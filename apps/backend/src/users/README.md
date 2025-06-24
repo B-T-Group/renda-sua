@@ -4,62 +4,33 @@ This module provides user management functionality for the Rendasua application.
 
 ## Users Controller
 
-### Endpoints
+This controller handles user-related operations including user creation and retrieval.
 
-#### POST `/users`
-Creates a new user record with automatic creation of related records based on user_type_id.
+## Endpoints
 
-**Request Body:**
-```json
-{
-  "email": "user@example.com",
-  "first_name": "John",
-  "last_name": "Doe",
-  "user_type_id": "client"
-}
-```
+### GET /users/me
 
-**For Agent Users:**
-```json
-{
-  "email": "agent@example.com",
-  "first_name": "Jane",
-  "last_name": "Smith",
-  "user_type_id": "agent",
-  "vehicle_type_id": "car"
-}
-```
+Retrieves the current user based on the identifier from the JWT token.
 
-**For Business Users:**
-```json
-{
-  "email": "business@example.com",
-  "first_name": "Bob",
-  "last_name": "Johnson",
-  "user_type_id": "business",
-  "business_name": "Acme Corporation"
-}
-```
+**Headers:**
+- `Authorization: Bearer <jwt_token>` (required)
 
-**Response Examples:**
+**Response:**
+- **200 OK**: User found successfully
+- **404 Not Found**: User not found
+- **500 Internal Server Error**: Server error
 
-**Client User:**
+**Success Response Example:**
 ```json
 {
   "success": true,
   "user": {
-    "id": "uuid",
+    "id": "123e4567-e89b-12d3-a456-426614174000",
     "identifier": "user123",
-    "email": "user@example.com",
+    "email": "john.doe@example.com",
     "first_name": "John",
     "last_name": "Doe",
     "user_type_id": "client",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
-  },
-  "client": {
-    "id": "uuid",
-    "user_id": "uuid",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
@@ -67,64 +38,131 @@ Creates a new user record with automatic creation of related records based on us
 }
 ```
 
-**Agent User:**
+**Error Response Example:**
+```json
+{
+  "success": false,
+  "error": "User not found"
+}
+```
+
+### POST /users
+
+Creates a new user with the appropriate related record (client, agent, or business) based on the user_type_id.
+
+**Headers:**
+- `Authorization: Bearer <jwt_token>` (required)
+
+**Request Body:**
+```json
+{
+  "email": "john.doe@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "user_type_id": "client|agent|business",
+  "vehicle_type_id": "vehicle_type_uuid", // Required for agents
+  "business_name": "Business Name" // Required for businesses
+}
+```
+
+**Response:**
+- **200 OK**: User created successfully
+- **400 Bad Request**: Invalid request data or missing required fields
+
+**Success Response Examples:**
+
+For Client:
 ```json
 {
   "success": true,
   "user": {
-    "id": "uuid",
-    "identifier": "user456",
-    "email": "agent@example.com",
-    "first_name": "Jane",
-    "last_name": "Smith",
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "identifier": "user123",
+    "email": "john.doe@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "user_type_id": "client",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  },
+  "client": {
+    "id": "456e7890-e89b-12d3-a456-426614174000",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  },
+  "identifier": "user123"
+}
+```
+
+For Agent:
+```json
+{
+  "success": true,
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "identifier": "user123",
+    "email": "john.doe@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
     "user_type_id": "agent",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
   "agent": {
-    "id": "uuid",
-    "user_id": "uuid",
-    "vehicle_type_id": "car",
+    "id": "456e7890-e89b-12d3-a456-426614174000",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "vehicle_type_id": "789e0123-e89b-12d3-a456-426614174000",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
-  "identifier": "user456"
+  "identifier": "user123"
 }
 ```
 
-**Business User:**
+For Business:
 ```json
 {
   "success": true,
   "user": {
-    "id": "uuid",
-    "identifier": "user789",
-    "email": "business@example.com",
-    "first_name": "Bob",
-    "last_name": "Johnson",
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "identifier": "user123",
+    "email": "john.doe@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
     "user_type_id": "business",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
   "business": {
-    "id": "uuid",
-    "user_id": "uuid",
-    "name": "Acme Corporation",
+    "id": "456e7890-e89b-12d3-a456-426614174000",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Business Name",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   },
-  "identifier": "user789"
+  "identifier": "user123"
 }
 ```
 
-**Notes:**
-- The `identifier` field is automatically extracted from the JWT token's `sub` claim
-- Requires a valid JWT token in the Authorization header
-- Returns HTTP 400 if the request is invalid or user creation fails
-- **For agents**: `vehicle_type_id` is required
-- **For businesses**: `business_name` is required
-- **For clients**: No additional fields required
-- **For other user types**: Only the user record is created (no related records)
+**Error Response Example:**
+```json
+{
+  "success": false,
+  "error": "vehicle_type_id is required for agent users"
+}
+```
+
+## Logic
+
+The controller automatically creates the appropriate related record based on the `user_type_id`:
+
+- **client**: Creates a user and a client record
+- **agent**: Creates a user and an agent record (requires `vehicle_type_id`)
+- **business**: Creates a user and a business record (requires `business_name`)
+- **other**: Creates only a user record
+
+The `identifier` field is automatically set from the JWT token using the `HasuraUserService.getIdentifier()` method.
 
 ## App Controller - Additional Endpoints
 

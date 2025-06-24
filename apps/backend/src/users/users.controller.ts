@@ -1,9 +1,64 @@
-import { Controller, Post, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly hasuraUserService: HasuraUserService) {}
+
+  @Get('me')
+  async getCurrentUser() {
+    try {
+      const identifier = this.hasuraUserService.getIdentifier();
+      
+      const query = `
+        query GetUserByIdentifier($identifier: String!) {
+          users(where: {identifier: {_eq: $identifier}}) {
+            id
+            identifier
+            email
+            first_name
+            last_name
+            user_type_id
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const result = await this.hasuraUserService.executeQuery(query, {
+        identifier: identifier,
+      });
+
+      if (!result.users || result.users.length === 0) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'User not found',
+          },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      const user = result.users[0];
+
+      return {
+        success: true,
+        user,
+        identifier: identifier,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   @Post()
   async createUser(@Body() userData: { 
