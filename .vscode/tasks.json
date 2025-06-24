@@ -42,7 +42,7 @@
       "label": "Start Backend (Watch)",
       "type": "shell",
       "command": "cd",
-      "args": ["rendasua/apps/backend", "&&", "npm", "run", "start:dev"],
+      "args": ["rendasua", "&&", "nx", "serve", "backend"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -77,7 +77,7 @@
       "label": "Start Frontend",
       "type": "shell",
       "command": "cd",
-      "args": ["rendasua/apps/frontend", "&&", "npm", "start"],
+      "args": ["rendasua", "&&", "nx", "serve", "frontend"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -129,46 +129,9 @@
     },
     {
       "label": "Install Dependencies",
-      "dependsOrder": "parallel",
-      "dependsOn": [
-        "Install Backend Dependencies",
-        "Install Frontend Dependencies"
-      ],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Install Backend Dependencies",
       "type": "shell",
       "command": "cd",
-      "args": ["rendasua/apps/backend", "&&", "npm", "install"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": [],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "Install Frontend Dependencies",
-      "type": "shell",
-      "command": "cd",
-      "args": ["rendasua/apps/frontend", "&&", "npm", "install"],
+      "args": ["rendasua", "&&", "npm", "install"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -185,8 +148,9 @@
     },
     {
       "label": "Build All",
-      "dependsOrder": "parallel",
-      "dependsOn": ["Build Backend", "Build Frontend"],
+      "type": "shell",
+      "command": "cd",
+      "args": ["rendasua", "&&", "nx", "run-many", "--target=build", "--all"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -196,13 +160,16 @@
         "showReuseMessage": true,
         "clear": false
       },
-      "problemMatcher": []
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
     },
     {
       "label": "Build Backend",
       "type": "shell",
       "command": "cd",
-      "args": ["rendasua/apps/backend", "&&", "npm", "run", "build"],
+      "args": ["rendasua", "&&", "nx", "build", "backend"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -221,8 +188,65 @@
       "label": "Build Frontend",
       "type": "shell",
       "command": "cd",
-      "args": ["rendasua/apps/frontend", "&&", "npm", "run", "build"],
+      "args": ["rendasua", "&&", "nx", "build", "frontend"],
       "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "Test All",
+      "type": "shell",
+      "command": "cd",
+      "args": ["rendasua", "&&", "nx", "run-many", "--target=test", "--all"],
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "Lint All",
+      "type": "shell",
+      "command": "cd",
+      "args": ["rendasua", "&&", "nx", "run-many", "--target=lint", "--all"],
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "Typecheck All",
+      "type": "shell",
+      "command": "cd",
+      "args": ["rendasua", "&&", "nx", "run-many", "--target=typecheck", "--all"],
+      "group": "test",
       "presentation": {
         "echo": true,
         "reveal": "always",
