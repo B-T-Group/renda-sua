@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { GraphQLClient } from 'graphql-request';
 
 @Injectable()
 export class HasuraSystemService {
@@ -14,7 +13,8 @@ export class HasuraSystemService {
   /**
    * Creates a GraphQL client with admin secret for system operations
    */
-  createClient(): GraphQLClient {
+  createClient(): any {
+    const { GraphQLClient } = require('graphql-request');
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
         'x-hasura-admin-secret': this.adminSecret,
@@ -26,17 +26,17 @@ export class HasuraSystemService {
   /**
    * Execute a GraphQL query with admin privileges
    */
-  async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
+  async executeQuery(query: string, variables?: any): Promise<any> {
     const client = this.createClient();
-    return client.request<T>(query, variables);
+    return client.request(query, variables);
   }
 
   /**
    * Execute a GraphQL mutation with admin privileges
    */
-  async executeMutation<T = any>(mutation: string, variables?: any): Promise<T> {
+  async executeMutation(mutation: string, variables?: any): Promise<any> {
     const client = this.createClient();
-    return client.request<T>(mutation, variables);
+    return client.request(mutation, variables);
   }
 
   /**

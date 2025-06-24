@@ -155,7 +155,7 @@ export class HasuraUserService {
           first_name: $first_name,
           last_name: $last_name,
           user_type_id: $user_type_id,
-          clients: {
+          client: {
             data: {}
           }
         }) {
@@ -232,7 +232,7 @@ export class HasuraUserService {
           first_name: $first_name,
           last_name: $last_name,
           user_type_id: $user_type_id,
-          agents: {
+          agent: {
             data: {
               vehicle_type_id: $vehicle_type_id
             }
@@ -314,7 +314,7 @@ export class HasuraUserService {
           first_name: $first_name,
           last_name: $last_name,
           user_type_id: $user_type_id,
-          businesses: {
+          business: {
             data: {
               name: $business_name
             }
