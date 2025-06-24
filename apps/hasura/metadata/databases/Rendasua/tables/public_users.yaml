@@ -1,0 +1,28 @@
+table:
+  name: users
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: agents
+          schema: public
+  - name: business
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: businesses
+          schema: public
+  - name: client
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: clients
+          schema: public
+  - name: user_type
+    using:
+      foreign_key_constraint_on: user_type_id
