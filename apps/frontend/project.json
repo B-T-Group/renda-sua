@@ -13,7 +13,6 @@
         "compiler": "babel",
         "outputPath": "dist/apps/frontend",
         "main": "apps/frontend/src/main.tsx",
-        "polyfills": ["zone.js"],
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "assets": [
           "apps/frontend/src/favicon.ico",

@@ -1,8 +1,20 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { NxReactWebpackPlugin } = require('@nx/react/webpack-plugin');
+const { join } = require('path');
 
 module.exports = (config, context) => ({
   ...config,
+  output: {
+    path: join(__dirname, 'dist'),
+  },
+  devServer: {
+    port: 4200,
+    historyApiFallback: {
+      index: '/index.html',
+      disableDotRule: true,
+      htmlAcceptHeaders: ['text/html', 'application/xhtml+xml'],
+    },
+  },
   plugins: [
     ...(config.plugins || []),
     new NxAppWebpackPlugin({
