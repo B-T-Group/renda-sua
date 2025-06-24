@@ -1,4 +1,4 @@
-import { Route, Routes, Link } from 'react-router-dom';
+import { Route, Routes, Link, Navigate } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -6,12 +6,35 @@ import {
   Container,
   Box,
   Button,
-  Card,
-  CardContent,
+  CircularProgress,
 } from '@mui/material';
-import { Home, Info } from '@mui/icons-material';
+import { Home, Dashboard, Login } from '@mui/icons-material';
+import { Auth0Provider } from '@auth0/auth0-react';
+import { auth0Config } from '../config/auth0.config';
+import { Auth0Provider as CustomAuth0Provider } from '../contexts/Auth0Context';
+import { ProtectedRoute } from '../components/auth/ProtectedRoute';
+import { LoginPage } from '../pages/LoginPage';
+import { DashboardPage } from '../pages/DashboardPage';
+import { useAuth0Context } from '../contexts/Auth0Context';
 
-export function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth0Context();
+
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
@@ -19,12 +42,20 @@ export function App() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Rendasua App
           </Typography>
-          <Button color="inherit" component={Link} to="/" startIcon={<Home />}>
-            Home
-          </Button>
-          <Button color="inherit" component={Link} to="/page-2" startIcon={<Info />}>
-            Page 2
-          </Button>
+          {isAuthenticated ? (
+            <>
+              <Button color="inherit" component={Link} to="/" startIcon={<Home />}>
+                Home
+              </Button>
+              <Button color="inherit" component={Link} to="/dashboard" startIcon={<Dashboard />}>
+                Dashboard
+              </Button>
+            </>
+          ) : (
+            <Button color="inherit" component={Link} to="/login" startIcon={<Login />}>
+              Login
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
 
@@ -38,67 +69,66 @@ export function App() {
                   Welcome to Rendasua
                 </Typography>
                 <Typography variant="body1" paragraph>
-                  This is your React frontend application with Material-UI integration.
+                  This is your React frontend application with Auth0 integration and Material-UI.
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                  <Card sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <CardContent>
-                      <Typography variant="h6" component="h2">
-                        Feature 1
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Description of your first feature goes here.
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                  <Card sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <CardContent>
-                      <Typography variant="h6" component="h2">
-                        Feature 2
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Description of your second feature goes here.
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-                <Box sx={{ mt: 3 }}>
-                  <Button
-                    variant="contained"
-                    component={Link}
-                    to="/page-2"
-                    startIcon={<Info />}
-                  >
-                    Go to Page 2
-                  </Button>
-                </Box>
+                {isAuthenticated ? (
+                  <Box sx={{ mt: 3 }}>
+                    <Button
+                      variant="contained"
+                      component={Link}
+                      to="/dashboard"
+                      startIcon={<Dashboard />}
+                    >
+                      Go to Dashboard
+                    </Button>
+                  </Box>
+                ) : (
+                  <Box sx={{ mt: 3 }}>
+                    <Button
+                      variant="contained"
+                      component={Link}
+                      to="/login"
+                      startIcon={<Login />}
+                    >
+                      Sign In
+                    </Button>
+                  </Box>
+                )}
               </Box>
             }
           />
           <Route
-            path="/page-2"
+            path="/login"
             element={
-              <Box>
-                <Typography variant="h4" component="h1" gutterBottom>
-                  Page 2
-                </Typography>
-                <Typography variant="body1" paragraph>
-                  This is the second page of your application.
-                </Typography>
-                <Button
-                  variant="outlined"
-                  component={Link}
-                  to="/"
-                  startIcon={<Home />}
-                >
-                  Back to Home
-                </Button>
-              </Box>
+              isAuthenticated ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <LoginPage />
+              )
             }
           />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Container>
     </Box>
+  );
+}
+
+export function App() {
+  return (
+    <Auth0Provider {...auth0Config}>
+      <CustomAuth0Provider>
+        <AppContent />
+      </CustomAuth0Provider>
+    </Auth0Provider>
   );
 }
 
