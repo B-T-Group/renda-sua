@@ -47,45 +47,72 @@ A request-scoped service that provides user-level access to Hasura using JWT tok
 ### Features:
 - Request-scoped (new instance per request)
 - Extracts JWT token from Authorization header
-- Extracts user identifier from JWT sub claim
-- Provides methods for creating users, clients, agents, and businesses
+- Extracts user identifier from JWT sub claim and uses it for user creation
+- Provides nested query methods for creating users with related records
 
 ### Methods:
 - `createUser(userData)`: Creates a new user record
-- `createClientRecord(clientData)`: Creates a new client record
-- `createAgentRecord(agentData)`: Creates a new agent record
-- `createBusinessRecord(businessData)`: Creates a new business record
+- `createUserWithClient(userData)`: Creates user and client records in a single transaction
+- `createUserWithAgent(userData, agentData)`: Creates user and agent records in a single transaction
+- `createUserWithBusiness(userData, businessData)`: Creates user and business records in a single transaction
+
+### User Data Structure:
+```typescript
+{
+  email: string;         // User email address
+  first_name: string;    // User's first name
+  last_name: string;     // User's last name
+  user_type_id: string;  // User type identifier
+}
+```
+
+**Note**: The `identifier` field is automatically extracted from the JWT token's `sub` claim and does not need to be provided in the request.
 
 ### Usage:
 ```typescript
 constructor(private hasuraUserService: HasuraUserService) {}
 
-// Create a user
+// Create a user only
 const user = await this.hasuraUserService.createUser({
   email: 'user@example.com',
-  name: 'John Doe'
+  first_name: 'John',
+  last_name: 'Doe',
+  user_type_id: 'client'
 });
 
-// Create a client
-const client = await this.hasuraUserService.createClientRecord({
-  name: 'Client Name',
-  user_id: user.id
+// Create a user with client record (nested query)
+const result = await this.hasuraUserService.createUserWithClient({
+  email: 'user@example.com',
+  first_name: 'John',
+  last_name: 'Doe',
+  user_type_id: 'client'
 });
 
-// Create an agent
-const agent = await this.hasuraUserService.createAgentRecord({
-  name: 'Agent Name',
-  user_id: user.id,
-  license_number: 'LIC123456'
-});
+// Create a user with agent record (nested query)
+const result = await this.hasuraUserService.createUserWithAgent(
+  {
+    email: 'agent@example.com',
+    first_name: 'Jane',
+    last_name: 'Smith',
+    user_type_id: 'agent'
+  },
+  {
+    vehicle_type_id: 'car'
+  }
+);
 
-// Create a business
-const business = await this.hasuraUserService.createBusinessRecord({
-  name: 'Business Name',
-  user_id: user.id,
-  business_type: 'LLC',
-  registration_number: 'REG123456'
-});
+// Create a user with business record (nested query)
+const result = await this.hasuraUserService.createUserWithBusiness(
+  {
+    email: 'business@example.com',
+    first_name: 'Bob',
+    last_name: 'Johnson',
+    user_type_id: 'business'
+  },
+  {
+    name: 'Business Name'
+  }
+);
 ```
 
 ## API Endpoints
@@ -94,34 +121,80 @@ The module includes a controller with the following endpoints:
 
 - `GET /hasura/system/status`: Get system service status
 - `POST /hasura/user/create`: Create a new user
-- `POST /hasura/user/create-client`: Create a new client
-- `POST /hasura/user/create-agent`: Create a new agent
-- `POST /hasura/user/create-business`: Create a new business
+- `POST /hasura/user/create-with-client`: Create user with client record
+- `POST /hasura/user/create-with-agent`: Create user with agent record
+- `POST /hasura/user/create-with-business`: Create user with business record
 - `GET /hasura/user/status`: Get user service status
 
-## Database Schema Requirements
+### Example API Requests:
 
-The services expect the following tables to exist in Hasura:
+#### Create User with Client:
+```json
+POST /hasura/user/create-with-client
+{
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "user_type_id": "client"
+}
+```
+
+#### Create User with Agent:
+```json
+POST /hasura/user/create-with-agent
+{
+  "user": {
+    "email": "agent@example.com",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "user_type_id": "agent"
+  },
+  "agent": {
+    "vehicle_type_id": "car"
+  }
+}
+```
+
+#### Create User with Business:
+```json
+POST /hasura/user/create-with-business
+{
+  "user": {
+    "email": "business@example.com",
+    "first_name": "Bob",
+    "last_name": "Johnson",
+    "user_type_id": "business"
+  },
+  "business": {
+    "name": "Business Name"
+  }
+}
+```
+
+## Database Schema
+
+The services work with the following actual database schema:
 
 ### users table:
 - id (UUID, primary key)
+- identifier (String, unique) - **Extracted from JWT token**
 - email (String, unique)
-- name (String, nullable)
+- first_name (String)
+- last_name (String)
+- user_type_id (String, foreign key to user_types.id)
 - created_at (timestamp)
 - updated_at (timestamp)
 
 ### clients table:
 - id (UUID, primary key)
 - user_id (UUID, foreign key to users.id)
-- name (String)
 - created_at (timestamp)
 - updated_at (timestamp)
 
 ### agents table:
 - id (UUID, primary key)
 - user_id (UUID, foreign key to users.id)
-- name (String)
-- license_number (String)
+- vehicle_type_id (String, foreign key to vehicle_types.id)
 - created_at (timestamp)
 - updated_at (timestamp)
 
@@ -129,14 +202,30 @@ The services expect the following tables to exist in Hasura:
 - id (UUID, primary key)
 - user_id (UUID, foreign key to users.id)
 - name (String)
-- business_type (String)
-- registration_number (String)
 - created_at (timestamp)
 - updated_at (timestamp)
+
+### Required Relationships:
+- users -> clients (one-to-many)
+- users -> agents (one-to-many)
+- users -> businesses (one-to-many)
+- users -> user_types (many-to-one)
+- agents -> vehicle_types (many-to-one)
+
+## Nested Query Benefits
+
+The nested query approach provides several advantages:
+
+1. **Atomic Operations**: User and related records are created in a single transaction
+2. **Data Consistency**: If any part fails, the entire operation is rolled back
+3. **Performance**: Single database round-trip instead of multiple queries
+4. **Simplified Error Handling**: No need to handle partial failures
+5. **Automatic Foreign Key Management**: Hasura handles the relationships automatically
 
 ## Security Notes
 
 - The HasuraUserService requires a valid JWT token in the Authorization header
 - The JWT token must contain a 'sub' claim with the user identifier
+- The identifier from the JWT token is automatically used for user creation
 - In production, implement proper JWT validation and authentication guards
 - The current JWT decoding is simplified - use a proper JWT library in production 

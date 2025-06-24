@@ -21,7 +21,12 @@ export class HasuraController {
   }
 
   @Post('user/create')
-  async createUser(@Body() userData: { email: string; name?: string }) {
+  async createUser(@Body() userData: { 
+    email: string; 
+    first_name: string;
+    last_name: string;
+    user_type_id: string;
+  }) {
     try {
       const user = await this.hasuraUserService.createUser(userData);
       return {
@@ -37,52 +42,75 @@ export class HasuraController {
     }
   }
 
-  @Post('user/create-client')
-  async createClient(@Body() clientData: { name: string; user_id: string }) {
-    try {
-      const client = await this.hasuraUserService.createClientRecord(clientData);
-      return {
-        success: true,
-        client,
-        identifier: this.hasuraUserService.getIdentifier(),
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  @Post('user/create-agent')
-  async createAgent(@Body() agentData: { name: string; user_id: string; license_number: string }) {
-    try {
-      const agent = await this.hasuraUserService.createAgentRecord(agentData);
-      return {
-        success: true,
-        agent,
-        identifier: this.hasuraUserService.getIdentifier(),
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  @Post('user/create-business')
-  async createBusiness(@Body() businessData: { 
-    name: string; 
-    user_id: string; 
-    business_type: string; 
-    registration_number: string 
+  @Post('user/create-with-client')
+  async createUserWithClient(@Body() userData: { 
+    email: string; 
+    first_name: string;
+    last_name: string;
+    user_type_id: string;
   }) {
     try {
-      const business = await this.hasuraUserService.createBusinessRecord(businessData);
+      const result = await this.hasuraUserService.createUserWithClient(userData);
       return {
         success: true,
-        business,
+        user: result.user,
+        client: result.client,
+        identifier: this.hasuraUserService.getIdentifier(),
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  @Post('user/create-with-agent')
+  async createUserWithAgent(@Body() data: { 
+    user: {
+      email: string; 
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    };
+    agent: {
+      vehicle_type_id: string;
+    };
+  }) {
+    try {
+      const result = await this.hasuraUserService.createUserWithAgent(data.user, data.agent);
+      return {
+        success: true,
+        user: result.user,
+        agent: result.agent,
+        identifier: this.hasuraUserService.getIdentifier(),
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  @Post('user/create-with-business')
+  async createUserWithBusiness(@Body() data: { 
+    user: {
+      email: string; 
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    };
+    business: {
+      name: string;
+    };
+  }) {
+    try {
+      const result = await this.hasuraUserService.createUserWithBusiness(data.user, data.business);
+      return {
+        success: true,
+        user: result.user,
+        business: result.business,
         identifier: this.hasuraUserService.getIdentifier(),
       };
     } catch (error: any) {
