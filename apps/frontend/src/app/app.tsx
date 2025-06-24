@@ -7,8 +7,9 @@ import {
   Box,
   Button,
   CircularProgress,
+  useTheme,
 } from '@mui/material';
-import { Home, Dashboard, Login } from '@mui/icons-material';
+import { Home, Dashboard, Login, DirectionsCar, Person } from '@mui/icons-material';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { auth0Config } from '../config/auth0.config';
 import { Auth0Provider as CustomAuth0Provider } from '../contexts/Auth0Context';
@@ -16,9 +17,11 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { useAuth0Context } from '../contexts/Auth0Context';
+import { Logo } from '../components/common/Logo';
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth0Context();
+  const theme = useTheme();
 
   if (isLoading) {
     return (
@@ -28,32 +31,79 @@ function AppContent() {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '100vh',
+          background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
         }}
       >
-        <CircularProgress />
+        <Box sx={{ textAlign: 'center' }}>
+          <Logo height={80} sx={{ mb: 2 }} />
+          <CircularProgress size={40} sx={{ color: 'white' }} />
+        </Box>
       </Box>
     );
   }
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Rendasua App
-          </Typography>
+      <AppBar position="static" elevation={0}>
+        <Toolbar sx={{ px: { xs: 2, md: 4 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+            <Logo height={40} sx={{ mr: 2 }} />
+            <Typography 
+              variant="h6" 
+              component="div" 
+              sx={{ 
+                fontWeight: 600,
+                display: { xs: 'none', sm: 'block' }
+              }}
+            >
+              Rendasua
+            </Typography>
+          </Box>
+          
           {isAuthenticated ? (
-            <>
-              <Button color="inherit" component={Link} to="/" startIcon={<Home />}>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button 
+                color="inherit" 
+                component={Link} 
+                to="/" 
+                startIcon={<Home />}
+                sx={{ 
+                  borderRadius: 2,
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
+                }}
+              >
                 Home
               </Button>
-              <Button color="inherit" component={Link} to="/dashboard" startIcon={<Dashboard />}>
+              <Button 
+                color="inherit" 
+                component={Link} 
+                to="/dashboard" 
+                startIcon={<Dashboard />}
+                sx={{ 
+                  borderRadius: 2,
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
+                }}
+              >
                 Dashboard
               </Button>
-            </>
+            </Box>
           ) : (
-            <Button color="inherit" component={Link} to="/login" startIcon={<Login />}>
-              Login
+            <Button 
+              color="inherit" 
+              component={Link} 
+              to="/login" 
+              startIcon={<Login />}
+              variant="outlined"
+              sx={{ 
+                borderRadius: 2,
+                borderColor: 'rgba(255,255,255,0.3)',
+                '&:hover': { 
+                  borderColor: 'white',
+                  backgroundColor: 'rgba(255,255,255,0.1)' 
+                }
+              }}
+            >
+              Sign In
             </Button>
           )}
         </Toolbar>
@@ -65,32 +115,72 @@ function AppContent() {
             path="/"
             element={
               <Box>
-                <Typography variant="h4" component="h1" gutterBottom>
-                  Welcome to Rendasua
-                </Typography>
-                <Typography variant="body1" paragraph>
-                  This is your React frontend application with Auth0 integration and Material-UI.
-                </Typography>
+                <Box sx={{ textAlign: 'center', mb: 6 }}>
+                  <Logo height={120} sx={{ mb: 3 }} />
+                  <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 700 }}>
+                    Welcome to Rendasua
+                  </Typography>
+                  <Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
+                    Your comprehensive transport and logistics solution platform
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 4, mb: 6 }}>
+                  <Box sx={{ textAlign: 'center', p: 4, bgcolor: 'background.paper', borderRadius: 3, boxShadow: 2 }}>
+                    <DirectionsCar sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+                    <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+                      Transport Management
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      Efficiently manage your fleet, routes, and deliveries with our advanced transport solutions.
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ textAlign: 'center', p: 4, bgcolor: 'background.paper', borderRadius: 3, boxShadow: 2 }}>
+                    <Person sx={{ fontSize: 60, color: 'secondary.main', mb: 2 }} />
+                    <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+                      User Management
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      Seamlessly manage clients, agents, and business accounts with role-based access control.
+                    </Typography>
+                  </Box>
+                </Box>
+
                 {isAuthenticated ? (
-                  <Box sx={{ mt: 3 }}>
+                  <Box sx={{ textAlign: 'center' }}>
                     <Button
                       variant="contained"
+                      size="large"
                       component={Link}
                       to="/dashboard"
                       startIcon={<Dashboard />}
+                      sx={{ 
+                        px: 4, 
+                        py: 1.5, 
+                        fontSize: '1.1rem',
+                        borderRadius: 3
+                      }}
                     >
                       Go to Dashboard
                     </Button>
                   </Box>
                 ) : (
-                  <Box sx={{ mt: 3 }}>
+                  <Box sx={{ textAlign: 'center' }}>
                     <Button
                       variant="contained"
+                      size="large"
                       component={Link}
                       to="/login"
                       startIcon={<Login />}
+                      sx={{ 
+                        px: 4, 
+                        py: 1.5, 
+                        fontSize: '1.1rem',
+                        borderRadius: 3
+                      }}
                     >
-                      Sign In
+                      Get Started
                     </Button>
                   </Box>
                 )}
