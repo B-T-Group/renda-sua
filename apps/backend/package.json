@@ -52,5 +52,9 @@
         "command": "docker build -f apps/backend/Dockerfile . -t rendasua-backend"
       }
     }
+  },
+  "dependencies": {
+    "graphql": "^16.11.0",
+    "graphql-request": "^7.2.0"
   }
 }
