@@ -121,16 +121,16 @@ The module includes a controller with the following endpoints:
 
 - `GET /hasura/system/status`: Get system service status
 - `POST /hasura/user/create`: Create a new user
-- `POST /hasura/user/create-with-client`: Create user with client record
-- `POST /hasura/user/create-with-agent`: Create user with agent record
-- `POST /hasura/user/create-with-business`: Create user with business record
+- `POST /hasura/user/create_with_client`: Create user with client record
+- `POST /hasura/user/create_with_agent`: Create user with agent record
+- `POST /hasura/user/create_with_business`: Create user with business record
 - `GET /hasura/user/status`: Get user service status
 
 ### Example API Requests:
 
 #### Create User with Client:
 ```json
-POST /hasura/user/create-with-client
+POST /hasura/user/create_with_client
 {
   "email": "user@example.com",
   "first_name": "John",
@@ -141,7 +141,7 @@ POST /hasura/user/create-with-client
 
 #### Create User with Agent:
 ```json
-POST /hasura/user/create-with-agent
+POST /hasura/user/create_with_agent
 {
   "user": {
     "email": "agent@example.com",
@@ -157,7 +157,7 @@ POST /hasura/user/create-with-agent
 
 #### Create User with Business:
 ```json
-POST /hasura/user/create-with-business
+POST /hasura/user/create_with_business
 {
   "user": {
     "email": "business@example.com",
@@ -205,12 +205,20 @@ The services work with the following actual database schema:
 - created_at (timestamp)
 - updated_at (timestamp)
 
-### Required Relationships:
-- users -> clients (one-to-many)
-- users -> agents (one-to-many)
-- users -> businesses (one-to-many)
-- users -> user_types (many-to-one)
-- agents -> vehicle_types (many-to-one)
+### user_types table:
+- id (String, primary key)
+- comment (String)
+
+### vehicle_types table:
+- id (String, primary key)
+- comment (String)
+
+## Implementation Notes
+
+- The `identifier` field is automatically extracted from the JWT token's `sub` claim
+- All mutations are wrapped in transactions to ensure data consistency
+- The service handles the creation of related records based on the user type
+- Error handling includes proper HTTP status codes and error messages
 
 ## Nested Query Benefits
 

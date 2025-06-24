@@ -42,7 +42,7 @@ export class HasuraController {
     }
   }
 
-  @Post('user/create-with-client')
+  @Post('user/create_with_client')
   async createUserWithClient(@Body() userData: { 
     email: string; 
     first_name: string;
@@ -65,7 +65,7 @@ export class HasuraController {
     }
   }
 
-  @Post('user/create-with-agent')
+  @Post('user/create_with_agent')
   async createUserWithAgent(@Body() data: { 
     user: {
       email: string; 
@@ -93,7 +93,7 @@ export class HasuraController {
     }
   }
 
-  @Post('user/create-with-business')
+  @Post('user/create_with_business')
   async createUserWithBusiness(@Body() data: { 
     user: {
       email: string; 

@@ -14,17 +14,14 @@ export class AppController {
     return this.appService.getData();
   }
 
-  @Get('user-types')
+  @Get('user_types')
   async getUserTypes() {
     try {
       const query = `
         query GetUserTypes {
           user_types {
             id
-            name
-            description
-            created_at
-            updated_at
+            comment
           }
         }
       `;
@@ -45,17 +42,14 @@ export class AppController {
     }
   }
 
-  @Get('vehicle-types')
+  @Get('vehicle_types')
   async getVehicleTypes() {
     try {
       const query = `
         query GetVehicleTypes {
           vehicle_types {
             id
-            name
-            description
-            created_at
-            updated_at
+            comment
           }
         }
       `;

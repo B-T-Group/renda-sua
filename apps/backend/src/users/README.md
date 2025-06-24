@@ -166,8 +166,11 @@ The `identifier` field is automatically set from the JWT token using the `Hasura
 
 ## App Controller - Additional Endpoints
 
-### GET `/user-types`
-Retrieves all available user types from the database.
+The app controller also provides endpoints for fetching reference data:
+
+### GET /user_types
+
+Retrieves all user types from the database.
 
 **Response:**
 ```json
@@ -176,31 +179,23 @@ Retrieves all available user types from the database.
   "user_types": [
     {
       "id": "client",
-      "name": "Client",
-      "description": "Regular client user",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Client user type"
     },
     {
       "id": "agent",
-      "name": "Agent",
-      "description": "Service agent",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Agent user type"
     },
     {
       "id": "business",
-      "name": "Business",
-      "description": "Business user",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Business user type"
     }
   ]
 }
 ```
 
-### GET `/vehicle-types`
-Retrieves all available vehicle types from the database.
+### GET /vehicle_types
+
+Retrieves all vehicle types from the database.
 
 **Response:**
 ```json
@@ -209,24 +204,15 @@ Retrieves all available vehicle types from the database.
   "vehicle_types": [
     {
       "id": "car",
-      "name": "Car",
-      "description": "Passenger car",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Car vehicle type"
     },
     {
       "id": "motorcycle",
-      "name": "Motorcycle",
-      "description": "Motorcycle or scooter",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Motorcycle vehicle type"
     },
     {
       "id": "truck",
-      "name": "Truck",
-      "description": "Commercial truck",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "comment": "Truck vehicle type"
     }
   ]
 }
