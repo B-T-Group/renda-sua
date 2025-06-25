@@ -1,122 +1,218 @@
 # Frontend Hooks
 
-This directory contains custom React hooks for the frontend application.
+This directory contains custom React hooks for the Rendasua frontend application.
 
-## useApiClient
+## Available Hooks
 
-A custom hook that provides an authenticated Axios instance for making API calls to the backend.
+### API Client Hook
 
-### Features
+**File:** `useApiClient.ts`
 
-- **Automatic Authentication**: Automatically includes Auth0 access token in requests
-- **Dynamic Setup**: Creates a new Axios instance when user authentication state changes
-- **Environment Configuration**: Uses `REACT_APP_API_URL` environment variable for base URL
+A hook that provides an axios client instance with Auth0 token authentication.
 
-### Usage
-
-```tsx
+```typescript
 import { useApiClient } from '../hooks';
 
 const MyComponent = () => {
   const apiClient = useApiClient();
-
+  
   const fetchData = async () => {
-    try {
-      const response = await apiClient.get('/api/users');
-      console.log(response.data);
-    } catch (error) {
-      console.error('API call failed:', error);
-    }
+    const response = await apiClient.get('/api/endpoint');
+    return response.data;
   };
-
-  return (
-    <button onClick={fetchData}>
-      Fetch Data
-    </button>
-  );
 };
 ```
 
-## useHasuraClient
+**Environment Variables:**
+- `REACT_APP_API_URL`: Backend API base URL
 
-A custom hook that provides an authenticated Apollo Client instance for making GraphQL queries to Hasura.
+### Hasura Client Hook
 
-### Features
+**File:** `useHasuraClient.ts`
 
-- **GraphQL Support**: Full Apollo Client integration for GraphQL operations
-- **Automatic Authentication**: Includes Auth0 access token in Authorization header
-- **Dynamic Setup**: Creates a new Apollo Client when user authentication state changes
-- **Error Handling**: Configurable error policies for queries and mutations
-- **Caching**: Built-in Apollo Client caching for optimal performance
+A hook that provides an Apollo Client instance for GraphQL operations with Auth0 token authentication.
 
-### Usage
-
-```tsx
+```typescript
 import { useHasuraClient } from '../hooks';
 import { gql, useQuery } from '@apollo/client';
 
-const GET_USERS = gql`
-  query GetUsers {
-    users {
-      id
-      name
-      email
+const MyComponent = () => {
+  const hasuraClient = useHasuraClient();
+  
+  const { data, loading, error } = useQuery(gql`
+    query GetUsers {
+      users {
+        id
+        email
+        first_name
+        last_name
+      }
     }
-  }
-`;
+  `, { client: hasuraClient });
+};
+```
+
+**Environment Variables:**
+- `REACT_APP_HASURA_URL`: Hasura GraphQL endpoint URL
+
+### Combined Clients Hook
+
+**File:** `useClients.ts`
+
+A utility hook that provides both API and Hasura clients in a single object.
+
+```typescript
+import { useClients } from '../hooks';
 
 const MyComponent = () => {
-  const client = useHasuraClient();
+  const { apiClient, hasuraClient } = useClients();
+  
+  // Use either client as needed
+};
+```
 
-  if (!client) {
-    return <div>Loading...</div>;
+### Login Flow Hook
+
+**File:** `useLoginFlow.ts`
+
+A hook that handles the complete login flow, including checking if the user has a complete profile and redirecting accordingly.
+
+```typescript
+import { useLoginFlow } from '../hooks';
+
+const App = () => {
+  const { isCheckingProfile, isAuthenticated, isLoading, user } = useLoginFlow();
+  
+  // The hook automatically:
+  // 1. Checks if user is authenticated
+  // 2. Makes a GET request to /users/me endpoint
+  // 3. Redirects to /dashboard if profile exists
+  // 4. Redirects to /complete-profile if 404 (no profile)
+  
+  if (isLoading || isCheckingProfile) {
+    return <LoadingPage />;
+  }
+  
+  return <MainApp />;
+};
+```
+
+**Flow:**
+1. User logs in with Auth0
+2. Hook makes GET request to `/users/me`
+3. If 200: User has complete profile → redirect to `/dashboard`
+4. If 404: User needs to complete profile → redirect to `/complete-profile`
+5. If other error: Fallback to `/dashboard`
+
+## Loading Components
+
+### LoadingPage
+
+**File:** `../components/common/LoadingPage.tsx`
+
+A full-page loading component with Rendasua branding and animations.
+
+```typescript
+import { LoadingPage } from '../hooks';
+
+<LoadingPage 
+  message="Loading Rendasua"
+  subtitle="Please wait while we prepare your experience"
+  showProgress={true}
+/>
+```
+
+### LoadingSpinner
+
+**File:** `../components/common/LoadingSpinner.tsx`
+
+A compact loading spinner for smaller loading states.
+
+```typescript
+import { LoadingSpinner } from '../hooks';
+
+<LoadingSpinner 
+  message="Loading data..."
+  size="medium"
+  fullHeight={false}
+/>
+```
+
+## Usage Examples
+
+### Complete Login Flow Implementation
+
+```typescript
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { useLoginFlow, LoadingPage } from '../hooks';
+import Dashboard from './Dashboard';
+import CompleteProfile from './CompleteProfile';
+
+function App() {
+  const { isCheckingProfile, isLoading } = useLoginFlow();
+
+  if (isLoading || isCheckingProfile) {
+    return (
+      <LoadingPage 
+        message={isCheckingProfile ? "Checking Profile" : "Loading Rendasua"}
+        subtitle={isCheckingProfile ? "Verifying your account information" : "Please wait while we authenticate your session"}
+        showProgress={true}
+      />
+    );
   }
 
   return (
-    <ApolloProvider client={client}>
-      <UserList />
-    </ApolloProvider>
+    <Routes>
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/complete-profile" element={<CompleteProfile />} />
+    </Routes>
   );
-};
+}
+```
 
-const UserList = () => {
-  const { loading, error, data } = useQuery(GET_USERS);
+### API Request with Error Handling
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+```typescript
+import React, { useState, useEffect } from 'react';
+import { useApiClient } from '../hooks';
 
-  return (
-    <div>
-      {data.users.map(user => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
-  );
+const UserProfile = () => {
+  const apiClient = useApiClient();
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await apiClient.get('/users/me');
+        setUserData(response.data);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to fetch user data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [apiClient]);
+
+  if (loading) return <LoadingSpinner message="Loading profile..." />;
+  if (error) return <div>Error: {error}</div>;
+
+  return <div>Welcome, {userData.user.first_name}!</div>;
 };
 ```
 
-### Environment Variables
+## Environment Setup
 
-Make sure to set the following environment variables:
+Make sure to set up the following environment variables in your `.env` file:
 
 ```env
-# For REST API
 REACT_APP_API_URL=http://localhost:3000
-
-# For Hasura GraphQL
 REACT_APP_HASURA_URL=http://localhost:8080/v1/graphql
-```
-
-### Dependencies
-
-- `axios`: HTTP client for making API requests
-- `@apollo/client`: GraphQL client for Hasura operations
-- `graphql`: GraphQL language support
-- `@auth0/auth0-react`: Authentication library for getting access tokens
-
-### Notes
-
-- The hooks only create authenticated clients when the user is authenticated
-- If the user is not authenticated, they return null or basic instances without authentication headers
-- The clients are automatically updated when the authentication state changes
-- The Hasura client uses Auth0 token in the Authorization header for authentication 
+REACT_APP_AUTH0_DOMAIN=your-domain.auth0.com
+REACT_APP_AUTH0_CLIENT_ID=your-client-id
+REACT_APP_AUTH0_AUDIENCE=your-audience
+``` 

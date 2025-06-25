@@ -60,6 +60,103 @@ export class UsersController {
     }
   }
 
+  @Post('profile')
+  async createUserProfile(@Body() profileData: { 
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    userType: string;
+    businessName?: string;
+    address?: string;
+  }) {
+    try {
+      const identifier = this.hasuraUserService.getIdentifier();
+      
+      // Map frontend user types to backend user type IDs
+      const userTypeMap: { [key: string]: string } = {
+        'client': 'client',
+        'agent': 'agent', 
+        'business': 'business'
+      };
+
+      const userTypeId = userTypeMap[profileData.userType];
+      if (!userTypeId) {
+        throw new Error('Invalid user type');
+      }
+
+      let result: any;
+
+      switch (userTypeId) {
+        case 'client':
+          result = await this.hasuraUserService.createUserWithClient({
+            email: profileData.email,
+            first_name: profileData.firstName,
+            last_name: profileData.lastName,
+            user_type_id: userTypeId,
+          });
+          return {
+            success: true,
+            user: result.user,
+            client: result.client,
+            identifier: identifier,
+          };
+
+        case 'agent':
+          result = await this.hasuraUserService.createUserWithAgent(
+            {
+              email: profileData.email,
+              first_name: profileData.firstName,
+              last_name: profileData.lastName,
+              user_type_id: userTypeId,
+            },
+            {
+              vehicle_type_id: '1', // Default vehicle type, can be updated later
+            }
+          );
+          return {
+            success: true,
+            user: result.user,
+            agent: result.agent,
+            identifier: identifier,
+          };
+
+        case 'business':
+          if (!profileData.businessName) {
+            throw new Error('Business name is required for business users');
+          }
+          result = await this.hasuraUserService.createUserWithBusiness(
+            {
+              email: profileData.email,
+              first_name: profileData.firstName,
+              last_name: profileData.lastName,
+              user_type_id: userTypeId,
+            },
+            {
+              name: profileData.businessName,
+            }
+          );
+          return {
+            success: true,
+            user: result.user,
+            business: result.business,
+            identifier: identifier,
+          };
+
+        default:
+          throw new Error('Invalid user type');
+      }
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   @Post()
   async createUser(@Body() userData: { 
     email: string; 

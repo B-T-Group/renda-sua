@@ -12,15 +12,19 @@ import UserProfile from '../components/auth/UserProfile';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
+import CompleteProfile from '../components/pages/CompleteProfile';
+import { useLoginFlow } from '../hooks/useLoginFlow';
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth0();
+  const { isCheckingProfile } = useLoginFlow();
 
-  if (isLoading) {
+  // Show loading page while Auth0 is loading or while checking user profile
+  if (isLoading || isCheckingProfile) {
     return (
       <LoadingPage 
-        message="Loading Rendasua"
-        subtitle="Please wait while we authenticate your session"
+        message={isCheckingProfile ? "Checking Profile" : "Loading Rendasua"}
+        subtitle={isCheckingProfile ? "Verifying your account information" : "Please wait while we authenticate your session"}
         showProgress={true}
       />
     );
@@ -45,6 +49,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <UserProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/complete-profile"
+            element={
+              <ProtectedRoute>
+                <CompleteProfile />
               </ProtectedRoute>
             }
           />
