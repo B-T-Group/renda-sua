@@ -10,20 +10,19 @@ import LandingPage from '../components/pages/LandingPage';
 import Dashboard from '../components/pages/Dashboard';
 import UserProfile from '../components/auth/UserProfile';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
+import LoadingPage from '../components/common/LoadingPage';
+import LoadingDemo from '../components/pages/LoadingDemo';
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth0();
 
   if (isLoading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="100vh"
-      >
-        Loading...
-      </Box>
+      <LoadingPage 
+        message="Loading Rendasua"
+        subtitle="Please wait while we authenticate your session"
+        showProgress={true}
+      />
     );
   }
 
@@ -49,6 +48,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/loading-demo" element={<LoadingDemo />} />
         </Routes>
       </Container>
     </Box>

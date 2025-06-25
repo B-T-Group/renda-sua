@@ -1,7 +1,8 @@
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { Lock } from "@mui/icons-material";
+import LoadingPage from "../common/LoadingPage";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,19 +13,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (isLoading) {
     return (
-      <Box
-        display="flex"
-        flexDirection="column"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="50vh"
-        gap={2}
-      >
-        <CircularProgress size={40} />
-        <Typography variant="body1" color="text.secondary">
-          Loading authentication...
-        </Typography>
-      </Box>
+      <LoadingPage 
+        message="Authenticating"
+        subtitle="Please wait while we verify your credentials"
+        showProgress={true}
+      />
     );
   }
 
