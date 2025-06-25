@@ -1,54 +1,44 @@
 // Uncomment this line to use CSS modules
 // import styles from './app.module.css';
-import NxWelcome from './nx-welcome';
-
-import { Route, Routes, Link } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { Box, Container } from '@mui/material';
 import { useAuth0 } from '@auth0/auth0-react';
-import LoginButton from '../components/auth/LoginButton';
-import LogoutButton from '../components/auth/LogoutButton';
+
+import Header from '../components/layout/Header';
+import LandingPage from '../components/pages/LandingPage';
+import Dashboard from '../components/pages/Dashboard';
 import UserProfile from '../components/auth/UserProfile';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 
-export function App() {
+function App() {
   const { isAuthenticated, isLoading } = useAuth0();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        Loading...
+      </Box>
+    );
   }
 
   return (
-    <div>
-      <header>
-        <nav>
-          <ul>
-            <li>
-              <Link to="/">Home</Link>
-            </li>
-            <li>
-              <Link to="/profile">Profile</Link>
-            </li>
-            <li>
-              <Link to="/protected">Protected Page</Link>
-            </li>
-          </ul>
-          <div>
-            {isAuthenticated ? <LogoutButton /> : <LoginButton />}
-          </div>
-        </nav>
-      </header>
-
-      <main>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Header />
+      <Container maxWidth="xl" sx={{ py: 4 }}>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route
-            path="/"
+            path="/dashboard"
             element={
-              <div>
-                <h1>Welcome to Rendasua</h1>
-                <p>This is the home page.</p>
-                {!isAuthenticated && (
-                  <p>Please log in to access protected features.</p>
-                )}
-              </div>
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
             }
           />
           <Route
@@ -59,20 +49,9 @@ export function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/protected"
-            element={
-              <ProtectedRoute>
-                <div>
-                  <h2>Protected Page</h2>
-                  <p>This page is only visible to authenticated users.</p>
-                </div>
-              </ProtectedRoute>
-            }
-          />
         </Routes>
-      </main>
-    </div>
+      </Container>
+    </Box>
   );
 }
 

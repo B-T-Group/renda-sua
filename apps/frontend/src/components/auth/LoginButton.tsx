@@ -1,10 +1,22 @@
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { Button } from "@mui/material";
+import { Login } from "@mui/icons-material";
 
 const LoginButton = () => {
   const { loginWithRedirect } = useAuth0();
 
-  return <button onClick={() => loginWithRedirect()}>Log In</button>;
+  return (
+    <Button
+      variant="contained"
+      color="primary"
+      startIcon={<Login />}
+      onClick={() => loginWithRedirect()}
+      size="medium"
+    >
+      Log In
+    </Button>
+  );
 };
 
 export default LoginButton; 
