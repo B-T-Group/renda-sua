@@ -78,7 +78,7 @@ const CompleteProfile: React.FC = () => {
     setError(null);
 
     try {
-      await apiClient?.post('/users/profile', profileData);
+      await apiClient.post('/users/profile', profileData);
       setSuccess(true);
       
       // Redirect to dashboard after a short delay
