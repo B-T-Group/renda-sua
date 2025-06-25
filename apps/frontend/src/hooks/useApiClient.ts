@@ -8,21 +8,28 @@ export const useApiClient = () => {
 
   useEffect(() => {
     const setupClient = () => {
+      // Always create a base axios instance immediately
+      const baseInstance = axios.create({
+        baseURL: process.env.REACT_APP_API_URL ?? 'http://localhost:3000/api',
+      });
+      
+      // Set the base instance immediately for unauthenticated users
       if (!isAuthenticated) {
-        // Create a basic axios instance without auth token when not authenticated
-        const instance = axios.create({
-          baseURL: process.env.REACT_APP_API_URL ?? 'http://localhost:3000/api',
-        });
-        setApiClient(instance);
+        setApiClient(baseInstance);
         return;
       }
 
+      // For authenticated users, try to get token with timeout
+      const tokenTimeout = setTimeout(() => {
+        console.warn('Token retrieval timed out, using base instance');
+        setApiClient(baseInstance);
+      }, 3000); // 3 second timeout for token
+
       getAccessTokenSilently()
         .then((token) => {
-          console.log('token', token);
+          clearTimeout(tokenTimeout);
           const instance = axios.create({
-            baseURL:
-              process.env.REACT_APP_API_URL ?? 'http://localhost:3000/api',
+            baseURL: process.env.REACT_APP_API_URL ?? 'http://localhost:3000/api',
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -30,12 +37,10 @@ export const useApiClient = () => {
           setApiClient(instance);
         })
         .catch((error) => {
+          clearTimeout(tokenTimeout);
           console.error('Failed to get access token:', error);
-          // Create a basic axios instance without auth token on error
-          const instance = axios.create({
-            baseURL: process.env.REACT_APP_API_URL ?? 'http://localhost:3000/api',
-          });
-          setApiClient(instance);
+          // Use base instance on error
+          setApiClient(baseInstance);
         });
     };
 

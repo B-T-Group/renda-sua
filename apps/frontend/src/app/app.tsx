@@ -16,15 +16,25 @@ import CompleteProfile from '../components/pages/CompleteProfile';
 import { useLoginFlow } from '../hooks/useLoginFlow';
 
 function App() {
-  const {  isLoading } = useAuth0();
+  const { isLoading } = useAuth0();
   const { isCheckingProfile } = useLoginFlow();
 
   // Show loading page while Auth0 is loading or while checking user profile
-  if (isLoading || isCheckingProfile) {
+  if (isLoading) {
     return (
       <LoadingPage 
-        message={isCheckingProfile ? "Checking Profile" : "Loading Rendasua"}
-        subtitle={isCheckingProfile ? "Verifying your account information" : "Please wait while we authenticate your session"}
+        message="Loading Rendasua"
+        subtitle="Please wait while we authenticate your session"
+        showProgress={true}
+      />
+    );
+  }
+
+  if (isCheckingProfile) {
+    return (
+      <LoadingPage 
+        message="Checking Profile"
+        subtitle="Verifying your account information"
         showProgress={true}
       />
     );
