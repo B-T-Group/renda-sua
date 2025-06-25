@@ -3,48 +3,75 @@
 import NxWelcome from './nx-welcome';
 
 import { Route, Routes, Link } from 'react-router-dom';
+import { useAuth0 } from '@auth0/auth0-react';
+import LoginButton from '../components/auth/LoginButton';
+import LogoutButton from '../components/auth/LogoutButton';
+import UserProfile from '../components/auth/UserProfile';
+import ProtectedRoute from '../components/auth/ProtectedRoute';
 
 export function App() {
+  const { isAuthenticated, isLoading } = useAuth0();
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div>
-      <NxWelcome title="@rendasua/frontend" />
+      <header>
+        <nav>
+          <ul>
+            <li>
+              <Link to="/">Home</Link>
+            </li>
+            <li>
+              <Link to="/profile">Profile</Link>
+            </li>
+            <li>
+              <Link to="/protected">Protected Page</Link>
+            </li>
+          </ul>
+          <div>
+            {isAuthenticated ? <LogoutButton /> : <LoginButton />}
+          </div>
+        </nav>
+      </header>
 
-      {/* START: routes */}
-      {/* These routes and navigation have been generated for you */}
-      {/* Feel free to move and update them to fit your needs */}
-      <br />
-      <hr />
-      <br />
-      <div role="navigation">
-        <ul>
-          <li>
-            <Link to="/">Home</Link>
-          </li>
-          <li>
-            <Link to="/page-2">Page 2</Link>
-          </li>
-        </ul>
-      </div>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <div>
-              This is the generated root route.{' '}
-              <Link to="/page-2">Click here for page 2.</Link>
-            </div>
-          }
-        />
-        <Route
-          path="/page-2"
-          element={
-            <div>
-              <Link to="/">Click here to go back to root page.</Link>
-            </div>
-          }
-        />
-      </Routes>
-      {/* END: routes */}
+      <main>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <div>
+                <h1>Welcome to Rendasua</h1>
+                <p>This is the home page.</p>
+                {!isAuthenticated && (
+                  <p>Please log in to access protected features.</p>
+                )}
+              </div>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/protected"
+            element={
+              <ProtectedRoute>
+                <div>
+                  <h2>Protected Page</h2>
+                  <p>This page is only visible to authenticated users.</p>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </main>
     </div>
   );
 }
