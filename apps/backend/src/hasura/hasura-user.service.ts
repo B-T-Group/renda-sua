@@ -52,14 +52,23 @@ export interface UserWithBusinessRecord {
 
 @Injectable({ scope: Scope.REQUEST })
 export class HasuraUserService {
-  public identifier: string;
+  public identifier!: string;
   private readonly hasuraUrl: string;
-  private readonly authToken: string;
+  private _authToken: string | null = null;
 
   constructor(@Inject(REQUEST) private readonly request: any) {
     this.hasuraUrl = process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
-    this.authToken = this.extractAuthToken();
-    this.identifier = this.extractSubClaim();
+  }
+
+  /**
+   * Get auth token lazily (only when needed)
+   */
+  private get authToken(): string {
+    if (!this._authToken) {
+      this._authToken = this.extractAuthToken();
+      this.identifier = this.extractSubClaim();
+    }
+    return this._authToken;
   }
 
   /**
@@ -408,6 +417,6 @@ export class HasuraUserService {
    * Check if the service is properly configured
    */
   isConfigured(): boolean {
-    return !!(this.hasuraUrl && this.authToken && this.identifier);
+    return !!(this.hasuraUrl && this._authToken && this.identifier);
   }
 } 

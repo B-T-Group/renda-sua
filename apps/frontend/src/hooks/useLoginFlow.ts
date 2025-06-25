@@ -12,6 +12,11 @@ export const useLoginFlow = () => {
   useEffect(() => {
     const checkUserProfile = async () => {
       if (!isAuthenticated || !user) return;
+      
+      // Wait for apiClient to be available
+      if (!apiClient) {
+        return;
+      }
 
       setIsCheckingProfile(true);
       

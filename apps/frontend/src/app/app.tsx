@@ -16,7 +16,7 @@ import CompleteProfile from '../components/pages/CompleteProfile';
 import { useLoginFlow } from '../hooks/useLoginFlow';
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const {  isLoading } = useAuth0();
   const { isCheckingProfile } = useLoginFlow();
 
   // Show loading page while Auth0 is loading or while checking user profile

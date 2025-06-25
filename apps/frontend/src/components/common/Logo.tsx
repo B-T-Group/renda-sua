@@ -9,11 +9,15 @@ interface LogoProps {
   size?: 'small' | 'medium' | 'large';
 }
 
-const LogoContainer = styled(Box)<{ $size: string }>(({ theme, $size }) => ({
+interface LogoContainerProps {
+  size: string;
+}
+
+const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1),
-  ...($size === 'small' && {
+  ...(size === 'small' && {
     '& .MuiTypography-root': {
       fontSize: '1rem',
     },
@@ -22,7 +26,7 @@ const LogoContainer = styled(Box)<{ $size: string }>(({ theme, $size }) => ({
       width: 'auto',
     },
   }),
-  ...($size === 'medium' && {
+  ...(size === 'medium' && {
     '& .MuiTypography-root': {
       fontSize: '1.5rem',
     },
@@ -31,7 +35,7 @@ const LogoContainer = styled(Box)<{ $size: string }>(({ theme, $size }) => ({
       width: 'auto',
     },
   }),
-  ...($size === 'large' && {
+  ...(size === 'large' && {
     '& .MuiTypography-root': {
       fontSize: '2rem',
     },
@@ -59,7 +63,7 @@ const Logo: React.FC<LogoProps> = ({
   };
 
   return (
-    <LogoContainer $size={size}>
+    <LogoContainer size={size}>
       <img 
         src={rendasuaLogo} 
         alt="Rendasua Logo" 
