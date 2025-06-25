@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import rendasuaLogo from '../../assets/rendasua.svg';
 
 interface LogoProps {
   variant?: 'default' | 'compact';
@@ -16,31 +17,29 @@ const LogoContainer = styled(Box)<{ $size: string }>(({ theme, $size }) => ({
     '& .MuiTypography-root': {
       fontSize: '1rem',
     },
+    '& img': {
+      height: '24px',
+      width: 'auto',
+    },
   }),
   ...($size === 'medium' && {
     '& .MuiTypography-root': {
       fontSize: '1.5rem',
+    },
+    '& img': {
+      height: '32px',
+      width: 'auto',
     },
   }),
   ...($size === 'large' && {
     '& .MuiTypography-root': {
       fontSize: '2rem',
     },
+    '& img': {
+      height: '48px',
+      width: 'auto',
+    },
   }),
-}));
-
-const LogoIcon = styled(Box)(({ theme }) => ({
-  width: 40,
-  height: 40,
-  borderRadius: '50%',
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: theme.palette.primary.contrastText,
-  fontWeight: 'bold',
-  fontSize: '1.2rem',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
 }));
 
 const Logo: React.FC<LogoProps> = ({ 
@@ -61,7 +60,14 @@ const Logo: React.FC<LogoProps> = ({
 
   return (
     <LogoContainer $size={size}>
-      <LogoIcon>R</LogoIcon>
+      <img 
+        src={rendasuaLogo} 
+        alt="Rendasua Logo" 
+        style={{ 
+          filter: color === 'white' ? 'brightness(0) invert(1)' : 'none',
+          opacity: color === 'white' ? 0.9 : 1,
+        }}
+      />
       {variant === 'default' && (
         <Typography 
           variant="h6" 

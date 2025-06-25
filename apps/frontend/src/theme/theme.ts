@@ -3,24 +3,24 @@ import { createTheme } from '@mui/material/styles';
 export const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2', // Professional blue
-      light: '#42a5f5',
-      dark: '#1565c0',
+      main: '#1e3a8a', // Deep blue that complements the logo
+      light: '#3b82f6',
+      dark: '#1e40af',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#dc004e', // Complementary red
-      light: '#ff5983',
-      dark: '#9a0036',
+      main: '#dc2626', // Red accent that works with the logo
+      light: '#ef4444',
+      dark: '#b91c1c',
       contrastText: '#ffffff',
     },
     background: {
-      default: '#f5f5f5',
+      default: '#f8fafc',
       paper: '#ffffff',
     },
     text: {
-      primary: '#212121',
-      secondary: '#757575',
+      primary: '#1e293b',
+      secondary: '#64748b',
     },
   },
   typography: {

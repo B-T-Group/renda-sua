@@ -44,7 +44,7 @@ const LandingPage: React.FC = () => {
       {/* Hero Section */}
       <Paper
         sx={{
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
           color: 'white',
           py: 8,
           mb: 6,
