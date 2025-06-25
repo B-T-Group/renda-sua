@@ -52,39 +52,11 @@
         "targetName": "test"
       },
       "exclude": ["apps/backend-e2e/**/*"]
-    },
-    {
-      "plugin": "@nx/react/router-plugin",
-      "options": {
-        "buildTargetName": "build",
-        "devTargetName": "dev",
-        "startTargetName": "start",
-        "watchDepsTargetName": "watch-deps",
-        "buildDepsTargetName": "build-deps",
-        "typecheckTargetName": "typecheck"
-      }
     }
   ],
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
-    }
-  },
-  "generators": {
-    "@nx/react": {
-      "application": {
-        "babel": true,
-        "style": "none",
-        "linter": "eslint",
-        "bundler": "webpack"
-      },
-      "component": {
-        "style": "none"
-      },
-      "library": {
-        "style": "none",
-        "linter": "eslint"
-      }
     }
   }
 }
