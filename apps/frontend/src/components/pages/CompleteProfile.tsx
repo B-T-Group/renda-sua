@@ -26,6 +26,7 @@ import Logo from '../common/Logo';
 interface ProfileData {
   first_name: string;
   last_name: string;
+  email: string;
   user_type_id: string;
   profile: {
     vehicle_type_id?: string;
@@ -71,6 +72,7 @@ const CompleteProfile: React.FC = () => {
   const [profileData, setProfileData] = useState<ProfileData>({
     first_name: user?.given_name || '',
     last_name: user?.family_name || '',
+    email: user?.email || '',
     user_type_id: '',
     profile: {},
   });
@@ -122,19 +124,8 @@ const CompleteProfile: React.FC = () => {
     setError(null);
 
     try {
-      // Format data for the existing /users/profile endpoint
-      const profileDataForBackend = {
-        firstName: profileData.first_name,
-        lastName: profileData.last_name,
-        email: user?.email || '',
-        phone: '', // Not required for this implementation
-        userType: profileData.user_type_id,
-        businessName: profileData.user_type_id === 'business' ? profileData.profile.name : undefined,
-        vehicleTypeId: profileData.user_type_id === 'agent' ? profileData.profile.vehicle_type_id : undefined,
-        address: '', // Not required for this implementation
-      };
-
-      await apiClient.post('/users/profile', profileDataForBackend);
+      // Use the POST /users API with the profile object format
+      await apiClient.post('/users', profileData);
       setSuccess(true);
       
       // Redirect to dashboard after a short delay
