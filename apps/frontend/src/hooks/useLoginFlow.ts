@@ -14,9 +14,9 @@ export const useLoginFlow = () => {
     
     setIsCheckingProfile(true);
     
-    // Add timeout to the API call
+    // Reduce timeout to 3 seconds for faster loading
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
     
     // Try to get user profile from backend
     apiClient.get('/users/me', { signal: controller.signal })

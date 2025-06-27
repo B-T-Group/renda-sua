@@ -12,4 +12,9 @@ export const auth0Config = {
   },
   cacheLocation: 'localstorage' as const,
   useRefreshTokens: true,
+  skipRedirectCallback: window.location.pathname === '/loading-demo',
+  // Performance optimizations
+  advancedOptions: {
+    defaultScope: 'openid profile email'
+  }
 }; 

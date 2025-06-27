@@ -5,6 +5,7 @@ import {
   Typography,
   CircularProgress,
   Paper,
+  Skeleton,
 } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import Logo from './Logo';
@@ -135,6 +136,13 @@ const LoadingPage: React.FC<LoadingPageProps> = ({
             </LoadingText>
           </ProgressContainer>
         )}
+        
+        {/* Skeleton loading for better perceived performance */}
+        <Box sx={{ mt: 4 }}>
+          <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
+          <Skeleton variant="rectangular" height={40} sx={{ mb: 1 }} />
+          <Skeleton variant="rectangular" height={40} width="80%" />
+        </Box>
       </LoadingContent>
     </LoadingContainer>
   );

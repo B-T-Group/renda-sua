@@ -1,6 +1,6 @@
 // Uncomment this line to use CSS modules
 // import styles from './app.module.css';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Box, Container } from '@mui/material';
 import { useAuth0 } from '@auth0/auth0-react';
@@ -16,28 +16,20 @@ import CompleteProfile from '../components/pages/CompleteProfile';
 import { useLoginFlow } from '../hooks/useLoginFlow';
 
 function App() {
-  const { isLoading } = useAuth0();
+  const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useLoginFlow();
 
-  console.log('isLoading', isLoading);
-  console.log('isCheckingProfile', isCheckingProfile);
+  // Memoize the loading state to prevent unnecessary re-renders
+  const shouldShowLoading = useMemo(() => {
+    return isLoading || isCheckingProfile;
+  }, [isLoading, isCheckingProfile]);
 
   // Show loading page while Auth0 is loading or while checking user profile
-  if (isLoading) {
+  if (shouldShowLoading) {
     return (
       <LoadingPage 
-        message="Loading Rendasua"
-        subtitle="Please wait while we authenticate your session"
-        showProgress={true}
-      />
-    );
-  }
-
-  if (isCheckingProfile) {
-    return (
-      <LoadingPage 
-        message="Checking Profile"
-        subtitle="Verifying your account information"
+        message={isLoading ? "Loading Rendasua" : "Checking Profile"}
+        subtitle={isLoading ? "Please wait while we authenticate your session" : "Verifying your account information"}
         showProgress={true}
       />
     );
