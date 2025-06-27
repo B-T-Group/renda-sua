@@ -8,12 +8,15 @@ import {
   CardContent,
   CardActions,
   Paper,
+  Chip,
 } from '@mui/material';
 import {
-  Security,
+  LocalShipping,
   Speed,
-  Analytics,
+  LocationOn,
   ArrowForward,
+  CheckCircle,
+  AccessTime,
 } from '@mui/icons-material';
 import { useAuth0 } from '@auth0/auth0-react';
 import Logo from '../common/Logo';
@@ -23,20 +26,29 @@ const LandingPage: React.FC = () => {
 
   const features = [
     {
-      icon: <Security color="primary" sx={{ fontSize: 40 }} />,
-      title: 'Secure Authentication',
-      description: 'Enterprise-grade security with Auth0 integration',
+      icon: <LocalShipping color="primary" sx={{ fontSize: 40 }} />,
+      title: 'Fast Delivery',
+      description: 'Get your packages delivered quickly and reliably across the city',
     },
     {
       icon: <Speed color="primary" sx={{ fontSize: 40 }} />,
-      title: 'Fast Performance',
-      description: 'Optimized for speed and reliability',
+      title: 'Real-time Tracking',
+      description: 'Track your deliveries in real-time with our advanced GPS system',
     },
     {
-      icon: <Analytics color="primary" sx={{ fontSize: 40 }} />,
-      title: 'Advanced Analytics',
-      description: 'Comprehensive insights and reporting',
+      icon: <LocationOn color="primary" sx={{ fontSize: 40 }} />,
+      title: 'Wide Coverage',
+      description: 'Serving all neighborhoods with our extensive delivery network',
     },
+  ];
+
+  const benefits = [
+    'Same-day delivery available',
+    'Secure package handling',
+    'Flexible delivery times',
+    'Professional delivery agents',
+    'Insurance coverage included',
+    '24/7 customer support',
   ];
 
   return (
@@ -44,7 +56,7 @@ const LandingPage: React.FC = () => {
       {/* Hero Section */}
       <Paper
         sx={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
+          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
           color: 'white',
           py: 8,
           mb: 6,
@@ -52,21 +64,21 @@ const LandingPage: React.FC = () => {
       >
         <Container maxWidth="lg">
           <Box textAlign="center">
-            <Logo variant="default" color="white" size="large" />
+            <Logo variant="with-tagline" color="white" size="large" />
             <Typography
               variant="h2"
               component="h1"
               gutterBottom
               sx={{ mt: 4, fontWeight: 700 }}
             >
-              Welcome to Rendasua
+              Fast & Reliable Delivery Service
             </Typography>
             <Typography
               variant="h5"
               component="h2"
               sx={{ mb: 4, opacity: 0.9, maxWidth: 600, mx: 'auto' }}
             >
-              Your comprehensive solution for modern business management
+              Connect with trusted delivery agents and get your packages delivered safely and on time
             </Typography>
             {!isAuthenticated && (
               <Button
@@ -84,7 +96,7 @@ const LandingPage: React.FC = () => {
                 }}
                 endIcon={<ArrowForward />}
               >
-                Get Started
+                Start Delivering
               </Button>
             )}
           </Box>
@@ -100,7 +112,7 @@ const LandingPage: React.FC = () => {
           gutterBottom
           sx={{ mb: 6 }}
         >
-          Why Choose Rendasua?
+          Why Choose Renda Sua?
         </Typography>
         <Box
           sx={{
@@ -147,11 +159,57 @@ const LandingPage: React.FC = () => {
         </Box>
       </Container>
 
+      {/* Benefits Section */}
+      <Paper
+        sx={{
+          bgcolor: 'grey.50',
+          py: 6,
+          mb: 6,
+        }}
+      >
+        <Container maxWidth="lg">
+          <Typography
+            variant="h4"
+            component="h2"
+            textAlign="center"
+            gutterBottom
+            sx={{ mb: 4 }}
+          >
+            What You Get
+          </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(2, 1fr)',
+              },
+              gap: 3,
+            }}
+          >
+            {benefits.map((benefit, index) => (
+              <Box
+                key={index}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}
+              >
+                <CheckCircle color="success" />
+                <Typography variant="body1">{benefit}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </Container>
+      </Paper>
+
       {/* CTA Section */}
       {!isAuthenticated && (
         <Paper
           sx={{
-            bgcolor: 'grey.50',
+            bgcolor: 'secondary.main',
+            color: 'white',
             py: 6,
             textAlign: 'center',
           }}
@@ -160,17 +218,46 @@ const LandingPage: React.FC = () => {
             <Typography variant="h4" component="h2" gutterBottom>
               Ready to Get Started?
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-              Join thousands of users who trust Rendasua for their business needs
+            <Typography variant="body1" sx={{ mb: 4, opacity: 0.9 }}>
+              Join our network of trusted delivery agents and customers
             </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              sx={{ px: 4, py: 1.5, fontSize: '1.1rem' }}
-              endIcon={<ArrowForward />}
-            >
-              Sign Up Now
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                size="large"
+                sx={{ 
+                  px: 4, 
+                  py: 1.5, 
+                  fontSize: '1.1rem',
+                  bgcolor: 'white',
+                  color: 'secondary.main',
+                  '&:hover': {
+                    bgcolor: 'grey.100',
+                  },
+                }}
+                endIcon={<ArrowForward />}
+              >
+                Become a Client
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                sx={{ 
+                  px: 4, 
+                  py: 1.5, 
+                  fontSize: '1.1rem',
+                  borderColor: 'white',
+                  color: 'white',
+                  '&:hover': {
+                    borderColor: 'white',
+                    bgcolor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+                endIcon={<LocalShipping />}
+              >
+                Become an Agent
+              </Button>
+            </Box>
           </Container>
         </Paper>
       )}

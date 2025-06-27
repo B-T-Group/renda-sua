@@ -26,7 +26,7 @@ const Header: React.FC = () => {
         <Toolbar disableGutters>
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
             <RouterLink to="/" style={{ textDecoration: 'none' }}>
-              <Logo variant="compact" color="white" size="medium" />
+              <Logo variant="with-tagline" color="white" size="medium" />
             </RouterLink>
           </Box>
           
