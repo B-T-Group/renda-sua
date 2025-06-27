@@ -74,7 +74,7 @@ export class UsersController {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
       
-      // Map frontend user types to backend user type IDs
+      // Map frontend user types to backend user type IDs (these should match the enum values)
       const userTypeMap: { [key: string]: string } = {
         'client': 'client',
         'agent': 'agent', 
@@ -162,6 +162,7 @@ export class UsersController {
   async createUser(@Body() userData: { 
     first_name: string;
     last_name: string;
+    email: string;
     user_type_id: string;
     profile: {
       vehicle_type_id?: string;
@@ -171,16 +172,12 @@ export class UsersController {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
       
-      // Get email from Auth0 user context (this would be set by middleware)
-      // For now, we'll use a placeholder - in production this should come from the JWT token
-      const email = `user-${identifier}@example.com`; // This should be replaced with actual email from Auth0
-      
       let result: any;
 
       switch (userData.user_type_id) {
         case 'client':
           result = await this.hasuraUserService.createUserWithClient({
-            email: email,
+            email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
             user_type_id: userData.user_type_id,
@@ -198,7 +195,7 @@ export class UsersController {
           }
           result = await this.hasuraUserService.createUserWithAgent(
             {
-              email: email,
+              email: userData.email,
               first_name: userData.first_name,
               last_name: userData.last_name,
               user_type_id: userData.user_type_id,
@@ -220,7 +217,7 @@ export class UsersController {
           }
           result = await this.hasuraUserService.createUserWithBusiness(
             {
-              email: email,
+              email: userData.email,
               first_name: userData.first_name,
               last_name: userData.last_name,
               user_type_id: userData.user_type_id,
@@ -239,7 +236,7 @@ export class UsersController {
         default:
           // For any other user type, just create the user without related records
           const user = await this.hasuraUserService.createUser({
-            email: email,
+            email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
             user_type_id: userData.user_type_id,

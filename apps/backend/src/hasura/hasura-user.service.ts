@@ -113,7 +113,7 @@ export class HasuraUserService {
     user_type_id: string;
   }): Promise<UserRecord> {
     const mutation = `
-      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!) {
+      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: user_types_enum!) {
         insert_users_one(object: {
           identifier: $identifier,
           email: $email,
@@ -159,7 +159,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
-        $user_type_id: String!
+        $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
           identifier: $identifier,
@@ -235,7 +235,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
-        $user_type_id: String!,
+        $user_type_id: user_types_enum!,
         $vehicle_type_id: String!
       ) {
         insert_users_one(object: {
@@ -317,7 +317,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
-        $user_type_id: String!,
+        $user_type_id: user_types_enum!,
         $business_name: String!
       ) {
         insert_users_one(object: {
