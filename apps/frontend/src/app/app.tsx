@@ -19,6 +19,9 @@ function App() {
   const { isLoading } = useAuth0();
   const { isCheckingProfile } = useLoginFlow();
 
+  console.log('isLoading', isLoading);
+  console.log('isCheckingProfile', isCheckingProfile);
+
   // Show loading page while Auth0 is loading or while checking user profile
   if (isLoading) {
     return (

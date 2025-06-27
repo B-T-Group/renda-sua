@@ -26,7 +26,7 @@ export class UsersController {
       `;
 
       const result = await this.hasuraUserService.executeQuery(query, {
-        identifier: identifier,
+        identifier,
       });
 
       if (!result.users || result.users.length === 0) {
@@ -69,6 +69,7 @@ export class UsersController {
     userType: string;
     businessName?: string;
     address?: string;
+    vehicleTypeId?: string;
   }) {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
@@ -111,7 +112,7 @@ export class UsersController {
               user_type_id: userTypeId,
             },
             {
-              vehicle_type_id: '1', // Default vehicle type, can be updated later
+              vehicle_type_id: profileData.vehicleTypeId || 'other',
             }
           );
           return {
@@ -159,20 +160,27 @@ export class UsersController {
 
   @Post()
   async createUser(@Body() userData: { 
-    email: string; 
     first_name: string;
     last_name: string;
     user_type_id: string;
-    vehicle_type_id?: string; // Required for agents
-    business_name?: string; // Required for businesses
+    profile: {
+      vehicle_type_id?: string;
+      name?: string;
+    };
   }) {
     try {
+      const identifier = this.hasuraUserService.getIdentifier();
+      
+      // Get email from Auth0 user context (this would be set by middleware)
+      // For now, we'll use a placeholder - in production this should come from the JWT token
+      const email = `user-${identifier}@example.com`; // This should be replaced with actual email from Auth0
+      
       let result: any;
 
       switch (userData.user_type_id) {
         case 'client':
           result = await this.hasuraUserService.createUserWithClient({
-            email: userData.email,
+            email: email,
             first_name: userData.first_name,
             last_name: userData.last_name,
             user_type_id: userData.user_type_id,
@@ -181,57 +189,57 @@ export class UsersController {
             success: true,
             user: result.user,
             client: result.client,
-            identifier: this.hasuraUserService.getIdentifier(),
+            identifier: identifier,
           };
 
         case 'agent':
-          if (!userData.vehicle_type_id) {
+          if (!userData.profile.vehicle_type_id) {
             throw new Error('vehicle_type_id is required for agent users');
           }
           result = await this.hasuraUserService.createUserWithAgent(
             {
-              email: userData.email,
+              email: email,
               first_name: userData.first_name,
               last_name: userData.last_name,
               user_type_id: userData.user_type_id,
             },
             {
-              vehicle_type_id: userData.vehicle_type_id,
+              vehicle_type_id: userData.profile.vehicle_type_id,
             }
           );
           return {
             success: true,
             user: result.user,
             agent: result.agent,
-            identifier: this.hasuraUserService.getIdentifier(),
+            identifier: identifier,
           };
 
         case 'business':
-          if (!userData.business_name) {
-            throw new Error('business_name is required for business users');
+          if (!userData.profile.name) {
+            throw new Error('business name is required for business users');
           }
           result = await this.hasuraUserService.createUserWithBusiness(
             {
-              email: userData.email,
+              email: email,
               first_name: userData.first_name,
               last_name: userData.last_name,
               user_type_id: userData.user_type_id,
             },
             {
-              name: userData.business_name,
+              name: userData.profile.name,
             }
           );
           return {
             success: true,
             user: result.user,
             business: result.business,
-            identifier: this.hasuraUserService.getIdentifier(),
+            identifier: identifier,
           };
 
         default:
           // For any other user type, just create the user without related records
           const user = await this.hasuraUserService.createUser({
-            email: userData.email,
+            email: email,
             first_name: userData.first_name,
             last_name: userData.last_name,
             user_type_id: userData.user_type_id,
@@ -239,7 +247,7 @@ export class UsersController {
           return {
             success: true,
             user,
-            identifier: this.hasuraUserService.getIdentifier(),
+            identifier: identifier,
           };
       }
     } catch (error: any) {

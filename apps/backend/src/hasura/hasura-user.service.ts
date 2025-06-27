@@ -58,6 +58,9 @@ export class HasuraUserService {
 
   constructor(@Inject(REQUEST) private readonly request: any) {
     this.hasuraUrl = process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
+     this._authToken = this.extractAuthToken();
+     this.identifier = this.extractSubClaim();
+    
   }
 
   /**
