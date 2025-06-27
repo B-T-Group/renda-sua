@@ -179,7 +179,7 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          clients {
+          client {
             id
             user_id
             created_at
@@ -198,7 +198,7 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const client = user.clients[0]; // Get the first (and only) client
+    const client = user.client; // Get the first (and only) client
 
     return {
       user: {
@@ -236,7 +236,7 @@ export class HasuraUserService {
         $first_name: String!, 
         $last_name: String!, 
         $user_type_id: user_types_enum!,
-        $vehicle_type_id: String!
+        $vehicle_type_id: vehicle_types_enum!
       ) {
         insert_users_one(object: {
           identifier: $identifier,
@@ -258,7 +258,7 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          agents {
+          agent {
             id
             user_id
             vehicle_type_id
@@ -279,7 +279,7 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const agent = user.agents[0]; // Get the first (and only) agent
+    const agent = user.agent; // Get the first (and only) agent
 
     return {
       user: {
@@ -340,7 +340,7 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          businesses {
+          business {
             id
             user_id
             name
@@ -361,7 +361,7 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const business = user.businesses[0]; // Get the first (and only) business
+    const business = user.business; // Get the first (and only) business
 
     return {
       user: {
