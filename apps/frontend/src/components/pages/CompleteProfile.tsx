@@ -17,7 +17,13 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
-import { Save, ArrowForward, Person, LocalShipping, Business } from '@mui/icons-material';
+import {
+  Save,
+  ArrowForward,
+  Person,
+  LocalShipping,
+  Business,
+} from '@mui/icons-material';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserTypes } from '../../hooks/useUserTypes';
@@ -63,7 +69,12 @@ const personaOptions = [
 const CompleteProfile: React.FC = () => {
   const { user } = useAuth0();
   const apiClient = useApiClient();
-  const { userTypes, vehicleTypes, loading: typesLoading, error: typesError } = useUserTypes();
+  const {
+    userTypes,
+    vehicleTypes,
+    loading: typesLoading,
+    error: typesError,
+  } = useUserTypes();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,26 +88,34 @@ const CompleteProfile: React.FC = () => {
     profile: {},
   });
 
-  const handleInputChange = (field: keyof ProfileData) => (
-    event: React.ChangeEvent<HTMLInputElement> | { target: { value: unknown } }
-  ) => {
-    setProfileData({
-      ...profileData,
-      [field]: event.target.value,
-    });
-  };
-
-  const handleProfileChange = (field: keyof ProfileData['profile']) => (
-    event: React.ChangeEvent<HTMLInputElement> | { target: { value: unknown } }
-  ) => {
-    setProfileData({
-      ...profileData,
-      profile: {
-        ...profileData.profile,
+  const handleInputChange =
+    (field: keyof ProfileData) =>
+    (
+      event:
+        | React.ChangeEvent<HTMLInputElement>
+        | { target: { value: unknown } }
+    ) => {
+      setProfileData({
+        ...profileData,
         [field]: event.target.value,
-      },
-    });
-  };
+      });
+    };
+
+  const handleProfileChange =
+    (field: keyof ProfileData['profile']) =>
+    (
+      event:
+        | React.ChangeEvent<HTMLInputElement>
+        | { target: { value: unknown } }
+    ) => {
+      setProfileData({
+        ...profileData,
+        profile: {
+          ...profileData.profile,
+          [field]: event.target.value,
+        },
+      });
+    };
 
   const handlePersonaSelect = (userTypeId: string) => {
     setProfileData({
@@ -127,13 +146,15 @@ const CompleteProfile: React.FC = () => {
       // Use the POST /users API with the profile object format
       await apiClient.post('/users', profileData);
       setSuccess(true);
-      
+
       // Redirect to dashboard after a short delay
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = '/app';
       }, 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create user. Please try again.');
+      setError(
+        err.response?.data?.error || 'Failed to create user. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -144,16 +165,19 @@ const CompleteProfile: React.FC = () => {
       case 0:
         return profileData.user_type_id !== '';
       case 1:
-        const hasRequiredFields = profileData.first_name && profileData.last_name && profileData.user_type_id;
-        
+        const hasRequiredFields =
+          profileData.first_name &&
+          profileData.last_name &&
+          profileData.user_type_id;
+
         if (profileData.user_type_id === 'agent') {
           return hasRequiredFields && profileData.profile.vehicle_type_id;
         }
-        
+
         if (profileData.user_type_id === 'business') {
           return hasRequiredFields && profileData.profile.name;
         }
-        
+
         return hasRequiredFields;
       default:
         return true;
@@ -161,7 +185,7 @@ const CompleteProfile: React.FC = () => {
   };
 
   const getSelectedPersona = () => {
-    return personaOptions.find(p => p.id === profileData.user_type_id);
+    return personaOptions.find((p) => p.id === profileData.user_type_id);
   };
 
   const renderStepContent = (step: number) => {
@@ -175,15 +199,24 @@ const CompleteProfile: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Select the type of account you want to create
             </Typography>
-            
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+              }}
+            >
               {personaOptions.map((persona) => (
                 <Box key={persona.id} sx={{ flex: 1 }}>
                   <Card
                     sx={{
                       cursor: 'pointer',
                       border: profileData.user_type_id === persona.id ? 2 : 1,
-                      borderColor: profileData.user_type_id === persona.id ? persona.color : 'divider',
+                      borderColor:
+                        profileData.user_type_id === persona.id
+                          ? persona.color
+                          : 'divider',
                       '&:hover': {
                         borderColor: persona.color,
                         boxShadow: 2,
@@ -215,7 +248,7 @@ const CompleteProfile: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Personal Information
             </Typography>
-            
+
             <TextField
               label="First Name"
               value={profileData.first_name}
@@ -223,7 +256,7 @@ const CompleteProfile: React.FC = () => {
               fullWidth
               required
             />
-            
+
             <TextField
               label="Last Name"
               value={profileData.last_name}
@@ -231,7 +264,7 @@ const CompleteProfile: React.FC = () => {
               fullWidth
               required
             />
-            
+
             {profileData.user_type_id === 'agent' && (
               <FormControl fullWidth required>
                 <InputLabel>Vehicle Type</InputLabel>
@@ -249,7 +282,7 @@ const CompleteProfile: React.FC = () => {
                 </Select>
               </FormControl>
             )}
-            
+
             {profileData.user_type_id === 'business' && (
               <TextField
                 label="Business Name"
@@ -269,24 +302,32 @@ const CompleteProfile: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Review Your Information
             </Typography>
-            
+
             <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
               <Typography variant="body2" gutterBottom>
-                <strong>Name:</strong> {profileData.first_name} {profileData.last_name}
+                <strong>Name:</strong> {profileData.first_name}{' '}
+                {profileData.last_name}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Persona:</strong> {selectedPersona?.title}
               </Typography>
-              {profileData.user_type_id === 'agent' && profileData.profile.vehicle_type_id && (
-                <Typography variant="body2" gutterBottom>
-                  <strong>Vehicle Type:</strong> {vehicleTypes.find(t => t.id === profileData.profile.vehicle_type_id)?.comment}
-                </Typography>
-              )}
-              {profileData.user_type_id === 'business' && profileData.profile.name && (
-                <Typography variant="body2" gutterBottom>
-                  <strong>Business Name:</strong> {profileData.profile.name}
-                </Typography>
-              )}
+              {profileData.user_type_id === 'agent' &&
+                profileData.profile.vehicle_type_id && (
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Vehicle Type:</strong>{' '}
+                    {
+                      vehicleTypes.find(
+                        (t) => t.id === profileData.profile.vehicle_type_id
+                      )?.comment
+                    }
+                  </Typography>
+                )}
+              {profileData.user_type_id === 'business' &&
+                profileData.profile.name && (
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Business Name:</strong> {profileData.profile.name}
+                  </Typography>
+                )}
             </Paper>
           </Box>
         );
@@ -352,7 +393,8 @@ const CompleteProfile: React.FC = () => {
             Profile Complete!
           </Typography>
           <Typography variant="body1" color="text.secondary" paragraph>
-            Your profile has been successfully created. Redirecting to dashboard...
+            Your profile has been successfully created. Redirecting to
+            dashboard...
           </Typography>
           <CircularProgress size={24} />
         </Paper>
@@ -386,7 +428,8 @@ const CompleteProfile: React.FC = () => {
             Complete Your Profile
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Please provide some additional information to complete your account setup
+            Please provide some additional information to complete your account
+            setup
           </Typography>
         </Box>
 
@@ -410,18 +453,13 @@ const CompleteProfile: React.FC = () => {
           ))}
         </Stepper>
 
-        <Box sx={{ mb: 4 }}>
-          {renderStepContent(activeStep)}
-        </Box>
+        <Box sx={{ mb: 4 }}>{renderStepContent(activeStep)}</Box>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button
-            disabled={activeStep === 0}
-            onClick={handleBack}
-          >
+          <Button disabled={activeStep === 0} onClick={handleBack}>
             Back
           </Button>
-          
+
           <Box>
             {activeStep === steps.length - 1 ? (
               <Button
@@ -449,4 +487,4 @@ const CompleteProfile: React.FC = () => {
   );
 };
 
-export default CompleteProfile; 
+export default CompleteProfile;

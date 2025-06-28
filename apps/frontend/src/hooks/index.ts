@@ -23,4 +23,5 @@ export { useGraphQLRequest } from './useGraphQLRequest';
 export { useInventoryItems } from './useInventoryItems';
 export { useAccountInfo } from './useAccountInfo';
 export { useCreateOrder } from './useCreateOrder';
-export { useBackendOrders } from './useBackendOrders'; 
+export { useBackendOrders } from './useBackendOrders';
+export { useUserProfile } from './useUserProfile';

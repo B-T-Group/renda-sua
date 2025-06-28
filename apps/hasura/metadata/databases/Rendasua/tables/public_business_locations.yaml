@@ -27,3 +27,52 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
+        - created_at
+        - updated_at
+      filter: {}

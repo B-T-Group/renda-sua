@@ -29,14 +29,14 @@ const Header: React.FC = () => {
               <Logo variant="with-tagline" color="white" size="medium" />
             </RouterLink>
           </Box>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {isAuthenticated ? (
               <>
                 <Button
                   color="inherit"
                   component={RouterLink}
-                  to="/dashboard"
+                  to="/app"
                   sx={{ display: { xs: 'none', md: 'block' } }}
                 >
                   Dashboard
@@ -54,12 +54,9 @@ const Header: React.FC = () => {
             ) : (
               <LoginButton />
             )}
-            
+
             {isMobile && (
-              <Button
-                color="inherit"
-                sx={{ minWidth: 'auto', p: 1 }}
-              >
+              <Button color="inherit" sx={{ minWidth: 'auto', p: 1 }}>
                 <MenuIcon />
               </Button>
             )}
@@ -70,4 +67,4 @@ const Header: React.FC = () => {
   );
 };
 
-export default Header; 
+export default Header;

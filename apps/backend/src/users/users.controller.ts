@@ -15,7 +15,7 @@ export class UsersController {
   @Get('me')
   async getCurrentUser() {
     try {
-      const user = this.hasuraUserService.getUser();
+      const user = await this.hasuraUserService.getUser();
 
       const identifier = this.hasuraUserService.getIdentifier();
 

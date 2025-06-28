@@ -15,3 +15,40 @@ array_relationships:
         remote_table:
           name: items
           schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - name
+        - item_category_id
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - item_category_id
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - item_category_id
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - item_category_id
+        - created_at
+        - updated_at
+      filter: {}

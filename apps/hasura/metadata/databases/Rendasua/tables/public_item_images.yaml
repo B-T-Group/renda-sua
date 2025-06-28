@@ -8,3 +8,60 @@ object_relationships:
   - name: uploaded_by_user
     using:
       foreign_key_constraint_on: uploaded_by
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}

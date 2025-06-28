@@ -11,3 +11,36 @@ array_relationships:
         remote_table:
           name: item_sub_categories
           schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - name
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - created_at
+        - updated_at
+      filter: {}

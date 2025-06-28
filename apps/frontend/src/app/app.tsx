@@ -9,9 +9,13 @@ import LoadingPage from '../components/common/LoadingPage';
 import Header from '../components/layout/Header';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
+import AgentDashboard from '../components/pages/AgentDashboard';
+import BusinessDashboard from '../components/pages/BusinessDashboard';
+import ErrorPage from '../components/pages/ErrorPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';
+import ProfileRouter from '../components/routing/ProfileRouter';
 
 function App() {
   const { isLoading } = useAuth0();
@@ -38,6 +42,18 @@ function App() {
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+
+          {/* Profile router - handles authentication and profile checking */}
+          <Route
+            path="/app"
+            element={
+              <ProtectedRoute>
+                <ProfileRouter />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Individual dashboard routes */}
           <Route
             path="/dashboard"
             element={
@@ -46,6 +62,24 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/agent-dashboard"
+            element={
+              <ProtectedRoute>
+                <AgentDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/business-dashboard"
+            element={
+              <ProtectedRoute>
+                <BusinessDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Profile management routes */}
           <Route
             path="/profile"
             element={
@@ -62,7 +96,19 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Demo route */}
           <Route path="/loading-demo" element={<LoadingDemo />} />
+
+          {/* Catch-all route - redirect to profile router */}
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <ProfileRouter />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </Container>
     </Box>
