@@ -204,7 +204,7 @@ export class AppController {
                 user_type_id
                 created_at
                 updated_at
-                businesses {
+                business {
                   id
                   user_id
                   name
@@ -224,7 +224,7 @@ export class AppController {
           return {
             success: true,
             user: result.insert_users_one,
-            business: result.insert_users_one.businesses[0],
+            business: result.insert_users_one.business,
           };
 
         default:

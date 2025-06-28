@@ -1,0 +1,7 @@
+table:
+  schema: public
+  name: business_inventory
+select_permissions: []
+insert_permissions: []
+update_permissions: []
+delete_permissions: []

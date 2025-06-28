@@ -1,0 +1,7 @@
+table:
+  schema: public
+  name: addresses
+select_permissions: []
+insert_permissions: []
+update_permissions: []
+delete_permissions: []

@@ -1,0 +1,7 @@
+table:
+  schema: public
+  name: business_locations
+select_permissions: []
+insert_permissions: []
+update_permissions: []
+delete_permissions: []

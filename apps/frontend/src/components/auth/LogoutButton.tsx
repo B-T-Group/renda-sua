@@ -8,11 +8,23 @@ const LogoutButton = () => {
 
   return (
     <Button
-      variant="outlined"
-      color="primary"
+      variant="contained"
+      color="error"
       startIcon={<Logout />}
       onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
       size="medium"
+      sx={{
+        bgcolor: 'rgba(255, 255, 255, 0.15)',
+        color: 'white',
+        border: '1px solid rgba(255, 255, 255, 0.3)',
+        '&:hover': {
+          bgcolor: 'rgba(255, 255, 255, 0.25)',
+          border: '1px solid rgba(255, 255, 255, 0.5)',
+        },
+        fontWeight: 500,
+        textTransform: 'none',
+        px: 2,
+      }}
     >
       Log Out
     </Button>
