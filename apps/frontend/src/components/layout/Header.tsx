@@ -14,9 +14,11 @@ import Logo from '../common/Logo';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useUserProfile } from '../../hooks';
 
 const Header: React.FC = () => {
   const { isAuthenticated } = useAuth0();
+  const { userType } = useUserProfile();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -41,6 +43,19 @@ const Header: React.FC = () => {
                 >
                   Dashboard
                 </Button>
+
+                {/* Show Orders link for clients */}
+                {userType === 'client' && (
+                  <Button
+                    color="inherit"
+                    component={RouterLink}
+                    to="/client-orders"
+                    sx={{ display: { xs: 'none', md: 'block' } }}
+                  >
+                    My Orders
+                  </Button>
+                )}
+
                 <Button
                   color="inherit"
                   component={RouterLink}

@@ -11,6 +11,7 @@ import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
+import { ClientOrders } from '../components/pages/ClientOrders';
 import ErrorPage from '../components/pages/ErrorPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
@@ -99,6 +100,16 @@ function App() {
 
           {/* Demo route */}
           <Route path="/loading-demo" element={<LoadingDemo />} />
+
+          {/* Client Orders route */}
+          <Route
+            path="/client-orders"
+            element={
+              <ProtectedRoute>
+                <ClientOrders />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Catch-all route - redirect to profile router */}
           <Route
