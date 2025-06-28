@@ -36,6 +36,7 @@ select_permissions:
         - latitude
         - longitude
         - is_primary
+        - address_type
         - created_at
         - updated_at
       filter: {}
@@ -54,6 +55,7 @@ select_permissions:
         - latitude
         - longitude
         - is_primary
+        - address_type
         - created_at
         - updated_at
       filter: {}
@@ -72,6 +74,7 @@ select_permissions:
         - latitude
         - longitude
         - is_primary
+        - address_type
         - created_at
         - updated_at
       filter: {}
