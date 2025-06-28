@@ -28,8 +28,9 @@ insert_permissions:
   - role: business
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - user_id
         - name
@@ -43,8 +44,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
 update_permissions:
   - role: business
     permission:
@@ -52,6 +54,7 @@ update_permissions:
         - name
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       check: null

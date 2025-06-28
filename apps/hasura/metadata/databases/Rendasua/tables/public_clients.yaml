@@ -19,8 +19,9 @@ insert_permissions:
   - role: client
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - user_id
 select_permissions:
@@ -32,14 +33,16 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
 update_permissions:
   - role: client
     permission:
       columns:
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       check: null

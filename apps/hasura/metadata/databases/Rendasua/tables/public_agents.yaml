@@ -22,8 +22,9 @@ insert_permissions:
   - role: agent
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - user_id
         - vehicle_type_id
@@ -37,8 +38,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
     permission:
@@ -46,6 +48,7 @@ update_permissions:
         - vehicle_type_id
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       check: null
