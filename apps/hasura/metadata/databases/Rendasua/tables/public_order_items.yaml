@@ -1,0 +1,13 @@
+table:
+  name: order_items
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: business_inventory
+    using:
+      foreign_key_constraint_on: business_inventory_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id

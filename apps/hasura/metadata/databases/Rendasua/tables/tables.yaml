@@ -13,3 +13,6 @@
 - '!include public_business_inventory.yaml'
 - '!include public_accounts.yaml'
 - '!include public_account_transactions.yaml'
+- '!include public_orders.yaml'
+- '!include public_order_items.yaml'
+- '!include public_order_status_history.yaml'
