@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
+import { useApiClient } from './useApiClient';
 
 // GraphQL Queries and Mutations
 const GET_USER_PROFILE = `
@@ -46,7 +47,7 @@ const GET_USER_PROFILE = `
 `;
 
 const UPDATE_USER = `
-  mutation UpdateUser($id: uuid!, $first_name: String, $last_name: String) {
+  mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!) {
     update_users_by_pk(
       pk_columns: { id: $id }
       _set: { first_name: $first_name, last_name: $last_name }
@@ -54,6 +55,10 @@ const UPDATE_USER = `
       id
       first_name
       last_name
+      email
+      identifier
+      user_type_id
+      created_at
       updated_at
     }
   }
@@ -88,6 +93,8 @@ const UPDATE_ADDRESS = `
       _set: $address
     ) {
       id
+      entity_type
+      entity_id
       address_line_1
       address_line_2
       city
@@ -96,21 +103,8 @@ const UPDATE_ADDRESS = `
       country
       is_primary
       address_type
-      updated_at
-    }
-  }
-`;
-
-const INSERT_ACCOUNT = `
-  mutation InsertAccount($account: accounts_insert_input!) {
-    insert_accounts_one(object: $account) {
-      id
-      user_id
-      currency
-      available_balance
-      withheld_balance
-      total_balance
-      is_active
+      latitude
+      longitude
       created_at
       updated_at
     }
@@ -184,7 +178,9 @@ export const useProfile = () => {
   const { execute: updateUser } = useGraphQLRequest(UPDATE_USER);
   const { execute: insertAddress } = useGraphQLRequest(INSERT_ADDRESS);
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
-  const { execute: insertAccount } = useGraphQLRequest(INSERT_ACCOUNT);
+  
+  // API client for backend calls
+  const apiClient = useApiClient();
 
   // Load profile data
   useEffect(() => {
@@ -240,6 +236,11 @@ export const useProfile = () => {
 
   const handleAccountCreate = async (userId: string, userTypeId: string, currency: string) => {
     try {
+      if (!apiClient) {
+        setErrorMessage('API client not available');
+        return false;
+      }
+
       // Check if account with this currency already exists
       const existingAccount = data?.accounts.find(
         acc => acc.currency === currency
@@ -250,20 +251,25 @@ export const useProfile = () => {
         return false;
       }
 
-      await insertAccount({
-        account: {
-          user_id: userId,
-          currency: currency,
-          available_balance: 0,
-          withheld_balance: 0,
-        },
+      // Use backend API to create account
+      const response = await apiClient.post('/accounts', {
+        currency: currency,
       });
 
-      setSuccessMessage('Account created successfully!');
-      refetch();
-      return true;
-    } catch (error) {
-      setErrorMessage('Failed to create account');
+      if (response.data.success) {
+        setSuccessMessage('Account created successfully!');
+        refetch();
+        return true;
+      } else {
+        setErrorMessage(response.data.error || 'Failed to create account');
+        return false;
+      }
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        setErrorMessage('Account with this currency already exists');
+      } else {
+        setErrorMessage('Failed to create account');
+      }
       console.error('Error creating account:', error);
       return false;
     }
