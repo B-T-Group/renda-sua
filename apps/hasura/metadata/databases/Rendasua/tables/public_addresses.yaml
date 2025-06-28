@@ -5,3 +5,12 @@ select_permissions: []
 insert_permissions: []
 update_permissions: []
 delete_permissions: []
+array_relationships:
+  - name: business_locations
+    using:
+      manual_configuration:
+        remote_table:
+          schema: public
+          name: business_locations
+        column_mapping:
+          id: address_id

@@ -1,3 +1,12 @@
 table:
   name: item_categories
   schema: public
+array_relationships:
+  - name: item_sub_categories
+    using:
+      manual_configuration:
+        remote_table:
+          schema: public
+          name: item_sub_categories
+        column_mapping:
+          id: item_category_id
