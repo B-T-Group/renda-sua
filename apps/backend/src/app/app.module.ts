@@ -4,10 +4,11 @@ import { AppService } from './app.service';
 import { HasuraModule } from '../hasura/hasura.module';
 import { UsersModule } from '../users/users.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { OrdersModule } from '../orders/orders.module';
 import { AccountsController } from '../accounts/accounts.controller';
 
 @Module({
-  imports: [HasuraModule, UsersModule, AccountsModule],
+  imports: [HasuraModule, UsersModule, AccountsModule, OrdersModule],
   controllers: [AppController, AccountsController],
   providers: [AppService],
 })

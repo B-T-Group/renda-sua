@@ -50,6 +50,40 @@ export interface UserWithBusinessRecord {
   business: BusinessRecord;
 }
 
+export interface OrderItem {
+  item_id: string;
+  quantity: number;
+}
+
+export interface CreateOrderRequest {
+  items: OrderItem[];
+}
+
+export interface Item {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  available_quantity: number;
+}
+
+export interface Account {
+  id: string;
+  currency: string;
+  available_balance: number;
+  withheld_balance: number;
+  total_balance: number;
+}
+
+export interface OrderResult {
+  id: string;
+  user_id: string;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  order_items: any[];
+}
+
 @Injectable({ scope: Scope.REQUEST })
 export class HasuraUserService {
   public identifier!: string;
@@ -421,5 +455,260 @@ export class HasuraUserService {
    */
   isConfigured(): boolean {
     return !!(this.hasuraUrl && this._authToken && this.identifier);
+  }
+
+  /**
+   * Get the current user by identifier
+   */
+  async getUser(): Promise<UserRecord> {
+    const getUserQuery = `
+      query GetUserByIdentifier($identifier: String!) {
+        users(where: {identifier: {_eq: $identifier}}) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          user_type_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const userResult = await this.executeQuery(getUserQuery, {
+      identifier: this.identifier,
+    });
+
+    if (!userResult.users || userResult.users.length === 0) {
+      throw new Error('User not found');
+    }
+
+    return userResult.users[0];
+  }
+
+  /**
+   * Create a new order with validation and fund withholding
+   */
+  async createOrder(orderData: CreateOrderRequest): Promise<OrderResult> {
+    // Get the current user
+    const user = await this.getUser();
+
+    // Get items with their prices and currencies
+    const itemIds = orderData.items.map(item => item.item_id);
+    const getItemsQuery = `
+      query GetItems($itemIds: [uuid!]!) {
+        items(where: {id: {_in: $itemIds}}) {
+          id
+          name
+          price
+          currency
+          available_quantity
+        }
+      }
+    `;
+
+    const itemsResult = await this.executeQuery(getItemsQuery, {
+      itemIds,
+    });
+
+    if (!itemsResult.items || itemsResult.items.length === 0) {
+      throw new Error('No valid items found');
+    }
+
+    const items = itemsResult.items as Item[];
+
+    // Group items by currency and calculate totals
+    const currencyGroups = new Map<string, { items: any[], total: number }>();
+    
+    for (const orderItem of orderData.items) {
+      const item = items.find((i: Item) => i.id === orderItem.item_id);
+      if (!item) {
+        throw new Error(`Item ${orderItem.item_id} not found`);
+      }
+
+      if (orderItem.quantity > item.available_quantity) {
+        throw new Error(`Insufficient quantity for item ${item.name}`);
+      }
+
+      const total = item.price * orderItem.quantity;
+      const currency = item.currency;
+
+      if (!currencyGroups.has(currency)) {
+        currencyGroups.set(currency, { items: [], total: 0 });
+      }
+
+      currencyGroups.get(currency)!.items.push({ ...orderItem, item });
+      currencyGroups.get(currency)!.total += total;
+    }
+
+    // Check user accounts for each currency
+    const currencies = Array.from(currencyGroups.keys());
+    const getAccountsQuery = `
+      query GetUserAccounts($userId: uuid!, $currencies: [currency_enum!]!) {
+        accounts(where: {user_id: {_eq: $userId}, currency: {_in: $currencies}}) {
+          id
+          currency
+          available_balance
+          withheld_balance
+          total_balance
+        }
+      }
+    `;
+
+    const accountsResult = await this.executeQuery(getAccountsQuery, {
+      userId: user.id,
+      currencies,
+    });
+
+    const userAccounts = (accountsResult.accounts || []) as Account[];
+
+    // Validate funds for each currency
+    for (const [currency, { total }] of currencyGroups) {
+      const account = userAccounts.find((acc: Account) => acc.currency === currency);
+      
+      if (!account) {
+        throw new Error(`No account found for currency ${currency}`);
+      }
+
+      if (account.available_balance < total) {
+        throw new Error(`Insufficient funds for currency ${currency}. Required: ${total}, Available: ${account.available_balance}`);
+      }
+    }
+
+    // Create order with all related data in a transaction
+    const createOrderMutation = `
+      mutation CreateOrderWithItems(
+        $userId: uuid!,
+        $orderItems: [order_items_insert_input!]!,
+        $statusHistory: order_status_history_insert_input!
+      ) {
+        insert_orders_one(object: {
+          user_id: $userId,
+          status: "pending",
+          total_amount: 0,
+          order_items: {
+            data: $orderItems
+          }
+        }) {
+          id
+          user_id
+          status
+          total_amount
+          created_at
+          order_items {
+            id
+            item_id
+            quantity
+            unit_price
+            total_price
+          }
+        }
+        
+        insert_order_status_history_one(object: $statusHistory) {
+          id
+          order_id
+          status
+          created_at
+        }
+      }
+    `;
+
+    // Prepare order items data
+    const orderItemsData = [];
+    let totalOrderAmount = 0;
+
+    for (const [currency, { items: currencyItems }] of currencyGroups) {
+      for (const orderItem of currencyItems) {
+        const totalPrice = orderItem.item.price * orderItem.quantity;
+        totalOrderAmount += totalPrice;
+        
+        orderItemsData.push({
+          item_id: orderItem.item_id,
+          quantity: orderItem.quantity,
+          unit_price: orderItem.item.price,
+          total_price: totalPrice,
+        });
+      }
+    }
+
+    // Create the order
+    const orderResult = await this.executeMutation(createOrderMutation, {
+      userId: user.id,
+      orderItems: orderItemsData,
+      statusHistory: {
+        order_id: null, // Will be set after order creation
+        status: "pending",
+        notes: "Order created"
+      }
+    });
+
+    const order = orderResult.insert_orders_one;
+
+    // Update the order with total amount
+    const updateOrderMutation = `
+      mutation UpdateOrderTotal($orderId: uuid!, $totalAmount: numeric!) {
+        update_orders_by_pk(
+          pk_columns: {id: $orderId},
+          _set: {total_amount: $totalAmount}
+        ) {
+          id
+          total_amount
+        }
+      }
+    `;
+
+    await this.executeMutation(updateOrderMutation, {
+      orderId: order.id,
+      totalAmount: totalOrderAmount,
+    });
+
+    // Update order status history with the correct order_id
+    const updateStatusHistoryMutation = `
+      mutation UpdateStatusHistoryOrderId($orderId: uuid!) {
+        update_order_status_history(
+          where: {order_id: {_is_null: true}},
+          _set: {order_id: $orderId}
+        ) {
+          affected_rows
+        }
+      }
+    `;
+
+    await this.executeMutation(updateStatusHistoryMutation, {
+      orderId: order.id,
+    });
+
+    // Withhold funds from user accounts
+    for (const [currency, { total }] of currencyGroups) {
+      const account = userAccounts.find((acc: Account) => acc.currency === currency);
+      
+      const withholdFundsMutation = `
+        mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
+          update_accounts_by_pk(
+            pk_columns: {id: $accountId},
+            _inc: {
+              available_balance: $amount,
+              withheld_balance: $amount
+            }
+          ) {
+            id
+            available_balance
+            withheld_balance
+            total_balance
+          }
+        }
+      `;
+
+      await this.executeMutation(withholdFundsMutation, {
+        accountId: account!.id,
+        amount: -total, // Negative to decrease available_balance
+      });
+    }
+
+    return {
+      ...order,
+      total_amount: totalOrderAmount,
+    };
   }
 } 
