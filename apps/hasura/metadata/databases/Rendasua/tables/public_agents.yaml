@@ -8,3 +8,42 @@ object_relationships:
   - name: vehicle_type
     using:
       foreign_key_constraint_on: vehicle_type_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - vehicle_type_id
+        - is_available
+        - current_location_lat
+        - current_location_lng
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - vehicle_type_id
+        - is_available
+        - current_location_lat
+        - current_location_lng
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - vehicle_type_id
+        - is_available
+        - current_location_lat
+        - current_location_lng
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id

@@ -8,3 +8,60 @@ object_relationships:
   - name: item
     using:
       foreign_key_constraint_on: item_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - quantity_available
+        - unit_price
+        - is_available
+        - created_at
+        - updated_at
+      filter:
+        is_available:
+          _eq: true
+        quantity_available:
+          _gt: 0
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - quantity_available
+        - unit_price
+        - is_available
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          business_id:
+            _eq: X-Hasura-User-Id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business_location:
+          business_id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - business_location_id
+        - item_id
+        - quantity_available
+        - unit_price
+        - is_available
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - quantity_available
+        - unit_price
+        - is_available
+        - updated_at
+      filter:
+        business_location:
+          business_id:
+            _eq: X-Hasura-User-Id

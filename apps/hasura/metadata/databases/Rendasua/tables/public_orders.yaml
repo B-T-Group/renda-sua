@@ -2,18 +2,18 @@ table:
   name: orders
   schema: public
 object_relationships:
-  - name: assigned_agent
+  - name: client
     using:
-      foreign_key_constraint_on: assigned_agent_id
+      foreign_key_constraint_on: client_id
   - name: business
     using:
       foreign_key_constraint_on: business_id
   - name: business_location
     using:
       foreign_key_constraint_on: business_location_id
-  - name: client
+  - name: assigned_agent
     using:
-      foreign_key_constraint_on: client_id
+      foreign_key_constraint_on: assigned_agent_id
   - name: delivery_address
     using:
       foreign_key_constraint_on: delivery_address_id
@@ -21,18 +21,150 @@ array_relationships:
   - name: order_items
     using:
       manual_configuration:
+        remote_table:
+          schema: public
+          name: order_items
         column_mapping:
           id: order_id
-        insertion_order: null
-        remote_table:
-          name: order_items
-          schema: public
   - name: order_status_history
     using:
       manual_configuration:
+        remote_table:
+          schema: public
+          name: order_status_history
         column_mapping:
           id: order_id
-        insertion_order: null
-        remote_table:
-          name: order_status_history
-          schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_number
+        - client_id
+        - business_id
+        - business_location_id
+        - assigned_agent_id
+        - delivery_address_id
+        - subtotal
+        - delivery_fee
+        - tax_amount
+        - total_amount
+        - currency
+        - current_status
+        - estimated_delivery_time
+        - actual_delivery_time
+        - special_instructions
+        - preferred_delivery_time
+        - payment_method
+        - payment_status
+        - created_at
+        - updated_at
+      filter:
+        client_id:
+          _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_number
+        - client_id
+        - business_id
+        - business_location_id
+        - assigned_agent_id
+        - delivery_address_id
+        - subtotal
+        - delivery_fee
+        - tax_amount
+        - total_amount
+        - currency
+        - current_status
+        - estimated_delivery_time
+        - actual_delivery_time
+        - special_instructions
+        - preferred_delivery_time
+        - payment_method
+        - payment_status
+        - created_at
+        - updated_at
+      filter:
+        assigned_agent_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_number
+        - client_id
+        - business_id
+        - business_location_id
+        - assigned_agent_id
+        - delivery_address_id
+        - subtotal
+        - delivery_fee
+        - tax_amount
+        - total_amount
+        - currency
+        - current_status
+        - estimated_delivery_time
+        - actual_delivery_time
+        - special_instructions
+        - preferred_delivery_time
+        - payment_method
+        - payment_status
+        - created_at
+        - updated_at
+      filter:
+        business_id:
+          _eq: X-Hasura-User-Id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        client_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - client_id
+        - business_id
+        - business_location_id
+        - delivery_address_id
+        - subtotal
+        - delivery_fee
+        - tax_amount
+        - total_amount
+        - currency
+        - special_instructions
+        - preferred_delivery_time
+        - payment_method
+update_permissions:
+  - role: client
+    permission:
+      columns:
+        - special_instructions
+        - preferred_delivery_time
+        - updated_at
+      filter:
+        client_id:
+          _eq: X-Hasura-User-Id
+        current_status:
+          _in:
+            - pending
+            - confirmed
+  - role: agent
+    permission:
+      columns:
+        - current_status
+        - actual_delivery_time
+        - updated_at
+      filter:
+        assigned_agent_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - current_status
+        - assigned_agent_id
+        - estimated_delivery_time
+        - updated_at
+      filter:
+        business_id:
+          _eq: X-Hasura-User-Id
