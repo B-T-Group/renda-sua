@@ -63,7 +63,6 @@ const Profile: React.FC = () => {
   });
 
   const [accountForm, setAccountForm] = useState({
-    account_type: 'client',
     currency: '',
   });
 
@@ -162,14 +161,13 @@ const Profile: React.FC = () => {
 
     const success = await handleAccountCreate(
       userProfile.id,
-      accountForm.account_type,
+      userProfile.user_type_id,
       accountForm.currency
     );
 
     if (success) {
       setAccountDialogOpen(false);
       setAccountForm({
-        account_type: 'client',
         currency: '',
       });
     }
@@ -207,7 +205,6 @@ const Profile: React.FC = () => {
 
   const handleAddAccount = () => {
     setAccountForm({
-      account_type: 'client',
       currency: '',
     });
     setAccountDialogOpen(true);
@@ -216,6 +213,10 @@ const Profile: React.FC = () => {
   const getCurrencyForCountry = (countryCode: string) => {
     const country = Country.getCountryByCode(countryCode);
     return country?.currency || 'USD';
+  };
+
+  const capitalizeUserType = (userType: string) => {
+    return userType.charAt(0).toUpperCase() + userType.slice(1);
   };
 
   if (loading) {
@@ -452,7 +453,7 @@ const Profile: React.FC = () => {
                 <Card key={account.id} variant="outlined">
                   <CardContent>
                     <Typography variant="h6" color="primary">
-                      {account.currency} Account
+                      {capitalizeUserType(account.account_type)} Account
                     </Typography>
                     <Typography variant="h4">
                       ${account.available_balance.toFixed(2)}
@@ -464,7 +465,7 @@ const Profile: React.FC = () => {
                       Total: ${account.total_balance.toFixed(2)}
                     </Typography>
                     <Chip
-                      label={account.account_type}
+                      label={account.currency}
                       size="small"
                       sx={{ mt: 1 }}
                     />
@@ -636,26 +637,20 @@ const Profile: React.FC = () => {
         open={accountDialogOpen}
         onClose={() => setAccountDialogOpen(false)}
       >
-        <DialogTitle>Add New Account</DialogTitle>
+        <DialogTitle>
+          Add New{' '}
+          {userProfile ? capitalizeUserType(userProfile.user_type_id) : 'User'}{' '}
+          Account
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel>Account Type</InputLabel>
-              <Select
-                value={accountForm.account_type}
-                onChange={(e) =>
-                  setAccountForm((prev) => ({
-                    ...prev,
-                    account_type: e.target.value,
-                  }))
-                }
-                label="Account Type"
-              >
-                <MenuItem value="client">Client</MenuItem>
-                <MenuItem value="agent">Agent</MenuItem>
-                <MenuItem value="business">Business</MenuItem>
-              </Select>
-            </FormControl>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              This account will be created as a{' '}
+              {userProfile
+                ? capitalizeUserType(userProfile.user_type_id)
+                : 'user'}{' '}
+              account.
+            </Typography>
             <FormControl fullWidth>
               <InputLabel>Currency</InputLabel>
               <Select

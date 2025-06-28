@@ -54,3 +54,97 @@ array_relationships:
         remote_table:
           name: order_status_history
           schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - first_name
+        - last_name
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: business
+    permission:
+      columns:
+        - first_name
+        - last_name
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: client
+    permission:
+      columns:
+        - first_name
+        - last_name
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: user
+    permission:
+      columns:
+        - first_name
+        - last_name
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+      check: null

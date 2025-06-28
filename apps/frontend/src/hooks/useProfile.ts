@@ -10,6 +10,7 @@ const GET_USER_PROFILE = `
       last_name
       email
       identifier
+      user_type_id
       created_at
       updated_at
     }
@@ -124,6 +125,7 @@ interface UserProfile {
   last_name: string;
   email: string;
   identifier: string;
+  user_type_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -239,7 +241,7 @@ export const useProfile = () => {
     }
   };
 
-  const handleAccountCreate = async (userId: string, accountType: string, currency: string) => {
+  const handleAccountCreate = async (userId: string, userTypeId: string, currency: string) => {
     try {
       // Check if account with this currency already exists
       const existingAccount = data?.accounts.find(
@@ -254,7 +256,7 @@ export const useProfile = () => {
       await insertAccount({
         account: {
           user_id: userId,
-          account_type: accountType,
+          account_type: userTypeId,
           currency: currency,
           available_balance: 0,
           withheld_balance: 0,

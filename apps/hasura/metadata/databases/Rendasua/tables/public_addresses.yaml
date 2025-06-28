@@ -21,24 +21,6 @@ array_relationships:
           name: orders
           schema: public
 select_permissions:
-  - role: client
-    permission:
-      columns:
-        - id
-        - entity_type
-        - entity_id
-        - address_line_1
-        - address_line_2
-        - city
-        - state
-        - postal_code
-        - country
-        - latitude
-        - longitude
-        - is_primary
-        - created_at
-        - updated_at
-      filter: {}
   - role: agent
     permission:
       columns:
@@ -58,6 +40,24 @@ select_permissions:
         - updated_at
       filter: {}
   - role: business
+    permission:
+      columns:
+        - id
+        - entity_type
+        - entity_id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
     permission:
       columns:
         - id

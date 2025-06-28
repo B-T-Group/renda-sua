@@ -1,30 +1,29 @@
 table:
   name: items
   schema: public
-insert_permissions: []
-update_permissions: []
-delete_permissions: []
 object_relationships:
   - name: item_sub_category
     using:
       foreign_key_constraint_on: item_sub_category_id
 array_relationships:
-  - name: item_images
-    using:
-      manual_configuration:
-        remote_table:
-          schema: public
-          name: item_images
-        column_mapping:
-          id: item_id
   - name: business_inventories
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: business_inventory
         column_mapping:
           id: item_id
+        insertion_order: null
+        remote_table:
+          name: business_inventory
+          schema: public
+  - name: item_images
+    using:
+      manual_configuration:
+        column_mapping:
+          id: item_id
+        insertion_order: null
+        remote_table:
+          name: item_images
+          schema: public
   - name: order_items
     using:
       manual_configuration:
@@ -35,21 +34,6 @@ array_relationships:
           name: order_items
           schema: public
 select_permissions:
-  - role: client
-    permission:
-      columns:
-        - id
-        - name
-        - description
-        - price
-        - weight
-        - weight_unit
-        - size
-        - size_unit
-        - item_sub_category_id
-        - created_at
-        - updated_at
-      filter: {}
   - role: agent
     permission:
       columns:
@@ -66,6 +50,21 @@ select_permissions:
         - updated_at
       filter: {}
   - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - price
+        - weight
+        - weight_unit
+        - size
+        - size_unit
+        - item_sub_category_id
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
     permission:
       columns:
         - id

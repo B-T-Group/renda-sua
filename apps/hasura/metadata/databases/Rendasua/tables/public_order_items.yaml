@@ -2,20 +2,23 @@ table:
   name: order_items
   schema: public
 object_relationships:
-  - name: order
-    using:
-      foreign_key_constraint_on: order_id
   - name: business_inventory
     using:
       foreign_key_constraint_on: business_inventory_id
   - name: item
     using:
       foreign_key_constraint_on: item_id
-select_permissions:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+insert_permissions:
   - role: client
     permission:
+      check:
+        order:
+          client_id:
+            _eq: X-Hasura-User-Id
       columns:
-        - id
         - order_id
         - business_inventory_id
         - item_id
@@ -23,17 +26,11 @@ select_permissions:
         - item_description
         - unit_price
         - quantity
-        - total_price
         - weight
         - weight_unit
         - dimensions
         - special_instructions
-        - created_at
-        - updated_at
-      filter:
-        order:
-          client_id:
-            _eq: X-Hasura-User-Id
+select_permissions:
   - role: agent
     permission:
       columns:
@@ -78,14 +75,10 @@ select_permissions:
         order:
           business_id:
             _eq: X-Hasura-User-Id
-insert_permissions:
   - role: client
     permission:
-      check:
-        order:
-          client_id:
-            _eq: X-Hasura-User-Id
       columns:
+        - id
         - order_id
         - business_inventory_id
         - item_id
@@ -93,7 +86,14 @@ insert_permissions:
         - item_description
         - unit_price
         - quantity
+        - total_price
         - weight
         - weight_unit
         - dimensions
         - special_instructions
+        - created_at
+        - updated_at
+      filter:
+        order:
+          client_id:
+            _eq: X-Hasura-User-Id
