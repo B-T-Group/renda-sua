@@ -10,6 +10,9 @@ export { useLoginFlow } from './useLoginFlow';
 // User Types Hook
 export { useUserTypes } from './useUserTypes';
 
+// Profile Hook
+export { useProfile } from './useProfile';
+
 // Loading Components
 export { default as LoadingPage } from '../components/common/LoadingPage';
 export { default as LoadingSpinner } from '../components/common/LoadingSpinner';

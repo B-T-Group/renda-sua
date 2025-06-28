@@ -5,13 +5,13 @@ import { Box, Container } from '@mui/material';
 import { useMemo } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
-import UserProfile from '../components/auth/UserProfile';
 import LoadingPage from '../components/common/LoadingPage';
 import Header from '../components/layout/Header';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
+import Profile from '../components/pages/Profile';
 
 function App() {
   const { isLoading } = useAuth0();
@@ -50,7 +50,7 @@ function App() {
             path="/profile"
             element={
               <ProtectedRoute>
-                <UserProfile />
+                <Profile />
               </ProtectedRoute>
             }
           />
