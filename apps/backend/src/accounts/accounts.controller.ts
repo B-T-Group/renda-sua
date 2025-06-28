@@ -43,7 +43,7 @@ export class AccountsController {
 
       // Check if user already has an account with this currency
       const checkExistingAccountQuery = `
-        query CheckExistingAccount($userId: uuid!, $currency: String!) {
+        query CheckExistingAccount($userId: uuid!, $currency: currency_enum!) {
           accounts(where: {user_id: {_eq: $userId}, currency: {_eq: $currency}}) {
             id
             currency
@@ -73,7 +73,7 @@ export class AccountsController {
       const createAccountMutation = `
         mutation CreateAccount(
           $userId: uuid!, 
-          $currency: String!
+          $currency: currency_enum!
         ) {
           insert_accounts_one(object: {
             user_id: $userId,
