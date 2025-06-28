@@ -18,3 +18,12 @@ array_relationships:
         remote_table:
           name: business_inventory
           schema: public
+  - name: orders
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_location_id
+        insertion_order: null
+        remote_table:
+          name: orders
+          schema: public

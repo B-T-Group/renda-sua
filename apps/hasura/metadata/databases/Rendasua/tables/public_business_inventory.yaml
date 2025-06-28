@@ -8,6 +8,16 @@ object_relationships:
   - name: item
     using:
       foreign_key_constraint_on: item_id
+array_relationships:
+  - name: order_items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_inventory_id
+        insertion_order: null
+        remote_table:
+          name: order_items
+          schema: public
 select_permissions:
   - role: client
     permission:
