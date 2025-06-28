@@ -1,5 +1,6 @@
 import { Injectable, Scope, Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
+import { HasuraSystemService } from './hasura-system.service';
 
 export interface UserRecord {
   id: string;
@@ -93,7 +94,10 @@ export class HasuraUserService {
   private readonly hasuraUrl: string;
   private _authToken: string | null = null;
 
-  constructor(@Inject(REQUEST) private readonly request: any) {
+  constructor(
+    @Inject(REQUEST) private readonly request: any,
+    private readonly hasuraSystemService: HasuraSystemService
+  ) {
     this.hasuraUrl =
       process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();
@@ -868,7 +872,7 @@ export class HasuraUserService {
       }
     `;
 
-    await this.executeMutation(withholdFundsMutation, {
+    await this.hasuraSystemService.executeMutation(withholdFundsMutation, {
       accountId: account!.id,
       amount: -totalAmount, // Negative to decrease available_balance
     });
