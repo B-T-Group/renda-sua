@@ -11,3 +11,5 @@
 - '!include public_addresses.yaml'
 - '!include public_business_locations.yaml'
 - '!include public_business_inventory.yaml'
+- '!include public_accounts.yaml'
+- '!include public_account_transactions.yaml'
