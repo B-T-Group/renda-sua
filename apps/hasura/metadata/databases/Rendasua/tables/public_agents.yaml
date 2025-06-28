@@ -15,9 +15,6 @@ select_permissions:
         - id
         - user_id
         - vehicle_type_id
-        - is_available
-        - current_location_lat
-        - current_location_lng
         - created_at
         - updated_at
       filter:
@@ -32,17 +29,11 @@ insert_permissions:
       columns:
         - user_id
         - vehicle_type_id
-        - is_available
-        - current_location_lat
-        - current_location_lng
 update_permissions:
   - role: agent
     permission:
       columns:
         - vehicle_type_id
-        - is_available
-        - current_location_lat
-        - current_location_lng
         - updated_at
       filter:
         user_id:

@@ -18,7 +18,8 @@ select_permissions:
         - id
         - entity_type
         - entity_id
-        - street_address
+        - address_line_1
+        - address_line_2
         - city
         - state
         - postal_code
@@ -35,7 +36,8 @@ select_permissions:
         - id
         - entity_type
         - entity_id
-        - street_address
+        - address_line_1
+        - address_line_2
         - city
         - state
         - postal_code
@@ -52,7 +54,8 @@ select_permissions:
         - id
         - entity_type
         - entity_id
-        - street_address
+        - address_line_1
+        - address_line_2
         - city
         - state
         - postal_code

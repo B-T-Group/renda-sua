@@ -15,15 +15,15 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - quantity_available
-        - unit_price
-        - is_available
+        - available_quantity
+        - selling_price
+        - is_active
         - created_at
         - updated_at
       filter:
-        is_available:
+        is_active:
           _eq: true
-        quantity_available:
+        available_quantity:
           _gt: 0
   - role: business
     permission:
@@ -31,9 +31,15 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - quantity_available
-        - unit_price
-        - is_available
+        - quantity
+        - available_quantity
+        - reserved_quantity
+        - reorder_point
+        - reorder_quantity
+        - unit_cost
+        - selling_price
+        - is_active
+        - last_restocked_at
         - created_at
         - updated_at
       filter:
@@ -50,16 +56,27 @@ insert_permissions:
       columns:
         - business_location_id
         - item_id
-        - quantity_available
-        - unit_price
-        - is_available
+        - quantity
+        - available_quantity
+        - reserved_quantity
+        - reorder_point
+        - reorder_quantity
+        - unit_cost
+        - selling_price
+        - is_active
 update_permissions:
   - role: business
     permission:
       columns:
-        - quantity_available
-        - unit_price
-        - is_available
+        - quantity
+        - available_quantity
+        - reserved_quantity
+        - reorder_point
+        - reorder_quantity
+        - unit_cost
+        - selling_price
+        - is_active
+        - last_restocked_at
         - updated_at
       filter:
         business_location:
