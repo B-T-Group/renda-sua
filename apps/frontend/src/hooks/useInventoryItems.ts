@@ -17,11 +17,25 @@ const GET_INVENTORY_ITEMS = `
         name
         description
         price
+        currency
         weight
         weight_unit
         size
         size_unit
         item_sub_category_id
+        sku
+        brand
+        model
+        color
+        material
+        is_fragile
+        is_perishable
+        requires_special_handling
+        max_delivery_distance
+        estimated_delivery_time
+        min_order_quantity
+        max_order_quantity
+        is_active
         created_at
         updated_at
         item_sub_category {
@@ -75,11 +89,25 @@ export interface InventoryItem {
     name: string;
     description: string;
     price: number;
+    currency: string;
     weight: number;
     weight_unit: string;
     size: number;
     size_unit: string;
     item_sub_category_id: number;
+    sku: string;
+    brand: string;
+    model: string;
+    color: string;
+    material: string;
+    is_fragile: boolean;
+    is_perishable: boolean;
+    requires_special_handling: boolean;
+    max_delivery_distance: number;
+    estimated_delivery_time: number;
+    min_order_quantity: number;
+    max_order_quantity: number;
+    is_active: boolean;
     created_at: string;
     updated_at: string;
     item_sub_category: {
@@ -121,7 +149,7 @@ export const useInventoryItems = () => {
   const { data, loading, error, execute, refetch } = useGraphQLRequest<{
     business_inventory: InventoryItem[];
   }>(GET_INVENTORY_ITEMS);
-  
+
   const hasExecuted = useRef(false);
 
   useEffect(() => {
@@ -142,4 +170,4 @@ export const useInventoryItems = () => {
     error,
     refetch: () => refetch(),
   };
-}; 
+};

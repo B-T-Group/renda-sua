@@ -38,6 +38,7 @@ import {
   useBackendOrders,
   useInventoryItems,
 } from '../../hooks';
+import NoImage from '../../assets/no-image.svg';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
@@ -155,7 +156,8 @@ const Dashboard: React.FC = () => {
     if (item.item.item_images && item.item.item_images.length > 0) {
       return item.item.item_images[0].image_url;
     }
-    return 'https://via.placeholder.com/300x200?text=No+Image';
+    // Use local no-image.svg asset as fallback
+    return NoImage;
   };
 
   if (inventoryLoading || accountLoading) {
@@ -401,6 +403,93 @@ const Dashboard: React.FC = () => {
                       )}
                     </Box>
 
+                    {/* Product Details */}
+                    <Box sx={{ mb: 2 }}>
+                      {item.item.brand && (
+                        <Typography
+                          variant="body1"
+                          color="primary"
+                          fontWeight="bold"
+                          sx={{ mb: 0.5 }}
+                        >
+                          {item.item.brand}
+                        </Typography>
+                      )}
+                      {item.item.model && (
+                        <Typography variant="body2" color="text.secondary">
+                          Model: {item.item.model}
+                        </Typography>
+                      )}
+                      {item.item.color && (
+                        <Typography variant="body2" color="text.secondary">
+                          Color: {item.item.color}
+                        </Typography>
+                      )}
+                      {item.item.material && (
+                        <Typography variant="body2" color="text.secondary">
+                          Material: {item.item.material}
+                        </Typography>
+                      )}
+                      {item.item.sku && (
+                        <Typography variant="body2" color="text.secondary">
+                          SKU: {item.item.sku}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    {/* Special Handling Indicators */}
+                    <Box sx={{ mb: 2 }}>
+                      {item.item.is_fragile && (
+                        <Chip
+                          label="Fragile"
+                          color="warning"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                      {item.item.is_perishable && (
+                        <Chip
+                          label="Perishable"
+                          color="error"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                      {item.item.requires_special_handling && (
+                        <Chip
+                          label="Special Handling"
+                          color="info"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Delivery Information */}
+                    <Box sx={{ mb: 2 }}>
+                      {item.item.estimated_delivery_time && (
+                        <Typography variant="body2" color="text.secondary">
+                          Est. Delivery: {item.item.estimated_delivery_time} min
+                        </Typography>
+                      )}
+                      {item.item.max_delivery_distance && (
+                        <Typography variant="body2" color="text.secondary">
+                          Max Distance: {item.item.max_delivery_distance} km
+                        </Typography>
+                      )}
+                      {item.item.min_order_quantity &&
+                        item.item.min_order_quantity > 1 && (
+                          <Typography variant="body2" color="text.secondary">
+                            Min Order: {item.item.min_order_quantity}
+                          </Typography>
+                        )}
+                      {item.item.max_order_quantity && (
+                        <Typography variant="body2" color="text.secondary">
+                          Max Order: {item.item.max_order_quantity}
+                        </Typography>
+                      )}
+                    </Box>
+
                     <Box sx={{ mb: 2 }}>
                       <Typography
                         variant="body2"
@@ -467,6 +556,95 @@ const Dashboard: React.FC = () => {
               <Typography variant="body2" color="text.secondary" paragraph>
                 {selectedItem.item.description}
               </Typography>
+
+              {/* Product Details */}
+              <Box sx={{ mb: 2 }}>
+                {selectedItem.item.brand && (
+                  <Typography
+                    variant="body1"
+                    color="primary"
+                    fontWeight="bold"
+                    sx={{ mb: 0.5 }}
+                  >
+                    {selectedItem.item.brand}
+                  </Typography>
+                )}
+                {selectedItem.item.model && (
+                  <Typography variant="body2" color="text.secondary">
+                    Model: {selectedItem.item.model}
+                  </Typography>
+                )}
+                {selectedItem.item.color && (
+                  <Typography variant="body2" color="text.secondary">
+                    Color: {selectedItem.item.color}
+                  </Typography>
+                )}
+                {selectedItem.item.material && (
+                  <Typography variant="body2" color="text.secondary">
+                    Material: {selectedItem.item.material}
+                  </Typography>
+                )}
+                {selectedItem.item.sku && (
+                  <Typography variant="body2" color="text.secondary">
+                    SKU: {selectedItem.item.sku}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Special Handling Indicators */}
+              <Box sx={{ mb: 2 }}>
+                {selectedItem.item.is_fragile && (
+                  <Chip
+                    label="Fragile"
+                    color="warning"
+                    size="small"
+                    sx={{ mr: 0.5, mb: 0.5 }}
+                  />
+                )}
+                {selectedItem.item.is_perishable && (
+                  <Chip
+                    label="Perishable"
+                    color="error"
+                    size="small"
+                    sx={{ mr: 0.5, mb: 0.5 }}
+                  />
+                )}
+                {selectedItem.item.requires_special_handling && (
+                  <Chip
+                    label="Special Handling"
+                    color="info"
+                    size="small"
+                    sx={{ mr: 0.5, mb: 0.5 }}
+                  />
+                )}
+              </Box>
+
+              {/* Delivery Information */}
+              <Box sx={{ mb: 2 }}>
+                {selectedItem.item.estimated_delivery_time && (
+                  <Typography variant="body2" color="text.secondary">
+                    Estimated Delivery:{' '}
+                    {selectedItem.item.estimated_delivery_time} minutes
+                  </Typography>
+                )}
+                {selectedItem.item.max_delivery_distance && (
+                  <Typography variant="body2" color="text.secondary">
+                    Max Delivery Distance:{' '}
+                    {selectedItem.item.max_delivery_distance} km
+                  </Typography>
+                )}
+                {selectedItem.item.min_order_quantity &&
+                  selectedItem.item.min_order_quantity > 1 && (
+                    <Typography variant="body2" color="text.secondary">
+                      Minimum Order: {selectedItem.item.min_order_quantity}
+                    </Typography>
+                  )}
+                {selectedItem.item.max_order_quantity && (
+                  <Typography variant="body2" color="text.secondary">
+                    Maximum Order: {selectedItem.item.max_order_quantity}
+                  </Typography>
+                )}
+              </Box>
 
               <Box sx={{ mb: 3 }}>
                 <Typography variant="h5" color="primary">

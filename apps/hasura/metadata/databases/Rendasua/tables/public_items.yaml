@@ -41,11 +41,25 @@ select_permissions:
         - name
         - description
         - price
+        - currency
         - weight
         - weight_unit
         - size
         - size_unit
         - item_sub_category_id
+        - sku
+        - brand
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
         - created_at
         - updated_at
       filter: {}
@@ -56,11 +70,25 @@ select_permissions:
         - name
         - description
         - price
+        - currency
         - weight
         - weight_unit
         - size
         - size_unit
         - item_sub_category_id
+        - sku
+        - brand
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
         - created_at
         - updated_at
       filter: {}
@@ -71,11 +99,54 @@ select_permissions:
         - name
         - description
         - price
+        - currency
         - weight
         - weight_unit
         - size
         - size_unit
         - item_sub_category_id
+        - sku
+        - brand
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - price
+        - currency
+        - weight
+        - weight_unit
+        - size
+        - size_unit
+        - item_sub_category_id
+        - sku
+        - brand
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
         - created_at
         - updated_at
       filter: {}

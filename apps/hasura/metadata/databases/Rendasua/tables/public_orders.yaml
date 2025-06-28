@@ -45,18 +45,27 @@ insert_permissions:
             identifier:
               _eq: X-Hasura-User-Id
       columns:
-        - client_id
-        - business_id
-        - business_location_id
-        - delivery_address_id
-        - subtotal
+        - id
+        - currency
+        - order_number
+        - payment_method
+        - payment_status
         - delivery_fee
+        - subtotal
         - tax_amount
         - total_amount
-        - currency
         - special_instructions
+        - actual_delivery_time
+        - created_at
+        - estimated_delivery_time
         - preferred_delivery_time
-        - payment_method
+        - updated_at
+        - current_status
+        - assigned_agent_id
+        - business_id
+        - business_location_id
+        - client_id
+        - delivery_address_id
 select_permissions:
   - role: agent
     permission:

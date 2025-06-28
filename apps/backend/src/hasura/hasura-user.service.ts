@@ -469,6 +469,65 @@ export class HasuraUserService {
   }
 
   /**
+   * Get user address by user ID
+   */
+  async getUserAddress(userId: string, entityType: string): Promise<any> {
+    const getUserAddressQuery = `
+      query GetUserAddress($userId: uuid!, $entityType: entity_type_enum!) {
+        addresses(where: {entity_id: {_eq: $userId}, entity_type: {_eq: $entityType}}) {
+          id
+          entity_id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          is_primary
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const addressResult = await this.executeQuery(getUserAddressQuery, {
+      userId,
+      entityType,
+    });
+
+    return addressResult.addresses[0];
+  }
+
+  /**
+   * Get all user addresses by user ID
+   */
+  async getAllUserAddresses(userId: string): Promise<any[]> {
+    const getAllUserAddressesQuery = `
+      query GetAllUserAddresses($userId: uuid!) {
+        addresses(where: {entity_id: {_eq: $userId}}) {
+          id
+          user_id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          is_primary
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const addressResult = await this.executeQuery(getAllUserAddressesQuery, {
+      userId,
+    });
+
+    return addressResult.addresses || [];
+  }
+
+  /**
    * Get the current user by identifier
    */
   async getUser(): Promise<UserRecord> {
@@ -521,6 +580,13 @@ export class HasuraUserService {
   }
 
   /**
+   * Creates a random 8-digit order number
+   */
+  private createOrderNumber(): string {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
   async createOrder(orderData: CreateOrderRequest): Promise<OrderResult> {
@@ -531,16 +597,24 @@ export class HasuraUserService {
       throw new Error('Client not found');
     }
 
-    // Get items with their prices, currencies, and available quantities from business_inventory
-    const businessInventoryIds = [orderData.item.business_inventory_id];
+    const address = await this.getUserAddress(user.id, 'user');
+
+    if (!address) {
+      throw new Error('Address not found');
+    }
+
+    // Get the business inventory item
     const getBusinessInventoryQuery = `
-      query GetBusinessInventory($businessInventoryIds: [uuid!]!) {
-        business_inventory(where: {id: {_in: $businessInventoryIds}}) {
+      query GetBusinessInventory($businessInventoryId: uuid!) {
+        business_inventory_by_pk(id: $businessInventoryId) {
           id
           available_quantity
           selling_price
           is_active
           business_location_id
+          business_location {
+            business_id
+          }
           item {
             id
             name
@@ -554,67 +628,37 @@ export class HasuraUserService {
     const businessInventoryResult = await this.executeQuery(
       getBusinessInventoryQuery,
       {
-        businessInventoryIds,
+        businessInventoryId: orderData.item.business_inventory_id,
       }
     );
 
-    if (
-      !businessInventoryResult.business_inventory ||
-      businessInventoryResult.business_inventory.length === 0
-    ) {
+    if (!businessInventoryResult.business_inventory_by_pk) {
       throw new Error('No valid business inventory found');
     }
 
-    const businessInventoryItems =
-      businessInventoryResult.business_inventory as any[];
+    const businessInventory =
+      businessInventoryResult.business_inventory_by_pk as any;
 
-    // Group items by currency and calculate totals
-    const currencyGroups = new Map<string, { items: any[]; total: number }>();
-
-    for (const orderItem of [orderData.item]) {
-      const businessInventory = businessInventoryItems.find(
-        (bi: any) => bi.id === orderItem.business_inventory_id
+    if (!businessInventory.is_active) {
+      throw new Error(
+        `Item ${businessInventory.item.name} is not currently available`
       );
-      if (!businessInventory) {
-        throw new Error(
-          `Business inventory ${orderItem.business_inventory_id} not found`
-        );
-      }
-
-      if (!businessInventory.is_active) {
-        throw new Error(
-          `Item ${businessInventory.item.name} is not currently available`
-        );
-      }
-
-      if (orderItem.quantity > businessInventory.available_quantity) {
-        throw new Error(
-          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderItem.quantity}`
-        );
-      }
-
-      const total = businessInventory.selling_price * orderItem.quantity;
-      const currency = businessInventory.item.currency;
-
-      if (!currencyGroups.has(currency)) {
-        currencyGroups.set(currency, { items: [], total: 0 });
-      }
-
-      currencyGroups.get(currency)!.items.push({
-        ...orderItem,
-        businessInventory: {
-          ...businessInventory,
-          item: businessInventory.item,
-        },
-      });
-      currencyGroups.get(currency)!.total += total;
     }
 
-    // Check user accounts for each currency
-    const currencies = Array.from(currencyGroups.keys());
+    if (orderData.item.quantity > businessInventory.available_quantity) {
+      throw new Error(
+        `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderData.item.quantity}`
+      );
+    }
+
+    const totalAmount =
+      businessInventory.selling_price * orderData.item.quantity;
+    const currency = businessInventory.item.currency;
+
+    // Check user account for the currency
     const getAccountsQuery = `
-      query GetUserAccounts($userId: uuid!, $currencies: [currency_enum!]!) {
-        accounts(where: {user_id: {_eq: $userId}, currency: {_in: $currencies}}) {
+      query GetUserAccounts($userId: uuid!, $currency: currency_enum!) {
+        accounts(where: {user_id: {_eq: $userId}, currency: {_eq: $currency}}) {
           id
           currency
           available_balance
@@ -626,41 +670,56 @@ export class HasuraUserService {
 
     const accountsResult = await this.executeQuery(getAccountsQuery, {
       userId: user.id,
-      currencies,
+      currency,
     });
 
     const userAccounts = (accountsResult.accounts || []) as Account[];
+    const account = userAccounts[0];
 
-    // Validate funds for each currency
-    for (const [currency, { total }] of currencyGroups) {
-      const account = userAccounts.find(
-        (acc: Account) => acc.currency === currency
-      );
-
-      if (!account) {
-        throw new Error(`No account found for currency ${currency}`);
-      }
-
-      if (account.available_balance < total) {
-        throw new Error(
-          `Insufficient funds for currency ${currency}. Required: ${total}, Available: ${account.available_balance}`
-        );
-      }
+    if (!account) {
+      throw new Error(`No account found for currency ${currency}`);
     }
+
+    if (account.available_balance < totalAmount) {
+      throw new Error(
+        `Insufficient funds for currency ${currency}. Required: ${totalAmount}, Available: ${account.available_balance}`
+      );
+    }
+
+    const orderNumber = this.createOrderNumber();
+    const business_location_id = businessInventory.business_location_id;
+    const delivery_address_id = address.id;
+    const subtotal = totalAmount;
+    const tax_amount = 0;
+    const delivery_fee = 0;
+    const total_amount = subtotal + tax_amount + delivery_fee;
+    const current_status = 'pending';
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
       mutation CreateOrderWithItems(
         $clientId: uuid!,
-        $businessId: uuid!,
+        $businessLocationId: uuid!,
+        $deliveryAddressId: uuid!,
+        $orderNumber: String!,
         $orderItems: [order_items_insert_input!]!,
-        $statusHistory: order_status_history_insert_input!
+        $statusHistory: order_status_history_insert_input!,
+        $subTotal: numeric!,
+        $taxAmount: numeric!,
+        $deliveryFee: numeric!,
+        $totalAmount: numeric!,
+        $currentStatus: order_status!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
-          business_id: $businessId,
-          status: "pending",
-          total_amount: 0,
+          business_location_id: $businessLocationId,
+          delivery_address_id: $deliveryAddressId,
+          current_status: $currentStatus,
+          subtotal: $subTotal,
+          tax_amount: $taxAmount,
+          delivery_fee: $deliveryFee,
+          total_amount: $totalAmount,
+          order_number: $orderNumber,
           order_items: {
             data: $orderItems
           }
@@ -691,31 +750,30 @@ export class HasuraUserService {
     `;
 
     // Prepare order items data
-    const orderItemsData = [];
-    let totalOrderAmount = 0;
-
-    for (const [currency, { items: currencyItems }] of currencyGroups) {
-      for (const orderItem of currencyItems) {
-        const totalPrice =
-          orderItem.businessInventory.selling_price * orderItem.quantity;
-        totalOrderAmount += totalPrice;
-
-        orderItemsData.push({
-          business_inventory_id: orderItem.businessInventory.id,
-          item_id: orderItem.businessInventory.item.id,
-          item_name: orderItem.businessInventory.item.name,
-          item_description: orderItem.businessInventory.item.description,
-          quantity: orderItem.quantity,
-          unit_price: orderItem.businessInventory.selling_price,
-          total_price: totalPrice,
-        });
-      }
-    }
+    const orderItemsData = [
+      {
+        business_inventory_id: orderData.item.business_inventory_id,
+        item_id: businessInventory.item.id,
+        item_name: businessInventory.item.name,
+        item_description: businessInventory.item.description,
+        quantity: orderData.item.quantity,
+        unit_price: businessInventory.selling_price,
+        total_price: totalAmount,
+      },
+    ];
 
     // Create the order
     const orderResult = await this.executeMutation(createOrderMutation, {
       clientId: user.client.id,
+      businessLocationId: business_location_id,
+      deliveryAddressId: delivery_address_id,
+      orderNumber: orderNumber,
       orderItems: orderItemsData,
+      subTotal: subtotal,
+      taxAmount: tax_amount,
+      deliveryFee: delivery_fee,
+      totalAmount: total_amount,
+      currentStatus: current_status,
       statusHistory: {
         order_id: null, // Will be set after order creation
         status: 'pending',
@@ -740,7 +798,7 @@ export class HasuraUserService {
 
     await this.executeMutation(updateOrderMutation, {
       orderId: order.id,
-      totalAmount: totalOrderAmount,
+      totalAmount: totalAmount,
     });
 
     // Update order status history with the correct order_id
@@ -760,37 +818,31 @@ export class HasuraUserService {
     });
 
     // Withhold funds from user accounts
-    for (const [currency, { total }] of currencyGroups) {
-      const account = userAccounts.find(
-        (acc: Account) => acc.currency === currency
-      );
-
-      const withholdFundsMutation = `
-        mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
-          update_accounts_by_pk(
-            pk_columns: {id: $accountId},
-            _inc: {
-              available_balance: $amount,
-              withheld_balance: $amount
-            }
-          ) {
-            id
-            available_balance
-            withheld_balance
-            total_balance
+    const withholdFundsMutation = `
+      mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
+        update_accounts_by_pk(
+          pk_columns: {id: $accountId},
+          _inc: {
+            available_balance: $amount,
+            withheld_balance: $amount
           }
+        ) {
+          id
+          available_balance
+          withheld_balance
+          total_balance
         }
-      `;
+      }
+    `;
 
-      await this.executeMutation(withholdFundsMutation, {
-        accountId: account!.id,
-        amount: -total, // Negative to decrease available_balance
-      });
-    }
+    await this.executeMutation(withholdFundsMutation, {
+      accountId: account!.id,
+      amount: -totalAmount, // Negative to decrease available_balance
+    });
 
     return {
       ...order,
-      total_amount: totalOrderAmount,
+      total_amount: totalAmount,
     };
   }
 }
