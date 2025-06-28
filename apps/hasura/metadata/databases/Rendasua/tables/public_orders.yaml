@@ -40,8 +40,10 @@ insert_permissions:
   - role: client
     permission:
       check:
-        client_id:
-          _eq: X-Hasura-User-Id
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
       columns:
         - client_id
         - business_id
@@ -108,8 +110,10 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        business_id:
-          _eq: X-Hasura-User-Id
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -135,8 +139,10 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        client_id:
-          _eq: X-Hasura-User-Id
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
     permission:
@@ -156,8 +162,10 @@ update_permissions:
         - estimated_delivery_time
         - updated_at
       filter:
-        business_id:
-          _eq: X-Hasura-User-Id
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
       check: null
   - role: client
     permission:
@@ -166,8 +174,10 @@ update_permissions:
         - preferred_delivery_time
         - updated_at
       filter:
-        client_id:
-          _eq: X-Hasura-User-Id
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
         current_status:
           _in:
             - pending

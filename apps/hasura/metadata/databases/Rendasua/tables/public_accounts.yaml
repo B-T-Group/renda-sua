@@ -16,45 +16,6 @@ array_relationships:
           name: account_transactions
           schema: public
 insert_permissions:
-  - role: agent
-    permission:
-      check:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
-      columns:
-        - user_id
-        - account_type
-        - currency
-        - available_balance
-        - withheld_balance
-        - is_active
-  - role: business
-    permission:
-      check:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
-      columns:
-        - user_id
-        - account_type
-        - currency
-        - available_balance
-        - withheld_balance
-        - is_active
-  - role: client
-    permission:
-      check:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
-      columns:
-        - user_id
-        - account_type
-        - currency
-        - available_balance
-        - withheld_balance
-        - is_active
   - role: user
     permission:
       check:
