@@ -5,3 +5,10 @@ select_permissions: []
 insert_permissions: []
 update_permissions: []
 delete_permissions: []
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
