@@ -82,7 +82,7 @@ export interface OrderResult {
   id: string;
   user_id: string;
   status: string;
-  total_amount: number;
+  total_price: number;
   created_at: string;
   order_items: any[];
 }
@@ -692,43 +692,85 @@ export class HasuraUserService {
     const subtotal = totalAmount;
     const tax_amount = 0;
     const delivery_fee = 0;
-    const total_amount = subtotal + tax_amount + delivery_fee;
+    const total_price = subtotal + tax_amount + delivery_fee;
     const current_status = 'pending';
+    const business_id = businessInventory.business_location.business_id;
+    const payment_method = 'online';
+    const payment_status = 'pending';
+    const special_instructions = '';
+    const estimated_delivery_time = null;
+    const preferred_delivery_time = null;
+    const actual_delivery_time = null;
+    const assigned_agent_id = null;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
       mutation CreateOrderWithItems(
         $clientId: uuid!,
+        $businessId: uuid!,
         $businessLocationId: uuid!,
         $deliveryAddressId: uuid!,
         $orderNumber: String!,
         $orderItems: [order_items_insert_input!]!,
         $statusHistory: order_status_history_insert_input!,
+        $currency: String!,
         $subTotal: numeric!,
         $taxAmount: numeric!,
         $deliveryFee: numeric!,
         $totalAmount: numeric!,
-        $currentStatus: order_status!
+        $currentStatus: order_status!,
+        $paymentMethod: String!,
+        $paymentStatus: String!,
+        $specialInstructions: String!,
+        $estimatedDeliveryTime: timestamptz,
+        $preferredDeliveryTime: timestamptz,
+        $actualDeliveryTime: timestamptz,
+        $assignedAgentId: uuid
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
+          business_id: $businessId,
           business_location_id: $businessLocationId,
           delivery_address_id: $deliveryAddressId,
-          current_status: $currentStatus,
+          currency: $currency,
+          order_number: $orderNumber,
+          payment_method: $paymentMethod,
+          payment_status: $paymentStatus,
+          delivery_fee: $deliveryFee,
           subtotal: $subTotal,
           tax_amount: $taxAmount,
-          delivery_fee: $deliveryFee,
           total_amount: $totalAmount,
-          order_number: $orderNumber,
+          special_instructions: $specialInstructions,
+          actual_delivery_time: $actualDeliveryTime,
+          estimated_delivery_time: $estimatedDeliveryTime,
+          preferred_delivery_time: $preferredDeliveryTime,
+          current_status: $currentStatus,
+          assigned_agent_id: $assignedAgentId,
           order_items: {
             data: $orderItems
           }
         }) {
           id
-          user_id
-          status
+          currency
+          order_number
+          payment_method
+          payment_status
+          delivery_fee
+          subtotal
+          tax_amount
           total_amount
+          special_instructions
+          actual_delivery_time
           created_at
+          estimated_delivery_time
+          preferred_delivery_time
+          updated_at
+          current_status
+          assigned_agent_id
+          business_id
+          business_location_id
+          client_id
+          delivery_address_id
           order_items {
             id
             business_inventory_id
@@ -740,11 +782,14 @@ export class HasuraUserService {
           }
         }
         
-        insert_order_status_history_one(object: $statusHistory) {
-          id
-          order_id
-          status
-          created_at
+        insert_order_status_history(objects: [$statusHistory]) {
+          affected_rows
+          returning {
+            id
+            order_id
+            status
+            created_at
+          }
         }
       }
     `;
@@ -765,15 +810,24 @@ export class HasuraUserService {
     // Create the order
     const orderResult = await this.executeMutation(createOrderMutation, {
       clientId: user.client.id,
+      businessId: business_id,
       businessLocationId: business_location_id,
       deliveryAddressId: delivery_address_id,
       orderNumber: orderNumber,
       orderItems: orderItemsData,
+      currency: currency,
       subTotal: subtotal,
       taxAmount: tax_amount,
       deliveryFee: delivery_fee,
-      totalAmount: total_amount,
+      totalAmount: total_price,
       currentStatus: current_status,
+      paymentMethod: payment_method,
+      paymentStatus: payment_status,
+      specialInstructions: special_instructions,
+      estimatedDeliveryTime: estimated_delivery_time,
+      preferredDeliveryTime: preferred_delivery_time,
+      actualDeliveryTime: actual_delivery_time,
+      assignedAgentId: assigned_agent_id,
       statusHistory: {
         order_id: null, // Will be set after order creation
         status: 'pending',
@@ -842,7 +896,7 @@ export class HasuraUserService {
 
     return {
       ...order,
-      total_amount: totalAmount,
+      total_price: totalAmount,
     };
   }
 }

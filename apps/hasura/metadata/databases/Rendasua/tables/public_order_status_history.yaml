@@ -8,3 +8,91 @@ object_relationships:
   - name: order
     using:
       foreign_key_constraint_on: order_id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        order:
+          client:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+  - role: agent
+    permission:
+      check:
+        order:
+          assigned_agent_id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+  - role: business
+    permission:
+      check:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+      filter:
+        order:
+          client:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+      filter:
+        order:
+          assigned_agent_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - status
+        - notes
+        - changed_by_user_id
+        - created_at
+      filter:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
