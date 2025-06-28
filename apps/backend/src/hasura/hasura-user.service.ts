@@ -54,12 +54,12 @@ export interface UserWithBusinessRecord {
 }
 
 export interface OrderItem {
-  item_id: string;
+  business_inventory_id: string;
   quantity: number;
 }
 
 export interface CreateOrderRequest {
-  items: OrderItem[];
+  item: OrderItem;
 }
 
 export interface Item {
@@ -532,62 +532,69 @@ export class HasuraUserService {
     }
 
     // Get items with their prices, currencies, and available quantities from business_inventory
-    const itemIds = orderData.items.map((item) => item.item_id);
-    const getItemsQuery = `
-      query GetItemsWithInventory($itemIds: [uuid!]!) {
-        items(where: {id: {_in: $itemIds}}) {
+    const businessInventoryIds = [orderData.item.business_inventory_id];
+    const getBusinessInventoryQuery = `
+      query GetBusinessInventory($businessInventoryIds: [uuid!]!) {
+        business_inventory(where: {id: {_in: $businessInventoryIds}}) {
           id
-          name
-          price
-          currency
-          business_inventories {
+          available_quantity
+          selling_price
+          is_active
+          business_location_id
+          item {
             id
-            available_quantity
-            selling_price
-            is_active
-            business_location_id
+            name
+            description
+            currency
           }
         }
       }
     `;
 
-    const itemsResult = await this.executeQuery(getItemsQuery, {
-      itemIds,
-    });
+    const businessInventoryResult = await this.executeQuery(
+      getBusinessInventoryQuery,
+      {
+        businessInventoryIds,
+      }
+    );
 
-    if (!itemsResult.items || itemsResult.items.length === 0) {
-      throw new Error('No valid items found');
+    if (
+      !businessInventoryResult.business_inventory ||
+      businessInventoryResult.business_inventory.length === 0
+    ) {
+      throw new Error('No valid business inventory found');
     }
 
-    const items = itemsResult.items as any[];
+    const businessInventoryItems =
+      businessInventoryResult.business_inventory as any[];
 
     // Group items by currency and calculate totals
     const currencyGroups = new Map<string, { items: any[]; total: number }>();
 
-    for (const orderItem of orderData.items) {
-      const item = items.find((i: any) => i.id === orderItem.item_id);
-      if (!item) {
-        throw new Error(`Item ${orderItem.item_id} not found`);
-      }
-
-      // Get the first available business inventory for this item
-      const businessInventory = item.business_inventories?.[0];
+    for (const orderItem of [orderData.item]) {
+      const businessInventory = businessInventoryItems.find(
+        (bi: any) => bi.id === orderItem.business_inventory_id
+      );
       if (!businessInventory) {
-        throw new Error(`No inventory found for item ${item.name}`);
+        throw new Error(
+          `Business inventory ${orderItem.business_inventory_id} not found`
+        );
       }
 
       if (!businessInventory.is_active) {
-        throw new Error(`Item ${item.name} is not currently available`);
+        throw new Error(
+          `Item ${businessInventory.item.name} is not currently available`
+        );
       }
 
       if (orderItem.quantity > businessInventory.available_quantity) {
         throw new Error(
-          `Insufficient quantity for item ${item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderItem.quantity}`
+          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderItem.quantity}`
         );
       }
 
       const total = businessInventory.selling_price * orderItem.quantity;
-      const currency = item.currency;
+      const currency = businessInventory.item.currency;
 
       if (!currencyGroups.has(currency)) {
         currencyGroups.set(currency, { items: [], total: 0 });
@@ -595,11 +602,9 @@ export class HasuraUserService {
 
       currencyGroups.get(currency)!.items.push({
         ...orderItem,
-        item: {
-          ...item,
-          available_quantity: businessInventory.available_quantity,
-          selling_price: businessInventory.selling_price,
-          business_inventory_id: businessInventory.id,
+        businessInventory: {
+          ...businessInventory,
+          item: businessInventory.item,
         },
       });
       currencyGroups.get(currency)!.total += total;
@@ -647,11 +652,13 @@ export class HasuraUserService {
     const createOrderMutation = `
       mutation CreateOrderWithItems(
         $clientId: uuid!,
+        $businessId: uuid!,
         $orderItems: [order_items_insert_input!]!,
         $statusHistory: order_status_history_insert_input!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
+          business_id: $businessId,
           status: "pending",
           total_amount: 0,
           order_items: {
@@ -665,7 +672,9 @@ export class HasuraUserService {
           created_at
           order_items {
             id
+            business_inventory_id
             item_id
+            item_name
             quantity
             unit_price
             total_price
@@ -687,13 +696,17 @@ export class HasuraUserService {
 
     for (const [currency, { items: currencyItems }] of currencyGroups) {
       for (const orderItem of currencyItems) {
-        const totalPrice = orderItem.item.selling_price * orderItem.quantity;
+        const totalPrice =
+          orderItem.businessInventory.selling_price * orderItem.quantity;
         totalOrderAmount += totalPrice;
 
         orderItemsData.push({
-          item_id: orderItem.item_id,
+          business_inventory_id: orderItem.businessInventory.id,
+          item_id: orderItem.businessInventory.item.id,
+          item_name: orderItem.businessInventory.item.name,
+          item_description: orderItem.businessInventory.item.description,
           quantity: orderItem.quantity,
-          unit_price: orderItem.item.selling_price,
+          unit_price: orderItem.businessInventory.selling_price,
           total_price: totalPrice,
         });
       }

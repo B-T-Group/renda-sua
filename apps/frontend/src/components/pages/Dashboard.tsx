@@ -33,7 +33,11 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
-import { useAccountInfo, useBackendOrders, useInventoryItems } from '../../hooks';
+import {
+  useAccountInfo,
+  useBackendOrders,
+  useInventoryItems,
+} from '../../hooks';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
@@ -47,7 +51,11 @@ const Dashboard: React.FC = () => {
     loading: accountLoading,
     error: accountError,
   } = useAccountInfo();
-  const { createOrder, loading: orderLoading, error: orderError } = useBackendOrders();
+  const {
+    createOrder,
+    loading: orderLoading,
+    error: orderError,
+  } = useBackendOrders();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
@@ -119,14 +127,12 @@ const Dashboard: React.FC = () => {
     if (!selectedItem || quantity <= 0) return;
 
     try {
-      // Use the new backend API format
+      // Use the new backend API format with business_inventory_id and single item
       const orderData = {
-        items: [
-          {
-            item_id: selectedItem.item.id,
-            quantity: quantity,
-          },
-        ],
+        item: {
+          business_inventory_id: selectedItem.id,
+          quantity: quantity,
+        },
       };
 
       await createOrder(orderData);
@@ -218,7 +224,10 @@ const Dashboard: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(300px, 1fr))' },
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(auto-fit, minmax(300px, 1fr))',
+              },
               gap: 2,
             }}
           >
@@ -233,10 +242,18 @@ const Dashboard: React.FC = () => {
                   </Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Available: {formatCurrency(account.available_balance, account.currency)}
+                      Available:{' '}
+                      {formatCurrency(
+                        account.available_balance,
+                        account.currency
+                      )}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Withheld: {formatCurrency(account.withheld_balance, account.currency)}
+                      Withheld:{' '}
+                      {formatCurrency(
+                        account.withheld_balance,
+                        account.currency
+                      )}
                     </Typography>
                   </Box>
                   <Button
@@ -313,7 +330,11 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                       {item.item.name}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" paragraph>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      paragraph
+                    >
                       {item.item.description}
                     </Typography>
 
@@ -323,7 +344,9 @@ const Dashboard: React.FC = () => {
                       </Typography>
                       <Chip
                         label={`${item.available_quantity} available`}
-                        color={item.available_quantity > 0 ? 'success' : 'error'}
+                        color={
+                          item.available_quantity > 0 ? 'success' : 'error'
+                        }
                         size="small"
                       />
                     </Box>
@@ -341,7 +364,10 @@ const Dashboard: React.FC = () => {
                             {getInsufficientFundsMessage(item)}
                           </Typography>
                           {account && (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
                               Current balance:{' '}
                               {formatCurrency(
                                 account.available_balance,
@@ -359,8 +385,9 @@ const Dashboard: React.FC = () => {
                         sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                       >
                         <Category fontSize="small" />
-                        {item.item.item_sub_category?.item_category?.name} →{' '}
-                        {item.item.item_sub_category?.name}
+                        {
+                          item.item.item_sub_category?.item_category?.name
+                        } → {item.item.item_sub_category?.name}
                       </Typography>
                       {item.item.weight && (
                         <Typography variant="body2" color="text.secondary">

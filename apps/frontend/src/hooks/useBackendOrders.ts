@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useApiClient } from './useApiClient';
 
 export interface OrderItem {
-  item_id: string;
+  business_inventory_id: string;
   quantity: number;
 }
 
 export interface CreateOrderRequest {
-  items: OrderItem[];
+  item: OrderItem;
 }
 
 export interface OrderResult {
@@ -30,24 +30,32 @@ export const useBackendOrders = () => {
   const [error, setError] = useState<string | null>(null);
   const apiClient = useApiClient();
 
-  const createOrder = async (orderData: CreateOrderRequest): Promise<OrderResult> => {
+  const createOrder = async (
+    orderData: CreateOrderRequest
+  ): Promise<OrderResult> => {
     if (!apiClient) {
-      throw new Error('API client not available. Please ensure you are authenticated.');
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await apiClient.post<CreateOrderResponse>('/orders', orderData);
-      
+      const response = await apiClient.post<CreateOrderResponse>(
+        '/orders',
+        orderData
+      );
+
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to create order');
       }
 
       return response.data.order;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create order';
+      const errorMessage =
+        err.response?.data?.error || err.message || 'Failed to create order';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
@@ -60,4 +68,4 @@ export const useBackendOrders = () => {
     loading,
     error,
   };
-}; 
+};
