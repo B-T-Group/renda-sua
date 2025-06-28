@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Get, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
 @Controller('users')
@@ -8,43 +15,14 @@ export class UsersController {
   @Get('me')
   async getCurrentUser() {
     try {
+      const user = this.hasuraUserService.getUser();
+
       const identifier = this.hasuraUserService.getIdentifier();
-      
-      const query = `
-        query GetUserByIdentifier($identifier: String!) {
-          users(where: {identifier: {_eq: $identifier}}) {
-            id
-            identifier
-            email
-            first_name
-            last_name
-            user_type_id
-            created_at
-            updated_at
-          }
-        }
-      `;
-
-      const result = await this.hasuraUserService.executeQuery(query, {
-        identifier,
-      });
-
-      if (!result.users || result.users.length === 0) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'User not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      const user = result.users[0];
 
       return {
         success: true,
         user,
-        identifier: identifier,
+        identifier,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -61,24 +39,27 @@ export class UsersController {
   }
 
   @Post('profile')
-  async createUserProfile(@Body() profileData: { 
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    userType: string;
-    businessName?: string;
-    address?: string;
-    vehicleTypeId?: string;
-  }) {
+  async createUserProfile(
+    @Body()
+    profileData: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      userType: string;
+      businessName?: string;
+      address?: string;
+      vehicleTypeId?: string;
+    }
+  ) {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
-      
+
       // Map frontend user types to backend user type IDs (these should match the enum values)
       const userTypeMap: { [key: string]: string } = {
-        'client': 'client',
-        'agent': 'agent', 
-        'business': 'business'
+        client: 'client',
+        agent: 'agent',
+        business: 'business',
       };
 
       const userTypeId = userTypeMap[profileData.userType];
@@ -159,19 +140,22 @@ export class UsersController {
   }
 
   @Post()
-  async createUser(@Body() userData: { 
-    first_name: string;
-    last_name: string;
-    email: string;
-    user_type_id: string;
-    profile: {
-      vehicle_type_id?: string;
-      name?: string;
-    };
-  }) {
+  async createUser(
+    @Body()
+    userData: {
+      first_name: string;
+      last_name: string;
+      email: string;
+      user_type_id: string;
+      profile: {
+        vehicle_type_id?: string;
+        name?: string;
+      };
+    }
+  ) {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
-      
+
       let result: any;
 
       switch (userData.user_type_id) {
@@ -257,4 +241,4 @@ export class UsersController {
       );
     }
   }
-} 
+}

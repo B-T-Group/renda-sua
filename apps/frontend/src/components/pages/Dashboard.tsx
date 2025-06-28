@@ -33,7 +33,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
-import { useAccountInfo, useCreateOrder, useInventoryItems } from '../../hooks';
+import { useAccountInfo, useBackendOrders, useInventoryItems } from '../../hooks';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
@@ -44,11 +44,10 @@ const Dashboard: React.FC = () => {
   } = useInventoryItems();
   const {
     accounts,
-    clientInfo,
     loading: accountLoading,
     error: accountError,
   } = useAccountInfo();
-  const { createOrderWithItems, loading: orderLoading } = useCreateOrder();
+  const { createOrder, loading: orderLoading, error: orderError } = useBackendOrders();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
@@ -120,35 +119,17 @@ const Dashboard: React.FC = () => {
     if (!selectedItem || quantity <= 0) return;
 
     try {
+      // Use the new backend API format
       const orderData = {
-        client_id: clientInfo[0]?.id || '',
-        business_id: selectedItem.business_location.business_id,
-        business_location_id: selectedItem.business_location_id,
-        delivery_address_id: '', // This should be set from user's address
-        subtotal: selectedItem.selling_price * quantity,
-        delivery_fee: 0, // This should be calculated based on distance
-        tax_amount: 0, // This should be calculated
-        total_amount: selectedItem.selling_price * quantity,
-        currency: DEFAULT_ITEM_CURRENCY,
-        special_instructions: specialInstructions,
-        payment_method: 'cash_on_delivery',
-        payment_status: 'pending',
+        items: [
+          {
+            item_id: selectedItem.item.id,
+            quantity: quantity,
+          },
+        ],
       };
 
-      const orderItemData = {
-        business_inventory_id: selectedItem.id,
-        item_id: selectedItem.item.id,
-        item_name: selectedItem.item.name,
-        item_description: selectedItem.item.description,
-        unit_price: selectedItem.selling_price,
-        quantity,
-        weight: selectedItem.item.weight,
-        weight_unit: selectedItem.item.weight_unit,
-        dimensions: `${selectedItem.item.size} ${selectedItem.item.size_unit}`,
-        special_instructions: specialInstructions,
-      };
-
-      await createOrderWithItems(orderData, [orderItemData]);
+      await createOrder(orderData);
       setOrderSuccess(true);
       setOrderDialogOpen(false);
       setTimeout(() => setOrderSuccess(false), 3000);
@@ -165,33 +146,32 @@ const Dashboard: React.FC = () => {
   };
 
   const getPrimaryImage = (item: any) => {
-    // Look for main image first, then fall back to first image
-    const mainImage = item.item.item_images?.find(
-      (img: any) => img.image_type === 'main'
-    );
-    const firstImage = item.item.item_images?.[0];
-    return (
-      mainImage?.image_url || firstImage?.image_url || '/placeholder-item.jpg'
-    );
+    if (item.item.item_images && item.item.item_images.length > 0) {
+      return item.item.item_images[0].image_url;
+    }
+    return 'https://via.placeholder.com/300x200?text=No+Image';
   };
 
   if (inventoryLoading || accountLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          Loading your dashboard...
-        </Typography>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="400px"
+        >
+          <CircularProgress />
+        </Box>
       </Container>
     );
   }
 
-  // Show error state if there are critical errors
-  if (inventoryError && accountError) {
+  if (inventoryError || accountError) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 3 }}>
-          Unable to load dashboard data. Please try refreshing the page.
+        <Alert severity="error">
+          Error loading data. Please try refreshing the page.
         </Alert>
       </Container>
     );
@@ -203,6 +183,13 @@ const Dashboard: React.FC = () => {
       {orderSuccess && (
         <Alert severity="success" sx={{ mb: 3 }}>
           Order placed successfully! You will receive a confirmation shortly.
+        </Alert>
+      )}
+
+      {/* Error Alert */}
+      {orderError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {orderError}
         </Alert>
       )}
 
@@ -231,47 +218,36 @@ const Dashboard: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)',
-              },
-              gap: 3,
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(300px, 1fr))' },
+              gap: 2,
             }}
           >
             {accounts.map((account) => (
               <Card key={account.id} variant="outlined">
                 <CardContent>
-                  <Typography variant="h6" color="primary" gutterBottom>
+                  <Typography variant="h6" gutterBottom>
                     {account.currency} Account
                   </Typography>
-                  <Typography variant="h4" component="div" gutterBottom>
-                    {formatCurrency(
-                      account.available_balance,
-                      account.currency
-                    )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Available Balance
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total:{' '}
+                  <Typography variant="h4" color="primary" gutterBottom>
                     {formatCurrency(account.total_balance, account.currency)}
                   </Typography>
-                  <Chip label={account.currency} size="small" sx={{ mt: 1 }} />
-                </CardContent>
-                <CardActions>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Available: {formatCurrency(account.available_balance, account.currency)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Withheld: {formatCurrency(account.withheld_balance, account.currency)}
+                    </Typography>
+                  </Box>
                   <Button
                     variant="outlined"
-                    color="primary"
-                    startIcon={<AccountBalanceWallet />}
-                    fullWidth
-                    onClick={handleTopUpClick}
                     size="small"
+                    startIcon={<AccountBalanceWallet />}
+                    onClick={handleTopUpClick}
                   >
                     Top Up Account
                   </Button>
-                </CardActions>
+                </CardContent>
               </Card>
             ))}
           </Box>
@@ -279,7 +255,7 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Inventory Items */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      <Paper sx={{ p: 3 }}>
         <Typography
           variant="h6"
           gutterBottom
@@ -289,157 +265,162 @@ const Dashboard: React.FC = () => {
           Available Items
         </Typography>
 
-        {inventoryError && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            Error loading inventory:{' '}
-            {typeof inventoryError === 'string'
-              ? inventoryError
-              : 'Unknown error'}
-          </Alert>
-        )}
+        {inventoryItems.length === 0 ? (
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            minHeight="200px"
+          >
+            <Typography variant="body1" color="text.secondary">
+              No items available at the moment.
+            </Typography>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
+              },
+              gap: 3,
+            }}
+          >
+            {inventoryItems.map((item) => {
+              const canAfford = canAffordItem(item);
+              const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
 
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, 1fr)',
-              md: 'repeat(3, 1fr)',
-            },
-            gap: 3,
-          }}
-        >
-          {inventoryItems.map((item) => {
-            const canAfford = canAffordItem(item);
-            const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
-
-            return (
-              <Card
-                key={item.id}
-                sx={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <CardMedia
-                  component="img"
-                  height="200"
-                  image={getPrimaryImage(item)}
-                  alt={item.item.name}
-                  sx={{ objectFit: 'cover' }}
-                />
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" gutterBottom>
-                    {item.item.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" paragraph>
-                    {item.item.description}
-                  </Typography>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="h5" color="primary" gutterBottom>
-                      {formatCurrency(item.selling_price)}
+              return (
+                <Card
+                  key={item.id}
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <CardMedia
+                    component="img"
+                    height="200"
+                    image={getPrimaryImage(item)}
+                    alt={item.item.name}
+                    sx={{ objectFit: 'cover' }}
+                  />
+                  <CardContent sx={{ flexGrow: 1 }}>
+                    <Typography variant="h6" gutterBottom>
+                      {item.item.name}
                     </Typography>
-                    <Chip
-                      label={`${item.available_quantity} available`}
-                      color={item.available_quantity > 0 ? 'success' : 'error'}
-                      size="small"
-                    />
-                  </Box>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      {item.item.description}
+                    </Typography>
 
-                  {/* Fund Status */}
-                  {!canAfford &&
-                    item.available_quantity > 0 &&
-                    item.is_active && (
-                      <Alert
-                        severity="warning"
-                        sx={{ mb: 2 }}
-                        icon={<Warning />}
-                      >
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          {getInsufficientFundsMessage(item)}
-                        </Typography>
-                        {account && (
-                          <Typography variant="caption" color="text.secondary">
-                            Current balance:{' '}
-                            {formatCurrency(
-                              account.available_balance,
-                              account.currency
-                            )}
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="h5" color="primary" gutterBottom>
+                        {formatCurrency(item.selling_price)}
+                      </Typography>
+                      <Chip
+                        label={`${item.available_quantity} available`}
+                        color={item.available_quantity > 0 ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </Box>
+
+                    {/* Fund Status */}
+                    {!canAfford &&
+                      item.available_quantity > 0 &&
+                      item.is_active && (
+                        <Alert
+                          severity="warning"
+                          sx={{ mb: 2 }}
+                          icon={<Warning />}
+                        >
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            {getInsufficientFundsMessage(item)}
                           </Typography>
-                        )}
-                      </Alert>
-                    )}
+                          {account && (
+                            <Typography variant="caption" color="text.secondary">
+                              Current balance:{' '}
+                              {formatCurrency(
+                                account.available_balance,
+                                account.currency
+                              )}
+                            </Typography>
+                          )}
+                        </Alert>
+                      )}
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                    >
-                      <Category fontSize="small" />
-                      {item.item.item_sub_category?.item_category?.name} →{' '}
-                      {item.item.item_sub_category?.name}
-                    </Typography>
-                    {item.item.weight && (
-                      <Typography variant="body2" color="text.secondary">
-                        Weight: {item.item.weight} {item.item.weight_unit}
+                    <Box sx={{ mb: 2 }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        <Category fontSize="small" />
+                        {item.item.item_sub_category?.item_category?.name} →{' '}
+                        {item.item.item_sub_category?.name}
                       </Typography>
-                    )}
-                    {item.item.size && (
-                      <Typography variant="body2" color="text.secondary">
-                        Size: {item.item.size} {item.item.size_unit}
-                      </Typography>
-                    )}
-                  </Box>
+                      {item.item.weight && (
+                        <Typography variant="body2" color="text.secondary">
+                          Weight: {item.item.weight} {item.item.weight_unit}
+                        </Typography>
+                      )}
+                      {item.item.size && (
+                        <Typography variant="body2" color="text.secondary">
+                          Size: {item.item.size} {item.item.size_unit}
+                        </Typography>
+                      )}
+                    </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                    >
-                      <LocationOn fontSize="small" />
-                      {item.business_location.address.city},{' '}
-                      {item.business_location.address.state}
-                    </Typography>
-                  </Box>
-                </CardContent>
-                <CardActions>
-                  {item.available_quantity === 0 ? (
-                    <Button variant="outlined" fullWidth disabled>
-                      Out of Stock
-                    </Button>
-                  ) : !item.is_active ? (
-                    <Button variant="outlined" fullWidth disabled>
-                      Not Available
-                    </Button>
-                  ) : canAfford ? (
-                    <Button
-                      variant="contained"
-                      startIcon={<ShoppingCart />}
-                      fullWidth
-                      onClick={() => handleOrderClick(item)}
-                    >
-                      Order Now
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outlined"
-                      color="warning"
-                      startIcon={<AccountBalanceWallet />}
-                      fullWidth
-                      onClick={handleTopUpClick}
-                    >
-                      Top Up Account
-                    </Button>
-                  )}
-                </CardActions>
-              </Card>
-            );
-          })}
-        </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        <LocationOn fontSize="small" />
+                        {item.business_location.address.city},{' '}
+                        {item.business_location.address.state}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                  <CardActions>
+                    {item.available_quantity === 0 ? (
+                      <Button variant="outlined" fullWidth disabled>
+                        Out of Stock
+                      </Button>
+                    ) : !item.is_active ? (
+                      <Button variant="outlined" fullWidth disabled>
+                        Not Available
+                      </Button>
+                    ) : canAfford ? (
+                      <Button
+                        variant="contained"
+                        startIcon={<ShoppingCart />}
+                        fullWidth
+                        onClick={() => handleOrderClick(item)}
+                      >
+                        Order Now
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outlined"
+                        color="warning"
+                        startIcon={<AccountBalanceWallet />}
+                        fullWidth
+                        onClick={handleTopUpClick}
+                      >
+                        Top Up Account
+                      </Button>
+                    )}
+                  </CardActions>
+                </Card>
+              );
+            })}
+          </Box>
+        )}
       </Paper>
 
       {/* Order Dialog */}

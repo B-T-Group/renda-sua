@@ -8,6 +8,9 @@ export interface UserRecord {
   first_name: string;
   last_name: string;
   user_type_id: string;
+  client?: ClientRecord;
+  agent?: AgentRecord;
+  business?: BusinessRecord;
   created_at: string;
   updated_at: string;
 }
@@ -91,10 +94,10 @@ export class HasuraUserService {
   private _authToken: string | null = null;
 
   constructor(@Inject(REQUEST) private readonly request: any) {
-    this.hasuraUrl = process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
-     this._authToken = this.extractAuthToken();
-     this.identifier = this.extractSubClaim();
-    
+    this.hasuraUrl =
+      process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
+    this._authToken = this.extractAuthToken();
+    this.identifier = this.extractSubClaim();
   }
 
   /**
@@ -115,7 +118,7 @@ export class HasuraUserService {
     const { GraphQLClient } = require('graphql-request');
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
-        'Authorization': `Bearer ${this.authToken}`,
+        Authorization: `Bearer ${this.authToken}`,
         'Content-Type': 'application/json',
       },
     });
@@ -140,8 +143,8 @@ export class HasuraUserService {
   /**
    * Create a new user record
    */
-  async createUser(userData: { 
-    email: string; 
+  async createUser(userData: {
+    email: string;
     first_name: string;
     last_name: string;
     user_type_id: string;
@@ -181,8 +184,8 @@ export class HasuraUserService {
   /**
    * Create a new user with client record using nested query
    */
-  async createUserWithClient(userData: { 
-    email: string; 
+  async createUserWithClient(userData: {
+    email: string;
     first_name: string;
     last_name: string;
     user_type_id: string;
@@ -250,19 +253,22 @@ export class HasuraUserService {
         user_id: client.user_id,
         created_at: client.created_at,
         updated_at: client.updated_at,
-      }
+      },
     };
   }
 
   /**
    * Create a new user with agent record using nested query
    */
-  async createUserWithAgent(userData: { 
-    email: string; 
-    first_name: string;
-    last_name: string;
-    user_type_id: string;
-  }, agentData: { vehicle_type_id: string }): Promise<UserWithAgentRecord> {
+  async createUserWithAgent(
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    },
+    agentData: { vehicle_type_id: string }
+  ): Promise<UserWithAgentRecord> {
     const mutation = `
       mutation CreateUserWithAgent(
         $identifier: String!, 
@@ -332,19 +338,22 @@ export class HasuraUserService {
         vehicle_type_id: agent.vehicle_type_id,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
-      }
+      },
     };
   }
 
   /**
    * Create a new user with business record using nested query
    */
-  async createUserWithBusiness(userData: { 
-    email: string; 
-    first_name: string;
-    last_name: string;
-    user_type_id: string;
-  }, businessData: { name: string }): Promise<UserWithBusinessRecord> {
+  async createUserWithBusiness(
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    },
+    businessData: { name: string }
+  ): Promise<UserWithBusinessRecord> {
     const mutation = `
       mutation CreateUserWithBusiness(
         $identifier: String!, 
@@ -414,7 +423,7 @@ export class HasuraUserService {
         name: business.name,
         created_at: business.created_at,
         updated_at: business.updated_at,
-      }
+      },
     };
   }
 
@@ -436,7 +445,9 @@ export class HasuraUserService {
     try {
       // This is a simplified JWT decode - in production, you should use a proper JWT library
       const token = this.authToken;
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      const payload = JSON.parse(
+        Buffer.from(token.split('.')[1], 'base64').toString()
+      );
       return payload.sub || payload.user_id || payload.id;
     } catch (error) {
       throw new Error('Invalid JWT token or missing sub claim');
@@ -470,6 +481,26 @@ export class HasuraUserService {
           first_name
           last_name
           user_type_id
+          client {
+            id
+            user_id
+            created_at
+            updated_at
+          }
+          agent {
+            id
+            user_id
+            vehicle_type_id
+            created_at
+            updated_at
+          }
+          business {
+            id
+            user_id
+            name
+            created_at
+            updated_at
+          }
           created_at
           updated_at
         }
@@ -484,6 +515,8 @@ export class HasuraUserService {
       throw new Error('User not found');
     }
 
+    console.log(userResult.users[0]);
+
     return userResult.users[0];
   }
 
@@ -494,16 +527,26 @@ export class HasuraUserService {
     // Get the current user
     const user = await this.getUser();
 
-    // Get items with their prices and currencies
-    const itemIds = orderData.items.map(item => item.item_id);
+    if (!user.client) {
+      throw new Error('Client not found');
+    }
+
+    // Get items with their prices, currencies, and available quantities from business_inventory
+    const itemIds = orderData.items.map((item) => item.item_id);
     const getItemsQuery = `
-      query GetItems($itemIds: [uuid!]!) {
+      query GetItemsWithInventory($itemIds: [uuid!]!) {
         items(where: {id: {_in: $itemIds}}) {
           id
           name
           price
           currency
-          available_quantity
+          business_inventories {
+            id
+            available_quantity
+            selling_price
+            is_active
+            business_location_id
+          }
         }
       }
     `;
@@ -516,29 +559,49 @@ export class HasuraUserService {
       throw new Error('No valid items found');
     }
 
-    const items = itemsResult.items as Item[];
+    const items = itemsResult.items as any[];
 
     // Group items by currency and calculate totals
-    const currencyGroups = new Map<string, { items: any[], total: number }>();
-    
+    const currencyGroups = new Map<string, { items: any[]; total: number }>();
+
     for (const orderItem of orderData.items) {
-      const item = items.find((i: Item) => i.id === orderItem.item_id);
+      const item = items.find((i: any) => i.id === orderItem.item_id);
       if (!item) {
         throw new Error(`Item ${orderItem.item_id} not found`);
       }
 
-      if (orderItem.quantity > item.available_quantity) {
-        throw new Error(`Insufficient quantity for item ${item.name}`);
+      // Get the first available business inventory for this item
+      const businessInventory = item.business_inventories?.[0];
+      if (!businessInventory) {
+        throw new Error(`No inventory found for item ${item.name}`);
       }
 
-      const total = item.price * orderItem.quantity;
+      if (!businessInventory.is_active) {
+        throw new Error(`Item ${item.name} is not currently available`);
+      }
+
+      if (orderItem.quantity > businessInventory.available_quantity) {
+        throw new Error(
+          `Insufficient quantity for item ${item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderItem.quantity}`
+        );
+      }
+
+      const total = businessInventory.selling_price * orderItem.quantity;
       const currency = item.currency;
 
       if (!currencyGroups.has(currency)) {
         currencyGroups.set(currency, { items: [], total: 0 });
       }
 
-      currencyGroups.get(currency)!.items.push({ ...orderItem, item });
+      currencyGroups.get(currency)!.items.push({
+        ...orderItem,
+        item: {
+          ...item,
+          available_quantity: businessInventory.available_quantity,
+          selling_price: businessInventory.selling_price,
+          business_inventory_id: businessInventory.id,
+        },
+      });
       currencyGroups.get(currency)!.total += total;
     }
 
@@ -565,26 +628,30 @@ export class HasuraUserService {
 
     // Validate funds for each currency
     for (const [currency, { total }] of currencyGroups) {
-      const account = userAccounts.find((acc: Account) => acc.currency === currency);
-      
+      const account = userAccounts.find(
+        (acc: Account) => acc.currency === currency
+      );
+
       if (!account) {
         throw new Error(`No account found for currency ${currency}`);
       }
 
       if (account.available_balance < total) {
-        throw new Error(`Insufficient funds for currency ${currency}. Required: ${total}, Available: ${account.available_balance}`);
+        throw new Error(
+          `Insufficient funds for currency ${currency}. Required: ${total}, Available: ${account.available_balance}`
+        );
       }
     }
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
       mutation CreateOrderWithItems(
-        $userId: uuid!,
+        $clientId: uuid!,
         $orderItems: [order_items_insert_input!]!,
         $statusHistory: order_status_history_insert_input!
       ) {
         insert_orders_one(object: {
-          user_id: $userId,
+          client_id: $clientId,
           status: "pending",
           total_amount: 0,
           order_items: {
@@ -620,13 +687,13 @@ export class HasuraUserService {
 
     for (const [currency, { items: currencyItems }] of currencyGroups) {
       for (const orderItem of currencyItems) {
-        const totalPrice = orderItem.item.price * orderItem.quantity;
+        const totalPrice = orderItem.item.selling_price * orderItem.quantity;
         totalOrderAmount += totalPrice;
-        
+
         orderItemsData.push({
           item_id: orderItem.item_id,
           quantity: orderItem.quantity,
-          unit_price: orderItem.item.price,
+          unit_price: orderItem.item.selling_price,
           total_price: totalPrice,
         });
       }
@@ -634,13 +701,13 @@ export class HasuraUserService {
 
     // Create the order
     const orderResult = await this.executeMutation(createOrderMutation, {
-      userId: user.id,
+      clientId: user.client.id,
       orderItems: orderItemsData,
       statusHistory: {
         order_id: null, // Will be set after order creation
-        status: "pending",
-        notes: "Order created"
-      }
+        status: 'pending',
+        notes: 'Order created',
+      },
     });
 
     const order = orderResult.insert_orders_one;
@@ -681,8 +748,10 @@ export class HasuraUserService {
 
     // Withhold funds from user accounts
     for (const [currency, { total }] of currencyGroups) {
-      const account = userAccounts.find((acc: Account) => acc.currency === currency);
-      
+      const account = userAccounts.find(
+        (acc: Account) => acc.currency === currency
+      );
+
       const withholdFundsMutation = `
         mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
           update_accounts_by_pk(
@@ -711,4 +780,4 @@ export class HasuraUserService {
       total_amount: totalOrderAmount,
     };
   }
-} 
+}
