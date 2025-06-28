@@ -36,6 +36,39 @@ select_permissions:
         user:
           identifier:
             _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
 update_permissions:
   - role: client
     permission:
