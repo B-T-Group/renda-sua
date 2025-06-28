@@ -8,6 +8,16 @@ object_relationships:
   - name: vehicle_type
     using:
       foreign_key_constraint_on: vehicle_type_id
+array_relationships:
+  - name: orders
+    using:
+      manual_configuration:
+        column_mapping:
+          id: assigned_agent_id
+        insertion_order: null
+        remote_table:
+          name: orders
+          schema: public
 select_permissions:
   - role: agent
     permission:

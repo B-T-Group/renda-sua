@@ -45,3 +45,12 @@ array_relationships:
         remote_table:
           name: item_images
           schema: public
+  - name: order_status_history
+    using:
+      manual_configuration:
+        column_mapping:
+          id: changed_by_user_id
+        insertion_order: null
+        remote_table:
+          name: order_status_history
+          schema: public

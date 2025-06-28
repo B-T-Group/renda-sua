@@ -25,6 +25,14 @@ array_relationships:
           name: business_inventory
         column_mapping:
           id: item_id
+  - name: order_items
+    using:
+      manual_configuration:
+        remote_table:
+          schema: public
+          name: order_items
+        column_mapping:
+          id: item_id
 select_permissions:
   - role: client
     permission:
