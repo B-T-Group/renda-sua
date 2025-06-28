@@ -2,18 +2,18 @@ table:
   name: orders
   schema: public
 object_relationships:
-  - name: client
+  - name: assigned_agent
     using:
-      foreign_key_constraint_on: client_id
+      foreign_key_constraint_on: assigned_agent_id
   - name: business
     using:
       foreign_key_constraint_on: business_id
   - name: business_location
     using:
       foreign_key_constraint_on: business_location_id
-  - name: assigned_agent
+  - name: client
     using:
-      foreign_key_constraint_on: assigned_agent_id
+      foreign_key_constraint_on: client_id
   - name: delivery_address
     using:
       foreign_key_constraint_on: delivery_address_id
@@ -21,16 +21,18 @@ array_relationships:
   - name: order_items
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: order_items
         column_mapping:
           id: order_id
+        insertion_order: null
+        remote_table:
+          name: order_items
+          schema: public
   - name: order_status_history
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: order_status_history
         column_mapping:
           id: order_id
+        insertion_order: null
+        remote_table:
+          name: order_status_history
+          schema: public

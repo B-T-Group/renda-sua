@@ -1,1 +1,8 @@
-[]
+- role_name: agent
+  role_set: []
+- role_name: business
+  role_set: []
+- role_name: client
+  role_set: []
+- role_name: user
+  role_set: []

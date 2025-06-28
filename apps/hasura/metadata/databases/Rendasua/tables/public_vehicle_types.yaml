@@ -6,8 +6,9 @@ array_relationships:
   - name: agents
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: agents
         column_mapping:
           id: vehicle_type_id
+        insertion_order: null
+        remote_table:
+          name: agents
+          schema: public

@@ -1,10 +1,6 @@
 table:
-  schema: public
   name: account_transactions
-select_permissions: []
-insert_permissions: []
-update_permissions: []
-delete_permissions: []
+  schema: public
 object_relationships:
   - name: account
     using:

@@ -1,10 +1,6 @@
 table:
-  schema: public
   name: accounts
-select_permissions: []
-insert_permissions: []
-update_permissions: []
-delete_permissions: []
+  schema: public
 object_relationships:
   - name: user
     using:
@@ -13,8 +9,9 @@ array_relationships:
   - name: account_transactions
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: account_transactions
         column_mapping:
           id: account_id
+        insertion_order: null
+        remote_table:
+          name: account_transactions
+          schema: public

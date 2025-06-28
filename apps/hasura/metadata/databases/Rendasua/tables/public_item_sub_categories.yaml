@@ -9,8 +9,9 @@ array_relationships:
   - name: items
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: items
         column_mapping:
           id: item_sub_category_id
+        insertion_order: null
+        remote_table:
+          name: items
+          schema: public

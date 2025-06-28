@@ -6,8 +6,9 @@ array_relationships:
   - name: users
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: users
         column_mapping:
           id: user_type_id
+        insertion_order: null
+        remote_table:
+          name: users
+          schema: public

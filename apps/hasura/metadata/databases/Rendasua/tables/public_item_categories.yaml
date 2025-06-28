@@ -5,8 +5,9 @@ array_relationships:
   - name: item_sub_categories
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: item_sub_categories
         column_mapping:
           id: item_category_id
+        insertion_order: null
+        remote_table:
+          name: item_sub_categories
+          schema: public

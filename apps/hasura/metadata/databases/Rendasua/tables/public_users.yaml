@@ -30,16 +30,18 @@ array_relationships:
   - name: accounts
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: accounts
         column_mapping:
           id: user_id
+        insertion_order: null
+        remote_table:
+          name: accounts
+          schema: public
   - name: item_images
     using:
       manual_configuration:
-        remote_table:
-          schema: public
-          name: item_images
         column_mapping:
           id: uploaded_by
+        insertion_order: null
+        remote_table:
+          name: item_images
+          schema: public

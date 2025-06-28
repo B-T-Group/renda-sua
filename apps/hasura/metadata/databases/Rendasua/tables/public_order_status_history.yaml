@@ -2,9 +2,9 @@ table:
   name: order_status_history
   schema: public
 object_relationships:
-  - name: order
-    using:
-      foreign_key_constraint_on: order_id
   - name: changed_by_user
     using:
       foreign_key_constraint_on: changed_by_user_id
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
