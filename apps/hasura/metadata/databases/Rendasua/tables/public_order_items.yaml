@@ -16,8 +16,10 @@ insert_permissions:
     permission:
       check:
         order:
-          client_id:
-            _eq: X-Hasura-User-Id
+          client:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
       columns:
         - id
         - dimensions
@@ -77,8 +79,10 @@ select_permissions:
         - updated_at
       filter:
         order:
-          business_id:
-            _eq: X-Hasura-User-Id
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -99,5 +103,7 @@ select_permissions:
         - updated_at
       filter:
         order:
-          client_id:
-            _eq: X-Hasura-User-Id
+          client:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id

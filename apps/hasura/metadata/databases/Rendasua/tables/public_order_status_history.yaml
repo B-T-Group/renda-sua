@@ -21,8 +21,13 @@ insert_permissions:
         - id
         - order_id
         - status
-        - notes
+        - previous_status
         - changed_by_user_id
+        - changed_by_type
+        - notes
+        - location_lat
+        - location_lng
+        - location_address
         - created_at
   - role: agent
     permission:

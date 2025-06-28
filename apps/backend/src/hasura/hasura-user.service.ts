@@ -692,7 +692,7 @@ export class HasuraUserService {
     const subtotal = totalAmount;
     const tax_amount = 0;
     const delivery_fee = 0;
-    const total_price = subtotal + tax_amount + delivery_fee;
+    const total_amount = subtotal + tax_amount + delivery_fee;
     const current_status = 'pending';
     const business_id = businessInventory.business_location.business_id;
     const payment_method = 'online';
@@ -712,7 +712,6 @@ export class HasuraUserService {
         $deliveryAddressId: uuid!,
         $orderNumber: String!,
         $orderItems: [order_items_insert_input!]!,
-        $statusHistory: order_status_history_insert_input!,
         $currency: String!,
         $subTotal: numeric!,
         $taxAmount: numeric!,
@@ -781,16 +780,6 @@ export class HasuraUserService {
             total_price
           }
         }
-        
-        insert_order_status_history(objects: [$statusHistory]) {
-          affected_rows
-          returning {
-            id
-            order_id
-            status
-            created_at
-          }
-        }
       }
     `;
 
@@ -819,7 +808,7 @@ export class HasuraUserService {
       subTotal: subtotal,
       taxAmount: tax_amount,
       deliveryFee: delivery_fee,
-      totalAmount: total_price,
+      totalAmount: total_amount,
       currentStatus: current_status,
       paymentMethod: payment_method,
       paymentStatus: payment_status,
@@ -828,47 +817,37 @@ export class HasuraUserService {
       preferredDeliveryTime: preferred_delivery_time,
       actualDeliveryTime: actual_delivery_time,
       assignedAgentId: assigned_agent_id,
-      statusHistory: {
-        order_id: null, // Will be set after order creation
-        status: 'pending',
-        notes: 'Order created',
-      },
     });
 
     const order = orderResult.insert_orders_one;
 
-    // Update the order with total amount
-    const updateOrderMutation = `
-      mutation UpdateOrderTotal($orderId: uuid!, $totalAmount: numeric!) {
-        update_orders_by_pk(
-          pk_columns: {id: $orderId},
-          _set: {total_amount: $totalAmount}
-        ) {
-          id
-          total_amount
-        }
-      }
-    `;
-
-    await this.executeMutation(updateOrderMutation, {
-      orderId: order.id,
-      totalAmount: totalAmount,
-    });
-
-    // Update order status history with the correct order_id
-    const updateStatusHistoryMutation = `
-      mutation UpdateStatusHistoryOrderId($orderId: uuid!) {
-        update_order_status_history(
-          where: {order_id: {_is_null: true}},
-          _set: {order_id: $orderId}
-        ) {
+    // Create order status history after order is created
+    const createStatusHistoryMutation = `
+      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
+        insert_order_status_history(objects: [{
+          order_id: $orderId,
+          status: $status,
+          notes: $notes,
+          changed_by_type: $changedByType,
+          changed_by_user_id: $changedByUserId
+        }]) {
           affected_rows
+          returning {
+            id
+            order_id
+            status
+            created_at
+          }
         }
       }
     `;
 
-    await this.executeMutation(updateStatusHistoryMutation, {
+    await this.executeMutation(createStatusHistoryMutation, {
       orderId: order.id,
+      status: 'pending',
+      notes: 'Order created',
+      changedByType: 'client',
+      changedByUserId: user.id,
     });
 
     // Withhold funds from user accounts
@@ -896,7 +875,7 @@ export class HasuraUserService {
 
     return {
       ...order,
-      total_price: totalAmount,
+      total_amount: totalAmount,
     };
   }
 }
