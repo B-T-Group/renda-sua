@@ -24,7 +24,6 @@ insert_permissions:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
-        - account_type
         - currency
         - available_balance
         - withheld_balance
@@ -35,7 +34,6 @@ select_permissions:
       columns:
         - id
         - user_id
-        - account_type
         - currency
         - available_balance
         - withheld_balance
@@ -52,7 +50,6 @@ select_permissions:
       columns:
         - id
         - user_id
-        - account_type
         - currency
         - available_balance
         - withheld_balance
@@ -69,7 +66,6 @@ select_permissions:
       columns:
         - id
         - user_id
-        - account_type
         - currency
         - available_balance
         - withheld_balance
@@ -86,7 +82,6 @@ select_permissions:
       columns:
         - id
         - user_id
-        - account_type
         - currency
         - available_balance
         - withheld_balance

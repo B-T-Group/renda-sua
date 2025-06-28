@@ -243,7 +243,7 @@ const Dashboard: React.FC = () => {
               <Card key={account.id} variant="outlined">
                 <CardContent>
                   <Typography variant="h6" color="primary" gutterBottom>
-                    {account.account_type} Account
+                    {account.currency} Account
                   </Typography>
                   <Typography variant="h4" component="div" gutterBottom>
                     {formatCurrency(

@@ -34,7 +34,6 @@ const GET_USER_PROFILE = `
     accounts {
       id
       user_id
-      account_type
       currency
       available_balance
       withheld_balance
@@ -107,7 +106,6 @@ const INSERT_ACCOUNT = `
     insert_accounts_one(object: $account) {
       id
       user_id
-      account_type
       currency
       available_balance
       withheld_balance
@@ -151,7 +149,6 @@ interface Address {
 interface Account {
   id: string;
   user_id: string;
-  account_type: string;
   currency: string;
   available_balance: number;
   withheld_balance: number;
@@ -256,7 +253,6 @@ export const useProfile = () => {
       await insertAccount({
         account: {
           user_id: userId,
-          account_type: userTypeId,
           currency: currency,
           available_balance: 0,
           withheld_balance: 0,

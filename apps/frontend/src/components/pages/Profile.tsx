@@ -453,7 +453,7 @@ const Profile: React.FC = () => {
                 <Card key={account.id} variant="outlined">
                   <CardContent>
                     <Typography variant="h6" color="primary">
-                      {capitalizeUserType(account.account_type)} Account
+                      {account.currency} Account
                     </Typography>
                     <Typography variant="h4">
                       ${account.available_balance.toFixed(2)}

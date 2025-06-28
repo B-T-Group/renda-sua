@@ -73,12 +73,10 @@ export class AccountsController {
       const createAccountMutation = `
         mutation CreateAccount(
           $userId: uuid!, 
-          $accountType: String!, 
           $currency: String!
         ) {
           insert_accounts_one(object: {
             user_id: $userId,
-            account_type: $accountType,
             currency: $currency,
             available_balance: 0,
             withheld_balance: 0,
@@ -86,7 +84,6 @@ export class AccountsController {
           }) {
             id
             user_id
-            account_type
             currency
             available_balance
             withheld_balance
@@ -102,7 +99,6 @@ export class AccountsController {
         createAccountMutation,
         {
           userId: user.id,
-          accountType: user.user_type_id,
           currency: accountData.currency,
         }
       );

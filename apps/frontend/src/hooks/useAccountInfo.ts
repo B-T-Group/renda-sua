@@ -6,7 +6,6 @@ const GET_ACCOUNT_INFO = `
     accounts {
       id
       user_id
-      account_type
       currency
       available_balance
       withheld_balance
@@ -34,7 +33,6 @@ const GET_ACCOUNT_INFO = `
 export interface Account {
   id: string;
   user_id: string;
-  account_type: string;
   currency: string;
   available_balance: number;
   withheld_balance: number;
