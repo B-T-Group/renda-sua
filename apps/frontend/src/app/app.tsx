@@ -1,35 +1,32 @@
 // Uncomment this line to use CSS modules
 // import styles from './app.module.css';
-import React, { useMemo } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { Box, Container } from '@mui/material';
 import { useAuth0 } from '@auth0/auth0-react';
-
-import Header from '../components/layout/Header';
-import LandingPage from '../components/pages/LandingPage';
-import Dashboard from '../components/pages/Dashboard';
-import UserProfile from '../components/auth/UserProfile';
+import { Box, Container } from '@mui/material';
+import { useMemo } from 'react';
+import { Route, Routes } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
+import UserProfile from '../components/auth/UserProfile';
 import LoadingPage from '../components/common/LoadingPage';
-import LoadingDemo from '../components/pages/LoadingDemo';
+import Header from '../components/layout/Header';
 import CompleteProfile from '../components/pages/CompleteProfile';
-import { useLoginFlow } from '../hooks/useLoginFlow';
+import Dashboard from '../components/pages/Dashboard';
+import LandingPage from '../components/pages/LandingPage';
+import LoadingDemo from '../components/pages/LoadingDemo';
 
 function App() {
-  const { isLoading, isAuthenticated } = useAuth0();
-  const { isCheckingProfile } = useLoginFlow();
+  const { isLoading } = useAuth0();
 
   // Memoize the loading state to prevent unnecessary re-renders
   const shouldShowLoading = useMemo(() => {
-    return isLoading || isCheckingProfile;
-  }, [isLoading, isCheckingProfile]);
+    return isLoading;
+  }, [isLoading]);
 
-  // Show loading page while Auth0 is loading or while checking user profile
+  // Show loading page while Auth0 is loading
   if (shouldShowLoading) {
     return (
-      <LoadingPage 
-        message={isLoading ? "Loading Rendasua" : "Checking Profile"}
-        subtitle={isLoading ? "Please wait while we authenticate your session" : "Verifying your account information"}
+      <LoadingPage
+        message="Loading Rendasua"
+        subtitle="Please wait while we authenticate your session"
         showProgress={true}
       />
     );

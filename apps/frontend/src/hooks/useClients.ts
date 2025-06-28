@@ -1,12 +1,12 @@
 import { useApiClient } from './useApiClient';
-import { useHasuraClient } from './useHasuraClient';
+import { useGraphQLClient } from './useGraphQLClient';
 
 export const useClients = () => {
   const apiClient = useApiClient();
-  const hasuraClient = useHasuraClient();
+  const graphQLClient = useGraphQLClient();
 
   return {
     apiClient,
-    hasuraClient,
+    graphQLClient,
   };
 }; 

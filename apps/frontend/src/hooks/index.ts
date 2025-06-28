@@ -1,9 +1,6 @@
 // API Client Hook
 export { useApiClient } from './useApiClient';
 
-// Hasura Client Hook
-export { useHasuraClient } from './useHasuraClient';
-
 // Combined Clients Hook
 export { useClients } from './useClients';
 
@@ -15,4 +12,11 @@ export { useUserTypes } from './useUserTypes';
 
 // Loading Components
 export { default as LoadingPage } from '../components/common/LoadingPage';
-export { default as LoadingSpinner } from '../components/common/LoadingSpinner'; 
+export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
+
+// GraphQL Request hooks
+export { useGraphQLClient } from './useGraphQLClient';
+export { useGraphQLRequest } from './useGraphQLRequest';
+export { useInventoryItems } from './useInventoryItems';
+export { useAccountInfo } from './useAccountInfo';
+export { useCreateOrder } from './useCreateOrder'; 
