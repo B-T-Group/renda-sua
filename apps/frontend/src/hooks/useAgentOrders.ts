@@ -103,6 +103,18 @@ export interface PendingOrdersResponse {
   count: number;
 }
 
+export interface PickUpOrderResponse {
+  success: boolean;
+  order: {
+    id: string;
+    order_number: string;
+    current_status: string;
+    assigned_agent_id: string;
+    updated_at: string;
+  };
+  message: string;
+}
+
 export const useAgentOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,16 +177,32 @@ export const useAgentOrders = () => {
   );
 
   const pickUpOrder = async (orderId: string, agentId: string) => {
+    if (!apiClient) {
+      throw new Error('API client not available');
+    }
+
     try {
-      await updateOrderStatus({
-        id: orderId,
-        current_status: 'assigned',
-        assigned_agent_id: agentId,
-      });
-      fetchPendingOrders(); // Refresh the orders
-    } catch (error) {
-      console.error('Error picking up order:', error);
-      throw error;
+      const response = await apiClient.post<PickUpOrderResponse>(
+        '/agents/pick_up_order',
+        {
+          order_id: orderId,
+        }
+      );
+
+      if (response.data.success) {
+        // Refresh the orders list after successful pickup
+        await fetchPendingOrders();
+        return response.data.order;
+      } else {
+        throw new Error(response.data.message || 'Failed to pick up order');
+      }
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to pick up order';
+      console.error('Error picking up order:', errorMessage);
+      throw new Error(errorMessage);
     }
   };
 

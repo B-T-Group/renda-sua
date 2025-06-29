@@ -9,22 +9,18 @@ import {
   CardActions,
   Button,
   Chip,
-  Grid,
-  Divider,
   Alert,
   CircularProgress,
   List,
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
-  IconButton,
-  Tooltip,
+  Snackbar,
 } from '@mui/material';
 import {
   LocationOn,
   Business,
   Person,
-  ShoppingCart,
   CheckCircle,
   Pending,
   DirectionsCar,
@@ -87,8 +83,8 @@ const formatCurrency = (amount: number, currency: string) => {
 
 const OrderCard: React.FC<{
   order: Order;
-  onPickUp?: (orderId: string) => void;
-  onUpdateStatus?: (orderId: string, status: string) => void;
+  onPickUp?: (orderId: string) => Promise<void>;
+  onUpdateStatus?: (orderId: string, status: string) => Promise<void>;
   showActions?: boolean;
 }> = ({ order, onPickUp, onUpdateStatus, showActions = true }) => {
   const [updating, setUpdating] = useState(false);
@@ -294,16 +290,65 @@ const AgentDashboard: React.FC = () => {
     updateOrderStatusAction,
   } = useAgentOrders();
 
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
   const handlePickUp = async (orderId: string) => {
     if (!profile?.id) {
-      alert('Agent profile not found');
+      setNotification({
+        open: true,
+        message: 'Agent profile not found. Please complete your profile first.',
+        severity: 'error',
+      });
       return;
     }
-    await pickUpOrder(orderId, profile.id);
+
+    try {
+      const result = await pickUpOrder(orderId, profile.id);
+      setNotification({
+        open: true,
+        message: `Successfully picked up order #${result.order_number}!`,
+        severity: 'success',
+      });
+    } catch (error: any) {
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to pick up order. Please try again.',
+        severity: 'error',
+      });
+    }
   };
 
   const handleStatusUpdate = async (orderId: string, status: string) => {
-    await updateOrderStatusAction(orderId, status);
+    try {
+      await updateOrderStatusAction(orderId, status);
+      setNotification({
+        open: true,
+        message: `Order status updated to ${status.replace(
+          '_',
+          ' '
+        )} successfully!`,
+        severity: 'success',
+      });
+    } catch (error: any) {
+      setNotification({
+        open: true,
+        message:
+          error.message || 'Failed to update order status. Please try again.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleCloseNotification = () => {
+    setNotification((prev) => ({ ...prev, open: false }));
   };
 
   if (loading) {
@@ -403,6 +448,22 @@ const AgentDashboard: React.FC = () => {
           </Box>
         )}
       </Paper>
+
+      {/* Success/Error Notifications */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
