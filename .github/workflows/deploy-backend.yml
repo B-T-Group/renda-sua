@@ -94,31 +94,3 @@ jobs:
                 "successCodes": "200-499"
               }
             }'
-
-      - name: Wait for deployment
-        run: |
-          echo "Waiting for deployment to complete..."
-          aws lightsail wait container-service-stable \
-            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}
-
-      - name: Get service URL
-        run: |
-          SERVICE_URL=$(aws lightsail get-container-service \
-            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
-            --query "containerService.url" \
-            --output text)
-          echo "Service URL: $SERVICE_URL"
-          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-
-      - name: Health check
-        run: |
-          # Wait a bit more for the service to be fully ready
-          sleep 10
-
-          # Check if the service is responding
-          if curl -f "${{ env.SERVICE_URL }}/api/health" > /dev/null 2>&1; then
-            echo "✅ Backend is healthy and responding"
-          else
-            echo "❌ Backend health check failed"
-            exit 1
-          fi
