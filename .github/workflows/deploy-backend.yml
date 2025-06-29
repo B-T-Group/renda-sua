@@ -1,0 +1,116 @@
+name: Deploy Backend to Lightsail Container
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - 'package.json'
+      - 'nx.json'
+      - 'tsconfig.base.json'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ca-central-1
+  LIGHTSAIL_CONTAINER_SERVICE: rendasua-backend-service
+  LIGHTSAIL_CONTAINER_NAME: backend
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npx nx build backend
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Lightsail plugin
+        run: |
+          curl "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" -o "lightsailctl"
+          sudo mv "lightsailctl" "/usr/local/bin/lightsailctl"
+          sudo chmod +x /usr/local/bin/lightsailctl
+
+      - name: Build and push container
+        run: |
+          # Build the Docker image
+          docker build -f apps/backend/Dockerfile -t ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} ${{ env.LIGHTSAIL_CONTAINER_NAME }}:latest
+
+          # Push to Lightsail Container Service
+          lightsailctl push-container-image \
+            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+            --label ${{ env.LIGHTSAIL_CONTAINER_NAME }} \
+            --image ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Lightsail
+        run: |
+          lightsailctl deploy-container-service \
+            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+            --containers '{
+              "backend": {
+                "image": "'${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}'",
+                "ports": {
+                  "3000": "HTTP"
+                },
+                "environment": {
+                  "NODE_ENV": "production",
+                  "HASURA_GRAPHQL_ENDPOINT": "${{ secrets.HASURA_GRAPHQL_ENDPOINT }}",
+                  "HASURA_GRAPHQL_ADMIN_SECRET": "${{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}"
+                }
+              }
+            }' \
+            --public-endpoint '{
+              "containerName": "backend",
+              "containerPort": 3000,
+              "healthCheck": {
+                "healthyThreshold": 2,
+                "unhealthyThreshold": 2,
+                "timeoutSeconds": 2,
+                "intervalSeconds": 5,
+                "path": "/api/health",
+                "successCodes": "200-499"
+              }
+            }'
+
+      - name: Get service URL
+        run: |
+          SERVICE_URL=$(lightsailctl get-container-service \
+            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+            --query "containerService.url" \
+            --output text)
+          echo "Service URL: $SERVICE_URL"
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+      - name: Health check
+        run: |
+          # Wait for deployment to complete
+          sleep 30
+
+          # Check if the service is responding
+          if curl -f "${{ env.SERVICE_URL }}/api/health" > /dev/null 2>&1; then
+            echo "✅ Backend is healthy and responding"
+          else
+            echo "❌ Backend health check failed"
+            exit 1
+          fi

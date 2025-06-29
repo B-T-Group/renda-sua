@@ -1,4 +1,11 @@
-import { Controller, Get, HttpException, HttpStatus, Post, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Post,
+  Body,
+} from '@nestjs/common';
 import { AppService } from './app.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
@@ -6,8 +13,18 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly hasuraSystemService: HasuraSystemService
   ) {}
+
+  @Get('health')
+  getHealth() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      service: 'rendasua-backend',
+      version: process.env.npm_package_version || '1.0.0',
+    };
+  }
 
   @Get()
   getData() {
@@ -71,24 +88,28 @@ export class AppController {
   }
 
   @Post('test-user')
-  async createTestUser(@Body() userData: { 
-    first_name: string;
-    last_name: string;
-    user_type_id: string;
-    profile: {
-      vehicle_type_id?: string;
-      name?: string;
-    };
-  }) {
+  async createTestUser(
+    @Body()
+    userData: {
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+      profile: {
+        vehicle_type_id?: string;
+        name?: string;
+      };
+    }
+  ) {
     try {
       // Use system service to create user without authentication
       const email = `test-${Date.now()}@example.com`;
-      
+
       let result: any;
 
       switch (userData.user_type_id) {
         case 'client':
-          result = await this.hasuraSystemService.executeMutation(`
+          result = await this.hasuraSystemService.executeMutation(
+            `
             mutation CreateUserWithClient($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!) {
               insert_users_one(object: {
                 identifier: $identifier,
@@ -116,13 +137,15 @@ export class AppController {
                 }
               }
             }
-          `, {
-            identifier: `test-${Date.now()}`,
-            email: email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            user_type_id: userData.user_type_id,
-          });
+          `,
+            {
+              identifier: `test-${Date.now()}`,
+              email: email,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              user_type_id: userData.user_type_id,
+            }
+          );
           return {
             success: true,
             user: result.insert_users_one,
@@ -133,7 +156,8 @@ export class AppController {
           if (!userData.profile.vehicle_type_id) {
             throw new Error('vehicle_type_id is required for agent users');
           }
-          result = await this.hasuraSystemService.executeMutation(`
+          result = await this.hasuraSystemService.executeMutation(
+            `
             mutation CreateUserWithAgent($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $vehicle_type_id: String!) {
               insert_users_one(object: {
                 identifier: $identifier,
@@ -164,14 +188,16 @@ export class AppController {
                 }
               }
             }
-          `, {
-            identifier: `test-${Date.now()}`,
-            email: email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            user_type_id: userData.user_type_id,
-            vehicle_type_id: userData.profile.vehicle_type_id,
-          });
+          `,
+            {
+              identifier: `test-${Date.now()}`,
+              email: email,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              user_type_id: userData.user_type_id,
+              vehicle_type_id: userData.profile.vehicle_type_id,
+            }
+          );
           return {
             success: true,
             user: result.insert_users_one,
@@ -182,7 +208,8 @@ export class AppController {
           if (!userData.profile.name) {
             throw new Error('business name is required for business users');
           }
-          result = await this.hasuraSystemService.executeMutation(`
+          result = await this.hasuraSystemService.executeMutation(
+            `
             mutation CreateUserWithBusiness($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $name: String!) {
               insert_users_one(object: {
                 identifier: $identifier,
@@ -213,14 +240,16 @@ export class AppController {
                 }
               }
             }
-          `, {
-            identifier: `test-${Date.now()}`,
-            email: email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            user_type_id: userData.user_type_id,
-            name: userData.profile.name,
-          });
+          `,
+            {
+              identifier: `test-${Date.now()}`,
+              email: email,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              user_type_id: userData.user_type_id,
+              name: userData.profile.name,
+            }
+          );
           return {
             success: true,
             user: result.insert_users_one,
