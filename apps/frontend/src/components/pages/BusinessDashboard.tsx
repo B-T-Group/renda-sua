@@ -32,6 +32,7 @@ import {
   DialogActions,
   CircularProgress,
   Alert,
+  Tooltip,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -39,6 +40,10 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Store as StoreIcon,
+  Warehouse as WarehouseIcon,
+  Business as BusinessIcon,
+  LocalShipping as PickupIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
@@ -49,6 +54,11 @@ import {
 } from '../../hooks/useBusinessInventory';
 import { useInventoryItems } from '../../hooks/useInventoryItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import {
+  useBusinessLocations,
+  BusinessLocation,
+  AddBusinessLocationData,
+} from '../../hooks/useBusinessLocations';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -108,16 +118,28 @@ const BusinessDashboard: React.FC = () => {
     restockItem,
   } = useBusinessInventory();
 
+  const {
+    locations,
+    loading: locationsLoading,
+    error: locationsError,
+    fetchLocations,
+    addLocation,
+    updateLocation,
+    deleteLocation,
+  } = useBusinessLocations();
+
   useEffect(() => {
     fetchOrders();
     fetchInventory();
     fetchAvailableItems();
     fetchBusinessLocations();
+    fetchLocations();
   }, [
     fetchOrders,
     fetchInventory,
     fetchAvailableItems,
     fetchBusinessLocations,
+    fetchLocations,
   ]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -216,6 +238,13 @@ const BusinessDashboard: React.FC = () => {
             label={
               <Badge badgeContent={inventory.length} color="secondary">
                 {t('business.dashboard.inventory')}
+              </Badge>
+            }
+          />
+          <Tab
+            label={
+              <Badge badgeContent={locations.length} color="success">
+                {t('business.dashboard.locations')}
               </Badge>
             }
           />
@@ -508,21 +537,29 @@ const BusinessDashboard: React.FC = () => {
               <Typography variant="h6">
                 {t('business.inventory.title')}
               </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  if (businessLocations.length === 0) {
-                    enqueueSnackbar(t('business.inventory.noLocationsError'), {
-                      variant: 'error',
-                    });
-                    return;
-                  }
-                  setShowAddItemDialog(true);
-                }}
-              >
-                {t('business.inventory.addItem')}
-              </Button>
+              <Tooltip title={t('business.inventory.noLocationsError')}>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (businessLocations.length === 0) {
+                        enqueueSnackbar(
+                          t('business.inventory.noLocationsError'),
+                          {
+                            variant: 'error',
+                          }
+                        );
+                        return;
+                      }
+                      setShowAddItemDialog(true);
+                    }}
+                    disabled={businessLocations.length === 0}
+                  >
+                    {t('business.inventory.addItem')}
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
 
             {inventoryLoading ? (
@@ -622,6 +659,91 @@ const BusinessDashboard: React.FC = () => {
                         <IconButton size="small">
                           <EditIcon />
                         </IconButton>
+                        <IconButton size="small" color="error">
+                          <DeleteIcon />
+                        </IconButton>
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
+          {/* Locations Management */}
+          <Box sx={{ mb: 3 }}>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
+            >
+              <Typography variant="h6">
+                {t('business.locations.title')}
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  // TODO: Add location dialog logic
+                  setShowAddItemDialog(true);
+                }}
+              >
+                {t('business.locations.addLocation')}
+              </Button>
+            </Box>
+
+            {locationsLoading ? (
+              <Box display="flex" justifyContent="center" p={3}>
+                <CircularProgress />
+              </Box>
+            ) : locationsError ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {locationsError}
+              </Alert>
+            ) : (
+              <Grid container spacing={2}>
+                {locations.map((location) => (
+                  <Grid item xs={12} sm={6} md={4} key={location.id}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          {location.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          gutterBottom
+                        >
+                          {formatAddress(location.address)}
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Chip
+                            label={
+                              location.is_active
+                                ? t('business.locations.active')
+                                : t('business.locations.inactive')
+                            }
+                            color={location.is_active ? 'success' : 'default'}
+                            size="small"
+                          />
+                        </Box>
+                      </CardContent>
+                      <CardActions>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            updateLocation(location.id, {
+                              is_active: !location.is_active,
+                            })
+                          }
+                        >
+                          {location.is_active
+                            ? t('business.locations.deactivate')
+                            : t('business.locations.activate')}
+                        </Button>
                         <IconButton size="small" color="error">
                           <DeleteIcon />
                         </IconButton>

@@ -121,7 +121,8 @@
       "title": "Tableau de bord Entreprise",
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
       "orders": "Commandes",
-      "inventory": "Inventaire"
+      "inventory": "Inventaire",
+      "locations": "Emplacements"
     },
     "orders": {
       "title": "Gestion des Commandes",
@@ -180,7 +181,34 @@
       "reorderPoint": "Point de réapprovisionnement",
       "active": "Actif",
       "inactive": "Inactif",
-      "restock": "Réapprovisionner"
+      "restock": "Réapprovisionner",
+      "noLocationsError": "Vous devez ajouter au moins un emplacement d'entreprise avant d'ajouter des articles d'inventaire."
+    },
+    "locations": {
+      "title": "Emplacements d'Entreprise",
+      "addLocation": "Ajouter un emplacement",
+      "editLocation": "Modifier l'emplacement",
+      "deleteLocation": "Supprimer l'emplacement",
+      "name": "Nom de l'emplacement",
+      "address": "Adresse",
+      "phone": "Téléphone",
+      "email": "E-mail",
+      "locationType": "Type d'emplacement",
+      "isPrimary": "Emplacement principal",
+      "isActive": "Actif",
+      "operatingHours": "Heures d'ouverture",
+      "store": "Magasin",
+      "warehouse": "Entrepôt",
+      "office": "Bureau",
+      "pickupPoint": "Point de ramassage",
+      "noLocations": "Aucun emplacement d'entreprise trouvé. Ajoutez votre premier emplacement pour commencer.",
+      "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cet emplacement ? Cette action ne peut pas être annulée.",
+      "locationDeleted": "Emplacement supprimé avec succès",
+      "locationAdded": "Emplacement ajouté avec succès",
+      "locationUpdated": "Emplacement mis à jour avec succès",
+      "primaryLocationWarning": "Ceci est votre emplacement principal. Vous devez définir un autre emplacement comme principal avant de supprimer celui-ci.",
+      "activate": "Activer",
+      "deactivate": "Désactiver"
     }
   },
   "notifications": {
