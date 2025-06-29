@@ -2,6 +2,93 @@ import { useEffect, useRef, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 import { useApiClient } from './useApiClient';
 
+const GET_ACTIVE_ORDERS = `
+  query GetActiveOrders {
+    orders(
+      where: {
+        current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
+      }
+      order_by: { created_at: desc }
+    ) {
+      id
+      order_number
+      client_id
+      business_id
+      business_location_id
+      assigned_agent_id
+      delivery_address_id
+      subtotal
+      delivery_fee
+      tax_amount
+      total_amount
+      currency
+      current_status
+      estimated_delivery_time
+      actual_delivery_time
+      special_instructions
+      preferred_delivery_time
+      payment_method
+      payment_status
+      created_at
+      updated_at
+      client {
+        id
+        user {
+          id
+          first_name
+          last_name
+          email
+        }
+      }
+      business {
+        id
+        name
+        user {
+          id
+          first_name
+          last_name
+          email
+        }
+      }
+      business_location {
+        id
+        name
+        location_type
+        address {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+        }
+      }
+      delivery_address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+      }
+      order_items {
+        id
+        item_name
+        item_description
+        unit_price
+        quantity
+        total_price
+        weight
+        weight_unit
+        dimensions
+        special_instructions
+      }
+    }
+  }
+`;
+
 const UPDATE_ORDER_STATUS = `
   mutation UpdateOrderStatus($id: uuid!, $current_status: order_status_enum!, $assigned_agent_id: uuid) {
     update_orders_by_pk(
@@ -117,13 +204,28 @@ export interface PickUpOrderResponse {
 
 export const useAgentOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { execute: getActiveOrders } = useGraphQLRequest(GET_ACTIVE_ORDERS);
   const { execute: updateOrderStatus } = useGraphQLRequest(UPDATE_ORDER_STATUS);
   const apiClient = useApiClient();
 
   const hasExecuted = useRef(false);
+
+  const fetchActiveOrders = async () => {
+    try {
+      const result = await getActiveOrders({});
+      if (result.data?.orders) {
+        setActiveOrders(result.data.orders);
+      }
+    } catch (err: any) {
+      console.error('Error fetching active orders:', err);
+      setError('Failed to fetch active orders');
+    }
+  };
 
   const fetchPendingOrders = async () => {
     if (!apiClient) {
@@ -141,7 +243,7 @@ export const useAgentOrders = () => {
       );
 
       if (response.data.success) {
-        setOrders(response.data.orders);
+        setPendingOrders(response.data.orders);
       } else {
         setError('Failed to fetch pending orders');
       }
@@ -156,25 +258,23 @@ export const useAgentOrders = () => {
     }
   };
 
+  const fetchAllOrders = async () => {
+    await Promise.all([fetchActiveOrders(), fetchPendingOrders()]);
+  };
+
   useEffect(() => {
     if (!hasExecuted.current) {
       hasExecuted.current = true;
       setTimeout(() => {
-        fetchPendingOrders();
+        fetchAllOrders();
       }, 0);
     }
   }, [apiClient]);
 
-  // Filter orders by status
-  const activeOrders = orders.filter((order) =>
-    ['assigned', 'picked_up', 'in_transit', 'out_for_delivery'].includes(
-      order.current_status
-    )
-  );
-
-  const pendingOrders = orders.filter(
-    (order) => order.current_status === 'pending'
-  );
+  // Combine active and pending orders for the main orders state
+  useEffect(() => {
+    setOrders([...activeOrders, ...pendingOrders]);
+  }, [activeOrders, pendingOrders]);
 
   const pickUpOrder = async (orderId: string, agentId: string) => {
     if (!apiClient) {
@@ -190,8 +290,8 @@ export const useAgentOrders = () => {
       );
 
       if (response.data.success) {
-        // Refresh the orders list after successful pickup
-        await fetchPendingOrders();
+        // Refresh both active and pending orders after successful pickup
+        await fetchAllOrders();
         return response.data.order;
       } else {
         throw new Error(response.data.message || 'Failed to pick up order');
@@ -212,7 +312,8 @@ export const useAgentOrders = () => {
         id: orderId,
         current_status: status,
       });
-      fetchPendingOrders(); // Refresh the orders
+      // Refresh active orders after status update
+      await fetchActiveOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
       throw error;
@@ -225,7 +326,7 @@ export const useAgentOrders = () => {
     pendingOrders,
     loading,
     error,
-    refetch: fetchPendingOrders,
+    refetch: fetchAllOrders,
     pickUpOrder,
     updateOrderStatusAction,
   };
