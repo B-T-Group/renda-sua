@@ -54,7 +54,7 @@ jobs:
       - name: Build and push container
         run: |
           # Build the Docker image
-          docker build -f apps/backend/Dockerfile -t ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} .
+          docker build -f Dockerfile.backend -t ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} .
           docker tag ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} ${{ env.LIGHTSAIL_CONTAINER_NAME }}:latest
 
           # Push to Lightsail Container Service

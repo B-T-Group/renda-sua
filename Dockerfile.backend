@@ -14,7 +14,7 @@ WORKDIR /app
 RUN addgroup --system rendasua-backend && \
           adduser --system -G rendasua-backend rendasua-backend
 
-COPY apps/backend/dist rendasua-backend/
+COPY dist/apps/backend rendasua-backend/
 COPY apps/backend/package.json rendasua-backend/
 RUN chown -R rendasua-backend:rendasua-backend .
 
