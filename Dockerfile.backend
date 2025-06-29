@@ -4,22 +4,43 @@
 # Tip: Modify "docker-build" options in project.json to change docker build args.
 #
 # Run the container with `docker run -p 3000:3000 -t rendasua-backend`.
-FROM docker.io/node:lts-alpine
 
+# Stage 1: Build
+FROM node:lts-alpine AS builder
+WORKDIR /app
+
+# Install dependencies and build the app
+COPY apps/backend/package.json ./apps/backend/package.json
+COPY package.json ./
+COPY package-lock.json ./
+RUN npm install --legacy-peer-deps
+COPY apps ./apps
+COPY tsconfig.base.json ./
+COPY tsconfig.json ./
+COPY apps/backend/tsconfig.* ./apps/backend/
+COPY apps/backend/webpack.config.js ./apps/backend/
+RUN npx nx build backend
+
+# Stage 2: Production image
+FROM node:lts-alpine
+WORKDIR /app
+
+ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 
-WORKDIR /app
+# Create a non-root user
+RUN addgroup -S rendasua && adduser -S rendasua -G rendasua
 
-RUN addgroup --system rendasua-backend && \
-          adduser --system -G rendasua-backend rendasua-backend
+# Copy built files and install only production dependencies
+COPY --from=builder /app/dist/apps/backend ./dist
+COPY package.json ./
+COPY package-lock.json ./
+RUN npm install --omit=dev --legacy-peer-deps && npm cache clean --force
 
-COPY dist/apps/backend rendasua-backend/
-COPY apps/backend/package.json rendasua-backend/
-RUN chown -R rendasua-backend:rendasua-backend .
+# Set permissions
+RUN chown -R rendasua:rendasua /app
+USER rendasua
 
-# You can remove this install step if you build with `--bundle` option.
-# The bundled output will include external dependencies.
-RUN npm --prefix rendasua-backend --omit=dev -f install
-
-CMD [ "node", "rendasua-backend/main.js" ]
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
