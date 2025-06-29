@@ -1,4 +1,4 @@
-# Configuration Setup
+# Configuration Setups
 
 This directory contains the configuration setup for the NestJS backend application using `@nestjs/config`.
 
