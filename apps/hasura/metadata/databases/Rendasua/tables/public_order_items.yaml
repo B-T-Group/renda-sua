@@ -57,8 +57,10 @@ select_permissions:
         - updated_at
       filter:
         order:
-          assigned_agent_id:
-            _eq: X-Hasura-User-Id
+          assigned_agent:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
   - role: business
     permission:
       columns:

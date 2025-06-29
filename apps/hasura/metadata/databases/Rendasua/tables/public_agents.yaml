@@ -28,6 +28,33 @@ insert_permissions:
       columns:
         - user_id
         - vehicle_type_id
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - vehicle_type_id
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - vehicle_type_id
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - vehicle_type_id
+        - created_at
+        - updated_at
 select_permissions:
   - role: agent
     permission:

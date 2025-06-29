@@ -12,7 +12,6 @@ import Dashboard from '../components/pages/Dashboard';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
 import { ClientOrders } from '../components/pages/ClientOrders';
-import ErrorPage from '../components/pages/ErrorPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';

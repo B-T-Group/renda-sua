@@ -1,9 +1,327 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Box, Container, Paper, Typography } from '@mui/material';
-import React from 'react';
+import {
+  Box,
+  Container,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
+  CardActions,
+  Button,
+  Chip,
+  Grid,
+  Divider,
+  Alert,
+  CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import {
+  LocationOn,
+  Business,
+  Person,
+  ShoppingCart,
+  CheckCircle,
+  Pending,
+  DirectionsCar,
+  LocalShipping,
+} from '@mui/icons-material';
+import React, { useState } from 'react';
+import { useAgentOrders, Order } from '../../hooks/useAgentOrders';
+import { useUserProfile } from '../../hooks/useUserProfile';
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'warning';
+    case 'assigned':
+      return 'info';
+    case 'picked_up':
+      return 'primary';
+    case 'in_transit':
+      return 'secondary';
+    case 'out_for_delivery':
+      return 'success';
+    case 'delivered':
+      return 'success';
+    case 'cancelled':
+      return 'error';
+    default:
+      return 'default';
+  }
+};
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return <Pending />;
+    case 'assigned':
+      return <CheckCircle />;
+    case 'picked_up':
+      return <DirectionsCar />;
+    case 'in_transit':
+    case 'out_for_delivery':
+      return <LocalShipping />;
+    case 'delivered':
+      return <CheckCircle />;
+    default:
+      return <Pending />;
+  }
+};
+
+const formatAddress = (address: any) => {
+  if (!address) return 'No address';
+  return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
+};
+
+const formatCurrency = (amount: number, currency: string) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+  }).format(amount);
+};
+
+const OrderCard: React.FC<{
+  order: Order;
+  onPickUp?: (orderId: string) => void;
+  onUpdateStatus?: (orderId: string, status: string) => void;
+  showActions?: boolean;
+}> = ({ order, onPickUp, onUpdateStatus, showActions = true }) => {
+  const [updating, setUpdating] = useState(false);
+
+  const handlePickUp = async () => {
+    if (!onPickUp) return;
+    setUpdating(true);
+    try {
+      await onPickUp(order.id);
+    } catch (error) {
+      console.error('Error picking up order:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleStatusUpdate = async (status: string) => {
+    if (!onUpdateStatus) return;
+    setUpdating(true);
+    try {
+      await onUpdateStatus(order.id, status);
+    } catch (error) {
+      console.error('Error updating order status:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'assigned':
+        return 'picked_up';
+      case 'picked_up':
+        return 'in_transit';
+      case 'in_transit':
+        return 'out_for_delivery';
+      case 'out_for_delivery':
+        return 'delivered';
+      default:
+        return null;
+    }
+  };
+
+  const nextStatus = getNextStatus(order.current_status);
+
+  return (
+    <Card sx={{ mb: 2, position: 'relative' }}>
+      <CardContent>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            mb: 2,
+          }}
+        >
+          <Box>
+            <Typography variant="h6" component="h3" gutterBottom>
+              Order #{order.order_number}
+            </Typography>
+            <Chip
+              icon={getStatusIcon(order.current_status)}
+              label={order.current_status.replace('_', ' ').toUpperCase()}
+              color={getStatusColor(order.current_status) as any}
+              size="small"
+            />
+          </Box>
+          <Typography variant="h6" color="primary">
+            {formatCurrency(order.total_amount, order.currency)}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            gap: 2,
+          }}
+        >
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Business sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">
+                {order.business.name}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <LocationOn sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">
+                Pickup: {formatAddress(order.business_location.address)}
+              </Typography>
+            </Box>
+          </Box>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Person sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">
+                {order.client.user.first_name} {order.client.user.last_name}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <LocationOn sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">
+                Delivery: {formatAddress(order.delivery_address)}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        {order.order_items.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Items ({order.order_items.length}):
+            </Typography>
+            <List dense>
+              {order.order_items.slice(0, 3).map((item) => (
+                <ListItem key={item.id} sx={{ py: 0 }}>
+                  <ListItemText
+                    primary={item.item_name}
+                    secondary={`${item.quantity}x ${formatCurrency(
+                      item.unit_price,
+                      order.currency
+                    )}`}
+                  />
+                  <ListItemSecondaryAction>
+                    <Typography variant="body2" color="primary">
+                      {formatCurrency(item.total_price, order.currency)}
+                    </Typography>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+              {order.order_items.length > 3 && (
+                <ListItem sx={{ py: 0 }}>
+                  <ListItemText
+                    secondary={`+${order.order_items.length - 3} more items`}
+                  />
+                </ListItem>
+              )}
+            </List>
+          </Box>
+        )}
+
+        {order.special_instructions && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Special Instructions:
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {order.special_instructions}
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
+
+      {showActions && (
+        <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+          <Box>
+            {order.current_status === 'pending' && onPickUp && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handlePickUp}
+                disabled={updating}
+                startIcon={<CheckCircle />}
+              >
+                {updating ? <CircularProgress size={20} /> : 'Pick Up Order'}
+              </Button>
+            )}
+            {nextStatus && onUpdateStatus && (
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => handleStatusUpdate(nextStatus)}
+                disabled={updating}
+                sx={{ ml: 1 }}
+              >
+                {updating ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  `Mark as ${nextStatus.replace('_', ' ')}`
+                )}
+              </Button>
+            )}
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            Created: {new Date(order.created_at).toLocaleDateString()}
+          </Typography>
+        </CardActions>
+      )}
+    </Card>
+  );
+};
 
 const AgentDashboard: React.FC = () => {
   const { user } = useAuth0();
+  const { profile } = useUserProfile();
+  const {
+    activeOrders,
+    pendingOrders,
+    loading,
+    error,
+    pickUpOrder,
+    updateOrderStatusAction,
+  } = useAgentOrders();
+
+  const handlePickUp = async (orderId: string) => {
+    if (!profile?.id) {
+      alert('Agent profile not found');
+      return;
+    }
+    await pickUpOrder(orderId, profile.id);
+  };
+
+  const handleStatusUpdate = async (orderId: string, status: string) => {
+    await updateOrderStatusAction(orderId, status);
+  };
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '400px',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -12,31 +330,78 @@ const AgentDashboard: React.FC = () => {
           Agent Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back, {user?.name}! This is your agent dashboard.
+          Welcome back, {user?.name}! Manage your delivery orders here.
         </Typography>
       </Box>
 
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Agent Features Coming Soon
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          The agent dashboard is under development. You'll be able to:
-        </Typography>
-        <Box component="ul" sx={{ mt: 2, pl: 3 }}>
-          <Typography component="li" variant="body2" color="text.secondary">
-            View assigned delivery orders
-          </Typography>
-          <Typography component="li" variant="body2" color="text.secondary">
-            Update order status
-          </Typography>
-          <Typography component="li" variant="body2" color="text.secondary">
-            Manage delivery routes
-          </Typography>
-          <Typography component="li" variant="body2" color="text.secondary">
-            Track earnings and performance
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Active Orders Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <LocalShipping sx={{ mr: 2, color: 'primary.main' }} />
+          <Typography variant="h5" component="h2">
+            Active Orders ({activeOrders.length})
           </Typography>
         </Box>
+
+        {activeOrders.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body1" color="text.secondary">
+              No active orders at the moment.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Pick up pending orders to get started!
+            </Typography>
+          </Box>
+        ) : (
+          <Box>
+            {activeOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onUpdateStatus={handleStatusUpdate}
+                showActions={true}
+              />
+            ))}
+          </Box>
+        )}
+      </Paper>
+
+      {/* Pending Orders Section */}
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Pending sx={{ mr: 2, color: 'warning.main' }} />
+          <Typography variant="h5" component="h2">
+            Pending Orders ({pendingOrders.length})
+          </Typography>
+        </Box>
+
+        {pendingOrders.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body1" color="text.secondary">
+              No pending orders available.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              New orders will appear here when they become available.
+            </Typography>
+          </Box>
+        ) : (
+          <Box>
+            {pendingOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onPickUp={handlePickUp}
+                showActions={true}
+              />
+            ))}
+          </Box>
+        )}
       </Paper>
     </Container>
   );

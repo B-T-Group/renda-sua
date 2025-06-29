@@ -21,9 +21,13 @@ const ProfileRouter: React.FC = () => {
       return;
     }
 
-    if (!loading && !error) {
-      if (!isProfileComplete) {
-        // Profile is not complete, redirect to complete profile
+    if (!loading) {
+      // Check if user is not found (404) or profile is incomplete
+      const isUserNotFound = error === 'Profile not found';
+      const shouldCompleteProfile = isUserNotFound || !isProfileComplete;
+
+      if (shouldCompleteProfile) {
+        // User not found or profile incomplete, redirect to complete profile
         navigate('/complete-profile');
         return;
       }
@@ -58,8 +62,8 @@ const ProfileRouter: React.FC = () => {
     );
   }
 
-  // Show error page if there's an error
-  if (error) {
+  // Show error page if there's an error (but not for 404/user not found)
+  if (error && error !== 'Profile not found') {
     return <ErrorPage error={error} onRetry={refetch} />;
   }
 

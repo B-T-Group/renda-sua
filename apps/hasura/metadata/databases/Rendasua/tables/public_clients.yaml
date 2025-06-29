@@ -24,6 +24,30 @@ insert_permissions:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+  - role: agent
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
 select_permissions:
   - role: client
     permission:

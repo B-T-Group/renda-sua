@@ -34,6 +34,33 @@ insert_permissions:
       columns:
         - user_id
         - name
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
+  - role: agent
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
 select_permissions:
   - role: business
     permission:
@@ -43,10 +70,7 @@ select_permissions:
         - name
         - created_at
         - updated_at
-      filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
+      filter: {}
   - role: client
     permission:
       columns:
@@ -55,10 +79,7 @@ select_permissions:
         - name
         - created_at
         - updated_at
-      filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
+      filter: {}
   - role: agent
     permission:
       columns:
@@ -67,22 +88,7 @@ select_permissions:
         - name
         - created_at
         - updated_at
-      filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
-  - role: user
-    permission:
-      columns:
-        - id
-        - user_id
-        - name
-        - created_at
-        - updated_at
-      filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
+      filter: {}
 update_permissions:
   - role: business
     permission:

@@ -54,6 +54,55 @@ array_relationships:
         remote_table:
           name: order_status_history
           schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+  - role: agent
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - created_at
+        - updated_at
 select_permissions:
   - role: agent
     permission:

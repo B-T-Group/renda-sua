@@ -92,8 +92,10 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        assigned_agent_id:
-          _eq: X-Hasura-User-Id
+        assigned_agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
   - role: business
     permission:
       columns:
@@ -160,8 +162,10 @@ update_permissions:
         - actual_delivery_time
         - updated_at
       filter:
-        assigned_agent_id:
-          _eq: X-Hasura-User-Id
+        assigned_agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
       check: null
   - role: business
     permission:

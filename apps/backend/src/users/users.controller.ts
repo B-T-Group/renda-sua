@@ -7,10 +7,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly hasuraUserService: HasuraUserService) {}
+  constructor(
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService
+  ) {}
 
   @Get('me')
   async getCurrentUser() {
@@ -32,6 +36,108 @@ export class UsersController {
         {
           success: false,
           error: error.message,
+        },
+        HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  @Get('pending_orders')
+  async getPendingOrders() {
+    try {
+      const query = `
+        query GetPendingOrders {
+          orders(where: { current_status: { _eq: "pending" } }) {
+            id
+            order_number
+            client_id
+            business_id
+            business_location_id
+            assigned_agent_id
+            delivery_address_id
+            subtotal
+            delivery_fee
+            tax_amount
+            total_amount
+            currency
+            current_status
+            estimated_delivery_time
+            actual_delivery_time
+            special_instructions
+            preferred_delivery_time
+            payment_method
+            payment_status
+            created_at
+            updated_at
+            client {
+              id
+              user {
+                id
+                first_name
+                last_name
+                email
+              }
+            }
+            business {
+              id
+              name
+              user {
+                id
+                first_name
+                last_name
+              }
+            }
+            business_location {
+              id
+              name
+              location_type
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+              }
+            }
+            delivery_address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
+            order_items {
+              id
+              item_name
+              item_description
+              unit_price
+              quantity
+              total_price
+              weight
+              weight_unit
+              dimensions
+              special_instructions
+            }
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(query);
+
+      return {
+        success: true,
+        orders: result.orders,
+        count: result.orders.length,
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch pending orders',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

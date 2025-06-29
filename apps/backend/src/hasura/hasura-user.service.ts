@@ -557,13 +557,7 @@ export class HasuraUserService {
             created_at
             updated_at
           }
-          business {
-            id
-            user_id
-            name
-            created_at
-            updated_at
-          }
+         
           created_at
           updated_at
         }
@@ -577,8 +571,6 @@ export class HasuraUserService {
     if (!userResult.users || userResult.users.length === 0) {
       throw new Error('User not found');
     }
-
-    console.log(userResult.users[0]);
 
     return userResult.users[0];
   }

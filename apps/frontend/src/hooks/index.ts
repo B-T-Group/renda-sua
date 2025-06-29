@@ -20,8 +20,11 @@ export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
 // GraphQL Request hooks
 export { useGraphQLClient } from './useGraphQLClient';
 export { useGraphQLRequest } from './useGraphQLRequest';
-export { useInventoryItems } from './useInventoryItems';
-export { useAccountInfo } from './useAccountInfo';
+
+// Domain-specific hooks
 export { useCreateOrder } from './useCreateOrder';
 export { useBackendOrders } from './useBackendOrders';
+export { useAgentOrders } from './useAgentOrders';
+export { useInventoryItems } from './useInventoryItems';
+export { useAccountInfo } from './useAccountInfo';
 export { useUserProfile } from './useUserProfile';
