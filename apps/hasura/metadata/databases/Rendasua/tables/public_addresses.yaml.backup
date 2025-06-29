@@ -68,21 +68,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        _or:
-          - _and:
-              - entity_type:
-                  _eq: user
-              - agent:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: business
     permission:
       columns:
@@ -102,21 +90,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        _or:
-          - _and:
-              - entity_type:
-                  _eq: user
-              - agent:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -136,18 +112,6 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        _or:
-          - _and:
-              - entity_type:
-                  _eq: user
-              - agent:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
