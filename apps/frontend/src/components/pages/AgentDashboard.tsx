@@ -185,7 +185,7 @@ const OrderCard: React.FC<{
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Person sx={{ mr: 1, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">
-                {order.client.user.first_name} {order.client.user.last_name}
+                {order.client?.user.first_name} {order.client?.user.last_name}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>

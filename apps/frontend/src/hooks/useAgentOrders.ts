@@ -2,93 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 import { useApiClient } from './useApiClient';
 
-const GET_ACTIVE_ORDERS = `
-  query GetActiveOrders {
-    orders(
-      where: {
-        current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
-      }
-      order_by: { created_at: desc }
-    ) {
-      id
-      order_number
-      client_id
-      business_id
-      business_location_id
-      assigned_agent_id
-      delivery_address_id
-      subtotal
-      delivery_fee
-      tax_amount
-      total_amount
-      currency
-      current_status
-      estimated_delivery_time
-      actual_delivery_time
-      special_instructions
-      preferred_delivery_time
-      payment_method
-      payment_status
-      created_at
-      updated_at
-      client {
-        id
-        user {
-          id
-          first_name
-          last_name
-          email
-        }
-      }
-      business {
-        id
-        name
-        user {
-          id
-          first_name
-          last_name
-          email
-        }
-      }
-      business_location {
-        id
-        name
-        location_type
-        address {
-          id
-          address_line_1
-          address_line_2
-          city
-          state
-          postal_code
-          country
-        }
-      }
-      delivery_address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-      }
-      order_items {
-        id
-        item_name
-        item_description
-        unit_price
-        quantity
-        total_price
-        weight
-        weight_unit
-        dimensions
-        special_instructions
-      }
-    }
-  }
-`;
-
 const UPDATE_ORDER_STATUS = `
   mutation UpdateOrderStatus($id: uuid!, $current_status: order_status_enum!, $assigned_agent_id: uuid) {
     update_orders_by_pk(
@@ -184,6 +97,12 @@ export interface Order {
   order_items: OrderItem[];
 }
 
+export interface ActiveOrdersResponse {
+  success: boolean;
+  orders: Order[];
+  count: number;
+}
+
 export interface PendingOrdersResponse {
   success: boolean;
   orders: Order[];
@@ -209,29 +128,44 @@ export const useAgentOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { execute: getActiveOrders } = useGraphQLRequest(GET_ACTIVE_ORDERS);
   const { execute: updateOrderStatus } = useGraphQLRequest(UPDATE_ORDER_STATUS);
   const apiClient = useApiClient();
 
   const fetchActiveOrders = useCallback(async () => {
+    if (!apiClient) {
+      setError('API client not available');
+      return [];
+    }
+
     try {
-      const result = await getActiveOrders({});
-      if (result.data?.orders) {
-        setActiveOrders(result.data.orders);
+      const response = await apiClient.get<ActiveOrdersResponse>(
+        '/agents/active_orders'
+      );
+
+      if (response.data.success) {
+        setActiveOrders(response.data.orders);
+        return response.data.orders;
       } else {
+        setError('Failed to fetch active orders');
         setActiveOrders([]);
+        return [];
       }
     } catch (err: any) {
       console.error('Error fetching active orders:', err);
-      setError('Failed to fetch active orders');
+      setError(
+        err.response?.data?.error ||
+          err.message ||
+          'Failed to fetch active orders'
+      );
       setActiveOrders([]);
+      return [];
     }
-  }, [getActiveOrders]);
+  }, [apiClient]);
 
   const fetchPendingOrders = useCallback(async () => {
     if (!apiClient) {
       setError('API client not available');
-      return;
+      return [];
     }
 
     try {
@@ -241,8 +175,10 @@ export const useAgentOrders = () => {
 
       if (response.data.success) {
         setPendingOrders(response.data.orders);
+        return response.data.orders;
       } else {
         setError('Failed to fetch pending orders');
+        return [];
       }
     } catch (err: any) {
       setError(
@@ -250,6 +186,7 @@ export const useAgentOrders = () => {
           err.message ||
           'Failed to fetch pending orders'
       );
+      return [];
     }
   }, [apiClient]);
 
@@ -258,7 +195,11 @@ export const useAgentOrders = () => {
     setError(null);
 
     try {
-      await Promise.all([fetchActiveOrders(), fetchPendingOrders()]);
+      const result = await Promise.all([
+        fetchActiveOrders(),
+        fetchPendingOrders(),
+      ]);
+      console.log('result', result);
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {

@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpException,
   HttpStatus,
@@ -12,12 +13,220 @@ export interface PickUpOrderRequest {
   order_id: string;
 }
 
+export interface ActiveOrder {
+  id: string;
+  order_number: string;
+  client_id: string;
+  business_id: string;
+  business_location_id: string;
+  assigned_agent_id: string;
+  delivery_address_id: string;
+  subtotal: number;
+  delivery_fee: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  current_status: string;
+  estimated_delivery_time?: string;
+  actual_delivery_time?: string;
+  special_instructions?: string;
+  preferred_delivery_time?: string;
+  payment_method?: string;
+  payment_status?: string;
+  created_at: string;
+  updated_at: string;
+  client: {
+    id: string;
+    user: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email?: string;
+    };
+  };
+  business: {
+    id: string;
+    name: string;
+    user: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email?: string;
+    };
+  };
+  business_location: {
+    id: string;
+    name: string;
+    location_type: string;
+    address: {
+      id: string;
+      address_line_1: string;
+      address_line_2?: string;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    };
+  };
+  delivery_address: {
+    id: string;
+    address_line_1: string;
+    address_line_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
+  order_items: Array<{
+    id: string;
+    item_name: string;
+    item_description: string;
+    unit_price: number;
+    quantity: number;
+    total_price: number;
+    weight?: number;
+    weight_unit?: string;
+    dimensions?: string;
+    special_instructions?: string;
+  }>;
+}
+
 @Controller('agents')
 export class AgentsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService
   ) {}
+
+  @Get('active_orders')
+  async getActiveOrders() {
+    try {
+      // Get the current agent's ID
+      const user = await this.hasuraUserService.getUser();
+      if (!user.agent) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'User is not an agent',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      const agentId = user.agent.id;
+
+      // Query for active orders assigned to this agent
+      const query = `
+        query GetAgentActiveOrders($agentId: uuid!) {
+          orders(
+            where: {
+              assigned_agent_id: { _eq: $agentId }
+              current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
+            }
+            order_by: { created_at: desc }
+          ) {
+            id
+            order_number
+            client_id
+            business_id
+            business_location_id
+            assigned_agent_id
+            delivery_address_id
+            subtotal
+            delivery_fee
+            tax_amount
+            total_amount
+            currency
+            current_status
+            estimated_delivery_time
+            actual_delivery_time
+            special_instructions
+            preferred_delivery_time
+            payment_method
+            payment_status
+            created_at
+            updated_at
+            client {
+              id
+              user {
+                id
+                first_name
+                last_name
+                email
+              }
+            }
+            business {
+              id
+              name
+              user {
+                id
+                first_name
+                last_name
+                email
+              }
+            }
+            business_location {
+              id
+              name
+              location_type
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+              }
+            }
+            delivery_address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
+            order_items {
+              id
+              item_name
+              item_description
+              unit_price
+              quantity
+              total_price
+              weight
+              weight_unit
+              dimensions
+              special_instructions
+            }
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        agentId,
+      });
+
+      return {
+        success: true,
+        orders: result.orders || [],
+        count: (result.orders || []).length,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch active orders',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   @Post('pick_up_order')
   async pickUpOrder(@Body() request: PickUpOrderRequest) {
