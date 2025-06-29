@@ -1,5 +1,7 @@
 import { Injectable, Scope, Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from './hasura-system.service';
 
 export interface UserRecord {
@@ -96,10 +98,12 @@ export class HasuraUserService {
 
   constructor(
     @Inject(REQUEST) private readonly request: any,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly configService: ConfigService<Configuration>
   ) {
+    const hasuraConfig = this.configService.get('hasura');
     this.hasuraUrl =
-      process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
+      hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();
     this.identifier = this.extractSubClaim();
   }

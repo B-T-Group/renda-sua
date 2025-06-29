@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class HasuraSystemService {
   private readonly hasuraUrl: string;
   private readonly adminSecret: string;
 
-  constructor() {
-    this.hasuraUrl = process.env.HASURA_GRAPHQL_ENDPOINT || 'http://localhost:8080/v1/graphql';
-    this.adminSecret = process.env.HASURA_GRAPHQL_ADMIN_SECRET || 'myadminsecretkey';
+  constructor(private readonly configService: ConfigService) {
+    this.hasuraUrl =
+      this.configService.get<string>('HASURA_GRAPHQL_ENDPOINT') ||
+      'http://localhost:8080/v1/graphql';
+    this.adminSecret =
+      this.configService.get<string>('HASURA_GRAPHQL_ADMIN_SECRET') ||
+      'myadminsecretkey';
   }
 
   /**
@@ -52,4 +57,4 @@ export class HasuraSystemService {
   isConfigured(): boolean {
     return !!(this.hasuraUrl && this.adminSecret);
   }
-} 
+}
