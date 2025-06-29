@@ -151,3 +151,143 @@ select_permissions:
                   user:
                     identifier:
                       _eq: X-Hasura-User-Id
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        _and:
+          - entity_type:
+              _eq: user
+          - agent:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - entity_type
+        - entity_id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+  - role: client
+    permission:
+      check:
+        _and:
+          - entity_type:
+              _eq: user
+          - client:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - entity_type
+        - entity_id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+  - role: business
+    permission:
+      check:
+        _and:
+          - entity_type:
+              _eq: business
+          - business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - entity_type
+        - entity_id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+update_permissions:
+  - role: agent
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _eq: user
+          - agent:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+        - updated_at
+      check: null
+  - role: client
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _eq: user
+          - client:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+        - updated_at
+      check: null
+  - role: business
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _eq: business
+          - business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+        - updated_at
+      check: null
