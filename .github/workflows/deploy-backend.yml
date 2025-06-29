@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'nx.json'
       - 'tsconfig.base.json'
+      - '.github/workflows/deploy-backend.yml'
 
   workflow_dispatch:
 

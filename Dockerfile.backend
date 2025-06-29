@@ -22,4 +22,4 @@ RUN chown -R rendasua-backend:rendasua-backend .
 # The bundled output will include external dependencies.
 RUN npm --prefix rendasua-backend --omit=dev -f install
 
-CMD [ "node", "rendasua-backend" ]
+CMD [ "node", "rendasua-backend/main.js" ]
