@@ -6,7 +6,7 @@ object_relationships:
     using:
       manual_configuration:
         column_mapping:
-          entity_id: id
+          entity_id: user_id
         remote_table:
           name: agents
           schema: public
@@ -15,7 +15,7 @@ object_relationships:
     using:
       manual_configuration:
         column_mapping:
-          entity_id: id
+          entity_id: user_id
         remote_table:
           name: clients
           schema: public
@@ -24,7 +24,7 @@ object_relationships:
     using:
       manual_configuration:
         column_mapping:
-          entity_id: id
+          entity_id: user_id
         remote_table:
           name: businesses
           schema: public
@@ -203,7 +203,7 @@ insert_permissions:
       check:
         _and:
           - entity_type:
-              _eq: business
+              _eq: user
           - business:
               user:
                 identifier:
