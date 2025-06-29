@@ -1,6 +1,34 @@
 table:
   name: addresses
   schema: public
+object_relationships:
+  - name: agent
+    using:
+      manual_configuration:
+        column_mapping:
+          entity_id: id
+        remote_table:
+          name: agents
+          schema: public
+        insertion_order: null
+  - name: client
+    using:
+      manual_configuration:
+        column_mapping:
+          entity_id: id
+        remote_table:
+          name: clients
+          schema: public
+        insertion_order: null
+  - name: business
+    using:
+      manual_configuration:
+        column_mapping:
+          entity_id: id
+        remote_table:
+          name: businesses
+          schema: public
+        insertion_order: null
 array_relationships:
   - name: business_locations
     using:
@@ -39,7 +67,18 @@ select_permissions:
         - address_type
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _or:
+          - entity_type:
+              _eq: agent
+            agent:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+          - entity_type:
+              _eq: client
+          - entity_type:
+              _eq: business
   - role: business
     permission:
       columns:
@@ -58,7 +97,18 @@ select_permissions:
         - address_type
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _or:
+          - entity_type:
+              _eq: agent
+          - entity_type:
+              _eq: client
+          - entity_type:
+              _eq: business
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -77,4 +127,15 @@ select_permissions:
         - address_type
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _or:
+          - entity_type:
+              _eq: agent
+          - entity_type:
+              _eq: client
+            client:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+          - entity_type:
+              _eq: business

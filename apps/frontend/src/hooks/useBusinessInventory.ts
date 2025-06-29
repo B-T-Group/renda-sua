@@ -201,6 +201,89 @@ export const useBusinessInventory = () => {
     GET_BUSINESS_LOCATIONS
   );
 
+  // Create mutation hooks at the top level
+  const addInventoryMutation = `
+    mutation AddInventoryItem($itemData: business_inventory_insert_input!) {
+      insert_business_inventory_one(object: $itemData) {
+        id
+        business_location_id
+        item_id
+        quantity
+        available_quantity
+        reserved_quantity
+        reorder_point
+        reorder_quantity
+        unit_cost
+        selling_price
+        is_active
+        last_restocked_at
+        created_at
+        updated_at
+      }
+    }
+  `;
+  const { execute: executeAddMutation } =
+    useGraphQLRequest(addInventoryMutation);
+
+  const updateInventoryMutation = `
+    mutation UpdateInventoryItem($itemId: uuid!, $updates: business_inventory_set_input!) {
+      update_business_inventory_by_pk(
+        pk_columns: { id: $itemId }
+        _set: $updates
+      ) {
+        id
+        quantity
+        available_quantity
+        reserved_quantity
+        reorder_point
+        reorder_quantity
+        unit_cost
+        selling_price
+        is_active
+        last_restocked_at
+        updated_at
+      }
+    }
+  `;
+  const { execute: executeUpdateMutation } = useGraphQLRequest(
+    updateInventoryMutation
+  );
+
+  const deleteInventoryMutation = `
+    mutation DeleteInventoryItem($itemId: uuid!) {
+      delete_business_inventory_by_pk(id: $itemId) {
+        id
+      }
+    }
+  `;
+  const { execute: executeDeleteMutation } = useGraphQLRequest(
+    deleteInventoryMutation
+  );
+
+  const restockItemMutation = `
+    mutation RestockItem($itemId: uuid!, $quantity: Int!) {
+      update_business_inventory_by_pk(
+        pk_columns: { id: $itemId }
+        _inc: { 
+          quantity: $quantity,
+          available_quantity: $quantity
+        }
+        _set: { 
+          last_restocked_at: "now()",
+          updated_at: "now()"
+        }
+      ) {
+        id
+        quantity
+        available_quantity
+        last_restocked_at
+        updated_at
+      }
+    }
+  `;
+  const { execute: executeRestockMutation } =
+    useGraphQLRequest(restockItemMutation);
+
   const fetchInventory = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -244,29 +327,7 @@ export const useBusinessInventory = () => {
   const addInventoryItem = useCallback(
     async (itemData: AddInventoryItemData) => {
       try {
-        const mutation = `
-        mutation AddInventoryItem($itemData: business_inventory_insert_input!) {
-          insert_business_inventory_one(object: $itemData) {
-            id
-            business_location_id
-            item_id
-            quantity
-            available_quantity
-            reserved_quantity
-            reorder_point
-            reorder_quantity
-            unit_cost
-            selling_price
-            is_active
-            last_restocked_at
-            created_at
-            updated_at
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ itemData });
+        await executeAddMutation({ itemData });
 
         // Refresh inventory after adding item
         await fetchInventory();
@@ -276,35 +337,13 @@ export const useBusinessInventory = () => {
         );
       }
     },
-    [fetchInventory]
+    [executeAddMutation, fetchInventory]
   );
 
   const updateInventoryItem = useCallback(
     async (itemId: string, updates: Partial<AddInventoryItemData>) => {
       try {
-        const mutation = `
-        mutation UpdateInventoryItem($itemId: uuid!, $updates: business_inventory_set_input!) {
-          update_business_inventory_by_pk(
-            pk_columns: { id: $itemId }
-            _set: $updates
-          ) {
-            id
-            quantity
-            available_quantity
-            reserved_quantity
-            reorder_point
-            reorder_quantity
-            unit_cost
-            selling_price
-            is_active
-            last_restocked_at
-            updated_at
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ itemId, updates });
+        await executeUpdateMutation({ itemId, updates });
 
         // Refresh inventory after updating item
         await fetchInventory();
@@ -314,22 +353,13 @@ export const useBusinessInventory = () => {
         );
       }
     },
-    [fetchInventory]
+    [executeUpdateMutation, fetchInventory]
   );
 
   const deleteInventoryItem = useCallback(
     async (itemId: string) => {
       try {
-        const mutation = `
-        mutation DeleteInventoryItem($itemId: uuid!) {
-          delete_business_inventory_by_pk(id: $itemId) {
-            id
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ itemId });
+        await executeDeleteMutation({ itemId });
 
         // Refresh inventory after deleting item
         await fetchInventory();
@@ -339,36 +369,13 @@ export const useBusinessInventory = () => {
         );
       }
     },
-    [fetchInventory]
+    [executeDeleteMutation, fetchInventory]
   );
 
   const restockItem = useCallback(
     async (itemId: string, quantity: number) => {
       try {
-        const mutation = `
-        mutation RestockItem($itemId: uuid!, $quantity: Int!) {
-          update_business_inventory_by_pk(
-            pk_columns: { id: $itemId }
-            _inc: { 
-              quantity: $quantity,
-              available_quantity: $quantity
-            }
-            _set: { 
-              last_restocked_at: "now()",
-              updated_at: "now()"
-            }
-          ) {
-            id
-            quantity
-            available_quantity
-            last_restocked_at
-            updated_at
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ itemId, quantity });
+        await executeRestockMutation({ itemId, quantity });
 
         // Refresh inventory after restocking
         await fetchInventory();
@@ -376,7 +383,7 @@ export const useBusinessInventory = () => {
         setError(err instanceof Error ? err.message : 'Failed to restock item');
       }
     },
-    [fetchInventory]
+    [executeRestockMutation, fetchInventory]
   );
 
   return {

@@ -1,64 +1,54 @@
-import { useAuth0 } from '@auth0/auth0-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
   Container,
-  Paper,
   Typography,
+  Box,
+  Paper,
   Tabs,
   Tab,
+  Badge,
+  Grid,
   TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Button,
-  Grid,
-  Card,
-  CardContent,
-  CardActions,
-  Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Button,
+  Chip,
+  Stack,
+  Card,
+  CardContent,
+  CardActions,
+  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
-  Alert,
   CircularProgress,
-  Divider,
-  Stack,
-  Badge,
+  Alert,
 } from '@mui/material';
 import {
+  Search as SearchIcon,
+  LocationOn as LocationIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  FilterList as FilterIcon,
-  Search as SearchIcon,
-  LocationOn as LocationIcon,
-  Person as PersonIcon,
-  ShoppingCart as CartIcon,
-  AttachMoney as MoneyIcon,
-  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import {
-  useBusinessOrders,
-  BusinessOrder,
-  OrderFilters,
-} from '../../hooks/useBusinessOrders';
+import { useSnackbar } from 'notistack';
+import { useBusinessOrders, OrderFilters } from '../../hooks/useBusinessOrders';
 import {
   useBusinessInventory,
-  BusinessInventoryItem,
   AddInventoryItemData,
 } from '../../hooks/useBusinessInventory';
+import { useInventoryItems } from '../../hooks/useInventoryItems';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -83,8 +73,10 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const BusinessDashboard: React.FC = () => {
-  const { user } = useAuth0();
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
+  const { profile } = useUserProfile();
+
   const [tabValue, setTabValue] = useState(0);
   const [orderFilters, setOrderFilters] = useState<OrderFilters>({});
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
@@ -201,7 +193,9 @@ const BusinessDashboard: React.FC = () => {
           {t('business.dashboard.title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          {t('business.dashboard.welcome', { name: user?.name })}
+          {t('business.dashboard.welcome', {
+            name: profile?.first_name || 'Business Owner',
+          })}
         </Typography>
       </Box>
 
@@ -517,7 +511,15 @@ const BusinessDashboard: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
-                onClick={() => setShowAddItemDialog(true)}
+                onClick={() => {
+                  if (businessLocations.length === 0) {
+                    enqueueSnackbar(t('business.inventory.noLocationsError'), {
+                      variant: 'error',
+                    });
+                    return;
+                  }
+                  setShowAddItemDialog(true);
+                }}
               >
                 {t('business.inventory.addItem')}
               </Button>

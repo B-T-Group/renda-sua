@@ -178,6 +178,43 @@ export const useBusinessOrders = () => {
 
   const { execute } = useGraphQLRequest(GET_BUSINESS_ORDERS);
 
+  // Create mutation hooks at the top level
+  const updateOrderStatusMutation = `
+    mutation UpdateOrderStatus($orderId: uuid!, $status: order_status!) {
+      update_orders_by_pk(
+        pk_columns: { id: $orderId }
+        _set: { current_status: $status, updated_at: "now()" }
+      ) {
+        id
+        current_status
+        updated_at
+      }
+    }
+  `;
+  const { execute: executeUpdateStatus } = useGraphQLRequest(
+    updateOrderStatusMutation
+  );
+
+  const assignOrderMutation = `
+    mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!) {
+      update_orders_by_pk(
+        pk_columns: { id: $orderId }
+        _set: { 
+          assigned_agent_id: $agentId, 
+          current_status: "assigned_to_agent",
+          updated_at: "now()" 
+        }
+      ) {
+        id
+        assigned_agent_id
+        current_status
+        updated_at
+      }
+    }
+  `;
+  const { execute: executeAssignOrder } =
+    useGraphQLRequest(assignOrderMutation);
+
   const buildFilters = useCallback((filterParams: OrderFilters) => {
     const conditions: any[] = [];
 
@@ -284,21 +321,7 @@ export const useBusinessOrders = () => {
   const updateOrderStatus = useCallback(
     async (orderId: string, newStatus: string) => {
       try {
-        const mutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $status: order_status!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { current_status: $status, updated_at: "now()" }
-          ) {
-            id
-            current_status
-            updated_at
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ orderId, status: newStatus });
+        await executeUpdateStatus({ orderId, status: newStatus });
 
         // Refresh orders after status update
         await fetchOrders(filters);
@@ -308,32 +331,13 @@ export const useBusinessOrders = () => {
         );
       }
     },
-    [execute, fetchOrders, filters]
+    [executeUpdateStatus, fetchOrders, filters]
   );
 
   const assignOrderToAgent = useCallback(
     async (orderId: string, agentId: string) => {
       try {
-        const mutation = `
-        mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { 
-              assigned_agent_id: $agentId, 
-              current_status: "assigned_to_agent",
-              updated_at: "now()" 
-            }
-          ) {
-            id
-            assigned_agent_id
-            current_status
-            updated_at
-          }
-        }
-      `;
-
-        const { execute: executeMutation } = useGraphQLRequest(mutation);
-        await executeMutation({ orderId, agentId });
+        await executeAssignOrder({ orderId, agentId });
 
         // Refresh orders after assignment
         await fetchOrders(filters);
@@ -343,7 +347,7 @@ export const useBusinessOrders = () => {
         );
       }
     },
-    [execute, fetchOrders, filters]
+    [executeAssignOrder, fetchOrders, filters]
   );
 
   return {

@@ -164,7 +164,7 @@ const CompleteProfile: React.FC = () => {
     switch (step) {
       case 0:
         return profileData.user_type_id !== '';
-      case 1:
+      case 1: {
         const hasRequiredFields =
           profileData.first_name &&
           profileData.last_name &&
@@ -179,6 +179,7 @@ const CompleteProfile: React.FC = () => {
         }
 
         return hasRequiredFields;
+      }
       default:
         return true;
     }
@@ -295,7 +296,7 @@ const CompleteProfile: React.FC = () => {
           </Box>
         );
 
-      case 2:
+      case 2: {
         const selectedPersona = getSelectedPersona();
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -331,6 +332,7 @@ const CompleteProfile: React.FC = () => {
             </Paper>
           </Box>
         );
+      }
 
       default:
         return null;

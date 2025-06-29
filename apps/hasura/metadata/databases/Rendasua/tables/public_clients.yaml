@@ -15,6 +15,15 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: addresses
+    using:
+      manual_configuration:
+        column_mapping:
+          id: entity_id
+        insertion_order: null
+        remote_table:
+          name: addresses
+          schema: public
 insert_permissions:
   - role: client
     permission:
