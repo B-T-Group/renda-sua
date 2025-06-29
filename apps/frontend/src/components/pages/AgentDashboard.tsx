@@ -27,6 +27,7 @@ import {
   LocalShipping,
 } from '@mui/icons-material';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAgentOrders, Order } from '../../hooks/useAgentOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
@@ -87,6 +88,7 @@ const OrderCard: React.FC<{
   onUpdateStatus?: (orderId: string, status: string) => Promise<void>;
   showActions?: boolean;
 }> = ({ order, onPickUp, onUpdateStatus, showActions = true }) => {
+  const { t } = useTranslation();
   const [updating, setUpdating] = useState(false);
 
   const handlePickUp = async () => {
@@ -143,11 +145,11 @@ const OrderCard: React.FC<{
         >
           <Box>
             <Typography variant="h6" component="h3" gutterBottom>
-              Order #{order.order_number}
+              {t('orderCard.orderNumber', { orderNumber: order.order_number })}
             </Typography>
             <Chip
               icon={getStatusIcon(order.current_status)}
-              label={order.current_status.replace('_', ' ').toUpperCase()}
+              label={t(`orderStatus.${order.current_status}`)}
               color={getStatusColor(order.current_status) as any}
               size="small"
             />
@@ -174,7 +176,8 @@ const OrderCard: React.FC<{
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <LocationOn sx={{ mr: 1, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">
-                Pickup: {formatAddress(order.business_location.address)}
+                {t('orderCard.pickup')}:{' '}
+                {formatAddress(order.business_location.address)}
               </Typography>
             </Box>
           </Box>
@@ -188,7 +191,8 @@ const OrderCard: React.FC<{
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <LocationOn sx={{ mr: 1, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">
-                Delivery: {formatAddress(order.delivery_address)}
+                {t('orderCard.delivery')}:{' '}
+                {formatAddress(order.delivery_address)}
               </Typography>
             </Box>
           </Box>
@@ -197,7 +201,7 @@ const OrderCard: React.FC<{
         {order.order_items.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-              Items ({order.order_items.length}):
+              {t('orderCard.items')} ({order.order_items.length}):
             </Typography>
             <List dense>
               {order.order_items.slice(0, 3).map((item) => (
@@ -219,7 +223,9 @@ const OrderCard: React.FC<{
               {order.order_items.length > 3 && (
                 <ListItem sx={{ py: 0 }}>
                   <ListItemText
-                    secondary={`+${order.order_items.length - 3} more items`}
+                    secondary={`+${order.order_items.length - 3} ${t(
+                      'orderCard.moreItems'
+                    )}`}
                   />
                 </ListItem>
               )}
@@ -230,7 +236,7 @@ const OrderCard: React.FC<{
         {order.special_instructions && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-              Special Instructions:
+              {t('business.specialInstructions')}:
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {order.special_instructions}
@@ -250,7 +256,11 @@ const OrderCard: React.FC<{
                 disabled={updating}
                 startIcon={<CheckCircle />}
               >
-                {updating ? <CircularProgress size={20} /> : 'Pick Up Order'}
+                {updating ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  t('orderActions.pickUpOrder')
+                )}
               </Button>
             )}
             {nextStatus && onUpdateStatus && (
@@ -264,13 +274,19 @@ const OrderCard: React.FC<{
                 {updating ? (
                   <CircularProgress size={20} />
                 ) : (
-                  `Mark as ${nextStatus.replace('_', ' ')}`
+                  t(
+                    `orderActions.markAs${
+                      nextStatus.charAt(0).toUpperCase() +
+                      nextStatus.slice(1).replace('_', '')
+                    }`
+                  )
                 )}
               </Button>
             )}
           </Box>
           <Typography variant="caption" color="text.secondary">
-            Created: {new Date(order.created_at).toLocaleDateString()}
+            {t('common.created')}:{' '}
+            {new Date(order.created_at).toLocaleDateString()}
           </Typography>
         </CardActions>
       )}
@@ -279,6 +295,7 @@ const OrderCard: React.FC<{
 };
 
 const AgentDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth0();
   const { profile } = useUserProfile();
   const {
@@ -304,7 +321,7 @@ const AgentDashboard: React.FC = () => {
     if (!profile?.id) {
       setNotification({
         open: true,
-        message: 'Agent profile not found. Please complete your profile first.',
+        message: t('messages.agentProfileNotFound'),
         severity: 'error',
       });
       return;
@@ -314,13 +331,15 @@ const AgentDashboard: React.FC = () => {
       const result = await pickUpOrder(orderId);
       setNotification({
         open: true,
-        message: `Successfully picked up order #${result.order_number}!`,
+        message: t('messages.orderPickupSuccess', {
+          orderNumber: result.order_number,
+        }),
         severity: 'success',
       });
     } catch (error: any) {
       setNotification({
         open: true,
-        message: error.message || 'Failed to pick up order. Please try again.',
+        message: error.message || t('messages.orderPickupError'),
         severity: 'error',
       });
     }
@@ -331,17 +350,15 @@ const AgentDashboard: React.FC = () => {
       await updateOrderStatusAction(orderId, status);
       setNotification({
         open: true,
-        message: `Order status updated to ${status.replace(
-          '_',
-          ' '
-        )} successfully!`,
+        message: t('messages.orderStatusUpdateSuccess', {
+          status: t(`orderStatus.${status}`),
+        }),
         severity: 'success',
       });
     } catch (error: any) {
       setNotification({
         open: true,
-        message:
-          error.message || 'Failed to update order status. Please try again.',
+        message: error.message || t('messages.orderStatusUpdateError'),
         severity: 'error',
       });
     }
@@ -372,10 +389,11 @@ const AgentDashboard: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Agent Dashboard
+          {t('dashboard.title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back, {user?.name}! Manage your delivery orders here.
+          {t('dashboard.welcomeBack')}, {user?.name}!{' '}
+          {t('dashboard.manageDeliveryOrders')}
         </Typography>
       </Box>
 
@@ -390,17 +408,17 @@ const AgentDashboard: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <LocalShipping sx={{ mr: 2, color: 'primary.main' }} />
           <Typography variant="h5" component="h2">
-            Active Orders ({activeOrders.length})
+            {t('dashboard.activeOrders')} ({activeOrders.length})
           </Typography>
         </Box>
 
         {activeOrders.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="body1" color="text.secondary">
-              No active orders at the moment.
+              {t('dashboard.noActiveOrders')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Pick up pending orders to get started!
+              {t('dashboard.pickUpPendingOrders')}
             </Typography>
           </Box>
         ) : (
@@ -422,17 +440,17 @@ const AgentDashboard: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <Pending sx={{ mr: 2, color: 'warning.main' }} />
           <Typography variant="h5" component="h2">
-            Pending Orders ({pendingOrders.length})
+            {t('dashboard.pendingOrders')} ({pendingOrders.length})
           </Typography>
         </Box>
 
         {pendingOrders.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="body1" color="text.secondary">
-              No pending orders available.
+              {t('dashboard.noPendingOrders')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              New orders will appear here when they become available.
+              {t('dashboard.newOrdersWillAppear')}
             </Typography>
           </Box>
         ) : (

@@ -12,6 +12,7 @@ import '@fontsource/roboto/700.css';
 import App from './app/app';
 import { theme } from './theme/theme';
 import { auth0Config } from './config/auth0.config';
+import './i18n'; // Initialize i18n
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -22,7 +23,9 @@ root.render(
     <Auth0Provider {...auth0Config}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <BrowserRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
           <App />
         </BrowserRouter>
       </ThemeProvider>

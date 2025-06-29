@@ -13,6 +13,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import Logo from '../common/Logo';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useUserProfile } from '../../hooks';
 
@@ -33,6 +34,9 @@ const Header: React.FC = () => {
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Language Switcher */}
+            <LanguageSwitcher />
+
             {isAuthenticated ? (
               <>
                 <Button

@@ -1,0 +1,142 @@
+# Cursor Rules for Frontend App - French Translation
+
+## General Rules
+- Always translate all user-facing text from English to French
+- Maintain consistent French terminology throughout the application
+- Use proper French grammar and punctuation
+- Keep technical terms and variable names in English
+- Preserve the original meaning and context
+
+## Translation Guidelines
+
+### Common UI Elements
+- "Welcome back" → "Bon retour"
+- "Loading" → "Chargement"
+- "Error" → "Erreur"
+- "Success" → "Succès"
+- "Cancel" → "Annuler"
+- "Save" → "Enregistrer"
+- "Delete" → "Supprimer"
+- "Edit" → "Modifier"
+- "Add" → "Ajouter"
+- "Remove" → "Retirer"
+- "Submit" → "Soumettre"
+- "Confirm" → "Confirmer"
+- "Back" → "Retour"
+- "Next" → "Suivant"
+- "Previous" → "Précédent"
+- "Close" → "Fermer"
+- "Open" → "Ouvrir"
+- "Search" → "Rechercher"
+- "Filter" → "Filtrer"
+- "Sort" → "Trier"
+
+### Dashboard Elements
+- "Dashboard" → "Tableau de bord"
+- "Active Orders" → "Commandes actives"
+- "Pending Orders" → "Commandes en attente"
+- "No active orders at the moment" → "Aucune commande active pour le moment"
+- "Pick up pending orders to get started" → "Récupérez des commandes en attente pour commencer"
+- "No pending orders available" → "Aucune commande en attente disponible"
+- "New orders will appear here when they become available" → "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles"
+
+### Order Status
+- "pending" → "en attente"
+- "confirmed" → "confirmée"
+- "preparing" → "en préparation"
+- "ready_for_pickup" → "prête pour récupération"
+- "assigned_to_agent" → "assignée à l'agent"
+- "picked_up" → "récupérée"
+- "in_transit" → "en transit"
+- "out_for_delivery" → "en livraison"
+- "delivered" → "livrée"
+- "cancelled" → "annulée"
+- "failed" → "échouée"
+- "refunded" → "remboursée"
+
+### Order Actions
+- "Pick Up Order" → "Récupérer la commande"
+- "Mark as picked up" → "Marquer comme récupérée"
+- "Mark as in transit" → "Marquer comme en transit"
+- "Mark as out for delivery" → "Marquer comme en livraison"
+- "Mark as delivered" → "Marquer comme livrée"
+- "Successfully picked up order" → "Commande récupérée avec succès"
+- "Failed to pick up order" → "Échec de la récupération de la commande"
+- "Order status updated successfully" → "Statut de la commande mis à jour avec succès"
+- "Failed to update order status" → "Échec de la mise à jour du statut de la commande"
+
+### Form Labels
+- "First Name" → "Prénom"
+- "Last Name" → "Nom de famille"
+- "Email" → "E-mail"
+- "Phone" → "Téléphone"
+- "Address" → "Adresse"
+- "City" → "Ville"
+- "State" → "État/Province"
+- "Postal Code" → "Code postal"
+- "Country" → "Pays"
+- "Password" → "Mot de passe"
+- "Confirm Password" → "Confirmer le mot de passe"
+- "Current Password" → "Mot de passe actuel"
+- "New Password" → "Nouveau mot de passe"
+
+### Messages
+- "Please complete your profile first" → "Veuillez d'abord compléter votre profil"
+- "Please try again" → "Veuillez réessayer"
+- "Something went wrong" → "Quelque chose s'est mal passé"
+- "Network error" → "Erreur réseau"
+- "Authentication required" → "Authentification requise"
+- "Access denied" → "Accès refusé"
+- "Not found" → "Non trouvé"
+- "Invalid input" → "Saisie invalide"
+- "Required field" → "Champ requis"
+- "Optional" → "Optionnel"
+
+### Time and Date
+- "Created" → "Créé"
+- "Updated" → "Mis à jour"
+- "Estimated delivery time" → "Heure de livraison estimée"
+- "Actual delivery time" → "Heure de livraison réelle"
+- "Preferred delivery time" → "Heure de livraison préférée"
+
+### Business Terms
+- "Business" → "Entreprise"
+- "Client" → "Client"
+- "Agent" → "Agent"
+- "Order" → "Commande"
+- "Item" → "Article"
+- "Price" → "Prix"
+- "Total" → "Total"
+- "Subtotal" → "Sous-total"
+- "Tax" → "Taxe"
+- "Delivery fee" → "Frais de livraison"
+- "Currency" → "Devise"
+- "Payment method" → "Méthode de paiement"
+- "Payment status" → "Statut du paiement"
+- "Special instructions" → "Instructions spéciales"
+
+### Notifications
+- "Successfully updated" → "Mis à jour avec succès"
+- "Successfully created" → "Créé avec succès"
+- "Successfully deleted" → "Supprimé avec succès"
+- "Changes saved" → "Modifications enregistrées"
+- "Profile updated" → "Profil mis à jour"
+- "Settings saved" → "Paramètres enregistrés"
+
+## Implementation Notes
+- Update all hardcoded strings in components
+- Update error messages and notifications
+- Update form labels and placeholders
+- Update button text and action labels
+- Update status display text
+- Keep console.log messages in English for debugging
+- Keep variable names, function names, and technical terms in English
+- Use proper French quotation marks (« ») where appropriate
+- Maintain consistent capitalization rules for French
+
+## File Types to Update
+- React components (.tsx, .jsx)
+- TypeScript files (.ts)
+- CSS files with text content
+- Configuration files with user-facing text
+- README files and documentation 
