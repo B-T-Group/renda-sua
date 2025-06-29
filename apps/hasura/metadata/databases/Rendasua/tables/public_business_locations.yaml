@@ -51,6 +51,10 @@ select_permissions:
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
         - created_at
         - updated_at
       filter: {}
@@ -63,6 +67,10 @@ select_permissions:
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
         - created_at
         - updated_at
       filter: {}
@@ -75,6 +83,10 @@ select_permissions:
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
         - created_at
         - updated_at
       filter:
@@ -91,6 +103,10 @@ select_permissions:
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
         - created_at
         - updated_at
       filter: {}
