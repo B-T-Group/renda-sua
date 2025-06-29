@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 import { useApiClient } from './useApiClient';
 
@@ -213,29 +213,26 @@ export const useAgentOrders = () => {
   const { execute: updateOrderStatus } = useGraphQLRequest(UPDATE_ORDER_STATUS);
   const apiClient = useApiClient();
 
-  const hasExecuted = useRef(false);
-
-  const fetchActiveOrders = async () => {
+  const fetchActiveOrders = useCallback(async () => {
     try {
       const result = await getActiveOrders({});
       if (result.data?.orders) {
         setActiveOrders(result.data.orders);
+      } else {
+        setActiveOrders([]);
       }
     } catch (err: any) {
       console.error('Error fetching active orders:', err);
       setError('Failed to fetch active orders');
+      setActiveOrders([]);
     }
-  };
+  }, [getActiveOrders]);
 
-  const fetchPendingOrders = async () => {
+  const fetchPendingOrders = useCallback(async () => {
     if (!apiClient) {
       setError('API client not available');
-      setLoading(false);
       return;
     }
-
-    setLoading(true);
-    setError(null);
 
     try {
       const response = await apiClient.get<PendingOrdersResponse>(
@@ -253,72 +250,82 @@ export const useAgentOrders = () => {
           err.message ||
           'Failed to fetch pending orders'
       );
+    }
+  }, [apiClient]);
+
+  const fetchAllOrders = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await Promise.all([fetchActiveOrders(), fetchPendingOrders()]);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchAllOrders = async () => {
-    await Promise.all([fetchActiveOrders(), fetchPendingOrders()]);
-  };
+  }, [fetchActiveOrders, fetchPendingOrders]);
 
   useEffect(() => {
-    if (!hasExecuted.current) {
-      hasExecuted.current = true;
-      setTimeout(() => {
-        fetchAllOrders();
-      }, 0);
-    }
-  }, [apiClient]);
+    setTimeout(() => {
+      fetchAllOrders();
+    }, 0);
+  }, [fetchAllOrders]);
 
   // Combine active and pending orders for the main orders state
   useEffect(() => {
     setOrders([...activeOrders, ...pendingOrders]);
   }, [activeOrders, pendingOrders]);
 
-  const pickUpOrder = async (orderId: string, agentId: string) => {
-    if (!apiClient) {
-      throw new Error('API client not available');
-    }
-
-    try {
-      const response = await apiClient.post<PickUpOrderResponse>(
-        '/agents/pick_up_order',
-        {
-          order_id: orderId,
-        }
-      );
-
-      if (response.data.success) {
-        // Refresh both active and pending orders after successful pickup
-        await fetchAllOrders();
-        return response.data.order;
-      } else {
-        throw new Error(response.data.message || 'Failed to pick up order');
+  const pickUpOrder = useCallback(
+    async (orderId: string) => {
+      if (!apiClient) {
+        throw new Error('API client not available');
       }
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error ||
-        error.message ||
-        'Failed to pick up order';
-      console.error('Error picking up order:', errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
 
-  const updateOrderStatusAction = async (orderId: string, status: string) => {
-    try {
-      await updateOrderStatus({
-        id: orderId,
-        current_status: status,
-      });
-      // Refresh active orders after status update
-      await fetchActiveOrders();
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      throw error;
-    }
-  };
+      try {
+        const response = await apiClient.post<PickUpOrderResponse>(
+          '/agents/pick_up_order',
+          {
+            order_id: orderId,
+          }
+        );
+
+        if (response.data.success) {
+          // Refresh both active and pending orders after successful pickup
+          await fetchAllOrders();
+          return response.data.order;
+        } else {
+          throw new Error(response.data.message || 'Failed to pick up order');
+        }
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to pick up order';
+        console.error('Error picking up order:', errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [apiClient, fetchAllOrders]
+  );
+
+  const updateOrderStatusAction = useCallback(
+    async (orderId: string, status: string) => {
+      try {
+        await updateOrderStatus({
+          id: orderId,
+          current_status: status,
+        });
+        // Refresh active orders after status update
+        await fetchActiveOrders();
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        throw error;
+      }
+    },
+    [updateOrderStatus, fetchActiveOrders]
+  );
 
   return {
     orders,

@@ -34,7 +34,7 @@ const getStatusColor = (status: string) => {
   switch (status) {
     case 'pending':
       return 'warning';
-    case 'assigned':
+    case 'assigned_to_agent':
       return 'info';
     case 'picked_up':
       return 'primary';
@@ -55,7 +55,7 @@ const getStatusIcon = (status: string) => {
   switch (status) {
     case 'pending':
       return <Pending />;
-    case 'assigned':
+    case 'assigned_to_agent':
       return <CheckCircle />;
     case 'picked_up':
       return <DirectionsCar />;
@@ -115,7 +115,7 @@ const OrderCard: React.FC<{
 
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
-      case 'assigned':
+      case 'assigned_to_agent':
         return 'picked_up';
       case 'picked_up':
         return 'in_transit';
@@ -311,7 +311,7 @@ const AgentDashboard: React.FC = () => {
     }
 
     try {
-      const result = await pickUpOrder(orderId, profile.id);
+      const result = await pickUpOrder(orderId);
       setNotification({
         open: true,
         message: `Successfully picked up order #${result.order_number}!`,
