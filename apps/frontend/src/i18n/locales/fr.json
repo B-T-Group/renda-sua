@@ -1,6 +1,6 @@
 {
   "common": {
-    "loading": "Chargement",
+    "loading": "Chargement...",
     "error": "Erreur",
     "success": "Succès",
     "cancel": "Annuler",
@@ -30,10 +30,21 @@
     "accessDenied": "Accès refusé",
     "notFound": "Non trouvé",
     "invalidInput": "Saisie invalide",
-    "requiredField": "Champ requis"
+    "requiredField": "Champ requis",
+    "refresh": "Actualiser",
+    "yes": "Oui",
+    "no": "Non",
+    "actions": "Actions"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "profile": "Profil",
+    "welcome": "Bienvenue"
   },
   "dashboard": {
     "title": "Tableau de bord",
+    "welcome": "Bienvenue sur votre tableau de bord",
     "welcomeBack": "Bon retour",
     "manageDeliveryOrders": "Gérez vos commandes de livraison ici",
     "activeOrders": "Commandes actives",
@@ -105,7 +116,72 @@
     "specialInstructions": "Instructions spéciales",
     "estimatedDeliveryTime": "Heure de livraison estimée",
     "actualDeliveryTime": "Heure de livraison réelle",
-    "preferredDeliveryTime": "Heure de livraison préférée"
+    "preferredDeliveryTime": "Heure de livraison préférée",
+    "dashboard": {
+      "title": "Tableau de bord Entreprise",
+      "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
+      "orders": "Commandes",
+      "inventory": "Inventaire"
+    },
+    "orders": {
+      "title": "Gestion des Commandes",
+      "filters": {
+        "search": "Rechercher des commandes...",
+        "status": "Statut",
+        "allStatuses": "Tous les Statuts",
+        "dateFrom": "Date de début",
+        "dateTo": "Date de fin",
+        "address": "Adresse de livraison"
+      },
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmée",
+        "preparing": "En préparation",
+        "ready_for_pickup": "Prête pour ramassage",
+        "assigned_to_agent": "Assignée à un agent",
+        "picked_up": "Ramassée",
+        "in_transit": "En transit",
+        "out_for_delivery": "En livraison",
+        "delivered": "Livrée",
+        "cancelled": "Annulée",
+        "failed": "Échouée",
+        "refunded": "Remboursée"
+      },
+      "table": {
+        "orderNumber": "Commande #",
+        "customer": "Client",
+        "items": "Articles",
+        "item": "article",
+        "items_plural": "articles",
+        "total": "Total",
+        "status": "Statut",
+        "deliveryAddress": "Adresse de livraison",
+        "agent": "Agent",
+        "createdAt": "Créée le",
+        "actions": "Actions",
+        "unassigned": "Non assignée"
+      },
+      "actions": {
+        "confirm": "Confirmer",
+        "prepare": "Préparer",
+        "ready": "Prête"
+      }
+    },
+    "inventory": {
+      "title": "Gestion de l'Inventaire",
+      "addItem": "Ajouter un article",
+      "add": "Ajouter",
+      "quantity": "Quantité",
+      "available": "Disponible",
+      "sellingPrice": "Prix de vente",
+      "location": "Emplacement",
+      "item": "Article",
+      "unitCost": "Coût unitaire",
+      "reorderPoint": "Point de réapprovisionnement",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "restock": "Réapprovisionner"
+    }
   },
   "notifications": {
     "successfullyUpdated": "Mis à jour avec succès",
@@ -129,5 +205,43 @@
     "delivery": "Livraison",
     "items": "Articles",
     "moreItems": "articles supplémentaires"
+  },
+  "agent": {
+    "dashboard": {
+      "title": "Tableau de bord Agent",
+      "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord agent.",
+      "activeOrders": "Commandes actives",
+      "pendingOrders": "Commandes en attente",
+      "noActiveOrders": "Aucune commande active pour le moment.",
+      "noPendingOrders": "Aucune commande en attente pour le moment."
+    },
+    "orders": {
+      "pickup": "Ramasser la commande",
+      "pickupSuccess": "Commande ramassée avec succès !",
+      "pickupError": "Échec du ramassage de la commande",
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmée",
+        "preparing": "En préparation",
+        "ready_for_pickup": "Prête pour ramassage",
+        "assigned_to_agent": "Assignée à un agent",
+        "picked_up": "Ramassée",
+        "in_transit": "En transit",
+        "out_for_delivery": "En livraison",
+        "delivered": "Livrée",
+        "cancelled": "Annulée",
+        "failed": "Échouée",
+        "refunded": "Remboursée"
+      }
+    }
+  },
+  "profile": {
+    "title": "Profil",
+    "personalInfo": "Informations personnelles",
+    "addresses": "Adresses",
+    "accounts": "Comptes",
+    "save": "Enregistrer les modifications",
+    "saved": "Profil enregistré avec succès !",
+    "error": "Échec de l'enregistrement du profil"
   }
 }

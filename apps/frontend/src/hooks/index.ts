@@ -1,30 +1,30 @@
-// API Client Hook
-export { useApiClient } from './useApiClient';
-
-// Combined Clients Hook
-export { useClients } from './useClients';
-
-// Login Flow Hook
+// Auth and user hooks
 export { useLoginFlow } from './useLoginFlow';
-
-// User Types Hook
+export { useUserProfile } from './useUserProfile';
 export { useUserTypes } from './useUserTypes';
-
-// Profile Hook
 export { useProfile } from './useProfile';
+export { useAccountInfo } from './useAccountInfo';
+
+// GraphQL hooks
+export { useGraphQLClient } from './useGraphQLClient';
+export { useGraphQLRequest } from './useGraphQLRequest';
+
+// Data hooks
+export { useClients } from './useClients';
+export { useInventoryItems } from './useInventoryItems';
+export { useBackendOrders } from './useBackendOrders';
+export { useCreateOrder } from './useCreateOrder';
+
+// Agent hooks
+export { useAgentOrders } from './useAgentOrders';
+
+// Business hooks
+export { useBusinessOrders } from './useBusinessOrders';
+export { useBusinessInventory } from './useBusinessInventory';
+
+// API client
+export { useApiClient } from './useApiClient';
 
 // Loading Components
 export { default as LoadingPage } from '../components/common/LoadingPage';
 export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
-
-// GraphQL Request hooks
-export { useGraphQLClient } from './useGraphQLClient';
-export { useGraphQLRequest } from './useGraphQLRequest';
-
-// Domain-specific hooks
-export { useCreateOrder } from './useCreateOrder';
-export { useBackendOrders } from './useBackendOrders';
-export { useAgentOrders } from './useAgentOrders';
-export { useInventoryItems } from './useInventoryItems';
-export { useAccountInfo } from './useAccountInfo';
-export { useUserProfile } from './useUserProfile';

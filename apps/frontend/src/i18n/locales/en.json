@@ -1,6 +1,6 @@
 {
   "common": {
-    "loading": "Loading",
+    "loading": "Loading...",
     "error": "Error",
     "success": "Success",
     "cancel": "Cancel",
@@ -30,10 +30,21 @@
     "accessDenied": "Access denied",
     "notFound": "Not found",
     "invalidInput": "Invalid input",
-    "requiredField": "Required field"
+    "requiredField": "Required field",
+    "refresh": "Refresh",
+    "yes": "Yes",
+    "no": "No",
+    "actions": "Actions"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "profile": "Profile",
+    "welcome": "Welcome"
   },
   "dashboard": {
     "title": "Dashboard",
+    "welcome": "Welcome to your dashboard",
     "welcomeBack": "Welcome back",
     "manageDeliveryOrders": "Manage your delivery orders here",
     "activeOrders": "Active Orders",
@@ -105,7 +116,110 @@
     "specialInstructions": "Special instructions",
     "estimatedDeliveryTime": "Estimated delivery time",
     "actualDeliveryTime": "Actual delivery time",
-    "preferredDeliveryTime": "Preferred delivery time"
+    "preferredDeliveryTime": "Preferred delivery time",
+    "dashboard": {
+      "title": "Business Dashboard",
+      "welcome": "Welcome back, {{name}}! This is your business dashboard.",
+      "orders": "Orders",
+      "inventory": "Inventory"
+    },
+    "orders": {
+      "title": "Order Management",
+      "filters": {
+        "search": "Search orders...",
+        "status": "Status",
+        "allStatuses": "All Statuses",
+        "dateFrom": "Date From",
+        "dateTo": "Date To",
+        "address": "Delivery Address"
+      },
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Assigned to Agent",
+        "picked_up": "Picked Up",
+        "in_transit": "In Transit",
+        "out_for_delivery": "Out for Delivery",
+        "delivered": "Delivered",
+        "cancelled": "Cancelled",
+        "failed": "Failed",
+        "refunded": "Refunded"
+      },
+      "table": {
+        "orderNumber": "Order #",
+        "customer": "Customer",
+        "items": "Items",
+        "item": "item",
+        "items_plural": "items",
+        "total": "Total",
+        "status": "Status",
+        "deliveryAddress": "Delivery Address",
+        "agent": "Agent",
+        "createdAt": "Created",
+        "actions": "Actions",
+        "unassigned": "Unassigned"
+      },
+      "actions": {
+        "confirm": "Confirm",
+        "prepare": "Prepare",
+        "ready": "Ready"
+      }
+    },
+    "inventory": {
+      "title": "Inventory Management",
+      "addItem": "Add Item",
+      "add": "Add",
+      "quantity": "Quantity",
+      "available": "Available",
+      "sellingPrice": "Selling Price",
+      "location": "Location",
+      "item": "Item",
+      "unitCost": "Unit Cost",
+      "reorderPoint": "Reorder Point",
+      "active": "Active",
+      "inactive": "Inactive",
+      "restock": "Restock"
+    }
+  },
+  "agent": {
+    "dashboard": {
+      "title": "Agent Dashboard",
+      "welcome": "Welcome back, {{name}}! This is your agent dashboard.",
+      "activeOrders": "Active Orders",
+      "pendingOrders": "Pending Orders",
+      "noActiveOrders": "No active orders at the moment.",
+      "noPendingOrders": "No pending orders at the moment."
+    },
+    "orders": {
+      "pickup": "Pick Up Order",
+      "pickupSuccess": "Order picked up successfully!",
+      "pickupError": "Failed to pick up order",
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Assigned to Agent",
+        "picked_up": "Picked Up",
+        "in_transit": "In Transit",
+        "out_for_delivery": "Out for Delivery",
+        "delivered": "Delivered",
+        "cancelled": "Cancelled",
+        "failed": "Failed",
+        "refunded": "Refunded"
+      }
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "personalInfo": "Personal Information",
+    "addresses": "Addresses",
+    "accounts": "Accounts",
+    "save": "Save Changes",
+    "saved": "Profile saved successfully!",
+    "error": "Failed to save profile"
   },
   "notifications": {
     "successfullyUpdated": "Successfully updated",

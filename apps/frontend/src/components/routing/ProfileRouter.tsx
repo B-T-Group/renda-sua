@@ -3,16 +3,12 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfile } from '../../hooks';
 import LoadingPage from '../common/LoadingPage';
-import CompleteProfile from '../pages/CompleteProfile';
-import Dashboard from '../pages/Dashboard';
-import AgentDashboard from '../pages/AgentDashboard';
-import BusinessDashboard from '../pages/BusinessDashboard';
 import ErrorPage from '../pages/ErrorPage';
 
 const ProfileRouter: React.FC = () => {
   const { isAuthenticated } = useAuth0();
   const navigate = useNavigate();
-  const { profile, loading, error, userType, isProfileComplete, refetch } =
+  const { loading, error, userType, isProfileComplete, refetch } =
     useUserProfile();
 
   useEffect(() => {

@@ -27,6 +27,20 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      columns:
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
 select_permissions:
   - role: client
     permission:
@@ -63,7 +77,11 @@ select_permissions:
         - is_primary
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
   - role: user
     permission:
       columns:
@@ -76,3 +94,17 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - name
+        - location_type
+        - is_primary
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null

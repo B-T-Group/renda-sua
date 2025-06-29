@@ -561,7 +561,13 @@ export class HasuraUserService {
             created_at
             updated_at
           }
-         
+          business {
+            id
+            user_id
+            name
+            created_at
+            updated_at
+          }
           created_at
           updated_at
         }

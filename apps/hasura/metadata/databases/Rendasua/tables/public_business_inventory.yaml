@@ -23,8 +23,10 @@ insert_permissions:
     permission:
       check:
         business_location:
-          business_id:
-            _eq: X-Hasura-User-Id
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
       columns:
         - business_location_id
         - item_id
@@ -56,8 +58,10 @@ select_permissions:
         - updated_at
       filter:
         business_location:
-          business_id:
-            _eq: X-Hasura-User-Id
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -90,6 +94,8 @@ update_permissions:
         - updated_at
       filter:
         business_location:
-          business_id:
-            _eq: X-Hasura-User-Id
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
       check: null
