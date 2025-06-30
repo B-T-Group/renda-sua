@@ -108,8 +108,42 @@ jobs:
 
       - name: Wait for deployment to complete
         run: |
-          aws lightsail wait container-service-stable \
-            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}
+          echo "Waiting for deployment to complete..."
+
+          # Poll the deployment status until it's stable
+          max_attempts=20
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking deployment status (attempt $attempt/$max_attempts)..."
+            
+            DEPLOYMENT_STATUS=$(aws lightsail get-container-services \
+              --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+              --query 'containerServices[0].state' \
+              --output text)
+            
+            echo "Current deployment status: $DEPLOYMENT_STATUS"
+            
+            if [ "$DEPLOYMENT_STATUS" = "RUNNING" ]; then
+              echo "✅ Deployment completed successfully!"
+              break
+            elif [ "$DEPLOYMENT_STATUS" = "FAILED" ]; then
+              echo "❌ Deployment failed!"
+              exit 1
+            fi
+            
+            if [ $attempt -lt $max_attempts ]; then
+              echo "Waiting 30 seconds before next check..."
+              sleep 30
+            fi
+            
+            attempt=$((attempt + 1))
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ Deployment timeout after $max_attempts attempts"
+            exit 1
+          fi
 
       - name: Get service URL
         id: get-url
