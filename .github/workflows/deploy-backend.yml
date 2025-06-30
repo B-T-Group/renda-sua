@@ -75,7 +75,7 @@ jobs:
               "backend": {
                 "image": "'${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}'",
                 "ports": {
-                  "3000": "HTTP"
+                  "80": "HTTP"
                 },
                 "environment": {
                   "NODE_ENV": "production",
