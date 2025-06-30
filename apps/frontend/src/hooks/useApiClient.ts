@@ -10,7 +10,7 @@ export const useApiClient = (): AxiosInstance | null => {
 
     const instance = axios.create({
       baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api/',
-      timeout: 10000,
+      timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -28,4 +28,4 @@ export const useApiClient = (): AxiosInstance | null => {
   }, [getAccessTokenSilently, isAuthenticated]);
 
   return apiClient;
-}; 
+};
