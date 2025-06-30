@@ -17,6 +17,8 @@ env:
   AWS_REGION: ca-central-1
   LIGHTSAIL_CONTAINER_SERVICE: rendasua-service
   LIGHTSAIL_CONTAINER_NAME: backend
+  ECR_REPOSITORY: groupe-bt-backend
+  ECR_REGISTRY: 235680477887.dkr.ecr.ca-central-1.amazonaws.com
 
 permissions:
   id-token: write
@@ -51,32 +53,38 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install Lightsail plugin
-        run: |
-          curl "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" -o "lightsailctl"
-          sudo mv "lightsailctl" "/usr/local/bin/lightsailctl"
-          sudo chmod +x /usr/local/bin/lightsailctl
-          aws --version
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push container
+      - name: Create ECR repository if it doesn't exist
         run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+
+      - name: Build and push container to ECR
+        run: |
+          # Generate image tag (using git SHA for versioning)
+          IMAGE_TAG=${{ github.sha }}
+
           # Build the Docker image
-          docker build -f Dockerfile.backend -t ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }} ${{ env.LIGHTSAIL_CONTAINER_NAME }}:latest
+          docker build -f Dockerfile.backend -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
+          docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
-          # Push to Lightsail Container Service
-          aws lightsail push-container-image \
-            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
-            --label ${{ env.LIGHTSAIL_CONTAINER_NAME }} \
-            --image ${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}
+          # Push to ECR
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
-      - name: Deploy to Lightsail
+          # Store the image URI for deployment
+          echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy to Lightsail using ECR image
         run: |
           aws lightsail create-container-service-deployment \
             --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
             --containers '{
               "backend": {
-                "image": "'${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}'",
+                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}'",
                 "ports": {
                   "3000": "HTTP"
                 },
@@ -93,7 +101,51 @@ jobs:
                 "unhealthyThreshold": 2,
                 "timeoutSeconds": 2,
                 "intervalSeconds": 5,
-                "path": "/api",
+                "path": "/health",
                 "successCodes": "200-499"
               }
             }'
+
+      - name: Wait for deployment to complete
+        run: |
+          aws lightsail wait container-service-stable \
+            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}
+
+      - name: Get service URL
+        id: get-url
+        run: |
+          SERVICE_URL=$(aws lightsail get-container-services \
+            --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+            --query 'containerServices[0].url' \
+            --output text)
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "service-url=$SERVICE_URL" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          echo "Waiting for service to be ready..."
+          sleep 30
+
+          # Test the health endpoint
+          curl -f ${{ env.SERVICE_URL }}/health || {
+            echo "Health check failed"
+            exit 1
+          }
+
+          echo "Deployment successful! Service is available at: ${{ env.SERVICE_URL }}"
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Backend deployed successfully!
+              
+              **Service URL:** ${{ env.SERVICE_URL }}
+              **Image:** ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+              **Deployment Time:** ${{ github.event.head_commit.timestamp }}`
+            })
