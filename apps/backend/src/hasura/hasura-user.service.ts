@@ -3,6 +3,7 @@ import { REQUEST } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from './hasura-system.service';
+import { GraphQLClient } from 'graphql-request';
 
 export interface UserRecord {
   id: string;
@@ -123,7 +124,6 @@ export class HasuraUserService {
    * Creates a GraphQL client with user's auth token
    */
   createGraphQLClient(): any {
-    const { GraphQLClient } = require('graphql-request');
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
         Authorization: `Bearer ${this.authToken}`,

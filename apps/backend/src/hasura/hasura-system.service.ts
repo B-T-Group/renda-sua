@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { GraphQLClient } from 'graphql-request';
 
 @Injectable()
 export class HasuraSystemService {
@@ -19,7 +20,6 @@ export class HasuraSystemService {
    * Creates a GraphQL client with admin secret for system operations
    */
   createClient(): any {
-    const { GraphQLClient } = require('graphql-request');
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
         'x-hasura-admin-secret': this.adminSecret,
