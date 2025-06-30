@@ -4,7 +4,7 @@ const { join } = require('path');
 
 module.exports = {
   output: {
-    path: join(__dirname, 'dist'),
+    path: join(__dirname, '../../dist/apps/frontend'),
   },
   devServer: {
     port: 4200,
@@ -16,6 +16,7 @@ module.exports = {
   },
   plugins: [
     new NxAppWebpackPlugin({
+      name: 'frontend',
       tsConfig: './tsconfig.app.json',
       compiler: 'babel',
       main: './src/main.tsx',

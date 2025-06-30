@@ -11,8 +11,26 @@ import '@fontsource/roboto/700.css';
 
 import App from './app/app';
 import { theme } from './theme/theme';
-import { auth0Config } from './config/auth0.config';
+import { environment } from './config/environment';
 import './i18n'; // Initialize i18n
+
+// Create auth0 config from environment
+const auth0Config = {
+  domain: environment.auth0.domain,
+  clientId: environment.auth0.clientId,
+  authorizationParams: {
+    redirect_uri: window.location.origin,
+    audience: environment.auth0.audience,
+    scope: 'openid profile email',
+  },
+  cacheLocation: 'localstorage' as const,
+  useRefreshTokens: true,
+  skipRedirectCallback: window.location.pathname === '/loading-demo',
+  // Performance optimizations
+  advancedOptions: {
+    defaultScope: 'openid profile email',
+  },
+};
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
