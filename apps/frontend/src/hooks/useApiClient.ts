@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import axios, { AxiosInstance } from 'axios';
 import { useAuth0 } from '@auth0/auth0-react';
+import { environment } from '../config/environment';
 
 export const useApiClient = (): AxiosInstance | null => {
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
@@ -8,10 +9,10 @@ export const useApiClient = (): AxiosInstance | null => {
   const apiClient = useMemo(() => {
     if (!isAuthenticated) return null;
 
-    console.log('process.env.REACT_APP_API_URL', process.env.REACT_APP_API_URL);
+    console.log('Backend URL:', environment.backendUrl);
 
     const instance = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api/',
+      baseURL: `${environment.backendUrl}/api/`,
       timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
