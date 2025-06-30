@@ -11,8 +11,6 @@ import { AwsModule } from '../aws/aws.module';
 import { AccountsController } from '../accounts/accounts.controller';
 import configuration from '../config/configuration';
 
-console.log('configuration', configuration());
-
 @Module({
   imports: [
     ConfigModule.forRoot({
