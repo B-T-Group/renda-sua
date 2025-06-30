@@ -40,7 +40,10 @@ jobs:
         run: npm ci
 
       - name: Build backend
-        run: npx nx build backend
+        run: |
+          cp apps/backend/.env.development ./apps/backend/.env  
+          sed -i "s/HASURA_GRAPHQL_ADMIN_SECRET=.*/HASURA_GRAPHQL_ADMIN_SECRET=${{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}/" apps/backend/.env
+          npx nx build backend
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

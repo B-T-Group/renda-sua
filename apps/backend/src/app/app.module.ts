@@ -16,12 +16,6 @@ import configuration from '../config/configuration';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: [
-        '.env.local',
-        '.env.development',
-        '.env.production',
-        '.env',
-      ],
       cache: true,
       expandVariables: true,
     }),
