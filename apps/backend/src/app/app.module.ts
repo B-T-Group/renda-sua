@@ -17,6 +17,7 @@ console.log('configuration', configuration());
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env'],
       load: [configuration],
       cache: true,
       expandVariables: true,
