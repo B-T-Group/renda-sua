@@ -161,7 +161,7 @@ jobs:
           sleep 30
 
           # Test the health endpoint  
-          curl -f ${{ env.SERVICE_URL }}/api/health | | {
+          curl -f ${{ env.SERVICE_URL }}api/health | | {
             echo "Health check failed"
             exit 1
           }
