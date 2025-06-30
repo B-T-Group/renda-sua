@@ -82,8 +82,6 @@ jobs:
                 },
                 "environment": {
                   "NODE_ENV": "production",
-                  "HASURA_GRAPHQL_ENDPOINT": "${{ secrets.HASURA_GRAPHQL_ENDPOINT }}",
-                  "HASURA_GRAPHQL_ADMIN_SECRET": "${{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}"
                 }
               }
             }' \
@@ -95,7 +93,7 @@ jobs:
                 "unhealthyThreshold": 2,
                 "timeoutSeconds": 2,
                 "intervalSeconds": 5,
-                "path": "/api/health",
+                "path": "/api",
                 "successCodes": "200-499"
               }
             }'
