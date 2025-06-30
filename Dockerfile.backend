@@ -1,29 +1,32 @@
+# Simple Dockerfile for Nx Monorepo NestJS Backend
 FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
 
+# Install dependencies for native modules
 RUN apk add --no-cache libc6-compat
 
-# Copy production output
 COPY dist/apps/backend/ ./
 
-# Optionally copy package files if installing here
-# COPY package*.json ./
-# RUN npm ci --only=production --legacy-peer-deps
+RUN npm ci --only=production --legacy-peer-deps
 
-# If you're copying pre-built node_modules from outside:
-COPY node_modules ./node_modules
 
-# Use correct port (must match app)
-ENV NODE_ENV=production
-ENV PORT=80
-ENV HOST=0.0.0.0
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
 
-EXPOSE 80
-
-# Non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+# Change ownership
 RUN chown -R nestjs:nodejs /app
 USER nestjs
 
-CMD ["node", "main.js"]
+# Expose port
+EXPOSE 3000
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOST=0.0.0.0
+
+# Start the application
+CMD ["node", "main.js"] 
