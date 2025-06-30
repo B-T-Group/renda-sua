@@ -160,8 +160,8 @@ jobs:
           echo "Waiting for service to be ready..."
           sleep 30
 
-          # Test the health endpoint
-          curl -f ${{ env.SERVICE_URL }}/health || {
+          # Test the health endpoint  
+          curl -f ${{ env.SERVICE_URL }}/api/health | | {
             echo "Health check failed"
             exit 1
           }
