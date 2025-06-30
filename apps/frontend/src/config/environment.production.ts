@@ -1,7 +1,8 @@
 // Production environment configuration
 const getProductionEnvironment = () => {
   const hasuraUrl =
-    process.env.REACT_APP_HASURA_URL || 'https://api.rendasua.com/v1/graphql';
+    process.env.HASURA_GRAPHQL_ENDPOINT ||
+    'https://api.rendasua.com/v1/graphql';
   const auth0Domain = process.env.REACT_APP_AUTH0_DOMAIN || '';
   const auth0ClientId = process.env.REACT_APP_AUTH0_CLIENT_ID || '';
   const auth0Audience = process.env.REACT_APP_AUTH0_AUDIENCE || '';

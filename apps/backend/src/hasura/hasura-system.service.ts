@@ -8,10 +8,10 @@ export class HasuraSystemService {
 
   constructor(private readonly configService: ConfigService) {
     this.hasuraUrl =
-      this.configService.get<string>('HASURA_GRAPHQL_ENDPOINT') ||
+      this.configService.get<string>('hasura.endpoint') ||
       'http://localhost:8080/v1/graphql';
     this.adminSecret =
-      this.configService.get<string>('HASURA_GRAPHQL_ADMIN_SECRET') ||
+      this.configService.get<string>('hasura.adminSecret') ||
       'myadminsecretkey';
   }
 
