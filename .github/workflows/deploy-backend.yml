@@ -81,7 +81,7 @@ jobs:
                   "3000": "HTTP"
                 },
                 "environment": {
-                  "NODE_ENV": "production",
+                  "NODE_ENV": "production"
                 }
               }
             }' \
