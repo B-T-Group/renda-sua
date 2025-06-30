@@ -75,7 +75,7 @@ jobs:
               "backend": {
                 "image": "'${{ env.LIGHTSAIL_CONTAINER_NAME }}:${{ github.sha }}'",
                 "ports": {
-                  "80": "HTTP"
+                  "3000": "HTTP"
                 },
                 "environment": {
                   "NODE_ENV": "production",
@@ -86,13 +86,13 @@ jobs:
             }' \
             --public-endpoint '{
               "containerName": "backend",
-              "containerPort": 80,
+              "containerPort": 3000,
               "healthCheck": {
                 "healthyThreshold": 2,
                 "unhealthyThreshold": 2,
                 "timeoutSeconds": 2,
                 "intervalSeconds": 5,
-                "path": "/",
+                "path": "/api/health",
                 "successCodes": "200-499"
               }
             }'

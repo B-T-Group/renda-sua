@@ -1,8 +1,6 @@
 // Development environment configuration
 const getDevelopmentEnvironment = () => {
-  const hasuraUrl =
-    process.env.REACT_APP_HASURA_URL ||
-    'https://healthy-mackerel-72.hasura.app/v1/graphql';
+  const hasuraUrl = 'https://healthy-mackerel-72.hasura.app/v1/graphql';
   const auth0Domain =
     process.env.REACT_APP_AUTH0_DOMAIN || 'groupe-bt-client-dev.us.auth0.com';
   const auth0ClientId =
@@ -21,7 +19,8 @@ const getDevelopmentEnvironment = () => {
     isDevelopment: true,
     isProduction: false,
     isLocal: false,
-    apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3000',
+    apiUrl:
+      'https://rendasua-service.m2naz4zc6z54g.ca-central-1.cs.amazonlightsail.com',
     enableDebugLogging: true,
     enableAnalytics: false,
   };
