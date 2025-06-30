@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/backend/**'
       - 'package.json'
+      - 'Dockerfile.backend'
       - 'nx.json'
       - 'tsconfig.base.json'
       - '.github/workflows/deploy-backend.yml'
