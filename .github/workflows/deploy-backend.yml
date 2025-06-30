@@ -86,7 +86,7 @@ jobs:
             }' \
             --public-endpoint '{
               "containerName": "backend",
-              "containerPort": 3000,
+              "containerPort": 80,
               "healthCheck": {
                 "healthyThreshold": 2,
                 "unhealthyThreshold": 2,
