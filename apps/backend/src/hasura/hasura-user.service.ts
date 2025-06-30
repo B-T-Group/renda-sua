@@ -548,26 +548,6 @@ export class HasuraUserService {
           first_name
           last_name
           user_type_id
-          client {
-            id
-            user_id
-            created_at
-            updated_at
-          }
-          agent {
-            id
-            user_id
-            vehicle_type_id
-            created_at
-            updated_at
-          }
-          business {
-            id
-            user_id
-            name
-            created_at
-            updated_at
-          }
           created_at
           updated_at
         }
@@ -582,7 +562,81 @@ export class HasuraUserService {
       throw new Error('User not found');
     }
 
+    switch (userResult.users[0].user_type_id) {
+      case 'client':
+        const client = await this.getUserClient(userResult.users[0].id);
+        userResult.users[0].client = client;
+        break;
+      case 'agent':
+        const agent = await this.getUserAgent(userResult.users[0].id);
+        userResult.users[0].agent = agent;
+        break;
+      case 'business':
+        const business = await this.getUserBusiness(userResult.users[0].id);
+        userResult.users[0].business = business;
+        break;
+      default:
+        throw new Error('Invalid user type');
+    }
+
     return userResult.users[0];
+  }
+
+  private async getUserClient(userId: string): Promise<ClientRecord> {
+    const getUserClientQuery = `
+      query GetUserClient($userId: uuid!) {
+        clients(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const clientResult = await this.executeQuery(getUserClientQuery, {
+      userId,
+    });
+
+    return clientResult.clients[0];
+  }
+
+  private async getUserBusiness(userId: string): Promise<BusinessRecord> {
+    const getUserBusinessQuery = `
+      query GetUserBusiness($userId: uuid!) {
+        businesses(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          name
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const businessResult = await this.executeQuery(getUserBusinessQuery, {
+      userId,
+    });
+    return businessResult.businesses[0];
+  }
+
+  private async getUserAgent(userId: string): Promise<AgentRecord> {
+    const getUserAgentQuery = `
+      query GetUserAgent($userId: uuid!) {
+        agents(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          vehicle_type_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const agentResult = await this.executeQuery(getUserAgentQuery, {
+      userId,
+    });
+    return agentResult.agents[0];
   }
 
   /**
