@@ -40,12 +40,17 @@
               "with": "apps/backend/src/environments/environment.production.ts"
             }
           ]
+        },
+        "local": {
+          "optimization": false,
+          "extractLicenses": false,
+          "inspect": false
         }
       }
     },
     "serve": {
       "executor": "@nx/js:node",
-      "defaultConfiguration": "development",
+      "defaultConfiguration": "local",
       "options": {
         "buildTarget": "backend:build"
       },
@@ -55,6 +60,9 @@
         },
         "production": {
           "buildTarget": "backend:build:production"
+        },
+        "local": {
+          "buildTarget": "backend:build:local"
         }
       }
     },
@@ -91,9 +99,7 @@
       "executor": "@nx/eslint:lint",
       "outputs": ["{options.outputFile}"],
       "options": {
-        "lintFilePatterns": [
-          "apps/backend/**/*.ts"
-        ]
+        "lintFilePatterns": ["apps/backend/**/*.ts"]
       }
     },
     "typecheck": {
@@ -104,4 +110,4 @@
     }
   },
   "tags": []
-} 
+}

@@ -33,7 +33,7 @@ const getEnvironment = () => {
     isLocal:
       process.env.NODE_ENV !== 'production' &&
       process.env.NODE_ENV !== 'development',
-    apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3000',
+    apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
     enableDebugLogging: isDevelopment,
     enableAnalytics: process.env.NODE_ENV === 'production',
   };

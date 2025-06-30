@@ -20,7 +20,7 @@ const getDevelopmentEnvironment = () => {
     isProduction: false,
     isLocal: false,
     apiUrl:
-      'https://rendasua-service.m2naz4zc6z54g.ca-central-1.cs.amazonlightsail.com',
+      'https://rendasua-service.m2naz4zc6z54g.ca-central-1.cs.amazonlightsail.com/api',
     enableDebugLogging: true,
     enableAnalytics: false,
   };
