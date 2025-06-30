@@ -6,6 +6,9 @@
     "build": "nx run-many --target=build --all",
     "build:frontend": "nx build frontend",
     "build:backend": "nx build backend",
+    "build:frontend:development": "NODE_ENV=development nx build frontend",
+    "build:frontend:staging": "NODE_ENV=staging nx build frontend",
+    "build:frontend:production": "NODE_ENV=production nx build frontend",
     "serve": "nx run-many --target=serve --all --parallel",
     "serve:frontend": "nx serve frontend",
     "serve:backend": "nx serve backend",
@@ -23,7 +26,11 @@
     "typecheck:backend": "nx typecheck backend",
     "dev": "nx run-many --target=serve --all --parallel",
     "dev:frontend": "nx serve frontend",
-    "dev:backend": "nx serve backend"
+    "dev:backend": "nx serve backend",
+    "validate-env": "cd apps/frontend && npm run validate-env",
+    "validate-env:development": "cd apps/frontend && npm run validate-env:development",
+    "validate-env:staging": "cd apps/frontend && npm run validate-env:staging",
+    "validate-env:production": "cd apps/frontend && npm run validate-env:production"
   },
   "private": true,
   "dependencies": {

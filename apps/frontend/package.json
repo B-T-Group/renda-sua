@@ -2,6 +2,19 @@
   "name": "@rendasua/frontend",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "validate-env": "node scripts/validate-env.js",
+    "validate-env:development": "node scripts/validate-env.js development",
+    "validate-env:staging": "node scripts/validate-env.js staging",
+    "validate-env:production": "node scripts/validate-env.js production",
+    "build": "NODE_ENV=production nx build frontend",
+    "build:development": "NODE_ENV=development nx build frontend",
+    "build:staging": "NODE_ENV=staging nx build frontend",
+    "build:production": "NODE_ENV=production nx build frontend",
+    "serve": "NODE_ENV=development nx serve frontend",
+    "serve:development": "NODE_ENV=development nx serve frontend",
+    "serve:staging": "NODE_ENV=staging nx serve frontend"
+  },
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "country-state-city": "^3.2.1",
@@ -11,5 +24,8 @@
     "i18next-browser-languagedetector": "^8.2.0",
     "notistack": "^3.0.2",
     "react-i18next": "^15.5.3"
+  },
+  "devDependencies": {
+    "dotenv-webpack": "^8.1.1"
   }
 }
