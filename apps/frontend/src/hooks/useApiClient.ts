@@ -8,6 +8,8 @@ export const useApiClient = (): AxiosInstance | null => {
   const apiClient = useMemo(() => {
     if (!isAuthenticated) return null;
 
+    console.log('process.env.REACT_APP_API_URL', process.env.REACT_APP_API_URL);
+
     const instance = axios.create({
       baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api/',
       timeout: 15000,
