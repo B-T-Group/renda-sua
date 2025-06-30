@@ -2,7 +2,7 @@
 
 This module provides user management functionality for the Rendasua application.
 
-## Users Controller
+## Users Controllers
 
 This controller handles user-related operations including user creation and retrieval.
 
@@ -13,14 +13,17 @@ This controller handles user-related operations including user creation and retr
 Retrieves the current user based on the identifier from the JWT token.
 
 **Headers:**
+
 - `Authorization: Bearer <jwt_token>` (required)
 
 **Response:**
+
 - **200 OK**: User found successfully
 - **404 Not Found**: User not found
 - **500 Internal Server Error**: Server error
 
 **Success Response Example:**
+
 ```json
 {
   "success": true,
@@ -39,6 +42,7 @@ Retrieves the current user based on the identifier from the JWT token.
 ```
 
 **Error Response Example:**
+
 ```json
 {
   "success": false,
@@ -51,9 +55,11 @@ Retrieves the current user based on the identifier from the JWT token.
 Creates a new user with the appropriate related record (client, agent, or business) based on the user_type_id.
 
 **Headers:**
+
 - `Authorization: Bearer <jwt_token>` (required)
 
 **Request Body:**
+
 ```json
 {
   "email": "john.doe@example.com",
@@ -66,12 +72,14 @@ Creates a new user with the appropriate related record (client, agent, or busine
 ```
 
 **Response:**
+
 - **200 OK**: User created successfully
 - **400 Bad Request**: Invalid request data or missing required fields
 
 **Success Response Examples:**
 
 For Client:
+
 ```json
 {
   "success": true,
@@ -96,6 +104,7 @@ For Client:
 ```
 
 For Agent:
+
 ```json
 {
   "success": true,
@@ -121,6 +130,7 @@ For Agent:
 ```
 
 For Business:
+
 ```json
 {
   "success": true,
@@ -146,6 +156,7 @@ For Business:
 ```
 
 **Error Response Example:**
+
 ```json
 {
   "success": false,
@@ -173,6 +184,7 @@ The app controller also provides endpoints for fetching reference data:
 Retrieves all user types from the database.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -198,6 +210,7 @@ Retrieves all user types from the database.
 Retrieves all vehicle types from the database.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -230,6 +243,7 @@ All endpoints return consistent error responses:
 ```
 
 Common error messages:
+
 - `"vehicle_type_id is required for agent users"` - When creating an agent without vehicle_type_id
 - `"business_name is required for business users"` - When creating a business without business_name
 
@@ -243,4 +257,4 @@ Common error messages:
 
 - `HasuraModule`: Provides access to Hasura services
 - `HasuraUserService`: For user creation operations
-- `HasuraSystemService`: For reference data queries 
+- `HasuraSystemService`: For reference data queries
