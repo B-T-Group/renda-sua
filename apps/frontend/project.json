@@ -7,7 +7,7 @@
     "build": {
       "executor": "@nx/webpack:webpack",
       "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
+      "defaultConfiguration": "local",
       "options": {
         "target": "web",
         "compiler": "babel",
@@ -59,7 +59,7 @@
     },
     "serve": {
       "executor": "@nx/webpack:dev-server",
-      "defaultConfiguration": "development",
+      "defaultConfiguration": "local",
       "options": {
         "buildTarget": "frontend:build",
         "port": 4200
@@ -68,6 +68,9 @@
         "development": {
           "buildTarget": "frontend:build:development"
         },
+        "local": {
+          "buildTarget": "frontend:build:local"
+        },
         "production": {
           "buildTarget": "frontend:build:production"
         }
@@ -75,7 +78,7 @@
     },
     "preview": {
       "executor": "@nx/webpack:dev-server",
-      "defaultConfiguration": "production",
+      "defaultConfiguration": "local",
       "options": {
         "buildTarget": "frontend:build",
         "port": 4200
@@ -83,6 +86,9 @@
       "configurations": {
         "development": {
           "buildTarget": "frontend:build:development"
+        },
+        "local": {
+          "buildTarget": "frontend:build:local"
         },
         "production": {
           "buildTarget": "frontend:build:production"
