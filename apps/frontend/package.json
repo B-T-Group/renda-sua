@@ -3,10 +3,6 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "validate-env": "node scripts/validate-env.js",
-    "validate-env:development": "node scripts/validate-env.js development",
-    "validate-env:staging": "node scripts/validate-env.js staging",
-    "validate-env:production": "node scripts/validate-env.js production",
     "build": "NODE_ENV=production nx build frontend",
     "build:development": "NODE_ENV=development nx build frontend",
     "build:staging": "NODE_ENV=staging nx build frontend",
@@ -25,7 +21,5 @@
     "notistack": "^3.0.2",
     "react-i18next": "^15.5.3"
   },
-  "devDependencies": {
-    "dotenv-webpack": "^8.1.1"
-  }
+  "devDependencies": {}
 }

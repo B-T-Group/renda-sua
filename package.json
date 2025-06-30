@@ -26,11 +26,7 @@
     "typecheck:backend": "nx typecheck backend",
     "dev": "nx run-many --target=serve --all --parallel",
     "dev:frontend": "nx serve frontend",
-    "dev:backend": "nx serve backend",
-    "validate-env": "cd apps/frontend && npm run validate-env",
-    "validate-env:development": "cd apps/frontend && npm run validate-env:development",
-    "validate-env:staging": "cd apps/frontend && npm run validate-env:staging",
-    "validate-env:production": "cd apps/frontend && npm run validate-env:production"
+    "dev:backend": "nx serve backend"
   },
   "private": true,
   "dependencies": {
