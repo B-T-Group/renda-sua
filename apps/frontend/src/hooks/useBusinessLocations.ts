@@ -139,35 +139,35 @@ const DELETE_BUSINESS_LOCATION = `
 `;
 
 const ADD_BUSINESS_LOCATION_NESTED = `
-  mutation AddBusinessLocationNested($address: addresses_insert_input!) {
-    insert_addresses_one(object: $address) {
-      address_line_1
-      address_line_2
-      address_type
-      city
-      country
+  mutation AddBusinessLocationNested($businessLocation: business_locations_insert_input!) {
+    insert_business_locations_one(object: $businessLocation) {
+      address_id
+      business_id
       created_at
-      entity_id
-      entity_type
+      email
       id
+      is_active
       is_primary
-      latitude
-      longitude
-      postal_code
-      state
+      location_type
+      name
+      operating_hours
+      phone
       updated_at
-      business_location {
-        address_id
-        business_id
+      address {
+        address_line_1
+        address_line_2
+        address_type
+        city
+        country
         created_at
-        email
+        entity_id
+        entity_type
         id
-        is_active
         is_primary
-        location_type
-        name
-        operating_hours
-        phone
+        latitude
+        longitude
+        postal_code
+        state
         updated_at
       }
     }
@@ -229,30 +229,30 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
           throw new Error('Address data is required');
         }
         // Compose the nested insert input
-        const addressInput = {
-          ...data.address,
-          entity_type: 'business',
-          entity_id: businessId,
-          business_location: {
+        const businessLocationInput = {
+          name: data.name,
+          phone: data.phone,
+          email: data.email,
+          operating_hours: data.operating_hours,
+          location_type: data.location_type,
+          is_primary: data.is_primary,
+          business_id: businessId,
+          is_active: true,
+          address: {
             data: {
-              name: data.name,
-              phone: data.phone,
-              email: data.email,
-              operating_hours: data.operating_hours,
-              location_type: data.location_type,
-              is_primary: data.is_primary,
-              business_id: businessId,
-              is_active: true,
+              ...data.address,
+              entity_type: 'business',
+              entity_id: businessId,
             },
           },
         };
         const result = await executeAddNestedMutation({
-          address: addressInput,
+          businessLocation: businessLocationInput,
         });
-        if (result.data?.insert_addresses_one) {
+        if (result.data?.insert_business_locations_one) {
           // Optionally, you can refetch or update state here
           await fetchLocations();
-          return result.data.insert_addresses_one;
+          return result.data.insert_business_locations_one;
         }
       } catch (err) {
         setError(

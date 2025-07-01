@@ -37,7 +37,7 @@ object_relationships:
         remote_table:
           name: business_locations
           schema: public
-        insertion_order: null
+        insertion_order: after_parent
 array_relationships:
   - name: orders
     using:
