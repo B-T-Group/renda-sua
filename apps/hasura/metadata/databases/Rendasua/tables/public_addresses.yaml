@@ -2,33 +2,6 @@ table:
   name: addresses
   schema: public
 object_relationships:
-  - name: agent
-    using:
-      manual_configuration:
-        column_mapping:
-          entity_id: user_id
-        remote_table:
-          name: agents
-          schema: public
-        insertion_order: null
-  - name: client
-    using:
-      manual_configuration:
-        column_mapping:
-          entity_id: user_id
-        remote_table:
-          name: clients
-          schema: public
-        insertion_order: null
-  - name: business
-    using:
-      manual_configuration:
-        column_mapping:
-          entity_id: user_id
-        remote_table:
-          name: businesses
-          schema: public
-        insertion_order: null
   - name: business_location
     using:
       manual_configuration:
@@ -48,40 +21,38 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: business_addresses
+    using:
+      manual_configuration:
+        column_mapping:
+          id: address_id
+        insertion_order: null
+        remote_table:
+          name: business_addresses
+          schema: public
+  - name: client_addresses
+    using:
+      manual_configuration:
+        column_mapping:
+          id: address_id
+        insertion_order: null
+        remote_table:
+          name: client_addresses
+          schema: public
+  - name: agent_addresses
+    using:
+      manual_configuration:
+        column_mapping:
+          id: address_id
+        insertion_order: null
+        remote_table:
+          name: agent_addresses
+          schema: public
 select_permissions:
   - role: agent
     permission:
       columns:
         - id
-        - entity_type
-        - entity_id
-        - address_line_1
-        - address_line_2
-        - city
-        - state
-        - postal_code
-        - country
-        - latitude
-        - longitude
-        - is_primary
-        - address_type
-        - created_at
-        - updated_at
-      filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - agent:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
-
-  - role: business
-    permission:
-      columns:
-        - id
-        - entity_type
-        - entity_id
         - address_line_1
         - address_line_2
         - city
@@ -96,27 +67,20 @@ select_permissions:
         - updated_at
       filter:
         _or:
-          - _and:
-              - entity_type:
-                  _eq: user
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business_location:
-                  business:
-                    user:
-                      identifier:
-                        _eq: X-Hasura-User-Id
-  - role: client
+          - agent_addresses:
+              agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              assigned_agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+  - role: business
     permission:
       columns:
         - id
-        - entity_type
-        - entity_id
         - address_line_1
         - address_line_2
         - city
@@ -130,28 +94,56 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - client:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - business_addresses:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - business_location:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+        - created_at
+        - updated_at
+      filter:
+        _or:
+          - client_addresses:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
 insert_permissions:
   - role: agent
     permission:
-      check:
-        _and:
-          - entity_type:
-              _eq: user
-          - agent:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+      check: {}
       columns:
         - id
-        - entity_type
-        - entity_id
         - address_line_1
         - address_line_2
         - city
@@ -166,18 +158,9 @@ insert_permissions:
         - updated_at
   - role: client
     permission:
-      check:
-        _and:
-          - entity_type:
-              _eq: user
-          - client:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+      check: {}
       columns:
         - id
-        - entity_type
-        - entity_id
         - address_line_1
         - address_line_2
         - city
@@ -192,29 +175,9 @@ insert_permissions:
         - updated_at
   - role: business
     permission:
-      check:
-        _or:
-          - _and:
-              - entity_type:
-                  _in:
-                    - user
-                    - business
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business_location:
-                  business:
-                    user:
-                      identifier:
-                        _eq: X-Hasura-User-Id
+      check: {}
       columns:
         - id
-        - entity_type
-        - entity_id
         - address_line_1
         - address_line_2
         - city
@@ -231,13 +194,17 @@ update_permissions:
   - role: agent
     permission:
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - agent:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - agent_addresses:
+              agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              assigned_agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
       columns:
         - address_line_1
         - address_line_2
@@ -254,13 +221,17 @@ update_permissions:
   - role: client
     permission:
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - client:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - client_addresses:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
       columns:
         - address_line_1
         - address_line_2
@@ -278,21 +249,21 @@ update_permissions:
     permission:
       filter:
         _or:
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
-          - _and:
-              - entity_type:
-                  _eq: business
-              - business_location:
-                  business:
-                    user:
-                      identifier:
-                        _eq: X-Hasura-User-Id
+          - business_addresses:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - business_location:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
       columns:
         - address_line_1
         - address_line_2
@@ -310,32 +281,47 @@ delete_permissions:
   - role: agent
     permission:
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - agent:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - agent_addresses:
+              agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              assigned_agent:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
   - role: client
     permission:
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - client:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - client_addresses:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              client:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
   - role: business
     permission:
       filter:
-        _and:
-          - entity_type:
-              _in:
-                - user
-                - business
-          - business:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - business_addresses:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - business_location:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - orders:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id

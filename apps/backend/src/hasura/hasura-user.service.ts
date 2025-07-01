@@ -487,62 +487,167 @@ export class HasuraUserService {
   }
 
   /**
-   * Get user address by user ID
+   * Get user address by user ID and user type
    */
-  async getUserAddress(userId: string, entityType: string): Promise<any> {
-    const getUserAddressQuery = `
-      query GetUserAddress($userId: uuid!, $entityType: entity_type_enum!) {
-        addresses(where: {entity_id: {_eq: $userId}, entity_type: {_eq: $entityType}}) {
-          id
-          entity_id
-          address_line_1
-          address_line_2
-          city
-          state
-          postal_code
-          country
-          is_primary
-          created_at
-          updated_at
-        }
-      }
-    `;
+  async getUserAddress(userId: string, userType: string): Promise<any> {
+    let query: string;
 
-    const addressResult = await this.executeQuery(getUserAddressQuery, {
+    switch (userType) {
+      case 'client':
+        query = `
+          query GetClientAddress($userId: uuid!) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'agent':
+        query = `
+          query GetAgentAddress($userId: uuid!) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'business':
+        query = `
+          query GetBusinessAddress($userId: uuid!) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      default:
+        throw new Error('Invalid user type');
+    }
+
+    const addressResult = await this.executeQuery(query, {
       userId,
-      entityType,
     });
 
-    return addressResult.addresses[0];
+    const addresses =
+      addressResult.client_addresses ||
+      addressResult.agent_addresses ||
+      addressResult.business_addresses;
+    return addresses?.[0]?.address || null;
   }
 
   /**
-   * Get all user addresses by user ID
+   * Get all user addresses by user ID and user type
    */
-  async getAllUserAddresses(userId: string): Promise<any[]> {
-    const getAllUserAddressesQuery = `
-      query GetAllUserAddresses($userId: uuid!) {
-        addresses(where: {entity_id: {_eq: $userId}}) {
-          id
-          user_id
-          address_line_1
-          address_line_2
-          city
-          state
-          postal_code
-          country
-          is_primary
-          created_at
-          updated_at
-        }
-      }
-    `;
+  async getAllUserAddresses(userId: string, userType: string): Promise<any[]> {
+    let query: string;
 
-    const addressResult = await this.executeQuery(getAllUserAddressesQuery, {
+    switch (userType) {
+      case 'client':
+        query = `
+          query GetAllClientAddresses($userId: uuid!) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'agent':
+        query = `
+          query GetAllAgentAddresses($userId: uuid!) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'business':
+        query = `
+          query GetAllBusinessAddresses($userId: uuid!) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      default:
+        throw new Error('Invalid user type');
+    }
+
+    const addressResult = await this.executeQuery(query, {
       userId,
     });
 
-    return addressResult.addresses || [];
+    const addresses =
+      addressResult.client_addresses ||
+      addressResult.agent_addresses ||
+      addressResult.business_addresses;
+    return addresses?.map((item: any) => item.address) || [];
   }
 
   /**
@@ -667,7 +772,7 @@ export class HasuraUserService {
       throw new Error('Client not found');
     }
 
-    const address = await this.getUserAddress(user.id, 'user');
+    const address = await this.getUserAddress(user.id, user.user_type_id);
 
     if (!address) {
       throw new Error('Address not found');

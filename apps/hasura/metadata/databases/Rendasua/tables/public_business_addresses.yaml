@@ -8,6 +8,7 @@ object_relationships:
   - name: address
     using:
       foreign_key_constraint_on: address_id
+      insertion_order: after_parent
 array_relationships: []
 
 insert_permissions:

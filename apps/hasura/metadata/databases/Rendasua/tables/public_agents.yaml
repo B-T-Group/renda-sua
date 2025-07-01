@@ -18,14 +18,14 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
-  - name: addresses
+  - name: agent_addresses
     using:
       manual_configuration:
         column_mapping:
-          id: entity_id
+          id: agent_id
         insertion_order: null
         remote_table:
-          name: addresses
+          name: agent_addresses
           schema: public
 insert_permissions:
   - role: agent

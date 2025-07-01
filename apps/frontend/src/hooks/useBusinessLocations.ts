@@ -153,23 +153,21 @@ const ADD_BUSINESS_LOCATION_NESTED = `
       operating_hours
       phone
       updated_at
-      address {
-        address_line_1
-        address_line_2
-        address_type
-        city
-        country
-        created_at
-        entity_id
-        entity_type
-        id
-        is_primary
-        latitude
-        longitude
-        postal_code
-        state
-        updated_at
-      }
+              address {
+          address_line_1
+          address_line_2
+          address_type
+          city
+          country
+          created_at
+          id
+          is_primary
+          latitude
+          longitude
+          postal_code
+          state
+          updated_at
+        }
     }
   }
 `;
@@ -241,8 +239,6 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
           address: {
             data: {
               ...data.address,
-              entity_type: 'business',
-              entity_id: businessId,
             },
           },
         };

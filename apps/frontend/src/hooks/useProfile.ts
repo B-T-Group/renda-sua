@@ -15,23 +15,6 @@ const GET_USER_PROFILE = `
       created_at
       updated_at
     }
-    addresses(where: { entity_type: { _eq: "user" } }) {
-      id
-      entity_type
-      entity_id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-      is_primary
-      address_type
-      latitude
-      longitude
-      created_at
-      updated_at
-    }
     accounts {
       id
       user_id
@@ -64,24 +47,84 @@ const UPDATE_USER = `
   }
 `;
 
-const INSERT_ADDRESS = `
-  mutation InsertAddress($address: addresses_insert_input!) {
-    insert_addresses_one(object: $address) {
+// New mutations for address management through junction tables
+const INSERT_AGENT_ADDRESS = `
+  mutation InsertAgentAddress($agentAddress: agent_addresses_insert_input!) {
+    insert_agent_addresses_one(object: $agentAddress) {
       id
-      entity_type
-      entity_id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-      is_primary
-      address_type
-      latitude
-      longitude
+      agent_id
+      address_id
       created_at
       updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
+const INSERT_CLIENT_ADDRESS = `
+  mutation InsertClientAddress($clientAddress: client_addresses_insert_input!) {
+    insert_client_addresses_one(object: $clientAddress) {
+      id
+      client_id
+      address_id
+      created_at
+      updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
+const INSERT_BUSINESS_ADDRESS = `
+  mutation InsertBusinessAddress($businessAddress: business_addresses_insert_input!) {
+    insert_business_addresses_one(object: $businessAddress) {
+      id
+      business_id
+      address_id
+      created_at
+      updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
     }
   }
 `;
@@ -93,8 +136,6 @@ const UPDATE_ADDRESS = `
       _set: $address
     ) {
       id
-      entity_type
-      entity_id
       address_line_1
       address_line_2
       city
@@ -124,8 +165,6 @@ interface UserProfile {
 
 interface Address {
   id: string;
-  entity_type: string;
-  entity_id: string;
   address_line_1: string;
   address_line_2?: string;
   city: string;
@@ -165,7 +204,6 @@ interface AddressFormData {
 
 interface ProfileData {
   users: UserProfile[];
-  addresses: Address[];
   accounts: Account[];
 }
 
@@ -174,11 +212,24 @@ export const useProfile = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // GraphQL hooks
-  const { data, loading, error, execute: fetchProfile, refetch } = useGraphQLRequest<ProfileData>(GET_USER_PROFILE);
+  const {
+    data,
+    loading,
+    error,
+    execute: fetchProfile,
+    refetch,
+  } = useGraphQLRequest<ProfileData>(GET_USER_PROFILE);
   const { execute: updateUser } = useGraphQLRequest(UPDATE_USER);
-  const { execute: insertAddress } = useGraphQLRequest(INSERT_ADDRESS);
+  const { execute: insertAgentAddress } =
+    useGraphQLRequest(INSERT_AGENT_ADDRESS);
+  const { execute: insertClientAddress } = useGraphQLRequest(
+    INSERT_CLIENT_ADDRESS
+  );
+  const { execute: insertBusinessAddress } = useGraphQLRequest(
+    INSERT_BUSINESS_ADDRESS
+  );
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
-  
+
   // API client for backend calls
   const apiClient = useApiClient();
 
@@ -187,7 +238,11 @@ export const useProfile = () => {
     fetchProfile();
   }, []);
 
-  const handleProfileUpdate = async (userId: string, firstName: string, lastName: string) => {
+  const handleProfileUpdate = async (
+    userId: string,
+    firstName: string,
+    lastName: string
+  ) => {
     try {
       await updateUser({
         id: userId,
@@ -205,23 +260,55 @@ export const useProfile = () => {
     }
   };
 
-  const handleAddressSave = async (userId: string, addressData: AddressFormData, editingAddressId?: string) => {
+  const handleAddressSave = async (
+    userId: string,
+    addressData: AddressFormData,
+    editingAddressId?: string,
+    userType?: string
+  ) => {
     try {
-      const addressInput = {
-        entity_type: 'user',
-        entity_id: userId,
-        ...addressData,
-      };
-
       if (editingAddressId) {
+        // Update existing address
         await updateAddress({
           id: editingAddressId,
-          address: addressInput,
+          address: addressData,
         });
       } else {
-        await insertAddress({
-          address: addressInput,
-        });
+        // Insert new address through appropriate junction table
+        const addressInput = {
+          data: {
+            ...addressData,
+          },
+        };
+
+        switch (userType) {
+          case 'agent':
+            await insertAgentAddress({
+              agentAddress: {
+                agent_id: userId,
+                address: addressInput,
+              },
+            });
+            break;
+          case 'client':
+            await insertClientAddress({
+              clientAddress: {
+                client_id: userId,
+                address: addressInput,
+              },
+            });
+            break;
+          case 'business':
+            await insertBusinessAddress({
+              businessAddress: {
+                business_id: userId,
+                address: addressInput,
+              },
+            });
+            break;
+          default:
+            throw new Error('Invalid user type for address creation');
+        }
       }
 
       setSuccessMessage('Address saved successfully!');
@@ -234,7 +321,11 @@ export const useProfile = () => {
     }
   };
 
-  const handleAccountCreate = async (userId: string, userTypeId: string, currency: string) => {
+  const handleAccountCreate = async (
+    userId: string,
+    userTypeId: string,
+    currency: string
+  ) => {
     try {
       if (!apiClient) {
         setErrorMessage('API client not available');
@@ -243,7 +334,7 @@ export const useProfile = () => {
 
       // Check if account with this currency already exists
       const existingAccount = data?.accounts.find(
-        acc => acc.currency === currency
+        (acc) => acc.currency === currency
       );
 
       if (existingAccount) {
@@ -283,17 +374,16 @@ export const useProfile = () => {
   return {
     // Data
     userProfile: data?.users?.[0],
-    addresses: data?.addresses || [],
     accounts: data?.accounts || [],
-    
+
     // Loading and error states
     loading,
     error,
-    
+
     // Messages
     successMessage,
     errorMessage,
-    
+
     // Actions
     handleProfileUpdate,
     handleAddressSave,
@@ -301,4 +391,4 @@ export const useProfile = () => {
     clearMessages,
     refetch,
   };
-}; 
+};
