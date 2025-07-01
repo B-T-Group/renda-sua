@@ -135,9 +135,12 @@ const GET_BUSINESS_INVENTORY = `
 `;
 
 const GET_AVAILABLE_ITEMS = `
-  query GetAvailableItems {
+  query GetAvailableItems($businessId: uuid!) {
     items(
-      where: { is_active: { _eq: true } }
+      where: { 
+        is_active: { _eq: true },
+        business_id: { _eq: $businessId }
+      }
       order_by: { name: asc }
     ) {
       id
@@ -308,16 +311,24 @@ export const useBusinessInventory = () => {
     }
   }, [executeInventoryQuery]);
 
-  const fetchAvailableItems = useCallback(async () => {
-    try {
-      const result = await executeItemsQuery();
-      setAvailableItems(result.items || []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch available items'
-      );
-    }
-  }, [executeItemsQuery]);
+  const fetchAvailableItems = useCallback(
+    async (businessId?: string) => {
+      if (!businessId) {
+        setAvailableItems([]);
+        return;
+      }
+
+      try {
+        const result = await executeItemsQuery({ businessId });
+        setAvailableItems(result.items || []);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch available items'
+        );
+      }
+    },
+    [executeItemsQuery]
+  );
 
   const fetchBusinessLocations = useCallback(async () => {
     try {

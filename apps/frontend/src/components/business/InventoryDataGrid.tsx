@@ -310,7 +310,6 @@ export default function InventoryDataGrid({
       rows={items}
       columns={columns}
       loading={loading}
-      autoHeight
       pageSizeOptions={[10, 25, 50, 100]}
       initialState={{
         pagination: {
@@ -322,8 +321,12 @@ export default function InventoryDataGrid({
       }}
       disableRowSelectionOnClick
       sx={{
+        height: 600,
         '& .MuiDataGrid-cell': {
           borderBottom: '1px solid #e0e0e0',
+          minHeight: '80px !important',
+          maxHeight: 'none !important',
+          padding: '8px 16px',
         },
         '& .MuiDataGrid-columnHeaders': {
           backgroundColor: '#f5f5f5',
@@ -331,6 +334,10 @@ export default function InventoryDataGrid({
         },
         '& .MuiDataGrid-row:hover': {
           backgroundColor: '#f8f8f8',
+        },
+        '& .MuiDataGrid-row': {
+          minHeight: '80px !important',
+          maxHeight: 'none !important',
         },
       }}
     />

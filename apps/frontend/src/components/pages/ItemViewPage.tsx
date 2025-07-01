@@ -436,6 +436,7 @@ export default function ItemViewPage() {
         open={showEditDialog}
         onClose={() => setShowEditDialog(false)}
         item={item}
+        businessId={profile?.business?.id}
       />
 
       <UpdateInventoryDialog

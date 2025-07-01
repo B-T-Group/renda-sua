@@ -139,7 +139,7 @@ const BusinessDashboard: React.FC = () => {
   useEffect(() => {
     fetchOrders();
     fetchInventory();
-    fetchAvailableItems();
+    fetchAvailableItems(profile?.business?.id);
     fetchBusinessLocations();
 
     // Only fetch locations if we have the required profile data
@@ -816,6 +816,7 @@ const BusinessDashboard: React.FC = () => {
         open={showEditItemDialog}
         onClose={handleCloseEditItemDialog}
         item={editingItem}
+        businessId={profile?.business?.id}
       />
 
       {/* Location Modal */}

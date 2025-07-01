@@ -25,12 +25,14 @@ interface EditItemDialogProps {
   open: boolean;
   onClose: () => void;
   item: Item | null;
+  businessId?: string;
 }
 
 export default function EditItemDialog({
   open,
   onClose,
   item,
+  businessId,
 }: EditItemDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
@@ -42,7 +44,7 @@ export default function EditItemDialog({
     fetchBrands,
     fetchItemSubCategories,
     updateItem,
-  } = useItems();
+  } = useItems(businessId);
 
   const [formData, setFormData] = useState<Partial<Item>>({});
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
@@ -94,7 +96,24 @@ export default function EditItemDialog({
     if (!item) return;
 
     try {
-      await updateItem(item.id, formData);
+      // Convert null values to undefined for optional fields
+      const updateData = {
+        ...formData,
+        size: formData.size ?? undefined,
+        size_unit: formData.size_unit ?? undefined,
+        weight: formData.weight ?? undefined,
+        weight_unit: formData.weight_unit ?? undefined,
+        sku: formData.sku ?? undefined,
+        brand_id: formData.brand_id ?? undefined,
+        model: formData.model ?? undefined,
+        color: formData.color ?? undefined,
+        material: formData.material ?? undefined,
+        max_delivery_distance: formData.max_delivery_distance ?? undefined,
+        estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
+        max_order_quantity: formData.max_order_quantity ?? undefined,
+      };
+
+      await updateItem(item.id, updateData);
       enqueueSnackbar(t('business.inventory.itemUpdatedSuccessfully'), {
         variant: 'success',
       });
