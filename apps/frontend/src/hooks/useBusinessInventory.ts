@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessInventoryItem {
@@ -113,7 +113,11 @@ const GET_BUSINESS_INVENTORY = `
         size
         size_unit
         sku
-        brand
+        brand {
+          id
+          name
+          description
+        }
         model
         color
         material
@@ -146,7 +150,11 @@ const GET_AVAILABLE_ITEMS = `
       size
       size_unit
       sku
-      brand
+      brand {
+        id
+        name
+        description
+      }
       model
       color
       material

@@ -22,7 +22,6 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -30,7 +29,6 @@ import {
   Paper,
   Select,
   Stack,
-  Switch,
   Tab,
   Table,
   TableBody,
@@ -46,7 +44,6 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AddInventoryItemData as AddInventoryItemDataFromHooks } from '../../hooks/useBusinessInventory';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import {
   AddBusinessLocationData,
@@ -55,6 +52,7 @@ import {
 } from '../../hooks/useBusinessLocations';
 import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AddItemDialog from '../business/AddItemDialog';
 import LocationModal from '../business/LocationModal';
 
 interface TabPanelProps {
@@ -87,10 +85,6 @@ const BusinessDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [orderFilters, setOrderFilters] = useState<OrderFilters>({});
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [newItemData, setNewItemData] = useState<
-    Partial<AddInventoryItemDataFromHooks>
-  >({});
-  const [selectedItem, setSelectedItem] = useState<any>(null);
 
   // Location management states
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -162,14 +156,6 @@ const BusinessDashboard: React.FC = () => {
     const newFilters = { ...orderFilters, ...filters };
     setOrderFilters(newFilters);
     fetchOrders(newFilters);
-  };
-
-  const handleAddItem = async () => {
-    if (newItemData.business_location_id && newItemData.item_id) {
-      await addInventoryItem(newItemData as AddInventoryItemDataFromHooks);
-      setShowAddItemDialog(false);
-      setNewItemData({});
-    }
   };
 
   // Location management handlers
@@ -887,245 +873,12 @@ const BusinessDashboard: React.FC = () => {
       </Paper>
 
       {/* Add Item Dialog */}
-      <Dialog
+      <AddItemDialog
         open={showAddItemDialog}
         onClose={() => setShowAddItemDialog(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>{t('business.inventory.addItem')}</DialogTitle>
-        <DialogContent>
-          <Grid container direction={'column'} spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.location')}</InputLabel>
-                <Select
-                  fullWidth
-                  value={newItemData.business_location_id || ''}
-                  onChange={(e) =>
-                    setNewItemData({
-                      ...newItemData,
-                      business_location_id: e.target.value,
-                    })
-                  }
-                  label={t('business.inventory.location')}
-                >
-                  {businessLocations.map((location) => (
-                    <MenuItem key={location.id} value={location.id}>
-                      {location.name} - {formatAddress(location.address)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.item')}</InputLabel>
-                <Select
-                  fullWidth
-                  value={newItemData.item_id || ''}
-                  onChange={(e) => {
-                    const selected = availableItems.find(
-                      (item) => item.id === e.target.value
-                    );
-                    setNewItemData({ ...newItemData, item_id: e.target.value });
-                    setSelectedItem(selected || null);
-                  }}
-                  label={t('business.inventory.item')}
-                >
-                  {availableItems.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name} - {formatCurrency(item.price, item.currency)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            {selectedItem && (
-              <Grid item xs={12}>
-                <Paper
-                  variant="outlined"
-                  sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}
-                >
-                  <Typography variant="subtitle1" gutterBottom>
-                    {selectedItem.name}{' '}
-                    {selectedItem.sku ? `(${selectedItem.sku})` : ''}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    {selectedItem.description}
-                  </Typography>
-                  <Grid container spacing={1}>
-                    <Grid item xs={6} sm={4}>
-                      <b>Brand:</b> {selectedItem.brand || '-'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Model:</b> {selectedItem.model || '-'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Color:</b> {selectedItem.color || '-'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Material:</b> {selectedItem.material || '-'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Size:</b> {selectedItem.size} {selectedItem.size_unit}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Weight:</b> {selectedItem.weight}{' '}
-                      {selectedItem.weight_unit}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Min Order:</b> {selectedItem.min_order_quantity}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Max Order:</b> {selectedItem.max_order_quantity}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Fragile:</b> {selectedItem.is_fragile ? 'Yes' : 'No'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Perishable:</b>{' '}
-                      {selectedItem.is_perishable ? 'Yes' : 'No'}
-                    </Grid>
-                    <Grid item xs={6} sm={4}>
-                      <b>Special Handling:</b>{' '}
-                      {selectedItem.requires_special_handling ? 'Yes' : 'No'}
-                    </Grid>
-                  </Grid>
-                </Paper>
-              </Grid>
-            )}
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.quantity')}
-                value={newItemData.quantity || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.availableQuantity')}
-                value={newItemData.available_quantity || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    available_quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.reservedQuantity')}
-                value={newItemData.reserved_quantity || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    reserved_quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.sellingPrice')}
-                value={newItemData.selling_price || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    selling_price: parseFloat(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.unitCost')}
-                value={newItemData.unit_cost || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    unit_cost: parseFloat(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.reorderPoint')}
-                value={newItemData.reorder_point || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    reorder_point: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.reorderQuantity')}
-                value={newItemData.reorder_quantity || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    reorder_quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Box display="flex" alignItems="center">
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={newItemData.is_active ?? true}
-                      onChange={(e) =>
-                        setNewItemData({
-                          ...newItemData,
-                          is_active: e.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label={t('business.inventory.active')}
-                />
-              </Box>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowAddItemDialog(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={handleAddItem} variant="contained">
-            {t('business.inventory.add')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        businessId={profile?.business?.id || ''}
+        businessLocations={businessLocations}
+      />
 
       {/* Location Modal */}
       <LocationModal

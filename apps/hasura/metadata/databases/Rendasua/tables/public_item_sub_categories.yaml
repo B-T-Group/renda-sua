@@ -21,6 +21,7 @@ select_permissions:
       columns:
         - id
         - name
+        - description
         - item_category_id
         - created_at
         - updated_at
@@ -30,6 +31,7 @@ select_permissions:
       columns:
         - id
         - name
+        - description
         - item_category_id
         - created_at
         - updated_at
@@ -39,6 +41,7 @@ select_permissions:
       columns:
         - id
         - name
+        - description
         - item_category_id
         - created_at
         - updated_at
@@ -48,6 +51,7 @@ select_permissions:
       columns:
         - id
         - name
+        - description
         - item_category_id
         - created_at
         - updated_at
