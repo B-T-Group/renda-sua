@@ -8,6 +8,8 @@ export class HasuraSystemService {
   private readonly adminSecret: string;
 
   constructor(private readonly configService: ConfigService) {
+    console.log('configService', this.configService.get('hasura'));
+
     this.hasuraUrl =
       this.configService.get<string>('hasura.endpoint') ||
       'http://localhost:8080/v1/graphql';
