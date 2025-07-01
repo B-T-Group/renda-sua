@@ -1,18 +1,19 @@
-import { StrictMode } from 'react';
-import * as ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
 import { Auth0Provider } from '@auth0/auth0-react';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
+import CssBaseline from '@mui/material/CssBaseline';
+import { ThemeProvider } from '@mui/material/styles';
+import { StrictMode } from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 
 import App from './app/app';
-import { theme } from './theme/theme';
 import { environment } from './config/environment';
+import { UserProfileProvider } from './contexts/UserProfileContext';
 import './i18n'; // Initialize i18n
+import { theme } from './theme/theme';
 
 // Create auth0 config from environment
 const auth0Config = {
@@ -44,7 +45,9 @@ root.render(
         <BrowserRouter
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          <App />
+          <UserProfileProvider>
+            <App />
+          </UserProfileProvider>
         </BrowserRouter>
       </ThemeProvider>
     </Auth0Provider>

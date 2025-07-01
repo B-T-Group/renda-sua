@@ -99,7 +99,10 @@ export interface InventoryItem {
     size_unit: string;
     item_sub_category_id: number;
     sku: string;
-    brand: string;
+    brand: {
+      id: string;
+      name: string;
+    };
     model: string;
     color: string;
     material: string;

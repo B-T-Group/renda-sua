@@ -1,30 +1,32 @@
-import React, { useState } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Stepper,
-  Step,
-  StepLabel,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  ArrowForward,
+  Business,
+  LocalShipping,
+  Person,
+  Save,
+} from '@mui/icons-material';
+import {
   Alert,
-  CircularProgress,
+  Box,
+  Button,
   Card,
   CardContent,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Step,
+  StepLabel,
+  Stepper,
+  TextField,
+  Typography,
 } from '@mui/material';
-import {
-  Save,
-  ArrowForward,
-  Person,
-  LocalShipping,
-  Business,
-} from '@mui/icons-material';
-import { useAuth0 } from '@auth0/auth0-react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
@@ -68,7 +70,9 @@ const personaOptions = [
 
 const CompleteProfile: React.FC = () => {
   const { user } = useAuth0();
+  const navigate = useNavigate();
   const apiClient = useApiClient();
+  const { refetch } = useUserProfileContext();
   const {
     userTypes,
     vehicleTypes,
@@ -147,9 +151,12 @@ const CompleteProfile: React.FC = () => {
       await apiClient.post('/users', profileData);
       setSuccess(true);
 
+      // Refresh the user profile context
+      await refetch();
+
       // Redirect to dashboard after a short delay
       setTimeout(() => {
-        window.location.href = '/app';
+        navigate('/app');
       }, 2000);
     } catch (err: any) {
       setError(

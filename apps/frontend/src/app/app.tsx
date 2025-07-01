@@ -8,6 +8,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import Header from '../components/layout/Header';
 import AgentDashboard from '../components/pages/AgentDashboard';
+import AppRedirect from '../components/pages/AppRedirect';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
 import { ClientOrders } from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
@@ -16,22 +17,27 @@ import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';
-import ProfileRouter from '../components/routing/ProfileRouter';
+import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
   const { isLoading } = useAuth0();
+  const { isCheckingProfile } = useAuthFlow();
 
   // Memoize the loading state to prevent unnecessary re-renders
   const shouldShowLoading = useMemo(() => {
-    return isLoading;
-  }, [isLoading]);
+    return isLoading || isCheckingProfile;
+  }, [isLoading, isCheckingProfile]);
 
-  // Show loading page while Auth0 is loading
+  // Show loading page while Auth0 is loading or checking profile
   if (shouldShowLoading) {
     return (
       <LoadingPage
-        message="Loading Rendasua"
-        subtitle="Please wait while we authenticate your session"
+        message={isCheckingProfile ? 'Checking Profile' : 'Loading Rendasua'}
+        subtitle={
+          isCheckingProfile
+            ? 'Verifying your account information'
+            : 'Please wait while we authenticate your session'
+        }
         showProgress={true}
       />
     );
@@ -44,12 +50,12 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
 
-          {/* Profile router - handles authentication and profile checking */}
+          {/* App route - redirects to appropriate dashboard based on auth flow */}
           <Route
             path="/app"
             element={
               <ProtectedRoute>
-                <ProfileRouter />
+                <AppRedirect />
               </ProtectedRoute>
             }
           />
@@ -121,15 +127,8 @@ function App() {
             }
           />
 
-          {/* Catch-all route - redirect to profile router */}
-          <Route
-            path="*"
-            element={
-              <ProtectedRoute>
-                <ProfileRouter />
-              </ProtectedRoute>
-            }
-          />
+          {/* Catch-all route - redirect to landing page */}
+          <Route path="*" element={<LandingPage />} />
         </Routes>
       </Container>
     </Box>

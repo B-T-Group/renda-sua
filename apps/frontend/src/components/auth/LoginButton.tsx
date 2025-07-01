@@ -1,14 +1,14 @@
-import React from 'react';
-import { Button } from '@mui/material';
-import { Login } from '@mui/icons-material';
 import { useAuth0 } from '@auth0/auth0-react';
+import { Login } from '@mui/icons-material';
+import { Button } from '@mui/material';
+import React from 'react';
 
 const LoginButton: React.FC = () => {
   const { loginWithRedirect, isAuthenticated } = useAuth0();
 
   const handleLogin = () => {
     loginWithRedirect({
-      appState: { returnTo: window.location.pathname },
+      appState: { returnTo: '/app' }, // Redirect to /app after login for profile checking
     });
   };
 
@@ -34,4 +34,4 @@ const LoginButton: React.FC = () => {
   );
 };
 
-export default LoginButton; 
+export default LoginButton;

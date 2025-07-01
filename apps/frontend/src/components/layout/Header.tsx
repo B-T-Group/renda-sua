@@ -1,25 +1,25 @@
-import React from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
+import { Menu as MenuIcon } from '@mui/icons-material';
 import {
   AppBar,
-  Toolbar,
   Box,
   Button,
   Container,
-  useTheme,
+  Toolbar,
   useMediaQuery,
+  useTheme,
 } from '@mui/material';
-import { Menu as MenuIcon } from '@mui/icons-material';
+import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import Logo from '../common/Logo';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
-import { useAuth0 } from '@auth0/auth0-react';
-import { useUserProfile } from '../../hooks';
+import Logo from '../common/Logo';
 
 const Header: React.FC = () => {
   const { isAuthenticated } = useAuth0();
-  const { userType } = useUserProfile();
+  const { userType } = useUserProfileContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 

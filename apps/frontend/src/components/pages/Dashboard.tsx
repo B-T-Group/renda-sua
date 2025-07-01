@@ -33,12 +33,12 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
+import NoImage from '../../assets/no-image.svg';
 import {
   useAccountInfo,
   useBackendOrders,
   useInventoryItems,
 } from '../../hooks';
-import NoImage from '../../assets/no-image.svg';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
@@ -412,7 +412,7 @@ const Dashboard: React.FC = () => {
                           fontWeight="bold"
                           sx={{ mb: 0.5 }}
                         >
-                          {item.item.brand}
+                          {item.item.brand.name}
                         </Typography>
                       )}
                       {item.item.model && (
@@ -497,8 +497,8 @@ const Dashboard: React.FC = () => {
                         sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                       >
                         <LocationOn fontSize="small" />
-                        {item.business_location.address.city},{' '}
-                        {item.business_location.address.state}
+                        {item.business_location.address?.city},{' '}
+                        {item.business_location.address?.state}
                       </Typography>
                     </Box>
                   </CardContent>
@@ -566,7 +566,7 @@ const Dashboard: React.FC = () => {
                     fontWeight="bold"
                     sx={{ mb: 0.5 }}
                   >
-                    {selectedItem.item.brand}
+                    {selectedItem.item.brand.name}
                   </Typography>
                 )}
                 {selectedItem.item.model && (

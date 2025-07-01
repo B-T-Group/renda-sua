@@ -1,5 +1,6 @@
 // Auth and user hooks
 export { useAccountInfo } from './useAccountInfo';
+export { useAuthFlow } from './useAuthFlow';
 export { useLoginFlow } from './useLoginFlow';
 export { useProfile } from './useProfile';
 export { useUserProfile } from './useUserProfile';
