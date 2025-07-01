@@ -36,11 +36,18 @@ insert_permissions:
             identifier:
               _eq: X-Hasura-User-Id
       columns:
+        - id
         - business_id
         - address_id
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
+        - created_at
+        - updated_at
 select_permissions:
   - role: client
     permission:
@@ -114,9 +121,14 @@ update_permissions:
   - role: business
     permission:
       columns:
+        - id
         - name
         - location_type
         - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
         - updated_at
       filter:
         business:
@@ -124,3 +136,11 @@ update_permissions:
             identifier:
               _eq: X-Hasura-User-Id
       check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

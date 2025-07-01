@@ -152,7 +152,7 @@ const CREATE_ADDRESS = `
   }
 `;
 
-export const useBusinessLocations = () => {
+export const useBusinessLocations = (businessId?: string, userId?: string) => {
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,10 +199,25 @@ export const useBusinessLocations = () => {
 
         // If address data is provided, create the address first
         if (data.address && !addressId) {
+          if (!userId) {
+            console.error('User ID is null when trying to create address:', {
+              userId,
+              businessId,
+              data,
+            });
+            throw new Error('User ID is required to create an address');
+          }
+
+          console.log('Creating address with:', {
+            entity_type: 'user',
+            entity_id: userId,
+            address: data.address,
+          });
+
           const addressResult = await executeCreateAddress({
             address: {
-              entity_type: 'business',
-              entity_id: 'your-business-id', // This should come from user context
+              entity_type: 'user',
+              entity_id: userId,
               ...data.address,
             },
           });
@@ -215,7 +230,7 @@ export const useBusinessLocations = () => {
         const locationData = {
           ...data,
           address_id: addressId,
-          business_id: 'your-business-id', // This should come from user context
+          business_id: businessId,
         };
 
         const result = await executeAddMutation({ data: locationData });
@@ -235,7 +250,7 @@ export const useBusinessLocations = () => {
         setLoading(false);
       }
     },
-    [executeAddMutation, executeCreateAddress]
+    [executeAddMutation, executeCreateAddress, businessId, userId]
   );
 
   const updateLocation = useCallback(

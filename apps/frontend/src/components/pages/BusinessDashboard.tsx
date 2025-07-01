@@ -123,8 +123,6 @@ const BusinessDashboard: React.FC = () => {
     fetchAvailableItems,
     fetchBusinessLocations,
     addInventoryItem,
-    updateInventoryItem,
-    deleteInventoryItem,
     restockItem,
   } = useBusinessInventory();
 
@@ -136,20 +134,29 @@ const BusinessDashboard: React.FC = () => {
     addLocation,
     updateLocation,
     deleteLocation,
-  } = useBusinessLocations();
+  } = useBusinessLocations(
+    profile?.business?.id || undefined,
+    profile?.id || undefined
+  );
 
   useEffect(() => {
     fetchOrders();
     fetchInventory();
     fetchAvailableItems();
     fetchBusinessLocations();
-    fetchLocations();
+
+    // Only fetch locations if we have the required profile data
+    if (profile?.id && profile?.business?.id) {
+      fetchLocations();
+    }
   }, [
     fetchOrders,
     fetchInventory,
     fetchAvailableItems,
     fetchBusinessLocations,
     fetchLocations,
+    profile?.id,
+    profile?.business?.id,
   ]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -203,6 +210,13 @@ const BusinessDashboard: React.FC = () => {
 
   const handleSaveLocation = async (data: AddBusinessLocationData | any) => {
     try {
+      if (!profile?.id || !profile?.business?.id) {
+        enqueueSnackbar('User profile not loaded. Please try again.', {
+          variant: 'error',
+        });
+        return;
+      }
+
       if (editingLocation) {
         await updateLocation(editingLocation.id, data);
         enqueueSnackbar(t('business.locations.locationUpdated'), {

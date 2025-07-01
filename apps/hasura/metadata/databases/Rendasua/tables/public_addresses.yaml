@@ -29,16 +29,16 @@ object_relationships:
           name: businesses
           schema: public
         insertion_order: null
-array_relationships:
-  - name: business_locations
+  - name: business_location
     using:
       manual_configuration:
         column_mapping:
           id: address_id
-        insertion_order: null
         remote_table:
           name: business_locations
           schema: public
+        insertion_order: null
+array_relationships:
   - name: orders
     using:
       manual_configuration:
@@ -95,13 +95,22 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        _and:
-          - entity_type:
-              _eq: user
-          - business:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - _and:
+              - entity_type:
+                  _eq: user
+              - business:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
+          - _and:
+              - entity_type:
+                  _eq: business
+              - business_location:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -140,6 +149,7 @@ insert_permissions:
                 identifier:
                   _eq: X-Hasura-User-Id
       columns:
+        - id
         - entity_type
         - entity_id
         - address_line_1
@@ -152,6 +162,8 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - created_at
+        - updated_at
   - role: client
     permission:
       check:
@@ -163,6 +175,7 @@ insert_permissions:
                 identifier:
                   _eq: X-Hasura-User-Id
       columns:
+        - id
         - entity_type
         - entity_id
         - address_line_1
@@ -175,17 +188,31 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - created_at
+        - updated_at
   - role: business
     permission:
       check:
-        _and:
-          - entity_type:
-              _eq: user
-          - business:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - _and:
+              - entity_type:
+                  _in:
+                    - user
+                    - business
+              - business:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
+          - _and:
+              - entity_type:
+                  _eq: business
+              - business_location:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
       columns:
+        - id
         - entity_type
         - entity_id
         - address_line_1
@@ -198,6 +225,8 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - created_at
+        - updated_at
 update_permissions:
   - role: agent
     permission:
@@ -248,13 +277,22 @@ update_permissions:
   - role: business
     permission:
       filter:
-        _and:
-          - entity_type:
-              _eq: business
-          - business:
-              user:
-                identifier:
-                  _eq: X-Hasura-User-Id
+        _or:
+          - _and:
+              - entity_type:
+                  _eq: business
+              - business:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
+          - _and:
+              - entity_type:
+                  _eq: business
+              - business_location:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
       columns:
         - address_line_1
         - address_line_2
@@ -268,3 +306,36 @@ update_permissions:
         - address_type
         - updated_at
       check: null
+delete_permissions:
+  - role: agent
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _eq: user
+          - agent:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _eq: user
+          - client:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      filter:
+        _and:
+          - entity_type:
+              _in:
+                - user
+                - business
+          - business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
