@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useAws } from './useAws';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface ItemImage {
@@ -92,6 +93,7 @@ const DELETE_ITEM_IMAGE = `
 export const useItemImages = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { generateImageUploadUrl } = useAws();
 
   const { execute: executeGetImages } = useGraphQLRequest(GET_ITEM_IMAGES);
   const { execute: executeCreateImage } = useGraphQLRequest(CREATE_ITEM_IMAGE);
@@ -115,20 +117,20 @@ export const useItemImages = () => {
   const getPresignedUrl = useCallback(
     async (request: PresignedUrlRequest): Promise<PresignedUrlResponse> => {
       try {
-        const response = await fetch('/api/aws/presigned-url/image', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(request),
+        const response = await generateImageUploadUrl({
+          bucketName: request.bucketName,
+          originalFileName: request.originalFileName,
+          contentType: request.contentType,
+          expiresIn: request.expiresIn,
+          prefix: request.prefix,
+          metadata: request.metadata,
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response) {
+          throw new Error('Failed to generate presigned URL');
         }
 
-        const result = await response.json();
-        return result;
+        return response;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to get presigned URL'
@@ -136,7 +138,7 @@ export const useItemImages = () => {
         throw err;
       }
     },
-    []
+    [generateImageUploadUrl]
   );
 
   const uploadImageToS3 = useCallback(
