@@ -43,7 +43,9 @@ export default function ItemViewPage() {
     useState(false);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
 
-  const { fetchItems, updateItem, items } = useItems(profile?.business?.id);
+  const { fetchItems, fetchSingleItem, updateItem, items } = useItems(
+    profile?.business?.id
+  );
   const { businessLocations, fetchBusinessLocations } = useBusinessInventory();
 
   useEffect(() => {
@@ -65,13 +67,7 @@ export default function ItemViewPage() {
     setError(null);
 
     try {
-      // Fetch items if not already loaded
-      if (items.length === 0) {
-        await fetchItems();
-      }
-
-      // Find the specific item from the loaded items
-      const foundItem = items.find((i: any) => i.id === itemId);
+      const foundItem = await fetchSingleItem(itemId);
 
       if (foundItem) {
         setItem(foundItem);
@@ -100,7 +96,7 @@ export default function ItemViewPage() {
   };
 
   const handleBack = () => {
-    navigate('/business');
+    navigate('/business-dashboard');
   };
 
   const formatCurrency = (amount: number, currency: string) => {

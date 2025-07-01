@@ -161,6 +161,52 @@ const GET_ITEM_SUB_CATEGORIES = `
   }
 `;
 
+const GET_SINGLE_ITEM = `
+  query GetSingleItem($id: uuid!) {
+    items_by_pk(id: $id) {
+      id
+      name
+      description
+      item_sub_category_id
+      size
+      size_unit
+      weight
+      weight_unit
+      price
+      currency
+      sku
+      brand_id
+      model
+      color
+      material
+      is_fragile
+      is_perishable
+      requires_special_handling
+      max_delivery_distance
+      estimated_delivery_time
+      min_order_quantity
+      max_order_quantity
+      is_active
+      business_id
+      created_at
+      updated_at
+      brand {
+        id
+        name
+        description
+      }
+      item_sub_category {
+        id
+        name
+        item_category {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
 export const useItems = (businessId?: string) => {
   const [items, setItems] = useState<Item[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -169,6 +215,8 @@ export const useItems = (businessId?: string) => {
   const [error, setError] = useState<string | null>(null);
 
   const { execute: executeItemsQuery } = useGraphQLRequest(GET_ITEMS);
+  const { execute: executeSingleItemQuery } =
+    useGraphQLRequest(GET_SINGLE_ITEM);
   const { execute: executeBrandsQuery } = useGraphQLRequest(GET_BRANDS);
   const { execute: executeSubCategoriesQuery } = useGraphQLRequest(
     GET_ITEM_SUB_CATEGORIES
@@ -304,6 +352,24 @@ export const useItems = (businessId?: string) => {
     }
   }, [executeItemsQuery, businessId]);
 
+  const fetchSingleItem = useCallback(
+    async (itemId: string) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await executeSingleItemQuery({ id: itemId });
+        return result.items_by_pk;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch item');
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [executeSingleItemQuery]
+  );
+
   const fetchBrands = useCallback(async () => {
     try {
       const result = await executeBrandsQuery();
@@ -389,6 +455,7 @@ export const useItems = (businessId?: string) => {
     loading,
     error,
     fetchItems,
+    fetchSingleItem,
     fetchBrands,
     fetchItemSubCategories,
     createItem,

@@ -404,6 +404,7 @@
     "delete": "Delete",
     "rowsPerPage": "Rows per page:",
     "of": "of",
-    "moreThan": "more than"
+    "moreThan": "more than",
+    "back": "Back"
   }
 }

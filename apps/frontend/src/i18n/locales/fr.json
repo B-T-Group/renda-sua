@@ -37,7 +37,8 @@
     "actions": "Actions",
     "rowsPerPage": "Lignes par page :",
     "of": "sur",
-    "moreThan": "plus de"
+    "moreThan": "plus de",
+    "back": "Retour"
   },
   "auth": {
     "login": "Connexion",
