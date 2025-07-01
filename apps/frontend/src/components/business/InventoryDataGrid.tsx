@@ -324,9 +324,9 @@ export default function InventoryDataGrid({
         height: 600,
         '& .MuiDataGrid-cell': {
           borderBottom: '1px solid #e0e0e0',
-          minHeight: '80px !important',
+          minHeight: '120px !important',
           maxHeight: 'none !important',
-          padding: '8px 16px',
+          padding: '12px 16px',
         },
         '& .MuiDataGrid-columnHeaders': {
           backgroundColor: '#f5f5f5',
@@ -336,7 +336,7 @@ export default function InventoryDataGrid({
           backgroundColor: '#f8f8f8',
         },
         '& .MuiDataGrid-row': {
-          minHeight: '80px !important',
+          minHeight: '120px !important',
           maxHeight: 'none !important',
         },
       }}
