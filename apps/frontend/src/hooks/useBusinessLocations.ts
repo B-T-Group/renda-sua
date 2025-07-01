@@ -138,16 +138,38 @@ const DELETE_BUSINESS_LOCATION = `
   }
 `;
 
-const CREATE_ADDRESS = `
-  mutation CreateAddress($address: addresses_insert_input!) {
+const ADD_BUSINESS_LOCATION_NESTED = `
+  mutation AddBusinessLocationNested($address: addresses_insert_input!) {
     insert_addresses_one(object: $address) {
-      id
       address_line_1
       address_line_2
+      address_type
       city
-      state
-      postal_code
       country
+      created_at
+      entity_id
+      entity_type
+      id
+      is_primary
+      latitude
+      longitude
+      postal_code
+      state
+      updated_at
+      business_location {
+        address_id
+        business_id
+        created_at
+        email
+        id
+        is_active
+        is_primary
+        location_type
+        name
+        operating_hours
+        phone
+        updated_at
+      }
     }
   }
 `;
@@ -169,7 +191,10 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
   );
-  const { execute: executeCreateAddress } = useGraphQLRequest(CREATE_ADDRESS);
+
+  const { execute: executeAddNestedMutation } = useGraphQLRequest(
+    ADD_BUSINESS_LOCATION_NESTED
+  );
 
   const fetchLocations = useCallback(async () => {
     setLoading(true);
@@ -195,51 +220,39 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
       setLoading(true);
       setError(null);
       try {
-        let addressId = data.address_id;
-
-        // If address data is provided, create the address first
-        if (data.address && !addressId) {
-          if (!userId) {
-            console.error('User ID is null when trying to create address:', {
-              userId,
-              businessId,
-              data,
-            });
-            throw new Error('User ID is required to create an address');
-          }
-
-          console.log('Creating address with:', {
-            entity_type: 'user',
-            entity_id: userId,
-            address: data.address,
-          });
-
-          const addressResult = await executeCreateAddress({
-            address: {
-              entity_type: 'user',
-              entity_id: userId,
-              ...data.address,
-            },
-          });
-
-          if (addressResult.data?.insert_addresses_one) {
-            addressId = addressResult.data.insert_addresses_one.id;
-          }
+        if (!businessId) {
+          throw new Error(
+            'Business ID is required to create a business location'
+          );
         }
-
-        const locationData = {
-          ...data,
-          address_id: addressId,
-          business_id: businessId,
+        if (!data.address) {
+          throw new Error('Address data is required');
+        }
+        // Compose the nested insert input
+        const addressInput = {
+          ...data.address,
+          entity_type: 'business',
+          entity_id: businessId,
+          business_location: {
+            data: {
+              name: data.name,
+              phone: data.phone,
+              email: data.email,
+              operating_hours: data.operating_hours,
+              location_type: data.location_type,
+              is_primary: data.is_primary,
+              business_id: businessId,
+              is_active: true,
+            },
+          },
         };
-
-        const result = await executeAddMutation({ data: locationData });
-        if (result.data?.insert_business_locations_one) {
-          setLocations((prev) => [
-            ...prev,
-            result.data.insert_business_locations_one,
-          ]);
-          return result.data.insert_business_locations_one;
+        const result = await executeAddNestedMutation({
+          address: addressInput,
+        });
+        if (result.data?.insert_addresses_one) {
+          // Optionally, you can refetch or update state here
+          await fetchLocations();
+          return result.data.insert_addresses_one;
         }
       } catch (err) {
         setError(
@@ -250,7 +263,7 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
         setLoading(false);
       }
     },
-    [executeAddMutation, executeCreateAddress, businessId, userId]
+    [executeAddNestedMutation, businessId, fetchLocations]
   );
 
   const updateLocation = useCallback(
