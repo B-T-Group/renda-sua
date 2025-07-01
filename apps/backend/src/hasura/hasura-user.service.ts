@@ -96,7 +96,7 @@ export class HasuraUserService {
   public identifier!: string;
   private readonly hasuraUrl: string;
   private _authToken: string | null = null;
-
+  private readonly client: GraphQLClient;
   constructor(
     @Inject(REQUEST) private readonly request: any,
     private readonly hasuraSystemService: HasuraSystemService,
@@ -107,6 +107,13 @@ export class HasuraUserService {
       hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();
     this.identifier = this.extractSubClaim();
+
+    this.client = new GraphQLClient(this.hasuraUrl, {
+      headers: {
+        Authorization: `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
   }
 
   /**
@@ -136,16 +143,14 @@ export class HasuraUserService {
    * Execute a GraphQL query with user privileges
    */
   async executeQuery(query: string, variables?: any): Promise<any> {
-    const client = this.createGraphQLClient();
-    return client.request(query, variables);
+    return this.client.request(query, variables);
   }
 
   /**
    * Execute a GraphQL mutation with user privileges
    */
   async executeMutation(mutation: string, variables?: any): Promise<any> {
-    const client = this.createGraphQLClient();
-    return client.request(mutation, variables);
+    return this.client.request(mutation, variables);
   }
 
   /**
