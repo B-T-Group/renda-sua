@@ -57,6 +57,7 @@ const GET_BUSINESS_LOCATIONS = `
     business_locations {
       id
       name
+      business_id
       address {
         id
         address_line_1
@@ -74,6 +75,11 @@ const GET_BUSINESS_LOCATIONS = `
       location_type
       created_at
       updated_at
+    }
+    businesses {
+      id
+      user_id
+      name
     }
   }
 `;
@@ -198,11 +204,18 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching business locations...');
       const result = await executeQuery();
-      if (result.data?.business_locations) {
-        setLocations(result.data.business_locations);
+      console.log('Business locations result:', result);
+      if (result?.business_locations) {
+        console.log('Found business locations:', result.business_locations);
+        setLocations(result.business_locations);
+      } else {
+        console.log('No business locations found in result');
+        setLocations([]);
       }
     } catch (err) {
+      console.error('Error fetching business locations:', err);
       setError(
         err instanceof Error
           ? err.message
