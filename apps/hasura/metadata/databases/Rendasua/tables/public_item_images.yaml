@@ -65,3 +65,31 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
