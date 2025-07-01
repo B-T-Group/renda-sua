@@ -54,7 +54,9 @@ import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
 import EditItemDialog from '../business/EditItemDialog';
+import InventoryDataGrid from '../business/InventoryDataGrid';
 import LocationModal from '../business/LocationModal';
+import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -88,6 +90,9 @@ const BusinessDashboard: React.FC = () => {
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [showEditItemDialog, setShowEditItemDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
+    useState(false);
+  const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
 
   // Location management states
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -641,105 +646,15 @@ const BusinessDashboard: React.FC = () => {
                 {inventoryError}
               </Alert>
             ) : (
-              <Grid container spacing={2}>
-                {inventory.map((item) => (
-                  <Grid item xs={12} sm={6} md={4} key={item.id}>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          {item.item.name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          gutterBottom
-                        >
-                          {item.item.description}
-                        </Typography>
-                        <Box sx={{ mt: 2 }}>
-                          <Grid container spacing={1}>
-                            <Grid item xs={6}>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {t('business.inventory.quantity')}
-                              </Typography>
-                              <Typography variant="body2">
-                                {item.quantity}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {t('business.inventory.available')}
-                              </Typography>
-                              <Typography variant="body2">
-                                {item.available_quantity}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {t('business.inventory.sellingPrice')}
-                              </Typography>
-                              <Typography variant="body2" fontWeight="bold">
-                                {formatCurrency(
-                                  item.selling_price,
-                                  item.item.currency
-                                )}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {t('business.inventory.location')}
-                              </Typography>
-                              <Typography variant="body2">
-                                {item.business_location.name}
-                              </Typography>
-                            </Grid>
-                          </Grid>
-                        </Box>
-                        <Box sx={{ mt: 2 }}>
-                          <Chip
-                            label={
-                              item.is_active
-                                ? t('business.inventory.active')
-                                : t('business.inventory.inactive')
-                            }
-                            color={item.is_active ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </Box>
-                      </CardContent>
-                      <CardActions>
-                        <Button
-                          size="small"
-                          onClick={() => restockItem(item.id, 10)}
-                        >
-                          {t('business.inventory.restock')}
-                        </Button>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditItem(item)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton size="small" color="error">
-                          <DeleteIcon />
-                        </IconButton>
-                      </CardActions>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
+              <InventoryDataGrid
+                items={availableItems}
+                loading={inventoryLoading}
+                onUpdateInventory={(item) => {
+                  setUpdatingInventoryItem(item);
+                  setShowUpdateInventoryDialog(true);
+                }}
+                onEditItem={handleEditItem}
+              />
             )}
           </Box>
         </TabPanel>
@@ -911,6 +826,14 @@ const BusinessDashboard: React.FC = () => {
         location={editingLocation}
         loading={locationsLoading}
         error={locationsError}
+      />
+
+      {/* Update Inventory Dialog */}
+      <UpdateInventoryDialog
+        open={showUpdateInventoryDialog}
+        onClose={() => setShowUpdateInventoryDialog(false)}
+        item={updatingInventoryItem}
+        businessLocations={businessLocations}
       />
 
       {/* Delete Confirmation Dialog */}

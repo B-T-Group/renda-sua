@@ -7,11 +7,12 @@ import { Route, Routes } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import Header from '../components/layout/Header';
-import CompleteProfile from '../components/pages/CompleteProfile';
-import Dashboard from '../components/pages/Dashboard';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
 import { ClientOrders } from '../components/pages/ClientOrders';
+import CompleteProfile from '../components/pages/CompleteProfile';
+import Dashboard from '../components/pages/Dashboard';
+import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';
@@ -106,6 +107,16 @@ function App() {
             element={
               <ProtectedRoute>
                 <ClientOrders />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Item View route */}
+          <Route
+            path="/business/items/:itemId"
+            element={
+              <ProtectedRoute>
+                <ItemViewPage />
               </ProtectedRoute>
             }
           />
