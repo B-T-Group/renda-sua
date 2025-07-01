@@ -257,7 +257,18 @@
       "imageDeletedSuccessfully": "Image deleted successfully",
       "failedToDeleteImage": "Failed to delete image",
       "userIdRequired": "User ID is required to upload images",
-      "addImages": "Add Images"
+      "addImages": "Add Images",
+      "editItem": "Edit Item: {{itemName}}",
+      "itemUpdatedSuccessfully": "Item updated successfully",
+      "failedToUpdateItem": "Failed to update item",
+      "editItemButton": "Edit Item",
+      "manageImages": "Manage Images",
+      "basicInformation": "Basic Information",
+      "pricing": "Pricing",
+      "physicalProperties": "Physical Properties",
+      "specialProperties": "Special Properties",
+      "orderQuantities": "Order Quantities",
+      "deliveryProperties": "Delivery Properties"
     },
     "locations": {
       "title": "Business Locations",

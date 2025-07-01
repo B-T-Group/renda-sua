@@ -53,6 +53,7 @@ import {
 import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
+import EditItemDialog from '../business/EditItemDialog';
 import LocationModal from '../business/LocationModal';
 
 interface TabPanelProps {
@@ -85,6 +86,8 @@ const BusinessDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [orderFilters, setOrderFilters] = useState<OrderFilters>({});
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
+  const [showEditItemDialog, setShowEditItemDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   // Location management states
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -187,6 +190,16 @@ const BusinessDashboard: React.FC = () => {
     } catch (error) {
       enqueueSnackbar('Failed to delete location', { variant: 'error' });
     }
+  };
+
+  const handleEditItem = (item: any) => {
+    setEditingItem(item.item);
+    setShowEditItemDialog(true);
+  };
+
+  const handleCloseEditItemDialog = () => {
+    setShowEditItemDialog(false);
+    setEditingItem(null);
   };
 
   const handleSaveLocation = async (data: AddBusinessLocationData | any) => {
@@ -713,7 +726,10 @@ const BusinessDashboard: React.FC = () => {
                         >
                           {t('business.inventory.restock')}
                         </Button>
-                        <IconButton size="small">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditItem(item)}
+                        >
                           <EditIcon />
                         </IconButton>
                         <IconButton size="small" color="error">
@@ -878,6 +894,13 @@ const BusinessDashboard: React.FC = () => {
         onClose={() => setShowAddItemDialog(false)}
         businessId={profile?.business?.id || ''}
         businessLocations={businessLocations}
+      />
+
+      {/* Edit Item Dialog */}
+      <EditItemDialog
+        open={showEditItemDialog}
+        onClose={handleCloseEditItemDialog}
+        item={editingItem}
       />
 
       {/* Location Modal */}

@@ -257,7 +257,18 @@
       "imageDeletedSuccessfully": "Image supprimée avec succès",
       "failedToDeleteImage": "Échec de la suppression de l'image",
       "userIdRequired": "L'ID utilisateur est requis pour télécharger des images",
-      "addImages": "Ajouter des images"
+      "addImages": "Ajouter des images",
+      "editItem": "Modifier l'article : {{itemName}}",
+      "itemUpdatedSuccessfully": "Article mis à jour avec succès",
+      "failedToUpdateItem": "Échec de la mise à jour de l'article",
+      "editItemButton": "Modifier l'article",
+      "manageImages": "Gérer les images",
+      "basicInformation": "Informations de base",
+      "pricing": "Prix",
+      "physicalProperties": "Propriétés physiques",
+      "specialProperties": "Propriétés spéciales",
+      "orderQuantities": "Quantités de commande",
+      "deliveryProperties": "Propriétés de livraison"
     },
     "locations": {
       "title": "Emplacements d'Entreprise",

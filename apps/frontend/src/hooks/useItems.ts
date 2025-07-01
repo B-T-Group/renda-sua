@@ -237,6 +237,57 @@ export const useItems = (businessId?: string) => {
   const { execute: executeCreateBrand } =
     useGraphQLRequest(createBrandMutation);
 
+  // Update item mutation
+  const updateItemMutation = `
+    mutation UpdateItem($id: uuid!, $itemData: items_set_input!) {
+      update_items_by_pk(
+        pk_columns: { id: $id }
+        _set: $itemData
+      ) {
+        id
+        name
+        description
+        item_sub_category_id
+        size
+        size_unit
+        weight
+        weight_unit
+        price
+        currency
+        sku
+        brand_id
+        model
+        color
+        material
+        is_fragile
+        is_perishable
+        requires_special_handling
+        max_delivery_distance
+        estimated_delivery_time
+        min_order_quantity
+        max_order_quantity
+        is_active
+        business_id
+        created_at
+        updated_at
+        brand {
+          id
+          name
+          description
+        }
+        item_sub_category {
+          id
+          name
+          item_category {
+            id
+            name
+          }
+        }
+      }
+    }
+  `;
+  const { execute: executeUpdateItem } = useGraphQLRequest(updateItemMutation);
+
   const fetchItems = useCallback(async () => {
     if (!businessId) return;
 
@@ -314,6 +365,23 @@ export const useItems = (businessId?: string) => {
     [executeCreateBrand, fetchBrands]
   );
 
+  const updateItem = useCallback(
+    async (id: string, itemData: Partial<CreateItemData>) => {
+      try {
+        const result = await executeUpdateItem({ id, itemData });
+
+        // Refresh items after updating
+        await fetchItems();
+
+        return result.update_items_by_pk;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update item');
+        throw err;
+      }
+    },
+    [executeUpdateItem, fetchItems]
+  );
+
   return {
     items,
     brands,
@@ -325,5 +393,6 @@ export const useItems = (businessId?: string) => {
     fetchItemSubCategories,
     createItem,
     createBrand,
+    updateItem,
   };
 };
