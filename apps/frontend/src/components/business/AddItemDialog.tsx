@@ -31,6 +31,7 @@ import {
   CreateItemData,
   useItems,
 } from '../../hooks/useItems';
+import ImageUploadDialog from './ImageUploadDialog';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -82,6 +83,8 @@ export default function AddItemDialog({
     description: '',
   });
   const [showNewBrandForm, setShowNewBrandForm] = useState(false);
+  const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
+  const [createdItem, setCreatedItem] = useState<any>(null);
 
   const {
     items,
@@ -189,6 +192,7 @@ export default function AddItemDialog({
 
     try {
       const newItem = await createItem(itemDataWithBusinessId);
+      setCreatedItem(newItem);
       setSelectedItem(newItem);
       setInventoryData({
         item_id: newItem.id,
@@ -807,7 +811,26 @@ export default function AddItemDialog({
             {t('business.inventory.createItem')}
           </Button>
         )}
+        {createdItem && (
+          <Button
+            onClick={() => setShowImageUploadDialog(true)}
+            variant="outlined"
+            color="primary"
+          >
+            {t('business.inventory.addImages')}
+          </Button>
+        )}
       </DialogActions>
+
+      {/* Image Upload Dialog */}
+      {createdItem && (
+        <ImageUploadDialog
+          open={showImageUploadDialog}
+          onClose={() => setShowImageUploadDialog(false)}
+          itemId={createdItem.id}
+          itemName={createdItem.name}
+        />
+      )}
     </Dialog>
   );
 }
