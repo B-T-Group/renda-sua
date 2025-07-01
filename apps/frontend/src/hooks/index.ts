@@ -28,6 +28,9 @@ export { useItems } from './useItems';
 // API client
 export { useApiClient } from './useApiClient';
 
+// AWS hooks
+export { useAws } from './useAws';
+
 // Loading Components
 export { default as LoadingPage } from '../components/common/LoadingPage';
 export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
