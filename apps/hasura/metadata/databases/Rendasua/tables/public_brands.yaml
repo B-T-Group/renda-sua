@@ -38,3 +38,10 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+insert_permissions:
+  - role: business
+    permission:
+      check: {}
+      columns:
+        - name
+        - description
