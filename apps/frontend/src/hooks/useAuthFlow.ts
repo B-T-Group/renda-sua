@@ -1,11 +1,12 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 export const useAuthFlow = () => {
   const { isAuthenticated, isLoading, user } = useAuth0();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     profile,
     loading: profileLoading,
@@ -16,7 +17,9 @@ export const useAuthFlow = () => {
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   useEffect(() => {
+    // Only run auth flow on /app route or when user first authenticates
     if (!isAuthenticated || !user) return;
+    if (location.pathname !== '/app') return;
 
     setIsCheckingProfile(true);
 
@@ -63,6 +66,7 @@ export const useAuthFlow = () => {
     userType,
     isProfileComplete,
     navigate,
+    location.pathname,
   ]);
 
   return {

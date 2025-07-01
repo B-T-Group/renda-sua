@@ -8,6 +8,20 @@ import React, {
 } from 'react';
 import { useApiClient } from '../hooks/useApiClient';
 
+export interface Address {
+  id: string;
+  address_line_1: string;
+  address_line_2?: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_primary: boolean;
+  address_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserProfile {
   id: string;
   identifier: string;
@@ -35,6 +49,7 @@ export interface UserProfile {
     created_at: string;
     updated_at: string;
   };
+  addresses?: Address[];
   created_at: string;
   updated_at: string;
 }

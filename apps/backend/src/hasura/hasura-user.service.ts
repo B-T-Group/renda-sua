@@ -1,9 +1,23 @@
-import { Injectable, Scope, Inject } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { REQUEST } from '@nestjs/core';
+import { GraphQLClient } from 'graphql-request';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from './hasura-system.service';
-import { GraphQLClient } from 'graphql-request';
+
+export interface AddressRecord {
+  id: string;
+  address_line_1: string;
+  address_line_2?: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_primary: boolean;
+  address_type: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface UserRecord {
   id: string;
@@ -15,6 +29,7 @@ export interface UserRecord {
   client?: ClientRecord;
   agent?: AgentRecord;
   business?: BusinessRecord;
+  addresses?: AddressRecord[];
   created_at: string;
   updated_at: string;
 }
@@ -506,6 +521,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -526,6 +542,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -546,6 +563,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -588,6 +606,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -608,6 +627,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -628,6 +648,7 @@ export class HasuraUserService {
                 postal_code
                 country
                 is_primary
+                address_type
                 created_at
                 updated_at
               }
@@ -677,24 +698,34 @@ export class HasuraUserService {
       throw new Error('User not found');
     }
 
-    switch (userResult.users[0].user_type_id) {
+    const user = userResult.users[0];
+
+    // Get user type-specific data
+    switch (user.user_type_id) {
       case 'client':
-        const client = await this.getUserClient(userResult.users[0].id);
-        userResult.users[0].client = client;
+        const client = await this.getUserClient(user.id);
+        user.client = client;
         break;
       case 'agent':
-        const agent = await this.getUserAgent(userResult.users[0].id);
-        userResult.users[0].agent = agent;
+        const agent = await this.getUserAgent(user.id);
+        user.agent = agent;
         break;
       case 'business':
-        const business = await this.getUserBusiness(userResult.users[0].id);
-        userResult.users[0].business = business;
+        const business = await this.getUserBusiness(user.id);
+        user.business = business;
         break;
       default:
         throw new Error('Invalid user type');
     }
 
-    return userResult.users[0];
+    // Get user addresses
+    const addresses = await this.getAllUserAddresses(
+      user.id,
+      user.user_type_id
+    );
+    user.addresses = addresses;
+
+    return user;
   }
 
   private async getUserClient(userId: string): Promise<ClientRecord> {

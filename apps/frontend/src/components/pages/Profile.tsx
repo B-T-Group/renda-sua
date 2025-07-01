@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { City, Country, State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useProfile } from '../../hooks/useProfile';
 
 interface AddressFormData {
@@ -71,10 +72,9 @@ const Profile: React.FC = () => {
   const [states, setStates] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
 
-  // Custom hook
+  // Custom hooks
   const {
     userProfile,
-    addresses,
     accounts,
     loading,
     error,
@@ -85,6 +85,10 @@ const Profile: React.FC = () => {
     handleAccountCreate,
     clearMessages,
   } = useProfile();
+
+  // Get addresses from UserProfileContext
+  const { profile: userProfileWithAddresses } = useUserProfileContext();
+  const addresses = userProfileWithAddresses?.addresses || [];
 
   // Load countries on component mount
   useEffect(() => {
@@ -132,12 +136,36 @@ const Profile: React.FC = () => {
   };
 
   const onAddressSave = async () => {
-    if (!userProfile) return;
+    if (!userProfile || !userProfileWithAddresses) return;
+
+    // Get the correct profile ID based on user type
+    let profileId: string | undefined;
+    switch (userProfileWithAddresses.user_type_id) {
+      case 'client':
+        profileId = userProfileWithAddresses.client?.id;
+        break;
+      case 'agent':
+        profileId = userProfileWithAddresses.agent?.id;
+        break;
+      case 'business':
+        profileId = userProfileWithAddresses.business?.id;
+        break;
+    }
+
+    if (!profileId) {
+      console.error(
+        'Profile ID not found for user type:',
+        userProfileWithAddresses.user_type_id
+      );
+      return;
+    }
 
     const success = await handleAddressSave(
       userProfile.id,
       addressForm,
-      editingAddress || undefined
+      editingAddress || undefined,
+      userProfileWithAddresses.user_type_id,
+      profileId
     );
 
     if (success) {

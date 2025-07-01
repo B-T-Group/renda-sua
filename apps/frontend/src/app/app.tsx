@@ -3,7 +3,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container } from '@mui/material';
 import { useMemo } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import Header from '../components/layout/Header';
@@ -22,11 +22,15 @@ import { useAuthFlow } from '../hooks/useAuthFlow';
 function App() {
   const { isLoading } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
+  const location = useLocation();
 
-  // Memoize the loading state to prevent unnecessary re-renders
+  // Only show loading for auth flow when on /app route
   const shouldShowLoading = useMemo(() => {
-    return isLoading || isCheckingProfile;
-  }, [isLoading, isCheckingProfile]);
+    if (location.pathname === '/app') {
+      return isLoading || isCheckingProfile;
+    }
+    return isLoading;
+  }, [isLoading, isCheckingProfile, location.pathname]);
 
   // Show loading page while Auth0 is loading or checking profile
   if (shouldShowLoading) {

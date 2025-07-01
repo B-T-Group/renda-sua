@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useGraphQLRequest } from './useGraphQLRequest';
+import { useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
+import { useGraphQLRequest } from './useGraphQLRequest';
 
 // GraphQL Queries and Mutations
 const GET_USER_PROFILE = `
@@ -264,7 +264,8 @@ export const useProfile = () => {
     userId: string,
     addressData: AddressFormData,
     editingAddressId?: string,
-    userType?: string
+    userType?: string,
+    profileId?: string
   ) => {
     try {
       if (editingAddressId) {
@@ -281,11 +282,14 @@ export const useProfile = () => {
           },
         };
 
+        // Use the correct profile ID (client_id, agent_id, or business_id)
+        const correctId = profileId || userId;
+
         switch (userType) {
           case 'agent':
             await insertAgentAddress({
               agentAddress: {
-                agent_id: userId,
+                agent_id: correctId,
                 address: addressInput,
               },
             });
@@ -293,7 +297,7 @@ export const useProfile = () => {
           case 'client':
             await insertClientAddress({
               clientAddress: {
-                client_id: userId,
+                client_id: correctId,
                 address: addressInput,
               },
             });
@@ -301,7 +305,7 @@ export const useProfile = () => {
           case 'business':
             await insertBusinessAddress({
               businessAddress: {
-                business_id: userId,
+                business_id: correctId,
                 address: addressInput,
               },
             });
