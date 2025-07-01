@@ -24,7 +24,10 @@ const GET_INVENTORY_ITEMS = `
         size_unit
         item_sub_category_id
         sku
-        brand
+        brand {
+          id
+          name
+        }
         model
         color
         material
