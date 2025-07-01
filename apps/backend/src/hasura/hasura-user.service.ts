@@ -108,6 +108,11 @@ export class HasuraUserService {
     this._authToken = this.extractAuthToken();
     this.identifier = this.extractSubClaim();
 
+    console.log('configService:headers', {
+      Authorization: `Bearer ${this.authToken}`,
+      'Content-Type': 'application/json',
+    });
+
     this.client = new GraphQLClient(this.hasuraUrl, {
       headers: {
         Authorization: `Bearer ${this.authToken}`,
