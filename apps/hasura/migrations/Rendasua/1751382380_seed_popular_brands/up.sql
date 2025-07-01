@@ -1,0 +1,122 @@
+-- Seed popular brands table with diverse brands across different industries
+INSERT INTO public.brands (name, description) VALUES
+
+-- Food & Beverage Brands
+('McDonald''s', 'Global fast food restaurant chain specializing in hamburgers, chicken, and breakfast items'),
+('KFC', 'International fast food restaurant chain specializing in fried chicken'),
+('Starbucks', 'Global coffeehouse chain and roastery reserves'),
+('Coca-Cola', 'Multinational beverage corporation known for its flagship product Coca-Cola'),
+('Pepsi', 'American multinational food, snack, and beverage corporation'),
+('Nestlé', 'Swiss multinational food and drink processing conglomerate'),
+('Kraft Heinz', 'American multinational food company'),
+('Unilever', 'British-Dutch multinational consumer goods company'),
+('Danone', 'French multinational food-products corporation'),
+('General Mills', 'American multinational manufacturer and marketer of branded consumer foods'),
+
+-- Electronics & Technology Brands
+('Apple', 'American multinational technology company specializing in consumer electronics, software, and online services'),
+('Samsung', 'South Korean multinational electronics company'),
+('Microsoft', 'American multinational technology corporation'),
+('Google', 'American multinational technology company specializing in Internet-related services and products'),
+('Sony', 'Japanese multinational conglomerate corporation'),
+('LG', 'South Korean multinational electronics company'),
+('Dell', 'American multinational computer technology company'),
+('HP', 'American multinational information technology company'),
+('Intel', 'American multinational corporation and technology company'),
+('AMD', 'American multinational semiconductor company'),
+
+-- Fashion & Apparel Brands
+('Nike', 'American multinational corporation engaged in the design, development, manufacturing, and worldwide marketing of footwear, apparel, equipment, accessories, and services'),
+('Adidas', 'German multinational corporation, founded and headquartered in Herzogenaurach, Germany, that designs and manufactures shoes, clothing and accessories'),
+('Puma', 'German multinational corporation that designs and manufactures athletic and casual footwear, apparel and accessories'),
+('Under Armour', 'American sports equipment company that manufactures footwear, sports and casual apparel'),
+('Levi''s', 'American clothing company known worldwide for its Levi''s brand of denim jeans'),
+('H&M', 'Swedish multinational clothing-retail company'),
+('Zara', 'Spanish multinational retail clothing chain'),
+('Uniqlo', 'Japanese casual wear designer, manufacturer and retailer'),
+('Gap', 'American worldwide clothing and accessories retailer'),
+('Ralph Lauren', 'American fashion company producing products ranging from the mid-range to the luxury segments'),
+
+-- Health & Beauty Brands
+('L''Oréal', 'French multinational personal care company'),
+('Procter & Gamble', 'American multinational consumer goods corporation'),
+('Johnson & Johnson', 'American multinational corporation that develops medical devices, pharmaceuticals, and consumer packaged goods'),
+('Estée Lauder', 'American multinational manufacturer and marketer of prestige skincare, makeup, fragrance and hair care products'),
+('MAC', 'Canadian cosmetics company founded in Toronto, Ontario'),
+('Maybelline', 'American multinational cosmetics, skin care, fragrance and personal care company'),
+('Revlon', 'American multinational cosmetics, skin care, fragrance and personal care company'),
+('CoverGirl', 'American cosmetics brand'),
+('Neutrogena', 'American brand of skin care, hair care and cosmetics'),
+('Olay', 'American skin care brand'),
+
+-- Automotive Brands
+('Toyota', 'Japanese multinational automotive manufacturer'),
+('Honda', 'Japanese multinational conglomerate manufacturer of automobiles, motorcycles, and power equipment'),
+('Ford', 'American multinational automobile manufacturer'),
+('BMW', 'German multinational corporation which produces luxury vehicles and motorcycles'),
+('Mercedes-Benz', 'German global automobile marque and a division of Daimler AG'),
+('Volkswagen', 'German multinational automotive manufacturing company'),
+('Audi', 'German automobile manufacturer of luxury vehicles'),
+('Hyundai', 'South Korean multinational automotive manufacturer'),
+('Kia', 'South Korean multinational automotive manufacturer'),
+('Tesla', 'American electric vehicle and clean energy company'),
+
+-- Home & Lifestyle Brands
+('IKEA', 'Swedish multinational group that designs and sells ready-to-assemble furniture, kitchen appliances and home accessories'),
+('Home Depot', 'American multinational home improvement retail corporation'),
+('Lowe''s', 'American retail company specializing in home improvement'),
+('Target', 'American retail corporation'),
+('Walmart', 'American multinational retail corporation'),
+('Costco', 'American multinational corporation which operates a chain of membership-only big-box retail stores'),
+('Best Buy', 'American multinational consumer electronics retailer'),
+('Amazon', 'American multinational technology company focusing on e-commerce, cloud computing, digital streaming, and artificial intelligence'),
+('eBay', 'American multinational e-commerce corporation'),
+('Alibaba', 'Chinese multinational technology company specializing in e-commerce, retail, Internet, and technology'),
+
+-- Sports & Outdoor Brands
+('The North Face', 'American outdoor recreation products company'),
+('Patagonia', 'American clothing company that markets and sells outdoor clothing'),
+('Columbia', 'American multinational corporation that manufactures and distributes outerwear, sportswear, and footwear'),
+('Nike Golf', 'Division of Nike, Inc. that manufactures golf equipment and apparel'),
+('Callaway', 'American golf company that designs, manufactures, and sells golf clubs and related equipment'),
+('Wilson', 'American sports equipment manufacturer'),
+('Spalding', 'American sports equipment manufacturing company'),
+('Rawlings', 'American sports equipment manufacturing company'),
+('Easton', 'American sports equipment manufacturing company'),
+('Reebok', 'American footwear and apparel company'),
+
+-- Luxury Brands
+('Gucci', 'Italian luxury brand of fashion and leather goods'),
+('Louis Vuitton', 'French fashion house and luxury goods company'),
+('Chanel', 'French luxury fashion house'),
+('Hermès', 'French luxury goods manufacturer'),
+('Prada', 'Italian luxury fashion house'),
+('Burberry', 'British luxury fashion house'),
+('Cartier', 'French luxury goods conglomerate company'),
+('Rolex', 'Swiss luxury watch manufacturer'),
+('Omega', 'Swiss luxury watchmaker'),
+('Tiffany & Co.', 'American luxury jewelry and specialty retailer'),
+
+-- Gaming & Entertainment Brands
+('PlayStation', 'Video gaming brand that consists of five home video game consoles'),
+('Xbox', 'Video gaming brand created and owned by Microsoft'),
+('Nintendo', 'Japanese multinational video game company'),
+('Electronic Arts', 'American video game company'),
+('Activision Blizzard', 'American video game holding company'),
+('Ubisoft', 'French video game company'),
+('Rockstar Games', 'American video game publisher'),
+('Valve', 'American video game developer, publisher, and digital distribution company'),
+('Steam', 'Digital distribution platform for video games'),
+('Epic Games', 'American video game developer and publisher'),
+
+-- Local & Regional Brands
+('MTN', 'South African multinational mobile telecommunications company'),
+('Airtel', 'Indian multinational telecommunications services company'),
+('Vodafone', 'British multinational telecommunications company'),
+('Orange', 'French multinational telecommunications corporation'),
+('T-Mobile', 'German telecommunications company'),
+('Verizon', 'American multinational telecommunications conglomerate'),
+('AT&T', 'American multinational telecommunications holding company'),
+('Comcast', 'American telecommunications conglomerate'),
+('Netflix', 'American subscription streaming service and production company'),
+('Disney', 'American multinational mass media and entertainment conglomerate'); 

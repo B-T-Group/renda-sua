@@ -895,7 +895,7 @@ const BusinessDashboard: React.FC = () => {
       >
         <DialogTitle>{t('business.inventory.addItem')}</DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid container direction={'column'} spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <FormControl fullWidth>
                 <InputLabel>{t('business.inventory.location')}</InputLabel>

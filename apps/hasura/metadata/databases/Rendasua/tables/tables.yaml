@@ -2,6 +2,7 @@
 - '!include public_accounts.yaml'
 - '!include public_addresses.yaml'
 - '!include public_agents.yaml'
+- '!include public_brands.yaml'
 - '!include public_business_inventory.yaml'
 - '!include public_business_locations.yaml'
 - '!include public_businesses.yaml'

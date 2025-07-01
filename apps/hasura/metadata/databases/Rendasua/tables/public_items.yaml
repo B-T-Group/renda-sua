@@ -5,6 +5,12 @@ object_relationships:
   - name: item_sub_category
     using:
       foreign_key_constraint_on: item_sub_category_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: brand
+    using:
+      foreign_key_constraint_on: brand_id
 array_relationships:
   - name: business_inventories
     using:
@@ -47,8 +53,9 @@ select_permissions:
         - size
         - size_unit
         - item_sub_category_id
+        - business_id
+        - brand_id
         - sku
-        - brand
         - model
         - color
         - material
@@ -76,8 +83,9 @@ select_permissions:
         - size
         - size_unit
         - item_sub_category_id
+        - business_id
+        - brand_id
         - sku
-        - brand
         - model
         - color
         - material
@@ -105,8 +113,9 @@ select_permissions:
         - size
         - size_unit
         - item_sub_category_id
+        - business_id
+        - brand_id
         - sku
-        - brand
         - model
         - color
         - material
@@ -134,8 +143,9 @@ select_permissions:
         - size
         - size_unit
         - item_sub_category_id
+        - business_id
+        - brand_id
         - sku
-        - brand
         - model
         - color
         - material
