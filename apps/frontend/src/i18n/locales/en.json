@@ -195,6 +195,7 @@
       "email": "Email",
       "locationType": "Location Type",
       "isPrimary": "Primary Location",
+      "primary": "Primary",
       "isActive": "Active",
       "operatingHours": "Operating Hours",
       "store": "Store",
@@ -271,5 +272,10 @@
     "delivery": "Delivery",
     "items": "Items",
     "moreItems": "more items"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete"
   }
 }

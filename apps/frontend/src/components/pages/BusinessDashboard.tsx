@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
   CircularProgress,
   Alert,
   Tooltip,
@@ -59,6 +60,7 @@ import {
   BusinessLocation,
   AddBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
+import LocationModal from '../business/LocationModal';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -93,6 +95,14 @@ const BusinessDashboard: React.FC = () => {
   const [newItemData, setNewItemData] = useState<Partial<AddInventoryItemData>>(
     {}
   );
+
+  // Location management states
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [editingLocation, setEditingLocation] =
+    useState<BusinessLocation | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [locationToDelete, setLocationToDelete] =
+    useState<BusinessLocation | null>(null);
 
   const {
     orders,
@@ -157,6 +167,58 @@ const BusinessDashboard: React.FC = () => {
       await addInventoryItem(newItemData as AddInventoryItemData);
       setShowAddItemDialog(false);
       setNewItemData({});
+    }
+  };
+
+  // Location management handlers
+  const handleAddLocation = () => {
+    setEditingLocation(null);
+    setShowLocationModal(true);
+  };
+
+  const handleEditLocation = (location: BusinessLocation) => {
+    setEditingLocation(location);
+    setShowLocationModal(true);
+  };
+
+  const handleDeleteLocation = (location: BusinessLocation) => {
+    setLocationToDelete(location);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!locationToDelete) return;
+
+    try {
+      await deleteLocation(locationToDelete.id);
+      enqueueSnackbar(t('business.locations.locationDeleted'), {
+        variant: 'success',
+      });
+      setShowDeleteConfirm(false);
+      setLocationToDelete(null);
+    } catch (error) {
+      enqueueSnackbar('Failed to delete location', { variant: 'error' });
+    }
+  };
+
+  const handleSaveLocation = async (data: AddBusinessLocationData | any) => {
+    try {
+      if (editingLocation) {
+        await updateLocation(editingLocation.id, data);
+        enqueueSnackbar(t('business.locations.locationUpdated'), {
+          variant: 'success',
+        });
+      } else {
+        await addLocation(data);
+        enqueueSnackbar(t('business.locations.locationAdded'), {
+          variant: 'success',
+        });
+      }
+      setShowLocationModal(false);
+      setEditingLocation(null);
+    } catch (error) {
+      enqueueSnackbar('Failed to save location', { variant: 'error' });
+      throw error;
     }
   };
 
@@ -686,10 +748,7 @@ const BusinessDashboard: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
-                onClick={() => {
-                  // TODO: Add location dialog logic
-                  setShowAddItemDialog(true);
-                }}
+                onClick={handleAddLocation}
               >
                 {t('business.locations.addLocation')}
               </Button>
@@ -703,23 +762,72 @@ const BusinessDashboard: React.FC = () => {
               <Alert severity="error" sx={{ mb: 2 }}>
                 {locationsError}
               </Alert>
+            ) : locations.length === 0 ? (
+              <Box textAlign="center" py={4}>
+                <Typography variant="body1" color="text.secondary">
+                  {t('business.locations.noLocations')}
+                </Typography>
+              </Box>
             ) : (
               <Grid container spacing={2}>
                 {locations.map((location) => (
                   <Grid item xs={12} sm={6} md={4} key={location.id}>
                     <Card>
                       <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          {location.name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          gutterBottom
+                        <Box
+                          display="flex"
+                          justifyContent="space-between"
+                          alignItems="flex-start"
                         >
-                          {formatAddress(location.address)}
-                        </Typography>
+                          <Box flex={1}>
+                            <Typography variant="h6" gutterBottom>
+                              {location.name}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              gutterBottom
+                            >
+                              {formatAddress(location.address)}
+                            </Typography>
+                            {location.phone && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                📞 {location.phone}
+                              </Typography>
+                            )}
+                            {location.email && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                ✉️ {location.email}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Box>
+                            {location.is_primary && (
+                              <Chip
+                                label={t('business.locations.primary')}
+                                color="primary"
+                                size="small"
+                                sx={{ mb: 1 }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+
                         <Box sx={{ mt: 2 }}>
+                          <Chip
+                            label={t(
+                              `business.locations.${location.location_type}`
+                            )}
+                            color="secondary"
+                            size="small"
+                            sx={{ mr: 1 }}
+                          />
                           <Chip
                             label={
                               location.is_active
@@ -734,6 +842,13 @@ const BusinessDashboard: React.FC = () => {
                       <CardActions>
                         <Button
                           size="small"
+                          startIcon={<EditIcon />}
+                          onClick={() => handleEditLocation(location)}
+                        >
+                          {t('business.locations.editLocation')}
+                        </Button>
+                        <Button
+                          size="small"
                           onClick={() =>
                             updateLocation(location.id, {
                               is_active: !location.is_active,
@@ -744,7 +859,12 @@ const BusinessDashboard: React.FC = () => {
                             ? t('business.locations.deactivate')
                             : t('business.locations.activate')}
                         </Button>
-                        <IconButton size="small" color="error">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteLocation(location)}
+                          disabled={location.is_primary}
+                        >
                           <DeleteIcon />
                         </IconButton>
                       </CardActions>
@@ -870,6 +990,44 @@ const BusinessDashboard: React.FC = () => {
           </Button>
           <Button onClick={handleAddItem} variant="contained">
             {t('business.inventory.add')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Location Modal */}
+      <LocationModal
+        open={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        onSave={handleSaveLocation}
+        location={editingLocation}
+        loading={locationsLoading}
+        error={locationsError}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+      >
+        <DialogTitle>{t('business.locations.deleteLocation')}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {locationToDelete?.is_primary
+              ? t('business.locations.primaryLocationWarning')
+              : t('business.locations.deleteConfirm')}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDeleteConfirm(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            disabled={locationToDelete?.is_primary}
+          >
+            {t('common.delete')}
           </Button>
         </DialogActions>
       </Dialog>

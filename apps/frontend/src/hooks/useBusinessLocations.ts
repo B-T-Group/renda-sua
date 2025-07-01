@@ -25,12 +25,20 @@ export interface BusinessLocation {
 
 export interface AddBusinessLocationData {
   name: string;
-  address_id: string;
+  address_id?: string;
   phone?: string;
   email?: string;
   operating_hours?: any;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_primary?: boolean;
+  address?: {
+    address_line_1: string;
+    address_line_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
 }
 
 export interface UpdateBusinessLocationData {
@@ -130,6 +138,20 @@ const DELETE_BUSINESS_LOCATION = `
   }
 `;
 
+const CREATE_ADDRESS = `
+  mutation CreateAddress($address: addresses_insert_input!) {
+    insert_addresses_one(object: $address) {
+      id
+      address_line_1
+      address_line_2
+      city
+      state
+      postal_code
+      country
+    }
+  }
+`;
+
 export const useBusinessLocations = () => {
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,6 +169,7 @@ export const useBusinessLocations = () => {
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
   );
+  const { execute: executeCreateAddress } = useGraphQLRequest(CREATE_ADDRESS);
 
   const fetchLocations = useCallback(async () => {
     setLoading(true);
@@ -172,7 +195,30 @@ export const useBusinessLocations = () => {
       setLoading(true);
       setError(null);
       try {
-        const result = await executeAddMutation({ data });
+        let addressId = data.address_id;
+
+        // If address data is provided, create the address first
+        if (data.address && !addressId) {
+          const addressResult = await executeCreateAddress({
+            address: {
+              entity_type: 'business',
+              entity_id: 'your-business-id', // This should come from user context
+              ...data.address,
+            },
+          });
+
+          if (addressResult.data?.insert_addresses_one) {
+            addressId = addressResult.data.insert_addresses_one.id;
+          }
+        }
+
+        const locationData = {
+          ...data,
+          address_id: addressId,
+          business_id: 'your-business-id', // This should come from user context
+        };
+
+        const result = await executeAddMutation({ data: locationData });
         if (result.data?.insert_business_locations_one) {
           setLocations((prev) => [
             ...prev,
@@ -189,7 +235,7 @@ export const useBusinessLocations = () => {
         setLoading(false);
       }
     },
-    [executeAddMutation]
+    [executeAddMutation, executeCreateAddress]
   );
 
   const updateLocation = useCallback(
