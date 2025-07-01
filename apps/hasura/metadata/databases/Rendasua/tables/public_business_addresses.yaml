@@ -1,0 +1,57 @@
+table:
+  name: business_addresses
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: address
+    using:
+      foreign_key_constraint_on: address_id
+array_relationships: []
+
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      columns:
+        - business_id
+        - address_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - address_id
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

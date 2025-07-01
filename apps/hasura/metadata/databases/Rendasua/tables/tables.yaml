@@ -16,3 +16,6 @@
 - '!include public_user_types.yaml'
 - '!include public_users.yaml'
 - '!include public_vehicle_types.yaml'
+- '!include public_business_addresses.yaml'
+- '!include public_client_addresses.yaml'
+- '!include public_agent_addresses.yaml'
