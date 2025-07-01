@@ -1,65 +1,60 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
-  Typography,
-  Box,
-  Paper,
-  Tabs,
-  Tab,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  LocationOn as LocationIcon,
+  Search as SearchIcon,
+} from '@mui/icons-material';
+import {
+  Alert,
   Badge,
-  Grid,
-  TextField,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
+  FormControlLabel,
+  Grid,
+  IconButton,
   InputLabel,
-  Select,
   MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Button,
-  Chip,
-  Stack,
-  Card,
-  CardContent,
-  CardActions,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  DialogContentText,
-  CircularProgress,
-  Alert,
+  Tabs,
+  TextField,
   Tooltip,
+  Typography,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  LocationOn as LocationIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Store as StoreIcon,
-  Warehouse as WarehouseIcon,
-  Business as BusinessIcon,
-  LocalShipping as PickupIcon,
-} from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
-import { useBusinessOrders, OrderFilters } from '../../hooks/useBusinessOrders';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { AddInventoryItemData as AddInventoryItemDataFromHooks } from '../../hooks/useBusinessInventory';
+import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import {
-  useBusinessInventory,
-  AddInventoryItemData,
-} from '../../hooks/useBusinessInventory';
-import { useInventoryItems } from '../../hooks/useInventoryItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
-import {
-  useBusinessLocations,
-  BusinessLocation,
   AddBusinessLocationData,
+  BusinessLocation,
+  useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
+import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import LocationModal from '../business/LocationModal';
 
 interface TabPanelProps {
@@ -92,9 +87,10 @@ const BusinessDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [orderFilters, setOrderFilters] = useState<OrderFilters>({});
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [newItemData, setNewItemData] = useState<Partial<AddInventoryItemData>>(
-    {}
-  );
+  const [newItemData, setNewItemData] = useState<
+    Partial<AddInventoryItemDataFromHooks>
+  >({});
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
   // Location management states
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -110,7 +106,6 @@ const BusinessDashboard: React.FC = () => {
     error: ordersError,
     fetchOrders,
     updateOrderStatus,
-    assignOrderToAgent,
   } = useBusinessOrders();
 
   const {
@@ -171,7 +166,7 @@ const BusinessDashboard: React.FC = () => {
 
   const handleAddItem = async () => {
     if (newItemData.business_location_id && newItemData.item_id) {
-      await addInventoryItem(newItemData as AddInventoryItemData);
+      await addInventoryItem(newItemData as AddInventoryItemDataFromHooks);
       setShowAddItemDialog(false);
       setNewItemData({});
     }
@@ -901,10 +896,11 @@ const BusinessDashboard: React.FC = () => {
         <DialogTitle>{t('business.inventory.addItem')}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <FormControl fullWidth>
                 <InputLabel>{t('business.inventory.location')}</InputLabel>
                 <Select
+                  fullWidth
                   value={newItemData.business_location_id || ''}
                   onChange={(e) =>
                     setNewItemData({
@@ -922,14 +918,19 @@ const BusinessDashboard: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <FormControl fullWidth>
                 <InputLabel>{t('business.inventory.item')}</InputLabel>
                 <Select
+                  fullWidth
                   value={newItemData.item_id || ''}
-                  onChange={(e) =>
-                    setNewItemData({ ...newItemData, item_id: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const selected = availableItems.find(
+                      (item) => item.id === e.target.value
+                    );
+                    setNewItemData({ ...newItemData, item_id: e.target.value });
+                    setSelectedItem(selected || null);
+                  }}
                   label={t('business.inventory.item')}
                 >
                   {availableItems.map((item) => (
@@ -940,7 +941,65 @@ const BusinessDashboard: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            {selectedItem && (
+              <Grid item xs={12}>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}
+                >
+                  <Typography variant="subtitle1" gutterBottom>
+                    {selectedItem.name}{' '}
+                    {selectedItem.sku ? `(${selectedItem.sku})` : ''}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    {selectedItem.description}
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={6} sm={4}>
+                      <b>Brand:</b> {selectedItem.brand || '-'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Model:</b> {selectedItem.model || '-'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Color:</b> {selectedItem.color || '-'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Material:</b> {selectedItem.material || '-'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Size:</b> {selectedItem.size} {selectedItem.size_unit}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Weight:</b> {selectedItem.weight}{' '}
+                      {selectedItem.weight_unit}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Min Order:</b> {selectedItem.min_order_quantity}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Max Order:</b> {selectedItem.max_order_quantity}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Fragile:</b> {selectedItem.is_fragile ? 'Yes' : 'No'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Perishable:</b>{' '}
+                      {selectedItem.is_perishable ? 'Yes' : 'No'}
+                    </Grid>
+                    <Grid item xs={6} sm={4}>
+                      <b>Special Handling:</b>{' '}
+                      {selectedItem.requires_special_handling ? 'Yes' : 'No'}
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+            )}
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 type="number"
@@ -954,7 +1013,35 @@ const BusinessDashboard: React.FC = () => {
                 }
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                type="number"
+                label={t('business.inventory.availableQuantity')}
+                value={newItemData.available_quantity || ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    available_quantity: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                type="number"
+                label={t('business.inventory.reservedQuantity')}
+                value={newItemData.reserved_quantity || ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    reserved_quantity: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+            </Grid>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 type="number"
@@ -968,7 +1055,7 @@ const BusinessDashboard: React.FC = () => {
                 }
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 type="number"
@@ -982,7 +1069,7 @@ const BusinessDashboard: React.FC = () => {
                 }
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 type="number"
@@ -995,6 +1082,38 @@ const BusinessDashboard: React.FC = () => {
                   })
                 }
               />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                type="number"
+                label={t('business.inventory.reorderQuantity')}
+                value={newItemData.reorder_quantity || ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    reorder_quantity: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Box display="flex" alignItems="center">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newItemData.is_active ?? true}
+                      onChange={(e) =>
+                        setNewItemData({
+                          ...newItemData,
+                          is_active: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  label={t('business.inventory.active')}
+                />
+              </Box>
             </Grid>
           </Grid>
         </DialogContent>
