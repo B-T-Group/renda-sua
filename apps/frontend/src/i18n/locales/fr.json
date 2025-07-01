@@ -34,7 +34,10 @@
     "refresh": "Actualiser",
     "yes": "Oui",
     "no": "Non",
-    "actions": "Actions"
+    "actions": "Actions",
+    "rowsPerPage": "Lignes par page :",
+    "of": "sur",
+    "moreThan": "plus de"
   },
   "auth": {
     "login": "Connexion",
@@ -295,7 +298,19 @@
       "itemDetails": "Détails de l'article",
       "orderAndDelivery": "Commande et livraison",
       "quickActions": "Actions rapides",
-      "itemNotFound": "Article non trouvé"
+      "itemNotFound": "Article non trouvé",
+      "itemNameRequired": "Le nom de l'article est requis",
+      "descriptionRequired": "La description est requise",
+      "categoryRequired": "La catégorie est requise",
+      "priceRequired": "Le prix est requis et doit être supérieur à 0",
+      "currencyRequired": "La devise est requise",
+      "minOrderQuantityInvalid": "La quantité minimale de commande doit être supérieure à 0",
+      "maxOrderQuantityInvalid": "La quantité maximale de commande doit être supérieure à 0",
+      "maxOrderQuantityLessThanMin": "La quantité maximale de commande doit être supérieure à la quantité minimale",
+      "maxDeliveryDistanceInvalid": "La distance de livraison maximale doit être supérieure à 0",
+      "estimatedDeliveryTimeInvalid": "Le temps de livraison estimé doit être supérieur à 0",
+      "pleaseFixValidationErrors": "Veuillez corriger les erreurs de validation avant de sauvegarder",
+      "skuPlaceholder": "Entrez la référence (optionnel)"
     },
     "locations": {
       "title": "Emplacements d'Entreprise",

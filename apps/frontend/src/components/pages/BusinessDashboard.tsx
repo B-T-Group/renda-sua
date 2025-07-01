@@ -54,7 +54,7 @@ import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
 import EditItemDialog from '../business/EditItemDialog';
-import InventoryDataGrid from '../business/InventoryDataGrid';
+import InventoryTable from '../business/InventoryTable';
 import LocationModal from '../business/LocationModal';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 
@@ -646,7 +646,7 @@ const BusinessDashboard: React.FC = () => {
                 {inventoryError}
               </Alert>
             ) : (
-              <InventoryDataGrid
+              <InventoryTable
                 items={availableItems}
                 loading={inventoryLoading}
                 onUpdateInventory={(item) => {

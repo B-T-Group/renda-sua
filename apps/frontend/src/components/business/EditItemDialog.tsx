@@ -1,10 +1,13 @@
 import {
   Alert,
+  Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -48,11 +51,16 @@ export default function EditItemDialog({
 
   const [formData, setFormData] = useState<Partial<Item>>({});
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     if (open) {
       fetchBrands();
       fetchItemSubCategories();
+      setValidationErrors({});
     }
   }, [open, fetchBrands, fetchItemSubCategories]);
 
@@ -85,15 +93,92 @@ export default function EditItemDialog({
     }
   }, [item]);
 
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.name?.trim()) {
+      errors.name = t('business.inventory.itemNameRequired');
+    }
+
+    if (!formData.description?.trim()) {
+      errors.description = t('business.inventory.descriptionRequired');
+    }
+
+    if (!formData.item_sub_category_id) {
+      errors.category = t('business.inventory.categoryRequired');
+    }
+
+    if (!formData.price || formData.price <= 0) {
+      errors.price = t('business.inventory.priceRequired');
+    }
+
+    if (!formData.currency) {
+      errors.currency = t('business.inventory.currencyRequired');
+    }
+
+    if (formData.min_order_quantity && formData.min_order_quantity <= 0) {
+      errors.minOrderQuantity = t('business.inventory.minOrderQuantityInvalid');
+    }
+
+    if (formData.max_order_quantity && formData.max_order_quantity <= 0) {
+      errors.maxOrderQuantity = t('business.inventory.maxOrderQuantityInvalid');
+    }
+
+    if (
+      formData.min_order_quantity &&
+      formData.max_order_quantity &&
+      formData.min_order_quantity > formData.max_order_quantity
+    ) {
+      errors.maxOrderQuantity = t(
+        'business.inventory.maxOrderQuantityLessThanMin'
+      );
+    }
+
+    if (formData.max_delivery_distance && formData.max_delivery_distance <= 0) {
+      errors.maxDeliveryDistance = t(
+        'business.inventory.maxDeliveryDistanceInvalid'
+      );
+    }
+
+    if (
+      formData.estimated_delivery_time &&
+      formData.estimated_delivery_time <= 0
+    ) {
+      errors.estimatedDeliveryTime = t(
+        'business.inventory.estimatedDeliveryTimeInvalid'
+      );
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleInputChange = (field: keyof Item, value: any) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+
+    // Clear validation error for this field
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => ({
+        ...prev,
+        [field]: '',
+      }));
+    }
   };
 
   const handleSave = async () => {
     if (!item) return;
+
+    if (!validateForm()) {
+      enqueueSnackbar(t('business.inventory.pleaseFixValidationErrors'), {
+        variant: 'error',
+      });
+      return;
+    }
+
+    setSaving(true);
 
     try {
       // Convert null values to undefined for optional fields
@@ -123,11 +208,15 @@ export default function EditItemDialog({
       enqueueSnackbar(t('business.inventory.failedToUpdateItem'), {
         variant: 'error',
       });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleClose = () => {
     setFormData({});
+    setValidationErrors({});
+    setSaving(false);
     onClose();
   };
 
@@ -137,42 +226,62 @@ export default function EditItemDialog({
     <>
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <DialogTitle>
-          {t('business.inventory.editItem', { itemName: item.name })}
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Typography variant="h6">
+              {t('business.inventory.editItem', { itemName: item.name })}
+            </Typography>
+            {itemsLoading && <CircularProgress size={20} />}
+          </Stack>
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
             {/* Basic Information */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.basicInformation')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.basicInformation')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  label={t('business.inventory.itemName')}
+                  value={formData.name || ''}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  error={!!validationErrors.name}
+                  helperText={validationErrors.name}
+                  required
+                />
+
+                <TextField
+                  fullWidth
+                  label={t('business.inventory.sku')}
+                  value={formData.sku || ''}
+                  onChange={(e) => handleInputChange('sku', e.target.value)}
+                  placeholder={t('business.inventory.skuPlaceholder')}
+                />
+              </Stack>
+
               <TextField
                 fullWidth
-                label={t('business.inventory.itemName')}
-                value={formData.name || ''}
-                onChange={(e) => handleInputChange('name', e.target.value)}
+                multiline
+                rows={3}
+                label={t('business.inventory.description')}
+                value={formData.description || ''}
+                onChange={(e) =>
+                  handleInputChange('description', e.target.value)
+                }
+                error={!!validationErrors.description}
+                helperText={validationErrors.description}
+                required
+                sx={{ mt: 2 }}
               />
 
-              <TextField
+              <FormControl
                 fullWidth
-                label={t('business.inventory.sku')}
-                value={formData.sku || ''}
-                onChange={(e) => handleInputChange('sku', e.target.value)}
-              />
-            </Stack>
-
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label={t('business.inventory.description')}
-              value={formData.description || ''}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-            />
-
-            <Stack direction="row" spacing={2}>
-              <FormControl fullWidth>
+                sx={{ mt: 2 }}
+                error={!!validationErrors.category}
+              >
                 <InputLabel>{t('business.inventory.category')}</InputLabel>
                 <Select
                   value={formData.item_sub_category_id || ''}
@@ -184,6 +293,7 @@ export default function EditItemDialog({
                   }
                   label={t('business.inventory.category')}
                   disabled={itemsLoading}
+                  required
                 >
                   {itemsLoading ? (
                     <MenuItem disabled>
@@ -201,289 +311,349 @@ export default function EditItemDialog({
                     ))
                   )}
                 </Select>
+                {validationErrors.category && (
+                  <Typography
+                    variant="caption"
+                    color="error"
+                    sx={{ mt: 0.5, ml: 1.5 }}
+                  >
+                    {validationErrors.category}
+                  </Typography>
+                )}
               </FormControl>
-            </Stack>
+            </Box>
 
             {/* Pricing */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.pricing')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.pricing')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.price')}
-                value={formData.price || ''}
-                onChange={(e) =>
-                  handleInputChange('price', parseFloat(e.target.value) || 0)
-                }
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.currency')}</InputLabel>
-                <Select
-                  value={formData.currency || 'USD'}
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.price')}
+                  value={formData.price || ''}
                   onChange={(e) =>
-                    handleInputChange('currency', e.target.value)
+                    handleInputChange('price', parseFloat(e.target.value) || 0)
                   }
-                  label={t('business.inventory.currency')}
-                >
-                  <MenuItem value="USD">USD</MenuItem>
-                  <MenuItem value="EUR">EUR</MenuItem>
-                  <MenuItem value="GBP">GBP</MenuItem>
-                  <MenuItem value="XAF">XAF</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
+                  error={!!validationErrors.price}
+                  helperText={validationErrors.price}
+                  required
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+
+                <FormControl fullWidth error={!!validationErrors.currency}>
+                  <InputLabel>{t('business.inventory.currency')}</InputLabel>
+                  <Select
+                    value={formData.currency || 'USD'}
+                    onChange={(e) =>
+                      handleInputChange('currency', e.target.value)
+                    }
+                    label={t('business.inventory.currency')}
+                    required
+                  >
+                    <MenuItem value="USD">USD</MenuItem>
+                    <MenuItem value="EUR">EUR</MenuItem>
+                    <MenuItem value="GBP">GBP</MenuItem>
+                    <MenuItem value="XAF">XAF</MenuItem>
+                  </Select>
+                  {validationErrors.currency && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, ml: 1.5 }}
+                    >
+                      {validationErrors.currency}
+                    </Typography>
+                  )}
+                </FormControl>
+              </Stack>
+            </Box>
 
             {/* Physical Properties */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.physicalProperties')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.physicalProperties')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.size')}
-                value={formData.size || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'size',
-                    parseFloat(e.target.value) || undefined
-                  )
-                }
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.sizeUnit')}</InputLabel>
-                <Select
-                  value={formData.size_unit || ''}
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.size')}
+                  value={formData.size || ''}
                   onChange={(e) =>
-                    handleInputChange('size_unit', e.target.value)
+                    handleInputChange(
+                      'size',
+                      parseFloat(e.target.value) || undefined
+                    )
                   }
-                  label={t('business.inventory.sizeUnit')}
-                >
-                  <MenuItem value="cm">cm</MenuItem>
-                  <MenuItem value="m">m</MenuItem>
-                  <MenuItem value="in">in</MenuItem>
-                  <MenuItem value="ft">ft</MenuItem>
-                  <MenuItem value="mm">mm</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
 
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.weight')}
-                value={formData.weight || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'weight',
-                    parseFloat(e.target.value) || undefined
-                  )
-                }
-              />
+                <FormControl fullWidth>
+                  <InputLabel>{t('business.inventory.sizeUnit')}</InputLabel>
+                  <Select
+                    value={formData.size_unit || ''}
+                    onChange={(e) =>
+                      handleInputChange('size_unit', e.target.value)
+                    }
+                    label={t('business.inventory.sizeUnit')}
+                  >
+                    <MenuItem value="cm">cm</MenuItem>
+                    <MenuItem value="m">m</MenuItem>
+                    <MenuItem value="in">in</MenuItem>
+                    <MenuItem value="ft">ft</MenuItem>
+                    <MenuItem value="mm">mm</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
 
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.weightUnit')}</InputLabel>
-                <Select
-                  value={formData.weight_unit || ''}
+              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.weight')}
+                  value={formData.weight || ''}
                   onChange={(e) =>
-                    handleInputChange('weight_unit', e.target.value)
+                    handleInputChange(
+                      'weight',
+                      parseFloat(e.target.value) || undefined
+                    )
                   }
-                  label={t('business.inventory.weightUnit')}
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+
+                <FormControl fullWidth>
+                  <InputLabel>{t('business.inventory.weightUnit')}</InputLabel>
+                  <Select
+                    value={formData.weight_unit || ''}
+                    onChange={(e) =>
+                      handleInputChange('weight_unit', e.target.value)
+                    }
+                    label={t('business.inventory.weightUnit')}
+                  >
+                    <MenuItem value="kg">kg</MenuItem>
+                    <MenuItem value="g">g</MenuItem>
+                    <MenuItem value="lb">lb</MenuItem>
+                    <MenuItem value="oz">oz</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
+
+              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  label={t('business.inventory.color')}
+                  value={formData.color || ''}
+                  onChange={(e) => handleInputChange('color', e.target.value)}
+                />
+
+                <TextField
+                  fullWidth
+                  label={t('business.inventory.model')}
+                  value={formData.model || ''}
+                  onChange={(e) => handleInputChange('model', e.target.value)}
+                />
+              </Stack>
+
+              <TextField
+                fullWidth
+                label={t('business.inventory.material')}
+                value={formData.material || ''}
+                onChange={(e) => handleInputChange('material', e.target.value)}
+                sx={{ mt: 2 }}
+              />
+
+              {/* Brand */}
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>{t('business.inventory.brand')}</InputLabel>
+                <Select
+                  value={formData.brand_id || ''}
+                  onChange={(e) =>
+                    handleInputChange('brand_id', e.target.value || undefined)
+                  }
+                  label={t('business.inventory.brand')}
+                  disabled={itemsLoading}
                 >
-                  <MenuItem value="kg">kg</MenuItem>
-                  <MenuItem value="g">g</MenuItem>
-                  <MenuItem value="lb">lb</MenuItem>
-                  <MenuItem value="oz">oz</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                label={t('business.inventory.color')}
-                value={formData.color || ''}
-                onChange={(e) => handleInputChange('color', e.target.value)}
-              />
-
-              <TextField
-                fullWidth
-                label={t('business.inventory.model')}
-                value={formData.model || ''}
-                onChange={(e) => handleInputChange('model', e.target.value)}
-              />
-            </Stack>
-
-            <TextField
-              fullWidth
-              label={t('business.inventory.material')}
-              value={formData.material || ''}
-              onChange={(e) => handleInputChange('material', e.target.value)}
-            />
-
-            {/* Brand */}
-            <FormControl fullWidth>
-              <InputLabel>{t('business.inventory.brand')}</InputLabel>
-              <Select
-                value={formData.brand_id || ''}
-                onChange={(e) =>
-                  handleInputChange('brand_id', e.target.value || undefined)
-                }
-                label={t('business.inventory.brand')}
-                disabled={itemsLoading}
-              >
-                <MenuItem value="">
-                  <em>{t('business.inventory.noBrand')}</em>
-                </MenuItem>
-                {itemsLoading ? (
-                  <MenuItem disabled>
-                    {t('business.inventory.loadingBrands')}
+                  <MenuItem value="">
+                    <em>{t('business.inventory.noBrand')}</em>
                   </MenuItem>
-                ) : brands.length === 0 ? (
-                  <MenuItem disabled>
-                    {t('business.inventory.noBrandsFound')}
-                  </MenuItem>
-                ) : (
-                  brands.map((brand) => (
-                    <MenuItem key={brand.id} value={brand.id}>
-                      {brand.name}
+                  {itemsLoading ? (
+                    <MenuItem disabled>
+                      {t('business.inventory.loadingBrands')}
                     </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
+                  ) : brands.length === 0 ? (
+                    <MenuItem disabled>
+                      {t('business.inventory.noBrandsFound')}
+                    </MenuItem>
+                  ) : (
+                    brands.map((brand) => (
+                      <MenuItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            </Box>
 
             {/* Special Properties */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.specialProperties')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.specialProperties')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.is_fragile ?? false}
-                    onChange={(e) =>
-                      handleInputChange('is_fragile', e.target.checked)
-                    }
-                  />
-                }
-                label={t('business.inventory.isFragile')}
-              />
+              <Stack direction="row" spacing={2}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_fragile ?? false}
+                      onChange={(e) =>
+                        handleInputChange('is_fragile', e.target.checked)
+                      }
+                    />
+                  }
+                  label={t('business.inventory.isFragile')}
+                />
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.is_perishable ?? false}
-                    onChange={(e) =>
-                      handleInputChange('is_perishable', e.target.checked)
-                    }
-                  />
-                }
-                label={t('business.inventory.isPerishable')}
-              />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_perishable ?? false}
+                      onChange={(e) =>
+                        handleInputChange('is_perishable', e.target.checked)
+                      }
+                    />
+                  }
+                  label={t('business.inventory.isPerishable')}
+                />
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.requires_special_handling ?? false}
-                    onChange={(e) =>
-                      handleInputChange(
-                        'requires_special_handling',
-                        e.target.checked
-                      )
-                    }
-                  />
-                }
-                label={t('business.inventory.requiresSpecialHandling')}
-              />
-            </Stack>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.requires_special_handling ?? false}
+                      onChange={(e) =>
+                        handleInputChange(
+                          'requires_special_handling',
+                          e.target.checked
+                        )
+                      }
+                    />
+                  }
+                  label={t('business.inventory.requiresSpecialHandling')}
+                />
+              </Stack>
+            </Box>
 
             {/* Order Quantities */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.orderQuantities')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.orderQuantities')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.minOrderQuantity')}
-                value={formData.min_order_quantity || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'min_order_quantity',
-                    parseInt(e.target.value) || 1
-                  )
-                }
-              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.minOrderQuantity')}
+                  value={formData.min_order_quantity || ''}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'min_order_quantity',
+                      parseInt(e.target.value) || 1
+                    )
+                  }
+                  error={!!validationErrors.minOrderQuantity}
+                  helperText={validationErrors.minOrderQuantity}
+                  inputProps={{ min: 1 }}
+                />
 
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.maxOrderQuantity')}
-                value={formData.max_order_quantity || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'max_order_quantity',
-                    parseInt(e.target.value) || undefined
-                  )
-                }
-              />
-            </Stack>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.maxOrderQuantity')}
+                  value={formData.max_order_quantity || ''}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'max_order_quantity',
+                      parseInt(e.target.value) || undefined
+                    )
+                  }
+                  error={!!validationErrors.maxOrderQuantity}
+                  helperText={validationErrors.maxOrderQuantity}
+                  inputProps={{ min: 1 }}
+                />
+              </Stack>
+            </Box>
 
             {/* Delivery Properties */}
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.deliveryProperties')}
-            </Typography>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.deliveryProperties')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.maxDeliveryDistance')}
-                value={formData.max_delivery_distance || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'max_delivery_distance',
-                    parseFloat(e.target.value) || undefined
-                  )
-                }
-              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.maxDeliveryDistance')}
+                  value={formData.max_delivery_distance || ''}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'max_delivery_distance',
+                      parseFloat(e.target.value) || undefined
+                    )
+                  }
+                  error={!!validationErrors.maxDeliveryDistance}
+                  helperText={validationErrors.maxDeliveryDistance}
+                  inputProps={{ min: 0, step: 0.1 }}
+                />
 
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.estimatedDeliveryTime')}
-                value={formData.estimated_delivery_time || ''}
-                onChange={(e) =>
-                  handleInputChange(
-                    'estimated_delivery_time',
-                    parseFloat(e.target.value) || undefined
-                  )
-                }
-              />
-            </Stack>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.estimatedDeliveryTime')}
+                  value={formData.estimated_delivery_time || ''}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'estimated_delivery_time',
+                      parseFloat(e.target.value) || undefined
+                    )
+                  }
+                  error={!!validationErrors.estimatedDeliveryTime}
+                  helperText={validationErrors.estimatedDeliveryTime}
+                  inputProps={{ min: 0, step: 0.5 }}
+                />
+              </Stack>
+            </Box>
 
             {/* Status */}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.is_active ?? true}
-                  onChange={(e) =>
-                    handleInputChange('is_active', e.target.checked)
-                  }
-                />
-              }
-              label={t('business.inventory.active')}
-            />
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.status')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.is_active ?? true}
+                    onChange={(e) =>
+                      handleInputChange('is_active', e.target.checked)
+                    }
+                  />
+                }
+                label={t('business.inventory.active')}
+              />
+            </Box>
           </Stack>
 
           {itemsError && (
@@ -493,20 +663,24 @@ export default function EditItemDialog({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>{t('common.cancel')}</Button>
+          <Button onClick={handleClose} disabled={saving}>
+            {t('common.cancel')}
+          </Button>
           <Button
             onClick={() => setShowImageUploadDialog(true)}
             variant="outlined"
             color="primary"
+            disabled={saving}
           >
             {t('business.inventory.manageImages')}
           </Button>
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={itemsLoading}
+            disabled={saving || itemsLoading}
+            startIcon={saving ? <CircularProgress size={16} /> : undefined}
           >
-            {itemsLoading ? t('common.saving') : t('common.save')}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>

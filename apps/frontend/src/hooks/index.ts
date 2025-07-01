@@ -23,6 +23,7 @@ export { useAgentOrders } from './useAgentOrders';
 export { useBusinessInventory } from './useBusinessInventory';
 export { useBusinessLocations } from './useBusinessLocations';
 export { useBusinessOrders } from './useBusinessOrders';
+export { useEditItemFlow } from './useEditItemFlow';
 export { useItems } from './useItems';
 
 // API client
