@@ -22,6 +22,9 @@ export class HasuraSystemService {
    * Creates a GraphQL client with admin secret for system operations
    */
   createClient(): any {
+    console.log('hasuraUrl', this.hasuraUrl);
+    console.log('adminSecret', this.adminSecret);
+
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
         'x-hasura-admin-secret': this.adminSecret,
