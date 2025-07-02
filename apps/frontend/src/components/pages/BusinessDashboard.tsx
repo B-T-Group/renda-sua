@@ -4,6 +4,7 @@ import {
   Edit as EditIcon,
   LocationOn as LocationIcon,
   Search as SearchIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -57,6 +58,7 @@ import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
+import CSVUploadDialog from '../business/CSVUploadDialog';
 import EditItemDialog from '../business/EditItemDialog';
 import InventoryCards from '../business/InventoryCards';
 import ItemsCards from '../business/ItemsCards';
@@ -106,6 +108,7 @@ const BusinessDashboard: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [locationToDelete, setLocationToDelete] =
     useState<BusinessLocation | null>(null);
+  const [showCSVUploadDialog, setShowCSVUploadDialog] = useState(false);
 
   const {
     orders,
@@ -851,26 +854,38 @@ const BusinessDashboard: React.FC = () => {
               mb={2}
             >
               <Typography variant="h6">{t('business.items.title')}</Typography>
-              <Tooltip title={t('business.items.noLocationsError')}>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (businessLocations.length === 0) {
-                        enqueueSnackbar(t('business.items.noLocationsError'), {
-                          variant: 'error',
-                        });
-                        return;
-                      }
-                      setShowAddItemDialog(true);
-                    }}
-                    disabled={businessLocations.length === 0}
-                  >
-                    {t('business.items.addItem')}
-                  </Button>
-                </span>
-              </Tooltip>
+              <Box display="flex" gap={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadIcon />}
+                  onClick={() => setShowCSVUploadDialog(true)}
+                >
+                  {t('business.csvUpload.uploadCSV')}
+                </Button>
+                <Tooltip title={t('business.items.noLocationsError')}>
+                  <span>
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        if (businessLocations.length === 0) {
+                          enqueueSnackbar(
+                            t('business.items.noLocationsError'),
+                            {
+                              variant: 'error',
+                            }
+                          );
+                          return;
+                        }
+                        setShowAddItemDialog(true);
+                      }}
+                      disabled={businessLocations.length === 0}
+                    >
+                      {t('business.items.addItem')}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
             </Box>
 
             {itemsLoading ? (
@@ -953,6 +968,13 @@ const BusinessDashboard: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* CSV Upload Dialog */}
+      <CSVUploadDialog
+        open={showCSVUploadDialog}
+        onClose={() => setShowCSVUploadDialog(false)}
+        businessId={profile?.business?.id || ''}
+      />
     </Container>
   );
 };

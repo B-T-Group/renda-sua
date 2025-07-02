@@ -391,6 +391,28 @@
         "allCategories": "All Categories",
         "showing": "Showing"
       }
+    },
+    "csvUpload": {
+      "title": "CSV Upload",
+      "uploadCSV": "Upload CSV",
+      "howToUse": "How to use CSV Upload",
+      "instructions": "Upload a CSV file to bulk add or update items. The CSV should have headers matching the item fields. If an item with the same name or SKU already exists, it will be updated; otherwise, a new item will be created. Download the template below to see the required format.",
+      "downloadTemplate": "Download Template",
+      "selectFile": "Select CSV File",
+      "upload": "Upload Items",
+      "uploading": "Uploading...",
+      "preview": "Preview",
+      "items": "items",
+      "results": "Upload Results",
+      "inserted": "Inserted",
+      "updated": "Updated",
+      "errors": "Errors",
+      "errorDetails": "Error Details",
+      "invalidFileType": "Please select a valid CSV file",
+      "emptyFile": "The CSV file is empty or has no data rows",
+      "parseError": "Error parsing CSV file. Please check the format.",
+      "noData": "No data to upload. Please select a valid CSV file.",
+      "uploadSuccess": "Successfully uploaded {{success}} items with {{errors}} errors"
     }
   },
   "agent": {

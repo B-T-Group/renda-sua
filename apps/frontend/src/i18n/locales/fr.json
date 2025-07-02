@@ -395,6 +395,28 @@
         "allCategories": "Toutes les Catégories",
         "showing": "Affichage"
       }
+    },
+    "csvUpload": {
+      "title": "Téléchargement CSV",
+      "uploadCSV": "Télécharger CSV",
+      "howToUse": "Comment utiliser le téléchargement CSV",
+      "instructions": "Téléchargez un fichier CSV pour ajouter ou mettre à jour des articles en masse. Le CSV doit avoir des en-têtes correspondant aux champs d'articles. Si un article avec le même nom ou référence existe déjà, il sera mis à jour ; sinon, un nouvel article sera créé. Téléchargez le modèle ci-dessous pour voir le format requis.",
+      "downloadTemplate": "Télécharger le Modèle",
+      "selectFile": "Sélectionner un Fichier CSV",
+      "upload": "Télécharger les Articles",
+      "uploading": "Téléchargement...",
+      "preview": "Aperçu",
+      "items": "articles",
+      "results": "Résultats du Téléchargement",
+      "inserted": "Insérés",
+      "updated": "Mis à jour",
+      "errors": "Erreurs",
+      "errorDetails": "Détails des Erreurs",
+      "invalidFileType": "Veuillez sélectionner un fichier CSV valide",
+      "emptyFile": "Le fichier CSV est vide ou n'a pas de lignes de données",
+      "parseError": "Erreur lors de l'analyse du fichier CSV. Veuillez vérifier le format.",
+      "noData": "Aucune donnée à télécharger. Veuillez sélectionner un fichier CSV valide.",
+      "uploadSuccess": "{{success}} articles téléchargés avec succès avec {{errors}} erreurs"
     }
   },
   "notifications": {
