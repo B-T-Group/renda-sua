@@ -18,11 +18,6 @@ export class HasuraSystemService {
       this.configService.get<string>('hasura.adminSecret') ||
       'myadminsecretkey';
 
-    console.log('configService:headers', {
-      'x-hasura-admin-secret': this.adminSecret,
-      'Content-Type': 'application/json',
-    });
-
     this.client = new GraphQLClient(this.hasuraUrl, {
       headers: {
         'x-hasura-admin-secret': this.adminSecret,

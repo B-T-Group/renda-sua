@@ -1,6 +1,6 @@
-import { GraphQLClient } from 'graphql-request';
 import { useAuth0 } from '@auth0/auth0-react';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { GraphQLClient } from 'graphql-request';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { environment } from '../config/environment';
 
 export const useGraphQLClient = () => {
@@ -11,8 +11,6 @@ export const useGraphQLClient = () => {
 
   // Memoize the base client to prevent recreation
   const baseClient = useMemo(() => {
-    console.log('Setting up GraphQL client with URL:', environment.hasuraUrl);
-    
     return new GraphQLClient(environment.hasuraUrl, {
       headers: {
         'Content-Type': 'application/json',
@@ -36,25 +34,23 @@ export const useGraphQLClient = () => {
       try {
         setIsLoading(true);
         setError(null);
-        
+
         // Test token retrieval first
         const token = await getAccessTokenSilently();
-        console.log('Token retrieved successfully');
-        
+
         if (!isMounted) return;
 
         // Create authenticated client
         const authenticatedClient = new GraphQLClient(environment.hasuraUrl, {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
         if (isMounted) {
           setClient(authenticatedClient);
           setIsLoading(false);
-          console.log('GraphQL Client setup completed successfully');
         }
       } catch (error) {
         console.error('Failed to setup GraphQL client:', error);
@@ -74,30 +70,31 @@ export const useGraphQLClient = () => {
   }, [getAccessTokenSilently, isAuthenticated]);
 
   // Memoize the getAuthenticatedClient function to prevent unnecessary re-renders
-  const getAuthenticatedClient = useCallback(async (): Promise<GraphQLClient | null> => {
-    if (!isAuthenticated) return null;
+  const getAuthenticatedClient =
+    useCallback(async (): Promise<GraphQLClient | null> => {
+      if (!isAuthenticated) return null;
 
-    try {
-      const token = await getAccessTokenSilently();
-      return new GraphQLClient(environment.hasuraUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-    } catch (error) {
-      console.error('Error getting authenticated client:', error);
-      return null;
-    }
-  }, [isAuthenticated, getAccessTokenSilently]);
+      try {
+        const token = await getAccessTokenSilently();
+        return new GraphQLClient(environment.hasuraUrl, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch (error) {
+        console.error('Error getting authenticated client:', error);
+        return null;
+      }
+    }, [isAuthenticated, getAccessTokenSilently]);
 
-  return { 
-    client, 
-    isLoading, 
-    error, 
+  return {
+    client,
+    isLoading,
+    error,
     getAuthenticatedClient,
-    baseClient 
+    baseClient,
   };
 };
 
-export default useGraphQLClient; 
+export default useGraphQLClient;

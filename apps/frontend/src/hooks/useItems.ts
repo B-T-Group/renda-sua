@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { ItemImage } from '../types/image';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Item {
@@ -41,6 +42,7 @@ export interface Item {
       name: string;
     };
   };
+  item_images?: ItemImage[];
 }
 
 export interface Brand {
@@ -127,6 +129,14 @@ const GET_ITEMS = `
           name
         }
       }
+      item_images {
+        id
+        image_url
+        image_type
+        alt_text
+        display_order
+        created_at
+      }
     }
   }
 `;
@@ -202,6 +212,14 @@ const GET_SINGLE_ITEM = `
           id
           name
         }
+      }
+      item_images {
+        id
+        image_url
+        image_type
+        alt_text
+        display_order
+        created_at
       }
     }
   }

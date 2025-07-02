@@ -7,11 +7,6 @@ WORKDIR /app
 # Install dependencies for native modules
 RUN apk add --no-cache libc6-compat
 
-# Define build arguments for AWS credentials
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
-ARG AWS_REGION=ca-central-1
-
 COPY dist/apps/backend/ ./
 
 RUN npm ci --only=production --legacy-peer-deps
@@ -32,11 +27,6 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
-
-# Set AWS credentials as environment variables
-ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-ENV AWS_REGION=${AWS_REGION}
 
 # Start the application
 CMD ["node", "main.js"] 

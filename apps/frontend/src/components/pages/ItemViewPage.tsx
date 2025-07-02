@@ -26,6 +26,7 @@ import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import EditItemDialog from '../business/EditItemDialog';
 import ImageUploadDialog from '../business/ImageUploadDialog';
+import ItemImageGallery from '../business/ItemImageGallery';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 
 export default function ItemViewPage() {
@@ -226,6 +227,14 @@ export default function ItemViewPage() {
               </Grid>
             </Stack>
           </Paper>
+
+          {/* Item Images */}
+          <Box sx={{ mt: 3 }}>
+            <ItemImageGallery
+              images={item.item_images || []}
+              itemName={item.name}
+            />
+          </Box>
 
           {/* Physical Properties */}
           <Paper sx={{ p: 3, mt: 3 }}>
