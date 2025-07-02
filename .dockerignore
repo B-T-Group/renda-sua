@@ -4,16 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build outputs
-dist
-build
-
-# Environment files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # IDE files
 .vscode
@@ -59,9 +49,6 @@ jspm_packages/
 
 # Yarn Integrity file
 .yarn-integrity
-
-# dotenv environment variables file
-.env
 
 # AWS credentials (if accidentally committed)
 .aws
