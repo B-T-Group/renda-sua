@@ -78,12 +78,12 @@ export default (): Configuration => ({
     adminSecret: process.env.HASURA_GRAPHQL_ADMIN_SECRET || 'myadminsecretkey',
   },
   aws: {
-    region: process.env.AWS_REGION || 'us-east-1',
+    region: process.env.AWS_REGION || 'ca-central-1',
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
     s3BucketName: process.env.S3_BUCKET_NAME,
     s3BucketRegion:
-      process.env.S3_BUCKET_REGION || process.env.AWS_REGION || 'us-east-1',
+      process.env.S3_BUCKET_REGION || process.env.AWS_REGION || 'ca-central-1',
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'your_jwt_secret_key',

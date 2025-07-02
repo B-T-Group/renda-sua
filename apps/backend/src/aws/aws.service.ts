@@ -1,7 +1,7 @@
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Configuration } from '../config/configuration';
 
 export interface PresignedUrlOptions {
@@ -25,7 +25,7 @@ export class AwsService {
   constructor(private readonly configService: ConfigService<Configuration>) {
     const awsConfig = this.configService.get('aws');
     this.s3Client = new S3Client({
-      region: awsConfig?.region || 'us-east-1',
+      region: awsConfig?.region || 'ca-central-1',
       credentials: {
         accessKeyId: awsConfig?.accessKeyId || '',
         secretAccessKey: awsConfig?.secretAccessKey || '',
