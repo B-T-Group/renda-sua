@@ -2,6 +2,7 @@
   "common": {
     "loading": "Chargement...",
     "error": "Erreur",
+    "errorLoadingData": "Erreur lors du chargement des données. Veuillez réessayer.",
     "success": "Succès",
     "cancel": "Annuler",
     "save": "Enregistrer",
@@ -39,7 +40,7 @@
     "rowsPerPage": "Lignes par page :",
     "of": "sur",
     "moreThan": "plus de",
-    "moreThan": "plus de",
+    "saving": "Enregistrement...",
     "back": "Retour",
     "home": "Accueil"
   },
@@ -180,6 +181,11 @@
         "dateFrom": "Date de début",
         "dateTo": "Date de fin",
         "address": "Adresse de livraison"
+      },
+      "actions": {
+        "confirm": "Confirmer",
+        "prepare": "Préparer",
+        "ready": "Prête"
       },
       "status": {
         "pending": "En attente",

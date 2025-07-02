@@ -61,6 +61,7 @@
     "rowsPerPage": "Rows per page:",
     "of": "of",
     "moreThan": "more than",
+    "saving": "Saving...",
     "home": "Home"
   },
   "auth": {
@@ -222,6 +223,11 @@
         "dateTo": "Date To",
         "address": "Address",
         "allStatuses": "All Statuses"
+      },
+      "actions": {
+        "confirm": "Confirm",
+        "prepare": "Prepare",
+        "ready": "Ready"
       }
     },
     "inventory": {
@@ -338,7 +344,15 @@
       "maxDeliveryDistanceInvalid": "Maximum delivery distance must be a positive number",
       "estimatedDeliveryTimeInvalid": "Estimated delivery time must be a positive number",
       "loadingBrands": "Loading brands...",
-      "noBrandsFound": "No brands found"
+      "noBrandsFound": "No brands found",
+      "editItem": "Edit Item: {{itemName}}",
+      "manageImages": "Manage Images",
+      "minOrderQuantity": "Min Order Quantity",
+      "maxOrderQuantity": "Max Order Quantity",
+      "sizeUnit": "Size Unit",
+      "weightUnit": "Weight Unit",
+      "model": "Model",
+      "material": "Material"
     },
     "locations": {
       "title": "Business Locations",
@@ -403,6 +417,9 @@
         "allBrands": "All Brands",
         "allCategories": "All Categories"
       },
+      "viewItem": "View Item",
+      "editItem": "Edit Item",
+      "deleteItem": "Delete Item",
       "csvUpload": {
         "uploadCSV": "Upload CSV",
         "title": "CSV Upload",
