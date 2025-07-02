@@ -123,7 +123,8 @@
       "welcome": "Welcome back, {{name}}! This is your business dashboard.",
       "orders": "Orders",
       "inventory": "Inventory",
-      "locations": "Locations"
+      "locations": "Locations",
+      "items": "Items"
     },
     "orders": {
       "title": "Order Management",
@@ -313,7 +314,25 @@
       "maxDeliveryDistanceInvalid": "Maximum delivery distance must be greater than 0",
       "estimatedDeliveryTimeInvalid": "Estimated delivery time must be greater than 0",
       "pleaseFixValidationErrors": "Please fix the validation errors before saving",
-      "skuPlaceholder": "Enter SKU (optional)"
+      "skuPlaceholder": "Enter SKU (optional)",
+      "stockStatus": "Stock Status",
+      "lastRestocked": "Last Restocked",
+      "outOfStock": "Out of Stock",
+      "lowStock": "Low Stock",
+      "inStock": "In Stock",
+      "unknown": "Unknown",
+      "neverRestocked": "Never",
+      "confirmDelete": "Are you sure you want to delete this inventory item?",
+      "enterRestockQuantity": "Enter restock quantity:",
+      "filters": {
+        "search": "Search items...",
+        "stockStatus": "Stock Status",
+        "location": "Location",
+        "allStatuses": "All Statuses",
+        "allLocations": "All Locations",
+        "showing": "Showing"
+      },
+      "noItems": "No inventory items found. Add your first item to get started."
     },
     "locations": {
       "title": "Business Locations",
@@ -341,6 +360,37 @@
       "primaryLocationWarning": "This is your primary location. You must set another location as primary before deleting this one.",
       "activate": "Activate",
       "deactivate": "Deactivate"
+    },
+    "items": {
+      "title": "Items Management",
+      "addItem": "Add Item",
+      "editItem": "Edit Item",
+      "viewItem": "View Item",
+      "deleteItem": "Delete Item",
+      "noItems": "No items found. Add your first item to get started.",
+      "noLocationsError": "You must add at least one business location before adding items.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "brand": "Brand",
+      "sku": "SKU",
+      "category": "Category",
+      "fragile": "Fragile",
+      "perishable": "Perishable",
+      "specialHandling": "Special Handling",
+      "weight": "Weight",
+      "size": "Size",
+      "color": "Color",
+      "material": "Material",
+      "filters": {
+        "search": "Search items...",
+        "status": "Status",
+        "brand": "Brand",
+        "category": "Category",
+        "allStatuses": "All Statuses",
+        "allBrands": "All Brands",
+        "allCategories": "All Categories",
+        "showing": "Showing"
+      }
     }
   },
   "agent": {

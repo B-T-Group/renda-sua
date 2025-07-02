@@ -44,17 +44,22 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBusinessInventory } from '../../hooks/useBusinessInventory';
+import {
+  BusinessInventoryItem,
+  useBusinessInventory,
+} from '../../hooks/useBusinessInventory';
 import {
   AddBusinessLocationData,
   BusinessLocation,
   useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
 import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
+import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
 import EditItemDialog from '../business/EditItemDialog';
-import InventoryTable from '../business/InventoryTable';
+import InventoryCards from '../business/InventoryCards';
+import ItemsCards from '../business/ItemsCards';
 import LocationModal from '../business/LocationModal';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 
@@ -120,6 +125,7 @@ const BusinessDashboard: React.FC = () => {
     fetchAvailableItems,
     fetchBusinessLocations,
     addInventoryItem,
+    deleteInventoryItem,
     restockItem,
   } = useBusinessInventory();
 
@@ -136,11 +142,19 @@ const BusinessDashboard: React.FC = () => {
     profile?.id || undefined
   );
 
+  const {
+    items,
+    loading: itemsLoading,
+    error: itemsError,
+    fetchItems,
+  } = useItems(profile?.business?.id);
+
   useEffect(() => {
     fetchOrders();
     fetchInventory();
-    fetchAvailableItems(profile?.business?.id);
+    fetchAvailableItems();
     fetchBusinessLocations();
+    fetchItems();
 
     // Only fetch locations if we have the required profile data
     if (profile?.id && profile?.business?.id) {
@@ -152,6 +166,7 @@ const BusinessDashboard: React.FC = () => {
     fetchAvailableItems,
     fetchBusinessLocations,
     fetchLocations,
+    fetchItems,
     profile?.id,
     profile?.business?.id,
   ]);
@@ -205,6 +220,19 @@ const BusinessDashboard: React.FC = () => {
   const handleCloseEditItemDialog = () => {
     setShowEditItemDialog(false);
     setEditingItem(null);
+  };
+
+  const handleDeleteInventoryItem = (item: BusinessInventoryItem) => {
+    if (window.confirm(t('business.inventory.confirmDelete'))) {
+      deleteInventoryItem(item.id);
+    }
+  };
+
+  const handleRestockInventoryItem = (item: BusinessInventoryItem) => {
+    const quantity = prompt(t('business.inventory.enterRestockQuantity'));
+    if (quantity && !isNaN(Number(quantity))) {
+      restockItem(item.id, Number(quantity));
+    }
   };
 
   const handleSaveLocation = async (data: AddBusinessLocationData | any) => {
@@ -320,6 +348,13 @@ const BusinessDashboard: React.FC = () => {
             label={
               <Badge badgeContent={locations.length} color="success">
                 {t('business.dashboard.locations')}
+              </Badge>
+            }
+          />
+          <Tab
+            label={
+              <Badge badgeContent={items.length} color="info">
+                {t('business.dashboard.items')}
               </Badge>
             }
           />
@@ -646,14 +681,16 @@ const BusinessDashboard: React.FC = () => {
                 {inventoryError}
               </Alert>
             ) : (
-              <InventoryTable
-                items={availableItems}
+              <InventoryCards
+                items={inventory}
                 loading={inventoryLoading}
                 onUpdateInventory={(item) => {
                   setUpdatingInventoryItem(item);
                   setShowUpdateInventoryDialog(true);
                 }}
                 onEditItem={handleEditItem}
+                onDeleteItem={handleDeleteInventoryItem}
+                onRestockItem={handleRestockInventoryItem}
               />
             )}
           </Box>
@@ -798,6 +835,56 @@ const BusinessDashboard: React.FC = () => {
                   </Grid>
                 ))}
               </Grid>
+            )}
+          </Box>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          {/* Items Management */}
+          <Box sx={{ mb: 3 }}>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
+            >
+              <Typography variant="h6">{t('business.items.title')}</Typography>
+              <Tooltip title={t('business.items.noLocationsError')}>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (businessLocations.length === 0) {
+                        enqueueSnackbar(t('business.items.noLocationsError'), {
+                          variant: 'error',
+                        });
+                        return;
+                      }
+                      setShowAddItemDialog(true);
+                    }}
+                    disabled={businessLocations.length === 0}
+                  >
+                    {t('business.items.addItem')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+
+            {itemsLoading ? (
+              <Box display="flex" justifyContent="center" p={3}>
+                <CircularProgress />
+              </Box>
+            ) : itemsError ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {itemsError}
+              </Alert>
+            ) : (
+              <ItemsCards
+                items={items}
+                loading={itemsLoading}
+                onEditItem={handleEditItem}
+              />
             )}
           </Box>
         </TabPanel>

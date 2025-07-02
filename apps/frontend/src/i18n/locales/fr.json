@@ -57,7 +57,8 @@
     "noActiveOrders": "Aucune commande active pour le moment",
     "pickUpPendingOrders": "Récupérez des commandes en attente pour commencer",
     "noPendingOrders": "Aucune commande en attente disponible",
-    "newOrdersWillAppear": "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles"
+    "newOrdersWillAppear": "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles",
+    "items": "Articles"
   },
   "orderStatus": {
     "pending": "en attente",
@@ -127,7 +128,8 @@
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
       "orders": "Commandes",
       "inventory": "Inventaire",
-      "locations": "Emplacements"
+      "locations": "Emplacements",
+      "items": "Articles"
     },
     "orders": {
       "title": "Gestion des Commandes",
@@ -317,7 +319,25 @@
       "maxDeliveryDistanceInvalid": "La distance de livraison maximale doit être supérieure à 0",
       "estimatedDeliveryTimeInvalid": "Le temps de livraison estimé doit être supérieur à 0",
       "pleaseFixValidationErrors": "Veuillez corriger les erreurs de validation avant de sauvegarder",
-      "skuPlaceholder": "Entrez la référence (optionnel)"
+      "skuPlaceholder": "Entrez la référence (optionnel)",
+      "stockStatus": "Statut du Stock",
+      "lastRestocked": "Dernier Réapprovisionnement",
+      "outOfStock": "Rupture de Stock",
+      "lowStock": "Stock Faible",
+      "inStock": "En Stock",
+      "unknown": "Inconnu",
+      "neverRestocked": "Jamais",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer cet article d'inventaire ?",
+      "enterRestockQuantity": "Entrez la quantité de réapprovisionnement :",
+      "filters": {
+        "search": "Rechercher des articles...",
+        "stockStatus": "Statut du Stock",
+        "location": "Emplacement",
+        "allStatuses": "Tous les Statuts",
+        "allLocations": "Tous les Emplacements",
+        "showing": "Affichage"
+      },
+      "noItems": "Aucun article d'inventaire trouvé. Ajoutez votre premier article pour commencer."
     },
     "locations": {
       "title": "Emplacements d'Entreprise",
@@ -344,6 +364,37 @@
       "primaryLocationWarning": "Ceci est votre emplacement principal. Vous devez définir un autre emplacement comme principal avant de supprimer celui-ci.",
       "activate": "Activer",
       "deactivate": "Désactiver"
+    },
+    "items": {
+      "title": "Gestion des Articles",
+      "addItem": "Ajouter un Article",
+      "editItem": "Modifier l'Article",
+      "viewItem": "Voir l'Article",
+      "deleteItem": "Supprimer l'Article",
+      "noItems": "Aucun article trouvé. Ajoutez votre premier article pour commencer.",
+      "noLocationsError": "Vous devez ajouter au moins un emplacement d'entreprise avant d'ajouter des articles.",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "brand": "Marque",
+      "sku": "Référence",
+      "category": "Catégorie",
+      "fragile": "Fragile",
+      "perishable": "Périssable",
+      "specialHandling": "Manutention Spéciale",
+      "weight": "Poids",
+      "size": "Taille",
+      "color": "Couleur",
+      "material": "Matériau",
+      "filters": {
+        "search": "Rechercher des articles...",
+        "status": "Statut",
+        "brand": "Marque",
+        "category": "Catégorie",
+        "allStatuses": "Tous les Statuts",
+        "allBrands": "Toutes les Marques",
+        "allCategories": "Toutes les Catégories",
+        "showing": "Affichage"
+      }
     }
   },
   "notifications": {
