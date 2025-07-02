@@ -22,6 +22,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CURRENCIES, SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
 import {
   AddInventoryItemData,
   useBusinessInventory,
@@ -534,10 +535,11 @@ export default function AddItemDialog({
                   }
                   label={t('business.inventory.currency')}
                 >
-                  <MenuItem value="USD">USD</MenuItem>
-                  <MenuItem value="EUR">EUR</MenuItem>
-                  <MenuItem value="GBP">GBP</MenuItem>
-                  <MenuItem value="XAF">XAF</MenuItem>
+                  {CURRENCIES.map((currency) => (
+                    <MenuItem key={currency} value={currency}>
+                      {currency}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Stack>
@@ -568,11 +570,11 @@ export default function AddItemDialog({
                   }
                   label={t('business.inventory.sizeUnit')}
                 >
-                  <MenuItem value="cm">cm</MenuItem>
-                  <MenuItem value="m">m</MenuItem>
-                  <MenuItem value="in">in</MenuItem>
-                  <MenuItem value="ft">ft</MenuItem>
-                  <MenuItem value="mm">mm</MenuItem>
+                  {SIZE_UNITS.map((unit) => (
+                    <MenuItem key={unit} value={unit}>
+                      {unit}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Stack>
@@ -603,10 +605,11 @@ export default function AddItemDialog({
                   }
                   label={t('business.inventory.weightUnit')}
                 >
-                  <MenuItem value="kg">kg</MenuItem>
-                  <MenuItem value="g">g</MenuItem>
-                  <MenuItem value="lb">lb</MenuItem>
-                  <MenuItem value="oz">oz</MenuItem>
+                  {WEIGHT_UNITS.map((unit) => (
+                    <MenuItem key={unit} value={unit}>
+                      {unit}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Stack>

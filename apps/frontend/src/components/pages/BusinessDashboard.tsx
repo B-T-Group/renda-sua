@@ -213,7 +213,9 @@ const BusinessDashboard: React.FC = () => {
   };
 
   const handleEditItem = (item: any) => {
-    setEditingItem(item.item);
+    // Handle both direct items and nested items (for inventory)
+    const itemToEdit = item.item || item;
+    setEditingItem(itemToEdit);
     setShowEditItemDialog(true);
   };
 

@@ -11,6 +11,7 @@ import {
   Card,
   CardActions,
   CardContent,
+  CardMedia,
   Chip,
   FormControl,
   Grid,
@@ -248,6 +249,20 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
             <Card
               sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
             >
+              {/* Item Image */}
+              {item.item_images && item.item_images.length > 0 && (
+                <CardMedia
+                  component="img"
+                  height="140"
+                  image={
+                    item.item_images.find((img) => img.image_type === 'main')
+                      ?.image_url || item.item_images[0].image_url
+                  }
+                  alt={item.name}
+                  sx={{ objectFit: 'cover' }}
+                />
+              )}
+
               <CardContent sx={{ flexGrow: 1 }}>
                 {/* Item Header */}
                 <Box

@@ -21,6 +21,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
 import { Item, useItems } from '../../hooks/useItems';
 import ImageUploadDialog from './ImageUploadDialog';
 
@@ -404,11 +405,11 @@ export default function EditItemDialog({
                     }
                     label={t('business.inventory.sizeUnit')}
                   >
-                    <MenuItem value="cm">cm</MenuItem>
-                    <MenuItem value="m">m</MenuItem>
-                    <MenuItem value="in">in</MenuItem>
-                    <MenuItem value="ft">ft</MenuItem>
-                    <MenuItem value="mm">mm</MenuItem>
+                    {SIZE_UNITS.map((unit) => (
+                      <MenuItem key={unit} value={unit}>
+                        {unit}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Stack>
@@ -437,10 +438,11 @@ export default function EditItemDialog({
                     }
                     label={t('business.inventory.weightUnit')}
                   >
-                    <MenuItem value="kg">kg</MenuItem>
-                    <MenuItem value="g">g</MenuItem>
-                    <MenuItem value="lb">lb</MenuItem>
-                    <MenuItem value="oz">oz</MenuItem>
+                    {WEIGHT_UNITS.map((unit) => (
+                      <MenuItem key={unit} value={unit}>
+                        {unit}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Stack>

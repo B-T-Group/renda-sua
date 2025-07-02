@@ -53,6 +53,12 @@ export interface BusinessInventoryItem {
     min_order_quantity: number | null;
     max_order_quantity: number | null;
     is_active: boolean;
+    item_images: {
+      id: string;
+      image_url: string;
+      alt_text: string;
+      image_type: string;
+    }[];
   };
 }
 
@@ -129,6 +135,12 @@ const GET_BUSINESS_INVENTORY = `
         min_order_quantity
         max_order_quantity
         is_active
+        item_images {
+          id
+          image_url
+          alt_text
+          image_type
+        }
       }
     }
   }
