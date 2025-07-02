@@ -1,6 +1,30 @@
 {
   "common": {
     "loading": "Loading...",
+    "error": "An error occurred",
+    "errorLoadingData": "Error loading data. Please try again.",
+    "noData": "No data available",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "filter": "Filter",
+    "clear": "Clear",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "close": "Close",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Information",
+    "error": "Error",
+    "loading": "Loading...",
     "error": "Error",
     "success": "Success",
     "cancel": "Cancel",
@@ -32,8 +56,6 @@
     "invalidInput": "Invalid input",
     "requiredField": "Required field",
     "refresh": "Refresh",
-    "yes": "Yes",
-    "no": "No",
     "actions": "Actions",
     "home": "Home"
   },
@@ -381,25 +403,30 @@
     },
     "csvUpload": {
       "title": "CSV Upload",
-      "uploadCSV": "Upload CSV",
-      "howToUse": "How to use CSV Upload",
-      "instructions": "Upload a CSV file to bulk add or update items. The CSV should have headers matching the item fields. If an item with the same name or SKU already exists, it will be updated; otherwise, a new item will be created. Download the template below to see the required format.",
+      "selectMode": "Select Upload Mode",
+      "itemsMode": "Items",
+      "inventoryMode": "Inventory",
+      "howToUse": "How to use CSV upload",
+      "instructions": "Upload a CSV file to bulk import items. The first row should contain column headers. Download the template to see the required format.",
+      "instructionsItems": "Upload a CSV file to bulk import items. The first row should contain column headers. Download the template to see the required format.",
+      "instructionsInventory": "Upload a CSV file to bulk import inventory items. Make sure the item names and location names match existing items and locations in your system.",
       "downloadTemplate": "Download Template",
       "selectFile": "Select CSV File",
-      "upload": "Upload Items",
-      "uploading": "Uploading...",
       "preview": "Preview",
       "items": "items",
+      "inventoryItems": "inventory items",
+      "upload": "Upload",
+      "uploading": "Uploading...",
+      "uploadSuccess": "Successfully uploaded {{success}} items with {{errors}} errors",
+      "invalidFileType": "Please select a valid CSV file",
+      "emptyFile": "The CSV file is empty or invalid",
+      "parseError": "Error parsing CSV file",
+      "noData": "No data to upload",
       "results": "Upload Results",
       "inserted": "Inserted",
       "updated": "Updated",
       "errors": "Errors",
-      "errorDetails": "Error Details",
-      "invalidFileType": "Please select a valid CSV file",
-      "emptyFile": "The CSV file is empty or has no data rows",
-      "parseError": "Error parsing CSV file. Please check the format.",
-      "noData": "No data to upload. Please select a valid CSV file.",
-      "uploadSuccess": "Successfully uploaded {{success}} items with {{errors}} errors"
+      "errorDetails": "Error Details"
     }
   },
   "agent": {
@@ -474,14 +501,14 @@
   },
   "seo": {
     "home": {
-      "title": "Rendasua - Your Trusted Business Platform",
-      "description": "Rendasua is a comprehensive business platform connecting agents, businesses, and clients. Streamline your operations, manage inventory, and grow your business with our innovative solutions.",
+      "title": "Rendasua - Business Platform",
+      "description": "Rendasua is a comprehensive business platform connecting businesses, agents, and clients. Streamline your operations, manage inventory, and grow your business with our innovative solutions.",
       "keywords": "business platform, inventory management, agent dashboard, business dashboard, client management, order management, Rendasua"
     },
     "dashboard": {
       "title": "Dashboard - Rendasua",
       "description": "Access your personalized dashboard to manage your business operations, view analytics, and track performance.",
-      "keywords": "dashboard, business analytics, performance tracking, Rendasua"
+      "keywords": "dashboard, business operations, analytics, performance tracking, Rendasua"
     },
     "agent-dashboard": {
       "title": "Agent Dashboard - Rendasua",
@@ -496,10 +523,10 @@
     "profile": {
       "title": "Profile - Rendasua",
       "description": "Manage your profile information, preferences, and account settings.",
-      "keywords": "profile, account settings, preferences, Rendasua"
+      "keywords": "profile, account settings, user preferences, Rendasua"
     },
     "client-orders": {
-      "title": "Client Orders - Rendasua",
+      "title": "My Orders - Rendasua",
       "description": "View and manage your client orders, track order status, and handle customer requests.",
       "keywords": "client orders, order management, customer service, Rendasua"
     },
@@ -537,6 +564,11 @@
       "title": "Items Management - Rendasua",
       "description": "Manage your product catalog, add new items, update product information, and maintain your product database.",
       "keywords": "product management, catalog management, item database, product information, business items"
+    },
+    "public-items": {
+      "title": "Browse Items - Rendasua",
+      "description": "Explore our collection of products and items. Create an account to start purchasing and managing your orders.",
+      "keywords": "products, items, catalog, shopping, online store, Rendasua"
     }
   },
   "breadcrumbs": {
@@ -551,5 +583,24 @@
     "business-inventory": "Inventory",
     "business-locations": "Locations",
     "business-items": "Items"
+  },
+  "public": {
+    "items": {
+      "title": "Browse Items",
+      "subtitle": "Explore our collection of products and items. Create an account to start purchasing and managing your orders.",
+      "authenticationMessage": "Create an account or sign in to start purchasing items and managing your orders.",
+      "signUp": "Sign Up",
+      "login": "Login",
+      "searchPlaceholder": "Search items...",
+      "category": "Category",
+      "brand": "Brand",
+      "allCategories": "All Categories",
+      "allBrands": "All Brands",
+      "resultsCount": "{{count}} items found",
+      "price": "${{price}} {{currency}}",
+      "signUpToPurchase": "Sign Up to Purchase",
+      "noItemsFound": "No items found",
+      "tryDifferentFilters": "Try adjusting your search or filters to find what you're looking for."
+    }
   }
 }

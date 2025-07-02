@@ -20,11 +20,18 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  AddInventoryItemData,
+  useBusinessInventory,
+} from '../../hooks/useBusinessInventory';
+import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItems } from '../../hooks/useItems';
 
 interface CSVUploadDialogProps {
@@ -32,6 +39,8 @@ interface CSVUploadDialogProps {
   onClose: () => void;
   businessId: string;
 }
+
+type UploadMode = 'items' | 'inventory';
 
 interface CSVItem {
   name: string;
@@ -55,6 +64,19 @@ interface CSVItem {
   item_sub_category_id?: number;
   brand_id?: string;
   business_id: string;
+}
+
+interface CSVInventoryItem {
+  item_name: string;
+  business_location_name: string;
+  quantity: number;
+  available_quantity: number;
+  reserved_quantity: number;
+  reorder_point: number;
+  reorder_quantity: number;
+  unit_cost: number;
+  selling_price: number;
+  is_active?: boolean;
 }
 
 interface UploadResult {
@@ -99,12 +121,33 @@ export default function CSVUploadDialog({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { createItem, updateItem, items } = useItems(businessId);
+  const { addInventoryItem, updateInventoryItem, inventory } =
+    useBusinessInventory(businessId);
+  const { locations } = useBusinessLocations(businessId);
 
-  const [csvData, setCsvData] = useState<CSVItem[]>([]);
+  const [uploadMode, setUploadMode] = useState<UploadMode>('items');
+  const [csvData, setCsvData] = useState<CSVItem[] | CSVInventoryItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const [previewData, setPreviewData] = useState<CSVItem[]>([]);
+  const [previewData, setPreviewData] = useState<
+    CSVItem[] | CSVInventoryItem[]
+  >([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleModeChange = (
+    event: React.MouseEvent<HTMLElement>,
+    newMode: UploadMode | null
+  ) => {
+    if (newMode !== null) {
+      setUploadMode(newMode);
+      setCsvData([]);
+      setPreviewData([]);
+      setUploadResult(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -136,7 +179,7 @@ export default function CSVUploadDialog({
       }
 
       const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-      const data: CSVItem[] = [];
+      const data: CSVItem[] | CSVInventoryItem[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map((v) => v.trim());
@@ -166,6 +209,13 @@ export default function CSVUploadDialog({
               'min_order_quantity',
               'max_order_quantity',
               'item_sub_category_id',
+              'quantity',
+              'available_quantity',
+              'reserved_quantity',
+              'reorder_point',
+              'reorder_quantity',
+              'unit_cost',
+              'selling_price',
             ].includes(header)
           ) {
             row[header] = value ? parseFloat(value) : undefined;
@@ -176,8 +226,10 @@ export default function CSVUploadDialog({
           }
         });
 
-        // Add business_id to each item
-        row.business_id = businessId;
+        // Add business_id to each item if in items mode
+        if (uploadMode === 'items') {
+          (row as CSVItem).business_id = businessId;
+        }
 
         data.push(row);
       }
@@ -207,8 +259,32 @@ export default function CSVUploadDialog({
       },
     };
 
-    for (let i = 0; i < csvData.length; i++) {
-      const item = csvData[i];
+    if (uploadMode === 'items') {
+      await handleItemsUpload(csvData as CSVItem[], result);
+    } else {
+      await handleInventoryUpload(csvData as CSVInventoryItem[], result);
+    }
+
+    setUploadResult(result);
+    setUploading(false);
+
+    if (result.success > 0) {
+      enqueueSnackbar(
+        t('business.csvUpload.uploadSuccess', {
+          success: result.success,
+          errors: result.errors,
+        }),
+        { variant: 'success' }
+      );
+    }
+  };
+
+  const handleItemsUpload = async (
+    itemsData: CSVItem[],
+    result: UploadResult
+  ) => {
+    for (let i = 0; i < itemsData.length; i++) {
+      const item = itemsData[i];
       try {
         // Check if item already exists by name or SKU
         const existingItem = items.find(
@@ -262,74 +338,171 @@ export default function CSVUploadDialog({
         });
       }
     }
+  };
 
-    setUploadResult(result);
-    setUploading(false);
+  const handleInventoryUpload = async (
+    inventoryData: CSVInventoryItem[],
+    result: UploadResult
+  ) => {
+    for (let i = 0; i < inventoryData.length; i++) {
+      const inventoryItem = inventoryData[i];
+      try {
+        // Find the item by name
+        const item = items.find(
+          (existing) =>
+            existing.name.toLowerCase() ===
+            inventoryItem.item_name.toLowerCase()
+        );
 
-    if (result.success > 0) {
-      enqueueSnackbar(
-        t('business.csvUpload.uploadSuccess', {
-          success: result.success,
-          errors: result.errors,
-        }),
-        { variant: 'success' }
-      );
+        if (!item) {
+          throw new Error(`Item "${inventoryItem.item_name}" not found`);
+        }
+
+        // Find the business location by name
+        const location = locations.find(
+          (existing) =>
+            existing.name.toLowerCase() ===
+            inventoryItem.business_location_name.toLowerCase()
+        );
+
+        if (!location) {
+          throw new Error(
+            `Location "${inventoryItem.business_location_name}" not found`
+          );
+        }
+
+        // Check if inventory item already exists
+        const existingInventory = inventory.find(
+          (existing) =>
+            existing.item_id === item.id &&
+            existing.business_location_id === location.id
+        );
+
+        const inventoryData: AddInventoryItemData = {
+          business_location_id: location.id,
+          item_id: item.id,
+          quantity: inventoryItem.quantity,
+          available_quantity: inventoryItem.available_quantity,
+          reserved_quantity: inventoryItem.reserved_quantity,
+          reorder_point: inventoryItem.reorder_point,
+          reorder_quantity: inventoryItem.reorder_quantity,
+          unit_cost: inventoryItem.unit_cost,
+          selling_price: inventoryItem.selling_price,
+          is_active: inventoryItem.is_active ?? true,
+        };
+
+        if (existingInventory) {
+          // Update existing inventory item
+          await updateInventoryItem(existingInventory.id, inventoryData);
+          result.details.updated.push(
+            `${inventoryItem.item_name} at ${inventoryItem.business_location_name}`
+          );
+          result.success++;
+        } else {
+          // Create new inventory item
+          await addInventoryItem(inventoryData);
+          result.details.inserted.push(
+            `${inventoryItem.item_name} at ${inventoryItem.business_location_name}`
+          );
+          result.success++;
+        }
+      } catch (error) {
+        result.errors++;
+        result.details.errors.push({
+          row: i + 2, // +2 because of 0-based index and header row
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
   };
 
   const downloadTemplate = () => {
-    const headers = [
-      'name',
-      'description',
-      'price',
-      'currency',
-      'sku',
-      'size',
-      'size_unit',
-      'weight',
-      'weight_unit',
-      'color',
-      'material',
-      'model',
-      'is_fragile',
-      'is_perishable',
-      'requires_special_handling',
-      'min_order_quantity',
-      'max_order_quantity',
-      'is_active',
-      'item_sub_category_id',
-      'brand_id',
-    ];
+    let headers: string[];
+    let sampleData: string[];
+    let filename: string;
 
-    const sampleData = [
-      'Sample Item',
-      'This is a sample item description',
-      '29.99',
-      'USD',
-      'SAMPLE-001',
-      '10',
-      'cm',
-      '500',
-      'g',
-      'Red',
-      'Plastic',
-      'Model-X',
-      'false',
-      'false',
-      'false',
-      '1',
-      '100',
-      'true',
-      '1',
-      '',
-    ];
+    if (uploadMode === 'items') {
+      headers = [
+        'name',
+        'description',
+        'price',
+        'currency',
+        'sku',
+        'size',
+        'size_unit',
+        'weight',
+        'weight_unit',
+        'color',
+        'material',
+        'model',
+        'is_fragile',
+        'is_perishable',
+        'requires_special_handling',
+        'min_order_quantity',
+        'max_order_quantity',
+        'is_active',
+        'item_sub_category_id',
+        'brand_id',
+      ];
+
+      sampleData = [
+        'Sample Item',
+        'This is a sample item description',
+        '29.99',
+        'USD',
+        'SAMPLE-001',
+        '10',
+        'cm',
+        '500',
+        'g',
+        'Red',
+        'Plastic',
+        'Model-X',
+        'false',
+        'false',
+        'false',
+        '1',
+        '100',
+        'true',
+        '1',
+        '',
+      ];
+      filename = 'items_template.csv';
+    } else {
+      headers = [
+        'item_name',
+        'business_location_name',
+        'quantity',
+        'available_quantity',
+        'reserved_quantity',
+        'reorder_point',
+        'reorder_quantity',
+        'unit_cost',
+        'selling_price',
+        'is_active',
+      ];
+
+      sampleData = [
+        'Sample Item',
+        'Main Warehouse',
+        '100',
+        '95',
+        '5',
+        '20',
+        '50',
+        '15.00',
+        '29.99',
+        'true',
+      ];
+      filename = 'inventory_template.csv';
+    }
 
     const csvContent = [headers.join(','), sampleData.join(',')].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'items_template.csv';
+    a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -342,6 +515,78 @@ export default function CSVUploadDialog({
       fileInputRef.current.value = '';
     }
     onClose();
+  };
+
+  const renderPreviewTable = () => {
+    if (uploadMode === 'items') {
+      const itemsData = previewData as CSVItem[];
+      return (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Price</TableCell>
+                <TableCell>SKU</TableCell>
+                <TableCell>Size</TableCell>
+                <TableCell>Weight</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {itemsData.map((item, index) => (
+                <TableRow key={index}>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>
+                    {item.price} {item.currency}
+                  </TableCell>
+                  <TableCell>{item.sku || '-'}</TableCell>
+                  <TableCell>
+                    {item.size && item.size_unit
+                      ? `${item.size} ${item.size_unit}`
+                      : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {item.weight && item.weight_unit
+                      ? `${item.weight} ${item.weight_unit}`
+                      : '-'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      );
+    } else {
+      const inventoryData = previewData as CSVInventoryItem[];
+      return (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Item Name</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Quantity</TableCell>
+                <TableCell>Available</TableCell>
+                <TableCell>Unit Cost</TableCell>
+                <TableCell>Selling Price</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {inventoryData.map((item, index) => (
+                <TableRow key={index}>
+                  <TableCell>{item.item_name}</TableCell>
+                  <TableCell>{item.business_location_name}</TableCell>
+                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>{item.available_quantity}</TableCell>
+                  <TableCell>${item.unit_cost}</TableCell>
+                  <TableCell>${item.selling_price}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      );
+    }
   };
 
   return (
@@ -357,6 +602,26 @@ export default function CSVUploadDialog({
 
       <DialogContent>
         <Stack spacing={3}>
+          {/* Mode Selector */}
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('business.csvUpload.selectMode')}
+            </Typography>
+            <ToggleButtonGroup
+              value={uploadMode}
+              exclusive
+              onChange={handleModeChange}
+              aria-label="upload mode"
+            >
+              <ToggleButton value="items" aria-label="items">
+                {t('business.csvUpload.itemsMode')}
+              </ToggleButton>
+              <ToggleButton value="inventory" aria-label="inventory">
+                {t('business.csvUpload.inventoryMode')}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Paper>
+
           {/* Instructions */}
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Box display="flex" alignItems="center" mb={1}>
@@ -366,7 +631,9 @@ export default function CSVUploadDialog({
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary">
-              {t('business.csvUpload.instructions')}
+              {uploadMode === 'items'
+                ? t('business.csvUpload.instructionsItems')
+                : t('business.csvUpload.instructionsInventory')}
             </Typography>
             <Box mt={2}>
               <Button
@@ -405,42 +672,12 @@ export default function CSVUploadDialog({
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 {t('business.csvUpload.preview')} ({csvData.length}{' '}
-                {t('business.csvUpload.items')})
+                {uploadMode === 'items'
+                  ? t('business.csvUpload.items')
+                  : t('business.csvUpload.inventoryItems')}
+                )
               </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Price</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell>Size</TableCell>
-                      <TableCell>Weight</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {previewData.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>
-                          {item.price} {item.currency}
-                        </TableCell>
-                        <TableCell>{item.sku || '-'}</TableCell>
-                        <TableCell>
-                          {item.size && item.size_unit
-                            ? `${item.size} ${item.size_unit}`
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {item.weight && item.weight_unit
-                            ? `${item.weight} ${item.weight_unit}`
-                            : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              {renderPreviewTable()}
             </Paper>
           )}
 

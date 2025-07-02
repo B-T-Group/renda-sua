@@ -14,6 +14,7 @@ export const useGraphQLClient = () => {
     return new GraphQLClient(environment.hasuraUrl, {
       headers: {
         'Content-Type': 'application/json',
+        'X-Hasura-Role': 'anonymous',
       },
     });
   }, []);

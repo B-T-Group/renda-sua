@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoginButton from '../auth/LoginButton';
@@ -20,6 +21,7 @@ import Logo from '../common/Logo';
 const Header: React.FC = () => {
   const { isAuthenticated } = useAuth0();
   const { userType } = useUserProfileContext();
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -71,7 +73,17 @@ const Header: React.FC = () => {
                 <LogoutButton />
               </>
             ) : (
-              <LoginButton />
+              <>
+                <Button
+                  color="inherit"
+                  component={RouterLink}
+                  to="/items"
+                  sx={{ display: { xs: 'none', md: 'block' } }}
+                >
+                  {t('public.items.title')}
+                </Button>
+                <LoginButton />
+              </>
             )}
 
             {isMobile && (

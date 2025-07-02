@@ -442,25 +442,30 @@
     },
     "csvUpload": {
       "title": "Téléchargement CSV",
-      "uploadCSV": "Télécharger CSV",
+      "selectMode": "Sélectionner le Mode de Téléchargement",
+      "itemsMode": "Articles",
+      "inventoryMode": "Inventaire",
       "howToUse": "Comment utiliser le téléchargement CSV",
-      "instructions": "Téléchargez un fichier CSV pour ajouter ou mettre à jour des articles en masse. Le CSV doit avoir des en-têtes correspondant aux champs d'articles. Si un article avec le même nom ou référence existe déjà, il sera mis à jour ; sinon, un nouvel article sera créé. Téléchargez le modèle ci-dessous pour voir le format requis.",
+      "instructions": "Téléchargez un fichier CSV pour importer des articles en masse. La première ligne doit contenir les en-têtes de colonnes. Téléchargez le modèle pour voir le format requis.",
+      "instructionsItems": "Téléchargez un fichier CSV pour importer des articles en masse. La première ligne doit contenir les en-têtes de colonnes. Téléchargez le modèle pour voir le format requis.",
+      "instructionsInventory": "Téléchargez un fichier CSV pour importer des articles d'inventaire en masse. Assurez-vous que les noms d'articles et les noms d'emplacements correspondent aux articles et emplacements existants dans votre système.",
       "downloadTemplate": "Télécharger le Modèle",
-      "selectFile": "Sélectionner un Fichier CSV",
-      "upload": "Télécharger les Articles",
-      "uploading": "Téléchargement...",
+      "selectFile": "Sélectionner le Fichier CSV",
       "preview": "Aperçu",
       "items": "articles",
+      "inventoryItems": "articles d'inventaire",
+      "upload": "Télécharger",
+      "uploading": "Téléchargement...",
+      "uploadSuccess": "{{success}} articles téléchargés avec succès avec {{errors}} erreurs",
+      "invalidFileType": "Veuillez sélectionner un fichier CSV valide",
+      "emptyFile": "Le fichier CSV est vide ou invalide",
+      "parseError": "Erreur lors de l'analyse du fichier CSV",
+      "noData": "Aucune donnée à télécharger",
       "results": "Résultats du Téléchargement",
       "inserted": "Insérés",
       "updated": "Mis à jour",
       "errors": "Erreurs",
-      "errorDetails": "Détails des Erreurs",
-      "invalidFileType": "Veuillez sélectionner un fichier CSV valide",
-      "emptyFile": "Le fichier CSV est vide ou n'a pas de lignes de données",
-      "parseError": "Erreur lors de l'analyse du fichier CSV. Veuillez vérifier le format.",
-      "noData": "Aucune donnée à télécharger. Veuillez sélectionner un fichier CSV valide.",
-      "uploadSuccess": "{{success}} articles téléchargés avec succès avec {{errors}} erreurs"
+      "errorDetails": "Détails des Erreurs"
     }
   },
   "notifications": {
@@ -584,6 +589,11 @@
       "title": "Rendasua - Votre Plateforme d'Affaires de Confiance",
       "description": "Rendasua est une plateforme d'affaires complète connectant agents, entreprises et clients.",
       "keywords": "plateforme d'affaires, Rendasua"
+    },
+    "public-items": {
+      "title": "Parcourir les Articles - Rendasua",
+      "description": "Explorez notre collection de produits et d'articles. Créez un compte pour commencer à acheter et gérer vos commandes.",
+      "keywords": "produits, articles, catalogue, shopping, boutique en ligne, Rendasua"
     }
   },
   "breadcrumbs": {
@@ -598,5 +608,24 @@
     "business-inventory": "Inventaire",
     "business-locations": "Emplacements",
     "business-items": "Articles"
+  },
+  "public": {
+    "items": {
+      "title": "Parcourir les Articles",
+      "subtitle": "Explorez notre collection de produits et d'articles. Créez un compte pour commencer à acheter et gérer vos commandes.",
+      "authenticationMessage": "Créez un compte ou connectez-vous pour commencer à acheter des articles et gérer vos commandes.",
+      "signUp": "S'inscrire",
+      "login": "Se connecter",
+      "searchPlaceholder": "Rechercher des articles...",
+      "category": "Catégorie",
+      "brand": "Marque",
+      "allCategories": "Toutes les Catégories",
+      "allBrands": "Toutes les Marques",
+      "resultsCount": "{{count}} articles trouvés",
+      "price": "{{price}} {{currency}}",
+      "signUpToPurchase": "S'inscrire pour Acheter",
+      "noItemsFound": "Aucun article trouvé",
+      "tryDifferentFilters": "Essayez d'ajuster votre recherche ou vos filtres pour trouver ce que vous cherchez."
+    }
   }
 }

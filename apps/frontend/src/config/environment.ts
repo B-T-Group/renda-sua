@@ -2,6 +2,8 @@
 const getEnvironment = () => {
   const hasuraUrl =
     process.env.REACT_APP_HASURA_URL || 'http://localhost:8080/v1/graphql';
+  const hasuraAdminSecret =
+    process.env.REACT_APP_HASURA_ADMIN_SECRET || 'myadminsecretkey';
   const auth0Domain =
     process.env.REACT_APP_AUTH0_DOMAIN || 'groupe-bt-client-dev.us.auth0.com';
   const auth0ClientId =
@@ -14,6 +16,7 @@ const getEnvironment = () => {
   // Log environment for debugging
   console.log('Environment Configuration:', {
     hasuraUrl,
+    hasuraAdminSecret: hasuraAdminSecret ? 'SET' : 'NOT SET',
     auth0Domain: auth0Domain ? 'SET' : 'NOT SET',
     auth0ClientId: auth0ClientId ? 'SET' : 'NOT SET',
     auth0Audience: auth0Audience ? 'SET' : 'NOT SET',
@@ -23,6 +26,7 @@ const getEnvironment = () => {
 
   return {
     hasuraUrl,
+    hasuraAdminSecret,
     auth0: {
       domain: auth0Domain,
       clientId: auth0ClientId,

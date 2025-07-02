@@ -21,6 +21,7 @@ import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';
+import PublicItemsPage from '../components/pages/PublicItemsPage';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
@@ -57,6 +58,9 @@ function App() {
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+
+          {/* Public routes */}
+          <Route path="/items" element={<PublicItemsPage />} />
 
           {/* App route - redirects to appropriate dashboard based on auth flow */}
           <Route
