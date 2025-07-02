@@ -1,7 +1,7 @@
+import { Language } from '@mui/icons-material';
+import { Box, Button, Menu, MenuItem, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Button, Menu, MenuItem, Typography } from '@mui/material';
-import { Language } from '@mui/icons-material';
 
 const LanguageSwitcher: React.FC = () => {
   const { i18n, t } = useTranslation();
@@ -35,9 +35,17 @@ const LanguageSwitcher: React.FC = () => {
       <Button
         onClick={handleClick}
         startIcon={<Language />}
-        sx={{ color: 'inherit', textTransform: 'none' }}
+        sx={{
+          color: 'white',
+          textTransform: 'none',
+          '&:hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          },
+        }}
       >
-        <Typography variant="body2">{getCurrentLanguageName()}</Typography>
+        <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+          {getCurrentLanguageName()}
+        </Typography>
       </Button>
       <Menu
         anchorEl={anchorEl}

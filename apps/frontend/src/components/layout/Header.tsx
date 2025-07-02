@@ -26,10 +26,10 @@ const Header: React.FC = () => {
   return (
     <AppBar position="static" elevation={1}>
       <Container maxWidth="xl">
-        <Toolbar disableGutters>
+        <Toolbar disableGutters sx={{ py: 2 }}>
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
             <RouterLink to="/" style={{ textDecoration: 'none' }}>
-              <Logo variant="with-tagline" color="white" size="medium" />
+              <Logo variant="compact" color="white" size="medium" />
             </RouterLink>
           </Box>
 

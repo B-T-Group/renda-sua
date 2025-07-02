@@ -1,6 +1,6 @@
-import React from 'react';
-import { Box, Typography, Chip } from '@mui/material';
+import { Box, Chip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import React from 'react';
 import rendasuaLogo from '../../assets/rendasua.svg';
 
 interface LogoProps {
@@ -37,39 +37,39 @@ const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
   }),
   ...(size === 'large' && {
     '& .MuiTypography-root': {
-      fontSize: '2rem',
+      fontSize: '2.5rem',
     },
     '& img': {
-      height: '48px',
+      height: '56px',
       width: 'auto',
     },
   }),
 }));
 
 const LogoText = styled(Typography)(({ theme }) => ({
-  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+  background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
   backgroundClip: 'text',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
-  fontWeight: 700,
+  fontWeight: 800,
   letterSpacing: '-0.025em',
 }));
 
 const DeliveryTagline = styled(Chip)(({ theme }) => ({
-  height: '20px',
+  height: '24px',
   fontSize: '0.75rem',
-  fontWeight: 500,
+  fontWeight: 600,
   backgroundColor: theme.palette.secondary.main,
   color: theme.palette.secondary.contrastText,
   '& .MuiChip-label': {
-    padding: '0 8px',
+    padding: '0 12px',
   },
 }));
 
-const Logo: React.FC<LogoProps> = ({ 
-  variant = 'default', 
-  color = 'primary', 
-  size = 'medium' 
+const Logo: React.FC<LogoProps> = ({
+  variant = 'default',
+  color = 'primary',
+  size = 'medium',
 }) => {
   const getTextColor = () => {
     switch (color) {
@@ -85,37 +85,50 @@ const Logo: React.FC<LogoProps> = ({
   const isWhiteVariant = color === 'white';
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 1,
+      }}
+    >
       <LogoContainer size={size}>
-        <img 
-          src={rendasuaLogo} 
-          alt="Rendasua Logo" 
-          style={{ 
+        <img
+          src={rendasuaLogo}
+          alt="Rendasua Logo"
+          style={{
             filter: isWhiteVariant ? 'brightness(0) invert(1)' : 'none',
-            opacity: isWhiteVariant ? 0.9 : 1,
+            opacity: isWhiteVariant ? 0.95 : 1,
           }}
         />
         {variant !== 'compact' && (
-          <LogoText 
-            variant="h6" 
+          <LogoText
+            variant="h6"
             sx={{
               color: isWhiteVariant ? 'white' : undefined,
               background: isWhiteVariant ? 'none' : undefined,
               WebkitTextFillColor: isWhiteVariant ? 'white' : undefined,
+              fontWeight: isWhiteVariant ? 700 : 800,
             }}
-            fontWeight={600}
           >
             Renda Sua
           </LogoText>
         )}
       </LogoContainer>
       {variant === 'with-tagline' && (
-        <DeliveryTagline 
-          label="Fast Delivery Service" 
+        <DeliveryTagline
+          label="Fast Delivery Service"
           size="small"
           sx={{
-            backgroundColor: isWhiteVariant ? 'rgba(255,255,255,0.2)' : undefined,
+            backgroundColor: isWhiteVariant
+              ? 'rgba(255,255,255,0.15)'
+              : undefined,
             color: isWhiteVariant ? 'white' : undefined,
+            border: isWhiteVariant
+              ? '1px solid rgba(255,255,255,0.2)'
+              : undefined,
+            fontWeight: 600,
           }}
         />
       )}
@@ -123,4 +136,4 @@ const Logo: React.FC<LogoProps> = ({
   );
 };
 
-export default Logo; 
+export default Logo;
