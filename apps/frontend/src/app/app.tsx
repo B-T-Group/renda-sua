@@ -10,6 +10,10 @@ import Header from '../components/layout/Header';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
+import BusinessInventoryPage from '../components/pages/BusinessInventoryPage';
+import BusinessItemsPage from '../components/pages/BusinessItemsPage';
+import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
+import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
 import { ClientOrders } from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
@@ -127,6 +131,40 @@ function App() {
             element={
               <ProtectedRoute>
                 <ItemViewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Business routes */}
+          <Route
+            path="/business/orders"
+            element={
+              <ProtectedRoute>
+                <BusinessOrdersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/business/inventory"
+            element={
+              <ProtectedRoute>
+                <BusinessInventoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/business/locations"
+            element={
+              <ProtectedRoute>
+                <BusinessLocationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/business/items"
+            element={
+              <ProtectedRoute>
+                <BusinessItemsPage />
               </ProtectedRoute>
             }
           />

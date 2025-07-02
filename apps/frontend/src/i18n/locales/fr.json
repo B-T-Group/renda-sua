@@ -51,14 +51,31 @@
     "title": "Tableau de bord",
     "welcome": "Bienvenue sur votre tableau de bord",
     "welcomeBack": "Bon retour",
-    "manageDeliveryOrders": "Gérez vos commandes de livraison ici",
-    "activeOrders": "Commandes actives",
-    "pendingOrders": "Commandes en attente",
+    "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
+    "orders": "Commandes",
+    "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
+    "inventory": "Inventaire",
+    "inventoryDescription": "Gérez vos niveaux d'inventaire, suivez les stocks et gérez les opérations de réapprovisionnement.",
+    "locations": "Emplacements",
+    "locationsDescription": "Gérez vos emplacements commerciaux, adresses et paramètres opérationnels.",
+    "items": "Articles",
+    "itemsDescription": "Gérez votre catalogue de produits, ajoutez de nouveaux articles et mettez à jour les informations produit.",
+    "analytics": "Analyses",
+    "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance.",
+    "manage": "Gérer",
+    "quickStats": "Statistiques Rapides",
+    "totalOrders": "Total des Commandes",
+    "totalItems": "Total des Articles",
+    "totalLocations": "Total des Emplacements",
+    "totalInventory": "Total de l'Inventaire",
+    "noBusinessProfile": "Aucun profil d'entreprise trouvé. Veuillez compléter votre profil d'entreprise en premier.",
+    "activeOrders": "Commandes Actives",
+    "pendingOrders": "Commandes en Attente",
     "noActiveOrders": "Aucune commande active pour le moment",
-    "pickUpPendingOrders": "Récupérez des commandes en attente pour commencer",
     "noPendingOrders": "Aucune commande en attente disponible",
     "newOrdersWillAppear": "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles",
-    "items": "Articles"
+    "manageDeliveryOrders": "Gérez vos commandes de livraison ici",
+    "pickUpPendingOrders": "Récupérez des commandes en attente pour commencer"
   },
   "orderStatus": {
     "pending": "en attente",
@@ -126,13 +143,34 @@
     "dashboard": {
       "title": "Tableau de bord Entreprise",
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
+      "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
       "orders": "Commandes",
+      "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
       "inventory": "Inventaire",
+      "inventoryDescription": "Gérez vos niveaux d'inventaire, suivez les stocks et gérez les opérations de réapprovisionnement.",
       "locations": "Emplacements",
-      "items": "Articles"
+      "locationsDescription": "Gérez vos emplacements commerciaux, adresses et paramètres opérationnels.",
+      "items": "Articles",
+      "itemsDescription": "Gérez votre catalogue de produits, ajoutez de nouveaux articles et mettez à jour les informations produit.",
+      "analytics": "Analyses",
+      "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance.",
+      "manage": "Gérer",
+      "quickStats": "Statistiques Rapides",
+      "totalOrders": "Total des Commandes",
+      "totalItems": "Total des Articles",
+      "totalLocations": "Total des Emplacements",
+      "totalInventory": "Total de l'Inventaire",
+      "noBusinessProfile": "Aucun profil d'entreprise trouvé. Veuillez compléter votre profil d'entreprise en premier.",
+      "activeOrders": "Commandes Actives",
+      "pendingOrders": "Commandes en Attente",
+      "noActiveOrders": "Aucune commande active pour le moment",
+      "noPendingOrders": "Aucune commande en attente disponible",
+      "newOrdersWillAppear": "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles"
     },
     "orders": {
       "title": "Gestion des Commandes",
+      "allOrders": "Toutes les Commandes",
+      "noOrdersFound": "Aucune commande trouvée correspondant à vos critères.",
       "filters": {
         "search": "Rechercher des commandes...",
         "status": "Statut",
@@ -156,11 +194,9 @@
         "refunded": "Remboursée"
       },
       "table": {
-        "orderNumber": "Commande #",
+        "orderNumber": "Commande #{{number}}",
         "customer": "Client",
         "items": "Articles",
-        "item": "article",
-        "items_plural": "articles",
         "total": "Total",
         "status": "Statut",
         "deliveryAddress": "Adresse de livraison",
@@ -350,6 +386,7 @@
       "email": "E-mail",
       "locationType": "Type d'emplacement",
       "isPrimary": "Emplacement principal",
+      "primary": "Principal",
       "isActive": "Actif",
       "operatingHours": "Heures d'ouverture",
       "store": "Magasin",
@@ -361,9 +398,14 @@
       "locationDeleted": "Emplacement supprimé avec succès",
       "locationAdded": "Emplacement ajouté avec succès",
       "locationUpdated": "Emplacement mis à jour avec succès",
+      "deleteError": "Échec de la suppression de l'emplacement",
+      "saveError": "Échec de l'enregistrement de l'emplacement",
       "primaryLocationWarning": "Ceci est votre emplacement principal. Vous devez définir un autre emplacement comme principal avant de supprimer celui-ci.",
       "activate": "Activer",
-      "deactivate": "Désactiver"
+      "deactivate": "Désactiver",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "other": "Autre"
     },
     "items": {
       "title": "Gestion des Articles",
@@ -385,6 +427,8 @@
       "size": "Taille",
       "color": "Couleur",
       "material": "Matériau",
+      "cardsView": "Vue Cartes",
+      "tableView": "Vue Tableau",
       "filters": {
         "search": "Rechercher des articles...",
         "status": "Statut",
@@ -501,6 +545,26 @@
       "description": "Gérez votre inventaire d'entreprise, suivez les ventes et optimisez vos opérations avec notre tableau de bord complet.",
       "keywords": "tableau de bord entreprise, gestion d'inventaire, suivi des ventes, Rendasua"
     },
+    "business-orders": {
+      "title": "Gestion des Commandes - Rendasua",
+      "description": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes pour votre entreprise.",
+      "keywords": "gestion des commandes, commandes clients, suivi de livraison, exécution des commandes, commandes d'entreprise"
+    },
+    "business-inventory": {
+      "title": "Gestion de l'Inventaire - Rendasua",
+      "description": "Gérez vos niveaux d'inventaire, suivez les stocks, gérez les opérations de réapprovisionnement et maintenez des niveaux d'inventaire optimaux.",
+      "keywords": "gestion de l'inventaire, suivi des stocks, réapprovisionnement, niveaux d'inventaire, inventaire d'entreprise"
+    },
+    "business-locations": {
+      "title": "Emplacements d'Entreprise - Rendasua",
+      "description": "Gérez vos emplacements commerciaux, adresses et paramètres opérationnels pour des opérations commerciales efficaces.",
+      "keywords": "emplacements commerciaux, adresses, paramètres opérationnels, gestion d'entreprise"
+    },
+    "business-items": {
+      "title": "Gestion des Articles - Rendasua",
+      "description": "Gérez votre catalogue de produits, ajoutez de nouveaux articles et mettez à jour les informations produit pour votre entreprise.",
+      "keywords": "gestion des articles, catalogue de produits, ajout d'articles, mise à jour des produits, articles d'entreprise"
+    },
     "profile": {
       "title": "Profil - Rendasua",
       "description": "Gérez vos informations de profil, préférences et paramètres de compte.",
@@ -529,6 +593,10 @@
     "profile": "Profil",
     "client-orders": "Commandes Client",
     "business": "Entreprise",
-    "items": "Articles"
+    "items": "Articles",
+    "business-orders": "Commandes",
+    "business-inventory": "Inventaire",
+    "business-locations": "Emplacements",
+    "business-items": "Articles"
   }
 }

@@ -1,980 +1,247 @@
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  LocationOn as LocationIcon,
-  Search as SearchIcon,
-  Upload as UploadIcon,
+  TrendingUp as AnalyticsIcon,
+  Inventory as InventoryIcon,
+  Inventory2 as ItemsIcon,
+  LocationOn as LocationsIcon,
+  Assignment as OrdersIcon,
 } from '@mui/icons-material';
 import {
   Alert,
-  Badge,
   Box,
   Button,
   Card,
   CardActions,
   CardContent,
-  Chip,
-  CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControl,
-  Grid,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tabs,
-  TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  BusinessInventoryItem,
-  useBusinessInventory,
-} from '../../hooks/useBusinessInventory';
-import {
-  AddBusinessLocationData,
-  BusinessLocation,
-  useBusinessLocations,
-} from '../../hooks/useBusinessLocations';
-import { OrderFilters, useBusinessOrders } from '../../hooks/useBusinessOrders';
+import { useNavigate } from 'react-router-dom';
+import { useBusinessInventory } from '../../hooks/useBusinessInventory';
+import { useBusinessLocations } from '../../hooks/useBusinessLocations';
+import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import AddItemDialog from '../business/AddItemDialog';
-import CSVUploadDialog from '../business/CSVUploadDialog';
-import EditItemDialog from '../business/EditItemDialog';
-import InventoryCards from '../business/InventoryCards';
-import ItemsCards from '../business/ItemsCards';
-import LocationModal from '../business/LocationModal';
-import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`business-tabpanel-${index}`}
-      aria-labelledby={`business-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
-  const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
   const { profile } = useUserProfile();
 
-  const [tabValue, setTabValue] = useState(0);
-  const [orderFilters, setOrderFilters] = useState<OrderFilters>({});
-  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [showEditItemDialog, setShowEditItemDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
-    useState(false);
-  const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
+  const { orders } = useBusinessOrders();
+  const { inventory } = useBusinessInventory();
+  const { locations } = useBusinessLocations();
+  const { items } = useItems(profile?.business?.id);
 
-  // Location management states
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [editingLocation, setEditingLocation] =
-    useState<BusinessLocation | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [locationToDelete, setLocationToDelete] =
-    useState<BusinessLocation | null>(null);
-  const [showCSVUploadDialog, setShowCSVUploadDialog] = useState(false);
+  const dashboardCards = [
+    {
+      title: t('business.dashboard.orders'),
+      description: t('business.dashboard.ordersDescription'),
+      icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+      count: orders.length,
+      color: '#1976d2',
+      path: '/business/orders',
+    },
+    {
+      title: t('business.dashboard.inventory'),
+      description: t('business.dashboard.inventoryDescription'),
+      icon: <InventoryIcon sx={{ fontSize: 40 }} />,
+      count: inventory.length,
+      color: '#388e3c',
+      path: '/business/inventory',
+    },
+    {
+      title: t('business.dashboard.locations'),
+      description: t('business.dashboard.locationsDescription'),
+      icon: <LocationsIcon sx={{ fontSize: 40 }} />,
+      count: locations.length,
+      color: '#f57c00',
+      path: '/business/locations',
+    },
+    {
+      title: t('business.dashboard.items'),
+      description: t('business.dashboard.itemsDescription'),
+      icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+      count: items.length,
+      color: '#7b1fa2',
+      path: '/business/items',
+    },
+    {
+      title: t('business.dashboard.analytics'),
+      description: t('business.dashboard.analyticsDescription'),
+      icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#d32f2f',
+      path: '/business/analytics',
+    },
+  ];
 
-  const {
-    orders,
-    loading: ordersLoading,
-    error: ordersError,
-    fetchOrders,
-    updateOrderStatus,
-  } = useBusinessOrders();
-
-  const {
-    inventory,
-    availableItems,
-    businessLocations,
-    loading: inventoryLoading,
-    error: inventoryError,
-    fetchInventory,
-    fetchAvailableItems,
-    fetchBusinessLocations,
-    addInventoryItem,
-    deleteInventoryItem,
-    restockItem,
-  } = useBusinessInventory();
-
-  const {
-    locations,
-    loading: locationsLoading,
-    error: locationsError,
-    fetchLocations,
-    addLocation,
-    updateLocation,
-    deleteLocation,
-  } = useBusinessLocations(
-    profile?.business?.id || undefined,
-    profile?.id || undefined
-  );
-
-  const {
-    items,
-    loading: itemsLoading,
-    error: itemsError,
-    fetchItems,
-  } = useItems(profile?.business?.id);
-
-  useEffect(() => {
-    fetchOrders();
-    fetchInventory();
-    fetchAvailableItems();
-    fetchBusinessLocations();
-    fetchItems();
-
-    // Only fetch locations if we have the required profile data
-    if (profile?.id && profile?.business?.id) {
-      fetchLocations();
-    }
-  }, [
-    fetchOrders,
-    fetchInventory,
-    fetchAvailableItems,
-    fetchBusinessLocations,
-    fetchLocations,
-    fetchItems,
-    profile?.id,
-    profile?.business?.id,
-  ]);
-
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  const handleFilterChange = (filters: Partial<OrderFilters>) => {
-    const newFilters = { ...orderFilters, ...filters };
-    setOrderFilters(newFilters);
-    fetchOrders(newFilters);
-  };
-
-  // Location management handlers
-  const handleAddLocation = () => {
-    setEditingLocation(null);
-    setShowLocationModal(true);
-  };
-
-  const handleEditLocation = (location: BusinessLocation) => {
-    setEditingLocation(location);
-    setShowLocationModal(true);
-  };
-
-  const handleDeleteLocation = (location: BusinessLocation) => {
-    setLocationToDelete(location);
-    setShowDeleteConfirm(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!locationToDelete) return;
-
-    try {
-      await deleteLocation(locationToDelete.id);
-      enqueueSnackbar(t('business.locations.locationDeleted'), {
-        variant: 'success',
-      });
-      setShowDeleteConfirm(false);
-      setLocationToDelete(null);
-    } catch (error) {
-      enqueueSnackbar('Failed to delete location', { variant: 'error' });
-    }
-  };
-
-  const handleEditItem = (item: any) => {
-    // Handle both direct items and nested items (for inventory)
-    const itemToEdit = item.item || item;
-    setEditingItem(itemToEdit);
-    setShowEditItemDialog(true);
-  };
-
-  const handleCloseEditItemDialog = () => {
-    setShowEditItemDialog(false);
-    setEditingItem(null);
-  };
-
-  const handleDeleteInventoryItem = (item: BusinessInventoryItem) => {
-    if (window.confirm(t('business.inventory.confirmDelete'))) {
-      deleteInventoryItem(item.id);
-    }
-  };
-
-  const handleRestockInventoryItem = (item: BusinessInventoryItem) => {
-    const quantity = prompt(t('business.inventory.enterRestockQuantity'));
-    if (quantity && !isNaN(Number(quantity))) {
-      restockItem(item.id, Number(quantity));
-    }
-  };
-
-  const handleSaveLocation = async (data: AddBusinessLocationData | any) => {
-    try {
-      if (!profile?.id || !profile?.business?.id) {
-        enqueueSnackbar('User profile not loaded. Please try again.', {
-          variant: 'error',
-        });
-        return;
-      }
-
-      if (editingLocation) {
-        await updateLocation(editingLocation.id, data);
-        enqueueSnackbar(t('business.locations.locationUpdated'), {
-          variant: 'success',
-        });
-      } else {
-        await addLocation(data);
-        enqueueSnackbar(t('business.locations.locationAdded'), {
-          variant: 'success',
-        });
-      }
-      setShowLocationModal(false);
-      setEditingLocation(null);
-    } catch (error) {
-      enqueueSnackbar('Failed to save location', { variant: 'error' });
-      throw error;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    const statusColors: Record<
-      string,
-      | 'default'
-      | 'primary'
-      | 'secondary'
-      | 'error'
-      | 'info'
-      | 'success'
-      | 'warning'
-    > = {
-      pending: 'warning',
-      confirmed: 'info',
-      preparing: 'info',
-      ready_for_pickup: 'primary',
-      assigned_to_agent: 'primary',
-      picked_up: 'info',
-      in_transit: 'info',
-      out_for_delivery: 'primary',
-      delivered: 'success',
-      cancelled: 'error',
-      failed: 'error',
-      refunded: 'error',
-    };
-    return statusColors[status] || 'default';
-  };
-
-  const formatAddress = (address: any) => {
-    return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  if (!profile?.business) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Alert severity="error">
+          {t('business.dashboard.noBusinessProfile')}
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {t('business.dashboard.title')}
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          {t('business.dashboard.welcome', {
-            name: profile?.first_name || 'Business Owner',
-          })}
-        </Typography>
-      </Box>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <SEOHead
+        title={t('seo.business-dashboard.title')}
+        description={t('seo.business-dashboard.description')}
+        keywords={t('seo.business-dashboard.keywords')}
+      />
 
-      <Paper sx={{ width: '100%' }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          aria-label="business dashboard tabs"
-        >
-          <Tab
-            label={
-              <Badge badgeContent={orders.length} color="primary">
-                {t('business.dashboard.orders')}
-              </Badge>
-            }
-          />
-          <Tab
-            label={
-              <Badge badgeContent={inventory.length} color="secondary">
-                {t('business.dashboard.inventory')}
-              </Badge>
-            }
-          />
-          <Tab
-            label={
-              <Badge badgeContent={locations.length} color="success">
-                {t('business.dashboard.locations')}
-              </Badge>
-            }
-          />
-          <Tab
-            label={
-              <Badge badgeContent={items.length} color="info">
-                {t('business.dashboard.items')}
-              </Badge>
-            }
-          />
-        </Tabs>
+      <Typography variant="h4" gutterBottom>
+        {t('business.dashboard.welcome', { name: profile.business.name })}
+      </Typography>
 
-        <TabPanel value={tabValue} index={0}>
-          {/* Orders Management */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('business.orders.title')}
-            </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        {t('business.dashboard.subtitle')}
+      </Typography>
 
-            {/* Filters */}
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label={t('business.orders.filters.search')}
-                    value={orderFilters.search || ''}
-                    onChange={(e) =>
-                      handleFilterChange({ search: e.target.value })
-                    }
-                    InputProps={{
-                      startAdornment: (
-                        <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={2}>
-                  <FormControl fullWidth>
-                    <InputLabel>
-                      {t('business.orders.filters.status')}
-                    </InputLabel>
-                    <Select
-                      value={orderFilters.status || 'all'}
-                      onChange={(e) =>
-                        handleFilterChange({ status: e.target.value })
-                      }
-                      label={t('business.orders.filters.status')}
-                    >
-                      <MenuItem value="all">
-                        {t('business.orders.filters.allStatuses')}
-                      </MenuItem>
-                      <MenuItem value="pending">
-                        {t('business.orders.status.pending')}
-                      </MenuItem>
-                      <MenuItem value="confirmed">
-                        {t('business.orders.status.confirmed')}
-                      </MenuItem>
-                      <MenuItem value="preparing">
-                        {t('business.orders.status.preparing')}
-                      </MenuItem>
-                      <MenuItem value="ready_for_pickup">
-                        {t('business.orders.status.ready_for_pickup')}
-                      </MenuItem>
-                      <MenuItem value="assigned_to_agent">
-                        {t('business.orders.status.assigned_to_agent')}
-                      </MenuItem>
-                      <MenuItem value="picked_up">
-                        {t('business.orders.status.picked_up')}
-                      </MenuItem>
-                      <MenuItem value="in_transit">
-                        {t('business.orders.status.in_transit')}
-                      </MenuItem>
-                      <MenuItem value="out_for_delivery">
-                        {t('business.orders.status.out_for_delivery')}
-                      </MenuItem>
-                      <MenuItem value="delivered">
-                        {t('business.orders.status.delivered')}
-                      </MenuItem>
-                      <MenuItem value="cancelled">
-                        {t('business.orders.status.cancelled')}
-                      </MenuItem>
-                      <MenuItem value="failed">
-                        {t('business.orders.status.failed')}
-                      </MenuItem>
-                      <MenuItem value="refunded">
-                        {t('business.orders.status.refunded')}
-                      </MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={2}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label={t('business.orders.filters.dateFrom')}
-                    value={orderFilters.dateFrom || ''}
-                    onChange={(e) =>
-                      handleFilterChange({ dateFrom: e.target.value })
-                    }
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={2}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label={t('business.orders.filters.dateTo')}
-                    value={orderFilters.dateTo || ''}
-                    onChange={(e) =>
-                      handleFilterChange({ dateTo: e.target.value })
-                    }
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label={t('business.orders.filters.address')}
-                    value={orderFilters.address || ''}
-                    onChange={(e) =>
-                      handleFilterChange({ address: e.target.value })
-                    }
-                    InputProps={{
-                      startAdornment: (
-                        <LocationIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      ),
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Orders List */}
-            {ordersLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <CircularProgress />
-              </Box>
-            ) : ordersError ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {ordersError}
-              </Alert>
-            ) : (
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>
-                        {t('business.orders.table.orderNumber')}
-                      </TableCell>
-                      <TableCell>
-                        {t('business.orders.table.customer')}
-                      </TableCell>
-                      <TableCell>{t('business.orders.table.items')}</TableCell>
-                      <TableCell>{t('business.orders.table.total')}</TableCell>
-                      <TableCell>{t('business.orders.table.status')}</TableCell>
-                      <TableCell>
-                        {t('business.orders.table.deliveryAddress')}
-                      </TableCell>
-                      <TableCell>{t('business.orders.table.agent')}</TableCell>
-                      <TableCell>
-                        {t('business.orders.table.createdAt')}
-                      </TableCell>
-                      <TableCell>
-                        {t('business.orders.table.actions')}
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell>
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            {order.order_number}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2">
-                              {order.client.user.first_name}{' '}
-                              {order.client.user.last_name}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {order.client.user.email}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {order.order_items.length}{' '}
-                            {t('business.orders.table.item', {
-                              count: order.order_items.length,
-                            })}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(order.total_amount, order.currency)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={t(
-                              `business.orders.status.${order.current_status}`
-                            )}
-                            color={getStatusColor(order.current_status)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            noWrap
-                            sx={{ maxWidth: 200 }}
-                          >
-                            {formatAddress(order.delivery_address)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {order.assigned_agent ? (
-                            <Typography variant="body2">
-                              {order.assigned_agent.user.first_name}{' '}
-                              {order.assigned_agent.user.last_name}
-                            </Typography>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              {t('business.orders.table.unassigned')}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {formatDate(order.created_at)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={1}>
-                            {order.current_status === 'pending' && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() =>
-                                  updateOrderStatus(order.id, 'confirmed')
-                                }
-                              >
-                                {t('business.orders.actions.confirm')}
-                              </Button>
-                            )}
-                            {order.current_status === 'confirmed' && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() =>
-                                  updateOrderStatus(order.id, 'preparing')
-                                }
-                              >
-                                {t('business.orders.actions.prepare')}
-                              </Button>
-                            )}
-                            {order.current_status === 'preparing' && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() =>
-                                  updateOrderStatus(
-                                    order.id,
-                                    'ready_for_pickup'
-                                  )
-                                }
-                              >
-                                {t('business.orders.actions.ready')}
-                              </Button>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          {/* Inventory Management */}
-          <Box sx={{ mb: 3 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">
-                {t('business.inventory.title')}
-              </Typography>
-              <Tooltip title={t('business.inventory.noLocationsError')}>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (businessLocations.length === 0) {
-                        enqueueSnackbar(
-                          t('business.inventory.noLocationsError'),
-                          {
-                            variant: 'error',
-                          }
-                        );
-                        return;
-                      }
-                      setShowAddItemDialog(true);
-                    }}
-                    disabled={businessLocations.length === 0}
-                  >
-                    {t('business.inventory.addItem')}
-                  </Button>
-                </span>
-              </Tooltip>
-            </Box>
-
-            {inventoryLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <CircularProgress />
-              </Box>
-            ) : inventoryError ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {inventoryError}
-              </Alert>
-            ) : (
-              <InventoryCards
-                items={inventory}
-                loading={inventoryLoading}
-                onUpdateInventory={(item) => {
-                  setUpdatingInventoryItem(item);
-                  setShowUpdateInventoryDialog(true);
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 6 }}>
+        {dashboardCards.map((card, index) => (
+          <Card
+            key={index}
+            sx={{
+              width: {
+                xs: '100%',
+                sm: 'calc(50% - 12px)',
+                md: 'calc(33.333% - 16px)',
+              },
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: 4,
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  mb: 2,
+                  color: card.color,
                 }}
-                onEditItem={handleEditItem}
-                onDeleteItem={handleDeleteInventoryItem}
-                onRestockItem={handleRestockInventoryItem}
-              />
-            )}
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          {/* Locations Management */}
-          <Box sx={{ mb: 3 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">
-                {t('business.locations.title')}
+              >
+                {card.icon}
+              </Box>
+              <Typography variant="h6" component="h2" gutterBottom>
+                {card.title}
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {card.description}
+              </Typography>
+              {card.count !== null && (
+                <Typography
+                  variant="h4"
+                  component="div"
+                  color="primary"
+                  sx={{ mb: 1 }}
+                >
+                  {card.count}
+                </Typography>
+              )}
+            </CardContent>
+            <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAddLocation}
+                onClick={() => navigate(card.path)}
+                sx={{
+                  backgroundColor: card.color,
+                  '&:hover': {
+                    backgroundColor: card.color,
+                    opacity: 0.9,
+                  },
+                }}
               >
-                {t('business.locations.addLocation')}
+                {t('business.dashboard.manage')}
               </Button>
-            </Box>
+            </CardActions>
+          </Card>
+        ))}
+      </Box>
 
-            {locationsLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <CircularProgress />
-              </Box>
-            ) : locationsError ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {locationsError}
-              </Alert>
-            ) : locations.length === 0 ? (
-              <Box textAlign="center" py={4}>
-                <Typography variant="body1" color="text.secondary">
-                  {t('business.locations.noLocations')}
-                </Typography>
-              </Box>
-            ) : (
-              <Grid container spacing={2}>
-                {locations.map((location) => (
-                  <Grid item xs={12} sm={6} md={4} key={location.id}>
-                    <Card>
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="flex-start"
-                        >
-                          <Box flex={1}>
-                            <Typography variant="h6" gutterBottom>
-                              {location.name}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              gutterBottom
-                            >
-                              {formatAddress(location.address)}
-                            </Typography>
-                            {location.phone && (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                📞 {location.phone}
-                              </Typography>
-                            )}
-                            {location.email && (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                ✉️ {location.email}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Box>
-                            {location.is_primary && (
-                              <Chip
-                                label={t('business.locations.primary')}
-                                color="primary"
-                                size="small"
-                                sx={{ mb: 1 }}
-                              />
-                            )}
-                          </Box>
-                        </Box>
-
-                        <Box sx={{ mt: 2 }}>
-                          <Chip
-                            label={t(
-                              `business.locations.${location.location_type}`
-                            )}
-                            color="secondary"
-                            size="small"
-                            sx={{ mr: 1 }}
-                          />
-                          <Chip
-                            label={
-                              location.is_active
-                                ? t('business.locations.active')
-                                : t('business.locations.inactive')
-                            }
-                            color={location.is_active ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </Box>
-                      </CardContent>
-                      <CardActions>
-                        <Button
-                          size="small"
-                          startIcon={<EditIcon />}
-                          onClick={() => handleEditLocation(location)}
-                        >
-                          {t('business.locations.editLocation')}
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            updateLocation(location.id, {
-                              is_active: !location.is_active,
-                            })
-                          }
-                        >
-                          {location.is_active
-                            ? t('business.locations.deactivate')
-                            : t('business.locations.activate')}
-                        </Button>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleDeleteLocation(location)}
-                          disabled={location.is_primary}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </CardActions>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            )}
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          {/* Items Management */}
-          <Box sx={{ mb: 3 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">{t('business.items.title')}</Typography>
-              <Box display="flex" gap={1}>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                  onClick={() => setShowCSVUploadDialog(true)}
-                >
-                  {t('business.csvUpload.uploadCSV')}
-                </Button>
-                <Tooltip title={t('business.items.noLocationsError')}>
-                  <span>
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        if (businessLocations.length === 0) {
-                          enqueueSnackbar(
-                            t('business.items.noLocationsError'),
-                            {
-                              variant: 'error',
-                            }
-                          );
-                          return;
-                        }
-                        setShowAddItemDialog(true);
-                      }}
-                      disabled={businessLocations.length === 0}
-                    >
-                      {t('business.items.addItem')}
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Box>
-            </Box>
-
-            {itemsLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <CircularProgress />
-              </Box>
-            ) : itemsError ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {itemsError}
-              </Alert>
-            ) : (
-              <ItemsCards
-                items={items}
-                loading={itemsLoading}
-                onEditItem={handleEditItem}
-              />
-            )}
-          </Box>
-        </TabPanel>
-      </Paper>
-
-      {/* Add Item Dialog */}
-      <AddItemDialog
-        open={showAddItemDialog}
-        onClose={() => setShowAddItemDialog(false)}
-        businessId={profile?.business?.id || ''}
-        businessLocations={businessLocations}
-      />
-
-      {/* Edit Item Dialog */}
-      <EditItemDialog
-        open={showEditItemDialog}
-        onClose={handleCloseEditItemDialog}
-        item={editingItem}
-        businessId={profile?.business?.id}
-      />
-
-      {/* Location Modal */}
-      <LocationModal
-        open={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-        onSave={handleSaveLocation}
-        location={editingLocation}
-        loading={locationsLoading}
-        error={locationsError}
-      />
-
-      {/* Update Inventory Dialog */}
-      <UpdateInventoryDialog
-        open={showUpdateInventoryDialog}
-        onClose={() => setShowUpdateInventoryDialog(false)}
-        item={updatingInventoryItem}
-        businessLocations={businessLocations}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-      >
-        <DialogTitle>{t('business.locations.deleteLocation')}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {locationToDelete?.is_primary
-              ? t('business.locations.primaryLocationWarning')
-              : t('business.locations.deleteConfirm')}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowDeleteConfirm(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            variant="contained"
-            disabled={locationToDelete?.is_primary}
+      {/* Quick Stats Section */}
+      <Box sx={{ mt: 6 }}>
+        <Typography variant="h5" gutterBottom>
+          {t('business.dashboard.quickStats')}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+          <Card
+            sx={{
+              flex: {
+                xs: '1 1 100%',
+                sm: '1 1 calc(50% - 8px)',
+                md: '1 1 calc(25% - 12px)',
+              },
+            }}
           >
-            {t('common.delete')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* CSV Upload Dialog */}
-      <CSVUploadDialog
-        open={showCSVUploadDialog}
-        onClose={() => setShowCSVUploadDialog(false)}
-        businessId={profile?.business?.id || ''}
-      />
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                {t('business.dashboard.totalOrders')}
+              </Typography>
+              <Typography variant="h4">{orders.length}</Typography>
+            </CardContent>
+          </Card>
+          <Card
+            sx={{
+              flex: {
+                xs: '1 1 100%',
+                sm: '1 1 calc(50% - 8px)',
+                md: '1 1 calc(25% - 12px)',
+              },
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                {t('business.dashboard.totalItems')}
+              </Typography>
+              <Typography variant="h4">{items.length}</Typography>
+            </CardContent>
+          </Card>
+          <Card
+            sx={{
+              flex: {
+                xs: '1 1 100%',
+                sm: '1 1 calc(50% - 8px)',
+                md: '1 1 calc(25% - 12px)',
+              },
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                {t('business.dashboard.totalLocations')}
+              </Typography>
+              <Typography variant="h4">{locations.length}</Typography>
+            </CardContent>
+          </Card>
+          <Card
+            sx={{
+              flex: {
+                xs: '1 1 100%',
+                sm: '1 1 calc(50% - 8px)',
+                md: '1 1 calc(25% - 12px)',
+              },
+            }}
+          >
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                {t('business.dashboard.totalInventory')}
+              </Typography>
+              <Typography variant="h4">{inventory.length}</Typography>
+            </CardContent>
+          </Card>
+        </Box>
+      </Box>
     </Container>
   );
 };
