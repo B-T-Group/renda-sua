@@ -1,5 +1,6 @@
 // Example usage of the useAws hook
 
+import axios from 'axios';
 import { GeneratePresignedUrlRequest, useAws } from './useAws';
 
 // Example 1: Basic image upload
@@ -25,13 +26,12 @@ export const useImageUploadExample = () => {
       });
       formData.append('file', file);
 
-      const uploadResponse = await fetch(response.data.url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (uploadResponse.ok) {
+      try {
+        await axios.post(response.data.url, formData);
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
+      } catch (err) {
+        console.error('Failed to upload image:', err);
+        return null;
       }
     }
 
@@ -68,13 +68,12 @@ export const useDocumentUploadExample = () => {
       });
       formData.append('file', file);
 
-      const uploadResponse = await fetch(response.data.url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (uploadResponse.ok) {
+      try {
+        await axios.post(response.data.url, formData);
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
+      } catch (err) {
+        console.error('Failed to upload document:', err);
+        return null;
       }
     }
 
@@ -114,13 +113,12 @@ export const useGenericUploadExample = () => {
       });
       formData.append('file', file);
 
-      const uploadResponse = await fetch(response.data.url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (uploadResponse.ok) {
+      try {
+        await axios.post(response.data.url, formData);
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
+      } catch (err) {
+        console.error('Failed to upload file:', err);
+        return null;
       }
     }
 

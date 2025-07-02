@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { ImageType } from '../types/image';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 const GET_INVENTORY_ITEMS = `
@@ -127,7 +128,7 @@ export interface InventoryItem {
     item_images: Array<{
       id: string;
       image_url: string;
-      image_type: string;
+      image_type: ImageType;
       alt_text?: string;
       caption?: string;
       display_order: number;

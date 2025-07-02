@@ -1,29 +1,8 @@
+import axios from 'axios';
 import { useCallback, useState } from 'react';
+import { CreateItemImageData, ImageType, ItemImage } from '../types/image';
 import { useAws } from './useAws';
 import { useGraphQLRequest } from './useGraphQLRequest';
-
-export interface ItemImage {
-  id: string;
-  item_id: string;
-  image_url: string;
-  image_type: string;
-  alt_text?: string;
-  caption?: string;
-  display_order: number;
-  uploaded_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateItemImageData {
-  item_id: string;
-  image_url: string;
-  image_type: string;
-  alt_text?: string;
-  caption?: string;
-  display_order: number;
-  uploaded_by: string;
-}
 
 export interface PresignedUrlRequest {
   bucketName: string;
@@ -144,17 +123,16 @@ export const useItemImages = () => {
   const uploadImageToS3 = useCallback(
     async (presignedUrl: string, file: File): Promise<void> => {
       try {
-        const response = await fetch(presignedUrl, {
-          method: 'PUT',
-          body: file,
+        const response = await axios.put(presignedUrl, file, {
           headers: {
             'Content-Type': file.type,
           },
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to upload image: ${response.statusText}`);
-        }
+        console.log('response', response);
+
+        // Axios automatically throws on non-2xx status codes
+        // If we reach here, the upload was successful
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to upload image to S3'
@@ -194,6 +172,30 @@ export const useItemImages = () => {
     [executeDeleteImage]
   );
 
+  // Helper function to determine image type based on existing images
+  const determineImageType = useCallback(
+    (currentImages: ItemImage[]): ImageType => {
+      // If no images exist, this is the main image
+      if (currentImages.length === 0) {
+        return 'main';
+      }
+
+      // Check if a main image already exists
+      const hasMainImage = currentImages.some(
+        (img) => img.image_type === 'main'
+      );
+
+      // If no main image exists, this should be the main image
+      if (!hasMainImage) {
+        return 'main';
+      }
+
+      // Otherwise, it's a gallery image
+      return 'gallery';
+    },
+    []
+  );
+
   const uploadItemImage = useCallback(
     async (
       itemId: string,
@@ -227,15 +229,16 @@ export const useItemImages = () => {
         // Get the final S3 URL
         const s3Url = `https://${bucketName}.s3.amazonaws.com/${presignedResponse.data.key}`;
 
-        // Get current images to determine display order
+        // Get current images to determine display order and image type
         const currentImages = await fetchItemImages(itemId);
         const nextDisplayOrder = currentImages.length + 1;
+        const imageType = determineImageType(currentImages);
 
         // Create item image record
         const imageData: CreateItemImageData = {
           item_id: itemId,
           image_url: s3Url,
-          image_type: file.type,
+          image_type: imageType,
           alt_text: altText,
           caption: caption,
           display_order: nextDisplayOrder,
@@ -253,7 +256,13 @@ export const useItemImages = () => {
         setLoading(false);
       }
     },
-    [getPresignedUrl, uploadImageToS3, fetchItemImages, createItemImage]
+    [
+      getPresignedUrl,
+      uploadImageToS3,
+      fetchItemImages,
+      createItemImage,
+      determineImageType,
+    ]
   );
 
   return {

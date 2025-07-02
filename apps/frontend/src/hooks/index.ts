@@ -32,6 +32,9 @@ export { useApiClient } from './useApiClient';
 // AWS hooks
 export { useAws } from './useAws';
 
+// Image types
+export type { CreateItemImageData, ImageType, ItemImage } from '../types/image';
+
 // Loading Components
 export { default as LoadingPage } from '../components/common/LoadingPage';
 export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
