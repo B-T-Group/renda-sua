@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessOrder {
@@ -301,15 +301,22 @@ export const useBusinessOrders = () => {
 
   const fetchOrders = useCallback(
     async (filterParams: OrderFilters = {}) => {
+      console.log(
+        'useBusinessOrders: Fetching orders with filters:',
+        filterParams
+      );
       setLoading(true);
       setError(null);
 
       try {
-        const filters = buildFilters(filterParams);
-        const result = await execute({ filters });
+        const builtFilters = buildFilters(filterParams);
+        console.log('useBusinessOrders: Built filters:', builtFilters);
+        const result = await execute({ filters: builtFilters });
+        console.log('useBusinessOrders: Fetch result:', result);
         setOrders(result.orders || []);
         setFilters(filterParams);
       } catch (err) {
+        console.error('useBusinessOrders: Fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch orders');
       } finally {
         setLoading(false);
@@ -349,6 +356,11 @@ export const useBusinessOrders = () => {
     },
     [executeAssignOrder, fetchOrders, filters]
   );
+
+  useEffect(() => {
+    console.log('useBusinessOrders: useEffect triggered, filters:', filters);
+    fetchOrders(filters);
+  }, [fetchOrders, filters]);
 
   return {
     orders,

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
@@ -355,15 +355,21 @@ export const useItems = (businessId?: string) => {
   const { execute: executeUpdateItem } = useGraphQLRequest(updateItemMutation);
 
   const fetchItems = useCallback(async () => {
-    if (!businessId) return;
+    if (!businessId) {
+      console.log('useItems: No businessId provided, skipping fetch');
+      return;
+    }
 
+    console.log('useItems: Fetching items for businessId:', businessId);
     setLoading(true);
     setError(null);
 
     try {
       const result = await executeItemsQuery({ businessId });
+      console.log('useItems: Fetch result:', result);
       setItems(result.items || []);
     } catch (err) {
+      console.error('useItems: Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch items');
     } finally {
       setLoading(false);
@@ -465,6 +471,13 @@ export const useItems = (businessId?: string) => {
     },
     [executeUpdateItem, fetchItems]
   );
+
+  useEffect(() => {
+    console.log('useItems: useEffect triggered, businessId:', businessId);
+    if (businessId) {
+      fetchItems();
+    }
+  }, [businessId, fetchItems]);
 
   return {
     items,

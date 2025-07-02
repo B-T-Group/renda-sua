@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessInventoryItem {
@@ -76,8 +76,9 @@ export interface AddInventoryItemData {
 }
 
 const GET_BUSINESS_INVENTORY = `
-  query GetBusinessInventory {
+  query GetBusinessInventory($businessId: uuid!) {
     business_inventory(
+      where: { business_location: { business_id: { _eq: $businessId } } }
       order_by: { created_at: desc }
     ) {
       id
@@ -206,7 +207,7 @@ const GET_BUSINESS_LOCATIONS = `
   }
 `;
 
-export const useBusinessInventory = () => {
+export const useBusinessInventory = (businessId?: string) => {
   const [inventory, setInventory] = useState<BusinessInventoryItem[]>([]);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [businessLocations, setBusinessLocations] = useState<any[]>([]);
@@ -305,20 +306,33 @@ export const useBusinessInventory = () => {
     useGraphQLRequest(restockItemMutation);
 
   const fetchInventory = useCallback(async () => {
+    if (!businessId) {
+      console.log(
+        'useBusinessInventory: No businessId provided, skipping fetch'
+      );
+      return;
+    }
+
+    console.log(
+      'useBusinessInventory: Fetching inventory for businessId:',
+      businessId
+    );
     setLoading(true);
     setError(null);
 
     try {
-      const result = await executeInventoryQuery();
+      const result = await executeInventoryQuery({ businessId });
+      console.log('useBusinessInventory: Fetch result:', result);
       setInventory(result.business_inventory || []);
     } catch (err) {
+      console.error('useBusinessInventory: Fetch error:', err);
       setError(
         err instanceof Error ? err.message : 'Failed to fetch inventory'
       );
     } finally {
       setLoading(false);
     }
-  }, [executeInventoryQuery]);
+  }, [executeInventoryQuery, businessId]);
 
   const fetchAvailableItems = useCallback(async () => {
     try {
@@ -405,6 +419,18 @@ export const useBusinessInventory = () => {
     },
     [executeRestockMutation, fetchInventory]
   );
+
+  useEffect(() => {
+    console.log(
+      'useBusinessInventory: useEffect triggered, businessId:',
+      businessId
+    );
+    if (businessId) {
+      fetchInventory();
+    }
+    fetchAvailableItems();
+    fetchBusinessLocations();
+  }, [businessId, fetchInventory, fetchAvailableItems, fetchBusinessLocations]);
 
   return {
     inventory,

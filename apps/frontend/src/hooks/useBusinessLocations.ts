@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessLocation {
@@ -53,8 +53,10 @@ export interface UpdateBusinessLocationData {
 }
 
 const GET_BUSINESS_LOCATIONS = `
-  query GetBusinessLocations {
-    business_locations {
+  query GetBusinessLocations($businessId: uuid!) {
+    business_locations(
+      where: { business_id: { _eq: $businessId } }
+    ) {
       id
       name
       business_id
@@ -201,11 +203,22 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
   );
 
   const fetchLocations = useCallback(async () => {
+    if (!businessId) {
+      console.log(
+        'useBusinessLocations: No businessId provided, skipping fetch'
+      );
+      return;
+    }
+
+    console.log(
+      'useBusinessLocations: Fetching locations for businessId:',
+      businessId
+    );
     setLoading(true);
     setError(null);
     try {
       console.log('Fetching business locations...');
-      const result = await executeQuery();
+      const result = await executeQuery({ businessId });
       console.log('Business locations result:', result);
       if (result?.business_locations) {
         console.log('Found business locations:', result.business_locations);
@@ -224,7 +237,7 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
     } finally {
       setLoading(false);
     }
-  }, [executeQuery]);
+  }, [executeQuery, businessId]);
 
   const addLocation = useCallback(
     async (data: AddBusinessLocationData) => {
@@ -328,6 +341,16 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
     },
     [executeDeleteMutation]
   );
+
+  useEffect(() => {
+    console.log(
+      'useBusinessLocations: useEffect triggered, businessId:',
+      businessId
+    );
+    if (businessId) {
+      fetchLocations();
+    }
+  }, [businessId, fetchLocations]);
 
   return {
     locations,

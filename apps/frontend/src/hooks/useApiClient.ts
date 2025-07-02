@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import axios, { AxiosInstance } from 'axios';
 import { useAuth0 } from '@auth0/auth0-react';
+import axios, { AxiosInstance } from 'axios';
+import { useMemo } from 'react';
 import { environment } from '../config/environment';
 
 export const useApiClient = (): AxiosInstance | null => {
@@ -21,6 +21,8 @@ export const useApiClient = (): AxiosInstance | null => {
       const token = await getAccessTokenSilently();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        config.headers['X-Hasura-Role'] = 'anonymous';
       }
       return config;
     });

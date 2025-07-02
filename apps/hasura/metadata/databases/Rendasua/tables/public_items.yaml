@@ -99,7 +99,11 @@ select_permissions:
         - is_active
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:

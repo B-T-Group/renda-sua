@@ -31,9 +31,20 @@ const BusinessDashboard: React.FC = () => {
   const { profile } = useUserProfile();
 
   const { orders } = useBusinessOrders();
-  const { inventory } = useBusinessInventory();
-  const { locations } = useBusinessLocations();
+  const { inventory } = useBusinessInventory(profile?.business?.id);
+  const { locations } = useBusinessLocations(profile?.business?.id);
   const { items } = useItems(profile?.business?.id);
+
+  // Debug logging
+  console.log('Business Dashboard Data:', {
+    profile: profile?.business,
+    ordersCount: orders.length,
+    inventoryCount: inventory.length,
+    locationsCount: locations.length,
+    itemsCount: items.length,
+    profileLoading: profile === null,
+    businessId: profile?.business?.id,
+  });
 
   const dashboardCards = [
     {
