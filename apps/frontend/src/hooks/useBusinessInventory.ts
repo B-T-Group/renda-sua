@@ -360,6 +360,7 @@ export const useBusinessInventory = (businessId?: string) => {
 
     try {
       const result = await executeLocationsQuery({ businessId });
+      console.log('useBusinessInventory: Locations fetch result:', result);
       setBusinessLocations(result.business_locations || []);
     } catch (err) {
       setError(
@@ -439,9 +440,9 @@ export const useBusinessInventory = (businessId?: string) => {
     );
     if (businessId) {
       fetchInventory();
+      fetchBusinessLocations();
     }
     fetchAvailableItems();
-    fetchBusinessLocations();
   }, [businessId, fetchInventory, fetchAvailableItems, fetchBusinessLocations]);
 
   return {

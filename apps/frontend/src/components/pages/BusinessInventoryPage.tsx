@@ -51,7 +51,7 @@ function TabPanel(props: TabPanelProps) {
 const BusinessInventoryPage: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfile();
+  const { profile, loading: profileLoading } = useUserProfile();
   const [tabValue, setTabValue] = useState(0);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
@@ -67,6 +67,18 @@ const BusinessInventoryPage: React.FC = () => {
     updateInventoryItem,
     deleteInventoryItem,
   } = useBusinessInventory(profile?.business?.id);
+
+  // Debug logging
+  console.log('BusinessInventoryPage: profile:', profile);
+  console.log(
+    'BusinessInventoryPage: profile?.business?.id:',
+    profile?.business?.id
+  );
+  console.log('BusinessInventoryPage: businessLocations:', businessLocations);
+  console.log(
+    'BusinessInventoryPage: businessLocations.length:',
+    businessLocations.length
+  );
   const { loading: locationsLoading } = useBusinessLocations();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -114,6 +126,16 @@ const BusinessInventoryPage: React.FC = () => {
       return { status: 'lowStock', color: 'warning' as const };
     return { status: 'inStock', color: 'success' as const };
   };
+
+  if (profileLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Box display="flex" justifyContent="center" p={3}>
+          <Typography>{t('common.loading')}</Typography>
+        </Box>
+      </Container>
+    );
+  }
 
   if (!profile?.business) {
     return (
@@ -182,7 +204,9 @@ const BusinessInventoryPage: React.FC = () => {
                         { variant: 'info' }
                       );
                     }}
-                    disabled={businessLocations.length === 0}
+                    disabled={
+                      businessLocations.length === 0 || inventoryLoading
+                    }
                   >
                     {t('business.inventory.addItem')}
                   </Button>
@@ -244,7 +268,9 @@ const BusinessInventoryPage: React.FC = () => {
                         { variant: 'info' }
                       );
                     }}
-                    disabled={businessLocations.length === 0}
+                    disabled={
+                      businessLocations.length === 0 || inventoryLoading
+                    }
                   >
                     {t('business.inventory.addItem')}
                   </Button>

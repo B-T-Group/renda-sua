@@ -729,6 +729,20 @@ export class HasuraUserService {
         clients(where: {user_id: {_eq: $userId}}) {
           id
           user_id
+          client_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
           created_at
           updated_at
         }
@@ -748,6 +762,20 @@ export class HasuraUserService {
         businesses(where: {user_id: {_eq: $userId}}) {
           id
           user_id
+          business_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
           name
           created_at
           updated_at
@@ -768,6 +796,20 @@ export class HasuraUserService {
           id
           user_id
           vehicle_type_id
+          agent_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
           created_at
           updated_at
         }
