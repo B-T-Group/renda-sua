@@ -23,7 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -46,7 +46,16 @@ const BusinessLocationsPage: React.FC = () => {
     addLocation,
     updateLocation,
     deleteLocation,
-  } = useBusinessLocations();
+  } = useBusinessLocations(profile?.business?.id);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('BusinessLocationsPage - Profile:', profile);
+    console.log('BusinessLocationsPage - Business ID:', profile?.business?.id);
+    console.log('BusinessLocationsPage - Locations:', locations);
+    console.log('BusinessLocationsPage - Loading:', locationsLoading);
+    console.log('BusinessLocationsPage - Error:', locationsError);
+  }, [profile, locations, locationsLoading, locationsError]);
 
   const handleAddLocation = () => {
     setEditingLocation(null);

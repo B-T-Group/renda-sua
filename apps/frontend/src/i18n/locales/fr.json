@@ -35,8 +35,10 @@
     "yes": "Oui",
     "no": "Non",
     "actions": "Actions",
+    "view": "Voir",
     "rowsPerPage": "Lignes par page :",
     "of": "sur",
+    "moreThan": "plus de",
     "moreThan": "plus de",
     "back": "Retour",
     "home": "Accueil"

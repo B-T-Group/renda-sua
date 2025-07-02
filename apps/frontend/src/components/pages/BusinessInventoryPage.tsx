@@ -66,7 +66,7 @@ const BusinessInventoryPage: React.FC = () => {
     error: inventoryError,
     updateInventoryItem,
     deleteInventoryItem,
-  } = useBusinessInventory();
+  } = useBusinessInventory(profile?.business?.id);
   const { loading: locationsLoading } = useBusinessLocations();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {

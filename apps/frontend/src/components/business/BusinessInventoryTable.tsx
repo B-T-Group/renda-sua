@@ -339,6 +339,12 @@ export default function BusinessInventoryTable({
         page={page}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage={t('common.rowsPerPage')}
+        labelDisplayedRows={({ from, to, count }) =>
+          `${from}-${to} ${t('common.of')} ${
+            count !== -1 ? count : `${t('common.moreThan')} ${to}`
+          }`
+        }
       />
     </Paper>
   );

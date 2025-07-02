@@ -41,7 +41,11 @@ export interface BusinessInventoryItem {
     size: string | null;
     size_unit: string | null;
     sku: string | null;
-    brand: string | null;
+    brand: {
+      id: string;
+      name: string;
+      description: string | null;
+    } | null;
     model: string | null;
     color: string | null;
     material: string | null;
@@ -150,7 +154,7 @@ const GET_BUSINESS_INVENTORY = `
 const GET_AVAILABLE_ITEMS = `
   query GetAvailableItems {
     items(
-     
+      where: { is_active: { _eq: true } }
       order_by: { name: asc }
     ) {
       id
@@ -184,8 +188,9 @@ const GET_AVAILABLE_ITEMS = `
 `;
 
 const GET_BUSINESS_LOCATIONS = `
-  query GetBusinessLocations {
+  query GetBusinessLocations($businessId: uuid!) {
     business_locations(
+      where: { business_id: { _eq: $businessId } }
       order_by: { name: asc }
     ) {
       id
@@ -346,8 +351,15 @@ export const useBusinessInventory = (businessId?: string) => {
   }, [executeItemsQuery]);
 
   const fetchBusinessLocations = useCallback(async () => {
+    if (!businessId) {
+      console.log(
+        'useBusinessInventory: No businessId provided, skipping locations fetch'
+      );
+      return;
+    }
+
     try {
-      const result = await executeLocationsQuery();
+      const result = await executeLocationsQuery({ businessId });
       setBusinessLocations(result.business_locations || []);
     } catch (err) {
       setError(
@@ -356,7 +368,7 @@ export const useBusinessInventory = (businessId?: string) => {
           : 'Failed to fetch business locations'
       );
     }
-  }, [executeLocationsQuery]);
+  }, [executeLocationsQuery, businessId]);
 
   const addInventoryItem = useCallback(
     async (itemData: AddInventoryItemData) => {
