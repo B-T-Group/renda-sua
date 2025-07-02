@@ -117,6 +117,22 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - business_id
+        - address_id
+        - name
+        - location_type
+        - is_primary
+        - is_active
+        - email
+        - phone
+        - operating_hours
+        - created_at
+        - updated_at
+      filter: {}
 update_permissions:
   - role: business
     permission:

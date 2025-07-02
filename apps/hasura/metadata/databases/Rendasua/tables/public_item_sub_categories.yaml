@@ -56,3 +56,13 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - item_category_id
+        - created_at
+        - updated_at
+      filter: {}

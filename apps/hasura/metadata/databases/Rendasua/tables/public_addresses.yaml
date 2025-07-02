@@ -138,6 +138,26 @@ select_permissions:
                 user:
                   identifier:
                     _eq: X-Hasura-User-Id
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - address_line_1
+        - address_line_2
+        - city
+        - state
+        - postal_code
+        - country
+        - latitude
+        - longitude
+        - is_primary
+        - address_type
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          is_active:
+            _eq: true
 insert_permissions:
   - role: agent
     permission:

@@ -6,3 +6,5 @@
   role_set: []
 - role_name: user
   role_set: []
+- role_name: anonymous
+  role_set: []

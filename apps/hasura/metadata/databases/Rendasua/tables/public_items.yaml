@@ -160,6 +160,36 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - price
+        - currency
+        - weight
+        - weight_unit
+        - size
+        - size_unit
+        - item_sub_category_id
+        - business_id
+        - brand_id
+        - sku
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
+        - created_at
+        - updated_at
+      filter: {}
 
 insert_permissions:
   - role: business

@@ -38,6 +38,15 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      filter: {}
 insert_permissions:
   - role: business
     permission:
