@@ -88,7 +88,7 @@ AWS_SECRET_ACCESS_KEY=your_secret_key
 }
 ```
 
-### 4. Generate Unique Key
+### 4. Generate Unique Keys
 
 **GET** `/api/aws/generate-key?originalFileName=example.jpg&prefix=uploads`
 
