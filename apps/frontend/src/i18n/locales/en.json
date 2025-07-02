@@ -34,7 +34,8 @@
     "refresh": "Refresh",
     "yes": "Yes",
     "no": "No",
-    "actions": "Actions"
+    "actions": "Actions",
+    "home": "Home"
   },
   "auth": {
     "login": "Login",
@@ -411,5 +412,56 @@
     "of": "of",
     "moreThan": "more than",
     "back": "Back"
+  },
+  "seo": {
+    "home": {
+      "title": "Rendasua - Your Trusted Business Platform",
+      "description": "Rendasua is a comprehensive business platform connecting agents, businesses, and clients. Streamline your operations, manage inventory, and grow your business with our innovative solutions.",
+      "keywords": "business platform, inventory management, agent dashboard, business dashboard, client management, order management, Rendasua"
+    },
+    "dashboard": {
+      "title": "Dashboard - Rendasua",
+      "description": "Access your personalized dashboard to manage your business operations, view analytics, and track performance.",
+      "keywords": "dashboard, business analytics, performance tracking, Rendasua"
+    },
+    "agent-dashboard": {
+      "title": "Agent Dashboard - Rendasua",
+      "description": "Manage your agent activities, track commissions, and handle client relationships efficiently.",
+      "keywords": "agent dashboard, commission tracking, client management, Rendasua"
+    },
+    "business-dashboard": {
+      "title": "Business Dashboard - Rendasua",
+      "description": "Manage your business inventory, track sales, and optimize your operations with our comprehensive dashboard.",
+      "keywords": "business dashboard, inventory management, sales tracking, Rendasua"
+    },
+    "profile": {
+      "title": "Profile - Rendasua",
+      "description": "Manage your profile information, preferences, and account settings.",
+      "keywords": "profile, account settings, preferences, Rendasua"
+    },
+    "client-orders": {
+      "title": "Client Orders - Rendasua",
+      "description": "View and manage your client orders, track order status, and handle customer requests.",
+      "keywords": "client orders, order management, customer service, Rendasua"
+    },
+    "item": {
+      "title": "Product Details - Rendasua",
+      "description": "View detailed product information, specifications, and pricing.",
+      "keywords": "product details, item information, pricing, Rendasua"
+    },
+    "default": {
+      "title": "Rendasua - Your Trusted Business Platform",
+      "description": "Rendasua is a comprehensive business platform connecting agents, businesses, and clients.",
+      "keywords": "business platform, Rendasua"
+    }
+  },
+  "breadcrumbs": {
+    "dashboard": "Dashboard",
+    "agent-dashboard": "Agent Dashboard",
+    "business-dashboard": "Business Dashboard",
+    "profile": "Profile",
+    "client-orders": "Client Orders",
+    "business": "Business",
+    "items": "Items"
   }
 }

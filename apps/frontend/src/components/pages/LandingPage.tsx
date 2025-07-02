@@ -26,10 +26,22 @@ import {
   Typography,
 } from '@mui/material';
 import React from 'react';
+import { useSEO } from '../../hooks/useSEO';
 import Logo from '../common/Logo';
+import { SEOHead } from '../seo';
 
 const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuth0();
+
+  // SEO configuration for landing page
+  const seoConfig = useSEO({
+    title: 'Rendasua - Fast & Reliable Delivery Service',
+    description:
+      'Connect with trusted delivery agents and get your packages delivered safely and on time, every time. Same-day delivery available with real-time tracking.',
+    keywords:
+      'delivery service, same-day delivery, package delivery, delivery agents, real-time tracking, secure delivery, Rendasua',
+    type: 'website',
+  });
 
   const features = [
     {
@@ -73,6 +85,7 @@ const LandingPage: React.FC = () => {
 
   return (
     <Box sx={{ overflow: 'hidden' }}>
+      <SEOHead {...seoConfig} />
       {/* Hero Section */}
       <Paper
         sx={{

@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+
+# Disallow private and authentication pages
+Disallow: /app
+Disallow: /dashboard
+Disallow: /agent-dashboard
+Disallow: /business-dashboard
+Disallow: /profile
+Disallow: /complete-profile
+Disallow: /client-orders
+Disallow: /loading-demo
+
+# Allow public pages
+Allow: /
+Allow: /business/items/*
+
+# Sitemap location
+Sitemap: https://rendasua.com/sitemap.xml
+
+# Crawl delay (optional - be respectful to server)
+Crawl-delay: 1 

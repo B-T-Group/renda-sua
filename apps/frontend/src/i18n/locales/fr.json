@@ -38,7 +38,8 @@
     "rowsPerPage": "Lignes par page :",
     "of": "sur",
     "moreThan": "plus de",
-    "back": "Retour"
+    "back": "Retour",
+    "home": "Accueil"
   },
   "auth": {
     "login": "Connexion",
@@ -405,5 +406,56 @@
     "save": "Enregistrer les modifications",
     "saved": "Profil enregistré avec succès !",
     "error": "Échec de l'enregistrement du profil"
+  },
+  "seo": {
+    "home": {
+      "title": "Rendasua - Votre Plateforme d'Affaires de Confiance",
+      "description": "Rendasua est une plateforme d'affaires complète connectant agents, entreprises et clients. Rationalisez vos opérations, gérez l'inventaire et développez votre entreprise avec nos solutions innovantes.",
+      "keywords": "plateforme d'affaires, gestion d'inventaire, tableau de bord agent, tableau de bord entreprise, gestion client, gestion de commandes, Rendasua"
+    },
+    "dashboard": {
+      "title": "Tableau de Bord - Rendasua",
+      "description": "Accédez à votre tableau de bord personnalisé pour gérer vos opérations commerciales, consulter les analyses et suivre les performances.",
+      "keywords": "tableau de bord, analyses commerciales, suivi des performances, Rendasua"
+    },
+    "agent-dashboard": {
+      "title": "Tableau de Bord Agent - Rendasua",
+      "description": "Gérez vos activités d'agent, suivez les commissions et gérez efficacement les relations clients.",
+      "keywords": "tableau de bord agent, suivi des commissions, gestion client, Rendasua"
+    },
+    "business-dashboard": {
+      "title": "Tableau de Bord Entreprise - Rendasua",
+      "description": "Gérez votre inventaire d'entreprise, suivez les ventes et optimisez vos opérations avec notre tableau de bord complet.",
+      "keywords": "tableau de bord entreprise, gestion d'inventaire, suivi des ventes, Rendasua"
+    },
+    "profile": {
+      "title": "Profil - Rendasua",
+      "description": "Gérez vos informations de profil, préférences et paramètres de compte.",
+      "keywords": "profil, paramètres de compte, préférences, Rendasua"
+    },
+    "client-orders": {
+      "title": "Commandes Client - Rendasua",
+      "description": "Consultez et gérez vos commandes client, suivez le statut des commandes et traitez les demandes clients.",
+      "keywords": "commandes client, gestion de commandes, service client, Rendasua"
+    },
+    "item": {
+      "title": "Détails du Produit - Rendasua",
+      "description": "Consultez les informations détaillées du produit, les spécifications et les prix.",
+      "keywords": "détails du produit, informations article, prix, Rendasua"
+    },
+    "default": {
+      "title": "Rendasua - Votre Plateforme d'Affaires de Confiance",
+      "description": "Rendasua est une plateforme d'affaires complète connectant agents, entreprises et clients.",
+      "keywords": "plateforme d'affaires, Rendasua"
+    }
+  },
+  "breadcrumbs": {
+    "dashboard": "Tableau de Bord",
+    "agent-dashboard": "Tableau de Bord Agent",
+    "business-dashboard": "Tableau de Bord Entreprise",
+    "profile": "Profil",
+    "client-orders": "Commandes Client",
+    "business": "Entreprise",
+    "items": "Articles"
   }
 }

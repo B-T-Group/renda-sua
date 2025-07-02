@@ -32,6 +32,10 @@ export { useApiClient } from './useApiClient';
 // AWS hooks
 export { useAws } from './useAws';
 
+// SEO hooks
+export { useSEO } from './useSEO';
+export type { PageSEOConfig } from './useSEO';
+
 // Image types
 export type { CreateItemImageData, ImageType, ItemImage } from '../types/image';
 
