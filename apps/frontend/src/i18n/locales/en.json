@@ -166,6 +166,7 @@
     "dashboard": {
       "title": "Business Dashboard",
       "welcome": "Welcome back, {{name}}! This is your business dashboard.",
+      "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "orders": "Orders",
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
       "inventory": "Inventory",
