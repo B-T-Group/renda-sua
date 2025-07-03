@@ -1,4 +1,8 @@
-import { Add as AddIcon, Upload as UploadIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -75,6 +79,113 @@ const BusinessItemsPage: React.FC = () => {
     setEditingItem(null);
   };
 
+  const downloadItemsCSV = () => {
+    if (!items || items.length === 0) {
+      enqueueSnackbar(t('business.items.noItemsToDownload'), {
+        variant: 'warning',
+      });
+      return;
+    }
+
+    // Define headers in the same order as the upload template
+    const headers = [
+      'name',
+      'description',
+      'price',
+      'currency',
+      'sku',
+      'size',
+      'size_unit',
+      'weight',
+      'weight_unit',
+      'color',
+      'material',
+      'model',
+      'is_fragile',
+      'is_perishable',
+      'requires_special_handling',
+      'min_order_quantity',
+      'max_order_quantity',
+      'is_active',
+      'item_sub_category_id',
+      'brand_id',
+      'business_location_name',
+      'quantity',
+      'available_quantity',
+      'reserved_quantity',
+      'reorder_point',
+      'reorder_quantity',
+      'unit_cost',
+      'selling_price',
+      'image_url',
+      'image_alt_text',
+      'image_caption',
+    ];
+
+    // Convert items to CSV rows
+    const csvRows = items.map((item) => {
+      // Get the main image URL if available
+      const mainImage = item.item_images?.find(
+        (img) => img.image_type === 'main'
+      );
+
+      return [
+        item.name || '',
+        item.description || '',
+        item.price?.toString() || '',
+        item.currency || 'USD',
+        item.sku || '',
+        item.size?.toString() || '',
+        item.size_unit || '',
+        item.weight?.toString() || '',
+        item.weight_unit || '',
+        item.color || '',
+        item.material || '',
+        item.model || '',
+        item.is_fragile?.toString() || 'false',
+        item.is_perishable?.toString() || 'false',
+        item.requires_special_handling?.toString() || 'false',
+        item.min_order_quantity?.toString() || '1',
+        item.max_order_quantity?.toString() || '',
+        item.is_active?.toString() || 'true',
+        item.item_sub_category_id?.toString() || '',
+        item.brand_id || '',
+        '', // business_location_name - will be empty for items without inventory
+        '', // quantity
+        '', // available_quantity
+        '', // reserved_quantity
+        '', // reorder_point
+        '', // reorder_quantity
+        '', // unit_cost
+        '', // selling_price
+        mainImage?.image_url || '',
+        mainImage?.alt_text || '',
+        mainImage?.caption || '',
+      ];
+    });
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...csvRows.map((row) => row.join(',')),
+    ].join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `items_export_${
+      new Date().toISOString().split('T')[0]
+    }.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+
+    enqueueSnackbar(t('business.items.downloadSuccess'), {
+      variant: 'success',
+    });
+  };
+
   if (!profile?.business) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -122,6 +233,14 @@ const BusinessItemsPage: React.FC = () => {
                 {t('business.items.cardsView')}
               </Typography>
               <Box display="flex" gap={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={downloadItemsCSV}
+                  disabled={itemsLoading || items.length === 0}
+                >
+                  {t('business.items.downloadCSV')}
+                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<UploadIcon />}
@@ -186,6 +305,14 @@ const BusinessItemsPage: React.FC = () => {
                 {t('business.items.tableView')}
               </Typography>
               <Box display="flex" gap={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={downloadItemsCSV}
+                  disabled={itemsLoading || items.length === 0}
+                >
+                  {t('business.items.downloadCSV')}
+                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<UploadIcon />}

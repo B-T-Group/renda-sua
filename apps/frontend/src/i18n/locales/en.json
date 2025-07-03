@@ -420,6 +420,9 @@
       "viewItem": "View Item",
       "editItem": "Edit Item",
       "deleteItem": "Delete Item",
+      "downloadCSV": "Download CSV",
+      "noItemsToDownload": "No items available to download",
+      "downloadSuccess": "Items exported successfully",
       "csvUpload": {
         "uploadCSV": "Upload CSV",
         "title": "CSV Upload",
