@@ -41,7 +41,6 @@
     "of": "sur",
     "moreThan": "plus de",
     "saving": "Enregistrement...",
-    "back": "Retour",
     "home": "Accueil"
   },
   "auth": {
@@ -174,6 +173,7 @@
     },
     "orders": {
       "title": "Gestion des Commandes",
+      "subtitle": "Gérez et suivez toutes vos commandes clients",
       "allOrders": "Toutes les Commandes",
       "noOrdersFound": "Aucune commande trouvée correspondant à vos critères.",
       "filters": {
@@ -202,7 +202,8 @@
         "delivered": "Livrée",
         "cancelled": "Annulée",
         "failed": "Échouée",
-        "refunded": "Remboursée"
+        "refunded": "Remboursée",
+        "unknown": "Inconnue"
       },
       "table": {
         "orderNumber": "Commande #{{number}}",
@@ -519,7 +520,8 @@
         "delivered": "Livrée",
         "cancelled": "Annulée",
         "failed": "Échouée",
-        "refunded": "Remboursée"
+        "refunded": "Remboursée",
+        "unknown": "Inconnue"
       }
     }
   },

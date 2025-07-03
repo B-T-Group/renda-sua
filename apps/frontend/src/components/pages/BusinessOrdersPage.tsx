@@ -7,6 +7,7 @@ import {
   Person as PersonIcon,
   PlayArrow as PlayArrowIcon,
   Receipt as ReceiptIcon,
+  Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import {
@@ -83,6 +84,7 @@ const BusinessOrdersPage: React.FC = () => {
     loading: ordersLoading,
     error: ordersError,
     fetchOrders,
+    refreshOrders,
   } = useBusinessOrders();
   const {
     updateOrderStatus,
@@ -91,9 +93,16 @@ const BusinessOrdersPage: React.FC = () => {
   } = useBackendOrders();
   const { locations } = useBusinessLocations();
 
+  // Debug logging
+  console.log('BusinessOrdersPage: Orders data:', orders);
+  console.log(
+    'BusinessOrdersPage: Orders with undefined status:',
+    orders.filter((order) => !order.current_status)
+  );
+
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -106,8 +115,7 @@ const BusinessOrdersPage: React.FC = () => {
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     try {
       await updateOrderStatus(orderId, newStatus);
-      // Refresh orders after status update
-      await fetchOrders();
+      // The updateOrderStatus function already refreshes orders
     } catch (error) {
       console.error('Failed to update order status:', error);
     }
@@ -212,7 +220,7 @@ const BusinessOrdersPage: React.FC = () => {
 
   const formatAddress = (address: any) => {
     if (!address) return '';
-    const street = address.street_address || '';
+    const street = address.address_line_1 || '';
     const city = address.city || '';
     const state = address.state || '';
     const postal = address.postal_code || '';
@@ -241,16 +249,16 @@ const BusinessOrdersPage: React.FC = () => {
       const searchLower = filters.search.toLowerCase();
       const matchesSearch =
         order.order_number.toLowerCase().includes(searchLower) ||
-        order.client?.first_name?.toLowerCase().includes(searchLower) ||
-        order.client?.last_name?.toLowerCase().includes(searchLower) ||
-        order.delivery_address?.street_address
+        order.client?.user?.first_name?.toLowerCase().includes(searchLower) ||
+        order.client?.user?.last_name?.toLowerCase().includes(searchLower) ||
+        order.delivery_address?.address_line_1
           ?.toLowerCase()
           .includes(searchLower) ||
         false;
       if (!matchesSearch) return false;
     }
 
-    if (filters.status && order.status !== filters.status) return false;
+    if (filters.status && order.current_status !== filters.status) return false;
 
     if (filters.dateFrom) {
       const orderDate = new Date(order.created_at);
@@ -276,7 +284,7 @@ const BusinessOrdersPage: React.FC = () => {
   });
 
   const pendingOrders = filteredOrders.filter(
-    (order: any) => order.status === 'pending'
+    (order: any) => order.current_status === 'pending'
   );
   const activeOrders = filteredOrders.filter((order: any) =>
     [
@@ -287,7 +295,7 @@ const BusinessOrdersPage: React.FC = () => {
       'picked_up',
       'in_transit',
       'out_for_delivery',
-    ].includes(order.status)
+    ].includes(order.current_status)
   );
 
   if (!profile?.business) {
@@ -311,6 +319,27 @@ const BusinessOrdersPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         {t('business.orders.title')}
       </Typography>
+
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
+        <Typography variant="h6" color="text.secondary">
+          {t('business.orders.subtitle')}
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={refreshOrders}
+          disabled={ordersLoading}
+        >
+          {t('common.refresh')}
+        </Button>
+      </Box>
 
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs
@@ -369,8 +398,16 @@ const BusinessOrdersPage: React.FC = () => {
                           })}
                         </Typography>
                         <Chip
-                          label={t(`business.orders.status.${order.status}`)}
-                          color={getStatusColor(order.status) as any}
+                          label={t(
+                            `business.orders.status.${
+                              order.current_status || 'unknown'
+                            }`
+                          )}
+                          color={
+                            getStatusColor(
+                              order.current_status || 'unknown'
+                            ) as any
+                          }
                           size="small"
                         />
                       </Box>
@@ -384,7 +421,8 @@ const BusinessOrdersPage: React.FC = () => {
                           mb={1}
                         >
                           <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.first_name} {order.client?.last_name}
+                          {order.client?.user?.first_name}{' '}
+                          {order.client?.user?.last_name}
                         </Typography>
                         <Typography
                           variant="body2"
@@ -426,9 +464,9 @@ const BusinessOrdersPage: React.FC = () => {
                         <Typography variant="h6" color="primary">
                           {formatCurrency(order.total_amount, order.currency)}
                         </Typography>
-                        {order.agent && (
+                        {order.assigned_agent && (
                           <Chip
-                            label={`${order.agent.first_name} ${order.agent.last_name}`}
+                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
                             size="small"
                             color="secondary"
                           />
@@ -503,8 +541,16 @@ const BusinessOrdersPage: React.FC = () => {
                           })}
                         </Typography>
                         <Chip
-                          label={t(`business.orders.status.${order.status}`)}
-                          color={getStatusColor(order.status) as any}
+                          label={t(
+                            `business.orders.status.${
+                              order.current_status || 'unknown'
+                            }`
+                          )}
+                          color={
+                            getStatusColor(
+                              order.current_status || 'unknown'
+                            ) as any
+                          }
                           size="small"
                         />
                       </Box>
@@ -518,7 +564,8 @@ const BusinessOrdersPage: React.FC = () => {
                           mb={1}
                         >
                           <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.first_name} {order.client?.last_name}
+                          {order.client?.user?.first_name}{' '}
+                          {order.client?.user?.last_name}
                         </Typography>
                         <Typography
                           variant="body2"
@@ -779,8 +826,16 @@ const BusinessOrdersPage: React.FC = () => {
                           })}
                         </Typography>
                         <Chip
-                          label={t(`business.orders.status.${order.status}`)}
-                          color={getStatusColor(order.status) as any}
+                          label={t(
+                            `business.orders.status.${
+                              order.current_status || 'unknown'
+                            }`
+                          )}
+                          color={
+                            getStatusColor(
+                              order.current_status || 'unknown'
+                            ) as any
+                          }
                           size="small"
                         />
                       </Box>
@@ -794,7 +849,8 @@ const BusinessOrdersPage: React.FC = () => {
                           mb={1}
                         >
                           <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.first_name} {order.client?.last_name}
+                          {order.client?.user?.first_name}{' '}
+                          {order.client?.user?.last_name}
                         </Typography>
                         <Typography
                           variant="body2"
@@ -836,17 +892,11 @@ const BusinessOrdersPage: React.FC = () => {
                         <Typography variant="h6" color="primary">
                           {formatCurrency(order.total_amount, order.currency)}
                         </Typography>
-                        {order.agent ? (
+                        {order.assigned_agent && (
                           <Chip
-                            label={`${order.agent.first_name} ${order.agent.last_name}`}
+                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
                             size="small"
                             color="secondary"
-                          />
-                        ) : (
-                          <Chip
-                            label={t('business.orders.table.unassigned')}
-                            size="small"
-                            color="default"
                           />
                         )}
                       </Box>

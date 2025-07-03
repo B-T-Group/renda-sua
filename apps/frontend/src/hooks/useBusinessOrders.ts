@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessOrder {
@@ -324,37 +324,61 @@ export const useBusinessOrders = () => {
   const updateOrderStatus = useCallback(
     async (orderId: string, newStatus: string) => {
       try {
-        await executeUpdateStatus({ orderId, status: newStatus });
+        const result = await executeUpdateStatus({
+          orderId,
+          status: newStatus,
+        });
 
-        // Refresh orders after status update
-        await fetchOrders(filters);
+        // Update local state instead of refetching
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order.id === orderId
+              ? {
+                  ...order,
+                  current_status: newStatus,
+                  updated_at: result.update_orders_by_pk.updated_at,
+                }
+              : order
+          )
+        );
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to update order status'
         );
       }
     },
-    [executeUpdateStatus, fetchOrders, filters]
+    [executeUpdateStatus]
   );
 
   const assignOrderToAgent = useCallback(
     async (orderId: string, agentId: string) => {
       try {
-        await executeAssignOrder({ orderId, agentId });
+        const result = await executeAssignOrder({ orderId, agentId });
 
-        // Refresh orders after assignment
-        await fetchOrders(filters);
+        // Update local state instead of refetching
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order.id === orderId
+              ? {
+                  ...order,
+                  assigned_agent_id: agentId,
+                  current_status: 'assigned_to_agent',
+                  updated_at: result.update_orders_by_pk.updated_at,
+                }
+              : order
+          )
+        );
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to assign order to agent'
         );
       }
     },
-    [executeAssignOrder, fetchOrders, filters]
+    [executeAssignOrder]
   );
 
-  useEffect(() => {
-    console.log('useBusinessOrders: useEffect triggered, filters:', filters);
+  // Function to refresh orders when needed
+  const refreshOrders = useCallback(() => {
     fetchOrders(filters);
   }, [fetchOrders, filters]);
 
@@ -366,5 +390,6 @@ export const useBusinessOrders = () => {
     fetchOrders,
     updateOrderStatus,
     assignOrderToAgent,
+    refreshOrders,
   };
 };
