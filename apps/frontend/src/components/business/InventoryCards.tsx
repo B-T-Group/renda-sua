@@ -250,9 +250,10 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
             <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
               <Card
                 sx={{
-                  height: '100%',
+                  height: '400px',
                   display: 'flex',
                   flexDirection: 'column',
+                  overflow: 'hidden',
                   backgroundColor:
                     item.available_quantity <= item.reorder_point
                       ? '#fff3e0'
@@ -274,19 +275,31 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                   />
                 )}
 
-                <CardContent sx={{ flexGrow: 1 }}>
+                <CardContent sx={{ flexGrow: 1, overflow: 'hidden' }}>
                   {/* Item Header */}
                   <Box
                     display="flex"
                     justifyContent="space-between"
                     alignItems="flex-start"
-                    mb={2}
+                    mb={1}
                   >
-                    <Box flex={1}>
+                    <Box flex={1} sx={{ minWidth: 0 }}>
                       <Typography variant="h6" gutterBottom noWrap>
                         {item.item.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" noWrap>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: 1.2,
+                          mb: 1,
+                        }}
+                      >
                         {item.item.description}
                       </Typography>
                     </Box>
@@ -294,26 +307,28 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                       label={getStockStatusText(stockStatus.status)}
                       color={getStockStatusColor(stockStatus.status)}
                       size="small"
+                      sx={{ ml: 1, flexShrink: 0 }}
                     />
                   </Box>
 
                   {/* Location */}
-                  <Box mb={2}>
+                  <Box mb={1}>
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>{t('business.inventory.location')}:</strong>{' '}
                       {item.business_location.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" noWrap>
                       {item.business_location.location_type}
                     </Typography>
                   </Box>
 
                   {/* Inventory Details */}
-                  <Box mb={2}>
+                  <Box mb={1}>
                     <Typography variant="h6" color="primary" fontWeight="bold">
                       {formatCurrency(item.selling_price, 'USD')}
                     </Typography>
@@ -321,7 +336,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>{t('business.inventory.quantity')}:</strong>{' '}
                       {item.quantity}
@@ -339,7 +355,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                           ? 'bold'
                           : 'normal'
                       }
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>
                         {t('business.inventory.availableQuantity')}:
@@ -350,7 +367,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>
                         {t('business.inventory.reservedQuantity')}:
@@ -361,7 +379,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>{t('business.inventory.unitCost')}:</strong>{' '}
                       {formatCurrency(item.unit_cost, 'USD')}
@@ -370,7 +389,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       <strong>{t('business.inventory.reorderPoint')}:</strong>{' '}
                       {item.reorder_point}
@@ -378,10 +398,10 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                   </Box>
 
                   {/* Item Properties */}
-                  <Box mb={2}>
+                  <Box mb={1}>
                     <Stack
                       direction="row"
-                      spacing={1}
+                      spacing={0.5}
                       flexWrap="wrap"
                       useFlexGap
                     >
@@ -412,12 +432,8 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                   </Box>
 
                   {/* Last Restocked */}
-                  <Box>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
+                  <Box sx={{ mt: 'auto' }}>
+                    <Typography variant="caption" color="text.secondary" noWrap>
                       <strong>{t('business.inventory.lastRestocked')}:</strong>{' '}
                       {item.last_restocked_at
                         ? new Date(item.last_restocked_at).toLocaleDateString()

@@ -247,7 +247,12 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
         {filteredItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
             <Card
-              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              sx={{
+                height: '400px',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
             >
               {/* Item Image */}
               {item.item_images && item.item_images.length > 0 && (
@@ -263,19 +268,31 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                 />
               )}
 
-              <CardContent sx={{ flexGrow: 1 }}>
+              <CardContent sx={{ flexGrow: 1, overflow: 'hidden' }}>
                 {/* Item Header */}
                 <Box
                   display="flex"
                   justifyContent="space-between"
                   alignItems="flex-start"
-                  mb={2}
+                  mb={1}
                 >
-                  <Box flex={1}>
+                  <Box flex={1} sx={{ minWidth: 0 }}>
                     <Typography variant="h6" gutterBottom noWrap>
                       {item.name}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        lineHeight: 1.2,
+                        mb: 1,
+                      }}
+                    >
                       {item.description}
                     </Typography>
                   </Box>
@@ -283,11 +300,12 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                     label={getItemStatusLabel(item.is_active)}
                     color={getItemStatusColor(item.is_active)}
                     size="small"
+                    sx={{ ml: 1, flexShrink: 0 }}
                   />
                 </Box>
 
                 {/* Item Details */}
-                <Box mb={2}>
+                <Box mb={1}>
                   <Typography variant="h6" color="primary" fontWeight="bold">
                     {formatCurrency(item.price, item.currency)}
                   </Typography>
@@ -296,7 +314,8 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       {t('business.items.brand')}: {item.brand.name}
                     </Typography>
@@ -306,7 +325,8 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       {t('business.items.sku')}: {item.sku}
                     </Typography>
@@ -316,7 +336,8 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      gutterBottom
+                      sx={{ mb: 0.5 }}
+                      noWrap
                     >
                       {t('business.items.category')}:{' '}
                       {item.item_sub_category.item_category.name} →{' '}
@@ -326,8 +347,13 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                 </Box>
 
                 {/* Item Properties */}
-                <Box mb={2}>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Box mb={1}>
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    flexWrap="wrap"
+                    useFlexGap
+                  >
                     {item.is_fragile && (
                       <Chip
                         label={t('business.items.fragile')}
@@ -353,44 +379,46 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                 </Box>
 
                 {/* Item Specifications */}
-                <Box>
-                  {item.weight && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
-                      {t('business.items.weight')}: {item.weight}{' '}
-                      {item.weight_unit}
-                    </Typography>
-                  )}
-                  {item.size && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
-                      {t('business.items.size')}: {item.size} {item.size_unit}
-                    </Typography>
-                  )}
-                  {item.color && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
-                      {t('business.items.color')}: {item.color}
-                    </Typography>
-                  )}
-                  {item.material && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
-                      {t('business.items.material')}: {item.material}
-                    </Typography>
-                  )}
+                <Box sx={{ mt: 'auto' }}>
+                  <Stack spacing={0.5}>
+                    {item.weight && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                      >
+                        {t('business.items.weight')}: {item.weight}{' '}
+                        {item.weight_unit}
+                      </Typography>
+                    )}
+                    {item.size && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                      >
+                        {t('business.items.size')}: {item.size} {item.size_unit}
+                      </Typography>
+                    )}
+                    {item.color && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                      >
+                        {t('business.items.color')}: {item.color}
+                      </Typography>
+                    )}
+                    {item.material && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                      >
+                        {t('business.items.material')}: {item.material}
+                      </Typography>
+                    )}
+                  </Stack>
                 </Box>
               </CardContent>
 
