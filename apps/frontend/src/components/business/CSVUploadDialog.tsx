@@ -33,6 +33,7 @@ import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
 import { useProfile } from '../../hooks/useProfile';
+import { ItemImage } from '../../types/image';
 
 interface CSVUploadDialogProps {
   open: boolean;
@@ -150,7 +151,8 @@ export default function CSVUploadDialog({
   const { addInventoryItem, updateInventoryItem, inventory } =
     useBusinessInventory(businessId);
   const { locations } = useBusinessLocations(businessId);
-  const { uploadItemImage, createItemImage } = useItemImages();
+  const { uploadItemImage, createItemImage, fetchItemImages, deleteItemImage } =
+    useItemImages();
   const { userProfile } = useProfile();
 
   const [csvData, setCsvData] = useState<CSVItemWithInventory[]>([]);
@@ -311,14 +313,30 @@ export default function CSVUploadDialog({
 
         let itemId: string;
         if (existingItem) {
-          // Update existing item - only pass item-specific fields
+          // Check if this is a SKU conflict (different item with same SKU)
+          const isSkuConflict =
+            existingItem.name.toLowerCase() !== row.name.toLowerCase() &&
+            row.sku &&
+            existingItem.sku &&
+            existingItem.sku.toLowerCase() === row.sku.toLowerCase();
+
+          if (isSkuConflict) {
+            throw new Error(
+              `SKU "${row.sku}" is already used by item "${existingItem.name}". Cannot update item "${row.name}" with conflicting SKU.`
+            );
+          }
+
+          // Update existing item - only pass item-specific fields, but skip SKU if it's different
           const updateItemData: UpdateItemData = {
             name: row.name,
             description: row.description || '',
             item_sub_category_id: row.item_sub_category_id || 1,
             price: row.price,
             currency: row.currency,
-            sku: row.sku,
+            // Only update SKU if it's the same or if the existing item has no SKU
+            ...(row.sku === existingItem.sku || !existingItem.sku
+              ? { sku: row.sku }
+              : {}),
             size: row.size,
             size_unit: row.size_unit,
             weight: row.weight,
@@ -338,6 +356,20 @@ export default function CSVUploadDialog({
           result.details.updated.push(`Item: ${row.name}`);
           itemId = existingItem.id;
         } else {
+          // Check if SKU already exists in the database
+          const skuExists = items.some(
+            (existing) =>
+              row.sku &&
+              existing.sku &&
+              existing.sku.toLowerCase() === row.sku.toLowerCase()
+          );
+
+          if (skuExists) {
+            throw new Error(
+              `SKU "${row.sku}" already exists. Cannot create item "${row.name}" with duplicate SKU.`
+            );
+          }
+
           // Create new item
           const createData: CreateItemData = {
             name: row.name,
@@ -412,6 +444,16 @@ export default function CSVUploadDialog({
         // Step 3: Add image if provided
         if (row.image_url) {
           try {
+            // Check if item already has a main image and delete it first
+            const existingImages = await fetchItemImages(itemId);
+            const existingMainImage = existingImages.find(
+              (img: ItemImage) => img.image_type === 'main'
+            );
+
+            if (existingMainImage) {
+              await deleteItemImage(existingMainImage.id);
+            }
+
             // Create the image record with the provided URL
             const imageData = {
               item_id: itemId,
