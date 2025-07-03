@@ -58,7 +58,10 @@
     "fetchingInventory": "Récupération de l'inventaire...",
     "updatingInventory": "Mise à jour de l'inventaire...",
     "fetchingLocations": "Récupération des emplacements...",
-    "savingLocation": "Enregistrement de l'emplacement..."
+    "savingLocation": "Enregistrement de l'emplacement...",
+    "warning": "Avertissement",
+    "info": "Information",
+    "language": "Langue"
   },
   "auth": {
     "login": "Connexion",

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessOrder {
@@ -170,7 +170,7 @@ const GET_BUSINESS_ORDERS = `
   }
 `;
 
-export const useBusinessOrders = () => {
+export const useBusinessOrders = (businessId?: string) => {
   const [orders, setOrders] = useState<BusinessOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,91 +220,111 @@ export const useBusinessOrders = () => {
     { loadingMessage: 'common.updatingOrder' }
   );
 
-  const buildFilters = useCallback((filterParams: OrderFilters) => {
-    const conditions: any[] = [];
+  const buildFilters = useCallback(
+    (filterParams: OrderFilters) => {
+      const conditions: any[] = [];
 
-    // Status filter
-    if (filterParams.status && filterParams.status !== 'all') {
-      conditions.push({
-        current_status: { _eq: filterParams.status },
-      });
-    }
-
-    // Date range filter
-    if (filterParams.dateFrom || filterParams.dateTo) {
-      const dateFilter: any = {};
-      if (filterParams.dateFrom) {
-        dateFilter._gte = filterParams.dateFrom;
+      // Business ID filter - this is the key fix
+      if (businessId) {
+        console.log(
+          'useBusinessOrders: Adding business_id filter:',
+          businessId
+        );
+        conditions.push({
+          business_id: { _eq: businessId },
+        });
+      } else {
+        console.log(
+          'useBusinessOrders: No businessId provided, will fetch all orders'
+        );
       }
-      if (filterParams.dateTo) {
-        dateFilter._lte = filterParams.dateTo;
+
+      // Status filter
+      if (filterParams.status && filterParams.status !== 'all') {
+        conditions.push({
+          current_status: { _eq: filterParams.status },
+        });
       }
-      conditions.push({
-        created_at: dateFilter,
-      });
-    }
 
-    // Address filter (search in delivery address)
-    if (filterParams.address) {
-      conditions.push({
-        _or: [
-          {
-            delivery_address: {
-              address_line_1: { _ilike: `%${filterParams.address}%` },
-            },
-          },
-          {
-            delivery_address: {
-              city: { _ilike: `%${filterParams.address}%` },
-            },
-          },
-          {
-            delivery_address: {
-              state: { _ilike: `%${filterParams.address}%` },
-            },
-          },
-        ],
-      });
-    }
+      // Date range filter
+      if (filterParams.dateFrom || filterParams.dateTo) {
+        const dateFilter: any = {};
+        if (filterParams.dateFrom) {
+          dateFilter._gte = filterParams.dateFrom;
+        }
+        if (filterParams.dateTo) {
+          dateFilter._lte = filterParams.dateTo;
+        }
+        conditions.push({
+          created_at: dateFilter,
+        });
+      }
 
-    // Search filter (order number, client name, etc.)
-    if (filterParams.search) {
-      conditions.push({
-        _or: [
-          {
-            order_number: { _ilike: `%${filterParams.search}%` },
-          },
-          {
-            client: {
-              user: {
-                first_name: { _ilike: `%${filterParams.search}%` },
+      // Address filter (search in delivery address)
+      if (filterParams.address) {
+        conditions.push({
+          _or: [
+            {
+              delivery_address: {
+                address_line_1: { _ilike: `%${filterParams.address}%` },
               },
             },
-          },
-          {
-            client: {
-              user: {
-                last_name: { _ilike: `%${filterParams.search}%` },
+            {
+              delivery_address: {
+                city: { _ilike: `%${filterParams.address}%` },
               },
             },
-          },
-        ],
-      });
-    }
+            {
+              delivery_address: {
+                state: { _ilike: `%${filterParams.address}%` },
+              },
+            },
+          ],
+        });
+      }
 
-    const finalFilter = conditions.length > 0 ? { _and: conditions } : {};
-    console.log(
-      'useBusinessOrders: Final filter:',
-      JSON.stringify(finalFilter, null, 2)
-    );
-    return finalFilter;
-  }, []);
+      // Search filter (order number, client name, etc.)
+      if (filterParams.search) {
+        conditions.push({
+          _or: [
+            {
+              order_number: { _ilike: `%${filterParams.search}%` },
+            },
+            {
+              client: {
+                user: {
+                  first_name: { _ilike: `%${filterParams.search}%` },
+                },
+              },
+            },
+            {
+              client: {
+                user: {
+                  last_name: { _ilike: `%${filterParams.search}%` },
+                },
+              },
+            },
+          ],
+        });
+      }
+
+      const finalFilter = conditions.length > 0 ? { _and: conditions } : {};
+      console.log(
+        'useBusinessOrders: Final filter:',
+        JSON.stringify(finalFilter, null, 2)
+      );
+      return finalFilter;
+    },
+    [businessId]
+  );
 
   const fetchOrders = useCallback(
     async (filterParams: OrderFilters = {}) => {
       console.log(
         'useBusinessOrders: Fetching orders with filters:',
-        filterParams
+        filterParams,
+        'businessId:',
+        businessId
       );
       setLoading(true);
       setError(null);
@@ -314,6 +334,10 @@ export const useBusinessOrders = () => {
         console.log('useBusinessOrders: Built filters:', builtFilters);
         const result = await execute({ filters: builtFilters });
         console.log('useBusinessOrders: Fetch result:', result);
+        console.log(
+          'useBusinessOrders: Orders count:',
+          result.orders?.length || 0
+        );
         setOrders(result.orders || []);
         setFilters(filterParams);
       } catch (err) {
@@ -323,7 +347,7 @@ export const useBusinessOrders = () => {
         setLoading(false);
       }
     },
-    [execute, buildFilters]
+    [execute, buildFilters, businessId]
   );
 
   const updateOrderStatus = useCallback(
@@ -386,6 +410,45 @@ export const useBusinessOrders = () => {
   const refreshOrders = useCallback(() => {
     fetchOrders(filters);
   }, [fetchOrders, filters]);
+
+  useEffect(() => {
+    console.log('useBusinessOrders: businessId changed:', businessId);
+    if (businessId) {
+      console.log(
+        'useBusinessOrders: Fetching orders for business:',
+        businessId
+      );
+      fetchOrders({});
+
+      // Temporary debug: also fetch all orders to see if there are any orders at all
+      setTimeout(async () => {
+        try {
+          console.log(
+            'useBusinessOrders: Debug - fetching all orders to check if any exist'
+          );
+          const result = await execute({ filters: {} });
+          console.log(
+            'useBusinessOrders: Debug - all orders count:',
+            result.orders?.length || 0
+          );
+          if (result.orders && result.orders.length > 0) {
+            console.log(
+              'useBusinessOrders: Debug - sample order business_id:',
+              result.orders[0].business_id
+            );
+          }
+        } catch (err) {
+          console.error(
+            'useBusinessOrders: Debug - error fetching all orders:',
+            err
+          );
+        }
+      }, 1000);
+    } else {
+      console.log('useBusinessOrders: No businessId provided, clearing orders');
+      setOrders([]);
+    }
+  }, [businessId, fetchOrders, execute]);
 
   return {
     orders,

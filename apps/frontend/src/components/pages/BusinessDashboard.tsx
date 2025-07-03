@@ -30,7 +30,7 @@ const BusinessDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
 
-  const { orders } = useBusinessOrders();
+  const { orders } = useBusinessOrders(profile?.business?.id);
   const { inventory } = useBusinessInventory(profile?.business?.id);
   const { locations } = useBusinessLocations(profile?.business?.id);
   const { items } = useItems(profile?.business?.id);

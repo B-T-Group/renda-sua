@@ -46,6 +46,7 @@
     "success": "Success",
     "warning": "Warning",
     "info": "Information",
+    "language": "Language",
     "loadingData": "Loading data...",
     "savingData": "Saving data...",
     "updatingData": "Updating data...",

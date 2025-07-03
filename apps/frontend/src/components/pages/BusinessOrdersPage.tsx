@@ -29,7 +29,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
@@ -85,7 +85,7 @@ const BusinessOrdersPage: React.FC = () => {
     error: ordersError,
     fetchOrders,
     refreshOrders,
-  } = useBusinessOrders();
+  } = useBusinessOrders(profile?.business?.id);
   const {
     updateOrderStatus,
     loading: updateLoading,
@@ -99,10 +99,6 @@ const BusinessOrdersPage: React.FC = () => {
     'BusinessOrdersPage: Orders with undefined status:',
     orders.filter((order) => !order.current_status)
   );
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
