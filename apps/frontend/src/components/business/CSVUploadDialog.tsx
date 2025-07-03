@@ -116,6 +116,29 @@ interface CreateItemData {
   brand_id?: string;
 }
 
+interface UpdateItemData {
+  name?: string;
+  description?: string;
+  item_sub_category_id?: number;
+  price?: number;
+  currency?: string;
+  sku?: string;
+  size?: number;
+  size_unit?: string;
+  weight?: number;
+  weight_unit?: string;
+  color?: string;
+  material?: string;
+  model?: string;
+  is_fragile?: boolean;
+  is_perishable?: boolean;
+  requires_special_handling?: boolean;
+  min_order_quantity?: number;
+  max_order_quantity?: number;
+  is_active?: boolean;
+  brand_id?: string;
+}
+
 export default function CSVUploadDialog({
   open,
   onClose,
@@ -288,8 +311,30 @@ export default function CSVUploadDialog({
 
         let itemId: string;
         if (existingItem) {
-          // Update existing item
-          await updateItem(existingItem.id, row);
+          // Update existing item - only pass item-specific fields
+          const updateItemData: UpdateItemData = {
+            name: row.name,
+            description: row.description || '',
+            item_sub_category_id: row.item_sub_category_id || 1,
+            price: row.price,
+            currency: row.currency,
+            sku: row.sku,
+            size: row.size,
+            size_unit: row.size_unit,
+            weight: row.weight,
+            weight_unit: row.weight_unit,
+            color: row.color,
+            material: row.material,
+            model: row.model,
+            is_fragile: row.is_fragile,
+            is_perishable: row.is_perishable,
+            requires_special_handling: row.requires_special_handling,
+            min_order_quantity: row.min_order_quantity,
+            max_order_quantity: row.max_order_quantity,
+            is_active: row.is_active,
+            brand_id: row.brand_id,
+          };
+          await updateItem(existingItem.id, updateItemData);
           result.details.updated.push(`Item: ${row.name}`);
           itemId = existingItem.id;
         } else {

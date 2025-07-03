@@ -449,6 +449,7 @@
       }
     },
     "csvUpload": {
+      "uploadCSV": "Télécharger CSV",
       "title": "Téléchargement CSV",
       "howToUse": "Comment utiliser le téléchargement CSV",
       "instructions": "Téléchargez un fichier CSV pour créer des articles, des enregistrements d'inventaire et ajouter des images en une seule opération. Chaque ligne doit contenir les détails de l'article, les informations d'inventaire et une URL d'image optionnelle.",

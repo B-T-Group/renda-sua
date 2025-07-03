@@ -457,6 +457,7 @@
       }
     },
     "csvUpload": {
+      "uploadCSV": "Upload CSV",
       "title": "CSV Upload",
       "howToUse": "How to use CSV upload",
       "instructions": "Upload a CSV file to create items, inventory records, and add images in one operation. Each row should contain item details, inventory information, and an optional image URL.",
