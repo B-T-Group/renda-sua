@@ -25,6 +25,16 @@ export interface CreateOrderResponse {
   message: string;
 }
 
+export interface UpdateOrderStatusRequest {
+  status: string;
+}
+
+export interface UpdateOrderStatusResponse {
+  success: boolean;
+  order: any;
+  message: string;
+}
+
 export const useBackendOrders = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +73,47 @@ export const useBackendOrders = () => {
     }
   };
 
+  const updateOrderStatus = async (
+    orderId: string,
+    status: string
+  ): Promise<any> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.patch<UpdateOrderStatusResponse>(
+        `/orders/${orderId}/status`,
+        { status }
+      );
+
+      if (!response.data.success) {
+        throw new Error(
+          response.data.message || 'Failed to update order status'
+        );
+      }
+
+      return response.data.order;
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to update order status';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     createOrder,
+    updateOrderStatus,
     loading,
     error,
   };

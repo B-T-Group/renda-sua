@@ -1,34 +1,36 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
-  Box,
-  Container,
-  Paper,
-  Typography,
-  Card,
-  CardContent,
-  CardActions,
-  Button,
-  Chip,
-  Alert,
-  CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Snackbar,
-} from '@mui/material';
-import {
-  LocationOn,
   Business,
-  Person,
+  Cancel,
   CheckCircle,
-  Pending,
   DirectionsCar,
   LocalShipping,
+  LocationOn,
+  Pending,
+  Person,
 } from '@mui/icons-material';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  List,
+  ListItem,
+  ListItemSecondaryAction,
+  ListItemText,
+  Paper,
+  Snackbar,
+  Typography,
+} from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAgentOrders, Order } from '../../hooks/useAgentOrders';
+import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 const getStatusColor = (status: string) => {
@@ -128,6 +130,63 @@ const OrderCard: React.FC<{
       default:
         return null;
     }
+  };
+
+  const getAvailableActions = (order: Order) => {
+    const actions = [];
+
+    switch (order.current_status) {
+      case 'ready_for_pickup':
+        actions.push({
+          label: t('orderActions.getOrder'),
+          status: 'assigned_to_agent',
+          color: 'primary' as const,
+          icon: <CheckCircle />,
+        });
+        break;
+      case 'assigned_to_agent':
+        actions.push({
+          label: t('orderActions.pickUpOrder'),
+          status: 'picked_up',
+          color: 'success' as const,
+          icon: <CheckCircle />,
+        });
+        break;
+      case 'picked_up':
+        actions.push({
+          label: t('orderActions.markAsInTransit'),
+          status: 'in_transit',
+          color: 'primary' as const,
+          icon: <LocalShipping />,
+        });
+        break;
+      case 'in_transit':
+        actions.push({
+          label: t('orderActions.markAsOutForDelivery'),
+          status: 'out_for_delivery',
+          color: 'secondary' as const,
+          icon: <LocalShipping />,
+        });
+        break;
+      case 'out_for_delivery':
+        actions.push(
+          {
+            label: t('orderActions.markAsDelivered'),
+            status: 'delivered',
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          },
+          {
+            label: t('orderActions.markAsFailed'),
+            status: 'failed',
+            color: 'error' as const,
+            icon: <Cancel />,
+          }
+        );
+        break;
+    }
+
+    return actions;
   };
 
   const nextStatus = getNextStatus(order.current_status);
@@ -248,41 +307,23 @@ const OrderCard: React.FC<{
       {showActions && (
         <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
           <Box>
-            {order.current_status === 'pending' && onPickUp && (
+            {getAvailableActions(order).map((action) => (
               <Button
-                variant="contained"
-                color="primary"
-                onClick={handlePickUp}
+                key={action.status}
+                variant={
+                  action.status === 'assigned_to_agent'
+                    ? 'contained'
+                    : 'outlined'
+                }
+                color={action.color}
+                onClick={() => handleStatusUpdate(action.status)}
                 disabled={updating}
-                startIcon={<CheckCircle />}
+                startIcon={action.icon}
+                sx={{ ml: action.status === 'assigned_to_agent' ? 0 : 1 }}
               >
-                {updating ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  t('orderActions.pickUpOrder')
-                )}
+                {updating ? <CircularProgress size={20} /> : action.label}
               </Button>
-            )}
-            {nextStatus && onUpdateStatus && (
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={() => handleStatusUpdate(nextStatus)}
-                disabled={updating}
-                sx={{ ml: 1 }}
-              >
-                {updating ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  t(
-                    `orderActions.markAs${
-                      nextStatus.charAt(0).toUpperCase() +
-                      nextStatus.slice(1).replace('_', '')
-                    }`
-                  )
-                )}
-              </Button>
-            )}
+            ))}
           </Box>
           <Typography variant="caption" color="text.secondary">
             {t('common.created')}:{' '}
@@ -306,6 +347,11 @@ const AgentDashboard: React.FC = () => {
     pickUpOrder,
     updateOrderStatusAction,
   } = useAgentOrders();
+  const {
+    updateOrderStatus,
+    loading: updateLoading,
+    error: updateError,
+  } = useBackendOrders();
 
   const [notification, setNotification] = useState<{
     open: boolean;
@@ -347,7 +393,7 @@ const AgentDashboard: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, status: string) => {
     try {
-      await updateOrderStatusAction(orderId, status);
+      await updateOrderStatus(orderId, status);
       setNotification({
         open: true,
         message: t('messages.orderStatusUpdateSuccess', {

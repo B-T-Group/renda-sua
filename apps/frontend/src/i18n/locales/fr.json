@@ -99,12 +99,14 @@
     "refunded": "remboursée"
   },
   "orderActions": {
+    "getOrder": "Récupérer la commande",
     "pickUpOrder": "Récupérer la commande",
     "markAsPickedUp": "Marquer comme récupérée",
     "markAsPickedup": "Marquer comme récupérée",
     "markAsInTransit": "Marquer comme en transit",
     "markAsOutForDelivery": "Marquer comme en livraison",
     "markAsDelivered": "Marquer comme livrée",
+    "markAsFailed": "Marquer comme échouée",
     "successfullyPickedUp": "Commande récupérée avec succès",
     "failedToPickUp": "Échec de la récupération de la commande",
     "orderStatusUpdated": "Statut de la commande mis à jour avec succès",
@@ -184,8 +186,9 @@
       },
       "actions": {
         "confirm": "Confirmer",
-        "prepare": "Préparer",
-        "ready": "Prête"
+        "cancel": "Annuler",
+        "startPreparing": "Commencer la Préparation",
+        "readyForPickup": "Prête pour Ramassage"
       },
       "status": {
         "pending": "En attente",
@@ -212,11 +215,6 @@
         "createdAt": "Créée le",
         "actions": "Actions",
         "unassigned": "Non assignée"
-      },
-      "actions": {
-        "confirm": "Confirmer",
-        "prepare": "Préparer",
-        "ready": "Prête"
       }
     },
     "inventory": {

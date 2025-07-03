@@ -116,12 +116,14 @@
     "refunded": "refunded"
   },
   "orderActions": {
+    "getOrder": "Get Order",
     "pickUpOrder": "Pick Up Order",
     "markAsPickedUp": "Mark as picked up",
     "markAsPickedup": "Mark as picked up",
     "markAsInTransit": "Mark as in transit",
     "markAsOutForDelivery": "Mark as out for delivery",
     "markAsDelivered": "Mark as delivered",
+    "markAsFailed": "Mark as failed",
     "successfullyPickedUp": "Successfully picked up order",
     "failedToPickUp": "Failed to pick up order",
     "orderStatusUpdated": "Order status updated successfully",
@@ -226,8 +228,9 @@
       },
       "actions": {
         "confirm": "Confirm",
-        "prepare": "Prepare",
-        "ready": "Ready"
+        "cancel": "Cancel",
+        "startPreparing": "Start Preparing",
+        "readyForPickup": "Ready for Pickup"
       }
     },
     "inventory": {

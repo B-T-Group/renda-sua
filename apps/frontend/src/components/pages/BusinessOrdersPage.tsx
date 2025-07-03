@@ -1,14 +1,20 @@
 import {
   AccessTime as AccessTimeIcon,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon,
   LocalShipping as LocalShippingIcon,
+  LocalShippingOutlined as LocalShippingOutlinedIcon,
   Person as PersonIcon,
+  PlayArrow as PlayArrowIcon,
   Receipt as ReceiptIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import {
   Alert,
   Box,
+  Button,
   Card,
+  CardActions,
   CardContent,
   Chip,
   Container,
@@ -24,6 +30,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -77,6 +84,11 @@ const BusinessOrdersPage: React.FC = () => {
     error: ordersError,
     fetchOrders,
   } = useBusinessOrders();
+  const {
+    updateOrderStatus,
+    loading: updateLoading,
+    error: updateError,
+  } = useBackendOrders();
   const { locations } = useBusinessLocations();
 
   useEffect(() => {
@@ -89,6 +101,82 @@ const BusinessOrdersPage: React.FC = () => {
 
   const handleFilterChange = (newFilters: Partial<OrderFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
+  };
+
+  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      // Refresh orders after status update
+      await fetchOrders();
+    } catch (error) {
+      console.error('Failed to update order status:', error);
+    }
+  };
+
+  const getAvailableActions = (order: any) => {
+    const actions = [];
+
+    switch (order.current_status) {
+      case 'pending':
+        actions.push(
+          {
+            label: t('business.orders.actions.confirm'),
+            status: 'confirmed',
+            color: 'success' as const,
+            icon: <CheckCircleIcon />,
+          },
+          {
+            label: t('business.orders.actions.cancel'),
+            status: 'cancelled',
+            color: 'error' as const,
+            icon: <CancelIcon />,
+          }
+        );
+        break;
+      case 'confirmed':
+        actions.push(
+          {
+            label: t('business.orders.actions.startPreparing'),
+            status: 'preparing',
+            color: 'primary' as const,
+            icon: <PlayArrowIcon />,
+          },
+          {
+            label: t('business.orders.actions.cancel'),
+            status: 'cancelled',
+            color: 'error' as const,
+            icon: <CancelIcon />,
+          }
+        );
+        break;
+      case 'preparing':
+        actions.push(
+          {
+            label: t('business.orders.actions.readyForPickup'),
+            status: 'ready_for_pickup',
+            color: 'secondary' as const,
+            icon: <LocalShippingOutlinedIcon />,
+          },
+          {
+            label: t('business.orders.actions.cancel'),
+            status: 'cancelled',
+            color: 'error' as const,
+            icon: <CancelIcon />,
+          }
+        );
+        break;
+      // Business owners cannot mark orders as picked up - only agents can do this
+      // case 'assigned_to_agent':
+      //   actions.push({
+      //     label: t('business.orders.actions.pickedUp'),
+      //     status: 'picked_up',
+      //     color: 'primary' as const,
+      //     icon: <AssignmentIcon />,
+      //   });
+      //   break;
+    }
+
+    return actions;
   };
 
   const getStatusColor = (status: string) => {
@@ -347,6 +435,23 @@ const BusinessOrdersPage: React.FC = () => {
                         )}
                       </Box>
                     </CardContent>
+                    <CardActions>
+                      {getAvailableActions(order).map((action) => (
+                        <Button
+                          key={action.status}
+                          size="small"
+                          color={action.color}
+                          variant="outlined"
+                          startIcon={action.icon}
+                          onClick={() =>
+                            handleStatusUpdate(order.id, action.status)
+                          }
+                          disabled={updateLoading}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                    </CardActions>
                   </Card>
                 ))}
               </Box>
@@ -462,6 +567,23 @@ const BusinessOrdersPage: React.FC = () => {
                         />
                       </Box>
                     </CardContent>
+                    <CardActions>
+                      {getAvailableActions(order).map((action) => (
+                        <Button
+                          key={action.status}
+                          size="small"
+                          color={action.color}
+                          variant="outlined"
+                          startIcon={action.icon}
+                          onClick={() =>
+                            handleStatusUpdate(order.id, action.status)
+                          }
+                          disabled={updateLoading}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                    </CardActions>
                   </Card>
                 ))}
               </Box>
@@ -729,6 +851,23 @@ const BusinessOrdersPage: React.FC = () => {
                         )}
                       </Box>
                     </CardContent>
+                    <CardActions>
+                      {getAvailableActions(order).map((action) => (
+                        <Button
+                          key={action.status}
+                          size="small"
+                          color={action.color}
+                          variant="outlined"
+                          startIcon={action.icon}
+                          onClick={() =>
+                            handleStatusUpdate(order.id, action.status)
+                          }
+                          disabled={updateLoading}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                    </CardActions>
                   </Card>
                 ))}
               </Box>
