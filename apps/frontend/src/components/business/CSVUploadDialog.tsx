@@ -20,8 +20,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -32,7 +30,9 @@ import {
   useBusinessInventory,
 } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
+import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
+import { useProfile } from '../../hooks/useProfile';
 
 interface CSVUploadDialogProps {
   open: boolean;
@@ -40,9 +40,8 @@ interface CSVUploadDialogProps {
   businessId: string;
 }
 
-type UploadMode = 'items' | 'inventory';
-
-interface CSVItem {
+interface CSVItemWithInventory {
+  // Item fields
   name: string;
   description?: string;
   price: number;
@@ -63,11 +62,8 @@ interface CSVItem {
   is_active?: boolean;
   item_sub_category_id?: number;
   brand_id?: string;
-  business_id: string;
-}
 
-interface CSVInventoryItem {
-  item_name: string;
+  // Inventory fields
   business_location_name: string;
   quantity: number;
   available_quantity: number;
@@ -76,7 +72,14 @@ interface CSVInventoryItem {
   reorder_quantity: number;
   unit_cost: number;
   selling_price: number;
-  is_active?: boolean;
+
+  // Image fields
+  image_url?: string;
+  image_alt_text?: string;
+  image_caption?: string;
+
+  // Internal fields
+  business_id: string;
 }
 
 interface UploadResult {
@@ -124,30 +127,14 @@ export default function CSVUploadDialog({
   const { addInventoryItem, updateInventoryItem, inventory } =
     useBusinessInventory(businessId);
   const { locations } = useBusinessLocations(businessId);
+  const { uploadItemImage, createItemImage } = useItemImages();
+  const { userProfile } = useProfile();
 
-  const [uploadMode, setUploadMode] = useState<UploadMode>('items');
-  const [csvData, setCsvData] = useState<CSVItem[] | CSVInventoryItem[]>([]);
+  const [csvData, setCsvData] = useState<CSVItemWithInventory[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const [previewData, setPreviewData] = useState<
-    CSVItem[] | CSVInventoryItem[]
-  >([]);
+  const [previewData, setPreviewData] = useState<CSVItemWithInventory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleModeChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newMode: UploadMode | null
-  ) => {
-    if (newMode !== null) {
-      setUploadMode(newMode);
-      setCsvData([]);
-      setPreviewData([]);
-      setUploadResult(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -179,7 +166,7 @@ export default function CSVUploadDialog({
       }
 
       const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-      const data: CSVItem[] | CSVInventoryItem[] = [];
+      const data: CSVItemWithInventory[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map((v) => v.trim());
@@ -226,10 +213,8 @@ export default function CSVUploadDialog({
           }
         });
 
-        // Add business_id to each item if in items mode
-        if (uploadMode === 'items') {
-          (row as CSVItem).business_id = businessId;
-        }
+        // Add business_id to each item
+        row.business_id = businessId;
 
         data.push(row);
       }
@@ -248,6 +233,13 @@ export default function CSVUploadDialog({
       return;
     }
 
+    if (!userProfile?.id) {
+      enqueueSnackbar(t('business.inventory.userIdRequired'), {
+        variant: 'error',
+      });
+      return;
+    }
+
     setUploading(true);
     const result: UploadResult = {
       success: 0,
@@ -259,11 +251,7 @@ export default function CSVUploadDialog({
       },
     };
 
-    if (uploadMode === 'items') {
-      await handleItemsUpload(csvData as CSVItem[], result);
-    } else {
-      await handleInventoryUpload(csvData as CSVInventoryItem[], result);
-    }
+    await handleUnifiedUpload(csvData, result);
 
     setUploadResult(result);
     setUploading(false);
@@ -279,133 +267,134 @@ export default function CSVUploadDialog({
     }
   };
 
-  const handleItemsUpload = async (
-    itemsData: CSVItem[],
+  const handleUnifiedUpload = async (
+    data: CSVItemWithInventory[],
     result: UploadResult
   ) => {
-    for (let i = 0; i < itemsData.length; i++) {
-      const item = itemsData[i];
+    const bucketName =
+      process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
       try {
-        // Check if item already exists by name or SKU
+        // Step 1: Create or update the item
         const existingItem = items.find(
           (existing) =>
-            existing.name.toLowerCase() === item.name.toLowerCase() ||
-            (item.sku &&
+            existing.name.toLowerCase() === row.name.toLowerCase() ||
+            (row.sku &&
               existing.sku &&
-              existing.sku.toLowerCase() === item.sku.toLowerCase())
+              existing.sku.toLowerCase() === row.sku.toLowerCase())
         );
 
+        let itemId: string;
         if (existingItem) {
           // Update existing item
-          await updateItem(existingItem.id, item);
-          result.details.updated.push(item.name);
-          result.success++;
+          await updateItem(existingItem.id, row);
+          result.details.updated.push(`Item: ${row.name}`);
+          itemId = existingItem.id;
         } else {
-          // Create new item - ensure required fields are present
+          // Create new item
           const createData: CreateItemData = {
-            name: item.name,
-            description: item.description || '', // Required field
-            item_sub_category_id: item.item_sub_category_id || 1, // Required field, default to 1
-            price: item.price,
-            currency: item.currency,
-            business_id: item.business_id,
-            // Optional fields
-            sku: item.sku,
-            size: item.size,
-            size_unit: item.size_unit,
-            weight: item.weight,
-            weight_unit: item.weight_unit,
-            color: item.color,
-            material: item.material,
-            model: item.model,
-            is_fragile: item.is_fragile,
-            is_perishable: item.is_perishable,
-            requires_special_handling: item.requires_special_handling,
-            min_order_quantity: item.min_order_quantity,
-            max_order_quantity: item.max_order_quantity,
-            is_active: item.is_active,
-            brand_id: item.brand_id,
+            name: row.name,
+            description: row.description || '',
+            item_sub_category_id: row.item_sub_category_id || 1,
+            price: row.price,
+            currency: row.currency,
+            business_id: row.business_id,
+            sku: row.sku,
+            size: row.size,
+            size_unit: row.size_unit,
+            weight: row.weight,
+            weight_unit: row.weight_unit,
+            color: row.color,
+            material: row.material,
+            model: row.model,
+            is_fragile: row.is_fragile,
+            is_perishable: row.is_perishable,
+            requires_special_handling: row.requires_special_handling,
+            min_order_quantity: row.min_order_quantity,
+            max_order_quantity: row.max_order_quantity,
+            is_active: row.is_active,
+            brand_id: row.brand_id,
           };
-          await createItem(createData);
-          result.details.inserted.push(item.name);
-          result.success++;
-        }
-      } catch (error) {
-        result.errors++;
-        result.details.errors.push({
-          row: i + 2, // +2 because of 0-based index and header row
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-  };
-
-  const handleInventoryUpload = async (
-    inventoryData: CSVInventoryItem[],
-    result: UploadResult
-  ) => {
-    for (let i = 0; i < inventoryData.length; i++) {
-      const inventoryItem = inventoryData[i];
-      try {
-        // Find the item by name
-        const item = items.find(
-          (existing) =>
-            existing.name.toLowerCase() ===
-            inventoryItem.item_name.toLowerCase()
-        );
-
-        if (!item) {
-          throw new Error(`Item "${inventoryItem.item_name}" not found`);
+          const newItem = await createItem(createData);
+          itemId = newItem.id;
+          result.details.inserted.push(`Item: ${row.name}`);
         }
 
-        // Find the business location by name
+        // Step 2: Create or update inventory
         const location = locations.find(
           (existing) =>
             existing.name.toLowerCase() ===
-            inventoryItem.business_location_name.toLowerCase()
+            row.business_location_name.toLowerCase()
         );
 
         if (!location) {
-          throw new Error(
-            `Location "${inventoryItem.business_location_name}" not found`
-          );
+          throw new Error(`Location "${row.business_location_name}" not found`);
         }
 
-        // Check if inventory item already exists
         const existingInventory = inventory.find(
           (existing) =>
-            existing.item_id === item.id &&
+            existing.item_id === itemId &&
             existing.business_location_id === location.id
         );
 
         const inventoryData: AddInventoryItemData = {
           business_location_id: location.id,
-          item_id: item.id,
-          quantity: inventoryItem.quantity,
-          available_quantity: inventoryItem.available_quantity,
-          reserved_quantity: inventoryItem.reserved_quantity,
-          reorder_point: inventoryItem.reorder_point,
-          reorder_quantity: inventoryItem.reorder_quantity,
-          unit_cost: inventoryItem.unit_cost,
-          selling_price: inventoryItem.selling_price,
-          is_active: inventoryItem.is_active ?? true,
+          item_id: itemId,
+          quantity: row.quantity,
+          available_quantity: row.available_quantity,
+          reserved_quantity: row.reserved_quantity,
+          reorder_point: row.reorder_point,
+          reorder_quantity: row.reorder_quantity,
+          unit_cost: row.unit_cost,
+          selling_price: row.selling_price,
+          is_active: row.is_active ?? true,
         };
 
         if (existingInventory) {
-          // Update existing inventory item
           await updateInventoryItem(existingInventory.id, inventoryData);
           result.details.updated.push(
-            `${inventoryItem.item_name} at ${inventoryItem.business_location_name}`
+            `Inventory: ${row.name} at ${row.business_location_name}`
           );
-          result.success++;
         } else {
-          // Create new inventory item
           await addInventoryItem(inventoryData);
           result.details.inserted.push(
-            `${inventoryItem.item_name} at ${inventoryItem.business_location_name}`
+            `Inventory: ${row.name} at ${row.business_location_name}`
           );
-          result.success++;
         }
+
+        // Step 3: Add image if provided
+        if (row.image_url) {
+          try {
+            // Create the image record with the provided URL
+            const imageData = {
+              item_id: itemId,
+              image_url: row.image_url,
+              image_type: 'main' as const,
+              alt_text: row.image_alt_text || row.name,
+              caption: row.image_caption,
+              display_order: 1,
+              uploaded_by: userProfile?.id || '',
+            };
+
+            await createItemImage(imageData);
+            result.details.inserted.push(`Image: ${row.name}`);
+          } catch (imageError) {
+            console.error('Failed to add image:', imageError);
+            // Don't fail the entire row for image errors
+            result.details.errors.push({
+              row: i + 2,
+              error: `Image upload failed: ${
+                imageError instanceof Error
+                  ? imageError.message
+                  : 'Unknown error'
+              }`,
+            });
+          }
+        }
+
+        result.success++;
       } catch (error) {
         result.errors++;
         result.details.errors.push({
@@ -417,92 +406,80 @@ export default function CSVUploadDialog({
   };
 
   const downloadTemplate = () => {
-    let headers: string[];
-    let sampleData: string[];
-    let filename: string;
+    const headers = [
+      'name',
+      'description',
+      'price',
+      'currency',
+      'sku',
+      'size',
+      'size_unit',
+      'weight',
+      'weight_unit',
+      'color',
+      'material',
+      'model',
+      'is_fragile',
+      'is_perishable',
+      'requires_special_handling',
+      'min_order_quantity',
+      'max_order_quantity',
+      'is_active',
+      'item_sub_category_id',
+      'brand_id',
+      'business_location_name',
+      'quantity',
+      'available_quantity',
+      'reserved_quantity',
+      'reorder_point',
+      'reorder_quantity',
+      'unit_cost',
+      'selling_price',
+      'image_url',
+      'image_alt_text',
+      'image_caption',
+    ];
 
-    if (uploadMode === 'items') {
-      headers = [
-        'name',
-        'description',
-        'price',
-        'currency',
-        'sku',
-        'size',
-        'size_unit',
-        'weight',
-        'weight_unit',
-        'color',
-        'material',
-        'model',
-        'is_fragile',
-        'is_perishable',
-        'requires_special_handling',
-        'min_order_quantity',
-        'max_order_quantity',
-        'is_active',
-        'item_sub_category_id',
-        'brand_id',
-      ];
-
-      sampleData = [
-        'Sample Item',
-        'This is a sample item description',
-        '29.99',
-        'USD',
-        'SAMPLE-001',
-        '10',
-        'cm',
-        '500',
-        'g',
-        'Red',
-        'Plastic',
-        'Model-X',
-        'false',
-        'false',
-        'false',
-        '1',
-        '100',
-        'true',
-        '1',
-        '',
-      ];
-      filename = 'items_template.csv';
-    } else {
-      headers = [
-        'item_name',
-        'business_location_name',
-        'quantity',
-        'available_quantity',
-        'reserved_quantity',
-        'reorder_point',
-        'reorder_quantity',
-        'unit_cost',
-        'selling_price',
-        'is_active',
-      ];
-
-      sampleData = [
-        'Sample Item',
-        'Main Warehouse',
-        '100',
-        '95',
-        '5',
-        '20',
-        '50',
-        '15.00',
-        '29.99',
-        'true',
-      ];
-      filename = 'inventory_template.csv';
-    }
+    const sampleData = [
+      'Sample Item',
+      'This is a sample item description',
+      '29.99',
+      'USD',
+      'SAMPLE-001',
+      '10',
+      'cm',
+      '500',
+      'g',
+      'Red',
+      'Plastic',
+      'Model-X',
+      'false',
+      'false',
+      'false',
+      '1',
+      '100',
+      'true',
+      '1',
+      '',
+      'Main Warehouse',
+      '100',
+      '95',
+      '5',
+      '20',
+      '50',
+      '15.00',
+      '29.99',
+      'https://example.com/images/sample-item.jpg',
+      'Sample item image',
+      'Main product image',
+    ];
 
     const csvContent = [headers.join(','), sampleData.join(',')].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'items_with_inventory_template.csv';
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -518,75 +495,34 @@ export default function CSVUploadDialog({
   };
 
   const renderPreviewTable = () => {
-    if (uploadMode === 'items') {
-      const itemsData = previewData as CSVItem[];
-      return (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Price</TableCell>
-                <TableCell>SKU</TableCell>
-                <TableCell>Size</TableCell>
-                <TableCell>Weight</TableCell>
+    return (
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Price</TableCell>
+              <TableCell>Location</TableCell>
+              <TableCell>Quantity</TableCell>
+              <TableCell>Image</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {previewData.map((item, index) => (
+              <TableRow key={index}>
+                <TableCell>{item.name}</TableCell>
+                <TableCell>
+                  {item.price} {item.currency}
+                </TableCell>
+                <TableCell>{item.business_location_name}</TableCell>
+                <TableCell>{item.quantity}</TableCell>
+                <TableCell>{item.image_url ? 'Yes' : 'No'}</TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {itemsData.map((item, index) => (
-                <TableRow key={index}>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>
-                    {item.price} {item.currency}
-                  </TableCell>
-                  <TableCell>{item.sku || '-'}</TableCell>
-                  <TableCell>
-                    {item.size && item.size_unit
-                      ? `${item.size} ${item.size_unit}`
-                      : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {item.weight && item.weight_unit
-                      ? `${item.weight} ${item.weight_unit}`
-                      : '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      );
-    } else {
-      const inventoryData = previewData as CSVInventoryItem[];
-      return (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Item Name</TableCell>
-                <TableCell>Location</TableCell>
-                <TableCell>Quantity</TableCell>
-                <TableCell>Available</TableCell>
-                <TableCell>Unit Cost</TableCell>
-                <TableCell>Selling Price</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {inventoryData.map((item, index) => (
-                <TableRow key={index}>
-                  <TableCell>{item.item_name}</TableCell>
-                  <TableCell>{item.business_location_name}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{item.available_quantity}</TableCell>
-                  <TableCell>${item.unit_cost}</TableCell>
-                  <TableCell>${item.selling_price}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      );
-    }
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
   };
 
   return (
@@ -602,26 +538,6 @@ export default function CSVUploadDialog({
 
       <DialogContent>
         <Stack spacing={3}>
-          {/* Mode Selector */}
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              {t('business.csvUpload.selectMode')}
-            </Typography>
-            <ToggleButtonGroup
-              value={uploadMode}
-              exclusive
-              onChange={handleModeChange}
-              aria-label="upload mode"
-            >
-              <ToggleButton value="items" aria-label="items">
-                {t('business.csvUpload.itemsMode')}
-              </ToggleButton>
-              <ToggleButton value="inventory" aria-label="inventory">
-                {t('business.csvUpload.inventoryMode')}
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Paper>
-
           {/* Instructions */}
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Box display="flex" alignItems="center" mb={1}>
@@ -631,9 +547,9 @@ export default function CSVUploadDialog({
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary">
-              {uploadMode === 'items'
-                ? t('business.csvUpload.instructionsItems')
-                : t('business.csvUpload.instructionsInventory')}
+              Upload a CSV file to create items, inventory records, and add
+              images in one operation. Each row should contain item details,
+              inventory information, and an optional image URL.
             </Typography>
             <Box mt={2}>
               <Button
@@ -671,11 +587,7 @@ export default function CSVUploadDialog({
           {previewData.length > 0 && (
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
-                {t('business.csvUpload.preview')} ({csvData.length}{' '}
-                {uploadMode === 'items'
-                  ? t('business.csvUpload.items')
-                  : t('business.csvUpload.inventoryItems')}
-                )
+                {t('business.csvUpload.preview')} ({csvData.length} items)
               </Typography>
               {renderPreviewTable()}
             </Paper>

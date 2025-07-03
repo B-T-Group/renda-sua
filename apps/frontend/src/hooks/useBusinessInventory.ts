@@ -188,9 +188,9 @@ const GET_AVAILABLE_ITEMS = `
 `;
 
 const GET_BUSINESS_LOCATIONS = `
-  query GetBusinessLocations($businessId: uuid!) {
+  query GetBusinessLocations {
     business_locations(
-      where: { business_id: { _eq: $businessId } }
+      
       order_by: { name: asc }
     ) {
       id
@@ -359,7 +359,7 @@ export const useBusinessInventory = (businessId?: string) => {
     }
 
     try {
-      const result = await executeLocationsQuery({ businessId });
+      const result = await executeLocationsQuery();
       console.log('useBusinessInventory: Locations fetch result:', result);
       setBusinessLocations(result.business_locations || []);
     } catch (err) {

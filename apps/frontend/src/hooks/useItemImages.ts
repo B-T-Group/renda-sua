@@ -271,6 +271,7 @@ export const useItemImages = () => {
     fetchItemImages,
     uploadItemImage,
     deleteItemImage,
+    createItemImage,
     getPresignedUrl,
   };
 };
