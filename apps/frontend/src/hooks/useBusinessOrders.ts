@@ -218,15 +218,6 @@ export const useBusinessOrders = () => {
   const buildFilters = useCallback((filterParams: OrderFilters) => {
     const conditions: any[] = [];
 
-    // Business filter (always filter by current business)
-    conditions.push({
-      business: {
-        user: {
-          identifier: { _eq: 'X-Hasura-User-Id' },
-        },
-      },
-    });
-
     // Status filter
     if (filterParams.status && filterParams.status !== 'all') {
       conditions.push({
@@ -296,7 +287,12 @@ export const useBusinessOrders = () => {
       });
     }
 
-    return conditions.length > 0 ? { _and: conditions } : {};
+    const finalFilter = conditions.length > 0 ? { _and: conditions } : {};
+    console.log(
+      'useBusinessOrders: Final filter:',
+      JSON.stringify(finalFilter, null, 2)
+    );
+    return finalFilter;
   }, []);
 
   const fetchOrders = useCallback(
