@@ -138,6 +138,7 @@ update_permissions:
     permission:
       columns:
         - id
+        - address_id
         - name
         - location_type
         - is_primary

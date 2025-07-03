@@ -1,28 +1,27 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid,
-  FormControlLabel,
-  Switch,
-  Box,
-  Typography,
   Alert,
+  Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  Switch,
+  TextField,
+  Typography,
 } from '@mui/material';
-import { useTranslation } from 'react-i18next';
 import { City, Country, State } from 'country-state-city';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  BusinessLocation,
   AddBusinessLocationData,
+  BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
 
@@ -145,8 +144,13 @@ const LocationModal: React.FC<LocationModalProps> = ({
   }, [location, open]);
 
   const handleSave = async () => {
+    console.log('LocationModal: handleSave called');
+    console.log('LocationModal: formData:', formData);
+    console.log('LocationModal: addressData:', addressData);
+
     // Validate required fields
     if (!formData.name.trim()) {
+      console.log('LocationModal: Name is required');
       return;
     }
 
@@ -157,6 +161,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
       !addressData.postal_code.trim() ||
       !addressData.country.trim()
     ) {
+      console.log('LocationModal: Address fields are required');
       return;
     }
 
@@ -167,6 +172,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
       address: addressData, // Include address data for backend processing
     };
 
+    console.log('LocationModal: Calling onSave with data:', locationData);
     await onSave(locationData);
   };
 

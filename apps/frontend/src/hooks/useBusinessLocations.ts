@@ -50,6 +50,14 @@ export interface UpdateBusinessLocationData {
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_active?: boolean;
   is_primary?: boolean;
+  address?: {
+    address_line_1?: string;
+    address_line_2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  };
 }
 
 const GET_BUSINESS_LOCATIONS = `
@@ -138,6 +146,20 @@ const UPDATE_BUSINESS_LOCATION = `
   }
 `;
 
+const UPDATE_ADDRESS = `
+  mutation UpdateAddress($id: uuid!, $data: addresses_set_input!) {
+    update_addresses_by_pk(pk_columns: {id: $id}, _set: $data) {
+      id
+      address_line_1
+      address_line_2
+      city
+      state
+      postal_code
+      country
+    }
+  }
+`;
+
 const DELETE_BUSINESS_LOCATION = `
   mutation DeleteBusinessLocation($id: uuid!) {
     delete_business_locations_by_pk(id: $id) {
@@ -197,6 +219,8 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
   );
+  const { execute: executeUpdateAddressMutation } =
+    useGraphQLRequest(UPDATE_ADDRESS);
 
   const { execute: executeAddNestedMutation } = useGraphQLRequest(
     ADD_BUSINESS_LOCATION_NESTED
@@ -289,12 +313,43 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
   );
 
   const updateLocation = useCallback(
-    async (id: string, data: UpdateBusinessLocationData) => {
+    async (
+      id: string,
+      data: UpdateBusinessLocationData & { address?: any }
+    ) => {
+      console.log('useBusinessLocations: updateLocation called');
+      console.log('useBusinessLocations: id:', id);
+      console.log('useBusinessLocations: data:', data);
+
       setLoading(true);
       setError(null);
       try {
-        const result = await executeUpdateMutation({ id, data });
-        if (result.data?.update_business_locations_by_pk) {
+        // Extract address data if present
+        const { address, ...locationData } = data;
+        console.log('useBusinessLocations: locationData:', locationData);
+        console.log('useBusinessLocations: address:', address);
+
+        // Update location data
+        const result = await executeUpdateMutation({ id, data: locationData });
+        console.log('useBusinessLocations: update result:', result);
+
+        // If address data is provided, update the address as well
+        if (
+          address &&
+          result.data?.update_business_locations_by_pk?.address?.id
+        ) {
+          const addressId =
+            result.data.update_business_locations_by_pk.address.id;
+          console.log(
+            'useBusinessLocations: updating address with ID:',
+            addressId
+          );
+          await executeUpdateAddressMutation({ id: addressId, data: address });
+
+          // Refetch locations to get updated data
+          await fetchLocations();
+        } else if (result.data?.update_business_locations_by_pk) {
+          // Update local state if no address update was needed
           setLocations((prev) =>
             prev.map((location) =>
               location.id === id
@@ -302,9 +357,11 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
                 : location
             )
           );
-          return result.data.update_business_locations_by_pk;
         }
+
+        return result.data?.update_business_locations_by_pk;
       } catch (err) {
+        console.error('useBusinessLocations: Error updating location:', err);
         setError(
           err instanceof Error
             ? err.message
@@ -315,7 +372,7 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
         setLoading(false);
       }
     },
-    [executeUpdateMutation]
+    [executeUpdateMutation, executeUpdateAddressMutation, fetchLocations]
   );
 
   const deleteLocation = useCallback(

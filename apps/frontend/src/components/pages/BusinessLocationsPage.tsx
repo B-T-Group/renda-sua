@@ -90,13 +90,22 @@ const BusinessLocationsPage: React.FC = () => {
   };
 
   const handleSaveLocation = async (data: any) => {
+    console.log('BusinessLocationsPage: handleSaveLocation called');
+    console.log('BusinessLocationsPage: editingLocation:', editingLocation);
+    console.log('BusinessLocationsPage: data:', data);
+
     try {
       if (editingLocation) {
+        console.log(
+          'BusinessLocationsPage: Updating location with ID:',
+          editingLocation.id
+        );
         await updateLocation(editingLocation.id, data);
         enqueueSnackbar(t('business.locations.locationUpdated'), {
           variant: 'success',
         });
       } else {
+        console.log('BusinessLocationsPage: Adding new location');
         await addLocation(data);
         enqueueSnackbar(t('business.locations.locationAdded'), {
           variant: 'success',
@@ -105,6 +114,7 @@ const BusinessLocationsPage: React.FC = () => {
       setShowLocationModal(false);
       setEditingLocation(null);
     } catch (error) {
+      console.error('BusinessLocationsPage: Error saving location:', error);
       enqueueSnackbar(t('business.locations.saveError'), { variant: 'error' });
     }
   };
