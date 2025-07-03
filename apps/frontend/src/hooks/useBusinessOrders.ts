@@ -176,7 +176,9 @@ export const useBusinessOrders = () => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({});
 
-  const { execute } = useGraphQLRequest(GET_BUSINESS_ORDERS);
+  const { execute } = useGraphQLRequest(GET_BUSINESS_ORDERS, {
+    loadingMessage: 'common.fetchingOrders',
+  });
 
   // Create mutation hooks at the top level
   const updateOrderStatusMutation = `
@@ -192,7 +194,8 @@ export const useBusinessOrders = () => {
     }
   `;
   const { execute: executeUpdateStatus } = useGraphQLRequest(
-    updateOrderStatusMutation
+    updateOrderStatusMutation,
+    { loadingMessage: 'common.updatingOrder' }
   );
 
   const assignOrderMutation = `
@@ -212,8 +215,10 @@ export const useBusinessOrders = () => {
       }
     }
   `;
-  const { execute: executeAssignOrder } =
-    useGraphQLRequest(assignOrderMutation);
+  const { execute: executeAssignOrder } = useGraphQLRequest(
+    assignOrderMutation,
+    { loadingMessage: 'common.updatingOrder' }
+  );
 
   const buildFilters = useCallback((filterParams: OrderFilters) => {
     const conditions: any[] = [];

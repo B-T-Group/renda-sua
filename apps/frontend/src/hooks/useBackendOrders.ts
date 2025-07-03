@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApiClient } from './useApiClient';
+import { useApiWithLoading } from './useApiWithLoading';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -36,9 +37,11 @@ export interface UpdateOrderStatusResponse {
 }
 
 export const useBackendOrders = () => {
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const apiClient = useApiClient();
+  const { callWithLoading } = useApiWithLoading({
+    loadingMessage: 'common.updatingOrder',
+  });
 
   const createOrder = async (
     orderData: CreateOrderRequest
@@ -49,28 +52,25 @@ export const useBackendOrders = () => {
       );
     }
 
-    setLoading(true);
-    setError(null);
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<CreateOrderResponse>(
+          '/orders',
+          orderData
+        );
 
-    try {
-      const response = await apiClient.post<CreateOrderResponse>(
-        '/orders',
-        orderData
-      );
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Failed to create order');
+        }
 
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'Failed to create order');
+        return response.data.order;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error || err.message || 'Failed to create order';
+        setError(errorMessage);
+        throw new Error(errorMessage);
       }
-
-      return response.data.order;
-    } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.error || err.message || 'Failed to create order';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    }, 'common.savingData');
   };
 
   const updateOrderStatus = async (
@@ -83,38 +83,35 @@ export const useBackendOrders = () => {
       );
     }
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await apiClient.patch<UpdateOrderStatusResponse>(
-        `/orders/${orderId}/status`,
-        { status }
-      );
-
-      if (!response.data.success) {
-        throw new Error(
-          response.data.message || 'Failed to update order status'
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.patch<UpdateOrderStatusResponse>(
+          `/orders/${orderId}/status`,
+          { status }
         );
-      }
 
-      return response.data.order;
-    } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.error ||
-        err.message ||
-        'Failed to update order status';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to update order status'
+          );
+        }
+
+        return response.data.order;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to update order status';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
   };
 
   return {
     createOrder,
     updateOrderStatus,
-    loading,
+    loading: false, // Loading is now handled globally
     error,
   };
 };

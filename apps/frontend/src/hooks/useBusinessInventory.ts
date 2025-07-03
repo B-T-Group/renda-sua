@@ -220,11 +220,18 @@ export const useBusinessInventory = (businessId?: string) => {
   const [error, setError] = useState<string | null>(null);
 
   const { execute: executeInventoryQuery } = useGraphQLRequest(
-    GET_BUSINESS_INVENTORY
+    GET_BUSINESS_INVENTORY,
+    { loadingMessage: 'common.fetchingInventory' }
   );
-  const { execute: executeItemsQuery } = useGraphQLRequest(GET_AVAILABLE_ITEMS);
+  const { execute: executeItemsQuery } = useGraphQLRequest(
+    GET_AVAILABLE_ITEMS,
+    {
+      loadingMessage: 'common.fetchingItems',
+    }
+  );
   const { execute: executeLocationsQuery } = useGraphQLRequest(
-    GET_BUSINESS_LOCATIONS
+    GET_BUSINESS_LOCATIONS,
+    { loadingMessage: 'common.fetchingLocations' }
   );
 
   // Create mutation hooks at the top level
@@ -248,8 +255,10 @@ export const useBusinessInventory = (businessId?: string) => {
       }
     }
   `;
-  const { execute: executeAddMutation } =
-    useGraphQLRequest(addInventoryMutation);
+  const { execute: executeAddMutation } = useGraphQLRequest(
+    addInventoryMutation,
+    { loadingMessage: 'common.savingData' }
+  );
 
   const updateInventoryMutation = `
     mutation UpdateInventoryItem($itemId: uuid!, $updates: business_inventory_set_input!) {
@@ -272,7 +281,8 @@ export const useBusinessInventory = (businessId?: string) => {
     }
   `;
   const { execute: executeUpdateMutation } = useGraphQLRequest(
-    updateInventoryMutation
+    updateInventoryMutation,
+    { loadingMessage: 'common.updatingInventory' }
   );
 
   const deleteInventoryMutation = `
@@ -283,7 +293,8 @@ export const useBusinessInventory = (businessId?: string) => {
     }
   `;
   const { execute: executeDeleteMutation } = useGraphQLRequest(
-    deleteInventoryMutation
+    deleteInventoryMutation,
+    { loadingMessage: 'common.deletingData' }
   );
 
   const restockItemMutation = `
@@ -307,8 +318,10 @@ export const useBusinessInventory = (businessId?: string) => {
       }
     }
   `;
-  const { execute: executeRestockMutation } =
-    useGraphQLRequest(restockItemMutation);
+  const { execute: executeRestockMutation } = useGraphQLRequest(
+    restockItemMutation,
+    { loadingMessage: 'common.updatingInventory' }
+  );
 
   const fetchInventory = useCallback(async () => {
     if (!businessId) {

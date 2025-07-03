@@ -11,6 +11,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import App from './app/app';
 import { environment } from './config/environment';
+import { LoadingProvider } from './contexts/LoadingContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import './i18n'; // Initialize i18n
 import { theme } from './theme/theme';
@@ -45,9 +46,11 @@ root.render(
         <BrowserRouter
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          <UserProfileProvider>
-            <App />
-          </UserProfileProvider>
+          <LoadingProvider>
+            <UserProfileProvider>
+              <App />
+            </UserProfileProvider>
+          </LoadingProvider>
         </BrowserRouter>
       </ThemeProvider>
     </Auth0Provider>

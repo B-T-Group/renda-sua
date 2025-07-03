@@ -45,3 +45,5 @@ export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
 
 // New export
 export { usePublicItems } from './usePublicItems';
+
+export { useApiWithLoading } from './useApiWithLoading';

@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
+import LoadingScreen from '../components/common/LoadingScreen';
 import Header from '../components/layout/Header';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
@@ -22,11 +23,13 @@ import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
+import { useLoading } from '../contexts/LoadingContext';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
   const { isLoading } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
+  const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
 
   // Only show loading for auth flow when on /app route
@@ -177,6 +180,9 @@ function App() {
           <Route path="*" element={<LandingPage />} />
         </Routes>
       </Container>
+
+      {/* Global API Loading Screen */}
+      <LoadingScreen open={isApiLoading} message={loadingMessage} />
     </Box>
   );
 }

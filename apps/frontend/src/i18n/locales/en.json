@@ -45,7 +45,24 @@
     "no": "No",
     "success": "Success",
     "warning": "Warning",
-    "info": "Information"
+    "info": "Information",
+    "loadingData": "Loading data...",
+    "savingData": "Saving data...",
+    "updatingData": "Updating data...",
+    "deletingData": "Deleting data...",
+    "uploadingData": "Uploading data...",
+    "processingRequest": "Processing request...",
+    "connectingToServer": "Connecting to server...",
+    "authenticating": "Authenticating...",
+    "fetchingOrders": "Fetching orders...",
+    "updatingOrder": "Updating order...",
+    "fetchingItems": "Fetching items...",
+    "savingItem": "Saving item...",
+    "uploadingImages": "Uploading images...",
+    "fetchingInventory": "Fetching inventory...",
+    "updatingInventory": "Updating inventory...",
+    "fetchingLocations": "Fetching locations...",
+    "savingLocation": "Saving location..."
   },
   "auth": {
     "login": "Login",
@@ -529,15 +546,6 @@
     "delivery": "Delivery",
     "items": "Items",
     "moreItems": "more items"
-  },
-  "common": {
-    "save": "Save",
-    "cancel": "Cancel",
-    "delete": "Delete",
-    "rowsPerPage": "Rows per page:",
-    "of": "of",
-    "moreThan": "more than",
-    "back": "Back"
   },
   "seo": {
     "home": {
