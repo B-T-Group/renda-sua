@@ -138,6 +138,12 @@ select_permissions:
                 user:
                   identifier:
                     _eq: X-Hasura-User-Id
+          - business_location:
+              orders:
+                client:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
   - role: anonymous
     permission:
       columns:
@@ -252,6 +258,12 @@ update_permissions:
                 user:
                   identifier:
                     _eq: X-Hasura-User-Id
+          - business_location:
+              orders:
+                client:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
       columns:
         - address_line_1
         - address_line_2
@@ -326,6 +338,12 @@ delete_permissions:
                 user:
                   identifier:
                     _eq: X-Hasura-User-Id
+          - business_location:
+              orders:
+                client:
+                  user:
+                    identifier:
+                      _eq: X-Hasura-User-Id
   - role: business
     permission:
       filter:

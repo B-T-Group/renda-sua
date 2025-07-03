@@ -124,7 +124,11 @@ const BusinessOrdersPage: React.FC = () => {
 
   const formatAddress = (address: any) => {
     if (!address) return '';
-    return `${address.street_address}, ${address.city}, ${address.state} ${address.postal_code}`;
+    const street = address.street_address || '';
+    const city = address.city || '';
+    const state = address.state || '';
+    const postal = address.postal_code || '';
+    return [street, city, state, postal].filter(Boolean).join(', ');
   };
 
   const formatCurrency = (amount: number, currency: string) => {
@@ -153,7 +157,8 @@ const BusinessOrdersPage: React.FC = () => {
         order.client?.last_name?.toLowerCase().includes(searchLower) ||
         order.delivery_address?.street_address
           ?.toLowerCase()
-          .includes(searchLower);
+          .includes(searchLower) ||
+        false;
       if (!matchesSearch) return false;
     }
 

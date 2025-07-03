@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Container,
-  Typography,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
+  LocalShipping as LocalShippingIcon,
+  Schedule as ScheduleIcon,
+  ShoppingCart as ShoppingCartIcon,
+} from '@mui/icons-material';
+import {
+  Alert,
+  Box,
   Card,
   CardContent,
-  Grid,
   Chip,
-  Box,
   CircularProgress,
-  Alert,
-  Paper,
+  Collapse,
+  Container,
   Divider,
+  Grid,
+  IconButton,
   List,
   ListItem,
-  ListItemText,
   ListItemSecondaryAction,
-  IconButton,
-  Collapse,
+  ListItemText,
+  Paper,
+  Typography,
 } from '@mui/material';
-import {
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  ShoppingCart as ShoppingCartIcon,
-  LocalShipping as LocalShippingIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Schedule as ScheduleIcon,
-} from '@mui/icons-material';
+import React, { useEffect, useState } from 'react';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 
 interface OrderItem {
@@ -261,10 +261,11 @@ export const ClientOrders: React.FC = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       <strong>Location:</strong>{' '}
-                      {order.business_location.address.street_address},{' '}
-                      {order.business_location.address.city},{' '}
-                      {order.business_location.address.state},{' '}
-                      {order.business_location.address.country}
+                      {order.business_location?.address?.street_address ||
+                        'N/A'}
+                      , {order.business_location?.address?.city || 'N/A'},{' '}
+                      {order.business_location?.address?.state || 'N/A'},{' '}
+                      {order.business_location?.address?.country || 'N/A'}
                     </Typography>
                   </Box>
 
