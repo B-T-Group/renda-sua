@@ -5,12 +5,12 @@ const getEnvironment = () => {
   const hasuraAdminSecret =
     process.env.REACT_APP_HASURA_ADMIN_SECRET || 'myadminsecretkey';
   const auth0Domain =
-    process.env.REACT_APP_AUTH0_DOMAIN || 'groupe-bt-client-dev.us.auth0.com';
+    process.env.REACT_APP_AUTH0_DOMAIN || 'rendasua.ca.auth0.com';
   const auth0ClientId =
-    process.env.REACT_APP_AUTH0_CLIENT_ID || '8O0pK4ySmqP3rBW53K15I3yFsgx5v7Mw';
+    process.env.REACT_APP_AUTH0_CLIENT_ID || 'KkXPODOPy753EuBeaFttZk148wyMkvJ4';
   const auth0Audience =
     process.env.REACT_APP_AUTH0_AUDIENCE ||
-    'https://groupe-bt-client-dev.us.auth0.com/api/v2/';
+    'https://rendasua.ca.auth0.com/api/v2/';
   const isDevelopment = process.env.NODE_ENV === 'development';
 
   // Log environment for debugging
