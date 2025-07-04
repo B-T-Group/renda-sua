@@ -1,6 +1,5 @@
 import {
   TrendingUp as AnalyticsIcon,
-  Inventory as InventoryIcon,
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
@@ -56,12 +55,12 @@ const BusinessDashboard: React.FC = () => {
       path: '/business/orders',
     },
     {
-      title: t('business.dashboard.inventory'),
-      description: t('business.dashboard.inventoryDescription'),
-      icon: <InventoryIcon sx={{ fontSize: 40 }} />,
-      count: inventory.length,
-      color: '#388e3c',
-      path: '/business/inventory',
+      title: t('business.dashboard.items'),
+      description: t('business.dashboard.itemsDescription'),
+      icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+      count: items.length,
+      color: '#7b1fa2',
+      path: '/business/items',
     },
     {
       title: t('business.dashboard.locations'),
@@ -70,14 +69,6 @@ const BusinessDashboard: React.FC = () => {
       count: locations.length,
       color: '#f57c00',
       path: '/business/locations',
-    },
-    {
-      title: t('business.dashboard.items'),
-      description: t('business.dashboard.itemsDescription'),
-      icon: <ItemsIcon sx={{ fontSize: 40 }} />,
-      count: items.length,
-      color: '#7b1fa2',
-      path: '/business/items',
     },
     {
       title: t('business.dashboard.analytics'),

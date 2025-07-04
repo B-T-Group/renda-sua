@@ -105,8 +105,8 @@ const Header: React.FC = () => {
           icon: <ShoppingCart />,
         },
         {
-          label: t('business.inventory.title'),
-          path: '/business/inventory',
+          label: t('business.items.title'),
+          path: '/business/items',
           icon: <Inventory />,
         },
         {

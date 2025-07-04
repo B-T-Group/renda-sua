@@ -12,7 +12,6 @@ import Header from '../components/layout/Header';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
-import BusinessInventoryPage from '../components/pages/BusinessInventoryPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
@@ -157,14 +156,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessOrdersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/business/inventory"
-              element={
-                <ProtectedRoute>
-                  <BusinessInventoryPage />
                 </ProtectedRoute>
               }
             />
