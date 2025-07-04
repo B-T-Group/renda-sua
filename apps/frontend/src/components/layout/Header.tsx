@@ -157,7 +157,7 @@ const Header: React.FC = () => {
       to={item.path}
       startIcon={item.icon}
       sx={{
-        color: 'inherit',
+        color: '#1e40af',
         textTransform: 'none',
         fontWeight: 500,
         px: 2,
@@ -165,14 +165,14 @@ const Header: React.FC = () => {
         borderRadius: 2,
         transition: 'all 0.2s ease-in-out',
         backgroundColor: isActiveRoute(item.path)
-          ? 'rgba(255,255,255,0.1)'
+          ? 'rgba(30, 64, 175, 0.1)'
           : 'transparent',
         '&:hover': {
-          backgroundColor: 'rgba(255,255,255,0.15)',
+          backgroundColor: 'rgba(30, 64, 175, 0.15)',
           transform: 'translateY(-1px)',
         },
         '&.active': {
-          backgroundColor: 'rgba(255,255,255,0.2)',
+          backgroundColor: 'rgba(30, 64, 175, 0.2)',
         },
       }}
     >
@@ -215,10 +215,10 @@ const Header: React.FC = () => {
                 mx: 1,
                 mb: 0.5,
                 '&.Mui-selected': {
-                  backgroundColor: theme.palette.primary.main,
+                  backgroundColor: '#1e40af',
                   color: 'white',
                   '&:hover': {
-                    backgroundColor: theme.palette.primary.dark,
+                    backgroundColor: '#1e3a8a',
                   },
                 },
               }}
@@ -273,9 +273,13 @@ const Header: React.FC = () => {
         position="sticky"
         elevation={0}
         sx={{
-          background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+          backgroundColor: 'white',
           backdropFilter: 'blur(10px)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          borderBottom: '2px solid #1e40af',
+          boxShadow: '0 2px 12px rgba(30, 64, 175, 0.1)',
+          '& .MuiToolbar-root': {
+            backgroundColor: 'white',
+          },
         }}
       >
         <Container maxWidth="xl">
@@ -289,7 +293,7 @@ const Header: React.FC = () => {
             {/* Logo Section */}
             <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
               <RouterLink to="/" style={{ textDecoration: 'none' }}>
-                <Logo variant="compact" color="white" size="medium" />
+                <Logo variant="compact" color="primary" size="medium" />
               </RouterLink>
             </Box>
 
@@ -318,10 +322,10 @@ const Header: React.FC = () => {
                     <IconButton
                       onClick={handleUserMenuOpen}
                       sx={{
-                        color: 'white',
-                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        color: '#1e40af',
+                        backgroundColor: 'rgba(30, 64, 175, 0.1)',
                         '&:hover': {
-                          backgroundColor: 'rgba(255,255,255,0.2)',
+                          backgroundColor: 'rgba(30, 64, 175, 0.2)',
                         },
                       }}
                     >
@@ -330,7 +334,7 @@ const Header: React.FC = () => {
                           width: 32,
                           height: 32,
                           fontSize: '0.875rem',
-                          backgroundColor: 'rgba(255,255,255,0.2)',
+                          backgroundColor: '#1e40af',
                           color: 'white',
                         }}
                       >
@@ -404,9 +408,10 @@ const Header: React.FC = () => {
                   onClick={handleDrawerToggle}
                   sx={{
                     ml: 1,
-                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    color: '#1e40af',
+                    backgroundColor: 'rgba(30, 64, 175, 0.1)',
                     '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.2)',
+                      backgroundColor: 'rgba(30, 64, 175, 0.2)',
                     },
                   }}
                 >

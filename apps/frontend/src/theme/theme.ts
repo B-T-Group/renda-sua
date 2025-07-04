@@ -198,7 +198,6 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 2px 12px rgba(0, 0, 0, 0.1)',
-          background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
           borderRadius: 0,
         },
       },

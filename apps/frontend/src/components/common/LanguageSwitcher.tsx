@@ -36,14 +36,14 @@ const LanguageSwitcher: React.FC = () => {
         onClick={handleClick}
         startIcon={<Language />}
         sx={{
-          color: 'white',
+          color: '#1e40af',
           textTransform: 'none',
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(30, 64, 175, 0.1)',
           },
         }}
       >
-        <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+        <Typography variant="body2" sx={{ color: '#1e40af', fontWeight: 500 }}>
           {getCurrentLanguageName()}
         </Typography>
       </Button>
