@@ -395,6 +395,8 @@ const BusinessItemsPage: React.FC = () => {
                       <Card
                         sx={{
                           height: '100%',
+                          width: '100%',
+                          minHeight: 400,
                           display: 'flex',
                           flexDirection: 'column',
                           transition:
@@ -419,7 +421,15 @@ const BusinessItemsPage: React.FC = () => {
                           }}
                         />
 
-                        <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                        <CardContent
+                          sx={{
+                            flexGrow: 1,
+                            p: 2,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            height: '100%',
+                          }}
+                        >
                           {/* Item Section */}
                           <Box sx={{ mb: 2 }}>
                             <Typography variant="h6" gutterBottom noWrap>
