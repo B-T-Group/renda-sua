@@ -637,8 +637,8 @@
   "public": {
     "items": {
       "title": "Browse Items",
-      "subtitle": "Explore our collection of products and items. Create an account to start purchasing and managing your orders.",
-      "authenticationMessage": "Create an account or sign in to start purchasing items and managing your orders.",
+      "subtitle": "Explore our collection of products and items. Create an account to start shopping and managing your orders.",
+      "authenticationMessage": "Create an account or sign in to start shopping for items and managing your orders.",
       "signUp": "Sign Up",
       "login": "Login",
       "searchPlaceholder": "Search items...",
@@ -647,10 +647,27 @@
       "allCategories": "All Categories",
       "allBrands": "All Brands",
       "resultsCount": "{{count}} items found",
-      "price": "${{price}} {{currency}}",
+      "price": "{{price}} {{currency}}",
       "signUpToPurchase": "Sign Up to Purchase",
       "noItemsFound": "No items found",
       "tryDifferentFilters": "Try adjusting your search or filters to find what you're looking for."
     }
+  },
+  "footer": {
+    "description": "Empowering businesses, agents, and clients with a comprehensive platform for seamless operations, inventory management, and growth.",
+    "platform": "Platform",
+    "forBusinesses": "For Businesses",
+    "forAgents": "For Agents",
+    "forClients": "For Clients",
+    "support": "Support",
+    "helpCenter": "Help Center",
+    "contact": "Contact Us",
+    "documentation": "Documentation",
+    "company": "Company",
+    "about": "About Us",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "allRightsReserved": "All rights reserved.",
+    "designedBy": "Designed by"
   }
 }

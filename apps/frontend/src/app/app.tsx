@@ -7,6 +7,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
+import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
@@ -56,130 +57,141 @@ function App() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <Header />
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
+      <Box sx={{ flex: 1, py: 4 }}>
+        <Container maxWidth="xl">
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
 
-          {/* Public routes */}
-          <Route path="/items" element={<PublicItemsPage />} />
+            {/* Public routes */}
+            <Route path="/items" element={<PublicItemsPage />} />
 
-          {/* App route - redirects to appropriate dashboard based on auth flow */}
-          <Route
-            path="/app"
-            element={
-              <ProtectedRoute>
-                <AppRedirect />
-              </ProtectedRoute>
-            }
-          />
+            {/* App route - redirects to appropriate dashboard based on auth flow */}
+            <Route
+              path="/app"
+              element={
+                <ProtectedRoute>
+                  <AppRedirect />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Individual dashboard routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/agent-dashboard"
-            element={
-              <ProtectedRoute>
-                <AgentDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/business-dashboard"
-            element={
-              <ProtectedRoute>
-                <BusinessDashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Individual dashboard routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/agent-dashboard"
+              element={
+                <ProtectedRoute>
+                  <AgentDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business-dashboard"
+              element={
+                <ProtectedRoute>
+                  <BusinessDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Profile management routes */}
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/complete-profile"
-            element={
-              <ProtectedRoute>
-                <CompleteProfile />
-              </ProtectedRoute>
-            }
-          />
+            {/* Profile management routes */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/complete-profile"
+              element={
+                <ProtectedRoute>
+                  <CompleteProfile />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Demo route */}
-          <Route path="/loading-demo" element={<LoadingDemo />} />
+            {/* Demo route */}
+            <Route path="/loading-demo" element={<LoadingDemo />} />
 
-          {/* Client Orders route */}
-          <Route
-            path="/client-orders"
-            element={
-              <ProtectedRoute>
-                <ClientOrders />
-              </ProtectedRoute>
-            }
-          />
+            {/* Client Orders route */}
+            <Route
+              path="/client-orders"
+              element={
+                <ProtectedRoute>
+                  <ClientOrders />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Item View route */}
-          <Route
-            path="/business/items/:itemId"
-            element={
-              <ProtectedRoute>
-                <ItemViewPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Item View route */}
+            <Route
+              path="/business/items/:itemId"
+              element={
+                <ProtectedRoute>
+                  <ItemViewPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Business routes */}
-          <Route
-            path="/business/orders"
-            element={
-              <ProtectedRoute>
-                <BusinessOrdersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/business/inventory"
-            element={
-              <ProtectedRoute>
-                <BusinessInventoryPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/business/locations"
-            element={
-              <ProtectedRoute>
-                <BusinessLocationsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/business/items"
-            element={
-              <ProtectedRoute>
-                <BusinessItemsPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Business routes */}
+            <Route
+              path="/business/orders"
+              element={
+                <ProtectedRoute>
+                  <BusinessOrdersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/inventory"
+              element={
+                <ProtectedRoute>
+                  <BusinessInventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/locations"
+              element={
+                <ProtectedRoute>
+                  <BusinessLocationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/items"
+              element={
+                <ProtectedRoute>
+                  <BusinessItemsPage />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Catch-all route - redirect to landing page */}
-          <Route path="*" element={<LandingPage />} />
-        </Routes>
-      </Container>
+            {/* Catch-all route - redirect to landing page */}
+            <Route path="*" element={<LandingPage />} />
+          </Routes>
+        </Container>
+      </Box>
+
+      <Footer />
 
       {/* Global API Loading Screen */}
       <LoadingScreen open={isApiLoading} message={loadingMessage} />

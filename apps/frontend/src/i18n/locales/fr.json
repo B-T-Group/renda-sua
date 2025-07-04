@@ -652,5 +652,22 @@
       "noItemsFound": "Aucun article trouvé",
       "tryDifferentFilters": "Essayez d'ajuster votre recherche ou vos filtres pour trouver ce que vous cherchez."
     }
+  },
+  "footer": {
+    "description": "Autonomiser les entreprises, les agents et les clients avec une plateforme complète pour des opérations fluides, la gestion d'inventaire et la croissance.",
+    "platform": "Plateforme",
+    "forBusinesses": "Pour les Entreprises",
+    "forAgents": "Pour les Agents",
+    "forClients": "Pour les Clients",
+    "support": "Support",
+    "helpCenter": "Centre d'Aide",
+    "contact": "Nous Contacter",
+    "documentation": "Documentation",
+    "company": "Entreprise",
+    "about": "À Propos",
+    "privacy": "Politique de Confidentialité",
+    "terms": "Conditions de Service",
+    "allRightsReserved": "Tous droits réservés.",
+    "designedBy": "Conçu par"
   }
 }
