@@ -39,6 +39,10 @@ interface AddItemDialogProps {
   onClose: () => void;
   businessId: string;
   businessLocations: any[];
+  items?: any[];
+  brands?: any[];
+  itemSubCategories?: any[];
+  loading?: boolean;
 }
 
 interface TabPanelProps {
@@ -67,6 +71,10 @@ export default function AddItemDialog({
   onClose,
   businessId,
   businessLocations,
+  items,
+  brands,
+  itemSubCategories,
+  loading,
 }: AddItemDialogProps) {
   const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
@@ -88,9 +96,9 @@ export default function AddItemDialog({
   const [createdItem, setCreatedItem] = useState<any>(null);
 
   const {
-    items,
-    brands,
-    itemSubCategories,
+    items: itemsFromHook,
+    brands: brandsFromHook,
+    itemSubCategories: itemSubCategoriesFromHook,
     loading: itemsLoading,
     error: itemsError,
     fetchItems,
@@ -113,9 +121,17 @@ export default function AddItemDialog({
         onClose();
         return;
       }
-      fetchItems();
-      fetchBrands();
-      fetchItemSubCategories();
+
+      // Only fetch if props data is not available
+      if (!items || items.length === 0) {
+        fetchItems();
+      }
+      if (!brands || brands.length === 0) {
+        fetchBrands();
+      }
+      if (!itemSubCategories || itemSubCategories.length === 0) {
+        fetchItemSubCategories();
+      }
     }
   }, [
     open,
@@ -125,6 +141,9 @@ export default function AddItemDialog({
     businessId,
     onClose,
     enqueueSnackbar,
+    items,
+    brands,
+    itemSubCategories,
   ]);
 
   // Update business_id when businessId prop changes
@@ -144,10 +163,17 @@ export default function AddItemDialog({
   };
 
   const handleItemSelect = (itemId: string) => {
-    const item = items.find((i) => i.id === itemId);
+    const allItems = items || itemsFromHook;
+    const item = allItems.find((i) => i.id === itemId);
     setSelectedItem(item);
+
+    // Auto-select the first location if available
+    const firstLocationId =
+      businessLocations.length > 0 ? businessLocations[0].id : '';
+
     setInventoryData({
       item_id: itemId,
+      business_location_id: firstLocationId,
       quantity: 0,
       available_quantity: 0,
       reserved_quantity: 0,
@@ -195,8 +221,14 @@ export default function AddItemDialog({
       const newItem = await createItem(itemDataWithBusinessId);
       setCreatedItem(newItem);
       setSelectedItem(newItem);
+
+      // Auto-select the first location if available
+      const firstLocationId =
+        businessLocations.length > 0 ? businessLocations[0].id : '';
+
       setInventoryData({
         item_id: newItem.id,
+        business_location_id: firstLocationId,
         quantity: 0,
         available_quantity: 0,
         reserved_quantity: 0,
@@ -222,8 +254,13 @@ export default function AddItemDialog({
     if (inventoryData.business_location_id && inventoryData.item_id) {
       try {
         await addInventoryItem(inventoryData as AddInventoryItemData);
-        onClose();
-        // Reset form
+
+        // Show success message
+        enqueueSnackbar(t('business.inventory.itemAddedToInventory'), {
+          variant: 'success',
+        });
+
+        // Reset form but keep dialog open
         setSelectedItem(null);
         setInventoryData({});
         setNewItemData({
@@ -232,9 +269,8 @@ export default function AddItemDialog({
           min_order_quantity: 1,
         });
         setTabValue(0);
-        enqueueSnackbar(t('business.inventory.itemAddedToInventory'), {
-          variant: 'success',
-        });
+
+        // Don't close the dialog - let user continue adding more items
       } catch (error) {
         console.error('Failed to add to inventory:', error);
         enqueueSnackbar(t('business.inventory.failedToAddToInventory'), {
@@ -275,12 +311,12 @@ export default function AddItemDialog({
                   <MenuItem disabled>
                     {t('business.inventory.loadingItems')}
                   </MenuItem>
-                ) : items.length === 0 ? (
+                ) : (items || itemsFromHook).length === 0 ? (
                   <MenuItem disabled>
                     {t('business.inventory.noItemsFound')}
                   </MenuItem>
                 ) : (
-                  items.map((item) => (
+                  (items || itemsFromHook).map((item) => (
                     <MenuItem key={item.id} value={item.id}>
                       {item.name} - {formatCurrency(item.price, item.currency)}
                     </MenuItem>
@@ -497,16 +533,19 @@ export default function AddItemDialog({
                     <MenuItem disabled>
                       {t('business.inventory.loadingCategories')}
                     </MenuItem>
-                  ) : itemSubCategories.length === 0 ? (
+                  ) : (itemSubCategories || itemSubCategoriesFromHook)
+                      .length === 0 ? (
                     <MenuItem disabled>
                       {t('business.inventory.noCategoriesFound')}
                     </MenuItem>
                   ) : (
-                    itemSubCategories.map((category) => (
-                      <MenuItem key={category.id} value={category.id}>
-                        {category.item_category.name} - {category.name}
-                      </MenuItem>
-                    ))
+                    (itemSubCategories || itemSubCategoriesFromHook).map(
+                      (category) => (
+                        <MenuItem key={category.id} value={category.id}>
+                          {category.item_category.name} - {category.name}
+                        </MenuItem>
+                      )
+                    )
                   )}
                 </Select>
               </FormControl>
@@ -702,12 +741,12 @@ export default function AddItemDialog({
                     <MenuItem disabled>
                       {t('business.inventory.loadingBrands')}
                     </MenuItem>
-                  ) : brands.length === 0 ? (
+                  ) : (brands || brandsFromHook).length === 0 ? (
                     <MenuItem disabled>
                       {t('business.inventory.noBrandsFound')}
                     </MenuItem>
                   ) : (
-                    brands.map((brand) => (
+                    (brands || brandsFromHook).map((brand) => (
                       <MenuItem key={brand.id} value={brand.id}>
                         {brand.name}
                       </MenuItem>
@@ -791,6 +830,9 @@ export default function AddItemDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button onClick={onClose} variant="outlined" color="primary">
+          {t('common.done')}
+        </Button>
         {tabValue === 0 && selectedItem && (
           <Button
             onClick={handleAddToInventory}

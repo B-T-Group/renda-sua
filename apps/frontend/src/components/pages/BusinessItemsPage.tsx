@@ -31,7 +31,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
@@ -83,8 +83,13 @@ const BusinessItemsPage: React.FC = () => {
 
   const {
     items,
+    brands,
+    itemSubCategories,
     loading: itemsLoading,
     error: itemsError,
+    fetchItems,
+    fetchBrands,
+    fetchItemSubCategories,
   } = useItems(profile?.business?.id);
 
   const {
@@ -95,6 +100,15 @@ const BusinessItemsPage: React.FC = () => {
   } = useBusinessInventory(profile?.business?.id);
 
   const { loading: locationsLoading } = useBusinessLocations();
+
+  // Fetch data when component mounts
+  useEffect(() => {
+    if (profile?.business?.id) {
+      fetchItems();
+      fetchBrands();
+      fetchItemSubCategories();
+    }
+  }, [profile?.business?.id, fetchItems, fetchBrands, fetchItemSubCategories]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -133,7 +147,9 @@ const BusinessItemsPage: React.FC = () => {
   };
 
   const handleRestockInventoryItem = (item: any) => {
-    setUpdatingInventoryItem(item);
+    // If item has business_inventories, use the first one, otherwise use the item directly
+    const inventoryItem = item.business_inventories?.[0] || item;
+    setUpdatingInventoryItem(inventoryItem);
     setShowUpdateInventoryDialog(true);
   };
 
@@ -366,9 +382,7 @@ const BusinessItemsPage: React.FC = () => {
                   const mainImage = item.item_images?.find(
                     (img) => img.image_type === 'main'
                   );
-                  const itemInventory = inventory.find(
-                    (inv) => inv.item_id === item.id
-                  );
+                  const itemInventory = item.business_inventories?.[0];
                   const stockStatus = itemInventory
                     ? getStockStatus(
                         itemInventory.available_quantity,
@@ -535,7 +549,7 @@ const BusinessItemsPage: React.FC = () => {
                                 <IconButton
                                   size="small"
                                   onClick={() =>
-                                    handleRestockInventoryItem(itemInventory)
+                                    handleRestockInventoryItem(item)
                                   }
                                   sx={{ color: theme.palette.warning.main }}
                                 >
@@ -579,6 +593,10 @@ const BusinessItemsPage: React.FC = () => {
         onClose={() => setShowAddItemDialog(false)}
         businessId={profile.business.id}
         businessLocations={businessLocations}
+        items={items}
+        brands={brands}
+        itemSubCategories={itemSubCategories}
+        loading={itemsLoading}
       />
 
       <EditItemDialog

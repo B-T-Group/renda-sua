@@ -43,6 +43,26 @@ export interface Item {
     };
   };
   item_images?: ItemImage[];
+  business_inventories?: {
+    id: string;
+    item_id: string;
+    business_location_id: string;
+    quantity: number;
+    available_quantity: number;
+    reserved_quantity: number;
+    selling_price: number;
+    unit_cost: number;
+    reorder_point: number;
+    reorder_quantity: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    business_location: {
+      id: string;
+      name: string;
+      address_id: string;
+    };
+  }[];
 }
 
 export interface Brand {
@@ -136,6 +156,26 @@ const GET_ITEMS = `
         alt_text
         display_order
         created_at
+      }
+      business_inventories {
+        id
+        item_id
+        business_location_id
+        quantity
+        available_quantity
+        reserved_quantity
+        selling_price
+        unit_cost
+        reorder_point
+        reorder_quantity
+        is_active
+        created_at
+        updated_at
+        business_location {
+          id
+          name
+          address_id
+        }
       }
     }
   }
