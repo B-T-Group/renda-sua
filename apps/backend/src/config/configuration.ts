@@ -49,6 +49,20 @@ export interface ExternalApiConfig {
   stripePublishableKey?: string;
 }
 
+export interface MtnMomoConfig {
+  subscriptionKey?: string;
+  apiKey?: string;
+  apiUserId?: string;
+  targetEnvironment?: string;
+  collectionPrimaryKey?: string;
+  collectionSecondaryKey?: string;
+  disbursementPrimaryKey?: string;
+  disbursementSecondaryKey?: string;
+  remittancePrimaryKey?: string;
+  remittanceSecondaryKey?: string;
+  callbackUrl?: string;
+}
+
 export interface Configuration {
   app: AppConfig;
   database: DatabaseConfig;
@@ -59,6 +73,7 @@ export interface Configuration {
   email: EmailConfig;
   redis: RedisConfig;
   externalApi: ExternalApiConfig;
+  mtnMomo: MtnMomoConfig;
 }
 
 export default (): Configuration => ({
@@ -107,5 +122,18 @@ export default (): Configuration => ({
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+  },
+  mtnMomo: {
+    subscriptionKey: process.env.MTN_MOMO_SUBSCRIPTION_KEY,
+    apiKey: process.env.MTN_MOMO_API_KEY,
+    apiUserId: process.env.MTN_MOMO_API_USER_ID,
+    targetEnvironment: process.env.MTN_MOMO_TARGET_ENVIRONMENT || 'sandbox',
+    collectionPrimaryKey: process.env.MTN_MOMO_COLLECTION_PRIMARY_KEY,
+    collectionSecondaryKey: process.env.MTN_MOMO_COLLECTION_SECONDARY_KEY,
+    disbursementPrimaryKey: process.env.MTN_MOMO_DISBURSEMENT_PRIMARY_KEY,
+    disbursementSecondaryKey: process.env.MTN_MOMO_DISBURSEMENT_SECONDARY_KEY,
+    remittancePrimaryKey: process.env.MTN_MOMO_REMITTANCE_PRIMARY_KEY,
+    remittanceSecondaryKey: process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY,
+    callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
   },
 });
