@@ -163,6 +163,7 @@ export class MtnMomoService {
         payer: request.payer,
         payerMessage: request.payerMessage,
         payeeNote: request.payeeNote,
+        callbackUrl: this.config.callbackUrl,
       };
 
       await this.httpClient.post(`/collection/v1_0/requesttopay`, payload, {
