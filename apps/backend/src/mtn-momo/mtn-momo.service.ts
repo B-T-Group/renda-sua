@@ -162,25 +162,19 @@ export class MtnMomoService {
         payeeNote: request.payeeNote,
       };
 
-      const response = await this.httpClient.post(
-        `/collection/v1_0/requesttopay`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'X-Reference-Id': referenceId,
-            'X-Target-Environment': this.config.targetEnvironment,
-            'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      this.logger.log(`Collection request initiated: ${referenceId}`);
+      await this.httpClient.post(`/collection/v1_0/requesttopay`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Reference-Id': referenceId,
+          'X-Target-Environment': this.config.targetEnvironment,
+          'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
+          'Content-Type': 'application/json',
+        },
+      });
 
       await this.logPaymentRequest(
         userId,
-        response.data.financialTransactionId,
+        referenceId,
         request.externalId,
         request.amount,
         request.currency,
@@ -190,8 +184,8 @@ export class MtnMomoService {
       );
 
       return {
-        status: response.data.status,
-        financialTransactionId: response.data.financialTransactionId,
+        status: true,
+        financialTransactionId: referenceId,
         externalId: request.externalId,
         amount: request.amount,
         currency: request.currency,

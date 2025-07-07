@@ -20,3 +20,4 @@
 - '!include public_business_addresses.yaml'
 - '!include public_client_addresses.yaml'
 - '!include public_agent_addresses.yaml'
+- '!include public_mtn_momo_payment_requests.yaml'
