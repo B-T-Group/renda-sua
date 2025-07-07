@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { randomUUID } from 'crypto';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
 import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 
 export interface MtnMomoConfig {
@@ -69,14 +71,14 @@ export interface MtnMomoResponse {
 
 @Injectable()
 export class MtnMomoService {
-  private readonly logger = new Logger(MtnMomoService.name);
   private readonly config: MtnMomoConfig;
   private readonly httpClient: AxiosInstance;
   private readonly baseUrl: string;
 
   constructor(
     private configService: ConfigService,
-    private mtnMomoDatabaseService: MtnMomoDatabaseService
+    private mtnMomoDatabaseService: MtnMomoDatabaseService,
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger
   ) {
     const subscriptionKey = this.configService.get<string>(
       'MTN_MOMO_SUBSCRIPTION_KEY'
@@ -137,8 +139,9 @@ export class MtnMomoService {
       timeout: 30000,
     });
 
-    this.logger.log(
-      `MTN MoMo service initialized for ${this.config.targetEnvironment} environment`
+    this.logger.info(
+      `MTN MoMo service initialized for ${this.config.targetEnvironment} environment`,
+      { service: 'MtnMomoService' }
     );
   }
 

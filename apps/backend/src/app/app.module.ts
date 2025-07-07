@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
+import { createWinstonConfig } from '../config/logging.config';
 import { HasuraModule } from '../hasura/hasura.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
@@ -21,6 +23,25 @@ import { AppService } from './app.service';
       load: [configuration],
       cache: true,
       expandVariables: true,
+    }),
+    WinstonModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const awsConfig = configService.get('aws');
+        const appConfig = configService.get('app');
+
+        return createWinstonConfig({
+          logGroupName: awsConfig.cloudWatchLogGroup,
+          logStreamName: awsConfig.cloudWatchLogStream,
+          region: awsConfig.region,
+          accessKeyId: awsConfig.accessKeyId,
+          secretAccessKey: awsConfig.secretAccessKey,
+          logLevel: appConfig.logLevel,
+          enableCloudWatch: appConfig.nodeEnv === 'production',
+          enableConsole: appConfig.nodeEnv !== 'production',
+        });
+      },
+      inject: [ConfigService],
     }),
     HasuraModule,
     UsersModule,

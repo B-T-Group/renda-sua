@@ -1,34 +1,47 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
   HttpStatus,
+  Inject,
   Post,
-  Body,
 } from '@nestjs/common';
-import { AppService } from './app.service';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { AppService } from './app.service';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger
   ) {}
 
   @Get('health')
-  getHealth() {
-    return {
-      status: 'ok',
+  getHealth(): { status: string; timestamp: string } {
+    this.logger.info('GET /health endpoint called', {
+      service: 'AppController',
+      method: 'getHealth',
+      endpoint: '/health',
       timestamp: new Date().toISOString(),
-      service: 'rendasua-backend',
-      version: process.env.npm_package_version || '1.0.0',
-    };
+    });
+
+    return this.appService.getHealth();
   }
 
   @Get()
-  getData() {
-    return this.appService.getData();
+  getHello(): string {
+    this.logger.info('GET / endpoint called', {
+      service: 'AppController',
+      method: 'getHello',
+      endpoint: '/',
+      timestamp: new Date().toISOString(),
+    });
+
+    return this.appService.getHello();
   }
 
   @Get('user_types')
@@ -268,5 +281,20 @@ export class AppController {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  @Get('test-error')
+  testError(): void {
+    this.logger.warn(
+      'GET /test-error endpoint called - testing error logging',
+      {
+        service: 'AppController',
+        method: 'testError',
+        endpoint: '/test-error',
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    this.appService.logError();
   }
 }

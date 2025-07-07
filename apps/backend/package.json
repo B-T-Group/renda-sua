@@ -60,6 +60,9 @@
     "axios": "^1.10.0",
     "crypto": "^1.0.1",
     "graphql": "^16.11.0",
-    "graphql-request": "^5.2.0"
+    "graphql-request": "^5.2.0",
+    "nest-winston": "^1.10.2",
+    "winston": "^3.17.0",
+    "winston-cloudwatch": "^6.3.0"
   }
 }
