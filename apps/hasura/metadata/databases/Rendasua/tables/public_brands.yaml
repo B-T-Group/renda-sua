@@ -1,6 +1,16 @@
 table:
   name: brands
   schema: public
+array_relationships:
+  - name: items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: brand_id
+        insertion_order: null
+        remote_table:
+          name: items
+          schema: public
 select_permissions:
   - role: agent
     permission:

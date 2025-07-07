@@ -33,6 +33,15 @@ array_relationships:
         remote_table:
           name: business_addresses
           schema: public
+  - name: items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: items
+          schema: public
 insert_permissions:
   - role: business
     permission:

@@ -48,6 +48,15 @@ array_relationships:
         remote_table:
           name: agent_addresses
           schema: public
+  - name: business_locations
+    using:
+      manual_configuration:
+        column_mapping:
+          id: address_id
+        insertion_order: null
+        remote_table:
+          name: business_locations
+          schema: public
 select_permissions:
   - role: agent
     permission:
