@@ -27,7 +27,9 @@ import {
 import { City, Country, State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
+import TopUpModal from '../business/TopUpModal';
 
 interface AddressFormData {
   address_line_1: string;
@@ -45,6 +47,8 @@ const Profile: React.FC = () => {
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [topUpModalOpen, setTopUpModalOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
 
   // Form states
   const [profileForm, setProfileForm] = useState({
@@ -86,6 +90,8 @@ const Profile: React.FC = () => {
     handleAccountCreate,
     clearMessages,
   } = useProfile();
+
+  const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
 
   // Get addresses from UserProfileContext
   const { profile: userProfileWithAddresses } = useUserProfileContext();
@@ -515,6 +521,16 @@ const Profile: React.FC = () => {
                       size="small"
                       sx={{ mt: 1 }}
                     />
+                    <Button
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setSelectedAccount(account);
+                        setTopUpModalOpen(true);
+                      }}
+                    >
+                      Top Up
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -728,6 +744,25 @@ const Profile: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Top Up Modal */}
+      {selectedAccount && (
+        <TopUpModal
+          open={topUpModalOpen}
+          onClose={() => setTopUpModalOpen(false)}
+          userPhoneNumber={userProfile?.phone_number || ''}
+          currency={selectedAccount.currency}
+          loading={topUpLoading}
+          onConfirm={async (phone: string, amount: string) => {
+            const ok = await requestTopUp({
+              phoneNumber: phone,
+              amount,
+              currency: selectedAccount.currency,
+            });
+            return ok;
+          }}
+        />
+      )}
     </Box>
   );
 };

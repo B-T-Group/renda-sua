@@ -158,6 +158,7 @@ interface UserProfile {
   first_name: string;
   last_name: string;
   email: string;
+  phone_number?: string;
   identifier: string;
   user_type_id: string;
   created_at: string;
