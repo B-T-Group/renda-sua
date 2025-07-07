@@ -10,6 +10,7 @@ const GET_USER_PROFILE = `
       first_name
       last_name
       email
+      phone_number
       identifier
       user_type_id
       created_at
@@ -246,9 +247,9 @@ export const useProfile = () => {
     lastName: string,
     phoneNumber: string
   ) => {
-    setLoading(true);
-    setError(null);
-    setSuccessMessage(null);
+    setSuccessMessage('');
+    setErrorMessage('');
+
     try {
       const variables = {
         id: userId,
@@ -256,15 +257,21 @@ export const useProfile = () => {
         last_name: lastName,
         phone_number: phoneNumber,
       };
-      const data = await apiClient.request(UPDATE_USER, variables);
-      setUserProfile(data.update_users_by_pk);
-      setSuccessMessage('Profile updated successfully!');
-      return true;
+
+      const result = await updateUser(variables);
+
+      if (result?.update_users_by_pk) {
+        setSuccessMessage('Profile updated successfully!');
+        refetch(); // Refresh the profile data
+        return true;
+      } else {
+        setErrorMessage('Failed to update profile.');
+        return false;
+      }
     } catch (err: any) {
-      setError('Failed to update profile.');
+      setErrorMessage('Failed to update profile.');
+      console.error('Error updating profile:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
   };
 

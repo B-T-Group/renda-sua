@@ -25,6 +25,9 @@ export interface UserRecord {
   email: string;
   first_name: string;
   last_name: string;
+  phone_number?: string;
+  phone_number_verified?: boolean;
+  email_verified?: boolean;
   user_type_id: string;
   client?: ClientRecord;
   agent?: AgentRecord;
@@ -191,6 +194,9 @@ export class HasuraUserService {
           email
           first_name
           last_name
+          phone_number
+          phone_number_verified
+          email_verified
           user_type_id
           created_at
           updated_at
@@ -241,6 +247,9 @@ export class HasuraUserService {
           email
           first_name
           last_name
+          phone_number
+          phone_number_verified
+          email_verified
           user_type_id
           created_at
           updated_at
@@ -272,6 +281,9 @@ export class HasuraUserService {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
@@ -323,6 +335,9 @@ export class HasuraUserService {
           email
           first_name
           last_name
+          phone_number
+          phone_number_verified
+          email_verified
           user_type_id
           created_at
           updated_at
@@ -356,6 +371,9 @@ export class HasuraUserService {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
@@ -408,6 +426,9 @@ export class HasuraUserService {
           email
           first_name
           last_name
+          phone_number
+          phone_number_verified
+          email_verified
           user_type_id
           created_at
           updated_at
@@ -441,6 +462,9 @@ export class HasuraUserService {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
@@ -678,6 +702,9 @@ export class HasuraUserService {
           email
           first_name
           last_name
+          phone_number
+          phone_number_verified
+          email_verified
           user_type_id
           created_at
           updated_at
