@@ -10,6 +10,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 import type {
   CollectionRequest,
   DisbursementRequest,
@@ -21,7 +23,11 @@ import { MtnMomoService } from './mtn-momo.service';
 export class MtnMomoController {
   private readonly logger = new Logger(MtnMomoController.name);
 
-  constructor(private readonly mtnMomoService: MtnMomoService) {}
+  constructor(
+    private readonly mtnMomoService: MtnMomoService,
+    private readonly mtnMomoDatabaseService: MtnMomoDatabaseService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   /**
    * Request payment from a customer (Collection)
@@ -44,7 +50,11 @@ export class MtnMomoController {
         throw new BadRequestException('Missing required fields');
       }
 
-      const result = await this.mtnMomoService.requestToPay(request);
+      // Get the current user's ID from the JWT token
+      const user = await this.hasuraUserService.getUser();
+      const userId = user.id;
+
+      const result = await this.mtnMomoService.requestToPay(request, userId);
 
       if (!result.status) {
         throw new BadRequestException(
@@ -256,6 +266,72 @@ export class MtnMomoController {
     } catch (error) {
       this.logger.error(
         `Account validation error: ${(error as Error).message}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment requests for a user
+   */
+  @Get('payment-requests/:userId')
+  async getUserPaymentRequests(@Param('userId') userId: string) {
+    try {
+      this.logger.log(`Getting payment requests for user: ${userId}`);
+
+      if (!userId) {
+        throw new BadRequestException('User ID is required');
+      }
+
+      const paymentRequests =
+        await this.mtnMomoDatabaseService.getUserPaymentRequests(userId);
+
+      return {
+        success: true,
+        data: paymentRequests,
+        message: `Found ${paymentRequests.length} payment requests`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get user payment requests error: ${(error as Error).message}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment request by transaction ID
+   */
+  @Get('payment-request/transaction/:transactionId')
+  async getPaymentRequestByTransactionId(
+    @Param('transactionId') transactionId: string
+  ) {
+    try {
+      this.logger.log(
+        `Getting payment request for transaction: ${transactionId}`
+      );
+
+      if (!transactionId) {
+        throw new BadRequestException('Transaction ID is required');
+      }
+
+      const paymentRequest =
+        await this.mtnMomoDatabaseService.getPaymentRequestByTransactionId(
+          transactionId
+        );
+
+      return {
+        success: true,
+        data: paymentRequest,
+        message: paymentRequest
+          ? 'Payment request found'
+          : 'Payment request not found',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get payment request by transaction ID error: ${
+          (error as Error).message
+        }`
       );
       throw error;
     }

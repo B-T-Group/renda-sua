@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { randomUUID } from 'crypto';
+import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 
 export interface MtnMomoConfig {
   subscriptionKey: string;
@@ -73,7 +74,10 @@ export class MtnMomoService {
   private readonly httpClient: AxiosInstance;
   private readonly baseUrl: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private mtnMomoDatabaseService: MtnMomoDatabaseService
+  ) {
     const subscriptionKey = this.configService.get<string>(
       'MTN_MOMO_SUBSCRIPTION_KEY'
     );
@@ -141,7 +145,10 @@ export class MtnMomoService {
   /**
    * Request to pay (Collection) - Request payment from a customer
    */
-  async requestToPay(request: CollectionRequest): Promise<MtnMomoResponse> {
+  async requestToPay(
+    request: CollectionRequest,
+    userId: string
+  ): Promise<MtnMomoResponse> {
     try {
       const referenceId = this.generateReferenceId();
       const token = await this.getCollectionToken();
@@ -171,9 +178,20 @@ export class MtnMomoService {
 
       this.logger.log(`Collection request initiated: ${referenceId}`);
 
+      await this.logPaymentRequest(
+        userId,
+        response.data.financialTransactionId,
+        request.externalId,
+        request.amount,
+        request.currency,
+        'PENDING',
+        request.payerMessage,
+        request.payeeNote
+      );
+
       return {
-        status: true,
-        financialTransactionId: referenceId,
+        status: response.data.status,
+        financialTransactionId: response.data.financialTransactionId,
         externalId: request.externalId,
         amount: request.amount,
         currency: request.currency,
@@ -479,12 +497,11 @@ export class MtnMomoService {
     type: 'collection' | 'disbursement' | 'remittance'
   ): Promise<string> {
     try {
-      const apiKey =
-        type === 'collection'
-          ? this.config.collectionPrimaryKey
-          : type === 'disbursement'
-          ? this.config.disbursementPrimaryKey
-          : this.config.remittancePrimaryKey;
+      const apiKey = this.config.apiKey;
+
+      console.log('apiKey', apiKey);
+      console.log('this.config.apiUserId', this.config.apiUserId);
+      console.log('this.config.subscriptionKey', this.config.subscriptionKey);
 
       const response = await this.httpClient.post(
         `/${type}/token/`,
@@ -514,6 +531,38 @@ export class MtnMomoService {
    */
   private generateReferenceId(): string {
     return randomUUID();
+  }
+
+  /**
+   * Log payment request to database
+   */
+  private async logPaymentRequest(
+    userId: string,
+    transactionId: string,
+    externalId: string,
+    amount: string,
+    currency: string,
+    status: string,
+    payerMessage: string,
+    payeeNote: string
+  ): Promise<void> {
+    try {
+      await this.mtnMomoDatabaseService.logPaymentRequest({
+        userId,
+        transactionId,
+        externalId,
+        amount: parseFloat(amount),
+        currency,
+        status,
+        payerMessage,
+        payeeNote,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to log payment request: ${(error as Error).message}`
+      );
+      // Don't throw error to avoid breaking the main flow
+    }
   }
 
   /**
