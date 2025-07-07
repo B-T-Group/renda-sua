@@ -163,7 +163,6 @@ export class MtnMomoService {
         payer: request.payer,
         payerMessage: request.payerMessage,
         payeeNote: request.payeeNote,
-        callbackUrl: this.config.callbackUrl,
       };
 
       await this.httpClient.post(`/collection/v1_0/requesttopay`, payload, {
@@ -173,6 +172,7 @@ export class MtnMomoService {
           'X-Target-Environment': this.config.targetEnvironment,
           'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
           'Content-Type': 'application/json',
+          'X-Callback-URL': this.config.callbackUrl,
         },
       });
 

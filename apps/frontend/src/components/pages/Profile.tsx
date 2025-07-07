@@ -30,6 +30,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
+import PhoneInput from '../common/PhoneInput';
 
 interface AddressFormData {
   address_line_1: string;
@@ -346,17 +347,21 @@ const Profile: React.FC = () => {
                   }
                   margin="normal"
                 />
-                <TextField
-                  fullWidth
+                <PhoneInput
                   label="Phone Number"
                   value={profileForm.phone_number}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setProfileForm((prev) => ({
                       ...prev,
-                      phone_number: e.target.value,
+                      phone_number: value || '',
                     }))
                   }
+                  defaultCountry="CM"
+                  fullWidth
+                  required
+                  error={false}
                   margin="normal"
+                  placeholder="Enter phone number"
                 />
                 <Box mt={2}>
                   <Button
