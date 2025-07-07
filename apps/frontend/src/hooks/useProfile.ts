@@ -30,15 +30,16 @@ const GET_USER_PROFILE = `
 `;
 
 const UPDATE_USER = `
-  mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!) {
+  mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String) {
     update_users_by_pk(
       pk_columns: { id: $id }
-      _set: { first_name: $first_name, last_name: $last_name }
+      _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number }
     ) {
       id
       first_name
       last_name
       email
+      phone_number
       identifier
       user_type_id
       created_at
@@ -241,22 +242,28 @@ export const useProfile = () => {
   const handleProfileUpdate = async (
     userId: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    phoneNumber: string
   ) => {
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
     try {
-      await updateUser({
+      const variables = {
         id: userId,
         first_name: firstName,
         last_name: lastName,
-      });
-
+        phone_number: phoneNumber,
+      };
+      const data = await apiClient.request(UPDATE_USER, variables);
+      setUserProfile(data.update_users_by_pk);
       setSuccessMessage('Profile updated successfully!');
-      refetch();
       return true;
-    } catch (error) {
-      setErrorMessage('Failed to update profile');
-      console.error('Error updating profile:', error);
+    } catch (err: any) {
+      setError('Failed to update profile.');
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 

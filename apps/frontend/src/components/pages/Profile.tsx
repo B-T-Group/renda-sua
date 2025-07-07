@@ -50,6 +50,7 @@ const Profile: React.FC = () => {
   const [profileForm, setProfileForm] = useState({
     first_name: '',
     last_name: '',
+    phone_number: '',
   });
 
   const [addressForm, setAddressForm] = useState<AddressFormData>({
@@ -117,6 +118,7 @@ const Profile: React.FC = () => {
       setProfileForm({
         first_name: userProfile.first_name || '',
         last_name: userProfile.last_name || '',
+        phone_number: userProfile.phone_number || '',
       });
     }
   }, [userProfile]);
@@ -127,7 +129,8 @@ const Profile: React.FC = () => {
     const success = await handleProfileUpdate(
       userProfile.id,
       profileForm.first_name,
-      profileForm.last_name
+      profileForm.last_name,
+      profileForm.phone_number
     );
 
     if (success) {
@@ -337,6 +340,18 @@ const Profile: React.FC = () => {
                   }
                   margin="normal"
                 />
+                <TextField
+                  fullWidth
+                  label="Phone Number"
+                  value={profileForm.phone_number}
+                  onChange={(e) =>
+                    setProfileForm((prev) => ({
+                      ...prev,
+                      phone_number: e.target.value,
+                    }))
+                  }
+                  margin="normal"
+                />
                 <Box mt={2}>
                   <Button
                     variant="contained"
@@ -355,6 +370,9 @@ const Profile: React.FC = () => {
                 </Typography>
                 <Typography variant="body1">
                   <strong>Email:</strong> {userProfile?.email}
+                </Typography>
+                <Typography variant="body1">
+                  <strong>Phone:</strong> {userProfile?.phone_number}
                 </Typography>
                 <Typography variant="body1">
                   <strong>Member since:</strong>{' '}
