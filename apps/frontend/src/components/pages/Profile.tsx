@@ -533,6 +533,7 @@ const Profile: React.FC = () => {
                         setSelectedAccount(account);
                         setTopUpModalOpen(true);
                       }}
+                      sx={{ ml: 2 }}
                     >
                       Top Up
                     </Button>

@@ -73,7 +73,7 @@
     "welcome": "Welcome"
   },
   "dashboard": {
-    "title": "Business Dashboard",
+    "title": "Dashboard",
     "welcome": "Welcome back, {{name}}! This is your business dashboard.",
     "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
     "orders": "Orders",
@@ -165,7 +165,7 @@
     "actualDeliveryTime": "Actual delivery time",
     "preferredDeliveryTime": "Preferred delivery time",
     "dashboard": {
-      "title": "Business Dashboard",
+      "title": "Dashboard",
       "welcome": "Welcome back, {{name}}! This is your business dashboard.",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "orders": "Orders",
