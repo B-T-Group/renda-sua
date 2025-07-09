@@ -90,7 +90,7 @@ jobs:
                   "3000": "HTTP"
                 },
                 "environment": {
-                  "NODE_ENV": "production",
+                  "NODE_ENV": "development",
                   "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
                   "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
                   "AWS_REGION": "${{ env.AWS_REGION }}"
