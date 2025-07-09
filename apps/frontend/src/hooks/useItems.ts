@@ -517,7 +517,7 @@ export const useItems = (businessId?: string) => {
     if (businessId) {
       fetchItems();
     }
-  }, [businessId, fetchItems]);
+  }, [businessId]);
 
   return {
     items,

@@ -112,16 +112,7 @@ export default function AddItemDialog({
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
-    if (open) {
-      if (!businessId) {
-        enqueueSnackbar(
-          t('business.inventory.businessIdRequiredForManagement'),
-          { variant: 'error' }
-        );
-        onClose();
-        return;
-      }
-
+    if (open && businessId) {
       // Only fetch if props data is not available
       if (!items || items.length === 0) {
         fetchItems();
@@ -133,18 +124,7 @@ export default function AddItemDialog({
         fetchItemSubCategories();
       }
     }
-  }, [
-    open,
-    fetchItems,
-    fetchBrands,
-    fetchItemSubCategories,
-    businessId,
-    onClose,
-    enqueueSnackbar,
-    items,
-    brands,
-    itemSubCategories,
-  ]);
+  }, [open, businessId]); // Removed function and data dependencies
 
   // Update business_id when businessId prop changes
   useEffect(() => {
