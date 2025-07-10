@@ -60,6 +60,11 @@
     "updatingInventory": "Mise à jour de l'inventaire...",
     "fetchingLocations": "Récupération des emplacements...",
     "savingLocation": "Enregistrement de l'emplacement...",
+    "all": "Tout",
+    "clearFilters": "Effacer les Filtres",
+    "showing": "Affichage",
+    "update": "Mettre à jour",
+    "uploading": "Téléchargement...",
     "warning": "Avertissement",
     "info": "Information",
     "language": "Langue"
@@ -421,7 +426,30 @@
         "showing": "Affichage"
       },
       "noItems": "Aucun article d'inventaire trouvé. Ajoutez votre premier article pour commencer.",
-      "noInventory": "Aucune donnée d'inventaire"
+      "noInventory": "Aucune donnée d'inventaire",
+      "noSku": "Aucune référence",
+      "orderAndDelivery": "Commande et Livraison",
+      "quickActions": "Actions Rapides",
+      "updatedAt": "Mis à jour le",
+      "color": "Couleur",
+      "itemNotFound": "Article non trouvé",
+      "failedToLoadImages": "Échec du chargement des images",
+      "maxImagesExceeded": "Maximum de {{max}} images autorisées",
+      "invalidFileType": "Type de fichier invalide pour {{file}}",
+      "fileTooLarge": "Le fichier {{file}} est trop volumineux",
+      "userIdRequired": "ID utilisateur requis",
+      "imagesUploadedSuccessfully": "Images téléchargées avec succès",
+      "failedToUploadImages": "Échec du téléchargement des images",
+      "imageDeletedSuccessfully": "Image supprimée avec succès",
+      "failedToDeleteImage": "Échec de la suppression de l'image",
+      "uploadImagesFor": "Télécharger des images pour {{itemName}}",
+      "currentImages": "Images actuelles",
+      "addNewImages": "Ajouter de nouvelles images",
+      "selectImages": "Sélectionner des images",
+      "caption": "Légende",
+      "maxImagesReached": "Maximum de {{max}} images atteint",
+      "uploadImages": "Télécharger des images",
+      "deleteInventoryConfirm": "Êtes-vous sûr de vouloir supprimer cet article d'inventaire ? Cette action ne peut pas être annulée."
     },
     "locations": {
       "title": "Emplacements d'Entreprise",
@@ -453,7 +481,11 @@
       "deactivate": "Désactiver",
       "active": "Actif",
       "inactive": "Inactif",
-      "other": "Autre"
+      "other": "Autre",
+      "refresh": "Actualiser",
+      "refreshLocations": "Actualiser les Emplacements",
+      "locationsRefreshed": "Emplacements actualisés avec succès",
+      "refreshError": "Échec de l'actualisation des emplacements"
     },
     "items": {
       "title": "Gestion des Articles",
@@ -489,7 +521,20 @@
         "allBrands": "Toutes les Marques",
         "allCategories": "Toutes les Catégories",
         "showing": "Affichage"
-      }
+      },
+      "items": "Articles",
+      "image": "Image",
+      "name": "Nom",
+      "sku": "Référence",
+      "price": "Prix",
+      "status": "Statut",
+      "itemDeleted": "Article supprimé avec succès",
+      "deleteError": "Échec de la suppression de l'article",
+      "confirmDelete": "Confirmer la Suppression",
+      "downloadTemplate": "Télécharger le Modèle CSV",
+      "csvUpload": "Télécharger CSV",
+      "download": "Télécharger CSV",
+      "noItemsFound": "Aucun article trouvé"
     },
     "csvUpload": {
       "uploadCSV": "Télécharger CSV",

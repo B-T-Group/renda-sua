@@ -66,6 +66,7 @@ const BusinessInventoryPage: React.FC = () => {
     error: inventoryError,
     updateInventoryItem,
     deleteInventoryItem,
+    refreshBusinessLocations,
   } = useBusinessInventory(profile?.business?.id);
 
   // Debug logging

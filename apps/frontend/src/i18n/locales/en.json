@@ -64,7 +64,12 @@
     "fetchingInventory": "Fetching inventory...",
     "updatingInventory": "Updating inventory...",
     "fetchingLocations": "Fetching locations...",
-    "savingLocation": "Saving location..."
+    "savingLocation": "Saving location...",
+    "all": "All",
+    "clearFilters": "Clear Filters",
+    "showing": "Showing",
+    "update": "Update",
+    "uploading": "Uploading..."
   },
   "auth": {
     "login": "Login",
@@ -381,7 +386,30 @@
       "model": "Model",
       "material": "Material",
       "available": "Available",
-      "noInventory": "No inventory data"
+      "noInventory": "No inventory data",
+      "noSku": "No SKU",
+      "orderAndDelivery": "Order and Delivery",
+      "quickActions": "Quick Actions",
+      "updatedAt": "Updated At",
+      "color": "Color",
+      "itemNotFound": "Item not found",
+      "failedToLoadImages": "Failed to load images",
+      "maxImagesExceeded": "Maximum of {{max}} images allowed",
+      "invalidFileType": "Invalid file type for {{file}}",
+      "fileTooLarge": "File {{file}} is too large",
+      "userIdRequired": "User ID is required",
+      "imagesUploadedSuccessfully": "Images uploaded successfully",
+      "failedToUploadImages": "Failed to upload images",
+      "imageDeletedSuccessfully": "Image deleted successfully",
+      "failedToDeleteImage": "Failed to delete image",
+      "uploadImagesFor": "Upload Images for {{itemName}}",
+      "currentImages": "Current Images",
+      "addNewImages": "Add New Images",
+      "selectImages": "Select Images",
+      "caption": "Caption",
+      "maxImagesReached": "Maximum of {{max}} images reached",
+      "uploadImages": "Upload Images",
+      "deleteInventoryConfirm": "Are you sure you want to delete this inventory item? This action cannot be undone."
     },
     "locations": {
       "title": "Business Locations",
@@ -413,7 +441,11 @@
       "deactivate": "Deactivate",
       "active": "Active",
       "inactive": "Inactive",
-      "other": "Other"
+      "other": "Other",
+      "refresh": "Refresh",
+      "refreshLocations": "Refresh Locations",
+      "locationsRefreshed": "Locations refreshed successfully",
+      "refreshError": "Failed to refresh locations"
     },
     "items": {
       "title": "Item Management",
@@ -435,7 +467,25 @@
       "deleteError": "Failed to delete item",
       "confirmDelete": "Confirm Delete",
       "deleteItemConfirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",
-      "downloadTemplate": "Download CSV Template"
+      "downloadTemplate": "Download CSV Template",
+      "items": "Items",
+      "image": "Image",
+      "name": "Name",
+      "sku": "SKU",
+      "brand": "Brand",
+      "category": "Category",
+      "price": "Price",
+      "status": "Status",
+      "filters": {
+        "search": "Search items...",
+        "status": "Status",
+        "brand": "Brand",
+        "category": "Category",
+        "allStatuses": "All Statuses",
+        "allBrands": "All Brands",
+        "allCategories": "All Categories",
+        "showing": "Showing"
+      }
     },
     "csvUpload": {
       "uploadCSV": "Upload CSV",
