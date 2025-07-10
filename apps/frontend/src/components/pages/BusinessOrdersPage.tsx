@@ -1,12 +1,8 @@
 import {
-  AccessTime as AccessTimeIcon,
   Cancel as CancelIcon,
   CheckCircle as CheckCircleIcon,
-  LocalShipping as LocalShippingIcon,
   LocalShippingOutlined as LocalShippingOutlinedIcon,
-  Person as PersonIcon,
   PlayArrow as PlayArrowIcon,
-  Receipt as ReceiptIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
@@ -14,10 +10,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardActions,
-  CardContent,
-  Chip,
   Container,
   FormControl,
   InputLabel,
@@ -35,6 +27,7 @@ import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import BusinessOrderCard from '../business/BusinessOrderCard';
 import SEOHead from '../seo/SEOHead';
 
 interface OrderFilters {
@@ -111,7 +104,8 @@ const BusinessOrdersPage: React.FC = () => {
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     try {
       await updateOrderStatus(orderId, newStatus);
-      // The updateOrderStatus function already refreshes orders
+      // Refresh orders to get the updated data
+      await refreshOrders();
     } catch (error) {
       console.error('Failed to update order status:', error);
     }
@@ -371,122 +365,18 @@ const BusinessOrdersPage: React.FC = () => {
             ) : (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                 {activeOrders.map((order: any) => (
-                  <Card
+                  <BusinessOrderCard
                     key={order.id}
-                    sx={{
-                      width: {
-                        xs: '100%',
-                        sm: 'calc(50% - 8px)',
-                        md: 'calc(33.333% - 12px)',
-                      },
-                    }}
-                  >
-                    <CardContent>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography variant="h6" component="div">
-                          {t('business.orders.table.orderNumber', {
-                            number: order.order_number,
-                          })}
-                        </Typography>
-                        <Chip
-                          label={t(
-                            `business.orders.status.${
-                              order.current_status || 'unknown'
-                            }`
-                          )}
-                          color={
-                            getStatusColor(
-                              order.current_status || 'unknown'
-                            ) as any
-                          }
-                          size="small"
-                        />
-                      </Box>
-
-                      <Box mb={2}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.user?.first_name}{' '}
-                          {order.client?.user?.last_name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.order_items?.length || 0}{' '}
-                          {t('business.orders.table.items')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatAddress(order.delivery_address)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                        >
-                          <AccessTimeIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatDate(order.created_at)}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography variant="h6" color="primary">
-                          {formatCurrency(order.total_amount, order.currency)}
-                        </Typography>
-                        {order.assigned_agent && (
-                          <Chip
-                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
-                            size="small"
-                            color="secondary"
-                          />
-                        )}
-                      </Box>
-                    </CardContent>
-                    <CardActions>
-                      {getAvailableActions(order).map((action) => (
-                        <Button
-                          key={action.status}
-                          size="small"
-                          color={action.color}
-                          variant="outlined"
-                          startIcon={action.icon}
-                          onClick={() =>
-                            handleStatusUpdate(order.id, action.status)
-                          }
-                          disabled={updateLoading}
-                        >
-                          {action.label}
-                        </Button>
-                      ))}
-                    </CardActions>
-                  </Card>
+                    order={order}
+                    onStatusUpdate={handleStatusUpdate}
+                    loading={updateLoading}
+                    getAvailableActions={getAvailableActions}
+                    getStatusColor={getStatusColor}
+                    formatAddress={formatAddress}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                    refreshOrders={refreshOrders}
+                  />
                 ))}
               </Box>
             )}
@@ -514,120 +404,18 @@ const BusinessOrdersPage: React.FC = () => {
             ) : (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                 {pendingOrders.map((order: any) => (
-                  <Card
+                  <BusinessOrderCard
                     key={order.id}
-                    sx={{
-                      width: {
-                        xs: '100%',
-                        sm: 'calc(50% - 8px)',
-                        md: 'calc(33.333% - 12px)',
-                      },
-                    }}
-                  >
-                    <CardContent>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography variant="h6" component="div">
-                          {t('business.orders.table.orderNumber', {
-                            number: order.order_number,
-                          })}
-                        </Typography>
-                        <Chip
-                          label={t(
-                            `business.orders.status.${
-                              order.current_status || 'unknown'
-                            }`
-                          )}
-                          color={
-                            getStatusColor(
-                              order.current_status || 'unknown'
-                            ) as any
-                          }
-                          size="small"
-                        />
-                      </Box>
-
-                      <Box mb={2}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.user?.first_name}{' '}
-                          {order.client?.user?.last_name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.order_items?.length || 0}{' '}
-                          {t('business.orders.table.items')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatAddress(order.delivery_address)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                        >
-                          <AccessTimeIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatDate(order.created_at)}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography variant="h6" color="primary">
-                          {formatCurrency(order.total_amount, order.currency)}
-                        </Typography>
-                        <Chip
-                          label={t('business.orders.table.unassigned')}
-                          size="small"
-                          color="default"
-                        />
-                      </Box>
-                    </CardContent>
-                    <CardActions>
-                      {getAvailableActions(order).map((action) => (
-                        <Button
-                          key={action.status}
-                          size="small"
-                          color={action.color}
-                          variant="outlined"
-                          startIcon={action.icon}
-                          onClick={() =>
-                            handleStatusUpdate(order.id, action.status)
-                          }
-                          disabled={updateLoading}
-                        >
-                          {action.label}
-                        </Button>
-                      ))}
-                    </CardActions>
-                  </Card>
+                    order={order}
+                    onStatusUpdate={handleStatusUpdate}
+                    loading={updateLoading}
+                    getAvailableActions={getAvailableActions}
+                    getStatusColor={getStatusColor}
+                    formatAddress={formatAddress}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                    refreshOrders={refreshOrders}
+                  />
                 ))}
               </Box>
             )}
@@ -775,7 +563,7 @@ const BusinessOrdersPage: React.FC = () => {
                   }
                   InputProps={{
                     startAdornment: (
-                      <LocalShippingIcon
+                      <LocalShippingOutlinedIcon
                         sx={{ mr: 1, color: 'text.secondary' }}
                       />
                     ),
@@ -799,122 +587,18 @@ const BusinessOrdersPage: React.FC = () => {
             ) : (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                 {filteredOrders.map((order: any) => (
-                  <Card
+                  <BusinessOrderCard
                     key={order.id}
-                    sx={{
-                      width: {
-                        xs: '100%',
-                        sm: 'calc(50% - 8px)',
-                        md: 'calc(33.333% - 12px)',
-                      },
-                    }}
-                  >
-                    <CardContent>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography variant="h6" component="div">
-                          {t('business.orders.table.orderNumber', {
-                            number: order.order_number,
-                          })}
-                        </Typography>
-                        <Chip
-                          label={t(
-                            `business.orders.status.${
-                              order.current_status || 'unknown'
-                            }`
-                          )}
-                          color={
-                            getStatusColor(
-                              order.current_status || 'unknown'
-                            ) as any
-                          }
-                          size="small"
-                        />
-                      </Box>
-
-                      <Box mb={2}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.client?.user?.first_name}{' '}
-                          {order.client?.user?.last_name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.order_items?.length || 0}{' '}
-                          {t('business.orders.table.items')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatAddress(order.delivery_address)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                        >
-                          <AccessTimeIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatDate(order.created_at)}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography variant="h6" color="primary">
-                          {formatCurrency(order.total_amount, order.currency)}
-                        </Typography>
-                        {order.assigned_agent && (
-                          <Chip
-                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
-                            size="small"
-                            color="secondary"
-                          />
-                        )}
-                      </Box>
-                    </CardContent>
-                    <CardActions>
-                      {getAvailableActions(order).map((action) => (
-                        <Button
-                          key={action.status}
-                          size="small"
-                          color={action.color}
-                          variant="outlined"
-                          startIcon={action.icon}
-                          onClick={() =>
-                            handleStatusUpdate(order.id, action.status)
-                          }
-                          disabled={updateLoading}
-                        >
-                          {action.label}
-                        </Button>
-                      ))}
-                    </CardActions>
-                  </Card>
+                    order={order}
+                    onStatusUpdate={handleStatusUpdate}
+                    loading={updateLoading}
+                    getAvailableActions={getAvailableActions}
+                    getStatusColor={getStatusColor}
+                    formatAddress={formatAddress}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                    refreshOrders={refreshOrders}
+                  />
                 ))}
               </Box>
             )}

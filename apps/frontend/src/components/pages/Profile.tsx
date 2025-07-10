@@ -24,24 +24,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { City, Country, State } from 'country-state-city';
+import { Country } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
 import PhoneInput from '../common/PhoneInput';
-
-interface AddressFormData {
-  address_line_1: string;
-  address_line_2: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  address_type: string;
-  is_primary: boolean;
-}
+import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 const Profile: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState(false);
@@ -75,8 +65,6 @@ const Profile: React.FC = () => {
 
   // Location data
   const [countries, setCountries] = useState<any[]>([]);
-  const [states, setStates] = useState<any[]>([]);
-  const [cities, setCities] = useState<any[]>([]);
 
   // Custom hooks
   const {
@@ -102,22 +90,6 @@ const Profile: React.FC = () => {
   useEffect(() => {
     setCountries(Country.getAllCountries());
   }, []);
-
-  // Update states when country changes
-  useEffect(() => {
-    if (addressForm.country) {
-      setStates(State.getStatesOfCountry(addressForm.country));
-      setAddressForm((prev) => ({ ...prev, state: '', city: '' }));
-    }
-  }, [addressForm.country]);
-
-  // Update cities when state changes
-  useEffect(() => {
-    if (addressForm.country && addressForm.state) {
-      setCities(City.getCitiesOfState(addressForm.country, addressForm.state));
-      setAddressForm((prev) => ({ ...prev, city: '' }));
-    }
-  }, [addressForm.country, addressForm.state]);
 
   // Update form when data loads
   useEffect(() => {
@@ -172,7 +144,11 @@ const Profile: React.FC = () => {
 
     const success = await handleAddressSave(
       userProfile.id,
-      addressForm,
+      {
+        ...addressForm,
+        address_type: addressForm.address_type || 'home',
+        is_primary: addressForm.is_primary ?? false,
+      },
       editingAddress || undefined,
       userProfileWithAddresses.user_type_id,
       profileId
@@ -546,159 +522,15 @@ const Profile: React.FC = () => {
       </Card>
 
       {/* Address Dialog */}
-      <Dialog
+      <AddressDialog
         open={addressDialogOpen}
+        title={editingAddress ? 'Edit Address' : 'Add New Address'}
+        addressData={addressForm}
+        loading={loading}
         onClose={() => setAddressDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          {editingAddress ? 'Edit Address' : 'Add New Address'}
-        </DialogTitle>
-        <DialogContent>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-              gap: 2,
-              mt: 1,
-            }}
-          >
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <TextField
-                fullWidth
-                label="Address Line 1"
-                value={addressForm.address_line_1}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({
-                    ...prev,
-                    address_line_1: e.target.value,
-                  }))
-                }
-                required
-              />
-            </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <TextField
-                fullWidth
-                label="Address Line 2 (Optional)"
-                value={addressForm.address_line_2}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({
-                    ...prev,
-                    address_line_2: e.target.value,
-                  }))
-                }
-              />
-            </Box>
-            <FormControl fullWidth required>
-              <InputLabel>Country</InputLabel>
-              <Select
-                value={addressForm.country}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({
-                    ...prev,
-                    country: e.target.value,
-                  }))
-                }
-                label="Country"
-              >
-                {countries.map((country) => (
-                  <MenuItem key={country.isoCode} value={country.isoCode}>
-                    {country.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>State/Province</InputLabel>
-              <Select
-                value={addressForm.state}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({ ...prev, state: e.target.value }))
-                }
-                label="State/Province"
-                disabled={!addressForm.country}
-              >
-                {states.map((state) => (
-                  <MenuItem key={state.isoCode} value={state.isoCode}>
-                    {state.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>City</InputLabel>
-              <Select
-                value={addressForm.city}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({ ...prev, city: e.target.value }))
-                }
-                label="City"
-                disabled={!addressForm.state}
-              >
-                {cities.map((city) => (
-                  <MenuItem key={city.name} value={city.name}>
-                    {city.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              fullWidth
-              label="Postal Code"
-              value={addressForm.postal_code}
-              onChange={(e) =>
-                setAddressForm((prev) => ({
-                  ...prev,
-                  postal_code: e.target.value,
-                }))
-              }
-              required
-            />
-            <FormControl fullWidth>
-              <InputLabel>Address Type</InputLabel>
-              <Select
-                value={addressForm.address_type}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({
-                    ...prev,
-                    address_type: e.target.value,
-                  }))
-                }
-                label="Address Type"
-              >
-                <MenuItem value="home">Home</MenuItem>
-                <MenuItem value="work">Work</MenuItem>
-                <MenuItem value="delivery">Delivery</MenuItem>
-                <MenuItem value="billing">Billing</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Primary Address</InputLabel>
-              <Select
-                value={addressForm.is_primary.toString()}
-                onChange={(e) =>
-                  setAddressForm((prev) => ({
-                    ...prev,
-                    is_primary: e.target.value === 'true',
-                  }))
-                }
-                label="Primary Address"
-              >
-                <MenuItem value="true">Yes</MenuItem>
-                <MenuItem value="false">No</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddressDialogOpen(false)}>Cancel</Button>
-          <Button onClick={onAddressSave} variant="contained">
-            Save Address
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSave={onAddressSave}
+        onAddressChange={setAddressForm}
+      />
 
       {/* Account Dialog */}
       <Dialog

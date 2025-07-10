@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   CircularProgress,
   Dialog,
@@ -8,15 +9,14 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
-  Grid,
   InputLabel,
   MenuItem,
   Select,
+  Stack,
   Switch,
   TextField,
   Typography,
 } from '@mui/material';
-import { City, Country, State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -24,6 +24,7 @@ import {
   BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
+import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 interface LocationModalProps {
   open: boolean;
@@ -34,15 +35,6 @@ interface LocationModalProps {
   location?: BusinessLocation | null;
   loading?: boolean;
   error?: string | null;
-}
-
-interface AddressFormData {
-  address_line_1: string;
-  address_line_2: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
 }
 
 const LocationModal: React.FC<LocationModalProps> = ({
@@ -75,31 +67,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
     country: '',
   });
 
-  // Location data
-  const [countries, setCountries] = useState<any[]>([]);
-  const [states, setStates] = useState<any[]>([]);
-  const [cities, setCities] = useState<any[]>([]);
-
-  // Load countries on component mount
-  useEffect(() => {
-    setCountries(Country.getAllCountries());
-  }, []);
-
-  // Update states when country changes
-  useEffect(() => {
-    if (addressData.country) {
-      setStates(State.getStatesOfCountry(addressData.country));
-      setAddressData((prev) => ({ ...prev, state: '', city: '' }));
-    }
-  }, [addressData.country]);
-
-  // Update cities when state changes
-  useEffect(() => {
-    if (addressData.country && addressData.state) {
-      setCities(City.getCitiesOfState(addressData.country, addressData.state));
-      setAddressData((prev) => ({ ...prev, city: '' }));
-    }
-  }, [addressData.country, addressData.state]);
+  // Address dialog state
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
 
   // Load location data when editing
   useEffect(() => {
@@ -165,11 +134,9 @@ const LocationModal: React.FC<LocationModalProps> = ({
       return;
     }
 
-    // For now, we'll use a placeholder address_id since we need to create the address first
-    // In a real implementation, you'd create the address first, then the location
     const locationData = {
       ...formData,
-      address: addressData, // Include address data for backend processing
+      address: addressData,
     };
 
     console.log('LocationModal: Calling onSave with data:', locationData);
@@ -182,243 +149,177 @@ const LocationModal: React.FC<LocationModalProps> = ({
     }
   };
 
-  return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        {isEditing
-          ? t('business.locations.editLocation')
-          : t('business.locations.addLocation')}
-      </DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+  const handleAddressSave = () => {
+    setAddressDialogOpen(false);
+  };
 
-        <Grid container direction="column" spacing={2} sx={{ mt: 1 }}>
-          {/* Location Name */}
-          <Grid item>
+  const hasAddress =
+    addressData.address_line_1 &&
+    addressData.city &&
+    addressData.state &&
+    addressData.country;
+
+  return (
+    <>
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {isEditing
+            ? t('business.locations.editLocation')
+            : t('business.locations.addLocation')}
+        </DialogTitle>
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              fullWidth
-              label={t('business.locations.name')}
+              label={t('business.locations.locationName')}
               value={formData.name}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
+              fullWidth
               required
             />
-          </Grid>
 
-          {/* Location Type */}
-          <Grid item>
-            <FormControl fullWidth>
-              <InputLabel>{t('business.locations.locationType')}</InputLabel>
-              <Select
-                value={formData.location_type}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    location_type: e.target.value as any,
-                  }))
-                }
-                label={t('business.locations.locationType')}
-              >
-                <MenuItem value="store">
-                  {t('business.locations.store')}
-                </MenuItem>
-                <MenuItem value="warehouse">
-                  {t('business.locations.warehouse')}
-                </MenuItem>
-                <MenuItem value="office">
-                  {t('business.locations.office')}
-                </MenuItem>
-                <MenuItem value="pickup_point">
-                  {t('business.locations.pickupPoint')}
-                </MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
-          {/* Primary Location */}
-          <Grid item>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.is_primary}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <FormControl sx={{ flex: 1, minWidth: 200 }}>
+                <InputLabel>{t('business.locations.locationType')}</InputLabel>
+                <Select
+                  value={formData.location_type}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      is_primary: e.target.checked,
+                      location_type: e.target.value,
                     }))
                   }
-                />
-              }
-              label={t('business.locations.isPrimary')}
-            />
-          </Grid>
+                  label={t('business.locations.locationType')}
+                >
+                  <MenuItem value="store">Store</MenuItem>
+                  <MenuItem value="warehouse">Warehouse</MenuItem>
+                  <MenuItem value="office">Office</MenuItem>
+                  <MenuItem value="showroom">Showroom</MenuItem>
+                </Select>
+              </FormControl>
 
-          {/* Phone */}
-          <Grid item>
-            <TextField
-              fullWidth
-              label={t('business.locations.phone')}
-              value={formData.phone}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, phone: e.target.value }))
-              }
-            />
-          </Grid>
-
-          {/* Email */}
-          <Grid item>
-            <TextField
-              fullWidth
-              label={t('business.locations.email')}
-              type="email"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, email: e.target.value }))
-              }
-            />
-          </Grid>
-
-          {/* Address Section */}
-          <Grid item>
-            <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-              {t('business.locations.address')}
-            </Typography>
-          </Grid>
-
-          {/* Address Line 1 */}
-          <Grid item>
-            <TextField
-              fullWidth
-              label="Address Line 1"
-              value={addressData.address_line_1}
-              onChange={(e) =>
-                setAddressData((prev) => ({
-                  ...prev,
-                  address_line_1: e.target.value,
-                }))
-              }
-              required
-            />
-          </Grid>
-
-          {/* Address Line 2 */}
-          <Grid item>
-            <TextField
-              fullWidth
-              label="Address Line 2 (Optional)"
-              value={addressData.address_line_2}
-              onChange={(e) =>
-                setAddressData((prev) => ({
-                  ...prev,
-                  address_line_2: e.target.value,
-                }))
-              }
-            />
-          </Grid>
-
-          {/* Country */}
-          <Grid item>
-            <FormControl fullWidth>
-              <InputLabel>Country</InputLabel>
-              <Select
-                value={addressData.country}
-                onChange={(e) =>
-                  setAddressData((prev) => ({
-                    ...prev,
-                    country: e.target.value,
-                  }))
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.is_primary}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        is_primary: e.target.checked,
+                      }))
+                    }
+                  />
                 }
-                label="Country"
-                required
-              >
-                {countries.map((country) => (
-                  <MenuItem key={country.isoCode} value={country.isoCode}>
-                    {country.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+                label={t('business.locations.isPrimary')}
+                sx={{ alignSelf: 'center' }}
+              />
+            </Box>
 
-          {/* State/Province */}
-          <Grid item>
-            <FormControl fullWidth>
-              <InputLabel>State/Province</InputLabel>
-              <Select
-                value={addressData.state}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <TextField
+                label={t('business.locations.phone')}
+                value={formData.phone}
                 onChange={(e) =>
-                  setAddressData((prev) => ({ ...prev, state: e.target.value }))
+                  setFormData((prev) => ({ ...prev, phone: e.target.value }))
                 }
-                label="State/Province"
-                required
-                disabled={!addressData.country}
-              >
-                {states.map((state) => (
-                  <MenuItem key={state.isoCode} value={state.isoCode}>
-                    {state.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+                sx={{ flex: 1, minWidth: 200 }}
+              />
 
-          {/* City */}
-          <Grid item>
-            <FormControl fullWidth>
-              <InputLabel>City</InputLabel>
-              <Select
-                value={addressData.city}
+              <TextField
+                label={t('business.locations.email')}
+                type="email"
+                value={formData.email}
                 onChange={(e) =>
-                  setAddressData((prev) => ({ ...prev, city: e.target.value }))
+                  setFormData((prev) => ({ ...prev, email: e.target.value }))
                 }
-                label="City"
-                required
-                disabled={!addressData.state}
-              >
-                {cities.map((city) => (
-                  <MenuItem key={city.name} value={city.name}>
-                    {city.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+                sx={{ flex: 1, minWidth: 200 }}
+              />
+            </Box>
 
-          {/* Postal Code */}
-          <Grid item>
-            <TextField
-              fullWidth
-              label="Postal Code"
-              value={addressData.postal_code}
-              onChange={(e) =>
-                setAddressData((prev) => ({
-                  ...prev,
-                  postal_code: e.target.value,
-                }))
-              }
-              required
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          {t('common.cancel')}
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={loading || !formData.name.trim()}
-        >
-          {loading ? <CircularProgress size={20} /> : t('common.save')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {t('business.locations.address')}
+              </Typography>
+
+              {hasAddress ? (
+                <Box
+                  sx={{
+                    p: 2,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                    mb: 2,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Current Address:
+                  </Typography>
+                  <Typography variant="body1">
+                    {addressData.address_line_1}
+                    {addressData.address_line_2 &&
+                      `, ${addressData.address_line_2}`}
+                  </Typography>
+                  <Typography variant="body1">
+                    {addressData.city}, {addressData.state}{' '}
+                    {addressData.postal_code}
+                  </Typography>
+                  <Typography variant="body1">{addressData.country}</Typography>
+                </Box>
+              ) : (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  No address configured. Please add an address for this
+                  location.
+                </Alert>
+              )}
+
+              <Button
+                variant="outlined"
+                onClick={() => setAddressDialogOpen(true)}
+                fullWidth
+              >
+                {hasAddress ? 'Edit Address' : 'Add Address'}
+              </Button>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={loading}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={loading || !hasAddress}
+            startIcon={loading && <CircularProgress size={20} />}
+          >
+            {loading
+              ? t('common.saving')
+              : isEditing
+              ? t('common.update')
+              : t('common.save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <AddressDialog
+        open={addressDialogOpen}
+        title={hasAddress ? 'Edit Location Address' : 'Add Location Address'}
+        addressData={addressData}
+        onClose={() => setAddressDialogOpen(false)}
+        onSave={handleAddressSave}
+        onAddressChange={setAddressData}
+      />
+    </>
   );
 };
 

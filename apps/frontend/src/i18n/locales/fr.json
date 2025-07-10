@@ -211,6 +211,8 @@
         "startPreparing": "Commencer la Préparation",
         "readyForPickup": "Prête pour Ramassage"
       },
+      "confirmTitle": "Confirmer la Mise à Jour du Statut",
+      "confirmStatusUpdate": "Êtes-vous sûr de vouloir mettre à jour le statut de la commande {{orderNumber}} à {{newStatus}} ?",
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmée",

@@ -236,7 +236,9 @@
         "cancel": "Cancel",
         "startPreparing": "Start Preparing",
         "readyForPickup": "Ready for Pickup"
-      }
+      },
+      "confirmTitle": "Confirm Status Update",
+      "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?"
     },
     "inventory": {
       "title": "Inventory Management",

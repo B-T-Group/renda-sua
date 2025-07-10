@@ -1168,7 +1168,7 @@ export class HasuraUserService {
             user_id
           }
           assigned_agent_id
-          agent {
+          assigned_agent {
             user_id
           }
         }
@@ -1189,7 +1189,7 @@ export class HasuraUserService {
     const isAssignedAgent = !!(
       user.agent &&
       order.assigned_agent_id &&
-      order.agent.user_id === user.id
+      order.assigned_agent.user_id === user.id
     );
     const isAnyAgent = !!user.agent;
 

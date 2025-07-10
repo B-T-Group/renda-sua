@@ -89,7 +89,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [userType, setUserType] = useState<UserType | null>(null);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
 
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated } = useAuth0();
   const apiClient = useApiClient();
 
   const checkProfile = async () => {
