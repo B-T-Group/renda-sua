@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
+import { AddressesModule } from '../addresses/addresses.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
@@ -46,6 +47,7 @@ import { AppService } from './app.service';
     HasuraModule,
     UsersModule,
     AccountsModule,
+    AddressesModule,
     OrdersModule,
     AgentsModule,
     AwsModule,
