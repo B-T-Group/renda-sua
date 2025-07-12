@@ -283,8 +283,8 @@ export class AddressesService {
           $country: String!,
           $isPrimary: Boolean!,
           $addressType: String!,
-          $latitude: Decimal,
-          $longitude: Decimal
+          $latitude: numeric,
+          $longitude: numeric
         ) {
           insert_addresses_one(object: {
             address_line_1: $addressLine1,

@@ -1,5 +1,41 @@
 # Cursor Rules for Rendasua Frontend
 
+## Test File Management
+
+### CRITICAL: Do Not Create Test Files Unless Explicitly Requested
+
+- **NEVER create test files** (`.js`, `.ts`, `.spec.js`, `.test.js`) unless the user explicitly asks for them
+- **NEVER create temporary test scripts** for debugging or verification
+- **NEVER create standalone test files** in the root directory or app directories
+- **ALWAYS ask the user first** if they want test files created
+- **Use existing test infrastructure** if tests are needed
+
+### Test File Guidelines
+
+#### When Test Files Are Allowed
+- User explicitly requests: "Create a test for X"
+- User explicitly requests: "Write a test script for Y"
+- User explicitly requests: "Add unit tests for Z"
+
+#### When Test Files Are NOT Allowed
+- Debugging issues (use console.log or existing debugging tools)
+- Verifying fixes (use existing endpoints or tools)
+- Temporary validation (use existing test infrastructure)
+- Code verification (use TypeScript compilation and linting)
+
+#### Alternative Approaches
+- **Use existing endpoints** for testing functionality
+- **Use console.log** for debugging
+- **Use TypeScript compilation** for type checking
+- **Use existing test infrastructure** if available
+- **Use browser dev tools** for frontend testing
+- **Use API testing tools** like Postman or curl for backend testing
+
+### Cleanup Responsibility
+- **Always clean up** any test files created during development
+- **Remove temporary scripts** after use
+- **Don't commit test files** unless they're part of the official test suite
+
 ## API and GraphQL Usage Rules
 
 ### CRITICAL: Use Proper Client Hooks for All Requests
