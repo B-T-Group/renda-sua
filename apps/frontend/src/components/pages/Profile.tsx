@@ -30,13 +30,11 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
+import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
-import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 const Profile: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<string | null>(null);
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
@@ -46,17 +44,6 @@ const Profile: React.FC = () => {
     first_name: '',
     last_name: '',
     phone_number: '',
-  });
-
-  const [addressForm, setAddressForm] = useState<AddressFormData>({
-    address_line_1: '',
-    address_line_2: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    country: '',
-    address_type: 'home',
-    is_primary: false,
   });
 
   const [accountForm, setAccountForm] = useState({
@@ -117,59 +104,6 @@ const Profile: React.FC = () => {
     }
   };
 
-  const onAddressSave = async () => {
-    if (!userProfile || !userProfileWithAddresses) return;
-
-    // Get the correct profile ID based on user type
-    let profileId: string | undefined;
-    switch (userProfileWithAddresses.user_type_id) {
-      case 'client':
-        profileId = userProfileWithAddresses.client?.id;
-        break;
-      case 'agent':
-        profileId = userProfileWithAddresses.agent?.id;
-        break;
-      case 'business':
-        profileId = userProfileWithAddresses.business?.id;
-        break;
-    }
-
-    if (!profileId) {
-      console.error(
-        'Profile ID not found for user type:',
-        userProfileWithAddresses.user_type_id
-      );
-      return;
-    }
-
-    const success = await handleAddressSave(
-      userProfile.id,
-      {
-        ...addressForm,
-        address_type: addressForm.address_type || 'home',
-        is_primary: addressForm.is_primary ?? false,
-      },
-      editingAddress || undefined,
-      userProfileWithAddresses.user_type_id,
-      profileId
-    );
-
-    if (success) {
-      setAddressDialogOpen(false);
-      setEditingAddress(null);
-      setAddressForm({
-        address_line_1: '',
-        address_line_2: '',
-        city: '',
-        state: '',
-        postal_code: '',
-        country: '',
-        address_type: 'home',
-        is_primary: false,
-      });
-    }
-  };
-
   const handleAccountSave = async () => {
     if (!userProfile) return;
 
@@ -185,36 +119,6 @@ const Profile: React.FC = () => {
         currency: '',
       });
     }
-  };
-
-  const handleEditAddress = (address: any) => {
-    setAddressForm({
-      address_line_1: address.address_line_1,
-      address_line_2: address.address_line_2 || '',
-      city: address.city,
-      state: address.state,
-      postal_code: address.postal_code,
-      country: address.country,
-      address_type: address.address_type,
-      is_primary: address.is_primary,
-    });
-    setEditingAddress(address.id);
-    setAddressDialogOpen(true);
-  };
-
-  const handleAddAddress = () => {
-    setAddressForm({
-      address_line_1: '',
-      address_line_2: '',
-      city: '',
-      state: '',
-      postal_code: '',
-      country: '',
-      address_type: 'home',
-      is_primary: false,
-    });
-    setEditingAddress(null);
-    setAddressDialogOpen(true);
   };
 
   const handleAddAccount = () => {
@@ -371,80 +275,25 @@ const Profile: React.FC = () => {
         </Card>
 
         {/* Addresses */}
-        <Card>
-          <CardContent>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">Addresses</Typography>
-              <Button
-                variant="outlined"
-                startIcon={<AddIcon />}
-                onClick={handleAddAddress}
-              >
-                Add Address
-              </Button>
-            </Box>
-
-            {addresses.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No addresses added yet.
-              </Typography>
-            ) : (
-              <Box>
-                {addresses.map((address) => (
-                  <Box
-                    key={address.id}
-                    mb={2}
-                    p={2}
-                    border={1}
-                    borderColor="divider"
-                    borderRadius={1}
-                  >
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                    >
-                      <Box flex={1}>
-                        <Typography variant="subtitle2">
-                          {address.address_type}{' '}
-                          {address.is_primary && (
-                            <Chip
-                              label="Primary"
-                              size="small"
-                              color="primary"
-                            />
-                          )}
-                        </Typography>
-                        <Typography variant="body2">
-                          {address.address_line_1}
-                          {address.address_line_2 &&
-                            `, ${address.address_line_2}`}
-                        </Typography>
-                        <Typography variant="body2">
-                          {address.city}, {address.state} {address.postal_code}
-                        </Typography>
-                        <Typography variant="body2">
-                          {address.country}
-                        </Typography>
-                      </Box>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditAddress(address)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+        {userProfileWithAddresses && (
+          <AddressManager
+            entityType={
+              userProfileWithAddresses.user_type_id as
+                | 'agent'
+                | 'client'
+                | 'business'
+            }
+            entityId={
+              userProfileWithAddresses.user_type_id === 'agent'
+                ? userProfileWithAddresses.agent?.id || ''
+                : userProfileWithAddresses.user_type_id === 'client'
+                ? userProfileWithAddresses.client?.id || ''
+                : userProfileWithAddresses.business?.id || ''
+            }
+            title="Personal Addresses"
+            showCoordinates={false}
+          />
+        )}
       </Box>
 
       {/* Accounts */}
@@ -520,17 +369,6 @@ const Profile: React.FC = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Address Dialog */}
-      <AddressDialog
-        open={addressDialogOpen}
-        title={editingAddress ? 'Edit Address' : 'Add New Address'}
-        addressData={addressForm}
-        loading={loading}
-        onClose={() => setAddressDialogOpen(false)}
-        onSave={onAddressSave}
-        onAddressChange={setAddressForm}
-      />
 
       {/* Account Dialog */}
       <Dialog

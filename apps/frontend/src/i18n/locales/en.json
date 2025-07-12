@@ -538,6 +538,27 @@
       }
     }
   },
+  "addresses": {
+    "title": "Addresses",
+    "addAddress": "Add Address",
+    "editAddress": "Edit Address",
+    "addFirstAddress": "Add First Address",
+    "noAddresses": "No addresses added yet.",
+    "primary": "Primary",
+    "coordinates": "Coordinates",
+    "maxAddressesReached": "Maximum of {{max}} addresses allowed.",
+    "deleteConfirmTitle": "Delete Address",
+    "deleteConfirmMessage": "Are you sure you want to delete this address? This action cannot be undone.",
+    "types": {
+      "home": "Home",
+      "work": "Work",
+      "delivery": "Delivery",
+      "billing": "Billing",
+      "store": "Store",
+      "warehouse": "Warehouse",
+      "office": "Office"
+    }
+  },
   "profile": {
     "title": "Profile",
     "personalInfo": "Personal Information",

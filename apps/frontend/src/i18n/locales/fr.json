@@ -611,6 +611,27 @@
       }
     }
   },
+  "addresses": {
+    "title": "Adresses",
+    "addAddress": "Ajouter une Adresse",
+    "editAddress": "Modifier l'Adresse",
+    "addFirstAddress": "Ajouter la Première Adresse",
+    "noAddresses": "Aucune adresse ajoutée pour le moment.",
+    "primary": "Principale",
+    "coordinates": "Coordonnées",
+    "maxAddressesReached": "Maximum de {{max}} adresses autorisées.",
+    "deleteConfirmTitle": "Supprimer l'Adresse",
+    "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ? Cette action ne peut pas être annulée.",
+    "types": {
+      "home": "Domicile",
+      "work": "Travail",
+      "delivery": "Livraison",
+      "billing": "Facturation",
+      "store": "Magasin",
+      "warehouse": "Entrepôt",
+      "office": "Bureau"
+    }
+  },
   "profile": {
     "title": "Profil",
     "personalInfo": "Informations personnelles",

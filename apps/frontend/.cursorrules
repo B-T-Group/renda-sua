@@ -1,13 +1,295 @@
-# Cursor Rules for Frontend App - French Translation
+# Cursor Rules for Frontend App - Reusable Components & Best Practices
 
-## General Rules
-- Always translate all user-facing text from English to French
-- Maintain consistent French terminology throughout the application
-- Use proper French grammar and punctuation
-- Keep technical terms and variable names in English
-- Preserve the original meaning and context
+## CRITICAL COMPONENT REUSE RULES
 
-## Translation Guidelines
+### 🔍 ALWAYS SEARCH BEFORE CREATING
+**MANDATORY**: Before creating ANY new component, you MUST:
+
+1. **Search existing components first**:
+   ```bash
+   # Search in these directories:
+   - src/components/common/     # Reusable UI components
+   - src/components/business/   # Business-specific components  
+   - src/components/dialogs/    # Modal/dialog components
+   - src/components/layout/     # Layout components
+   ```
+
+2. **Use codebase_search to find similar patterns**:
+   - Search for similar functionality: "loading", "card", "table", "form", "modal"
+   - Look for existing hooks: "useLoading", "useApi", "useGraphQL"
+   - Check for similar UI patterns before recreating
+
+3. **Reuse or extend existing components**:
+   - If 70%+ similar → Extend existing component with new props
+   - If 50-70% similar → Create variant or extract common base
+   - If <50% similar → Create new component but follow established patterns
+
+### 📏 COMPONENT SIZE LIMITS
+- **Maximum 20 lines per method/function** (as per project rules)
+- **Maximum 200 lines per component file**
+- **If larger → Split into smaller components or extract custom hooks**
+
+### 🎨 MANDATORY SKELETON LOADING
+
+**EVERY component that loads data MUST use skeleton loading**:
+
+```tsx
+// ✅ CORRECT - Always use skeleton loading
+const MyComponent = () => {
+  const { data, loading } = useData();
+  
+  if (loading) {
+    return (
+      <Box>
+        <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
+        <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
+        <Skeleton variant="text" height={20} width="80%" />
+      </Box>
+    );
+  }
+  
+  return <div>{data}</div>;
+};
+
+// ❌ WRONG - Never use simple loading text
+const BadComponent = () => {
+  const { data, loading } = useData();
+  
+  if (loading) return <div>Loading...</div>; // ❌ FORBIDDEN
+  
+  return <div>{data}</div>;
+};
+```
+
+**Required Skeleton Patterns**:
+- **Cards**: `<Skeleton variant="rectangular" height={200} />`
+- **Text Lines**: `<Skeleton variant="text" height={24} />`
+- **Circular**: `<Skeleton variant="circular" width={40} height={40} />`
+- **Tables**: Use `<Skeleton>` for each cell
+- **Lists**: Array.from(new Array(5)).map() with skeleton items
+
+### 🧩 REUSABLE COMPONENT HIERARCHY
+
+#### 1. **Common Components** (`src/components/common/`)
+**USE THESE FIRST** - Already available:
+- `LoadingPage` - Full page loading with skeleton
+- `LoadingSpinner` - Simple spinner component  
+- `LoadingScreen` - Backdrop loading overlay
+- `ConfirmationModal` - Yes/No confirmation dialogs
+- `DashboardItemCard` - Product/item display cards
+- `AccountInformation` - Account balance display
+- `PhoneInput` - Phone number input with validation
+- `LanguageSwitcher` - Language selection
+- `Logo` - Brand logo component
+- `ErrorBoundary` - Error handling wrapper
+
+#### 2. **Dialog Components** (`src/components/dialogs/`)
+**REUSE THESE** - Already available:
+- `OrderDialog` - Order placement dialog
+- `AddressDialog` - Address form dialog
+
+#### 3. **Business Components** (`src/components/business/`)
+**EXTEND THESE** - Domain-specific but reusable:
+- `BusinessOrderCard` - Order display card
+- `InventoryCards` - Inventory grid view
+- `ItemsCards` - Items grid view  
+- `BusinessInventoryTable` - Inventory table view
+
+### 🔄 COMPONENT CREATION PROCESS
+
+#### Step 1: Search & Analyze
+```bash
+# REQUIRED searches before creating new component:
+1. codebase_search: "similar functionality description"
+2. grep_search: "component name patterns"  
+3. file_search: "related file names"
+```
+
+#### Step 2: Reuse Decision Matrix
+- **90%+ match** → Use existing component with new props
+- **70-89% match** → Extend existing component
+- **50-69% match** → Extract common base component
+- **<50% match** → Create new component following patterns
+
+#### Step 3: Component Structure Template
+```tsx
+// ✅ MANDATORY TEMPLATE for new components
+import React from 'react';
+import { Box, Skeleton } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+
+interface ComponentNameProps {
+  // Define clear, typed props
+  data?: DataType;
+  loading?: boolean;
+  onAction?: (item: DataType) => void;
+}
+
+const ComponentName: React.FC<ComponentNameProps> = ({
+  data,
+  loading = false,
+  onAction,
+}) => {
+  const { t } = useTranslation();
+
+  // MANDATORY: Skeleton loading
+  if (loading) {
+    return (
+      <Box>
+        <Skeleton variant="rectangular" height={200} />
+        <Skeleton variant="text" height={24} sx={{ mt: 1 }} />
+      </Box>
+    );
+  }
+
+  // MANDATORY: Empty state
+  if (!data || data.length === 0) {
+    return (
+      <Box textAlign="center" py={4}>
+        <Typography variant="body1" color="text.secondary">
+          {t('common.noData')}
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      {/* Component content */}
+    </Box>
+  );
+};
+
+export default ComponentName;
+```
+
+### 🎯 LOADING PATTERNS
+
+#### 1. **Page-Level Loading**
+```tsx
+// Use LoadingPage for full page loads
+if (loading) {
+  return (
+    <LoadingPage
+      message="Loading data"
+      subtitle="Please wait"
+      showProgress={true}
+    />
+  );
+}
+```
+
+#### 2. **Section-Level Loading**  
+```tsx
+// Use skeleton for content sections
+if (loading) {
+  return (
+    <Box>
+      {Array.from(new Array(3)).map((_, index) => (
+        <Card key={index} sx={{ mb: 2 }}>
+          <CardContent>
+            <Skeleton variant="rectangular" height={60} />
+            <Skeleton variant="text" sx={{ mt: 1 }} />
+          </CardContent>
+        </Card>
+      ))}
+    </Box>
+  );
+}
+```
+
+#### 3. **Table/Grid Loading**
+```tsx
+// Use skeleton for table rows
+if (loading) {
+  return (
+    <TableContainer>
+      <Table>
+        <TableBody>
+          {Array.from(new Array(5)).map((_, index) => (
+            <TableRow key={index}>
+              <TableCell><Skeleton /></TableCell>
+              <TableCell><Skeleton /></TableCell>
+              <TableCell><Skeleton /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+```
+
+### 🚫 FORBIDDEN PATTERNS
+
+#### ❌ Simple Loading Text
+```tsx
+// NEVER DO THIS:
+if (loading) return <div>Loading...</div>;
+if (loading) return <CircularProgress />;
+if (loading) return <Typography>Loading...</Typography>;
+```
+
+#### ❌ Duplicate Components
+```tsx
+// NEVER CREATE DUPLICATE COMPONENTS:
+// Don't create LoadingSpinner2, CustomModal, etc.
+// ALWAYS extend existing components instead
+```
+
+#### ❌ Large Components
+```tsx
+// NEVER CREATE COMPONENTS >200 lines
+// ALWAYS split into smaller components
+```
+
+### ✅ REQUIRED IMPORTS
+
+**Every component MUST import**:
+```tsx
+import React from 'react';
+import { Skeleton } from '@mui/material'; // For loading states
+import { useTranslation } from 'react-i18next'; // For i18n
+```
+
+### 🔧 CUSTOM HOOKS INTEGRATION
+
+**ALWAYS use existing hooks**:
+- `useLoading` - Global loading state
+- `useApiWithLoading` - API calls with loading
+- `useGraphQLRequest` - GraphQL with loading
+- `useUserProfile` - User profile data
+- `useBusinessInventory` - Business inventory
+- `useBusinessLocations` - Business locations
+
+### 📋 COMPONENT CHECKLIST
+
+Before creating ANY component, verify:
+- [ ] Searched for existing similar components
+- [ ] Checked if existing component can be extended
+- [ ] Includes skeleton loading for all loading states
+- [ ] Uses proper TypeScript interfaces
+- [ ] Includes empty state handling
+- [ ] Uses translation keys (no hardcoded strings)
+- [ ] Follows Material-UI design system
+- [ ] Component is <200 lines
+- [ ] Methods are <20 lines
+- [ ] Includes proper error handling
+
+### 🏗️ ARCHITECTURE PRINCIPLES
+
+1. **Composition over Inheritance** - Use props and composition
+2. **Single Responsibility** - One component, one purpose  
+3. **Reusability First** - Design for reuse from the start
+4. **Loading States** - Always show skeleton loading
+5. **Error Boundaries** - Wrap components in ErrorBoundary
+6. **Accessibility** - Use proper ARIA labels and semantic HTML
+7. **Performance** - Use React.memo for expensive components
+8. **Testing** - Write tests for reusable components
+
+---
+
+## Translation Guidelines (Preserved from original rules)
 
 ### Common UI Elements
 - "Welcome back" → "Bon retour"
@@ -31,112 +313,8 @@
 - "Filter" → "Filtrer"
 - "Sort" → "Trier"
 
-### Dashboard Elements
-- "Dashboard" → "Tableau de bord"
-- "Active Orders" → "Commandes actives"
-- "Pending Orders" → "Commandes en attente"
-- "No active orders at the moment" → "Aucune commande active pour le moment"
-- "Pick up pending orders to get started" → "Récupérez des commandes en attente pour commencer"
-- "No pending orders available" → "Aucune commande en attente disponible"
-- "New orders will appear here when they become available" → "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles"
-
-### Order Status
-- "pending" → "en attente"
-- "confirmed" → "confirmée"
-- "preparing" → "en préparation"
-- "ready_for_pickup" → "prête pour récupération"
-- "assigned_to_agent" → "assignée à l'agent"
-- "picked_up" → "récupérée"
-- "in_transit" → "en transit"
-- "out_for_delivery" → "en livraison"
-- "delivered" → "livrée"
-- "cancelled" → "annulée"
-- "failed" → "échouée"
-- "refunded" → "remboursée"
-
-### Order Actions
-- "Pick Up Order" → "Récupérer la commande"
-- "Mark as picked up" → "Marquer comme récupérée"
-- "Mark as in transit" → "Marquer comme en transit"
-- "Mark as out for delivery" → "Marquer comme en livraison"
-- "Mark as delivered" → "Marquer comme livrée"
-- "Successfully picked up order" → "Commande récupérée avec succès"
-- "Failed to pick up order" → "Échec de la récupération de la commande"
-- "Order status updated successfully" → "Statut de la commande mis à jour avec succès"
-- "Failed to update order status" → "Échec de la mise à jour du statut de la commande"
-
-### Form Labels
-- "First Name" → "Prénom"
-- "Last Name" → "Nom de famille"
-- "Email" → "E-mail"
-- "Phone" → "Téléphone"
-- "Address" → "Adresse"
-- "City" → "Ville"
-- "State" → "État/Province"
-- "Postal Code" → "Code postal"
-- "Country" → "Pays"
-- "Password" → "Mot de passe"
-- "Confirm Password" → "Confirmer le mot de passe"
-- "Current Password" → "Mot de passe actuel"
-- "New Password" → "Nouveau mot de passe"
-
-### Messages
-- "Please complete your profile first" → "Veuillez d'abord compléter votre profil"
-- "Please try again" → "Veuillez réessayer"
-- "Something went wrong" → "Quelque chose s'est mal passé"
-- "Network error" → "Erreur réseau"
-- "Authentication required" → "Authentification requise"
-- "Access denied" → "Accès refusé"
-- "Not found" → "Non trouvé"
-- "Invalid input" → "Saisie invalide"
-- "Required field" → "Champ requis"
-- "Optional" → "Optionnel"
-
-### Time and Date
-- "Created" → "Créé"
-- "Updated" → "Mis à jour"
-- "Estimated delivery time" → "Heure de livraison estimée"
-- "Actual delivery time" → "Heure de livraison réelle"
-- "Preferred delivery time" → "Heure de livraison préférée"
-
-### Business Terms
-- "Business" → "Entreprise"
-- "Client" → "Client"
-- "Agent" → "Agent"
-- "Order" → "Commande"
-- "Item" → "Article"
-- "Price" → "Prix"
-- "Total" → "Total"
-- "Subtotal" → "Sous-total"
-- "Tax" → "Taxe"
-- "Delivery fee" → "Frais de livraison"
-- "Currency" → "Devise"
-- "Payment method" → "Méthode de paiement"
-- "Payment status" → "Statut du paiement"
-- "Special instructions" → "Instructions spéciales"
-
-### Notifications
-- "Successfully updated" → "Mis à jour avec succès"
-- "Successfully created" → "Créé avec succès"
-- "Successfully deleted" → "Supprimé avec succès"
-- "Changes saved" → "Modifications enregistrées"
-- "Profile updated" → "Profil mis à jour"
-- "Settings saved" → "Paramètres enregistrés"
-
-## Implementation Notes
-- Update all hardcoded strings in components
-- Update error messages and notifications
-- Update form labels and placeholders
-- Update button text and action labels
-- Update status display text
-- Keep console.log messages in English for debugging
-- Keep variable names, function names, and technical terms in English
-- Use proper French quotation marks (« ») where appropriate
-- Maintain consistent capitalization rules for French
-
-## File Types to Update
-- React components (.tsx, .jsx)
-- TypeScript files (.ts)
-- CSS files with text content
-- Configuration files with user-facing text
-- README files and documentation 
+### Implementation Notes
+- Always use translation keys from i18n files
+- Keep technical terms and variable names in English
+- Use proper French grammar and punctuation
+- Maintain consistent terminology throughout the application 
