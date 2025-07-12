@@ -622,6 +622,8 @@
     "maxAddressesReached": "Maximum de {{max}} adresses autorisées.",
     "deleteConfirmTitle": "Supprimer l'Adresse",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ? Cette action ne peut pas être annulée.",
+    "accountCreated": "Nouveau compte créé avec la devise {{currency}}",
+    "accountAlreadyExists": "Un compte existe déjà pour la devise de ce pays",
     "types": {
       "home": "Domicile",
       "work": "Travail",

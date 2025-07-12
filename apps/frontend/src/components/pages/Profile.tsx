@@ -14,12 +14,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
-import AccountManager from '../common/AccountManager';
+import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
 
@@ -51,6 +51,9 @@ const Profile: React.FC = () => {
   // Get addresses from UserProfileContext
   const { profile: userProfileWithAddresses } = useUserProfileContext();
 
+  // Ref to access AccountManager's refresh function
+  const accountManagerRef = useRef<AccountManagerRef | null>(null);
+
   // Update form when data loads
   useEffect(() => {
     if (userProfile) {
@@ -74,6 +77,15 @@ const Profile: React.FC = () => {
 
     if (success) {
       setEditingProfile(false);
+    }
+  };
+
+  // Handle account creation from address creation
+  const handleAccountCreated = async (account: any) => {
+    console.log('New account created:', account);
+    // Refresh the accounts list
+    if (accountManagerRef.current) {
+      await accountManagerRef.current.fetchAccounts();
     }
   };
 
@@ -231,6 +243,7 @@ const Profile: React.FC = () => {
             }
             title="Personal Addresses"
             showCoordinates={false}
+            onAccountCreated={handleAccountCreated}
           />
         )}
       </Box>
@@ -239,6 +252,7 @@ const Profile: React.FC = () => {
       {userProfile && (
         <Box sx={{ mt: 3 }}>
           <AccountManager
+            ref={accountManagerRef}
             entityType={
               userProfile.user_type_id as 'agent' | 'client' | 'business'
             }

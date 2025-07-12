@@ -40,6 +40,7 @@ interface AddressManagerProps {
   maxAddresses?: number;
   allowDelete?: boolean;
   emptyStateMessage?: string;
+  onAccountCreated?: (account: any) => void;
 }
 
 const defaultAddressTypeOptions = [
@@ -63,6 +64,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
   maxAddresses,
   allowDelete = true,
   emptyStateMessage,
+  onAccountCreated,
 }) => {
   const { t } = useTranslation();
 
@@ -77,7 +79,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     updateAddress,
     deleteAddress,
     clearMessages,
-  } = useAddressManager({ entityType, entityId });
+  } = useAddressManager({ entityType, entityId, onAccountCreated });
 
   // Dialog states
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);

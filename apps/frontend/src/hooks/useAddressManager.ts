@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { environment } from '../config/environment';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Address {
@@ -30,12 +31,35 @@ export interface AddressFormData {
   longitude?: number;
 }
 
+export interface AddressApiResponse {
+  success: boolean;
+  message: string;
+  data: {
+    address: Address;
+    accountCreated?: {
+      message: string;
+      account: {
+        id: string;
+        user_id: string;
+        currency: string;
+        available_balance: number;
+        withheld_balance: number;
+        total_balance: number;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      };
+    };
+  };
+}
+
 export type EntityType = 'agent' | 'client' | 'business';
 
 interface AddressManagerConfig {
   entityType: EntityType;
   entityId: string;
   autoFetch?: boolean;
+  onAccountCreated?: (account: any) => void;
 }
 
 // GraphQL queries for fetching addresses
@@ -120,88 +144,6 @@ const GET_BUSINESS_ADDRESSES = `
   }
 `;
 
-// GraphQL mutations for address operations
-const INSERT_AGENT_ADDRESS = `
-  mutation InsertAgentAddress($agentAddress: agent_addresses_insert_input!) {
-    insert_agent_addresses_one(object: $agentAddress) {
-      id
-      agent_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
-const INSERT_CLIENT_ADDRESS = `
-  mutation InsertClientAddress($clientAddress: client_addresses_insert_input!) {
-    insert_client_addresses_one(object: $clientAddress) {
-      id
-      client_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
-const INSERT_BUSINESS_ADDRESS = `
-  mutation InsertBusinessAddress($businessAddress: business_addresses_insert_input!) {
-    insert_business_addresses_one(object: $businessAddress) {
-      id
-      business_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
 const UPDATE_ADDRESS = `
   mutation UpdateAddress($id: uuid!, $address: addresses_set_input!) {
     update_addresses_by_pk(
@@ -234,28 +176,19 @@ const DELETE_ADDRESS = `
 `;
 
 export const useAddressManager = (config: AddressManagerConfig) => {
-  const { entityType, entityId, autoFetch = true } = config;
+  const { entityType, entityId, autoFetch = true, onAccountCreated } = config;
 
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  // GraphQL hooks
+  // GraphQL hooks for fetching and other operations
   const { execute: executeAgentQuery } = useGraphQLRequest(GET_AGENT_ADDRESSES);
   const { execute: executeClientQuery } =
     useGraphQLRequest(GET_CLIENT_ADDRESSES);
   const { execute: executeBusinessQuery } = useGraphQLRequest(
     GET_BUSINESS_ADDRESSES
-  );
-
-  const { execute: insertAgentAddress } =
-    useGraphQLRequest(INSERT_AGENT_ADDRESS);
-  const { execute: insertClientAddress } = useGraphQLRequest(
-    INSERT_CLIENT_ADDRESS
-  );
-  const { execute: insertBusinessAddress } = useGraphQLRequest(
-    INSERT_BUSINESS_ADDRESS
   );
 
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
@@ -274,25 +207,6 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         throw new Error(`Unsupported entity type: ${entityType}`);
     }
   }, [entityType, executeAgentQuery, executeClientQuery, executeBusinessQuery]);
-
-  // Get the appropriate mutation executor based on entity type
-  const getMutationExecutor = useCallback(() => {
-    switch (entityType) {
-      case 'agent':
-        return insertAgentAddress;
-      case 'client':
-        return insertClientAddress;
-      case 'business':
-        return insertBusinessAddress;
-      default:
-        throw new Error(`Unsupported entity type: ${entityType}`);
-    }
-  }, [
-    entityType,
-    insertAgentAddress,
-    insertClientAddress,
-    insertBusinessAddress,
-  ]);
 
   // Fetch addresses
   const fetchAddresses = useCallback(async () => {
@@ -325,7 +239,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
     }
   }, [entityId, entityType, getQueryExecutor]);
 
-  // Add new address
+  // Add new address using the new POST API
   const addAddress = useCallback(
     async (addressData: AddressFormData) => {
       if (!entityId) {
@@ -337,30 +251,54 @@ export const useAddressManager = (config: AddressManagerConfig) => {
       setSuccessMessage('');
 
       try {
-        const mutationExecutor = getMutationExecutor();
+        // Prepare the request data for the API
+        const requestData = {
+          address_line_1: addressData.address_line_1,
+          address_line_2: addressData.address_line_2 || undefined,
+          city: addressData.city,
+          state: addressData.state,
+          postal_code: addressData.postal_code,
+          country: addressData.country,
+          is_primary: addressData.is_primary,
+          address_type: addressData.address_type,
+          latitude: addressData.latitude,
+          longitude: addressData.longitude,
+        };
 
-        // Create the nested input structure
-        const addressInput = {
-          data: {
-            ...addressData,
+        // Make the API call to the backend
+        const response = await fetch(`${environment.apiUrl}/addresses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Add authentication headers here if needed
+            // 'Authorization': `Bearer ${token}`,
           },
-        };
+          body: JSON.stringify(requestData),
+        });
 
-        const entityInput = {
-          [`${entityType}_id`]: entityId,
-          address: addressInput,
-        };
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || `HTTP error! status: ${response.status}`
+          );
+        }
 
-        const variables = {
-          [`${entityType}Address`]: entityInput,
-        };
+        const result: AddressApiResponse = await response.json();
 
-        const result = await mutationExecutor(variables);
+        if (result.success) {
+          setSuccessMessage(result.message);
 
-        if (result[`insert_${entityType}_addresses_one`]) {
-          setSuccessMessage('Address added successfully!');
-          await fetchAddresses(); // Refresh the list
-          return result[`insert_${entityType}_addresses_one`];
+          // Refresh the addresses list
+          await fetchAddresses();
+
+          // If an account was created, notify the parent component
+          if (result.data.accountCreated && onAccountCreated) {
+            onAccountCreated(result.data.accountCreated.account);
+          }
+
+          return result.data.address;
+        } else {
+          throw new Error(result.message || 'Failed to add address');
         }
       } catch (err) {
         console.error('Error adding address:', err);
@@ -370,7 +308,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         setLoading(false);
       }
     },
-    [entityId, entityType, getMutationExecutor, fetchAddresses]
+    [entityId, fetchAddresses, onAccountCreated]
   );
 
   // Update existing address
