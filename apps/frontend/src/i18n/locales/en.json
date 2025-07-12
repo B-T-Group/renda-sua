@@ -559,6 +559,37 @@
       "office": "Office"
     }
   },
+  "accounts": {
+    "title": "Accounts",
+    "account": "Account",
+    "summary": "Account Summary",
+    "accountSummary": "Account Summary",
+    "noAccounts": "No accounts found.",
+    "active": "Active",
+    "inactive": "Inactive",
+    "availableBalance": "Available Balance",
+    "totalBalance": "Total Balance",
+    "withheldBalance": "Withheld Balance",
+    "available": "Available",
+    "createdAt": "Created",
+    "transactionHistory": "Transaction History",
+    "recentTransactions": "Recent Transactions",
+    "noTransactions": "No transactions found.",
+    "loadMore": "Load More",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "balance": "Balance",
+    "transactionTypes": {
+      "credit": "Credit",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "refund": "Refund",
+      "fee": "Fee",
+      "commission": "Commission"
+    }
+  },
   "profile": {
     "title": "Profile",
     "personalInfo": "Personal Information",

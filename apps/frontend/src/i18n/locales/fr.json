@@ -632,6 +632,37 @@
       "office": "Bureau"
     }
   },
+  "accounts": {
+    "title": "Comptes",
+    "account": "Compte",
+    "summary": "Résumé des Comptes",
+    "accountSummary": "Résumé du Compte",
+    "noAccounts": "Aucun compte trouvé.",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "availableBalance": "Solde Disponible",
+    "totalBalance": "Solde Total",
+    "withheldBalance": "Solde Retenu",
+    "available": "Disponible",
+    "createdAt": "Créé le",
+    "transactionHistory": "Historique des Transactions",
+    "recentTransactions": "Transactions Récentes",
+    "noTransactions": "Aucune transaction trouvée.",
+    "loadMore": "Charger Plus",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Montant",
+    "balance": "Solde",
+    "transactionTypes": {
+      "credit": "Crédit",
+      "debit": "Débit",
+      "transfer": "Transfert",
+      "refund": "Remboursement",
+      "fee": "Frais",
+      "commission": "Commission"
+    }
+  },
   "profile": {
     "title": "Profil",
     "personalInfo": "Informations personnelles",
