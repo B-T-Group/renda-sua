@@ -24,7 +24,7 @@ Creates a new address and optionally creates an account for the country's curren
   "city": "Douala",
   "state": "Littoral",
   "postal_code": "237",
-  "country": "Cameroon",
+  "country": "CM",
   "is_primary": false,
   "address_type": "home",
   "latitude": 4.0511,
@@ -38,7 +38,7 @@ Creates a new address and optionally creates an account for the country's curren
 - `city`: City name
 - `state`: State/province name
 - `postal_code`: Postal/ZIP code
-- `country`: Country name
+- `country`: Country code (ISO 3166-1 alpha-2 format, e.g., "CM", "US", "GB")
 
 #### Optional Fields
 
@@ -62,7 +62,7 @@ Creates a new address and optionally creates an account for the country's curren
       "city": "Douala",
       "state": "Littoral",
       "postal_code": "237",
-      "country": "Cameroon",
+      "country": "CM",
       "is_primary": false,
       "address_type": "home",
       "latitude": 4.0511,
@@ -90,7 +90,7 @@ Creates a new address and optionally creates an account for the country's curren
 
 #### Account Creation Logic
 
-1. **Currency Detection**: The system uses the `country-currency-map` package to determine the currency for the selected country
+1. **Currency Detection**: The system uses the `country-to-currency` package to determine the currency for the selected country code
 2. **Existing Account Check**: Checks if the user already has an account with the detected currency
 3. **Account Creation**: If no account exists for the currency, a new account is created with:
    - Zero initial balance
@@ -102,55 +102,40 @@ Creates a new address and optionally creates an account for the country's curren
 The address creation process involves multiple tables:
 
 1. **addresses**: Stores the actual address information
+2. **client_addresses**: Junction table linking clients to addresses
+3. **business_addresses**: Junction table linking businesses to addresses
+4. **agent_addresses**: Junction table linking agents to addresses
+5. **accounts**: Stores user accounts with different currencies
 
-   - `id`: Primary key
-   - `address_line_1`: Primary address line
-   - `address_line_2`: Secondary address line (optional)
-   - `city`: City name
-   - `state`: State/province name
-   - `postal_code`: Postal/ZIP code
-   - `country`: Country name
-   - `is_primary`: Whether this is the primary address
-   - `address_type`: Type of address (home, work, delivery, etc.)
-   - `latitude`: Latitude coordinate (optional)
-   - `longitude`: Longitude coordinate (optional)
-   - `created_at`: Creation timestamp
-   - `updated_at`: Last update timestamp
+#### Currency Mapping
 
-2. **Junction Tables**: Link addresses to different entity types
+The system uses ISO 3166-1 alpha-2 country codes (e.g., "CM", "US", "GB") and maps them to ISO 4217 currency codes:
 
-   - `client_addresses`: Links addresses to clients
-   - `agent_addresses`: Links addresses to agents
-   - `business_addresses`: Links addresses to businesses
-
-3. **accounts**: Stores user account information
-   - `user_id`: Reference to the user
-   - `currency`: Account currency
-   - `available_balance`: Available balance
-   - `withheld_balance`: Withheld balance
-   - `total_balance`: Computed total balance
-
-#### Entity Type Detection
-
-The system determines the entity type based on the user's `user_type_id`:
-
-- `1`: Client → Creates entry in `client_addresses`
-- `2`: Business → Creates entry in `business_addresses`
-- `3`: Agent → Creates entry in `agent_addresses`
+- **CM** (Cameroon) → **XAF** (Central African CFA franc)
+- **US** (United States) → **USD** (US Dollar)
+- **GB** (United Kingdom) → **GBP** (British Pound)
+- **DE** (Germany) → **EUR** (Euro)
+- **NG** (Nigeria) → **NGN** (Nigerian Naira)
+- **ZA** (South Africa) → **ZAR** (South African Rand)
+- **KE** (Kenya) → **KES** (Kenyan Shilling)
+- **GH** (Ghana) → **GHS** (Ghanaian Cedi)
 
 #### Error Handling
 
-- **400 Bad Request**: Missing required fields
+The API returns appropriate HTTP status codes and error messages:
+
+- **400 Bad Request**: Missing required fields or invalid data
+- **401 Unauthorized**: Missing or invalid authentication
 - **404 Not Found**: User not found
-- **409 Conflict**: User already has an account with the detected currency
-- **500 Internal Server Error**: Database or system errors
+- **500 Internal Server Error**: Server-side errors
 
 #### Authentication
 
-This endpoint requires authentication. The user identifier is extracted from the authentication context to determine the user and their entity type.
+This endpoint requires a valid JWT token in the Authorization header. The token must contain a valid user identifier that exists in the system.
 
 #### Dependencies
 
-- `country-currency-map`: For country-to-currency mapping
-- `@nestjs/common`: NestJS framework
-- Hasura services for database operations
+- `country-to-currency`: For mapping country codes to currency codes
+- `@nestjs/common`: For HTTP decorators and exceptions
+- `HasuraSystemService`: For GraphQL mutations with admin privileges
+- `HasuraUserService`: For user authentication and data retrieval

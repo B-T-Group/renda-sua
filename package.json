@@ -40,6 +40,7 @@
     "@nestjs/platform-express": "^11.0.0",
     "axios": "^1.6.0",
     "country-state-city": "^3.2.1",
+    "country-to-currency": "^2.0.2",
     "graphql-request": "^5.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

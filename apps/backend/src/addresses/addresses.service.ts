@@ -1,5 +1,4 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { getCountry } from 'country-currency-map';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -39,137 +38,18 @@ export class AddressesService {
     private readonly hasuraSystemService: HasuraSystemService
   ) {}
 
-  private getCurrencyFromCountry(country: string): string {
+  private async getCurrencyFromCountry(country: string): Promise<string> {
     try {
-      const countryInfo = getCountry(country);
-      if (!countryInfo || !countryInfo.currency) {
+      const countryToCurrency = await import('country-to-currency');
+      const countryCode = country.toUpperCase();
+      const currency = (countryToCurrency.default as any)[countryCode];
+      if (!currency) {
         // Default to XAF for Cameroon if country not found
         return 'XAF';
       }
-
-      // Map common currency codes to our enum values
-      const currencyMap: { [key: string]: string } = {
-        USD: 'USD',
-        EUR: 'EUR',
-        GBP: 'GBP',
-        JPY: 'JPY',
-        CNY: 'CNY',
-        CHF: 'CHF',
-        CAD: 'CAD',
-        AUD: 'AUD',
-        XAF: 'XAF',
-        XOF: 'XOF',
-        NGN: 'NGN',
-        ZAR: 'ZAR',
-        EGP: 'EGP',
-        KES: 'KES',
-        GHS: 'GHS',
-        MAD: 'MAD',
-        TND: 'TND',
-        DZD: 'DZD',
-        ETB: 'ETB',
-        UGX: 'UGX',
-        TZS: 'TZS',
-        MWK: 'MWK',
-        ZMW: 'ZMW',
-        BWP: 'BWP',
-        NAM: 'NAM',
-        LSL: 'LSL',
-        SZL: 'SZL',
-        MUR: 'MUR',
-        SCR: 'SCR',
-        CDF: 'CDF',
-        RWF: 'RWF',
-        BIF: 'BIF',
-        SDG: 'SDG',
-        SOS: 'SOS',
-        DJF: 'DJF',
-        KMF: 'KMF',
-        MGA: 'MGA',
-        INR: 'INR',
-        KRW: 'KRW',
-        SGD: 'SGD',
-        HKD: 'HKD',
-        TWD: 'TWD',
-        THB: 'THB',
-        MYR: 'MYR',
-        IDR: 'IDR',
-        PHP: 'PHP',
-        VND: 'VND',
-        PKR: 'PKR',
-        BDT: 'BDT',
-        LKR: 'LKR',
-        NPR: 'NPR',
-        MMK: 'MMK',
-        KHR: 'KHR',
-        LAK: 'LAK',
-        MNT: 'MNT',
-        SEK: 'SEK',
-        NOK: 'NOK',
-        DKK: 'DKK',
-        PLN: 'PLN',
-        CZK: 'CZK',
-        HUF: 'HUF',
-        RON: 'RON',
-        BGN: 'BGN',
-        HRK: 'HRK',
-        RSD: 'RSD',
-        ALL: 'ALL',
-        MKD: 'MKD',
-        BAM: 'BAM',
-        MDL: 'MDL',
-        UAH: 'UAH',
-        BYN: 'BYN',
-        RUB: 'RUB',
-        TRY: 'TRY',
-        GEL: 'GEL',
-        AMD: 'AMD',
-        AZN: 'AZN',
-        BRL: 'BRL',
-        MXN: 'MXN',
-        ARS: 'ARS',
-        CLP: 'CLP',
-        COP: 'COP',
-        PEN: 'PEN',
-        UYU: 'UYU',
-        PYG: 'PYG',
-        BOB: 'BOB',
-        VES: 'VES',
-        GTQ: 'GTQ',
-        HNL: 'HNL',
-        NIO: 'NIO',
-        CRC: 'CRC',
-        PAB: 'PAB',
-        DOP: 'DOP',
-        JMD: 'JMD',
-        TTD: 'TTD',
-        BBD: 'BBD',
-        XCD: 'XCD',
-        NZD: 'NZD',
-        FJD: 'FJD',
-        PGK: 'PGK',
-        WST: 'WST',
-        TOP: 'TOP',
-        VUV: 'VUV',
-        SBD: 'SBD',
-        SAR: 'SAR',
-        AED: 'AED',
-        QAR: 'QAR',
-        KWD: 'KWD',
-        BHD: 'BHD',
-        OMR: 'OMR',
-        JOD: 'JOD',
-        LBP: 'LBP',
-        ILS: 'ILS',
-        IRR: 'IRR',
-        IQD: 'IQD',
-        AFN: 'AFN',
-      };
-
-      const currency = currencyMap[countryInfo.currency] || 'XAF';
       return currency;
     } catch (error) {
-      // Default to XAF if there's any error
+      // Default to XAF for Cameroon if any error occurs
       return 'XAF';
     }
   }
@@ -181,6 +61,15 @@ export class AddressesService {
           id
           identifier
           user_type_id
+          client {
+            id
+          }
+          agent {
+            id
+          }
+          business {
+            id
+          }
         }
       }
     `;
@@ -339,6 +228,15 @@ export class AddressesService {
 
       if (user.user_type_id === 'client') {
         // Client
+        if (!user.client) {
+          throw new HttpException(
+            {
+              success: false,
+              error: 'Client record not found for user',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
         junctionMutation = `
           mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
             insert_client_addresses_one(object: {
@@ -354,11 +252,20 @@ export class AddressesService {
           }
         `;
         junctionVariables = {
-          clientId: user.id,
+          clientId: user.client.id,
           addressId: address.id,
         };
       } else if (user.user_type_id === 'business') {
         // Business
+        if (!user.business) {
+          throw new HttpException(
+            {
+              success: false,
+              error: 'Business record not found for user',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
         junctionMutation = `
           mutation CreateBusinessAddress($businessId: uuid!, $addressId: uuid!) {
             insert_business_addresses_one(object: {
@@ -374,11 +281,20 @@ export class AddressesService {
           }
         `;
         junctionVariables = {
-          businessId: user.id,
+          businessId: user.business.id,
           addressId: address.id,
         };
       } else if (user.user_type_id === 'agent') {
         // Agent
+        if (!user.agent) {
+          throw new HttpException(
+            {
+              success: false,
+              error: 'Agent record not found for user',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
         junctionMutation = `
           mutation CreateAgentAddress($agentId: uuid!, $addressId: uuid!) {
             insert_agent_addresses_one(object: {
@@ -394,7 +310,7 @@ export class AddressesService {
           }
         `;
         junctionVariables = {
-          agentId: user.id,
+          agentId: user.agent.id,
           addressId: address.id,
         };
       }
@@ -407,7 +323,7 @@ export class AddressesService {
       }
 
       // Get currency from country and create account if needed
-      const currency = this.getCurrencyFromCountry(addressData.country);
+      const currency = await this.getCurrencyFromCountry(addressData.country);
       let accountCreated = null;
 
       const hasExistingAccount = await this.checkExistingAccount(
