@@ -337,7 +337,7 @@ export class AddressesService {
       let junctionMutation = '';
       let junctionVariables = {};
 
-      if (user.user_type_id === 1) {
+      if (user.user_type_id === 'client') {
         // Client
         junctionMutation = `
           mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
@@ -357,7 +357,7 @@ export class AddressesService {
           clientId: user.id,
           addressId: address.id,
         };
-      } else if (user.user_type_id === 2) {
+      } else if (user.user_type_id === 'business') {
         // Business
         junctionMutation = `
           mutation CreateBusinessAddress($businessId: uuid!, $addressId: uuid!) {
@@ -377,7 +377,7 @@ export class AddressesService {
           businessId: user.id,
           addressId: address.id,
         };
-      } else if (user.user_type_id === 3) {
+      } else if (user.user_type_id === 'agent') {
         // Agent
         junctionMutation = `
           mutation CreateAgentAddress($agentId: uuid!, $addressId: uuid!) {
