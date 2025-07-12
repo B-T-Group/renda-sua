@@ -7,7 +7,7 @@ This module provides address management functionality with automatic account cre
 - **Address Creation**: Create addresses for users and businesses
 - **Automatic Account Creation**: Automatically creates accounts based on the country's currency
 - **Currency Detection**: Uses country-to-currency mapping to determine the appropriate currency
-- **Entity Type Detection**: Automatically determines if the address belongs to a user or business
+- **Junction Table Integration**: Uses junction tables to link addresses to different entity types
 
 ## API Endpoints
 
@@ -57,8 +57,6 @@ Creates a new address and optionally creates an account for the country's curren
   "data": {
     "address": {
       "id": "uuid",
-      "entity_type": "user",
-      "entity_id": "user-uuid",
       "address_line_1": "123 Main Street",
       "address_line_2": "Apt 4B",
       "city": "Douala",
@@ -99,6 +97,47 @@ Creates a new address and optionally creates an account for the country's curren
    - Active status
    - The detected currency
 
+#### Database Schema
+
+The address creation process involves multiple tables:
+
+1. **addresses**: Stores the actual address information
+
+   - `id`: Primary key
+   - `address_line_1`: Primary address line
+   - `address_line_2`: Secondary address line (optional)
+   - `city`: City name
+   - `state`: State/province name
+   - `postal_code`: Postal/ZIP code
+   - `country`: Country name
+   - `is_primary`: Whether this is the primary address
+   - `address_type`: Type of address (home, work, delivery, etc.)
+   - `latitude`: Latitude coordinate (optional)
+   - `longitude`: Longitude coordinate (optional)
+   - `created_at`: Creation timestamp
+   - `updated_at`: Last update timestamp
+
+2. **Junction Tables**: Link addresses to different entity types
+
+   - `client_addresses`: Links addresses to clients
+   - `agent_addresses`: Links addresses to agents
+   - `business_addresses`: Links addresses to businesses
+
+3. **accounts**: Stores user account information
+   - `user_id`: Reference to the user
+   - `currency`: Account currency
+   - `available_balance`: Available balance
+   - `withheld_balance`: Withheld balance
+   - `total_balance`: Computed total balance
+
+#### Entity Type Detection
+
+The system determines the entity type based on the user's `user_type_id`:
+
+- `1`: Client → Creates entry in `client_addresses`
+- `2`: Business → Creates entry in `business_addresses`
+- `3`: Agent → Creates entry in `agent_addresses`
+
 #### Error Handling
 
 - **400 Bad Request**: Missing required fields
@@ -109,3 +148,9 @@ Creates a new address and optionally creates an account for the country's curren
 #### Authentication
 
 This endpoint requires authentication. The user identifier is extracted from the authentication context to determine the user and their entity type.
+
+#### Dependencies
+
+- `country-currency-map`: For country-to-currency mapping
+- `@nestjs/common`: NestJS framework
+- Hasura services for database operations

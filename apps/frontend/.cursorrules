@@ -1,320 +1,187 @@
-# Cursor Rules for Frontend App - Reusable Components & Best Practices
+# Cursor Rules for Rendasua Frontend
 
-## CRITICAL COMPONENT REUSE RULES
+## API and GraphQL Usage Rules
 
-### 🔍 ALWAYS SEARCH BEFORE CREATING
-**MANDATORY**: Before creating ANY new component, you MUST:
+### CRITICAL: Use Proper Client Hooks for All Requests
 
-1. **Search existing components first**:
-   ```bash
-   # Search in these directories:
-   - src/components/common/     # Reusable UI components
-   - src/components/business/   # Business-specific components  
-   - src/components/dialogs/    # Modal/dialog components
-   - src/components/layout/     # Layout components
-   ```
+#### GraphQL Requests (Hasura)
+- **ALWAYS use `useGraphQLClient`** for all Hasura GraphQL requests
+- **ALWAYS use `useGraphQLRequest`** hook for executing GraphQL queries and mutations
+- **NEVER make direct GraphQL requests** using fetch, axios, or other HTTP clients
+- **NEVER bypass authentication** - all requests must go through the authenticated client
 
-2. **Use codebase_search to find similar patterns**:
-   - Search for similar functionality: "loading", "card", "table", "form", "modal"
-   - Look for existing hooks: "useLoading", "useApi", "useGraphQL"
-   - Check for similar UI patterns before recreating
+#### Backend API Requests
+- **ALWAYS use `useApiClient`** for all backend API requests (NestJS endpoints)
+- **ALWAYS use the returned axios instance** for making HTTP requests
+- **NEVER make direct API requests** using fetch, axios.create(), or other HTTP clients
+- **NEVER bypass authentication** - all requests must go through the authenticated client
 
-3. **Reuse or extend existing components**:
-   - If 70%+ similar → Extend existing component with new props
-   - If 50-70% similar → Create variant or extract common base
-   - If <50% similar → Create new component but follow established patterns
+### Implementation Examples
 
-### 📏 COMPONENT SIZE LIMITS
-- **Maximum 20 lines per method/function** (as per project rules)
-- **Maximum 200 lines per component file**
-- **If larger → Split into smaller components or extract custom hooks**
+#### ✅ CORRECT GraphQL Usage
+```typescript
+import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 
-### 🎨 MANDATORY SKELETON LOADING
+const { execute } = useGraphQLRequest(GET_USER_QUERY);
+const result = await execute({ userId: '123' });
+```
 
-**EVERY component that loads data MUST use skeleton loading**:
+#### ✅ CORRECT Backend API Usage
+```typescript
+import { useApiClient } from '../hooks/useApiClient';
 
-```tsx
-// ✅ CORRECT - Always use skeleton loading
-const MyComponent = () => {
-  const { data, loading } = useData();
-  
-  if (loading) {
-    return (
-      <Box>
-        <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
-        <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
-        <Skeleton variant="text" height={20} width="80%" />
-      </Box>
-    );
+const apiClient = useApiClient();
+const response = await apiClient.post('/addresses', addressData);
+```
+
+#### ❌ WRONG - Direct HTTP Requests
+```typescript
+// DON'T DO THIS
+const response = await fetch('/api/addresses', { method: 'POST' });
+const response = await axios.post('/api/addresses', data);
+const client = new GraphQLClient(url);
+```
+
+### Authentication and Security
+
+#### GraphQL Client Features
+- **Automatic token management** - handles Auth0 token refresh
+- **Proper headers** - includes Authorization and Hasura headers
+- **Error handling** - manages authentication errors gracefully
+- **Loading states** - provides loading indicators
+
+#### API Client Features
+- **Automatic token injection** - adds Auth0 tokens to requests
+- **Request/response interceptors** - handles loading states and errors
+- **Timeout handling** - 15-second timeout for requests
+- **Error handling** - manages API errors consistently
+
+### Migration Guidelines
+
+#### When Updating Existing Code
+1. **Replace direct fetch calls** with `useApiClient`
+2. **Replace direct GraphQL calls** with `useGraphQLRequest`
+3. **Update error handling** to use the client's error management
+4. **Update loading states** to use the client's loading management
+
+#### Example Migration
+```typescript
+// OLD - Direct fetch
+const response = await fetch('/api/addresses', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data)
+});
+
+// NEW - Using useApiClient
+const apiClient = useApiClient();
+const response = await apiClient.post('/addresses', data);
+```
+
+### Component Integration
+
+#### Hooks Usage
+- **Use `useGraphQLRequest`** for all Hasura operations
+- **Use `useApiClient`** for all backend API operations
+- **Handle loading states** from the hooks
+- **Handle errors** from the hooks
+
+#### Error Handling
+- **Always check for client errors** before making requests
+- **Use the error states** provided by the hooks
+- **Display user-friendly error messages**
+- **Log errors** for debugging
+
+### Testing Considerations
+
+#### Mocking
+- **Mock the client hooks** in tests, not the underlying HTTP clients
+- **Test error scenarios** using the hook's error states
+- **Test loading states** using the hook's loading states
+
+#### Integration Testing
+- **Test the full request flow** through the hooks
+- **Verify authentication** is properly handled
+- **Verify error handling** works correctly
+
+### Performance Considerations
+
+#### Caching
+- **Use React Query or SWR** for caching if needed
+- **Don't cache sensitive data** in localStorage
+- **Clear cache** on logout
+
+#### Optimization
+- **Memoize query strings** to prevent unnecessary re-renders
+- **Use the skip option** to prevent unnecessary requests
+- **Batch requests** when possible
+
+### Security Best Practices
+
+#### Token Management
+- **Never store tokens** in localStorage or sessionStorage
+- **Let Auth0 handle** token refresh automatically
+- **Clear tokens** on logout
+
+#### Request Validation
+- **Validate input data** before sending requests
+- **Sanitize user input** to prevent injection attacks
+- **Use TypeScript** for type safety
+
+### Common Patterns
+
+#### Data Fetching Pattern
+```typescript
+const { data, loading, error, execute } = useGraphQLRequest(QUERY);
+
+useEffect(() => {
+  if (!loading && !data) {
+    execute();
   }
-  
-  return <div>{data}</div>;
-};
-
-// ❌ WRONG - Never use simple loading text
-const BadComponent = () => {
-  const { data, loading } = useData();
-  
-  if (loading) return <div>Loading...</div>; // ❌ FORBIDDEN
-  
-  return <div>{data}</div>;
-};
+}, [execute, loading, data]);
 ```
 
-**Required Skeleton Patterns**:
-- **Cards**: `<Skeleton variant="rectangular" height={200} />`
-- **Text Lines**: `<Skeleton variant="text" height={24} />`
-- **Circular**: `<Skeleton variant="circular" width={40} height={40} />`
-- **Tables**: Use `<Skeleton>` for each cell
-- **Lists**: Array.from(new Array(5)).map() with skeleton items
+#### API Call Pattern
+```typescript
+const apiClient = useApiClient();
 
-### 🧩 REUSABLE COMPONENT HIERARCHY
-
-#### 1. **Common Components** (`src/components/common/`)
-**USE THESE FIRST** - Already available:
-- `LoadingPage` - Full page loading with skeleton
-- `LoadingSpinner` - Simple spinner component  
-- `LoadingScreen` - Backdrop loading overlay
-- `ConfirmationModal` - Yes/No confirmation dialogs
-- `DashboardItemCard` - Product/item display cards
-- `AccountInformation` - Account balance display
-- `PhoneInput` - Phone number input with validation
-- `LanguageSwitcher` - Language selection
-- `Logo` - Brand logo component
-- `ErrorBoundary` - Error handling wrapper
-
-#### 2. **Dialog Components** (`src/components/dialogs/`)
-**REUSE THESE** - Already available:
-- `OrderDialog` - Order placement dialog
-- `AddressDialog` - Address form dialog
-
-#### 3. **Business Components** (`src/components/business/`)
-**EXTEND THESE** - Domain-specific but reusable:
-- `BusinessOrderCard` - Order display card
-- `InventoryCards` - Inventory grid view
-- `ItemsCards` - Items grid view  
-- `BusinessInventoryTable` - Inventory table view
-
-### 🔄 COMPONENT CREATION PROCESS
-
-#### Step 1: Search & Analyze
-```bash
-# REQUIRED searches before creating new component:
-1. codebase_search: "similar functionality description"
-2. grep_search: "component name patterns"  
-3. file_search: "related file names"
-```
-
-#### Step 2: Reuse Decision Matrix
-- **90%+ match** → Use existing component with new props
-- **70-89% match** → Extend existing component
-- **50-69% match** → Extract common base component
-- **<50% match** → Create new component following patterns
-
-#### Step 3: Component Structure Template
-```tsx
-// ✅ MANDATORY TEMPLATE for new components
-import React from 'react';
-import { Box, Skeleton } from '@mui/material';
-import { useTranslation } from 'react-i18next';
-
-interface ComponentNameProps {
-  // Define clear, typed props
-  data?: DataType;
-  loading?: boolean;
-  onAction?: (item: DataType) => void;
-}
-
-const ComponentName: React.FC<ComponentNameProps> = ({
-  data,
-  loading = false,
-  onAction,
-}) => {
-  const { t } = useTranslation();
-
-  // MANDATORY: Skeleton loading
-  if (loading) {
-    return (
-      <Box>
-        <Skeleton variant="rectangular" height={200} />
-        <Skeleton variant="text" height={24} sx={{ mt: 1 }} />
-      </Box>
-    );
+const handleSubmit = async (data) => {
+  try {
+    const response = await apiClient.post('/endpoint', data);
+    // Handle success
+  } catch (error) {
+    // Handle error
   }
-
-  // MANDATORY: Empty state
-  if (!data || data.length === 0) {
-    return (
-      <Box textAlign="center" py={4}>
-        <Typography variant="body1" color="text.secondary">
-          {t('common.noData')}
-        </Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Box>
-      {/* Component content */}
-    </Box>
-  );
 };
-
-export default ComponentName;
 ```
 
-### 🎯 LOADING PATTERNS
+### File Organization
 
-#### 1. **Page-Level Loading**
-```tsx
-// Use LoadingPage for full page loads
-if (loading) {
-  return (
-    <LoadingPage
-      message="Loading data"
-      subtitle="Please wait"
-      showProgress={true}
-    />
-  );
-}
+#### Hook Location
+- **GraphQL hooks** in `src/hooks/useGraphQL*.ts`
+- **API hooks** in `src/hooks/useApi*.ts`
+- **Custom hooks** in `src/hooks/` directory
+
+#### Import Structure
+```typescript
+// GraphQL imports
+import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
+
+// API imports
+import { useApiClient } from '../hooks/useApiClient';
 ```
 
-#### 2. **Section-Level Loading**  
-```tsx
-// Use skeleton for content sections
-if (loading) {
-  return (
-    <Box>
-      {Array.from(new Array(3)).map((_, index) => (
-        <Card key={index} sx={{ mb: 2 }}>
-          <CardContent>
-            <Skeleton variant="rectangular" height={60} />
-            <Skeleton variant="text" sx={{ mt: 1 }} />
-          </CardContent>
-        </Card>
-      ))}
-    </Box>
-  );
-}
-```
+### Compliance Checklist
 
-#### 3. **Table/Grid Loading**
-```tsx
-// Use skeleton for table rows
-if (loading) {
-  return (
-    <TableContainer>
-      <Table>
-        <TableBody>
-          {Array.from(new Array(5)).map((_, index) => (
-            <TableRow key={index}>
-              <TableCell><Skeleton /></TableCell>
-              <TableCell><Skeleton /></TableCell>
-              <TableCell><Skeleton /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}
-```
+Before committing any API or GraphQL related code, ensure:
 
-### 🚫 FORBIDDEN PATTERNS
+- [ ] All GraphQL requests use `useGraphQLRequest`
+- [ ] All backend API requests use `useApiClient`
+- [ ] No direct fetch, axios, or GraphQLClient usage
+- [ ] Proper error handling implemented
+- [ ] Loading states handled correctly
+- [ ] Authentication properly configured
+- [ ] TypeScript types defined
+- [ ] Tests updated to use proper hooks
 
-#### ❌ Simple Loading Text
-```tsx
-// NEVER DO THIS:
-if (loading) return <div>Loading...</div>;
-if (loading) return <CircularProgress />;
-if (loading) return <Typography>Loading...</Typography>;
-```
-
-#### ❌ Duplicate Components
-```tsx
-// NEVER CREATE DUPLICATE COMPONENTS:
-// Don't create LoadingSpinner2, CustomModal, etc.
-// ALWAYS extend existing components instead
-```
-
-#### ❌ Large Components
-```tsx
-// NEVER CREATE COMPONENTS >200 lines
-// ALWAYS split into smaller components
-```
-
-### ✅ REQUIRED IMPORTS
-
-**Every component MUST import**:
-```tsx
-import React from 'react';
-import { Skeleton } from '@mui/material'; // For loading states
-import { useTranslation } from 'react-i18next'; // For i18n
-```
-
-### 🔧 CUSTOM HOOKS INTEGRATION
-
-**ALWAYS use existing hooks**:
-- `useLoading` - Global loading state
-- `useApiWithLoading` - API calls with loading
-- `useGraphQLRequest` - GraphQL with loading
-- `useUserProfile` - User profile data
-- `useBusinessInventory` - Business inventory
-- `useBusinessLocations` - Business locations
-
-### 📋 COMPONENT CHECKLIST
-
-Before creating ANY component, verify:
-- [ ] Searched for existing similar components
-- [ ] Checked if existing component can be extended
-- [ ] Includes skeleton loading for all loading states
-- [ ] Uses proper TypeScript interfaces
-- [ ] Includes empty state handling
-- [ ] Uses translation keys (no hardcoded strings)
-- [ ] Follows Material-UI design system
-- [ ] Component is <200 lines
-- [ ] Methods are <20 lines
-- [ ] Includes proper error handling
-
-### 🏗️ ARCHITECTURE PRINCIPLES
-
-1. **Composition over Inheritance** - Use props and composition
-2. **Single Responsibility** - One component, one purpose  
-3. **Reusability First** - Design for reuse from the start
-4. **Loading States** - Always show skeleton loading
-5. **Error Boundaries** - Wrap components in ErrorBoundary
-6. **Accessibility** - Use proper ARIA labels and semantic HTML
-7. **Performance** - Use React.memo for expensive components
-8. **Testing** - Write tests for reusable components
-
----
-
-## Translation Guidelines (Preserved from original rules)
-
-### Common UI Elements
-- "Welcome back" → "Bon retour"
-- "Loading" → "Chargement"
-- "Error" → "Erreur"
-- "Success" → "Succès"
-- "Cancel" → "Annuler"
-- "Save" → "Enregistrer"
-- "Delete" → "Supprimer"
-- "Edit" → "Modifier"
-- "Add" → "Ajouter"
-- "Remove" → "Retirer"
-- "Submit" → "Soumettre"
-- "Confirm" → "Confirmer"
-- "Back" → "Retour"
-- "Next" → "Suivant"
-- "Previous" → "Précédent"
-- "Close" → "Fermer"
-- "Open" → "Ouvrir"
-- "Search" → "Rechercher"
-- "Filter" → "Filtrer"
-- "Sort" → "Trier"
-
-### Implementation Notes
-- Always use translation keys from i18n files
-- Keep technical terms and variable names in English
-- Use proper French grammar and punctuation
-- Maintain consistent terminology throughout the application 
+This ensures consistent, secure, and maintainable API communication throughout the application. 

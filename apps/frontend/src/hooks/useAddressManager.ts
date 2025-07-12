@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { environment } from '../config/environment';
+import { useApiClient } from './useApiClient';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Address {
@@ -194,6 +194,9 @@ export const useAddressManager = (config: AddressManagerConfig) => {
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
   const { execute: deleteAddress } = useGraphQLRequest(DELETE_ADDRESS);
 
+  // API client for backend requests
+  const apiClient = useApiClient();
+
   // Get the appropriate query based on entity type
   const getQueryExecutor = useCallback(() => {
     switch (entityType) {
@@ -239,11 +242,15 @@ export const useAddressManager = (config: AddressManagerConfig) => {
     }
   }, [entityId, entityType, getQueryExecutor]);
 
-  // Add new address using the new POST API
+  // Add new address using the new POST API with useApiClient
   const addAddress = useCallback(
     async (addressData: AddressFormData) => {
       if (!entityId) {
         throw new Error('Entity ID is required');
+      }
+
+      if (!apiClient) {
+        throw new Error('API client not available');
       }
 
       setLoading(true);
@@ -265,25 +272,13 @@ export const useAddressManager = (config: AddressManagerConfig) => {
           longitude: addressData.longitude,
         };
 
-        // Make the API call to the backend
-        const response = await fetch(`${environment.apiUrl}/addresses`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Add authentication headers here if needed
-            // 'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(requestData),
-        });
+        // Make the API call using useApiClient
+        const response = await apiClient.post<AddressApiResponse>(
+          '/addresses',
+          requestData
+        );
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
-          );
-        }
-
-        const result: AddressApiResponse = await response.json();
+        const result = response.data;
 
         if (result.success) {
           setSuccessMessage(result.message);
@@ -300,15 +295,24 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         } else {
           throw new Error(result.message || 'Failed to add address');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error adding address:', err);
-        setError(err instanceof Error ? err.message : 'Failed to add address');
+
+        // Handle axios error response
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else if (err.message) {
+          setError(err.message);
+        } else {
+          setError('Failed to add address');
+        }
+
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [entityId, fetchAddresses, onAccountCreated]
+    [entityId, apiClient, fetchAddresses, onAccountCreated]
   );
 
   // Update existing address

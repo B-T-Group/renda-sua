@@ -18,8 +18,6 @@ export interface CreateAddressDto {
 
 export interface AddressResponse {
   id: string;
-  entity_type: string;
-  entity_id: string;
   address_line_1: string;
   address_line_2?: string;
   city: string;
@@ -274,18 +272,9 @@ export class AddressesService {
       const identifier = this.hasuraUserService.getIdentifier();
       const user = await this.getUserInfo(identifier);
 
-      // Determine entity type based on user_type_id
-      let entityType = 'user';
-      if (user.user_type_id === 2) {
-        // Assuming 2 is for businesses
-        entityType = 'business';
-      }
-
-      // Create the address
+      // Create the address first
       const createAddressMutation = `
         mutation CreateAddress(
-          $entityType: entity_type_enum!,
-          $entityId: uuid!,
           $addressLine1: String!,
           $addressLine2: String,
           $city: String!,
@@ -298,8 +287,6 @@ export class AddressesService {
           $longitude: Decimal
         ) {
           insert_addresses_one(object: {
-            entity_type: $entityType,
-            entity_id: $entityId,
             address_line_1: $addressLine1,
             address_line_2: $addressLine2,
             city: $city,
@@ -312,8 +299,6 @@ export class AddressesService {
             longitude: $longitude
           }) {
             id
-            entity_type
-            entity_id
             address_line_1
             address_line_2
             city
@@ -333,8 +318,6 @@ export class AddressesService {
       const addressResult = await this.hasuraSystemService.executeMutation(
         createAddressMutation,
         {
-          entityType,
-          entityId: user.id,
           addressLine1: addressData.address_line_1,
           addressLine2: addressData.address_line_2,
           city: addressData.city,
@@ -349,6 +332,79 @@ export class AddressesService {
       );
 
       const address = addressResult.insert_addresses_one;
+
+      // Now create the junction table entry based on user type
+      let junctionMutation = '';
+      let junctionVariables = {};
+
+      if (user.user_type_id === 1) {
+        // Client
+        junctionMutation = `
+          mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
+            insert_client_addresses_one(object: {
+              client_id: $clientId,
+              address_id: $addressId
+            }) {
+              id
+              client_id
+              address_id
+              created_at
+              updated_at
+            }
+          }
+        `;
+        junctionVariables = {
+          clientId: user.id,
+          addressId: address.id,
+        };
+      } else if (user.user_type_id === 2) {
+        // Business
+        junctionMutation = `
+          mutation CreateBusinessAddress($businessId: uuid!, $addressId: uuid!) {
+            insert_business_addresses_one(object: {
+              business_id: $businessId,
+              address_id: $addressId
+            }) {
+              id
+              business_id
+              address_id
+              created_at
+              updated_at
+            }
+          }
+        `;
+        junctionVariables = {
+          businessId: user.id,
+          addressId: address.id,
+        };
+      } else if (user.user_type_id === 3) {
+        // Agent
+        junctionMutation = `
+          mutation CreateAgentAddress($agentId: uuid!, $addressId: uuid!) {
+            insert_agent_addresses_one(object: {
+              agent_id: $agentId,
+              address_id: $addressId
+            }) {
+              id
+              agent_id
+              address_id
+              created_at
+              updated_at
+            }
+          }
+        `;
+        junctionVariables = {
+          agentId: user.id,
+          addressId: address.id,
+        };
+      }
+
+      if (junctionMutation) {
+        await this.hasuraSystemService.executeMutation(
+          junctionMutation,
+          junctionVariables
+        );
+      }
 
       // Get currency from country and create account if needed
       const currency = this.getCurrencyFromCountry(addressData.country);
