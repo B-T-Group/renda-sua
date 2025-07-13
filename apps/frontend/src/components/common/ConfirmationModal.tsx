@@ -25,6 +25,7 @@ interface ConfirmationModalProps {
   loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  additionalContent?: React.ReactNode;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -37,6 +38,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   loading = false,
   onConfirm,
   onCancel,
+  additionalContent,
 }) => {
   const { t } = useTranslation();
 
@@ -54,6 +56,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         <DialogContentText id="confirmation-dialog-description">
           {message}
         </DialogContentText>
+        {additionalContent}
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={loading} color="inherit">

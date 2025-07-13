@@ -11,9 +11,9 @@ import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type {
   GetOrderRequest,
-  OrdersService,
   OrderStatusChangeRequest,
 } from './orders.service';
+import { OrdersService } from './orders.service';
 
 export interface UpdateOrderStatusRequest {
   status: string;

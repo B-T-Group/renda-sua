@@ -22,7 +22,7 @@ interface OrderAction {
   label: string;
   status: string;
   color: 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
-  icon: React.ReactNode;
+  icon: React.ComponentType;
 }
 
 interface BusinessOrderCardProps {
@@ -91,7 +91,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   };
 
   const getConfirmationMessage = (action: OrderAction) => {
-    return t('business.orders.confirmStatusUpdate', {
+    return t('orders.confirmStatusUpdate', {
       orderNumber: order.order_number,
       newStatus: action.label,
     });
@@ -122,7 +122,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             mb={2}
           >
             <Typography variant="h6" component="div">
-              {t('business.orders.table.orderNumber', {
+              {t('orders.table.orderNumber', {
                 number: order.order_number,
               })}
             </Typography>
@@ -154,8 +154,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               mb={1}
             >
               <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-              {order.order_items?.length || 0}{' '}
-              {t('business.orders.table.items')}
+              {order.order_items?.length || 0} {t('orders.table.items')}
             </Typography>
             <Typography
               variant="body2"
@@ -196,19 +195,22 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
           </Box>
         </CardContent>
         <CardActions>
-          {getAvailableActions(order).map((action) => (
-            <Button
-              key={action.status}
-              size="small"
-              color={action.color}
-              variant="outlined"
-              startIcon={action.icon}
-              onClick={() => handleActionClick(action)}
-              disabled={loading}
-            >
-              {action.label}
-            </Button>
-          ))}
+          {getAvailableActions(order).map((action) => {
+            const IconComponent = action.icon;
+            return (
+              <Button
+                key={action.status}
+                size="small"
+                color={action.color}
+                variant="outlined"
+                startIcon={<IconComponent />}
+                onClick={() => handleActionClick(action)}
+                disabled={loading}
+              >
+                {action.label}
+              </Button>
+            );
+          })}
         </CardActions>
       </Card>
 
@@ -222,7 +224,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
         cancelText={t('common.cancel')}
         onConfirm={handleConfirmStatusUpdate}
         onCancel={handleCancelStatusUpdate}
-        color={
+        confirmColor={
           pendingAction ? getConfirmationColor(pendingAction.action) : 'primary'
         }
         loading={loading}

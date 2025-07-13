@@ -20,6 +20,7 @@
     "done": "Terminé",
     "search": "Rechercher",
     "filter": "Filtrer",
+    "clear": "Effacer",
     "sort": "Trier",
     "created": "Créé",
     "updated": "Mis à jour",
@@ -152,6 +153,13 @@
     "currentPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe"
   },
+  "client": {
+    "orders": {
+      "title": "Mes Commandes",
+      "subtitle": "Consultez et gérez votre historique de commandes",
+      "noOrdersFound": "Aucune commande trouvée. Commencez à faire des achats pour voir vos commandes ici."
+    }
+  },
   "business": {
     "business": "Entreprise",
     "client": "Client",
@@ -214,10 +222,33 @@
         "confirm": "Confirmer",
         "cancel": "Annuler",
         "startPreparing": "Commencer la Préparation",
-        "readyForPickup": "Prête pour Ramassage"
+        "readyForPickup": "Prête pour Ramassage",
+        "refund": "Rembourser",
+        "pickUp": "Ramasser",
+        "startTransit": "Commencer le Transit",
+        "outForDelivery": "En Livraison",
+        "deliver": "Livrer",
+        "failDelivery": "Échec de Livraison",
+        "getOrder": "Obtenir la Commande"
       },
       "confirmTitle": "Confirmer la Mise à Jour du Statut",
       "confirmStatusUpdate": "Êtes-vous sûr de vouloir mettre à jour le statut de la commande {{orderNumber}} à {{newStatus}} ?",
+      "notes": "Notes",
+      "notesPlaceholder": "Ajoutez des notes supplémentaires sur ce changement de statut...",
+      "orderItems": "Articles de Commande",
+      "specialInstructions": "Instructions Spéciales",
+      "confirming": "Confirmation de la commande...",
+      "startingPreparation": "Début de la préparation...",
+      "completingPreparation": "Finalisation de la préparation...",
+      "cancelling": "Annulation de la commande...",
+      "refunding": "Traitement du remboursement...",
+      "gettingOrder": "Obtention de la commande...",
+      "pickingUp": "Ramassage de la commande...",
+      "startingTransit": "Début du transit...",
+      "outForDelivery": "Marquage comme en livraison...",
+      "delivering": "Livraison de la commande...",
+      "failingDelivery": "Marquage de la livraison comme échouée...",
+      "completed": "Terminée",
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmée",

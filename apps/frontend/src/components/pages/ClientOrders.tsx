@@ -581,7 +581,7 @@ const ClientOrders: React.FC = () => {
         cancelText={t('common.cancel')}
         onConfirm={handleConfirmAction}
         onCancel={handleCancelAction}
-        color="primary"
+        confirmColor="primary"
         loading={updateLoading}
         additionalContent={
           <TextField

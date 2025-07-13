@@ -151,6 +151,13 @@
     "currentPassword": "Current Password",
     "newPassword": "New Password"
   },
+  "client": {
+    "orders": {
+      "title": "My Orders",
+      "subtitle": "View and manage your order history",
+      "noOrdersFound": "No orders found. Start shopping to see your orders here."
+    }
+  },
   "business": {
     "business": "Business",
     "client": "Client",
@@ -226,6 +233,7 @@
         "cancelled": "Cancelled",
         "failed": "Failed",
         "refunded": "Refunded",
+        "completed": "Completed",
         "unknown": "Unknown"
       },
       "filters": {
@@ -253,6 +261,8 @@
       "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",
       "notes": "Notes",
       "notesPlaceholder": "Add any additional notes about this status change...",
+      "orderItems": "Order Items",
+      "specialInstructions": "Special Instructions",
       "confirming": "Confirming order...",
       "startingPreparation": "Starting preparation...",
       "completingPreparation": "Completing preparation...",
