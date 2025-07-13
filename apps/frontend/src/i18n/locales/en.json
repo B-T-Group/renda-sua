@@ -240,10 +240,31 @@
         "confirm": "Confirm",
         "cancel": "Cancel",
         "startPreparing": "Start Preparing",
-        "readyForPickup": "Ready for Pickup"
+        "readyForPickup": "Ready for Pickup",
+        "refund": "Refund",
+        "pickUp": "Pick Up",
+        "startTransit": "Start Transit",
+        "outForDelivery": "Out for Delivery",
+        "deliver": "Deliver",
+        "failDelivery": "Fail Delivery",
+        "getOrder": "Get Order"
       },
       "confirmTitle": "Confirm Status Update",
-      "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?"
+      "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",
+      "notes": "Notes",
+      "notesPlaceholder": "Add any additional notes about this status change...",
+      "confirming": "Confirming order...",
+      "startingPreparation": "Starting preparation...",
+      "completingPreparation": "Completing preparation...",
+      "cancelling": "Cancelling order...",
+      "refunding": "Processing refund...",
+      "gettingOrder": "Getting order...",
+      "pickingUp": "Picking up order...",
+      "startingTransit": "Starting transit...",
+      "outForDelivery": "Marking as out for delivery...",
+      "delivering": "Delivering order...",
+      "failingDelivery": "Marking delivery as failed...",
+      "completed": "Completed"
     },
     "inventory": {
       "title": "Inventory Management",

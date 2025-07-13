@@ -11,6 +11,7 @@ import {
   CardActions,
   CardContent,
   Chip,
+  TextField,
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
@@ -26,7 +27,7 @@ interface OrderAction {
 
 interface BusinessOrderCardProps {
   order: any; // TODO: Replace with proper Order type
-  onStatusUpdate: (orderId: string, newStatus: string) => void;
+  onStatusUpdate: (orderId: string, newStatus: string, notes?: string) => void;
   getAvailableActions: (order: any) => OrderAction[];
   getStatusColor: (status: string) => string;
   formatAddress: (address: any) => string;
@@ -53,16 +54,22 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
     status: string;
     action: OrderAction;
   } | null>(null);
+  const [notes, setNotes] = useState('');
 
   const handleActionClick = (action: OrderAction) => {
     setPendingAction({ status: action.status, action });
     setConfirmationOpen(true);
+    setNotes('');
   };
 
   const handleConfirmStatusUpdate = async () => {
     if (pendingAction) {
       try {
-        await onStatusUpdate(order.id, pendingAction.status);
+        await onStatusUpdate(
+          order.id,
+          pendingAction.status,
+          notes.trim() || undefined
+        );
         // Optionally refresh orders if the function is provided
         if (refreshOrders) {
           refreshOrders();
@@ -72,6 +79,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
       } finally {
         setConfirmationOpen(false);
         setPendingAction(null);
+        setNotes('');
       }
     }
   };
@@ -79,6 +87,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   const handleCancelStatusUpdate = () => {
     setConfirmationOpen(false);
     setPendingAction(null);
+    setNotes('');
   };
 
   const getConfirmationMessage = (action: OrderAction) => {
@@ -205,18 +214,30 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
 
       <ConfirmationModal
         open={confirmationOpen}
-        title={t('business.orders.confirmTitle')}
+        title={t('orders.confirmTitle')}
         message={
           pendingAction ? getConfirmationMessage(pendingAction.action) : ''
         }
-        confirmText={t('common.yes')}
-        cancelText={t('common.no')}
-        confirmColor={
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={handleConfirmStatusUpdate}
+        onCancel={handleCancelStatusUpdate}
+        color={
           pendingAction ? getConfirmationColor(pendingAction.action) : 'primary'
         }
         loading={loading}
-        onConfirm={handleConfirmStatusUpdate}
-        onCancel={handleCancelStatusUpdate}
+        additionalContent={
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label={t('orders.notes')}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={t('orders.notesPlaceholder')}
+            sx={{ mt: 2 }}
+          />
+        }
       />
     </>
   );

@@ -15,7 +15,7 @@ import BusinessDashboard from '../components/pages/BusinessDashboard';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
-import { ClientOrders } from '../components/pages/ClientOrders';
+import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
 import ItemViewPage from '../components/pages/ItemViewPage';

@@ -1,24 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useGraphQLRequest } from './useGraphQLRequest';
+import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-
-const UPDATE_ORDER_STATUS = `
-  mutation UpdateOrderStatus($id: uuid!, $current_status: order_status_enum!, $assigned_agent_id: uuid) {
-    update_orders_by_pk(
-      pk_columns: { id: $id }
-      _set: { 
-        current_status: $current_status
-        assigned_agent_id: $assigned_agent_id
-        updated_at: "now()"
-      }
-    ) {
-      id
-      current_status
-      assigned_agent_id
-      updated_at
-    }
-  }
-`;
+import { useBackendOrders } from './useBackendOrders';
 
 export interface OrderItem {
   id: string;
@@ -33,39 +15,50 @@ export interface OrderItem {
   special_instructions?: string;
 }
 
-export interface Address {
+export interface Client {
   id: string;
-  address_line_1: string;
-  address_line_2?: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
+  user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+}
+
+export interface Business {
+  id: string;
+  name: string;
+  user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
 }
 
 export interface BusinessLocation {
   id: string;
   name: string;
   location_type: string;
-  address: Address;
+  address: {
+    id: string;
+    address_line_1: string;
+    address_line_2: string | null;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
 }
 
-export interface User {
+export interface Address {
   id: string;
-  first_name: string;
-  last_name: string;
-  email?: string;
-}
-
-export interface Client {
-  id: string;
-  user: User;
-}
-
-export interface Business {
-  id: string;
-  name: string;
-  user: User;
+  address_line_1: string;
+  address_line_2: string | null;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
 }
 
 export interface Order {
@@ -100,24 +93,18 @@ export interface Order {
 export interface ActiveOrdersResponse {
   success: boolean;
   orders: Order[];
-  count: number;
+  message?: string;
 }
 
 export interface PendingOrdersResponse {
   success: boolean;
   orders: Order[];
-  count: number;
+  message?: string;
 }
 
 export interface PickUpOrderResponse {
   success: boolean;
-  order: {
-    id: string;
-    order_number: string;
-    current_status: string;
-    assigned_agent_id: string;
-    updated_at: string;
-  };
+  order: Order;
   message: string;
 }
 
@@ -128,8 +115,15 @@ export const useAgentOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { execute: updateOrderStatus } = useGraphQLRequest(UPDATE_ORDER_STATUS);
   const apiClient = useApiClient();
+  const {
+    getOrder,
+    pickUpOrder: backendPickUpOrder,
+    startTransit,
+    outForDelivery,
+    deliverOrder,
+    failDelivery,
+  } = useBackendOrders();
 
   const fetchActiveOrders = useCallback(async () => {
     if (!apiClient) {
@@ -225,19 +219,16 @@ export const useAgentOrders = () => {
       }
 
       try {
-        const response = await apiClient.post<PickUpOrderResponse>(
-          '/agents/pick_up_order',
-          {
-            order_id: orderId,
-          }
-        );
+        const response = await backendPickUpOrder({
+          orderId,
+        });
 
-        if (response.data.success) {
+        if (response.success) {
           // Refresh both active and pending orders after successful pickup
           await fetchAllOrders();
-          return response.data.order;
+          return response.order;
         } else {
-          throw new Error(response.data.message || 'Failed to pick up order');
+          throw new Error(response.message || 'Failed to pick up order');
         }
       } catch (error: any) {
         const errorMessage =
@@ -248,24 +239,72 @@ export const useAgentOrders = () => {
         throw new Error(errorMessage);
       }
     },
-    [apiClient, fetchAllOrders]
+    [apiClient, backendPickUpOrder, fetchAllOrders]
   );
 
   const updateOrderStatusAction = useCallback(
-    async (orderId: string, status: string) => {
+    async (orderId: string, status: string, notes?: string) => {
       try {
-        await updateOrderStatus({
-          id: orderId,
-          current_status: status,
-        });
-        // Refresh active orders after status update
-        await fetchActiveOrders();
+        let response;
+
+        switch (status) {
+          case 'in_transit':
+            response = await startTransit({ orderId, notes });
+            break;
+          case 'out_for_delivery':
+            response = await outForDelivery({ orderId, notes });
+            break;
+          case 'delivered':
+            response = await deliverOrder({ orderId, notes });
+            break;
+          case 'failed':
+            response = await failDelivery({ orderId, notes });
+            break;
+          default:
+            throw new Error(`Unsupported status transition: ${status}`);
+        }
+
+        if (response.success) {
+          // Refresh active orders after status update
+          await fetchActiveOrders();
+          return response.order;
+        } else {
+          throw new Error(response.message || 'Failed to update order status');
+        }
       } catch (error) {
         console.error('Error updating order status:', error);
         throw error;
       }
     },
-    [updateOrderStatus, fetchActiveOrders]
+    [
+      startTransit,
+      outForDelivery,
+      deliverOrder,
+      failDelivery,
+      fetchActiveOrders,
+    ]
+  );
+
+  const getOrderForPickup = useCallback(
+    async (orderId: string) => {
+      try {
+        const response = await getOrder({ orderId });
+
+        if (response.success) {
+          // Refresh orders after successful pickup
+          await fetchAllOrders();
+          return response;
+        } else {
+          throw new Error(response.message || 'Failed to get order');
+        }
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.error || error.message || 'Failed to get order';
+        console.error('Error getting order:', errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [getOrder, fetchAllOrders]
   );
 
   return {
@@ -277,5 +316,6 @@ export const useAgentOrders = () => {
     refetch: fetchAllOrders,
     pickUpOrder,
     updateOrderStatusAction,
+    getOrderForPickup,
   };
 };

@@ -346,9 +346,15 @@ const AgentDashboard: React.FC = () => {
     error,
     pickUpOrder,
     updateOrderStatusAction,
+    getOrderForPickup,
   } = useAgentOrders();
   const {
-    updateOrderStatus,
+    getOrder,
+    pickUpOrder: backendPickUpOrder,
+    startTransit,
+    outForDelivery,
+    deliverOrder,
+    failDelivery,
     loading: updateLoading,
     error: updateError,
   } = useBackendOrders();
@@ -391,9 +397,42 @@ const AgentDashboard: React.FC = () => {
     }
   };
 
-  const handleStatusUpdate = async (orderId: string, status: string) => {
+  const handleGetOrder = async (orderId: string) => {
+    if (!profile?.id) {
+      setNotification({
+        open: true,
+        message: t('messages.agentProfileNotFound'),
+        severity: 'error',
+      });
+      return;
+    }
+
     try {
-      await updateOrderStatus(orderId, status);
+      const result = await getOrderForPickup(orderId);
+      setNotification({
+        open: true,
+        message: t('messages.orderAssignedSuccess', {
+          orderNumber: result.order.order_number,
+          holdAmount: result.holdAmount,
+        }),
+        severity: 'success',
+      });
+    } catch (error: any) {
+      setNotification({
+        open: true,
+        message: error.message || t('messages.orderAssignmentError'),
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleStatusUpdate = async (
+    orderId: string,
+    status: string,
+    notes?: string
+  ) => {
+    try {
+      const result = await updateOrderStatusAction(orderId, status, notes);
       setNotification({
         open: true,
         message: t('messages.orderStatusUpdateSuccess', {
@@ -401,12 +440,14 @@ const AgentDashboard: React.FC = () => {
         }),
         severity: 'success',
       });
+      return result;
     } catch (error: any) {
       setNotification({
         open: true,
         message: error.message || t('messages.orderStatusUpdateError'),
         severity: 'error',
       });
+      throw error;
     }
   };
 

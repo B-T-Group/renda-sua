@@ -28,6 +28,9 @@ export { useBusinessOrders } from './useBusinessOrders';
 export { useEditItemFlow } from './useEditItemFlow';
 export { useItems } from './useItems';
 
+// Client hooks
+export { useClientOrders } from './useClientOrders';
+
 // API client
 export { useApiClient } from './useApiClient';
 

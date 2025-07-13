@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useBackendOrders } from './useBackendOrders';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
-export interface BusinessOrder {
+export interface ClientOrder {
   id: string;
   order_number: string;
   client_id: string;
@@ -24,8 +24,9 @@ export interface BusinessOrder {
   payment_status: string | null;
   created_at: string;
   updated_at: string;
-  client: {
+  business: {
     id: string;
+    name: string;
     user: {
       id: string;
       first_name: string;
@@ -84,11 +85,10 @@ export interface OrderFilters {
   status?: string;
   dateFrom?: string;
   dateTo?: string;
-  address?: string;
 }
 
-const GET_BUSINESS_ORDERS = `
-  query GetBusinessOrders($filters: orders_bool_exp) {
+const GET_CLIENT_ORDERS = `
+  query GetClientOrders($filters: orders_bool_exp) {
     orders(where: $filters, order_by: { created_at: desc }) {
       id
       order_number
@@ -111,8 +111,9 @@ const GET_BUSINESS_ORDERS = `
       payment_status
       created_at
       updated_at
-      client {
+      business {
         id
+        name
         user {
           id
           first_name
@@ -168,33 +169,27 @@ const GET_BUSINESS_ORDERS = `
   }
 `;
 
-export const useBusinessOrders = (businessId?: string) => {
-  const [orders, setOrders] = useState<BusinessOrder[]>([]);
+export const useClientOrders = (clientId?: string) => {
+  const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({});
 
-  const { execute } = useGraphQLRequest(GET_BUSINESS_ORDERS, {
+  const { execute } = useGraphQLRequest(GET_CLIENT_ORDERS, {
     loadingMessage: 'common.fetchingOrders',
   });
 
-  // Use backend order management APIs
-  const {
-    confirmOrder,
-    startPreparing,
-    completePreparation,
-    cancelOrder,
-    refundOrder,
-  } = useBackendOrders();
+  // Use backend order management APIs for client actions
+  const { cancelOrder, refundOrder } = useBackendOrders();
 
   const buildFilters = useCallback(
     (filterParams: OrderFilters) => {
       const conditions: any[] = [];
 
-      // Business filter
-      if (businessId) {
+      // Client filter
+      if (clientId) {
         conditions.push({
-          business_id: { _eq: businessId },
+          client_id: { _eq: clientId },
         });
       }
 
@@ -219,16 +214,7 @@ export const useBusinessOrders = (businessId?: string) => {
         });
       }
 
-      // Address filter
-      if (filterParams.address) {
-        conditions.push({
-          delivery_address: {
-            address_line_1: { _ilike: `%${filterParams.address}%` },
-          },
-        });
-      }
-
-      // Search filter (order number, client name, etc.)
+      // Search filter (order number, business name, etc.)
       if (filterParams.search) {
         conditions.push({
           _or: [
@@ -236,17 +222,8 @@ export const useBusinessOrders = (businessId?: string) => {
               order_number: { _ilike: `%${filterParams.search}%` },
             },
             {
-              client: {
-                user: {
-                  first_name: { _ilike: `%${filterParams.search}%` },
-                },
-              },
-            },
-            {
-              client: {
-                user: {
-                  last_name: { _ilike: `%${filterParams.search}%` },
-                },
+              business: {
+                name: { _ilike: `%${filterParams.search}%` },
               },
             },
           ],
@@ -255,44 +232,44 @@ export const useBusinessOrders = (businessId?: string) => {
 
       const finalFilter = conditions.length > 0 ? { _and: conditions } : {};
       console.log(
-        'useBusinessOrders: Final filter:',
+        'useClientOrders: Final filter:',
         JSON.stringify(finalFilter, null, 2)
       );
       return finalFilter;
     },
-    [businessId]
+    [clientId]
   );
 
   const fetchOrders = useCallback(
     async (filterParams: OrderFilters = {}) => {
       console.log(
-        'useBusinessOrders: Fetching orders with filters:',
+        'useClientOrders: Fetching orders with filters:',
         filterParams,
-        'businessId:',
-        businessId
+        'clientId:',
+        clientId
       );
       setLoading(true);
       setError(null);
 
       try {
         const builtFilters = buildFilters(filterParams);
-        console.log('useBusinessOrders: Built filters:', builtFilters);
+        console.log('useClientOrders: Built filters:', builtFilters);
         const result = await execute({ filters: builtFilters });
-        console.log('useBusinessOrders: Fetch result:', result);
+        console.log('useClientOrders: Fetch result:', result);
         console.log(
-          'useBusinessOrders: Orders count:',
+          'useClientOrders: Orders count:',
           result.orders?.length || 0
         );
         setOrders(result.orders || []);
         setFilters(filterParams);
       } catch (err) {
-        console.error('useBusinessOrders: Fetch error:', err);
+        console.error('useClientOrders: Fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch orders');
       } finally {
         setLoading(false);
       }
     },
-    [execute, buildFilters, businessId]
+    [execute, buildFilters, clientId]
   );
 
   const updateOrderStatus = useCallback(
@@ -301,15 +278,6 @@ export const useBusinessOrders = (businessId?: string) => {
         let response;
 
         switch (newStatus) {
-          case 'confirmed':
-            response = await confirmOrder({ orderId, notes });
-            break;
-          case 'preparing':
-            response = await startPreparing({ orderId, notes });
-            break;
-          case 'ready_for_pickup':
-            response = await completePreparation({ orderId, notes });
-            break;
           case 'cancelled':
             response = await cancelOrder({ orderId, notes });
             break;
@@ -345,13 +313,7 @@ export const useBusinessOrders = (businessId?: string) => {
         throw err;
       }
     },
-    [
-      confirmOrder,
-      startPreparing,
-      completePreparation,
-      cancelOrder,
-      refundOrder,
-    ]
+    [cancelOrder, refundOrder]
   );
 
   // Function to refresh orders when needed
@@ -360,43 +322,15 @@ export const useBusinessOrders = (businessId?: string) => {
   }, [fetchOrders, filters]);
 
   useEffect(() => {
-    console.log('useBusinessOrders: businessId changed:', businessId);
-    if (businessId) {
-      console.log(
-        'useBusinessOrders: Fetching orders for business:',
-        businessId
-      );
+    console.log('useClientOrders: clientId changed:', clientId);
+    if (clientId) {
+      console.log('useClientOrders: Fetching orders for client:', clientId);
       fetchOrders({});
-
-      // Temporary debug: also fetch all orders to see if there are any orders at all
-      setTimeout(async () => {
-        try {
-          console.log(
-            'useBusinessOrders: Debug - fetching all orders to check if any exist'
-          );
-          const result = await execute({ filters: {} });
-          console.log(
-            'useBusinessOrders: Debug - all orders count:',
-            result.orders?.length || 0
-          );
-          if (result.orders && result.orders.length > 0) {
-            console.log(
-              'useBusinessOrders: Debug - sample order business_id:',
-              result.orders[0].business_id
-            );
-          }
-        } catch (err) {
-          console.error(
-            'useBusinessOrders: Debug - error fetching all orders:',
-            err
-          );
-        }
-      }, 1000);
     } else {
-      console.log('useBusinessOrders: No businessId provided, clearing orders');
+      console.log('useClientOrders: No clientId provided, clearing orders');
       setOrders([]);
     }
-  }, [businessId, fetchOrders, execute]);
+  }, [clientId, fetchOrders]);
 
   return {
     orders,
