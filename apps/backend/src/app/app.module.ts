@@ -8,6 +8,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
+import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
@@ -52,6 +53,7 @@ import { AppService } from './app.service';
     AgentsModule,
     AwsModule,
     MtnMomoModule,
+    GoogleModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],

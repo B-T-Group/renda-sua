@@ -52,3 +52,4 @@ export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
 export { usePublicItems } from './usePublicItems';
 
 export { useApiWithLoading } from './useApiWithLoading';
+export * from './useDistanceMatrix';
