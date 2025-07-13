@@ -65,6 +65,10 @@ export interface MtnMomoConfig {
   callbackUrl?: string;
 }
 
+export interface OrderConfig {
+  agentHoldPercentage: number;
+}
+
 export interface Configuration {
   app: AppConfig;
   database: DatabaseConfig;
@@ -76,6 +80,7 @@ export interface Configuration {
   redis: RedisConfig;
   externalApi: ExternalApiConfig;
   mtnMomo: MtnMomoConfig;
+  order: OrderConfig;
 }
 
 export default (): Configuration => ({
@@ -140,5 +145,8 @@ export default (): Configuration => ({
     remittancePrimaryKey: process.env.MTN_MOMO_REMITTANCE_PRIMARY_KEY,
     remittanceSecondaryKey: process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY,
     callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
+  },
+  order: {
+    agentHoldPercentage: parseFloat(process.env.AGENT_HOLD_PERCENTAGE || '80'),
   },
 });

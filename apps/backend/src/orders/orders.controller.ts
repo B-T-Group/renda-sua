@@ -9,6 +9,11 @@ import {
 } from '@nestjs/common';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import type {
+  GetOrderRequest,
+  OrdersService,
+  OrderStatusChangeRequest,
+} from './orders.service';
 
 export interface UpdateOrderStatusRequest {
   status: string;
@@ -16,7 +21,10 @@ export interface UpdateOrderStatusRequest {
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly hasuraUserService: HasuraUserService) {}
+  constructor(
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly ordersService: OrdersService
+  ) {}
 
   @Post()
   async createOrder(@Body() orderData: CreateOrderRequest) {
@@ -99,5 +107,60 @@ export class OrdersController {
         statusCode
       );
     }
+  }
+
+  @Post('confirm')
+  async confirmOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.confirmOrder(request);
+  }
+
+  @Post('start_preparing')
+  async startPreparing(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.startPreparing(request);
+  }
+
+  @Post('complete_preparation')
+  async completePreparation(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.completePreparation(request);
+  }
+
+  @Post('get_order')
+  async getOrder(@Body() request: GetOrderRequest) {
+    return this.ordersService.getOrder(request);
+  }
+
+  @Post('pick_up')
+  async pickUpOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.pickUpOrder(request);
+  }
+
+  @Post('start_transit')
+  async startTransit(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.startTransit(request);
+  }
+
+  @Post('out_for_delivery')
+  async outForDelivery(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.outForDelivery(request);
+  }
+
+  @Post('deliver')
+  async deliverOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.deliverOrder(request);
+  }
+
+  @Post('fail_delivery')
+  async failDelivery(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.failDelivery(request);
+  }
+
+  @Post('cancel')
+  async cancelOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.cancelOrder(request);
+  }
+
+  @Post('refund')
+  async refundOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.refundOrder(request);
   }
 }
