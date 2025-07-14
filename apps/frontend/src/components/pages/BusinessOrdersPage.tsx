@@ -435,6 +435,11 @@ const BusinessOrdersPage: React.FC = () => {
                 formatDate={formatDate}
                 loading={updateLoading}
                 refreshOrders={refreshOrders}
+                businessAddress={
+                  locations && locations.length > 0
+                    ? formatAddress(locations[0].address)
+                    : ''
+                }
               />
             ))}
           </Box>

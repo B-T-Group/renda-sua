@@ -31,6 +31,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
+import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 const getStatusColor = (status: string) => {
@@ -89,9 +90,46 @@ const OrderCard: React.FC<{
   onPickUp?: (orderId: string) => Promise<void>;
   onUpdateStatus?: (orderId: string, status: string) => Promise<void>;
   showActions?: boolean;
-}> = ({ order, onPickUp, onUpdateStatus, showActions = true }) => {
+  agentAddress?: any;
+}> = ({
+  order,
+  onPickUp,
+  onUpdateStatus,
+  showActions = true,
+  agentAddress,
+}) => {
   const { t } = useTranslation();
   const [updating, setUpdating] = useState(false);
+
+  // Distance Matrix integration
+  const formatAddress = (address: any) => {
+    if (!address) return '';
+    return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
+  };
+  const origin = formatAddress(agentAddress);
+  const pickupDestination = formatAddress(order.business_location.address);
+  const deliveryDestination = formatAddress(order.delivery_address);
+  const {
+    data: pickupDistanceData,
+    loading: pickupDistanceLoading,
+    error: pickupDistanceError,
+    fetchDistance: fetchPickupDistance,
+  } = useDistanceMatrix();
+  const {
+    data: deliveryDistanceData,
+    loading: deliveryDistanceLoading,
+    error: deliveryDistanceError,
+    fetchDistance: fetchDeliveryDistance,
+  } = useDistanceMatrix();
+  React.useEffect(() => {
+    if (origin && pickupDestination) {
+      fetchPickupDistance([origin], [pickupDestination]);
+    }
+    if (origin && deliveryDestination) {
+      fetchDeliveryDistance([origin], [deliveryDestination]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin, pickupDestination, deliveryDestination]);
 
   const handlePickUp = async () => {
     if (!onPickUp) return;
@@ -302,6 +340,44 @@ const OrderCard: React.FC<{
             </Typography>
           </Box>
         )}
+        {/* Pickup Distance */}
+        {pickupDistanceLoading && (
+          <Typography variant="body2" color="text.secondary">
+            Loading pickup distance...
+          </Typography>
+        )}
+        {pickupDistanceError && (
+          <Typography variant="body2" color="error">
+            Error: {pickupDistanceError}
+          </Typography>
+        )}
+        {pickupDistanceData &&
+          pickupDistanceData.rows[0]?.elements[0]?.status === 'OK' && (
+            <Typography variant="body2" color="text.secondary">
+              Pickup Distance:{' '}
+              {pickupDistanceData.rows[0].elements[0].distance.text}, Duration:{' '}
+              {pickupDistanceData.rows[0].elements[0].duration.text}
+            </Typography>
+          )}
+        {/* Delivery Distance */}
+        {deliveryDistanceLoading && (
+          <Typography variant="body2" color="text.secondary">
+            Loading delivery distance...
+          </Typography>
+        )}
+        {deliveryDistanceError && (
+          <Typography variant="body2" color="error">
+            Error: {deliveryDistanceError}
+          </Typography>
+        )}
+        {deliveryDistanceData &&
+          deliveryDistanceData.rows[0]?.elements[0]?.status === 'OK' && (
+            <Typography variant="body2" color="text.secondary">
+              Delivery Distance:{' '}
+              {deliveryDistanceData.rows[0].elements[0].distance.text},
+              Duration: {deliveryDistanceData.rows[0].elements[0].duration.text}
+            </Typography>
+          )}
       </CardContent>
 
       {showActions && (
@@ -516,6 +592,7 @@ const AgentDashboard: React.FC = () => {
                 order={order}
                 onUpdateStatus={handleStatusUpdate}
                 showActions={true}
+                agentAddress={profile?.agent?.address}
               />
             ))}
           </Box>
@@ -548,6 +625,7 @@ const AgentDashboard: React.FC = () => {
                 order={order}
                 onPickUp={handlePickUp}
                 showActions={true}
+                agentAddress={profile?.agent?.address}
               />
             ))}
           </Box>

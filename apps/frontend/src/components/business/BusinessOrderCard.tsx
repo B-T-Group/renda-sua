@@ -14,8 +14,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import ConfirmationModal from '../common/ConfirmationModal';
 
 interface OrderAction {
@@ -35,6 +36,7 @@ interface BusinessOrderCardProps {
   formatDate: (dateString: string) => string;
   loading?: boolean;
   refreshOrders?: () => void;
+  businessAddress: string;
 }
 
 const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
@@ -47,6 +49,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   formatDate,
   loading = false,
   refreshOrders,
+  businessAddress,
 }) => {
   const { t } = useTranslation();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -55,6 +58,23 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
     action: OrderAction;
   } | null>(null);
   const [notes, setNotes] = useState('');
+
+  // Distance Matrix integration
+  const {
+    data: distanceData,
+    loading: distanceLoading,
+    error: distanceError,
+    fetchDistance,
+  } = useDistanceMatrix();
+  useEffect(() => {
+    if (businessAddress && order.delivery_address) {
+      const destination = formatAddress(order.delivery_address);
+      if (destination) {
+        fetchDistance([businessAddress], [destination]);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessAddress, order.delivery_address]);
 
   const handleActionClick = (action: OrderAction) => {
     setPendingAction({ status: action.status, action });
@@ -175,6 +195,26 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               <AccessTimeIcon sx={{ mr: 1, fontSize: 16 }} />
               {formatDate(order.created_at)}
             </Typography>
+            {/* Distance Matrix display */}
+            {distanceLoading && (
+              <Typography variant="body2" color="text.secondary">
+                {t('common.loading')} distance...
+              </Typography>
+            )}
+            {distanceError && (
+              <Typography variant="body2" color="error">
+                {t('common.error')}: {distanceError}
+              </Typography>
+            )}
+            {distanceData &&
+              distanceData.rows[0]?.elements[0]?.status === 'OK' && (
+                <Typography variant="body2" color="text.secondary">
+                  {t('Distance')}:{' '}
+                  {distanceData.rows[0].elements[0].distance.text},{' '}
+                  {t('Duration')}:{' '}
+                  {distanceData.rows[0].elements[0].duration.text}
+                </Typography>
+              )}
           </Box>
 
           <Box

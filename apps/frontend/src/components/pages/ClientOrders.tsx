@@ -34,6 +34,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useClientOrders } from '../../hooks/useClientOrders';
+import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
 import SEOHead from '../seo/SEOHead';
@@ -213,6 +214,7 @@ const ClientOrders: React.FC = () => {
     }
   };
 
+  // Helper to format address as string
   const formatAddress = (address: any) => {
     if (!address) return '';
     const parts = [
@@ -395,172 +397,211 @@ const ClientOrders: React.FC = () => {
           </Paper>
         ) : (
           <Grid container spacing={2}>
-            {orders.map((order) => (
-              <Grid item xs={12} key={order.id}>
-                <Card>
-                  <CardContent>
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      mb={2}
-                    >
-                      <Typography variant="h6" component="div">
-                        {t('orders.table.orderNumber', {
-                          number: order.order_number,
-                        })}
-                      </Typography>
-                      <Chip
-                        label={t(
-                          `orders.status.${order.current_status || 'unknown'}`
-                        )}
-                        color={
-                          getStatusColor(
-                            order.current_status || 'unknown'
-                          ) as any
-                        }
-                        size="small"
-                      />
-                    </Box>
-
-                    <Box mb={2}>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
+            {orders.map((order) => {
+              // Distance Matrix integration for each card
+              const origin = formatAddress(order.delivery_address);
+              const destination = formatAddress(
+                order.business_location?.address
+              );
+              const {
+                data: distanceData,
+                loading: distanceLoading,
+                error: distanceError,
+                fetchDistance,
+              } = useDistanceMatrix();
+              React.useEffect(() => {
+                if (origin && destination) {
+                  fetchDistance([origin], [destination]);
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+              }, [origin, destination]);
+              return (
+                <Grid item xs={12} key={order.id}>
+                  <Card>
+                    <CardContent>
+                      <Box
                         display="flex"
+                        justifyContent="space-between"
                         alignItems="center"
-                        mb={1}
+                        mb={2}
                       >
-                        <ShoppingCartIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {order.business?.name}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        display="flex"
-                        alignItems="center"
-                        mb={1}
-                      >
-                        <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {order.order_items?.length || 0}{' '}
-                        {t('orders.table.items')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        display="flex"
-                        alignItems="center"
-                        mb={1}
-                      >
-                        <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {formatAddress(order.delivery_address)}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        display="flex"
-                        alignItems="center"
-                      >
-                        <ScheduleIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {formatDate(order.created_at)}
-                      </Typography>
-                    </Box>
-
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      mb={2}
-                    >
-                      <Typography variant="h6" color="primary">
-                        {formatCurrency(order.total_amount, order.currency)}
-                      </Typography>
-                      {order.assigned_agent && (
+                        <Typography variant="h6" component="div">
+                          {t('orders.table.orderNumber', {
+                            number: order.order_number,
+                          })}
+                        </Typography>
                         <Chip
-                          label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
-                          size="small"
-                          color="secondary"
-                        />
-                      )}
-                    </Box>
-
-                    {/* Order Actions */}
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {getAvailableActions(order).map((action) => (
-                        <Button
-                          key={action.status}
-                          size="small"
-                          color={action.color}
-                          variant="outlined"
-                          onClick={() =>
-                            handleActionClick(order.id, action.status)
+                          label={t(
+                            `orders.status.${order.current_status || 'unknown'}`
+                          )}
+                          color={
+                            getStatusColor(
+                              order.current_status || 'unknown'
+                            ) as any
                           }
-                          disabled={updateLoading}
-                        >
-                          {action.label}
-                        </Button>
-                      ))}
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => handleExpandOrder(order.id)}
-                        endIcon={
-                          expandedOrder === order.id ? (
-                            <ExpandLessIcon />
-                          ) : (
-                            <ExpandMoreIcon />
-                          )
-                        }
-                      >
-                        {expandedOrder === order.id
-                          ? t('common.hideDetails')
-                          : t('common.showDetails')}
-                      </Button>
-                    </Box>
+                          size="small"
+                        />
+                      </Box>
 
-                    {/* Order Details */}
-                    <Collapse in={expandedOrder === order.id}>
-                      <Divider sx={{ my: 2 }} />
-                      <Typography variant="subtitle2" gutterBottom>
-                        {t('orders.orderItems')}
-                      </Typography>
-                      <List dense>
-                        {order.order_items?.map((item: any) => (
-                          <ListItem key={item.id}>
-                            <ListItemText
-                              primary={item.item_name}
-                              secondary={`${item.quantity} x ${formatCurrency(
-                                item.unit_price,
-                                order.currency
-                              )}`}
-                            />
-                            <ListItemSecondaryAction>
-                              <Typography variant="body2">
-                                {formatCurrency(
-                                  item.total_price,
-                                  order.currency
-                                )}
-                              </Typography>
-                            </ListItemSecondaryAction>
-                          </ListItem>
+                      <Box mb={2}>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          display="flex"
+                          alignItems="center"
+                          mb={1}
+                        >
+                          <ShoppingCartIcon sx={{ mr: 1, fontSize: 16 }} />
+                          {order.business?.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          display="flex"
+                          alignItems="center"
+                          mb={1}
+                        >
+                          {/* <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} /> */}
+                          {order.order_items?.length || 0}{' '}
+                          {t('orders.table.items')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          display="flex"
+                          alignItems="center"
+                          mb={1}
+                        >
+                          <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
+                          {formatAddress(order.delivery_address)}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          display="flex"
+                          alignItems="center"
+                        >
+                          <ScheduleIcon sx={{ mr: 1, fontSize: 16 }} />
+                          {formatDate(order.created_at)}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        mb={2}
+                      >
+                        <Typography variant="h6" color="primary">
+                          {formatCurrency(order.total_amount, order.currency)}
+                        </Typography>
+                        {order.assigned_agent && (
+                          <Chip
+                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
+                            size="small"
+                            color="secondary"
+                          />
+                        )}
+                      </Box>
+
+                      {/* Order Actions */}
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {getAvailableActions(order).map((action) => (
+                          <Button
+                            key={action.status}
+                            size="small"
+                            color={action.color}
+                            variant="outlined"
+                            onClick={() =>
+                              handleActionClick(order.id, action.status)
+                            }
+                            disabled={updateLoading}
+                          >
+                            {action.label}
+                          </Button>
                         ))}
-                      </List>
-                      {order.special_instructions && (
-                        <>
-                          <Divider sx={{ my: 2 }} />
-                          <Typography variant="subtitle2" gutterBottom>
-                            {t('orders.specialInstructions')}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {order.special_instructions}
-                          </Typography>
-                        </>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => handleExpandOrder(order.id)}
+                          endIcon={
+                            expandedOrder === order.id ? (
+                              <ExpandLessIcon />
+                            ) : (
+                              <ExpandMoreIcon />
+                            )
+                          }
+                        >
+                          {expandedOrder === order.id
+                            ? t('common.hideDetails')
+                            : t('common.showDetails')}
+                        </Button>
+                      </Box>
+
+                      {/* Order Details */}
+                      <Collapse in={expandedOrder === order.id}>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" gutterBottom>
+                          {t('orders.orderItems')}
+                        </Typography>
+                        <List dense>
+                          {order.order_items?.map((item: any) => (
+                            <ListItem key={item.id}>
+                              <ListItemText
+                                primary={item.item_name}
+                                secondary={`${item.quantity} x ${formatCurrency(
+                                  item.unit_price,
+                                  order.currency
+                                )}`}
+                              />
+                              <ListItemSecondaryAction>
+                                <Typography variant="body2">
+                                  {formatCurrency(
+                                    item.total_price,
+                                    order.currency
+                                  )}
+                                </Typography>
+                              </ListItemSecondaryAction>
+                            </ListItem>
+                          ))}
+                        </List>
+                        {order.special_instructions && (
+                          <>
+                            <Divider sx={{ my: 2 }} />
+                            <Typography variant="subtitle2" gutterBottom>
+                              {t('orders.specialInstructions')}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {order.special_instructions}
+                            </Typography>
+                          </>
+                        )}
+                      </Collapse>
+                      {/* Distance Matrix display */}
+                      {distanceLoading && (
+                        <Typography variant="body2" color="text.secondary">
+                          {t('common.loading')} distance...
+                        </Typography>
                       )}
-                    </Collapse>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+                      {distanceError && (
+                        <Typography variant="body2" color="error">
+                          {t('common.error')}: {distanceError}
+                        </Typography>
+                      )}
+                      {distanceData &&
+                        distanceData.rows[0]?.elements[0]?.status === 'OK' && (
+                          <Typography variant="body2" color="text.secondary">
+                            {t('Distance')}:{' '}
+                            {distanceData.rows[0].elements[0].distance.text},{' '}
+                            {t('Duration')}:{' '}
+                            {distanceData.rows[0].elements[0].duration.text}
+                          </Typography>
+                        )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
           </Grid>
         )}
       </Container>
