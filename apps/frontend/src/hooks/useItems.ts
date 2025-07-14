@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
+import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Item {
@@ -63,6 +64,8 @@ export interface Item {
       address_id: string;
     };
   }[];
+  estimated_delivery_time_text?: string | null;
+  estimated_distance_text?: string | null;
 }
 
 export interface Brand {
@@ -279,6 +282,7 @@ export const useItems = (businessId?: string) => {
   const { execute: executeSubCategoriesQuery } = useGraphQLRequest(
     GET_ITEM_SUB_CATEGORIES
   );
+  const { fetchDistanceMatrix } = useDistanceMatrix();
 
   // Create item mutation
   const createItemMutation = `
@@ -407,14 +411,55 @@ export const useItems = (businessId?: string) => {
     try {
       const result = await executeItemsQuery({ businessId });
       console.log('useItems: Fetch result:', result);
-      setItems(result.items || []);
+      const fetchedItems = result.items || [];
+      // Collect unique destination address IDs from all business_inventories
+      const allAddressIds = fetchedItems
+        .flatMap((item: any) =>
+          (item.business_inventories || []).map((inv: any) =>
+            String(inv.business_location?.address_id)
+          )
+        )
+        .filter(Boolean);
+      const uniqueAddressIds: string[] = Array.from(new Set(allAddressIds));
+      // Call distance-matrix API if there are addresses
+      let distanceMatrix: any = null;
+      if (uniqueAddressIds.length > 0) {
+        try {
+          distanceMatrix = await fetchDistanceMatrix({
+            destination_address_ids: uniqueAddressIds,
+          });
+        } catch (e) {
+          console.warn('Failed to fetch distance matrix:', e);
+        }
+      }
+      // Map distances/times to items
+      const updatedItems = fetchedItems.map((item: any) => {
+        let estDeliveryTime: string | null = null;
+        let estDistance: string | null = null;
+        const addressId =
+          item.business_inventories?.[0]?.business_location?.address_id;
+        if (distanceMatrix && addressId) {
+          const idx = distanceMatrix.destination_ids.indexOf(addressId);
+          if (idx !== -1 && distanceMatrix.rows[0]?.elements[idx]) {
+            const el = distanceMatrix.rows[0].elements[idx];
+            estDeliveryTime = el.duration?.text || null;
+            estDistance = el.distance?.text || null;
+          }
+        }
+        return {
+          ...item,
+          estimated_delivery_time_text: estDeliveryTime,
+          estimated_distance_text: estDistance,
+        };
+      });
+      setItems(updatedItems);
     } catch (err) {
       console.error('useItems: Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch items');
     } finally {
       setLoading(false);
     }
-  }, [executeItemsQuery, businessId]);
+  }, [executeItemsQuery, businessId, fetchDistanceMatrix]);
 
   const fetchSingleItem = useCallback(
     async (itemId: string) => {
