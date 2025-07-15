@@ -14,6 +14,7 @@ import {
   useBackendOrders,
   useInventoryItems,
 } from '../../hooks';
+import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import AccountInformation from '../common/AccountInformation';
 import DashboardItemCard from '../common/DashboardItemCard';
 import OrderDialog from '../dialogs/OrderDialog';
@@ -44,6 +45,45 @@ const Dashboard: React.FC = () => {
 
   // Assume USD as default currency for items since business_inventory doesn't have currency field
   const DEFAULT_ITEM_CURRENCY = 'USD';
+
+  // Aggregate unique destination address IDs from inventoryItems
+  const destinationAddressIds = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        (inventoryItems || [])
+          .map((item) => item.business_location?.address?.id)
+          .filter(Boolean)
+      )
+    );
+  }, [inventoryItems]);
+
+  const {
+    data: distanceData,
+    loading: distanceLoading,
+    error: distanceError,
+    fetchDistanceMatrix,
+  } = useDistanceMatrix();
+
+  React.useEffect(() => {
+    if (destinationAddressIds.length > 0) {
+      fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
+    }
+  }, [destinationAddressIds.join(',')]);
+
+  // Helper to get distance/duration for an item
+  const getItemDistanceInfo = (item: any) => {
+    if (!distanceData || !item.business_location?.address?.id) return null;
+    const idx = distanceData.destination_ids.indexOf(
+      item.business_location.address.id
+    );
+    if (idx === -1 || !distanceData.rows[0]?.elements[idx]) return null;
+    const el = distanceData.rows[0].elements[idx];
+    if (el.status !== 'OK') return null;
+    return {
+      distance: el.distance?.text,
+      duration: el.duration?.text,
+    };
+  };
 
   // Memoized function to check if user can afford an item
   const canAffordItem = useMemo(() => {
@@ -227,7 +267,7 @@ const Dashboard: React.FC = () => {
             {inventoryItems.map((item) => {
               const canAfford = canAffordItem(item);
               const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
-
+              const distanceInfo = getItemDistanceInfo(item);
               return (
                 <DashboardItemCard
                   key={item.id}
@@ -238,6 +278,10 @@ const Dashboard: React.FC = () => {
                   formatCurrency={formatCurrency}
                   onOrderClick={handleOrderClick}
                   onTopUpClick={handleTopUpClick}
+                  estimatedDistance={distanceInfo?.distance}
+                  estimatedDuration={distanceInfo?.duration}
+                  distanceLoading={distanceLoading}
+                  distanceError={distanceError}
                 />
               );
             })}

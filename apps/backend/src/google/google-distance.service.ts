@@ -1,11 +1,15 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import type { DistanceMatrixResponse } from './distance-matrix.types';
 
 @Injectable()
 export class GoogleDistanceService {
-  private readonly apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  private readonly apiKey;
 
+  constructor(private readonly configService: ConfigService) {
+    this.apiKey = this.configService.get('GOOGLE_MAPS_API_KEY');
+  }
   /**
    * origins and destinations are arrays of formatted address strings (lat,lng or full address)
    */

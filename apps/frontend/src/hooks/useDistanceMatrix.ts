@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { useState } from 'react';
+import { useApiClient } from './useApiClient';
 
 export interface DistanceMatrixElement {
   status: string;
@@ -24,6 +24,7 @@ export function useDistanceMatrix() {
   const [data, setData] = useState<DistanceMatrixResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const apiClient = useApiClient();
 
   const fetchDistanceMatrix = async (payload: {
     destination_address_ids: string[];
@@ -32,7 +33,8 @@ export function useDistanceMatrix() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.post('/api/distance-matrix', payload);
+      if (!apiClient) throw new Error('API client not available');
+      const response = await apiClient.post('/distance-matrix', payload);
       setData(response.data);
       return response.data;
     } catch (err: any) {

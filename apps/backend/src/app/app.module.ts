@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
@@ -27,23 +27,19 @@ import { AppService } from './app.service';
       expandVariables: true,
     }),
     WinstonModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
-        const awsConfig = configService.get('aws');
-        const appConfig = configService.get('app');
-
+      useFactory: () => {
         return createWinstonConfig({
-          logGroupName: awsConfig.cloudWatchLogGroup,
-          logStreamName: awsConfig.cloudWatchLogStream,
-          region: awsConfig.region,
-          accessKeyId: awsConfig.accessKeyId,
-          secretAccessKey: awsConfig.secretAccessKey,
-          logLevel: appConfig.logLevel,
-          enableCloudWatch: appConfig.nodeEnv === 'production',
-          enableConsole: appConfig.nodeEnv !== 'production',
+          logGroupName:
+            process.env.CLOUDWATCH_LOG_GROUP || 'rendasua-backend-logs',
+          logStreamName: process.env.CLOUDWATCH_LOG_STREAM || 'application',
+          region: process.env.AWS_REGION || 'ca-central-1',
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+          logLevel: process.env.LOG_LEVEL || 'debug',
+          enableCloudWatch: process.env.NODE_ENV === 'production',
+          enableConsole: process.env.NODE_ENV !== 'production',
         });
       },
-      inject: [ConfigService],
     }),
     HasuraModule,
     UsersModule,

@@ -29,6 +29,10 @@ interface DashboardItemCardProps {
   formatCurrency: (amount: number, currency?: string) => string;
   onOrderClick: (item: InventoryItem) => void;
   onTopUpClick: () => void;
+  estimatedDistance?: string | null;
+  estimatedDuration?: string | null;
+  distanceLoading?: boolean;
+  distanceError?: string | null;
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
@@ -39,6 +43,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   formatCurrency,
   onOrderClick,
   onTopUpClick,
+  estimatedDistance,
+  estimatedDuration,
+  distanceLoading,
+  distanceError,
 }) => {
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
@@ -202,6 +210,25 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               Max Order: {item.item.max_order_quantity}
             </Typography>
           )}
+          {/* Estimated Distance/Time from Distance Matrix */}
+          {distanceLoading && (
+            <Typography variant="body2" color="text.secondary">
+              Calculating distance...
+            </Typography>
+          )}
+          {distanceError && (
+            <Typography variant="body2" color="error">
+              Error: {distanceError}
+            </Typography>
+          )}
+          {estimatedDistance &&
+            estimatedDuration &&
+            !distanceLoading &&
+            !distanceError && (
+              <Typography variant="body2" color="text.secondary">
+                Distance: {estimatedDistance}, Duration: {estimatedDuration}
+              </Typography>
+            )}
         </Box>
 
         <Box sx={{ mb: 2 }}>

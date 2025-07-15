@@ -7,5 +7,6 @@ import { AddressesService } from './addresses.service';
   imports: [HasuraModule],
   controllers: [AddressesController],
   providers: [AddressesService],
+  exports: [AddressesService],
 })
 export class AddressesModule {}

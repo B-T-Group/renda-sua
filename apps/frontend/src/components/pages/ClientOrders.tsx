@@ -73,6 +73,46 @@ const ClientOrders: React.FC = () => {
     error: updateError,
   } = useBackendOrders();
 
+  // Aggregate unique destination address IDs from all orders
+  const destinationAddressIds = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        (orders || [])
+          .map((order) => order.business_location?.address?.id)
+          .filter(Boolean)
+      )
+    );
+  }, [orders]);
+
+  const {
+    data: distanceData,
+    loading: distanceLoading,
+    error: distanceError,
+    fetchDistanceMatrix,
+  } = useDistanceMatrix();
+
+  // Fetch distance matrix when orders or addresses change
+  React.useEffect(() => {
+    if (destinationAddressIds.length > 0) {
+      fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
+    }
+  }, [destinationAddressIds.join(',')]);
+
+  // Helper to get distance/duration for an order
+  const getOrderDistanceInfo = (order: any) => {
+    if (!distanceData || !order.business_location?.address?.id) return null;
+    const idx = distanceData.destination_ids.indexOf(
+      order.business_location.address.id
+    );
+    if (idx === -1 || !distanceData.rows[0]?.elements[idx]) return null;
+    const el = distanceData.rows[0].elements[idx];
+    if (el.status !== 'OK') return null;
+    return {
+      distance: el.distance?.text,
+      duration: el.duration?.text,
+    };
+  };
+
   const handleExpandOrder = (orderId: string) => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
@@ -269,7 +309,7 @@ const ClientOrders: React.FC = () => {
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           Error loading orders:{' '}
-          {typeof error === 'string' ? error : error.message}
+          {typeof error === 'string' ? error : (error as any)?.message}
         </Alert>
       </Container>
     );
@@ -398,23 +438,7 @@ const ClientOrders: React.FC = () => {
         ) : (
           <Grid container spacing={2}>
             {orders.map((order) => {
-              // Distance Matrix integration for each card
-              const origin = formatAddress(order.delivery_address);
-              const destination = formatAddress(
-                order.business_location?.address
-              );
-              const {
-                data: distanceData,
-                loading: distanceLoading,
-                error: distanceError,
-                fetchDistance,
-              } = useDistanceMatrix();
-              React.useEffect(() => {
-                if (origin && destination) {
-                  fetchDistance([origin], [destination]);
-                }
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-              }, [origin, destination]);
+              const distanceInfo = getOrderDistanceInfo(order);
               return (
                 <Grid item xs={12} key={order.id}>
                   <Card>
@@ -588,15 +612,12 @@ const ClientOrders: React.FC = () => {
                           {t('common.error')}: {distanceError}
                         </Typography>
                       )}
-                      {distanceData &&
-                        distanceData.rows[0]?.elements[0]?.status === 'OK' && (
-                          <Typography variant="body2" color="text.secondary">
-                            {t('Distance')}:{' '}
-                            {distanceData.rows[0].elements[0].distance.text},{' '}
-                            {t('Duration')}:{' '}
-                            {distanceData.rows[0].elements[0].duration.text}
-                          </Typography>
-                        )}
+                      {distanceInfo && (
+                        <Typography variant="body2" color="text.secondary">
+                          {t('Distance')}: {distanceInfo.distance},{' '}
+                          {t('Duration')}: {distanceInfo.duration}
+                        </Typography>
+                      )}
                     </CardContent>
                   </Card>
                 </Grid>
