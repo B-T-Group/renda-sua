@@ -152,6 +152,7 @@ const Dashboard: React.FC = () => {
           business_inventory_id: selectedItem.id,
           quantity: quantity,
         },
+        special_instructions: specialInstructions,
       };
 
       await createOrder(orderData);

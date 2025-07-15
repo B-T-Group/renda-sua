@@ -190,16 +190,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
         {/* Delivery Information */}
         <Box sx={{ mb: 2 }}>
-          {item.item.estimated_delivery_time && (
-            <Typography variant="body2" color="text.secondary">
-              Est. Delivery: {item.item.estimated_delivery_time} min
-            </Typography>
-          )}
-          {item.item.max_delivery_distance && (
-            <Typography variant="body2" color="text.secondary">
-              Max Distance: {item.item.max_delivery_distance} km
-            </Typography>
-          )}
           {item.item.min_order_quantity && item.item.min_order_quantity > 1 && (
             <Typography variant="body2" color="text.secondary">
               Min Order: {item.item.min_order_quantity}
@@ -221,14 +211,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               Error: {distanceError}
             </Typography>
           )}
-          {estimatedDistance &&
-            estimatedDuration &&
-            !distanceLoading &&
-            !distanceError && (
-              <Typography variant="body2" color="text.secondary">
-                Distance: {estimatedDistance}, Duration: {estimatedDuration}
-              </Typography>
-            )}
+          {estimatedDistance && estimatedDuration && (
+            <Typography variant="body2" color="text.secondary">
+              Distance: {estimatedDistance}, Duration: {estimatedDuration}
+            </Typography>
+          )}
         </Box>
 
         <Box sx={{ mb: 2 }}>

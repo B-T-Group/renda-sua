@@ -82,6 +82,7 @@ export interface OrderItem {
 
 export interface CreateOrderRequest {
   item: OrderItem;
+  special_instructions?: string;
 }
 
 export interface Item {
@@ -967,7 +968,7 @@ export class HasuraUserService {
     const business_id = businessInventory.business_location.business_id;
     const payment_method = 'online';
     const payment_status = 'pending';
-    const special_instructions = '';
+    const special_instructions = orderData.special_instructions || '';
     const estimated_delivery_time = null;
     const preferred_delivery_time = null;
     const actual_delivery_time = null;

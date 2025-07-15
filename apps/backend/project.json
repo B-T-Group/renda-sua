@@ -52,17 +52,21 @@
       "executor": "@nx/js:node",
       "defaultConfiguration": "local",
       "options": {
-        "buildTarget": "backend:build"
+        "buildTarget": "backend:build",
+        "watch": true
       },
       "configurations": {
         "development": {
-          "buildTarget": "backend:build:development"
+          "buildTarget": "backend:build:development",
+          "watch": true
         },
         "production": {
-          "buildTarget": "backend:build:production"
+          "buildTarget": "backend:build:production",
+          "watch": false
         },
         "local": {
-          "buildTarget": "backend:build:local"
+          "buildTarget": "backend:build:local",
+          "watch": true
         }
       }
     },

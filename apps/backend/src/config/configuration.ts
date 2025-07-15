@@ -135,7 +135,10 @@ export default async (): Promise<Configuration> => {
       endpoint:
         process.env.HASURA_GRAPHQL_ENDPOINT ||
         'http://localhost:8080/v1/graphql',
-      adminSecret: secrets.HASURA_GRAPHQL_ADMIN_SECRET || 'myadminsecretkey',
+      adminSecret:
+        process.env.HASURA_GRAPHQL_ADMIN_SECRET ||
+        secrets.HASURA_GRAPHQL_ADMIN_SECRET ||
+        'myadminsecretkey',
     },
     aws: {
       region: process.env.AWS_REGION || 'ca-central-1',
