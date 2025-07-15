@@ -146,13 +146,13 @@ const BusinessOrdersPage: React.FC = () => {
     switch (status) {
       case 'pending':
         actions.push({
-          label: t('orders.actions.confirm'),
+          label: t('business.orders.actions.confirm'),
           status: 'confirmed',
           color: 'success' as const,
           icon: CheckCircleIcon,
         });
         actions.push({
-          label: t('orders.actions.cancel'),
+          label: t('business.orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
           icon: CancelIcon,
@@ -160,13 +160,13 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'confirmed':
         actions.push({
-          label: t('orders.actions.startPreparing'),
+          label: t('business.orders.actions.startPreparing'),
           status: 'preparing',
           color: 'primary' as const,
           icon: PlayArrowIcon,
         });
         actions.push({
-          label: t('orders.actions.cancel'),
+          label: t('business.orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
           icon: CancelIcon,
@@ -174,7 +174,7 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'preparing':
         actions.push({
-          label: t('orders.actions.readyForPickup'),
+          label: t('business.orders.actions.readyForPickup'),
           status: 'ready_for_pickup',
           color: 'success' as const,
           icon: LocalShippingOutlinedIcon,
@@ -182,7 +182,7 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'delivered':
         actions.push({
-          label: t('orders.actions.refund'),
+          label: t('business.orders.actions.refund'),
           status: 'refunded',
           color: 'warning' as const,
           icon: CancelIcon,
@@ -302,58 +302,64 @@ const BusinessOrdersPage: React.FC = () => {
             }}
           >
             <TextField
-              label={t('orders.filters.search')}
+              label={t('business.business.orders.filters.search')}
               value={filters.search}
               onChange={(e) => handleFilterChange({ search: e.target.value })}
               size="small"
               sx={{ minWidth: 200 }}
             />
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>{t('orders.filters.status')}</InputLabel>
+              <InputLabel>
+                {t('business.business.orders.filters.status')}
+              </InputLabel>
               <Select
                 value={filters.status}
                 onChange={(e) => handleFilterChange({ status: e.target.value })}
-                label={t('orders.filters.status')}
+                label={t('business.business.orders.filters.status')}
               >
-                <MenuItem value="">{t('orders.filters.allStatuses')}</MenuItem>
+                <MenuItem value="">
+                  {t('business.business.orders.filters.allStatuses')}
+                </MenuItem>
                 <MenuItem value="pending">
-                  {t('orders.status.pending')}
+                  {t('business.orders.status.pending')}
                 </MenuItem>
                 <MenuItem value="confirmed">
-                  {t('orders.status.confirmed')}
+                  {t('business.orders.status.confirmed')}
                 </MenuItem>
                 <MenuItem value="preparing">
-                  {t('orders.status.preparing')}
+                  {t('business.orders.status.preparing')}
                 </MenuItem>
                 <MenuItem value="ready_for_pickup">
-                  {t('orders.status.ready_for_pickup')}
+                  {t('business.orders.status.ready_for_pickup')}
                 </MenuItem>
                 <MenuItem value="assigned_to_agent">
-                  {t('orders.status.assigned_to_agent')}
+                  {t('business.orders.status.assigned_to_agent')}
                 </MenuItem>
                 <MenuItem value="picked_up">
-                  {t('orders.status.picked_up')}
+                  {t('business.orders.status.picked_up')}
                 </MenuItem>
                 <MenuItem value="in_transit">
-                  {t('orders.status.in_transit')}
+                  {t('business.orders.status.in_transit')}
                 </MenuItem>
                 <MenuItem value="out_for_delivery">
-                  {t('orders.status.out_for_delivery')}
+                  {t('business.orders.status.out_for_delivery')}
                 </MenuItem>
                 <MenuItem value="delivered">
-                  {t('orders.status.delivered')}
+                  {t('business.orders.status.delivered')}
                 </MenuItem>
                 <MenuItem value="cancelled">
-                  {t('orders.status.cancelled')}
+                  {t('business.orders.status.cancelled')}
                 </MenuItem>
-                <MenuItem value="failed">{t('orders.status.failed')}</MenuItem>
+                <MenuItem value="failed">
+                  {t('business.orders.status.failed')}
+                </MenuItem>
                 <MenuItem value="refunded">
-                  {t('orders.status.refunded')}
+                  {t('business.orders.status.refunded')}
                 </MenuItem>
               </Select>
             </FormControl>
             <TextField
-              label={t('orders.filters.dateFrom')}
+              label={t('business.business.orders.filters.dateFrom')}
               type="date"
               value={filters.dateFrom}
               onChange={(e) => handleFilterChange({ dateFrom: e.target.value })}
@@ -361,7 +367,7 @@ const BusinessOrdersPage: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('orders.filters.dateTo')}
+              label={t('business.business.orders.filters.dateTo')}
               type="date"
               value={filters.dateTo}
               onChange={(e) => handleFilterChange({ dateTo: e.target.value })}
@@ -369,7 +375,7 @@ const BusinessOrdersPage: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('orders.filters.address')}
+              label={t('business.business.orders.filters.address')}
               value={filters.address}
               onChange={(e) => handleFilterChange({ address: e.target.value })}
               size="small"
@@ -392,9 +398,9 @@ const BusinessOrdersPage: React.FC = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label={t('orders.allOrders')} />
-            <Tab label={t('orders.status.preparing')} />
-            <Tab label={t('orders.status.in_transit')} />
-            <Tab label={t('orders.status.completed')} />
+            <Tab label={t('business.orders.status.preparing')} />
+            <Tab label={t('business.orders.status.in_transit')} />
+            <Tab label={t('business.orders.status.completed')} />
           </Tabs>
         </Box>
 

@@ -64,13 +64,15 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
     data: distanceData,
     loading: distanceLoading,
     error: distanceError,
-    fetchDistance,
+    fetchDistanceMatrix,
   } = useDistanceMatrix();
   useEffect(() => {
     if (businessAddress && order.delivery_address) {
       const destination = formatAddress(order.delivery_address);
       if (destination) {
-        fetchDistance([businessAddress], [destination]);
+        fetchDistanceMatrix({
+          destination_address_ids: [destination],
+        });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,7 +144,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             mb={2}
           >
             <Typography variant="h6" component="div">
-              {t('orders.table.orderNumber', {
+              {t('business.orders.table.orderNumber', {
                 number: order.order_number,
               })}
             </Typography>
@@ -174,7 +176,8 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               mb={1}
             >
               <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} />
-              {order.order_items?.length || 0} {t('orders.table.items')}
+              {order.order_items?.length || 0}{' '}
+              {t('business.orders.table.items')}
             </Typography>
             <Typography
               variant="body2"
@@ -209,10 +212,10 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             {distanceData &&
               distanceData.rows[0]?.elements[0]?.status === 'OK' && (
                 <Typography variant="body2" color="text.secondary">
-                  {t('Distance')}:{' '}
-                  {distanceData.rows[0].elements[0].distance.text},{' '}
-                  {t('Duration')}:{' '}
-                  {distanceData.rows[0].elements[0].duration.text}
+                  {t('business.orders.table.distance')}:{' '}
+                  {distanceData.rows[0]?.elements[0]?.distance?.text},{' '}
+                  {t('business.orders.table.duration')}:{' '}
+                  {distanceData.rows[0]?.elements[0]?.duration?.text}
                 </Typography>
               )}
           </Box>
@@ -256,7 +259,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
 
       <ConfirmationModal
         open={confirmationOpen}
-        title={t('orders.confirmTitle')}
+        title={t('business.orders.confirmTitle')}
         message={
           pendingAction ? getConfirmationMessage(pendingAction.action) : ''
         }
@@ -273,10 +276,10 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             fullWidth
             multiline
             rows={3}
-            label={t('orders.notes')}
+            label={t('business.orders.notes')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder={t('orders.notesPlaceholder')}
+            placeholder={t('business.orders.notesPlaceholder')}
             sx={{ mt: 2 }}
           />
         }

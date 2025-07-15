@@ -206,14 +206,14 @@ const ClientOrders: React.FC = () => {
       case 'confirmed':
       case 'preparing':
         actions.push({
-          label: t('orders.actions.cancel'),
+          label: t('business.orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
         });
         break;
       case 'delivered':
         actions.push({
-          label: t('orders.actions.refund'),
+          label: t('business.orders.actions.refund'),
           status: 'refunded',
           color: 'warning' as const,
         });
@@ -342,20 +342,22 @@ const ClientOrders: React.FC = () => {
             }}
           >
             <TextField
-              label={t('orders.filters.search')}
+              label={t('business.orders.filters.search')}
               value={filters.search}
               onChange={(e) => handleFilterChange({ search: e.target.value })}
               size="small"
               sx={{ minWidth: 200 }}
             />
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>{t('orders.filters.status')}</InputLabel>
+              <InputLabel>{t('business.orders.filters.status')}</InputLabel>
               <Select
                 value={filters.status}
                 onChange={(e) => handleFilterChange({ status: e.target.value })}
-                label={t('orders.filters.status')}
+                label={t('business.orders.filters.status')}
               >
-                <MenuItem value="">{t('orders.filters.allStatuses')}</MenuItem>
+                <MenuItem value="">
+                  {t('business.orders.filters.allStatuses')}
+                </MenuItem>
                 <MenuItem value="pending">
                   {t('orders.status.pending')}
                 </MenuItem>
@@ -393,7 +395,7 @@ const ClientOrders: React.FC = () => {
               </Select>
             </FormControl>
             <TextField
-              label={t('orders.filters.dateFrom')}
+              label={t('business.orders.filters.dateFrom')}
               type="date"
               value={filters.dateFrom}
               onChange={(e) => handleFilterChange({ dateFrom: e.target.value })}
@@ -401,7 +403,7 @@ const ClientOrders: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('orders.filters.dateTo')}
+              label={t('business.orders.filters.dateTo')}
               type="date"
               value={filters.dateTo}
               onChange={(e) => handleFilterChange({ dateTo: e.target.value })}
