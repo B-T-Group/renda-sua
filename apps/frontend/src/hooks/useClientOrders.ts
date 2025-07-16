@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 import { useBackendOrders } from './useBackendOrders';
-import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface ClientOrder {
   id: string;
@@ -175,9 +175,7 @@ export const useClientOrders = (clientId?: string) => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({});
 
-  const { execute } = useGraphQLRequest(GET_CLIENT_ORDERS, {
-    loadingMessage: 'common.fetchingOrders',
-  });
+  const apiClient = useApiClient();
 
   // Use backend order management APIs for client actions
   const { cancelOrder, refundOrder } = useBackendOrders();
@@ -242,34 +240,23 @@ export const useClientOrders = (clientId?: string) => {
 
   const fetchOrders = useCallback(
     async (filterParams: OrderFilters = {}) => {
-      console.log(
-        'useClientOrders: Fetching orders with filters:',
-        filterParams,
-        'clientId:',
-        clientId
-      );
       setLoading(true);
       setError(null);
-
       try {
         const builtFilters = buildFilters(filterParams);
-        console.log('useClientOrders: Built filters:', builtFilters);
-        const result = await execute({ filters: builtFilters });
-        console.log('useClientOrders: Fetch result:', result);
-        console.log(
-          'useClientOrders: Orders count:',
-          result.orders?.length || 0
-        );
-        setOrders(result.orders || []);
+        if (!apiClient) throw new Error('API client not available');
+        const response = await apiClient.get('/orders', {
+          params: { filters: JSON.stringify(builtFilters) },
+        });
+        setOrders(response.data.orders || []);
         setFilters(filterParams);
-      } catch (err) {
-        console.error('useClientOrders: Fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch orders');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to fetch orders');
       } finally {
         setLoading(false);
       }
     },
-    [execute, buildFilters, clientId]
+    [apiClient, buildFilters]
   );
 
   const updateOrderStatus = useCallback(
@@ -322,12 +309,9 @@ export const useClientOrders = (clientId?: string) => {
   }, [fetchOrders, filters]);
 
   useEffect(() => {
-    console.log('useClientOrders: clientId changed:', clientId);
     if (clientId) {
-      console.log('useClientOrders: Fetching orders for client:', clientId);
       fetchOrders({});
     } else {
-      console.log('useClientOrders: No clientId provided, clearing orders');
       setOrders([]);
     }
   }, [clientId, fetchOrders]);

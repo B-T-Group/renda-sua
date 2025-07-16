@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Get,
   HttpException,
   HttpStatus,
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -162,5 +164,32 @@ export class OrdersController {
   @Post('refund')
   async refundOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.refundOrder(request);
+  }
+
+  @Get()
+  async getOrders(@Query('filters') filters?: string) {
+    try {
+      let parsedFilters = undefined;
+      if (filters) {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (e) {
+          throw new HttpException(
+            'Invalid filters JSON',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
+      const orders = await this.ordersService.getBusinessOrders(parsedFilters);
+      return { success: true, orders };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        { success: false, error: error.message || 'Internal server error' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

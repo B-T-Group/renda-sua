@@ -488,6 +488,117 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Fetch orders for the current user (client, agent, or business) with optional filters
+   */
+  async getBusinessOrders(filters?: any): Promise<any[]> {
+    const user = await this.hasuraUserService.getUser();
+    let personaFilter: any = {};
+    if (user.user_type_id === 'client' && user.client) {
+      personaFilter = { client_id: { _eq: user.client.id } };
+    } else if (user.user_type_id === 'agent' && user.agent) {
+      personaFilter = { assigned_agent_id: { _eq: user.agent.id } };
+    } else if (user.user_type_id === 'business' && user.business) {
+      personaFilter = { business_id: { _eq: user.business.id } };
+    } else {
+      throw new HttpException(
+        'Invalid user persona for orders query',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Merge persona filter with any additional filters
+    const where = filters ? { _and: [personaFilter, filters] } : personaFilter;
+
+    const query = `
+      query GetBusinessOrders($filters: orders_bool_exp) {
+        orders(where: $filters, order_by: { created_at: desc }) {
+          id
+          order_number
+          client_id
+          business_id
+          business_location_id
+          assigned_agent_id
+          delivery_address_id
+          subtotal
+          delivery_fee
+          tax_amount
+          total_amount
+          currency
+          current_status
+          estimated_delivery_time
+          actual_delivery_time
+          special_instructions
+          preferred_delivery_time
+          payment_method
+          payment_status
+          created_at
+          updated_at
+          client {
+            id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
+          }
+          business_location {
+            id
+            name
+            location_type
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
+          }
+          delivery_address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+          }
+          assigned_agent {
+            id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
+          }
+          order_items {
+            id
+            item_name
+            item_description
+            unit_price
+            quantity
+            total_price
+            weight
+            weight_unit
+            dimensions
+            special_instructions
+          }
+        }
+      }
+    `;
+
+    const variables = { filters: where };
+    const result = await this.hasuraSystemService.executeQuery(
+      query,
+      variables
+    );
+    return result.orders;
+  }
+
   private async getOrderDetails(orderId: string): Promise<any> {
     const query = `
       query GetOrder($orderId: uuid!) {

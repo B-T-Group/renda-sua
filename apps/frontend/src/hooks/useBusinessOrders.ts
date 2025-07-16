@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 import { useBackendOrders } from './useBackendOrders';
-import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessOrder {
   id: string;
@@ -174,9 +174,7 @@ export const useBusinessOrders = (businessId?: string) => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({});
 
-  const { execute } = useGraphQLRequest(GET_BUSINESS_ORDERS, {
-    loadingMessage: 'common.fetchingOrders',
-  });
+  const apiClient = useApiClient();
 
   // Use backend order management APIs
   const {
@@ -265,34 +263,23 @@ export const useBusinessOrders = (businessId?: string) => {
 
   const fetchOrders = useCallback(
     async (filterParams: OrderFilters = {}) => {
-      console.log(
-        'useBusinessOrders: Fetching orders with filters:',
-        filterParams,
-        'businessId:',
-        businessId
-      );
       setLoading(true);
       setError(null);
-
       try {
         const builtFilters = buildFilters(filterParams);
-        console.log('useBusinessOrders: Built filters:', builtFilters);
-        const result = await execute({ filters: builtFilters });
-        console.log('useBusinessOrders: Fetch result:', result);
-        console.log(
-          'useBusinessOrders: Orders count:',
-          result.orders?.length || 0
-        );
-        setOrders(result.orders || []);
+        if (!apiClient) throw new Error('API client not available');
+        const response = await apiClient.get('/orders', {
+          params: { filters: JSON.stringify(builtFilters) },
+        });
+        setOrders(response.data.orders || []);
         setFilters(filterParams);
-      } catch (err) {
-        console.error('useBusinessOrders: Fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch orders');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to fetch orders');
       } finally {
         setLoading(false);
       }
     },
-    [execute, buildFilters, businessId]
+    [apiClient, buildFilters]
   );
 
   const updateOrderStatus = useCallback(
@@ -360,43 +347,12 @@ export const useBusinessOrders = (businessId?: string) => {
   }, [fetchOrders, filters]);
 
   useEffect(() => {
-    console.log('useBusinessOrders: businessId changed:', businessId);
     if (businessId) {
-      console.log(
-        'useBusinessOrders: Fetching orders for business:',
-        businessId
-      );
       fetchOrders({});
-
-      // Temporary debug: also fetch all orders to see if there are any orders at all
-      setTimeout(async () => {
-        try {
-          console.log(
-            'useBusinessOrders: Debug - fetching all orders to check if any exist'
-          );
-          const result = await execute({ filters: {} });
-          console.log(
-            'useBusinessOrders: Debug - all orders count:',
-            result.orders?.length || 0
-          );
-          if (result.orders && result.orders.length > 0) {
-            console.log(
-              'useBusinessOrders: Debug - sample order business_id:',
-              result.orders[0].business_id
-            );
-          }
-        } catch (err) {
-          console.error(
-            'useBusinessOrders: Debug - error fetching all orders:',
-            err
-          );
-        }
-      }, 1000);
     } else {
-      console.log('useBusinessOrders: No businessId provided, clearing orders');
       setOrders([]);
     }
-  }, [businessId, fetchOrders, execute]);
+  }, [businessId, fetchOrders]);
 
   return {
     orders,

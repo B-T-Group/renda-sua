@@ -302,23 +302,21 @@ const BusinessOrdersPage: React.FC = () => {
             }}
           >
             <TextField
-              label={t('business.business.orders.filters.search')}
+              label={t('business.orders.filters.search')}
               value={filters.search}
               onChange={(e) => handleFilterChange({ search: e.target.value })}
               size="small"
               sx={{ minWidth: 200 }}
             />
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>
-                {t('business.business.orders.filters.status')}
-              </InputLabel>
+              <InputLabel>{t('business.orders.filters.status')}</InputLabel>
               <Select
                 value={filters.status}
                 onChange={(e) => handleFilterChange({ status: e.target.value })}
-                label={t('business.business.orders.filters.status')}
+                label={t('business.orders.filters.status')}
               >
                 <MenuItem value="">
-                  {t('business.business.orders.filters.allStatuses')}
+                  {t('business.orders.filters.allStatuses')}
                 </MenuItem>
                 <MenuItem value="pending">
                   {t('business.orders.status.pending')}
@@ -359,7 +357,7 @@ const BusinessOrdersPage: React.FC = () => {
               </Select>
             </FormControl>
             <TextField
-              label={t('business.business.orders.filters.dateFrom')}
+              label={t('business.orders.filters.dateFrom')}
               type="date"
               value={filters.dateFrom}
               onChange={(e) => handleFilterChange({ dateFrom: e.target.value })}
@@ -367,7 +365,7 @@ const BusinessOrdersPage: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('business.business.orders.filters.dateTo')}
+              label={t('business.orders.filters.dateTo')}
               type="date"
               value={filters.dateTo}
               onChange={(e) => handleFilterChange({ dateTo: e.target.value })}
@@ -375,7 +373,7 @@ const BusinessOrdersPage: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('business.business.orders.filters.address')}
+              label={t('business.orders.filters.address')}
               value={filters.address}
               onChange={(e) => handleFilterChange({ address: e.target.value })}
               size="small"
