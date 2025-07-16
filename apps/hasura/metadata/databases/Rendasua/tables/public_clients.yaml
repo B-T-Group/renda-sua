@@ -88,9 +88,11 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
+        orders:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
   - role: user
     permission:
       columns:
