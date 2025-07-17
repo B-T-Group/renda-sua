@@ -197,4 +197,45 @@ export class HasuraSystemService {
     }
     return account;
   }
+
+  /**
+   * Update user account balances
+   */
+  async updateUserAccount(
+    accountId: string,
+    updates: {
+      available_balance?: number;
+      withheld_balance?: number;
+    },
+    operation: 'set' | 'inc' = 'set'
+  ): Promise<any> {
+    const mutation = `
+      mutation UpdateUserAccount(
+        $accountId: uuid!,
+        $availableBalance: numeric,
+        $withheldBalance: numeric
+      ) {
+        update_accounts_by_pk(
+          pk_columns: { id: $accountId },
+          ${operation === 'inc' ? '_inc' : '_set'}: {
+            available_balance: $availableBalance,
+            withheld_balance: $withheldBalance
+          }
+        ) {
+          id
+          available_balance
+          withheld_balance
+          total_balance
+        }
+      }
+    `;
+
+    const result = await this.executeMutation(mutation, {
+      accountId,
+      availableBalance: updates.available_balance,
+      withheldBalance: updates.withheld_balance,
+    });
+
+    return result.update_accounts_by_pk;
+  }
 }

@@ -1,19 +1,28 @@
-import { Controller, Post, Body, HttpException, HttpStatus } from '@nestjs/common';
-import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  Body,
+  Controller,
+  HttpException,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import type { TransactionRequest } from './accounts.service';
+import { AccountsService } from './accounts.service';
 
 @Controller('accounts')
 export class AccountsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly accountsService: AccountsService
   ) {}
 
   @Post()
   async createAccount(@Body() accountData: { currency: string }) {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
-      
+
       // First, get the current user to check their user_type_id
       const getUserQuery = `
         query GetUserByIdentifier($identifier: String!) {
@@ -25,9 +34,12 @@ export class AccountsController {
         }
       `;
 
-      const userResult = await this.hasuraUserService.executeQuery(getUserQuery, {
-        identifier,
-      });
+      const userResult = await this.hasuraUserService.executeQuery(
+        getUserQuery,
+        {
+          identifier,
+        }
+      );
 
       if (!userResult.users || userResult.users.length === 0) {
         throw new HttpException(
@@ -59,7 +71,10 @@ export class AccountsController {
         }
       );
 
-      if (existingAccountResult.accounts && existingAccountResult.accounts.length > 0) {
+      if (
+        existingAccountResult.accounts &&
+        existingAccountResult.accounts.length > 0
+      ) {
         throw new HttpException(
           {
             success: false,
@@ -120,4 +135,40 @@ export class AccountsController {
       );
     }
   }
-} 
+
+  @Post('transaction')
+  async registerTransaction(@Body() transactionData: TransactionRequest) {
+    try {
+      const result = await this.accountsService.registerTransaction(
+        transactionData
+      );
+
+      if (!result.success) {
+        throw new HttpException(
+          {
+            success: false,
+            error: result.error,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      return {
+        success: true,
+        transactionId: result.transactionId,
+        newBalance: result.newBalance,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+}

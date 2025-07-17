@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AccountsService } from '../accounts/accounts.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -17,6 +18,7 @@ export class OrdersService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
+    private readonly accountsService: AccountsService,
     private readonly configService: ConfigService<Configuration>
   ) {}
 
@@ -137,7 +139,7 @@ export class OrdersService {
     };
   }
 
-  async getOrder(request: GetOrderRequest) {
+  async claimOrder(request: GetOrderRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent)
       throw new HttpException(
@@ -168,12 +170,22 @@ export class OrdersService {
         `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
         HttpStatus.FORBIDDEN
       );
-    await this.placeHoldOnAccount(
-      agentAccount.id,
-      holdAmount,
-      `Hold for order ${order.order_number}`,
-      order.id
-    );
+
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+
+    await this.updateOrderHold(orderHold.id, {
+      agent_hold_amount: holdAmount,
+      agent_id: user.agent.id,
+    });
+
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: holdAmount,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
       user.agent.id,
@@ -336,7 +348,7 @@ export class OrdersService {
       );
 
     // Release the hold and process payment
-    await this.processOrderDelivery(order, user.id);
+    await this.processOrderDelivery(order);
 
     const updatedOrder = await this.hasuraUserService.updateOrderStatus(
       request.orderId,
@@ -709,27 +721,16 @@ export class OrdersService {
       );
     }
     // Get the order and check if assigned to this agent and in assigned_to_agent status
-    const order = await this.hasuraUserService.executeQuery(
-      `
-      query GetOrder($orderId: uuid!) {
-        orders_by_pk(id: $orderId) {
-          id
-          assigned_agent_id
-          current_status
-        }
-      }
-    `,
-      { orderId: request.orderId }
-    );
-    const o = order.orders_by_pk;
-    if (!o) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (o.current_status !== 'assigned_to_agent') {
+    const order = await this.getOrderDetails(request.orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (order.current_status !== 'assigned_to_agent') {
       throw new HttpException(
         'Order is not in assigned_to_agent status',
         HttpStatus.BAD_REQUEST
       );
     }
-    if (o.assigned_agent_id !== user.agent.id) {
+    if (order.assigned_agent_id !== user.agent.id) {
       throw new HttpException(
         'You are not assigned to this order',
         HttpStatus.FORBIDDEN
@@ -756,16 +757,30 @@ export class OrdersService {
       'agent',
       user.id
     );
+
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.agent.user_id,
+      order.currency
+    );
+
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+
+    await this.updateOrderHold(orderHold.id, {
+      status: 'cancelled',
+    });
+
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: orderHold.agent_hold_amount,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
+      referenceId: order.id,
+    });
     return {
       success: true,
       order: result.update_orders_by_pk,
       message: 'Order dropped and made available for other agents.',
     };
-  }
-
-  async claimOrder(request: GetOrderRequest) {
-    // Just call the old getOrder logic
-    return this.getOrder(request);
   }
 
   private async getOrderDetails(orderId: string): Promise<any> {
@@ -830,32 +845,6 @@ export class OrdersService {
       orderId,
     });
     return result.orders_by_pk;
-  }
-
-  /**
-   * Get account by accountId (returns available_balance and withheld_balance)
-   */
-  private async getAccountById(
-    accountId: string
-  ): Promise<{ available_balance: number; withheld_balance: number }> {
-    const getAccountQuery = `
-      query ($accountId: uuid!) {
-        accounts_by_pk(id: $accountId) {
-          available_balance
-          withheld_balance
-        }
-      }
-    `;
-    const accountResult = await this.hasuraSystemService.executeQuery(
-      getAccountQuery,
-      { accountId }
-    );
-    const account = accountResult.accounts_by_pk;
-    if (!account) throw new Error('Account not found');
-    return {
-      available_balance: Number(account.available_balance),
-      withheld_balance: Number(account.withheld_balance),
-    };
   }
 
   /**
@@ -1117,8 +1106,13 @@ export class OrdersService {
       }
     );
 
-    // Withhold funds from client account
-    await this.withHoldClientOrderPayment(account.id, totalAmount);
+    await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount: totalAmount,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
 
@@ -1130,36 +1124,6 @@ export class OrdersService {
       ...order,
       total_amount: totalAmount,
     };
-  }
-
-  /**
-   * Withhold payment amount from client account
-   */
-  private async withHoldClientOrderPayment(
-    accountId: string,
-    amount: number
-  ): Promise<void> {
-    const withholdFundsMutation = `
-      mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
-        update_accounts_by_pk(
-          pk_columns: {id: $accountId},
-          _inc: {
-            available_balance: $amount,
-            withheld_balance: $amount
-          }
-        ) {
-          id
-          available_balance
-          withheld_balance
-          total_balance
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(withholdFundsMutation, {
-      accountId,
-      amount: -amount, // Negative to decrease available_balance
-    });
   }
 
   /**
@@ -1260,105 +1224,37 @@ export class OrdersService {
     }
   ): Promise<any> {
     const updateOrderHoldMutation = `
-      mutation UpdateOrderHold(
-        $orderHoldId: uuid!,
-        $status: order_hold_status_enum,
-        $clientHoldAmount: numeric,
-        $agentHoldAmount: numeric,
-        $agentId: uuid
-      ) {
-        update_order_holds_by_pk(
-          pk_columns: { id: $orderHoldId },
-          _set: {
-            status: $status,
-            client_hold_amount: $clientHoldAmount,
-            agent_hold_amount: $agentHoldAmount,
-            agent_id: $agentId
-          }
-        ) {
-          id
-          order_id
-          client_id
-          agent_id
-          client_hold_amount
-          agent_hold_amount
-          currency
-          status
-          created_at
-          updated_at
-        }
+     mutation UpdateOrderHold($orderHoldId: uuid!, $_set: order_holds_set_input = {}) {
+      update_order_holds_by_pk(pk_columns: {id: $orderHoldId}, _set: $_set) {
+        id
+        order_id
+        client_id
+        agent_id
+        client_hold_amount
+        agent_hold_amount
+        currency
+        status
+        created_at
+        updated_at
       }
+    }
+
     `;
 
     const result = await this.hasuraSystemService.executeMutation(
       updateOrderHoldMutation,
       {
         orderHoldId,
-        status: updates.status,
-        clientHoldAmount: updates.client_hold_amount,
-        agentHoldAmount: updates.agent_hold_amount,
-        agentId: updates.agent_id,
+        _set: {
+          status: updates.status ?? undefined,
+          client_hold_amount: updates.client_hold_amount ?? undefined,
+          agent_hold_amount: updates.agent_hold_amount ?? undefined,
+          agent_id: updates.agent_id ?? undefined,
+        },
       }
     );
 
     return result.update_order_holds_by_pk;
-  }
-
-  private async placeHoldOnAccount(
-    accountId: string,
-    amount: number,
-    memo: string,
-    referenceId: string
-  ): Promise<void> {
-    // 1. Insert the hold transaction
-    const insertTransactionMutation = `
-      mutation ($accountId: uuid!, $amount: numeric!, $memo: String!, $referenceId: uuid!) {
-        insert_account_transactions(objects: [{
-          account_id: $accountId,
-          amount: $amount,
-          transaction_type: "hold",
-          memo: $memo,
-          reference_id: $referenceId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(insertTransactionMutation, {
-      accountId,
-      amount,
-      memo,
-      referenceId,
-    });
-
-    // 2. Query the current balances using the reusable method
-    const account = await this.getAccountById(accountId);
-
-    // 3. Calculate new balances
-    const newAvailable = account.available_balance - Number(amount);
-    const newWithheld = account.withheld_balance + Number(amount);
-
-    // 4. Update the account using _set
-    const updateAccountMutation = `
-      mutation ($accountId: uuid!, $available: numeric!, $withheld: numeric!) {
-        update_accounts_by_pk(
-          pk_columns: { id: $accountId },
-          _set: {
-            available_balance: $available,
-            withheld_balance: $withheld
-          }
-        ) {
-          id
-          available_balance
-          withheld_balance
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(updateAccountMutation, {
-      accountId,
-      available: newAvailable,
-      withheld: newWithheld,
-    });
   }
 
   private async assignOrderToAgent(
@@ -1423,24 +1319,9 @@ export class OrdersService {
     });
   }
 
-  private async processOrderDelivery(order: any, userId: string) {
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      userId,
-      order.currency
-    );
-    if (!agentAccount) return;
-
-    const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.total_amount * holdPercentage) / 100;
-
+  private async processOrderDelivery(order: any) {
     // Release hold and process payment
-    await this.releaseHoldAndProcessPayment(
-      agentAccount.id,
-      holdAmount,
-      order.total_amount,
-      `Payment for delivered order ${order.order_number}`,
-      order.id
-    );
+    await this.releaseHoldAndProcessPayment(order.id);
   }
 
   private async releaseOrderHold(order: any, userId: string) {
@@ -1453,83 +1334,20 @@ export class OrdersService {
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
     const holdAmount = (order.total_amount * holdPercentage) / 100;
 
-    // Release hold
-    await this.releaseHold(
-      agentAccount.id,
-      holdAmount,
-      `Hold released for order ${order.order_number}`,
-      order.id
-    );
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: holdAmount,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number}`,
+      referenceId: order.id,
+    });
   }
 
   private async releaseHoldAndProcessPayment(
-    accountId: string,
-    holdAmount: number,
-    paymentAmount: number,
-    memo: string,
     referenceId: string
   ): Promise<void> {
-    // 1. Insert the release and payment transactions for the agent
-    const insertTransactionsMutation = `
-      mutation ProcessDelivery($accountId: uuid!, $holdAmount: numeric!, $paymentAmount: numeric!, $memo: String!, $referenceId: uuid!) {
-        insert_account_transactions(objects: [
-          {
-            account_id: $accountId,
-            amount: $holdAmount,
-            transaction_type: "release",
-            memo: "Hold released for delivery",
-            reference_id: $referenceId
-          },
-          {
-            account_id: $accountId,
-            amount: $paymentAmount,
-            transaction_type: "payment",
-            memo: $memo,
-            reference_id: $referenceId
-          }
-        ]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(insertTransactionsMutation, {
-      accountId,
-      holdAmount,
-      paymentAmount,
-      memo,
-      referenceId,
-    });
-
-    // 2. Get the current agent account balances
-    const agentAccount = await this.getAccountById(accountId);
-    const newWithheld = agentAccount.withheld_balance - Number(holdAmount);
-    const newAvailable = agentAccount.available_balance + Number(holdAmount);
-
-    // 3. Update the agent account using _set
-    const updateAgentAccountMutation = `
-      mutation ($accountId: uuid!, $available: numeric!, $withheld: numeric!) {
-        update_accounts_by_pk(
-          pk_columns: { id: $accountId },
-          _set: {
-            available_balance: $available,
-            withheld_balance: $withheld
-          }
-        ) {
-          id
-          available_balance
-          withheld_balance
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(updateAgentAccountMutation, {
-      accountId,
-      available: newAvailable,
-      withheld: newWithheld,
-    });
-
-    // 3.5. Release the hold on the client (decrement withheld_balance by the order amount, do not credit available_balance)
-    // Get the order details to find the client user and currency
     const order = await this.getOrderDetails(referenceId);
+
     if (
       !order ||
       !order.business ||
@@ -1539,33 +1357,41 @@ export class OrdersService {
       throw new Error('Order, business user, or client not found');
     }
 
+    const orderHold = await this.getOrCreateOrderHold(referenceId);
+
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      order.assigned_agent.user_id,
+      order.currency
+    );
+
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: orderHold.agent_hold_amount,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
+
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
     );
 
-    if (clientAccount && clientAccount.withheld_balance > 0) {
-      const newWithheld =
-        clientAccount.withheld_balance - Number(order.total_amount);
-      const updateClientAccountMutation = `
-        mutation ($accountId: uuid!, $withheld_balance: numeric!) {
-          update_accounts_by_pk(
-            pk_columns: { id: $accountId },
-            _set: { withheld_balance: $withheld_balance }
-          ) {
-            id
-            withheld_balance
-          }
-        }
-      `;
-      await this.hasuraSystemService.executeMutation(
-        updateClientAccountMutation,
-        {
-          accountId: clientAccount.id,
-          withheld_balance: newWithheld < 0 ? 0 : newWithheld,
-        }
-      );
-    }
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount: orderHold.client_hold_amount,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
+
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount: order.total_amount,
+      transactionType: 'payment',
+      memo: `Order payment received for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
 
     const businessUserId = order.business.user_id;
     const currency = order.currency;
@@ -1575,121 +1401,17 @@ export class OrdersService {
       businessUserId,
       currency
     );
-    if (!businessAccount) {
-      // If the business account for the given currency is not found, create one
-      businessAccount = await this.hasuraSystemService.createUserAccount(
-        businessUserId,
-        currency
-      );
-      if (!businessAccount) {
-        throw new Error('Failed to create business account');
-      }
-    }
 
-    // 6. Insert a transaction to increment the business's available_balance
-    const businessTransactionMutation = `
-      mutation ($accountId: uuid!, $amount: numeric!, $memo: String!, $referenceId: uuid!) {
-        insert_account_transactions(objects: [{
-          account_id: $accountId,
-          amount: $amount,
-          transaction_type: "payment",
-          memo: $memo,
-          reference_id: $referenceId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(
-      businessTransactionMutation,
-      {
-        accountId: businessAccount.id,
-        amount: paymentAmount,
-        memo: `Order payment received for order ${order.order_number}`,
-        referenceId,
-      }
-    );
-
-    // 7. Update the business account's available_balance
-    const businessAccountBalances = await this.getAccountById(
-      businessAccount.id
-    );
-    const newBusinessAvailable =
-      businessAccountBalances.available_balance + Number(paymentAmount);
-    const updateBusinessAccountMutation = `
-      mutation ($accountId: uuid!, $available: numeric!) {
-        update_accounts_by_pk(
-          pk_columns: { id: $accountId },
-          _set: {
-            available_balance: $available
-          }
-        ) {
-          id
-          available_balance
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(
-      updateBusinessAccountMutation,
-      {
-        accountId: businessAccount.id,
-        available: newBusinessAvailable,
-      }
-    );
-  }
-
-  private async releaseHold(
-    accountId: string,
-    amount: number,
-    memo: string,
-    referenceId: string
-  ): Promise<void> {
-    // 1. Get the current account balances
-    const account = await this.getAccountById(accountId);
-    const newAvailable = account.available_balance + Number(amount);
-    const newWithheld = account.withheld_balance - Number(amount);
-
-    // 2. Insert the release transaction
-    const insertTransactionMutation = `
-      mutation ReleaseHold($accountId: uuid!, $amount: numeric!, $memo: String!, $referenceId: uuid!) {
-        insert_account_transactions(objects: [{
-          account_id: $accountId,
-          amount: $amount,
-          transaction_type: "release",
-          memo: $memo,
-          reference_id: $referenceId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(insertTransactionMutation, {
-      accountId,
-      amount,
-      memo,
-      referenceId,
+    await this.accountsService.registerTransaction({
+      accountId: businessAccount.id,
+      amount: order.total_amount,
+      transactionType: 'deposit',
+      memo: `Order payment received for order ${order.order_number}`,
+      referenceId: referenceId,
     });
 
-    // 3. Update the account using _set
-    const updateAccountMutation = `
-      mutation ($accountId: uuid!, $available: numeric!, $withheld: numeric!) {
-        update_accounts_by_pk(
-          pk_columns: { id: $accountId },
-          _set: {
-            available_balance: $available,
-            withheld_balance: $withheld
-          }
-        ) {
-          id
-          available_balance
-          withheld_balance
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(updateAccountMutation, {
-      accountId,
-      available: newAvailable,
-      withheld: newWithheld,
+    await this.updateOrderHold(orderHold.id, {
+      status: 'completed',
     });
   }
 }
