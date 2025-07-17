@@ -431,6 +431,15 @@ const OrderCard: React.FC<{
             </Typography>
           </Box>
         )}
+        {(order.current_status === 'assigned_to_agent' ||
+          order.current_status === 'ready_for_pickup') && (
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="warning" variant="outlined">
+              Once you claim this order, you must deliver it within 24 hours or
+              penalties may apply.
+            </Alert>
+          </Box>
+        )}
       </CardContent>
 
       {showActions && (
