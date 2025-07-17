@@ -1287,38 +1287,6 @@ export class HasuraUserService {
       mutationVariables
     );
 
-    // Create status history entry
-    const createStatusHistoryMutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-          returning {
-            id
-            order_id
-            status
-            created_at
-          }
-        }
-      }
-    `;
-
-    const changedByType = isBusinessOwner ? 'business' : 'agent';
-    const notes = `Status changed to ${newStatus}`;
-
-    await this.executeMutation(createStatusHistoryMutation, {
-      orderId,
-      status: newStatus,
-      notes,
-      changedByType,
-      changedByUserId: user.id,
-    });
-
     return updateResult.update_orders_by_pk;
   }
 

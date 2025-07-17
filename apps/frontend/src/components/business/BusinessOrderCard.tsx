@@ -113,7 +113,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   };
 
   const getConfirmationMessage = (action: OrderAction) => {
-    return t('orders.confirmStatusUpdate', {
+    return t('business.orders.confirmStatusUpdate', {
       orderNumber: order.order_number,
       newStatus: action.label,
     });

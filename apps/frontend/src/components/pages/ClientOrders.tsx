@@ -634,7 +634,7 @@ const ClientOrders: React.FC = () => {
         title={t('orders.confirmTitle')}
         message={
           pendingAction
-            ? t('orders.confirmStatusUpdate', {
+            ? t('business.orders.confirmStatusUpdate', {
                 orderNumber: orders.find((o) => o.id === pendingAction.orderId)
                   ?.order_number,
                 newStatus: t(`orders.status.${pendingAction.status}`),
