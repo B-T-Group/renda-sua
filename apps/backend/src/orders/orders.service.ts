@@ -154,7 +154,10 @@ export class OrdersService {
       );
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
     const holdAmount = (order.total_amount * holdPercentage) / 100;
-    const agentAccount = await this.getUserAccount(user.id, order.currency);
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      order.currency
+    );
     if (!agentAccount)
       throw new HttpException(
         `No account found for currency ${order.currency}`,
@@ -829,36 +832,6 @@ export class OrdersService {
     return result.orders_by_pk;
   }
 
-  private async getUserAccount(userId: string, currency: string): Promise<any> {
-    const query = `
-      query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
-        accounts(where: {
-          user_id: {_eq: $userId},
-          currency: {_eq: $currency},
-          is_active: {_eq: true}
-        }) {
-          id
-          available_balance
-          withheld_balance
-          total_balance
-        }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      userId,
-      currency,
-    });
-    let account = result.accounts[0] || null;
-    if (!account) {
-      // Create the account if it doesn't exist
-      account = await this.hasuraSystemService.createUserAccount(
-        userId,
-        currency
-      );
-    }
-    return account;
-  }
-
   /**
    * Get account by accountId (returns available_balance and withheld_balance)
    */
@@ -1005,7 +978,10 @@ export class OrdersService {
   }
 
   private async processOrderDelivery(order: any, userId: string) {
-    const agentAccount = await this.getUserAccount(userId, order.currency);
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      userId,
+      order.currency
+    );
     if (!agentAccount) return;
 
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
@@ -1022,7 +998,10 @@ export class OrdersService {
   }
 
   private async releaseOrderHold(order: any, userId: string) {
-    const agentAccount = await this.getUserAccount(userId, order.currency);
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      userId,
+      order.currency
+    );
     if (!agentAccount) return;
 
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
@@ -1114,10 +1093,11 @@ export class OrdersService {
       throw new Error('Order, business user, or client not found');
     }
 
-    const clientAccount = await this.getUserAccount(
+    const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
     );
+
     if (clientAccount && clientAccount.withheld_balance > 0) {
       const newWithheld =
         clientAccount.withheld_balance - Number(order.total_amount);
@@ -1145,7 +1125,10 @@ export class OrdersService {
     const currency = order.currency;
 
     // 5. Get the business account for the order's currency
-    let businessAccount = await this.getUserAccount(businessUserId, currency);
+    let businessAccount = await this.hasuraSystemService.getAccount(
+      businessUserId,
+      currency
+    );
     if (!businessAccount) {
       // If the business account for the given currency is not found, create one
       businessAccount = await this.hasuraSystemService.createUserAccount(

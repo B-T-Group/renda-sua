@@ -927,25 +927,10 @@ export class HasuraUserService {
     const currency = businessInventory.item.currency;
 
     // Check user account for the currency
-    const getAccountsQuery = `
-      query GetUserAccounts($userId: uuid!, $currency: currency_enum!) {
-        accounts(where: {user_id: {_eq: $userId}, currency: {_eq: $currency}}) {
-          id
-          currency
-          available_balance
-          withheld_balance
-          total_balance
-        }
-      }
-    `;
-
-    const accountsResult = await this.executeQuery(getAccountsQuery, {
-      userId: user.id,
-      currency,
-    });
-
-    const userAccounts = (accountsResult.accounts || []) as Account[];
-    const account = userAccounts[0];
+    const account = await this.hasuraSystemService.getAccount(
+      user.id,
+      currency
+    );
 
     if (!account) {
       throw new Error(`No account found for currency ${currency}`);

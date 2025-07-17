@@ -167,4 +167,34 @@ export class HasuraSystemService {
     const result = await this.executeQuery(query, { id });
     return result.agents[0] || null;
   }
+
+  /**
+   * Get user account by userId and currency
+   */
+  async getAccount(userId: string, currency: string): Promise<any> {
+    const query = `
+      query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
+        accounts(where: {
+          user_id: {_eq: $userId},
+          currency: {_eq: $currency},
+          is_active: {_eq: true}
+        }) {
+          id
+          available_balance
+          withheld_balance
+          total_balance
+        }
+      }
+    `;
+    const result = await this.executeQuery(query, {
+      userId,
+      currency,
+    });
+    let account = result.accounts[0] || null;
+    if (!account) {
+      // Create the account if it doesn't exist
+      account = await this.createUserAccount(userId, currency);
+    }
+    return account;
+  }
 }
