@@ -4,6 +4,7 @@ import {
   Cancel,
   CheckCircle,
   DirectionsCar,
+  History,
   LocalShipping,
   LocationOn,
   Pending,
@@ -31,6 +32,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -106,6 +108,7 @@ const OrderCard: React.FC<{
 }) => {
   const { t } = useTranslation();
   const [updating, setUpdating] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
 
   // Distance Matrix integration
   const formatAddress = (address: any) => {
@@ -160,6 +163,10 @@ const OrderCard: React.FC<{
     } finally {
       setUpdating(false);
     }
+  };
+
+  const handleViewHistory = () => {
+    setHistoryDialogOpen(true);
   };
 
   const getAvailableActions = (order: Order) => {
@@ -488,6 +495,16 @@ const OrderCard: React.FC<{
                 {updating ? <CircularProgress size={20} /> : action.label}
               </Button>
             ))}
+            <Button
+              variant="outlined"
+              color="info"
+              onClick={handleViewHistory}
+              disabled={updating}
+              startIcon={<History />}
+              sx={{ ml: 1 }}
+            >
+              {t('orderActions.viewHistory', 'History')}
+            </Button>
           </Box>
           <Typography variant="caption" color="text.secondary">
             {t('common.created')}:{' '}
@@ -495,6 +512,13 @@ const OrderCard: React.FC<{
           </Typography>
         </CardActions>
       )}
+
+      <OrderHistoryDialog
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
+        orderHistory={order.order_status_history || []}
+        orderNumber={order.order_number}
+      />
     </Card>
   );
 };

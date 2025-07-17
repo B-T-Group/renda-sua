@@ -527,7 +527,7 @@ export class OrdersService {
 
     const query = `
       query GetBusinessOrders($filters: orders_bool_exp) {
-        orders(where: $filters, order_by: { created_at: desc }) {
+        orders(where: $filters, order_by: {created_at: desc}) {
           id
           order_number
           client_id
@@ -628,8 +628,41 @@ export class OrdersService {
             dimensions
             special_instructions
           }
+          order_status_history {
+            changed_by_type
+            changed_by_user {
+              agent {
+                user {
+                  email
+                  first_name
+                  last_name
+                }
+              }
+              business {
+                user {
+                  email
+                  first_name
+                  last_name
+                }
+              }
+              client {
+                user {
+                  first_name
+                  email
+                  last_name
+                }
+              }
+            }
+            changed_by_user_id
+            created_at
+            id
+            previous_status
+            status
+            notes
+          }
         }
       }
+
     `;
 
     const variables = { filters: where };

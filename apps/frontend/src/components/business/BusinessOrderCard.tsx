@@ -1,5 +1,6 @@
 import {
   AccessTime as AccessTimeIcon,
+  History as HistoryIcon,
   LocalShipping as LocalShippingIcon,
   Person as PersonIcon,
   Receipt as ReceiptIcon,
@@ -27,6 +28,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import ConfirmationModal from '../common/ConfirmationModal';
+import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 interface OrderAction {
   label: string;
@@ -68,6 +70,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
   } | null>(null);
   const [notes, setNotes] = useState('');
   const [itemsDialogOpen, setItemsDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
 
   // Distance Matrix integration
   const {
@@ -274,6 +277,16 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
           >
             {t('business.orders.actions.viewItems', 'View Items')}
           </Button>
+          <Button
+            size="small"
+            color="secondary"
+            variant="outlined"
+            startIcon={<HistoryIcon />}
+            onClick={() => setHistoryDialogOpen(true)}
+            disabled={loading}
+          >
+            {t('business.orders.actions.viewHistory', 'History')}
+          </Button>
         </CardActions>
       </Card>
 
@@ -456,6 +469,14 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Order History Dialog */}
+      <OrderHistoryDialog
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
+        orderHistory={order.order_status_history || []}
+        orderNumber={order.order_number}
+      />
     </>
   );
 };

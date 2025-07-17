@@ -89,6 +89,39 @@ export interface Order {
   business_location: BusinessLocation;
   delivery_address: Address;
   order_items: OrderItem[];
+  order_status_history?: Array<{
+    id: string;
+    order_id: string;
+    status: string;
+    previous_status: string | null;
+    notes: string;
+    changed_by_type: string;
+    changed_by_user_id: string;
+    created_at: string;
+    changed_by_user: {
+      agent?: {
+        user: {
+          email: string;
+          first_name: string;
+          last_name: string;
+        };
+      };
+      business?: {
+        user: {
+          email: string;
+          first_name: string;
+          last_name: string;
+        };
+      };
+      client?: {
+        user: {
+          email: string;
+          first_name: string;
+          last_name: string;
+        };
+      };
+    };
+  }>;
 }
 
 export interface ActiveOrdersResponse {

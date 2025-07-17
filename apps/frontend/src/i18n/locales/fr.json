@@ -68,7 +68,9 @@
     "uploading": "Téléchargement...",
     "warning": "Avertissement",
     "info": "Information",
-    "language": "Langue"
+    "language": "Langue",
+    "showDetails": "Afficher les détails",
+    "hideDetails": "Masquer les détails"
   },
   "auth": {
     "login": "Connexion",
@@ -108,24 +110,31 @@
   },
   "orderStatus": {
     "pending": "en attente",
-    "confirmed": "confirmée",
+    "confirmed": "confirmé",
     "preparing": "en préparation",
-    "readyForPickup": "prête pour récupération",
-    "assigned_to_agent": "assignée à l'agent",
-    "assignedToAgent": "assignée à l'agent",
-    "picked_up": "récupérée",
-    "pickedUp": "récupérée",
+    "readyForPickup": "prêt pour le ramassage",
+    "assigned_to_agent": "assigné à l'agent",
+    "assignedToAgent": "assigné à l'agent",
+    "picked_up": "ramassé",
+    "pickedUp": "ramassé",
     "in_transit": "en transit",
     "inTransit": "en transit",
     "out_for_delivery": "en livraison",
     "outForDelivery": "en livraison",
-    "delivered": "livrée",
-    "cancelled": "annulée",
-    "failed": "échouée",
-    "refunded": "remboursée"
+    "delivered": "livré",
+    "cancelled": "annulé",
+    "failed": "échoué",
+    "refunded": "remboursé",
+    "ready_for_pickup": "Prêt pour le ramassage"
+  },
+  "orderHistory": {
+    "title": "Historique des commandes",
+    "noHistory": "Aucun historique de commande disponible.",
+    "changedBy": "Modifié par",
+    "fromStatus": "De"
   },
   "orderActions": {
-    "getOrder": "Récupérer la commande",
+    "getOrder": "Obtenir la commande",
     "pickUpOrder": "Récupérer la commande",
     "markAsPickedUp": "Marquer comme récupérée",
     "markAsPickedup": "Marquer comme récupérée",
@@ -136,7 +145,10 @@
     "successfullyPickedUp": "Commande récupérée avec succès",
     "failedToPickUp": "Échec de la récupération de la commande",
     "orderStatusUpdated": "Statut de la commande mis à jour avec succès",
-    "failedToUpdateStatus": "Échec de la mise à jour du statut de la commande"
+    "failedToUpdateStatus": "Échec de la mise à jour du statut de la commande",
+    "claimOrder": "Réclamer",
+    "dropOrder": "Abandonner",
+    "viewHistory": "Historique"
   },
   "forms": {
     "firstName": "Prénom",
@@ -153,11 +165,86 @@
     "currentPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe"
   },
+  "orders": {
+    "title": "Mes commandes",
+    "subtitle": "Afficher et gérer l'historique de vos commandes",
+    "noOrdersFound": "Aucune commande trouvée. Commencez à faire des achats pour voir vos commandes ici.",
+    "table": {
+      "orderNumber": "Commande #{{number}}",
+      "customer": "Client",
+      "items": "Articles",
+      "total": "Total",
+      "status": "Statut",
+      "deliveryAddress": "Adresse de livraison",
+      "agent": "Agent",
+      "createdAt": "Créé le",
+      "actions": "Actions",
+      "unassigned": "Non assigné"
+    },
+    "status": {
+      "pending": "En attente",
+      "confirmed": "Confirmé",
+      "preparing": "En préparation",
+      "ready_for_pickup": "Prêt pour le ramassage",
+      "assigned_to_agent": "Assigné à l'agent",
+      "picked_up": "Ramassé",
+      "in_transit": "En transit",
+      "out_for_delivery": "En livraison",
+      "delivered": "Livré",
+      "cancelled": "Annulé",
+      "failed": "Échoué",
+      "refunded": "Remboursé",
+      "completed": "Terminé",
+      "unknown": "Inconnu"
+    },
+    "orderItems": "Articles de commande",
+    "specialInstructions": "Instructions spéciales",
+    "actions": {
+      "viewHistory": "Historique"
+    }
+  },
   "client": {
     "orders": {
-      "title": "Mes Commandes",
-      "subtitle": "Consultez et gérez votre historique de commandes",
-      "noOrdersFound": "Aucune commande trouvée. Commencez à faire des achats pour voir vos commandes ici."
+      "title": "Mes commandes",
+      "subtitle": "Afficher et gérer l'historique de vos commandes",
+      "noOrdersFound": "Aucune commande trouvée. Commencez à faire des achats pour voir vos commandes ici.",
+      "table": {
+        "orderNumber": "Commande #{{number}}",
+        "customer": "Client",
+        "items": "Articles",
+        "total": "Total",
+        "status": "Statut",
+        "deliveryAddress": "Adresse de livraison",
+        "agent": "Agent",
+        "createdAt": "Créé le",
+        "actions": "Actions",
+        "unassigned": "Non assigné"
+      },
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmé",
+        "preparing": "En préparation",
+        "ready_for_pickup": "Prêt pour le ramassage",
+        "assigned_to_agent": "Assigné à l'agent",
+        "picked_up": "Ramassé",
+        "in_transit": "En transit",
+        "out_for_delivery": "En livraison",
+        "delivered": "Livré",
+        "cancelled": "Annulé",
+        "failed": "Échoué",
+        "refunded": "Remboursé",
+        "completed": "Terminé",
+        "unknown": "Inconnu"
+      },
+      "orderItems": "Articles de commande",
+      "specialInstructions": "Instructions spéciales",
+      "brand": "Marque",
+      "model": "Modèle",
+      "color": "Couleur",
+      "size": "Taille",
+      "actions": {
+        "viewHistory": "Historique"
+      }
     }
   },
   "business": {

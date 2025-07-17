@@ -69,7 +69,9 @@
     "clearFilters": "Clear Filters",
     "showing": "Showing",
     "update": "Update",
-    "uploading": "Uploading..."
+    "uploading": "Uploading...",
+    "showDetails": "Show Details",
+    "hideDetails": "Hide Details"
   },
   "auth": {
     "login": "Login",
@@ -123,6 +125,12 @@
     "refunded": "refunded",
     "ready_for_pickup": "Ready for Pickup"
   },
+  "orderHistory": {
+    "title": "Order History",
+    "noHistory": "No order history available.",
+    "changedBy": "Changed by",
+    "fromStatus": "From"
+  },
   "orderActions": {
     "getOrder": "Get Order",
     "pickUpOrder": "Pick Up Order",
@@ -137,7 +145,8 @@
     "orderStatusUpdated": "Order status updated successfully",
     "failedToUpdateStatus": "Failed to update order status",
     "claimOrder": "Claim",
-    "dropOrder": "Drop"
+    "dropOrder": "Drop",
+    "viewHistory": "History"
   },
   "forms": {
     "firstName": "First Name",
@@ -158,7 +167,86 @@
     "orders": {
       "title": "My Orders",
       "subtitle": "View and manage your order history",
-      "noOrdersFound": "No orders found. Start shopping to see your orders here."
+      "noOrdersFound": "No orders found. Start shopping to see your orders here.",
+      "table": {
+        "orderNumber": "Order #{{number}}",
+        "customer": "Customer",
+        "items": "Items",
+        "total": "Total",
+        "status": "Status",
+        "deliveryAddress": "Delivery Address",
+        "agent": "Agent",
+        "createdAt": "Created At",
+        "actions": "Actions",
+        "unassigned": "Unassigned"
+      },
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Assigned to Agent",
+        "picked_up": "Picked Up",
+        "in_transit": "In Transit",
+        "out_for_delivery": "Out for Delivery",
+        "delivered": "Delivered",
+        "cancelled": "Cancelled",
+        "failed": "Failed",
+        "refunded": "Refunded",
+        "completed": "Completed",
+        "unknown": "Unknown"
+      },
+      "orderItems": "Order Items",
+      "specialInstructions": "Special Instructions",
+      "brand": "Brand",
+      "model": "Model",
+      "color": "Color",
+      "size": "Size",
+      "actions": {
+        "viewHistory": "History"
+      }
+    }
+  },
+  "orders": {
+    "title": "My Orders",
+    "subtitle": "View and manage your order history",
+    "noOrdersFound": "No orders found. Start shopping to see your orders here.",
+    "table": {
+      "orderNumber": "Order #{{number}}",
+      "customer": "Customer",
+      "items": "Items",
+      "total": "Total",
+      "status": "Status",
+      "deliveryAddress": "Delivery Address",
+      "agent": "Agent",
+      "createdAt": "Created At",
+      "actions": "Actions",
+      "unassigned": "Unassigned"
+    },
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "ready_for_pickup": "Ready for Pickup",
+      "assigned_to_agent": "Assigned to Agent",
+      "picked_up": "Picked Up",
+      "in_transit": "In Transit",
+      "out_for_delivery": "Out for Delivery",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "refunded": "Refunded",
+      "completed": "Completed",
+      "unknown": "Unknown"
+    },
+    "orderItems": "Order Items",
+    "specialInstructions": "Special Instructions",
+    "brand": "Brand",
+    "model": "Model",
+    "color": "Color",
+    "size": "Size",
+    "actions": {
+      "viewHistory": "History"
     }
   },
   "business": {
@@ -259,7 +347,9 @@
         "outForDelivery": "Out for Delivery",
         "deliver": "Deliver",
         "failDelivery": "Fail Delivery",
-        "getOrder": "Get Order"
+        "getOrder": "Get Order",
+        "viewItems": "View Items",
+        "viewHistory": "History"
       },
       "confirmTitle": "Confirm Status Update",
       "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",

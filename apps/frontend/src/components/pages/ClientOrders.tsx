@@ -1,6 +1,7 @@
 import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
+  History as HistoryIcon,
   LocalShipping as LocalShippingIcon,
   Schedule as ScheduleIcon,
   Search as SearchIcon,
@@ -18,12 +19,7 @@ import {
   Container,
   Divider,
   FormControl,
-  Grid,
   InputLabel,
-  List,
-  ListItem,
-  ListItemSecondaryAction,
-  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -37,6 +33,7 @@ import { useClientOrders } from '../../hooks/useClientOrders';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
+import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import SEOHead from '../seo/SEOHead';
 
 interface OrderFilters {
@@ -63,6 +60,9 @@ const ClientOrders: React.FC = () => {
     notes?: string;
   } | null>(null);
   const [notes, setNotes] = useState('');
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedOrderForHistory, setSelectedOrderForHistory] =
+    useState<any>(null);
 
   const { orders, loading, error, fetchOrders, refreshOrders } =
     useClientOrders(profile?.client?.id);
@@ -438,11 +438,11 @@ const ClientOrders: React.FC = () => {
             </Typography>
           </Paper>
         ) : (
-          <Grid container spacing={2}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {orders.map((order) => {
               const distanceInfo = getOrderDistanceInfo(order);
               return (
-                <Grid item xs={12} key={order.id}>
+                <Box key={order.id} sx={{ width: '100%' }}>
                   <Card>
                     <CardContent>
                       <Box
@@ -548,6 +548,19 @@ const ClientOrders: React.FC = () => {
                         ))}
                         <Button
                           size="small"
+                          color="info"
+                          variant="outlined"
+                          startIcon={<HistoryIcon />}
+                          onClick={() => {
+                            setSelectedOrderForHistory(order);
+                            setHistoryDialogOpen(true);
+                          }}
+                          disabled={updateLoading}
+                        >
+                          {t('orders.actions.viewHistory', 'History')}
+                        </Button>
+                        <Button
+                          size="small"
                           variant="text"
                           onClick={() => handleExpandOrder(order.id)}
                           endIcon={
@@ -570,27 +583,94 @@ const ClientOrders: React.FC = () => {
                         <Typography variant="subtitle2" gutterBottom>
                           {t('orders.orderItems')}
                         </Typography>
-                        <List dense>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 1,
+                          }}
+                        >
                           {order.order_items?.map((item: any) => (
-                            <ListItem key={item.id}>
-                              <ListItemText
-                                primary={item.item_name}
-                                secondary={`${item.quantity} x ${formatCurrency(
-                                  item.unit_price,
-                                  order.currency
-                                )}`}
-                              />
-                              <ListItemSecondaryAction>
-                                <Typography variant="body2">
-                                  {formatCurrency(
-                                    item.total_price,
-                                    order.currency
+                            <Box key={item.id} sx={{ width: '100%' }}>
+                              <Paper
+                                variant="outlined"
+                                sx={{
+                                  p: 2,
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Box>
+                                  <Typography
+                                    variant="body1"
+                                    fontWeight="medium"
+                                  >
+                                    {item.item_name}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {item.quantity} x{' '}
+                                    {formatCurrency(
+                                      item.unit_price,
+                                      order.currency
+                                    )}
+                                  </Typography>
+                                  {item.item?.brand?.name && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      {t('orders.brand')}:{' '}
+                                      {item.item.brand.name}
+                                    </Typography>
                                   )}
-                                </Typography>
-                              </ListItemSecondaryAction>
-                            </ListItem>
+                                  {item.item?.model && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      display="block"
+                                    >
+                                      {t('orders.model')}: {item.item.model}
+                                    </Typography>
+                                  )}
+                                  {item.item?.color && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      display="block"
+                                    >
+                                      {t('orders.color')}: {item.item.color}
+                                    </Typography>
+                                  )}
+                                  {item.item?.size && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      display="block"
+                                    >
+                                      {t('orders.size')}: {item.item.size}{' '}
+                                      {item.item.size_unit}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <Box textAlign="right">
+                                  <Typography
+                                    variant="body1"
+                                    fontWeight="medium"
+                                  >
+                                    {formatCurrency(
+                                      item.total_price,
+                                      order.currency
+                                    )}
+                                  </Typography>
+                                </Box>
+                              </Paper>
+                            </Box>
                           ))}
-                        </List>
+                        </Box>
                         {order.special_instructions && (
                           <>
                             <Divider sx={{ my: 2 }} />
@@ -622,10 +702,10 @@ const ClientOrders: React.FC = () => {
                       )}
                     </CardContent>
                   </Card>
-                </Grid>
+                </Box>
               );
             })}
-          </Grid>
+          </Box>
         )}
       </Container>
 
@@ -659,6 +739,16 @@ const ClientOrders: React.FC = () => {
             sx={{ mt: 2 }}
           />
         }
+      />
+
+      <OrderHistoryDialog
+        open={historyDialogOpen}
+        onClose={() => {
+          setHistoryDialogOpen(false);
+          setSelectedOrderForHistory(null);
+        }}
+        orderHistory={selectedOrderForHistory?.order_status_history || []}
+        orderNumber={selectedOrderForHistory?.order_number || ''}
       />
     </>
   );
