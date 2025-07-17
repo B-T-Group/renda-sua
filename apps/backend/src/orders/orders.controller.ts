@@ -126,11 +126,6 @@ export class OrdersController {
     return this.ordersService.completePreparation(request);
   }
 
-  @Post('get_order')
-  async getOrder(@Body() request: GetOrderRequest) {
-    return this.ordersService.getOrder(request);
-  }
-
   @Post('pick_up')
   async pickUpOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.pickUpOrder(request);
@@ -191,5 +186,20 @@ export class OrdersController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('open')
+  async getOpenOrders() {
+    return this.ordersService.getOpenOrders();
+  }
+
+  @Post('drop_order')
+  async dropOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.dropOrder(request);
+  }
+
+  @Post('claim_order')
+  async claimOrder(@Body() request: GetOrderRequest) {
+    return this.ordersService.claimOrder(request);
   }
 }

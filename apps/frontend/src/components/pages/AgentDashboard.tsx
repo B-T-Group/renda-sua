@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
@@ -21,7 +22,6 @@ import {
   Container,
   List,
   ListItem,
-  ListItemSecondaryAction,
   ListItemText,
   Paper,
   Snackbar,
@@ -30,8 +30,6 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
-import { useBackendOrders } from '../../hooks/useBackendOrders';
-import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 const getStatusColor = (status: string) => {
@@ -88,13 +86,15 @@ const formatCurrency = (amount: number, currency: string) => {
 const OrderCard: React.FC<{
   order: Order;
   onPickUp?: (orderId: string) => Promise<void>;
-  onUpdateStatus?: (orderId: string, status: string) => Promise<void>;
+  onClaim?: (orderId: string) => Promise<void>;
+  onDrop?: (orderId: string) => Promise<void>;
   showActions?: boolean;
   agentAddress?: any;
 }> = ({
   order,
   onPickUp,
-  onUpdateStatus,
+  onClaim,
+  onDrop,
   showActions = true,
   agentAddress,
 }) => {
@@ -106,30 +106,19 @@ const OrderCard: React.FC<{
     if (!address) return '';
     return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
   };
-  const origin = formatAddress(agentAddress);
-  const pickupDestination = formatAddress(order.business_location.address);
-  const deliveryDestination = formatAddress(order.delivery_address);
-  const {
-    data: pickupDistanceData,
-    loading: pickupDistanceLoading,
-    error: pickupDistanceError,
-    fetchDistance: fetchPickupDistance,
-  } = useDistanceMatrix();
-  const {
-    data: deliveryDistanceData,
-    loading: deliveryDistanceLoading,
-    error: deliveryDistanceError,
-    fetchDistance: fetchDeliveryDistance,
-  } = useDistanceMatrix();
-  React.useEffect(() => {
-    if (origin && pickupDestination) {
-      fetchPickupDistance([origin], [pickupDestination]);
-    }
-    if (origin && deliveryDestination) {
-      fetchDeliveryDistance([origin], [deliveryDestination]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origin, pickupDestination, deliveryDestination]);
+  const origin =
+    agentAddress && agentAddress.address
+      ? formatAddress(agentAddress.address)
+      : '';
+  const pickupDestination =
+    order.business_location && order.business_location.address
+      ? formatAddress(order.business_location.address)
+      : '';
+  const deliveryDestination = order.delivery_address
+    ? formatAddress(order.delivery_address)
+    : '';
+
+  React.useEffect(() => {}, [origin, pickupDestination, deliveryDestination]);
 
   const handlePickUp = async () => {
     if (!onPickUp) return;
@@ -143,41 +132,37 @@ const OrderCard: React.FC<{
     }
   };
 
-  const handleStatusUpdate = async (status: string) => {
-    if (!onUpdateStatus) return;
+  const handleClaim = async () => {
+    if (!onClaim) return;
     setUpdating(true);
     try {
-      await onUpdateStatus(order.id, status);
+      await onClaim(order.id);
     } catch (error) {
-      console.error('Error updating order status:', error);
+      console.error('Error claiming order:', error);
     } finally {
       setUpdating(false);
     }
   };
 
-  const getNextStatus = (currentStatus: string) => {
-    switch (currentStatus) {
-      case 'assigned_to_agent':
-        return 'picked_up';
-      case 'picked_up':
-        return 'in_transit';
-      case 'in_transit':
-        return 'out_for_delivery';
-      case 'out_for_delivery':
-        return 'delivered';
-      default:
-        return null;
+  const handleDrop = async () => {
+    if (!onDrop) return;
+    setUpdating(true);
+    try {
+      await onDrop(order.id);
+    } catch (error) {
+      console.error('Error dropping order:', error);
+    } finally {
+      setUpdating(false);
     }
   };
 
   const getAvailableActions = (order: Order) => {
     const actions = [];
-
     switch (order.current_status) {
       case 'ready_for_pickup':
         actions.push({
-          label: t('orderActions.getOrder'),
-          status: 'assigned_to_agent',
+          label: t('orderActions.claimOrder', 'Claim'),
+          action: handleClaim,
           color: 'primary' as const,
           icon: <CheckCircle />,
         });
@@ -185,9 +170,15 @@ const OrderCard: React.FC<{
       case 'assigned_to_agent':
         actions.push({
           label: t('orderActions.pickUpOrder'),
-          status: 'picked_up',
+          action: handlePickUp,
           color: 'success' as const,
           icon: <CheckCircle />,
+        });
+        actions.push({
+          label: t('orderActions.dropOrder', 'Drop'),
+          action: handleDrop,
+          color: 'error' as const,
+          icon: <Cancel />,
         });
         break;
       case 'picked_up':
@@ -223,11 +214,8 @@ const OrderCard: React.FC<{
         );
         break;
     }
-
     return actions;
   };
-
-  const nextStatus = getNextStatus(order.current_status);
 
   return (
     <Card sx={{ mb: 2, position: 'relative' }}>
@@ -301,24 +289,127 @@ const OrderCard: React.FC<{
               {t('orderCard.items')} ({order.order_items.length}):
             </Typography>
             <List dense>
-              {order.order_items.slice(0, 3).map((item) => (
-                <ListItem key={item.id} sx={{ py: 0 }}>
+              {order.order_items.slice(0, 3).map((order_item, idx) => (
+                <ListItem
+                  key={order_item.id || order_item.item?.sku || idx}
+                  sx={{ py: 1, alignItems: 'flex-start' }}
+                >
+                  {/* Item image */}
+                  {order_item.item &&
+                    order_item.item.item_images &&
+                    order_item.item.item_images[0]?.image_url && (
+                      <Avatar
+                        src={order_item.item.item_images[0].image_url}
+                        alt={order_item.item_name}
+                        sx={{ width: 96, height: 96, mr: 2, mt: 0.5 }}
+                        variant="rounded"
+                      />
+                    )}
                   <ListItemText
-                    primary={item.item_name}
-                    secondary={`${item.quantity}x ${formatCurrency(
-                      item.unit_price,
-                      order.currency
-                    )}`}
+                    primary={
+                      <Box>
+                        <Typography
+                          variant="subtitle2"
+                          fontWeight={600}
+                          component="div"
+                        >
+                          {(order_item.item &&
+                            (order_item.item.model || order_item.item.name)) ||
+                            order_item.item_name}
+                        </Typography>
+                        {order_item.item && order_item.item.sku && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                          >
+                            SKU: {order_item.item.sku}
+                          </Typography>
+                        )}
+                        {order_item.item && order_item.item.brand?.name && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                          >
+                            Brand: {order_item.item.brand.name}
+                          </Typography>
+                        )}
+                        {order_item.item &&
+                          order_item.item.item_sub_category?.item_category
+                            ?.name && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              component="div"
+                            >
+                              Category:{' '}
+                              {
+                                order_item.item.item_sub_category.item_category
+                                  .name
+                              }{' '}
+                              → {order_item.item.item_sub_category.name}
+                            </Typography>
+                          )}
+                        {order_item.item && order_item.item.size && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                          >
+                            Size: {order_item.item.size}{' '}
+                            {order_item.item.size_unit || ''}
+                          </Typography>
+                        )}
+                        {order_item.item && order_item.item.weight && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                          >
+                            Weight: {order_item.item.weight}{' '}
+                            {order_item.item.weight_unit || ''}
+                          </Typography>
+                        )}
+                        {order_item.item && order_item.item.color && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                          >
+                            Color: {order_item.item.color}
+                          </Typography>
+                        )}
+                        <Typography
+                          variant="body2"
+                          color="text.primary"
+                          component="div"
+                        >
+                          Quantity: {order_item.quantity}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          component="div"
+                        >
+                          Unit Price:{' '}
+                          {formatCurrency(
+                            order_item.unit_price,
+                            order.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
+                      <Typography variant="body2" color="primary">
+                        {formatCurrency(order_item.total_price, order.currency)}
+                      </Typography>
+                    }
                   />
-                  <ListItemSecondaryAction>
-                    <Typography variant="body2" color="primary">
-                      {formatCurrency(item.total_price, order.currency)}
-                    </Typography>
-                  </ListItemSecondaryAction>
                 </ListItem>
               ))}
               {order.order_items.length > 3 && (
-                <ListItem sx={{ py: 0 }}>
+                <ListItem key="more-items" sx={{ py: 0 }}>
                   <ListItemText
                     secondary={`+${order.order_items.length - 3} ${t(
                       'orderCard.moreItems'
@@ -340,62 +431,29 @@ const OrderCard: React.FC<{
             </Typography>
           </Box>
         )}
-        {/* Pickup Distance */}
-        {pickupDistanceLoading && (
-          <Typography variant="body2" color="text.secondary">
-            Loading pickup distance...
-          </Typography>
-        )}
-        {pickupDistanceError && (
-          <Typography variant="body2" color="error">
-            Error: {pickupDistanceError}
-          </Typography>
-        )}
-        {pickupDistanceData &&
-          pickupDistanceData.rows[0]?.elements[0]?.status === 'OK' && (
-            <Typography variant="body2" color="text.secondary">
-              Pickup Distance:{' '}
-              {pickupDistanceData.rows[0].elements[0].distance.text}, Duration:{' '}
-              {pickupDistanceData.rows[0].elements[0].duration.text}
-            </Typography>
-          )}
-        {/* Delivery Distance */}
-        {deliveryDistanceLoading && (
-          <Typography variant="body2" color="text.secondary">
-            Loading delivery distance...
-          </Typography>
-        )}
-        {deliveryDistanceError && (
-          <Typography variant="body2" color="error">
-            Error: {deliveryDistanceError}
-          </Typography>
-        )}
-        {deliveryDistanceData &&
-          deliveryDistanceData.rows[0]?.elements[0]?.status === 'OK' && (
-            <Typography variant="body2" color="text.secondary">
-              Delivery Distance:{' '}
-              {deliveryDistanceData.rows[0].elements[0].distance.text},
-              Duration: {deliveryDistanceData.rows[0].elements[0].duration.text}
-            </Typography>
-          )}
       </CardContent>
 
       {showActions && (
         <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
           <Box>
-            {getAvailableActions(order).map((action) => (
+            {getAvailableActions(order).map((action, idx) => (
               <Button
-                key={action.status}
+                key={action.label}
                 variant={
-                  action.status === 'assigned_to_agent'
+                  action.label === t('orderActions.claimOrder', 'Claim')
                     ? 'contained'
                     : 'outlined'
                 }
                 color={action.color}
-                onClick={() => handleStatusUpdate(action.status)}
+                onClick={action.action}
                 disabled={updating}
                 startIcon={action.icon}
-                sx={{ ml: action.status === 'assigned_to_agent' ? 0 : 1 }}
+                sx={{
+                  ml:
+                    action.label === t('orderActions.claimOrder', 'Claim')
+                      ? 0
+                      : 1,
+                }}
               >
                 {updating ? <CircularProgress size={20} /> : action.label}
               </Button>
@@ -415,6 +473,7 @@ const AgentDashboard: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth0();
   const { profile } = useUserProfile();
+  const agentOrders = useAgentOrders();
   const {
     activeOrders,
     pendingOrders,
@@ -423,17 +482,7 @@ const AgentDashboard: React.FC = () => {
     pickUpOrder,
     updateOrderStatusAction,
     getOrderForPickup,
-  } = useAgentOrders();
-  const {
-    getOrder,
-    pickUpOrder: backendPickUpOrder,
-    startTransit,
-    outForDelivery,
-    deliverOrder,
-    failDelivery,
-    loading: updateLoading,
-    error: updateError,
-  } = useBackendOrders();
+  } = agentOrders;
 
   const [notification, setNotification] = useState<{
     open: boolean;
@@ -531,6 +580,33 @@ const AgentDashboard: React.FC = () => {
     setNotification((prev) => ({ ...prev, open: false }));
   };
 
+  const handleDrop = async (orderId: string) => {
+    if (!profile?.id) {
+      setNotification({
+        open: true,
+        message: t('messages.agentProfileNotFound'),
+        severity: 'error',
+      });
+      return;
+    }
+    try {
+      const result = await agentOrders.dropOrder(orderId);
+      setNotification({
+        open: true,
+        message: t('messages.orderDropSuccess', {
+          orderNumber: result.order_number,
+        }),
+        severity: 'success',
+      });
+    } catch (error: any) {
+      setNotification({
+        open: true,
+        message: error.message || t('messages.orderDropError'),
+        severity: 'error',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -590,9 +666,12 @@ const AgentDashboard: React.FC = () => {
               <OrderCard
                 key={order.id}
                 order={order}
-                onUpdateStatus={handleStatusUpdate}
                 showActions={true}
-                agentAddress={profile?.agent?.address}
+                agentAddress={
+                  profile?.agent && (profile.agent as any).address
+                    ? (profile.agent as any).address
+                    : undefined
+                }
               />
             ))}
           </Box>
@@ -624,8 +703,14 @@ const AgentDashboard: React.FC = () => {
                 key={order.id}
                 order={order}
                 onPickUp={handlePickUp}
+                onClaim={handleGetOrder}
+                onDrop={handleDrop}
                 showActions={true}
-                agentAddress={profile?.agent?.address}
+                agentAddress={
+                  profile?.agent && (profile.agent as any).address
+                    ? (profile.agent as any).address
+                    : undefined
+                }
               />
             ))}
           </Box>

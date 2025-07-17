@@ -13,6 +13,7 @@ export interface OrderItem {
   weight_unit?: string;
   dimensions?: string;
   special_instructions?: string;
+  item?: any; // Add this line to support nested item details
 }
 
 export interface Client {
@@ -164,7 +165,7 @@ export const useAgentOrders = () => {
 
     try {
       const response = await apiClient.get<PendingOrdersResponse>(
-        '/users/pending_orders'
+        '/orders/open'
       );
 
       if (response.data.success) {
@@ -285,26 +286,24 @@ export const useAgentOrders = () => {
     ]
   );
 
+  const dropOrder = useCallback(
+    async (orderId: string) => {
+      if (!apiClient) throw new Error('API client not available');
+      const response = await apiClient.post('/orders/drop_order', { orderId });
+      if (response.data.success) return response.data.order;
+      throw new Error(response.data.error || 'Failed to drop order');
+    },
+    [apiClient]
+  );
+
   const getOrderForPickup = useCallback(
     async (orderId: string) => {
-      try {
-        const response = await getOrder({ orderId });
-
-        if (response.success) {
-          // Refresh orders after successful pickup
-          await fetchAllOrders();
-          return response;
-        } else {
-          throw new Error(response.message || 'Failed to get order');
-        }
-      } catch (error: any) {
-        const errorMessage =
-          error.response?.data?.error || error.message || 'Failed to get order';
-        console.error('Error getting order:', errorMessage);
-        throw new Error(errorMessage);
-      }
+      if (!apiClient) throw new Error('API client not available');
+      const response = await apiClient.post('/orders/claim_order', { orderId });
+      if (response.data.success) return response.data;
+      throw new Error(response.data.error || 'Failed to claim order');
     },
-    [getOrder, fetchAllOrders]
+    [apiClient]
   );
 
   return {
@@ -317,5 +316,6 @@ export const useAgentOrders = () => {
     pickUpOrder,
     updateOrderStatusAction,
     getOrderForPickup,
+    dropOrder,
   };
 };

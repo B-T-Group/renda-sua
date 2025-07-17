@@ -120,7 +120,8 @@
     "delivered": "delivered",
     "cancelled": "cancelled",
     "failed": "failed",
-    "refunded": "refunded"
+    "refunded": "refunded",
+    "ready_for_pickup": "Ready for Pickup"
   },
   "orderActions": {
     "getOrder": "Get Order",
@@ -134,7 +135,9 @@
     "successfullyPickedUp": "Successfully picked up order",
     "failedToPickUp": "Failed to pick up order",
     "orderStatusUpdated": "Order status updated successfully",
-    "failedToUpdateStatus": "Failed to update order status"
+    "failedToUpdateStatus": "Failed to update order status",
+    "claimOrder": "Claim",
+    "dropOrder": "Drop"
   },
   "forms": {
     "firstName": "First Name",

@@ -625,6 +625,146 @@ export class OrdersService {
     return result.orders;
   }
 
+  async getOpenOrders() {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
+      throw new HttpException(
+        'Only agent users can view open orders',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    // Query for orders in ready_for_pickup and assigned_agent_id is null
+    const query = `
+      query OpenOrders {
+        orders(where: {current_status: {_eq: "ready_for_pickup"}, assigned_agent_id: {_is_null: true}}) {
+          id
+          order_number
+          business {
+            name
+          }
+          business_location {
+            id
+            name
+            address {
+              address_line_1
+              city
+              state
+              postal_code
+            }
+          }
+          
+          delivery_address {
+            address_line_1
+            city
+            state
+            postal_code
+          }
+          total_amount
+          currency
+          current_status
+          created_at
+          order_items {
+            id
+            item_name
+            item {
+              model
+              color
+              size
+              size_unit
+              weight
+              weight_unit
+              brand {
+                name
+              }
+              item_sub_category {
+                name
+                item_category {
+                  name
+                }
+              }
+              item_images {
+                image_url
+              }
+            }
+            quantity
+            unit_price
+            total_price
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query);
+    return { success: true, orders: result.orders };
+  }
+
+  async dropOrder(request: OrderStatusChangeRequest) {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
+      throw new HttpException(
+        'Only agent users can drop orders',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    // Get the order and check if assigned to this agent and in assigned_to_agent status
+    const order = await this.hasuraUserService.executeQuery(
+      `
+      query GetOrder($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          assigned_agent_id
+          current_status
+        }
+      }
+    `,
+      { orderId: request.orderId }
+    );
+    const o = order.orders_by_pk;
+    if (!o) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (o.current_status !== 'assigned_to_agent') {
+      throw new HttpException(
+        'Order is not in assigned_to_agent status',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (o.assigned_agent_id !== user.agent.id) {
+      throw new HttpException(
+        'You are not assigned to this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    // Clear assigned_agent_id and set status to ready_for_pickup
+    const mutation = `
+      mutation DropOrder($orderId: uuid!) {
+        update_orders_by_pk(pk_columns: {id: $orderId}, _set: {assigned_agent_id: null, current_status: "ready_for_pickup"}) {
+          id
+          current_status
+          assigned_agent_id
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeMutation(mutation, {
+      orderId: request.orderId,
+    });
+    // Add order status history entry
+    await this.createStatusHistoryEntry(
+      request.orderId,
+      'ready_for_pickup',
+      'Order dropped by agent and made available for other agents',
+      'agent',
+      user.id
+    );
+    return {
+      success: true,
+      order: result.update_orders_by_pk,
+      message: 'Order dropped and made available for other agents.',
+    };
+  }
+
+  async claimOrder(request: GetOrderRequest) {
+    // Just call the old getOrder logic
+    return this.getOrder(request);
+  }
+
   private async getOrderDetails(orderId: string): Promise<any> {
     const query = `
       query GetOrder($orderId: uuid!) {
