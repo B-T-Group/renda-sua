@@ -1,0 +1,90 @@
+table:
+  name: order_holds
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+array_relationships: []
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_id
+        - client_id
+        - agent_id
+        - client_hold_amount
+        - agent_hold_amount
+        - currency
+        - status
+        - created_at
+        - updated_at
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - client_id
+        - agent_id
+        - client_hold_amount
+        - agent_hold_amount
+        - currency
+        - status
+        - created_at
+        - updated_at
+      filter:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - client_id
+        - agent_id
+        - client_hold_amount
+        - agent_hold_amount
+        - currency
+        - status
+        - created_at
+        - updated_at
+      filter:
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true
+insert_permissions: []
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - status
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+delete_permissions: []

@@ -11,6 +11,7 @@
 - '!include public_item_images.yaml'
 - '!include public_item_sub_categories.yaml'
 - '!include public_items.yaml'
+- '!include public_order_holds.yaml'
 - '!include public_order_items.yaml'
 - '!include public_order_status_history.yaml'
 - '!include public_orders.yaml'
