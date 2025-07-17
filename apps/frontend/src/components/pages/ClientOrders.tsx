@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
@@ -599,12 +600,53 @@ const ClientOrders: React.FC = () => {
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
+                                  gap: 2,
                                 }}
                               >
-                                <Box>
+                                {/* Item Image */}
+                                <Box sx={{ flexShrink: 0 }}>
+                                  {item.item?.item_images?.[0]?.image_url ? (
+                                    <Avatar
+                                      src={item.item.item_images[0].image_url}
+                                      alt={item.item_name}
+                                      sx={{
+                                        width: 60,
+                                        height: 60,
+                                        borderRadius: 1,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                      }}
+                                      variant="rounded"
+                                      onError={(e) => {
+                                        // Hide the image on error and show fallback
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  ) : null}
+                                  {!item.item?.item_images?.[0]?.image_url && (
+                                    <Avatar
+                                      sx={{
+                                        width: 60,
+                                        height: 60,
+                                        borderRadius: 1,
+                                        bgcolor: 'grey.100',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        color: 'grey.500',
+                                      }}
+                                      variant="rounded"
+                                    >
+                                      <ShoppingCartIcon />
+                                    </Avatar>
+                                  )}
+                                </Box>
+
+                                {/* Item Details */}
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
                                   <Typography
                                     variant="body1"
                                     fontWeight="medium"
+                                    noWrap
                                   >
                                     {item.item_name}
                                   </Typography>
@@ -656,7 +698,9 @@ const ClientOrders: React.FC = () => {
                                     </Typography>
                                   )}
                                 </Box>
-                                <Box textAlign="right">
+
+                                {/* Price */}
+                                <Box textAlign="right" sx={{ flexShrink: 0 }}>
                                   <Typography
                                     variant="body1"
                                     fontWeight="medium"
