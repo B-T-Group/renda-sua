@@ -503,6 +503,38 @@ export const useBackendOrders = () => {
     }, 'orders.failingDelivery');
   };
 
+  const completeOrder = async (
+    request: OrderStatusChangeRequest
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          '/orders/complete',
+          request
+        );
+
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Failed to complete order');
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to complete order';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.completing');
+  };
+
   return {
     // Legacy methods
     createOrder,
@@ -522,6 +554,9 @@ export const useBackendOrders = () => {
     outForDelivery,
     deliverOrder,
     failDelivery,
+
+    // Client methods
+    completeOrder,
 
     loading: false, // Loading is now handled globally
     error,

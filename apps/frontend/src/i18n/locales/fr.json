@@ -201,8 +201,10 @@
     "orderItems": "Articles de commande",
     "specialInstructions": "Instructions spéciales",
     "actions": {
-      "viewHistory": "Historique"
-    }
+      "viewHistory": "Historique",
+      "complete": "Compléter la commande"
+    },
+    "completionWarning": "Veuillez compléter votre commande dans les 4 heures suivant la réception de l'article pour finaliser la transaction. Des pénalités peuvent s'appliquer si elle n'est pas complétée à temps."
   },
   "client": {
     "orders": {
@@ -330,6 +332,7 @@
       "confirming": "Confirmation de la commande...",
       "startingPreparation": "Début de la préparation...",
       "completingPreparation": "Finalisation de la préparation...",
+      "completing": "Finalisation de la commande...",
       "cancelling": "Annulation de la commande...",
       "refunding": "Traitement du remboursement...",
       "gettingOrder": "Obtention de la commande...",

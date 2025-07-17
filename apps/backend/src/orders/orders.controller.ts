@@ -146,6 +146,11 @@ export class OrdersController {
     return this.ordersService.deliverOrder(request);
   }
 
+  @Post('complete')
+  async completeOrder(@Body() request: OrderStatusChangeRequest) {
+    return this.ordersService.completeOrder(request);
+  }
+
   @Post('fail_delivery')
   async failDelivery(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.failDelivery(request);

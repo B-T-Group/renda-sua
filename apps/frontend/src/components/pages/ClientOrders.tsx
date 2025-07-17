@@ -70,6 +70,7 @@ const ClientOrders: React.FC = () => {
   const {
     cancelOrder,
     refundOrder,
+    completeOrder,
     loading: updateLoading,
     error: updateError,
   } = useBackendOrders();
@@ -152,6 +153,9 @@ const ClientOrders: React.FC = () => {
         case 'refunded':
           response = await refundOrder({ orderId, notes });
           break;
+        case 'complete':
+          response = await completeOrder({ orderId, notes });
+          break;
         default:
           throw new Error(`Unsupported status transition: ${newStatus}`);
       }
@@ -213,6 +217,11 @@ const ClientOrders: React.FC = () => {
         });
         break;
       case 'delivered':
+        actions.push({
+          label: t('orders.actions.complete'),
+          status: 'complete',
+          color: 'success' as const,
+        });
         actions.push({
           label: t('business.orders.actions.refund'),
           status: 'refunded',
@@ -577,6 +586,18 @@ const ClientOrders: React.FC = () => {
                             : t('common.showDetails')}
                         </Button>
                       </Box>
+
+                      {/* Warning for delivered orders */}
+                      {order.current_status === 'delivered' && (
+                        <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+                          <Typography variant="body2">
+                            {t(
+                              'orders.completionWarning',
+                              'Please complete your order within 8 hours to finalize the transaction. Penalties may apply if not completed on time.'
+                            )}
+                          </Typography>
+                        </Alert>
+                      )}
 
                       {/* Order Details */}
                       <Collapse in={expandedOrder === order.id}>

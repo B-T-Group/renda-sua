@@ -248,8 +248,10 @@
     "color": "Color",
     "size": "Size",
     "actions": {
-      "viewHistory": "History"
-    }
+      "viewHistory": "History",
+      "complete": "Complete Order"
+    },
+    "completionWarning": "Please complete your order within 4 hours of receiving the item to finalize the transaction. Penalties may apply if not completed on time."
   },
   "business": {
     "business": "Business",
@@ -363,6 +365,7 @@
       "confirming": "Confirming order...",
       "startingPreparation": "Starting preparation...",
       "completingPreparation": "Completing preparation...",
+      "completing": "Completing order...",
       "cancelling": "Cancelling order...",
       "refunding": "Processing refund...",
       "gettingOrder": "Getting order...",

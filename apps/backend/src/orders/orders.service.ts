@@ -347,9 +347,6 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Release the hold and process payment
-    await this.processOrderDelivery(order);
-
     const updatedOrder = await this.hasuraUserService.updateOrderStatus(
       request.orderId,
       'delivered'
@@ -366,6 +363,49 @@ export class OrdersService {
       success: true,
       order: updatedOrder,
       message: 'Order delivered successfully',
+    };
+  }
+
+  async completeOrder(request: OrderStatusChangeRequest) {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.client)
+      throw new HttpException(
+        'Only client users can complete orders',
+        HttpStatus.FORBIDDEN
+      );
+
+    const order = await this.getOrderDetails(request.orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (order.client_id !== user.client.id)
+      throw new HttpException(
+        'Only the client can complete this order',
+        HttpStatus.FORBIDDEN
+      );
+    if (order.current_status !== 'delivered')
+      throw new HttpException(
+        `Cannot complete order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+
+    await this.releaseHoldAndProcessPayment(order.id);
+
+    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+      request.orderId,
+      'completed'
+    );
+    await this.createStatusHistoryEntry(
+      request.orderId,
+      'completed',
+      'Order completed by client',
+      'client',
+      user.id,
+      request.notes
+    );
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order completed successfully',
     };
   }
 
@@ -1350,11 +1390,6 @@ export class OrdersService {
       changedByType,
       changedByUserId,
     });
-  }
-
-  private async processOrderDelivery(order: any) {
-    // Release hold and process payment
-    await this.releaseHoldAndProcessPayment(order.id);
   }
 
   private async releaseOrderHold(order: any, userId: string) {
