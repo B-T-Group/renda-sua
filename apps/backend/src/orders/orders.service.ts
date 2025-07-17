@@ -284,7 +284,10 @@ export class OrdersService {
         'Only the assigned agent can mark this order as out for delivery',
         HttpStatus.FORBIDDEN
       );
-    if (order.current_status !== 'in_transit')
+    if (
+      order.current_status !== 'in_transit' &&
+      order.current_status !== 'picked_up'
+    )
       throw new HttpException(
         `Cannot mark order as out for delivery in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
@@ -739,7 +742,7 @@ export class OrdersService {
         }
       }
     `;
-    const result = await this.hasuraUserService.executeMutation(mutation, {
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
       orderId: request.orderId,
     });
     // Add order status history entry
@@ -772,6 +775,10 @@ export class OrdersService {
           total_amount
           currency
           business_id
+          client_id
+          client {
+            user_id
+          }
           business {
             user_id
           }
@@ -782,7 +789,7 @@ export class OrdersService {
         }
       }
     `;
-    const result = await this.hasuraUserService.executeQuery(query, {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       orderId,
     });
     return result.orders_by_pk;
@@ -822,14 +829,11 @@ export class OrdersService {
     return result.orders_by_pk;
   }
 
-  private async getUserAccount(
-    agentId: string,
-    currency: string
-  ): Promise<any> {
+  private async getUserAccount(userId: string, currency: string): Promise<any> {
     const query = `
-      query GetAgentAccount($agentId: uuid!, $currency: currency_enum!) {
+      query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
         accounts(where: {
-          user_id: {_eq: $agentId},
+          user_id: {_eq: $userId},
           currency: {_eq: $currency},
           is_active: {_eq: true}
         }) {
@@ -841,10 +845,18 @@ export class OrdersService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      agentId,
+      userId,
       currency,
     });
-    return result.accounts[0] || null;
+    let account = result.accounts[0] || null;
+    if (!account) {
+      // Create the account if it doesn't exist
+      account = await this.hasuraSystemService.createUserAccount(
+        userId,
+        currency
+      );
+    }
+    return account;
   }
 
   /**
@@ -953,7 +965,7 @@ export class OrdersService {
         }
       }
     `;
-    const result = await this.hasuraUserService.executeMutation(mutation, {
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       agentId,
       status,
@@ -983,7 +995,7 @@ export class OrdersService {
         }
       }
     `;
-    await this.hasuraUserService.executeMutation(mutation, {
+    await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       status,
       notes: finalNotes,
@@ -1017,7 +1029,7 @@ export class OrdersService {
     const holdAmount = (order.total_amount * holdPercentage) / 100;
 
     // Release hold
-    await this.releaseHoldOnAccount(
+    await this.releaseHold(
       agentAccount.id,
       holdAmount,
       `Hold released for order ${order.order_number}`,
@@ -1090,18 +1102,59 @@ export class OrdersService {
       withheld: newWithheld,
     });
 
-    // 4. Get the order details to find the business user and currency
+    // 3.5. Release the hold on the client (decrement withheld_balance by the order amount, do not credit available_balance)
+    // Get the order details to find the client user and currency
     const order = await this.getOrderDetails(referenceId);
-    if (!order || !order.business || !order.business.user_id) {
-      throw new Error('Order or business user not found');
+    if (
+      !order ||
+      !order.business ||
+      !order.business.user_id ||
+      !order.client_id
+    ) {
+      throw new Error('Order, business user, or client not found');
     }
+
+    const clientAccount = await this.getUserAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (clientAccount && clientAccount.withheld_balance > 0) {
+      const newWithheld =
+        clientAccount.withheld_balance - Number(order.total_amount);
+      const updateClientAccountMutation = `
+        mutation ($accountId: uuid!, $withheld_balance: numeric!) {
+          update_accounts_by_pk(
+            pk_columns: { id: $accountId },
+            _set: { withheld_balance: $withheld_balance }
+          ) {
+            id
+            withheld_balance
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(
+        updateClientAccountMutation,
+        {
+          accountId: clientAccount.id,
+          withheld_balance: newWithheld < 0 ? 0 : newWithheld,
+        }
+      );
+    }
+
     const businessUserId = order.business.user_id;
     const currency = order.currency;
 
     // 5. Get the business account for the order's currency
-    const businessAccount = await this.getUserAccount(businessUserId, currency);
+    let businessAccount = await this.getUserAccount(businessUserId, currency);
     if (!businessAccount) {
-      throw new Error('Business account not found');
+      // If the business account for the given currency is not found, create one
+      businessAccount = await this.hasuraSystemService.createUserAccount(
+        businessUserId,
+        currency
+      );
+      if (!businessAccount) {
+        throw new Error('Failed to create business account');
+      }
     }
 
     // 6. Insert a transaction to increment the business's available_balance
@@ -1110,7 +1163,7 @@ export class OrdersService {
         insert_account_transactions(objects: [{
           account_id: $accountId,
           amount: $amount,
-          transaction_type: "credit",
+          transaction_type: "payment",
           memo: $memo,
           reference_id: $referenceId
         }]) {
@@ -1156,7 +1209,7 @@ export class OrdersService {
     );
   }
 
-  private async releaseHoldOnAccount(
+  private async releaseHold(
     accountId: string,
     amount: number,
     memo: string,

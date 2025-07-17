@@ -53,6 +53,40 @@ export class HasuraSystemService {
   }
 
   /**
+   * Create a user account for a given user and currency
+   */
+  async createUserAccount(
+    userId: string,
+    currency: string,
+    available_balance = 0,
+    withheld_balance = 0
+  ): Promise<any> {
+    const mutation = `
+      mutation CreateUserAccount($userId: uuid!, $currency: currency_enum!, $available_balance: numeric!, $withheld_balance: numeric!) {
+        insert_accounts_one(object: {
+          user_id: $userId,
+          currency: $currency,
+          available_balance: $available_balance,
+          withheld_balance: $withheld_balance
+        }) {
+          id
+          user_id
+          currency
+          available_balance
+          withheld_balance
+        }
+      }
+    `;
+    const result = await this.executeMutation(mutation, {
+      userId,
+      currency,
+      available_balance,
+      withheld_balance,
+    });
+    return result.insert_accounts_one;
+  }
+
+  /**
    * Get the Hasura endpoint URL
    */
   getHasuraUrl(): string {
@@ -64,5 +98,73 @@ export class HasuraSystemService {
    */
   isConfigured(): boolean {
     return !!(this.hasuraUrl && this.adminSecret);
+  }
+
+  /**
+   * Get the client user using HasuraSystemService (create method if not exists)
+   * We'll assume a method getUserById exists or add it to HasuraSystemService if not.
+   * Usage:   const clientUser = await this.hasuraSystemService.getUserById(clientUserId);
+   * If not present, you should add this to HasuraSystemService:
+   */
+  async getUserById(userId: string) {
+    const query = `
+         query ($userId: uuid!) {
+           users_by_pk(id: $userId) {
+             id
+             email
+             name
+           }
+         }
+       `;
+    const result = await this.executeQuery(query, { userId });
+    return result.users_by_pk;
+  }
+
+  /**
+   * Get client by user ID
+   */
+  async getClient(id: string): Promise<any> {
+    const query = `
+      query ($id: uuid!) {
+        clients(where: { id: { _eq: $id } }) {
+          id
+          user_id
+        }
+      }
+    `;
+    const result = await this.executeQuery(query, { id });
+    return result.clients[0] || null;
+  }
+
+  /**
+   * Get business by user ID
+   */
+  async getBusiness(id: string): Promise<any> {
+    const query = `
+      query ($id: uuid!) {
+        businesses(where: { id: { _eq: $id } }) {
+          id
+          user_id
+        }
+      }
+    `;
+    const result = await this.executeQuery(query, { id });
+    return result.businesses[0] || null;
+  }
+
+  /**
+   * Get agent by user ID
+   */
+  async getAgent(id: string): Promise<any> {
+    const query = `
+      query ($id: uuid!) {
+        agents(where: { id: { _eq: $id } }) {
+          id
+          user_id
+        }
+      }
+    `;
+    const result = await this.executeQuery(query, { id });
+    return result.agents[0] || null;
   }
 }

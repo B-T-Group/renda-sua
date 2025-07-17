@@ -290,20 +290,26 @@ export const useAgentOrders = () => {
     async (orderId: string) => {
       if (!apiClient) throw new Error('API client not available');
       const response = await apiClient.post('/orders/drop_order', { orderId });
-      if (response.data.success) return response.data.order;
+      if (response.data.success) {
+        await fetchAllOrders(); // Refresh orders after dropping
+        return response.data.order;
+      }
       throw new Error(response.data.error || 'Failed to drop order');
     },
-    [apiClient]
+    [apiClient, fetchAllOrders]
   );
 
   const getOrderForPickup = useCallback(
     async (orderId: string) => {
       if (!apiClient) throw new Error('API client not available');
       const response = await apiClient.post('/orders/claim_order', { orderId });
-      if (response.data.success) return response.data;
+      if (response.data.success) {
+        await fetchAllOrders(); // Refresh orders after claiming
+        return response.data;
+      }
       throw new Error(response.data.error || 'Failed to claim order');
     },
-    [apiClient]
+    [apiClient, fetchAllOrders]
   );
 
   return {

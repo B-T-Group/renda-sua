@@ -88,6 +88,11 @@ const OrderCard: React.FC<{
   onPickUp?: (orderId: string) => Promise<void>;
   onClaim?: (orderId: string) => Promise<void>;
   onDrop?: (orderId: string) => Promise<void>;
+  onStatusUpdate?: (
+    orderId: string,
+    status: string,
+    notes?: string
+  ) => Promise<void>;
   showActions?: boolean;
   agentAddress?: any;
 }> = ({
@@ -95,6 +100,7 @@ const OrderCard: React.FC<{
   onPickUp,
   onClaim,
   onDrop,
+  onStatusUpdate,
   showActions = true,
   agentAddress,
 }) => {
@@ -187,6 +193,16 @@ const OrderCard: React.FC<{
           status: 'in_transit',
           color: 'primary' as const,
           icon: <LocalShipping />,
+          action: () =>
+            onStatusUpdate && onStatusUpdate(order.id, 'in_transit'),
+        });
+        actions.push({
+          label: t('orderActions.markAsOutForDelivery'),
+          status: 'out_for_delivery',
+          color: 'secondary' as const,
+          icon: <LocalShipping />,
+          action: () =>
+            onStatusUpdate && onStatusUpdate(order.id, 'out_for_delivery'),
         });
         break;
       case 'in_transit':
@@ -195,6 +211,8 @@ const OrderCard: React.FC<{
           status: 'out_for_delivery',
           color: 'secondary' as const,
           icon: <LocalShipping />,
+          action: () =>
+            onStatusUpdate && onStatusUpdate(order.id, 'out_for_delivery'),
         });
         break;
       case 'out_for_delivery':
@@ -204,12 +222,15 @@ const OrderCard: React.FC<{
             status: 'delivered',
             color: 'success' as const,
             icon: <CheckCircle />,
+            action: () =>
+              onStatusUpdate && onStatusUpdate(order.id, 'delivered'),
           },
           {
             label: t('orderActions.markAsFailed'),
             status: 'failed',
             color: 'error' as const,
             icon: <Cancel />,
+            action: () => onStatusUpdate && onStatusUpdate(order.id, 'failed'),
           }
         );
         break;
@@ -675,6 +696,9 @@ const AgentDashboard: React.FC = () => {
               <OrderCard
                 key={order.id}
                 order={order}
+                onPickUp={handlePickUp}
+                onDrop={handleDrop}
+                onStatusUpdate={handleStatusUpdate}
                 showActions={true}
                 agentAddress={
                   profile?.agent && (profile.agent as any).address
@@ -714,6 +738,7 @@ const AgentDashboard: React.FC = () => {
                 onPickUp={handlePickUp}
                 onClaim={handleGetOrder}
                 onDrop={handleDrop}
+                onStatusUpdate={handleStatusUpdate}
                 showActions={true}
                 agentAddress={
                   profile?.agent && (profile.agent as any).address
