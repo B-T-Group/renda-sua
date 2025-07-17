@@ -180,7 +180,7 @@ export class OrdersController {
           );
         }
       }
-      const orders = await this.ordersService.getBusinessOrders(parsedFilters);
+      const orders = await this.ordersService.getOrders(parsedFilters);
       return { success: true, orders };
     } catch (error: any) {
       if (error instanceof HttpException) {

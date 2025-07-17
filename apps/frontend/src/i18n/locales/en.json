@@ -248,6 +248,7 @@
         "confirm": "Confirm",
         "cancel": "Cancel",
         "startPreparing": "Start Preparing",
+        "completePreparation": "Complete Preparation",
         "readyForPickup": "Ready for Pickup",
         "refund": "Refund",
         "pickUp": "Pick Up",

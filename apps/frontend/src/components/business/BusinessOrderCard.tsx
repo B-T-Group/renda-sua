@@ -3,14 +3,23 @@ import {
   LocalShipping as LocalShippingIcon,
   Person as PersonIcon,
   Receipt as ReceiptIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
+  Avatar,
   Box,
   Button,
   Card,
   CardActions,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  List,
+  ListItem,
   TextField,
   Typography,
 } from '@mui/material';
@@ -58,6 +67,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
     action: OrderAction;
   } | null>(null);
   const [notes, setNotes] = useState('');
+  const [itemsDialogOpen, setItemsDialogOpen] = useState(false);
 
   // Distance Matrix integration
   const {
@@ -254,6 +264,16 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               </Button>
             );
           })}
+          <Button
+            size="small"
+            color="info"
+            variant="outlined"
+            startIcon={<VisibilityIcon />}
+            onClick={() => setItemsDialogOpen(true)}
+            disabled={loading}
+          >
+            {t('business.orders.actions.viewItems', 'View Items')}
+          </Button>
         </CardActions>
       </Card>
 
@@ -284,6 +304,158 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
           />
         }
       />
+      {/* Order Items Dialog */}
+      <Dialog
+        open={itemsDialogOpen}
+        onClose={() => setItemsDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('business.orders.itemsInOrder', 'Order Items')}
+        </DialogTitle>
+        <DialogContent dividers>
+          {order.order_items && order.order_items.length > 0 ? (
+            <List>
+              {order.order_items.map((order_item: any, idx: number) => (
+                <React.Fragment key={order_item.id || idx}>
+                  <ListItem alignItems="flex-start">
+                    {/* Item image and details */}
+                    <Box display="flex" alignItems="center" width="100%" mx={2}>
+                      {order_item.item.item_images &&
+                        order_item.item.item_images[0]?.image_url && (
+                          <Avatar
+                            src={order_item.item.item_images[0].image_url}
+                            alt={order_item.item_name}
+                            sx={{ width: 56, height: 56, mr: 2 }}
+                            variant="rounded"
+                          />
+                        )}
+                      <Box flex={1} flexDirection={'column'} minWidth={0}>
+                        <Typography
+                          variant="subtitle1"
+                          fontWeight={600}
+                          component="div"
+                          sx={{ mb: 0.5 }}
+                        >
+                          {order_item.item.model || order_item.item_name}
+                        </Typography>
+                        {order_item.item.sku && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                            sx={{ mb: 0.5 }}
+                          >
+                            SKU: {order_item.item.sku}
+                          </Typography>
+                        )}
+                        {order_item.item.brand?.name && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mb: 0.5 }}
+                          >
+                            {t('business.items.brand', 'Brand')}:{' '}
+                            {order_item.item.brand.name}
+                          </Typography>
+                        )}
+                        {order_item.item.item_sub_category?.item_category
+                          ?.name && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                            sx={{ mb: 0.5 }}
+                          >
+                            {t('business.items.category', 'Category')}:{' '}
+                            {
+                              order_item.item.item_sub_category.item_category
+                                .name
+                            }{' '}
+                            → {order_item.item.item_sub_category.name}
+                          </Typography>
+                        )}
+                        {order_item.item.weight && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                            sx={{ mb: 0.5 }}
+                          >
+                            {t('business.items.weight', 'Weight')}:{' '}
+                            {order_item.item.weight}{' '}
+                            {order_item.item.weight_unit || ''}
+                          </Typography>
+                        )}
+                        {order_item.item.color && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="div"
+                            sx={{ mb: 0.5 }}
+                          >
+                            {t('business.items.color', 'Color')}:{' '}
+                            {order_item.item.color}
+                          </Typography>
+                        )}
+                        <Typography
+                          component="div"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ mb: 0.5 }}
+                        >
+                          {t('business.orders.table.quantity', 'Quantity')}:{' '}
+                          {order_item.quantity}
+                        </Typography>
+                        <Typography
+                          component="div"
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 0.5 }}
+                        >
+                          {t('business.orders.table.unitPrice', 'Unit Price')}:{' '}
+                          {formatCurrency(
+                            order_item.unit_price,
+                            order.currency
+                          )}
+                        </Typography>
+                        <Typography
+                          component="div"
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          {t('business.orders.table.totalPrice', 'Total')}:{' '}
+                          {formatCurrency(
+                            order_item.total_price,
+                            order.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </ListItem>
+                  {idx < order.order_items.length - 1 && (
+                    <Divider component="li" />
+                  )}
+                </React.Fragment>
+              ))}
+            </List>
+          ) : (
+            <Typography color="text.secondary">
+              {t('business.orders.noItems', 'No items in this order.')}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setItemsDialogOpen(false)}
+            color="primary"
+            variant="contained"
+          >
+            {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

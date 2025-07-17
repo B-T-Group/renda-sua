@@ -97,9 +97,14 @@ const BusinessOrdersPage: React.FC = () => {
         case 'preparing':
           response = await startPreparing({ orderId, notes });
           break;
-        case 'ready_for_pickup':
+        case 'complete_preparation':
           response = await completePreparation({ orderId, notes });
           break;
+        case 'ready_for_pickup':
+          // No direct action, only transition from complete_preparation
+          throw new Error(
+            'Cannot set ready_for_pickup directly. Use complete_preparation.'
+          );
         case 'cancelled':
           response = await cancelOrder({ orderId, notes });
           break;
@@ -173,6 +178,14 @@ const BusinessOrdersPage: React.FC = () => {
         });
         break;
       case 'preparing':
+        actions.push({
+          label: t('business.orders.actions.completePreparation'),
+          status: 'complete_preparation',
+          color: 'info' as const,
+          icon: CheckCircleIcon,
+        });
+        break;
+      case 'complete_preparation':
         actions.push({
           label: t('business.orders.actions.readyForPickup'),
           status: 'ready_for_pickup',
@@ -257,9 +270,12 @@ const BusinessOrdersPage: React.FC = () => {
   const filteredOrders = orders.filter((order) => {
     if (tabValue === 0) return true; // All orders
     if (tabValue === 1)
-      return ['pending', 'confirmed', 'preparing'].includes(
-        order.current_status
-      );
+      return [
+        'pending',
+        'confirmed',
+        'preparing',
+        'complete_preparation',
+      ].includes(order.current_status);
     if (tabValue === 2)
       return [
         'ready_for_pickup',
@@ -326,6 +342,9 @@ const BusinessOrdersPage: React.FC = () => {
                 </MenuItem>
                 <MenuItem value="preparing">
                   {t('business.orders.status.preparing')}
+                </MenuItem>
+                <MenuItem value="complete_preparation">
+                  {t('business.orders.status.complete_preparation')}
                 </MenuItem>
                 <MenuItem value="ready_for_pickup">
                   {t('business.orders.status.ready_for_pickup')}

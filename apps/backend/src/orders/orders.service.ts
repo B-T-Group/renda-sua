@@ -491,7 +491,7 @@ export class OrdersService {
   /**
    * Fetch orders for the current user (client, agent, or business) with optional filters
    */
-  async getBusinessOrders(filters?: any): Promise<any[]> {
+  async getOrders(filters?: any): Promise<any[]> {
     const user = await this.hasuraUserService.getUser();
     let personaFilter: any = {};
     if (user.user_type_id === 'client' && user.client) {
@@ -583,6 +583,32 @@ export class OrdersService {
             quantity
             total_price
             weight
+            item {
+              sku
+              currency
+              model
+              color
+              size
+              size_unit
+              weight
+              weight_unit
+              brand {
+                id
+                name
+              }
+              item_sub_category {
+                id
+                name
+                item_category {
+                  id
+                  name
+                }
+              }
+              item_images {
+                id
+                image_url
+              }
+            }
             weight_unit
             dimensions
             special_instructions
