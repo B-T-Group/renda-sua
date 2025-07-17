@@ -858,6 +858,452 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Creates a random 8-digit order number
+   */
+  private createOrderNumber(): string {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  }
+
+  /**
+   * Create a new order with validation and fund withholding
+   */
+  async createOrder(orderData: any): Promise<any> {
+    // Get the current user
+    const user = await this.hasuraUserService.getUser();
+
+    if (!user.client) {
+      throw new Error('Client not found');
+    }
+
+    const address = await this.hasuraUserService.getUserAddress(
+      user.id,
+      user.user_type_id
+    );
+
+    if (!address) {
+      throw new Error('Address not found');
+    }
+
+    // Get the business inventory item
+    const getBusinessInventoryQuery = `
+      query GetBusinessInventory($businessInventoryId: uuid!) {
+        business_inventory_by_pk(id: $businessInventoryId) {
+          id
+          available_quantity
+          selling_price
+          is_active
+          business_location_id
+          business_location {
+            business_id
+          }
+          item {
+            id
+            name
+            description
+            currency
+          }
+        }
+      }
+    `;
+
+    const businessInventoryResult = await this.hasuraSystemService.executeQuery(
+      getBusinessInventoryQuery,
+      {
+        businessInventoryId: orderData.item.business_inventory_id,
+      }
+    );
+
+    if (!businessInventoryResult.business_inventory_by_pk) {
+      throw new Error('No valid business inventory found');
+    }
+
+    const businessInventory =
+      businessInventoryResult.business_inventory_by_pk as any;
+
+    if (!businessInventory.is_active) {
+      throw new Error(
+        `Item ${businessInventory.item.name} is not currently available`
+      );
+    }
+
+    if (orderData.item.quantity > businessInventory.available_quantity) {
+      throw new Error(
+        `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderData.item.quantity}`
+      );
+    }
+
+    const totalAmount =
+      businessInventory.selling_price * orderData.item.quantity;
+    const currency = businessInventory.item.currency;
+
+    // Check user account for the currency
+    const account = await this.hasuraSystemService.getAccount(
+      user.id,
+      currency
+    );
+
+    if (!account) {
+      throw new Error(`No account found for currency ${currency}`);
+    }
+
+    if (account.available_balance < totalAmount) {
+      throw new Error(
+        `Insufficient funds for currency ${currency}. Required: ${totalAmount}, Available: ${account.available_balance}`
+      );
+    }
+
+    const orderNumber = this.createOrderNumber();
+    const business_location_id = businessInventory.business_location_id;
+    const delivery_address_id = address.id;
+    const subtotal = totalAmount;
+    const tax_amount = 0;
+    const delivery_fee = 0;
+    const total_amount = subtotal + tax_amount + delivery_fee;
+    const current_status = 'pending';
+    const business_id = businessInventory.business_location.business_id;
+    const payment_method = 'online';
+    const payment_status = 'pending';
+    const special_instructions = orderData.special_instructions || '';
+    const estimated_delivery_time = null;
+    const preferred_delivery_time = null;
+    const actual_delivery_time = null;
+    const assigned_agent_id = null;
+
+    // Create order with all related data in a transaction
+    const createOrderMutation = `
+      mutation CreateOrderWithItems(
+        $clientId: uuid!,
+        $businessId: uuid!,
+        $businessLocationId: uuid!,
+        $deliveryAddressId: uuid!,
+        $orderNumber: String!,
+        $orderItems: [order_items_insert_input!]!,
+        $currency: String!,
+        $subTotal: numeric!,
+        $taxAmount: numeric!,
+        $deliveryFee: numeric!,
+        $totalAmount: numeric!,
+        $currentStatus: order_status!,
+        $paymentMethod: String!,
+        $paymentStatus: String!,
+        $specialInstructions: String!,
+        $estimatedDeliveryTime: timestamptz,
+        $preferredDeliveryTime: timestamptz,
+        $actualDeliveryTime: timestamptz,
+        $assignedAgentId: uuid
+      ) {
+        insert_orders_one(object: {
+          client_id: $clientId,
+          business_id: $businessId,
+          business_location_id: $businessLocationId,
+          delivery_address_id: $deliveryAddressId,
+          currency: $currency,
+          order_number: $orderNumber,
+          payment_method: $paymentMethod,
+          payment_status: $paymentStatus,
+          delivery_fee: $deliveryFee,
+          subtotal: $subTotal,
+          tax_amount: $taxAmount,
+          total_amount: $totalAmount,
+          special_instructions: $specialInstructions,
+          actual_delivery_time: $actualDeliveryTime,
+          estimated_delivery_time: $estimatedDeliveryTime,
+          preferred_delivery_time: $preferredDeliveryTime,
+          current_status: $currentStatus,
+          assigned_agent_id: $assignedAgentId,
+          order_items: {
+            data: $orderItems
+          }
+        }) {
+          id
+          currency
+          order_number
+          payment_method
+          payment_status
+          delivery_fee
+          subtotal
+          tax_amount
+          total_amount
+          special_instructions
+          actual_delivery_time
+          created_at
+          estimated_delivery_time
+          preferred_delivery_time
+          updated_at
+          current_status
+          assigned_agent_id
+          business_id
+          business_location_id
+          client_id
+          delivery_address_id
+          order_items {
+            id
+            business_inventory_id
+            item_id
+            item_name
+            quantity
+            unit_price
+            total_price
+          }
+        }
+      }
+    `;
+
+    // Prepare order items data
+    const orderItemsData = [
+      {
+        business_inventory_id: orderData.item.business_inventory_id,
+        item_id: businessInventory.item.id,
+        item_name: businessInventory.item.name,
+        item_description: businessInventory.item.description,
+        quantity: orderData.item.quantity,
+        unit_price: businessInventory.selling_price,
+        total_price: totalAmount,
+      },
+    ];
+
+    // Create the order
+    const orderResult = await this.hasuraSystemService.executeMutation(
+      createOrderMutation,
+      {
+        clientId: user.client.id,
+        businessId: business_id,
+        businessLocationId: business_location_id,
+        deliveryAddressId: delivery_address_id,
+        orderNumber: orderNumber,
+        orderItems: orderItemsData,
+        currency: currency,
+        subTotal: subtotal,
+        taxAmount: tax_amount,
+        deliveryFee: delivery_fee,
+        totalAmount: total_amount,
+        currentStatus: current_status,
+        paymentMethod: payment_method,
+        paymentStatus: payment_status,
+        specialInstructions: special_instructions,
+        estimatedDeliveryTime: estimated_delivery_time,
+        preferredDeliveryTime: preferred_delivery_time,
+        actualDeliveryTime: actual_delivery_time,
+        assignedAgentId: assigned_agent_id,
+      }
+    );
+
+    const order = orderResult.insert_orders_one;
+
+    // Create order status history after order is created
+    const createStatusHistoryMutation = `
+      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
+        insert_order_status_history(objects: [{
+          order_id: $orderId,
+          status: $status,
+          notes: $notes,
+          changed_by_type: $changedByType,
+          changed_by_user_id: $changedByUserId
+        }]) {
+          affected_rows
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(
+      createStatusHistoryMutation,
+      {
+        orderId: order.id,
+        status: 'pending',
+        notes: 'Order created',
+        changedByType: 'client',
+        changedByUserId: user.id,
+      }
+    );
+
+    // Withhold funds from client account
+    await this.withHoldClientOrderPayment(account.id, totalAmount);
+
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: totalAmount,
+    });
+
+    return {
+      ...order,
+      total_amount: totalAmount,
+    };
+  }
+
+  /**
+   * Withhold payment amount from client account
+   */
+  private async withHoldClientOrderPayment(
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    const withholdFundsMutation = `
+      mutation WithholdFunds($accountId: uuid!, $amount: numeric!) {
+        update_accounts_by_pk(
+          pk_columns: {id: $accountId},
+          _inc: {
+            available_balance: $amount,
+            withheld_balance: $amount
+          }
+        ) {
+          id
+          available_balance
+          withheld_balance
+          total_balance
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(withholdFundsMutation, {
+      accountId,
+      amount: -amount, // Negative to decrease available_balance
+    });
+  }
+
+  /**
+   * Get or create an order hold for the given order ID
+   */
+  private async getOrCreateOrderHold(orderId: string): Promise<any> {
+    // First, try to get the existing order hold
+    const getOrderHoldQuery = `
+      query GetOrderHold($orderId: uuid!) {
+        order_holds(where: { order_id: { _eq: $orderId } }) {
+          id
+          order_id
+          client_id
+          agent_id
+          client_hold_amount
+          agent_hold_amount
+          currency
+          status
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(
+      getOrderHoldQuery,
+      {
+        orderId,
+      }
+    );
+
+    let orderHold = result.order_holds[0] || null;
+
+    if (!orderHold) {
+      // Get order details to create the order hold
+      const order = await this.getOrderDetails(orderId);
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Create a new order hold
+      const createOrderHoldMutation = `
+        mutation CreateOrderHold(
+          $orderId: uuid!,
+          $clientId: uuid!,
+          $currency: currency_enum!,
+          $clientHoldAmount: numeric!
+        ) {
+          insert_order_holds_one(object: {
+            order_id: $orderId,
+            client_id: $clientId,
+            agent_id: null,
+            client_hold_amount: $clientHoldAmount,
+            agent_hold_amount: 0,
+            currency: $currency,
+            status: "active"
+          }) {
+            id
+            order_id
+            client_id
+            agent_id
+            client_hold_amount
+            agent_hold_amount
+            currency
+            status
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const createResult = await this.hasuraSystemService.executeMutation(
+        createOrderHoldMutation,
+        {
+          orderId: order.id,
+          clientId: order.client_id,
+          currency: order.currency,
+          clientHoldAmount: order.total_amount,
+        }
+      );
+
+      orderHold = createResult.insert_order_holds_one;
+    }
+
+    return orderHold;
+  }
+
+  /**
+   * Update an order hold with the specified fields
+   */
+  private async updateOrderHold(
+    orderHoldId: string,
+    updates: {
+      status?: string;
+      client_hold_amount?: number;
+      agent_hold_amount?: number;
+      agent_id?: string | null;
+    }
+  ): Promise<any> {
+    const updateOrderHoldMutation = `
+      mutation UpdateOrderHold(
+        $orderHoldId: uuid!,
+        $status: order_hold_status_enum,
+        $clientHoldAmount: numeric,
+        $agentHoldAmount: numeric,
+        $agentId: uuid
+      ) {
+        update_order_holds_by_pk(
+          pk_columns: { id: $orderHoldId },
+          _set: {
+            status: $status,
+            client_hold_amount: $clientHoldAmount,
+            agent_hold_amount: $agentHoldAmount,
+            agent_id: $agentId
+          }
+        ) {
+          id
+          order_id
+          client_id
+          agent_id
+          client_hold_amount
+          agent_hold_amount
+          currency
+          status
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(
+      updateOrderHoldMutation,
+      {
+        orderHoldId,
+        status: updates.status,
+        clientHoldAmount: updates.client_hold_amount,
+        agentHoldAmount: updates.agent_hold_amount,
+        agentId: updates.agent_id,
+      }
+    );
+
+    return result.update_order_holds_by_pk;
+  }
+
   private async placeHoldOnAccount(
     accountId: string,
     amount: number,

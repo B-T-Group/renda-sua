@@ -31,7 +31,7 @@ export class OrdersController {
   @Post()
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
-      const order = await this.hasuraUserService.createOrder(orderData);
+      const order = await this.ordersService.createOrder(orderData);
 
       return {
         success: true,
