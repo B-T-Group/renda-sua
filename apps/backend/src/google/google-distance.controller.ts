@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   HttpException,
   HttpStatus,
   Post,
+  Query,
 } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from './google-distance.service';
@@ -11,18 +13,19 @@ import { GoogleDistanceService } from './google-distance.service';
 interface DistanceMatrixRequest {
   destination_address_ids: string[];
   origin_address_id?: string;
+  origin_address?: string; // Pre-formatted address string (lat,lng or full address)
 }
 
-@Controller('distance-matrix')
+@Controller('google')
 export class GoogleDistanceController {
   constructor(
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly addressesService: AddressesService
   ) {}
 
-  @Post()
+  @Post('distance-matrix')
   async getDistanceMatrix(@Body() body: DistanceMatrixRequest) {
-    const { destination_address_ids, origin_address_id } = body;
+    const { destination_address_ids, origin_address_id, origin_address } = body;
     if (
       !destination_address_ids ||
       !Array.isArray(destination_address_ids) ||
@@ -43,30 +46,44 @@ export class GoogleDistanceController {
         HttpStatus.BAD_REQUEST
       );
     }
-    // Fetch origin address
-    let originAddress = null;
+    // Handle origin address
+    let originStr: string;
     let usedOriginId = origin_address_id;
-    if (origin_address_id) {
+
+    if (origin_address) {
+      // Use the provided pre-formatted address
+      originStr = origin_address;
+    } else if (origin_address_id) {
+      // Fetch origin address by ID
       const origins = await this.addressesService.getAddressesByIds([
         origin_address_id,
       ]);
-      originAddress = origins[0] || null;
+      const originAddress = origins[0] || null;
+      if (!originAddress) {
+        throw new HttpException(
+          'Origin address not found',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      originStr = formatAddressForGoogle(originAddress);
     } else {
-      originAddress =
+      // Use current user's primary address
+      const originAddress =
         await this.addressesService.getCurrentUserPrimaryAddress();
-      usedOriginId = originAddress?.id;
+      if (!originAddress) {
+        return {
+          origin_id: null,
+          destination_ids: destination_address_ids,
+          rows: [],
+          status: 'NO_ORIGIN',
+        };
+      }
+      usedOriginId = originAddress.id;
+      originStr = formatAddressForGoogle(originAddress);
     }
-    if (!originAddress) {
-      return {
-        origin_id: null,
-        destination_ids: destination_address_ids,
-        rows: [],
-        status: 'NO_ORIGIN',
-      };
-    }
-    // Format for Google API
-    const originStr = formatAddressForGoogle(originAddress);
-    const destinationStrs = destinationAddresses.map(formatAddressForGoogle);
+    const destinationStrs = destination_address_ids
+      .map((x) => destinationAddresses.find((y) => y.id === x))
+      .map(formatAddressForGoogle);
     // Call Google API
     const matrix = await this.googleDistanceService.getDistanceMatrix(
       [originStr],
@@ -78,6 +95,50 @@ export class GoogleDistanceController {
       destination_ids: destination_address_ids,
       ...matrix,
     };
+  }
+
+  @Get('geocode')
+  async reverseGeocode(@Query('lat') lat: string, @Query('lng') lng: string) {
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      throw new HttpException(
+        'Invalid latitude or longitude parameters',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (latitude < -90 || latitude > 90) {
+      throw new HttpException(
+        'Latitude must be between -90 and 90',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (longitude < -180 || longitude > 180) {
+      throw new HttpException(
+        'Longitude must be between -180 and 180',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    try {
+      const result = await this.googleDistanceService.reverseGeocode(
+        latitude,
+        longitude
+      );
+
+      return {
+        success: true,
+        result,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
   }
 }
 

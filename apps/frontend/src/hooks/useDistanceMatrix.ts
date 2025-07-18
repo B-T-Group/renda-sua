@@ -29,12 +29,13 @@ export function useDistanceMatrix() {
   const fetchDistanceMatrix = async (payload: {
     destination_address_ids: string[];
     origin_address_id?: string;
+    origin_address?: string; // Pre-formatted address string
   }) => {
     setLoading(true);
     setError(null);
     try {
       if (!apiClient) throw new Error('API client not available');
-      const response = await apiClient.post('/distance-matrix', payload);
+      const response = await apiClient.post('/google/distance-matrix', payload);
       setData(response.data);
       return response.data;
     } catch (err: any) {

@@ -102,9 +102,16 @@
     "noBusinessProfile": "No business profile found. Please complete your business profile first.",
     "activeOrders": "Active Orders",
     "pendingOrders": "Pending Orders",
+    "inProgressOrders": "In Progress Orders",
+    "completedOrders": "Completed Orders",
+    "cancelledOrders": "Cancelled Orders",
     "noActiveOrders": "No active orders at the moment",
     "noPendingOrders": "No pending orders available",
-    "newOrdersWillAppear": "New orders will appear here when they become available"
+    "noOrders": "No Orders",
+    "noOrdersDescription": "You don't have any orders assigned to you at the moment.",
+    "newOrdersWillAppear": "New orders will appear here when they become available",
+    "welcomeBack": "Welcome back",
+    "manageDeliveryOrders": "Manage your delivery orders and track their progress."
   },
   "orderStatus": {
     "pending": "pending",
@@ -123,6 +130,7 @@
     "cancelled": "cancelled",
     "failed": "failed",
     "refunded": "refunded",
+    "complete": "complete",
     "ready_for_pickup": "Ready for Pickup"
   },
   "orderHistory": {
@@ -755,6 +763,10 @@
     "agentProfileNotFound": "Agent profile not found. Please complete your profile first.",
     "orderPickupSuccess": "Successfully picked up order #{{orderNumber}}!",
     "orderPickupError": "Failed to pick up order. Please try again.",
+    "orderAssignedSuccess": "Order #{{orderNumber}} assigned successfully! Hold amount: {{holdAmount}}",
+    "orderAssignmentError": "Failed to assign order. Please try again.",
+    "orderDropSuccess": "Order #{{orderNumber}} dropped successfully!",
+    "orderDropError": "Failed to drop order. Please try again.",
     "orderStatusUpdateSuccess": "Order status updated to {{status}} successfully!",
     "orderStatusUpdateError": "Failed to update order status. Please try again."
   },
@@ -763,7 +775,11 @@
     "pickup": "Pickup",
     "delivery": "Delivery",
     "items": "Items",
-    "moreItems": "more items"
+    "moreItems": "more items",
+    "deliveryDistance": "Delivery Distance",
+    "deliveryTime": "Delivery Time",
+    "businessDistance": "Business Distance",
+    "businessTime": "Business Time"
   },
   "seo": {
     "home": {

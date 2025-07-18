@@ -295,6 +295,17 @@ const OrderCard: React.FC<{
                 {formatAddress(order.business_location.address)}
               </Typography>
             </Box>
+            {(order as any).businessDistance && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <DirectionsCar sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('orderCard.businessDistance')}:{' '}
+                  {(order as any).businessDistance}
+                  {(order as any).businessEstTime &&
+                    ` (${(order as any).businessEstTime})`}
+                </Typography>
+              </Box>
+            )}
           </Box>
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -310,6 +321,17 @@ const OrderCard: React.FC<{
                 {formatAddress(order.delivery_address)}
               </Typography>
             </Box>
+            {(order as any).deliveryDistance && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <DirectionsCar sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('orderCard.deliveryDistance')}:{' '}
+                  {(order as any).deliveryDistance}
+                  {(order as any).deliveryEstTime &&
+                    ` (${(order as any).deliveryEstTime})`}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Box>
 
@@ -536,8 +558,7 @@ const AgentDashboard: React.FC = () => {
     error: accountError,
   } = useAccountInfo();
   const {
-    activeOrders,
-    pendingOrders,
+    categorizedOrders,
     loading,
     error,
     pickUpOrder,
@@ -697,11 +718,17 @@ const AgentDashboard: React.FC = () => {
     );
   }
 
+  const totalOrders =
+    categorizedOrders.active.length +
+    categorizedOrders.inProgress.length +
+    categorizedOrders.completed.length +
+    categorizedOrders.cancelled.length;
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          {t('dashboard.title')}
+          {t('agent.dashboard.title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {t('dashboard.welcomeBack')}, {user?.name}!{' '}
@@ -723,26 +750,17 @@ const AgentDashboard: React.FC = () => {
       />
 
       {/* Active Orders Section */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <LocalShipping sx={{ mr: 2, color: 'primary.main' }} />
-          <Typography variant="h5" component="h2">
-            {t('dashboard.activeOrders')} ({activeOrders.length})
-          </Typography>
-        </Box>
-
-        {activeOrders.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body1" color="text.secondary">
-              {t('dashboard.noActiveOrders')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('dashboard.pickUpPendingOrders')}
+      {categorizedOrders.active.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <LocalShipping sx={{ mr: 2, color: 'primary.main' }} />
+            <Typography variant="h5" component="h2">
+              {t('dashboard.activeOrders')} ({categorizedOrders.active.length})
             </Typography>
           </Box>
-        ) : (
+
           <Box>
-            {activeOrders.map((order) => (
+            {categorizedOrders.active.map((order: Order) => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -758,30 +776,22 @@ const AgentDashboard: React.FC = () => {
               />
             ))}
           </Box>
-        )}
-      </Paper>
+        </Paper>
+      )}
 
-      {/* Pending Orders Section */}
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Pending sx={{ mr: 2, color: 'warning.main' }} />
-          <Typography variant="h5" component="h2">
-            {t('dashboard.pendingOrders')} ({pendingOrders.length})
-          </Typography>
-        </Box>
-
-        {pendingOrders.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body1" color="text.secondary">
-              {t('dashboard.noPendingOrders')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('dashboard.newOrdersWillAppear')}
+      {/* In Progress Orders Section */}
+      {categorizedOrders.inProgress.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Pending sx={{ mr: 2, color: 'warning.main' }} />
+            <Typography variant="h5" component="h2">
+              {t('dashboard.inProgressOrders')} (
+              {categorizedOrders.inProgress.length})
             </Typography>
           </Box>
-        ) : (
+
           <Box>
-            {pendingOrders.map((order) => (
+            {categorizedOrders.inProgress.map((order: Order) => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -798,8 +808,78 @@ const AgentDashboard: React.FC = () => {
               />
             ))}
           </Box>
-        )}
-      </Paper>
+        </Paper>
+      )}
+
+      {/* Cancelled/Failed Orders Section */}
+      {categorizedOrders.cancelled.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Cancel sx={{ mr: 2, color: 'error.main' }} />
+            <Typography variant="h5" component="h2">
+              {t('dashboard.cancelledOrders')} (
+              {categorizedOrders.cancelled.length})
+            </Typography>
+          </Box>
+
+          <Box>
+            {categorizedOrders.cancelled.map((order: Order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                showActions={false}
+                agentAddress={
+                  profile?.agent && (profile.agent as any).address
+                    ? (profile.agent as any).address
+                    : undefined
+                }
+              />
+            ))}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Completed Orders Section - At the bottom */}
+      {categorizedOrders.completed.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <CheckCircle sx={{ mr: 2, color: 'success.main' }} />
+            <Typography variant="h5" component="h2">
+              {t('dashboard.completedOrders')} (
+              {categorizedOrders.completed.length})
+            </Typography>
+          </Box>
+
+          <Box>
+            {categorizedOrders.completed.map((order: Order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                showActions={false}
+                agentAddress={
+                  profile?.agent && (profile.agent as any).address
+                    ? (profile.agent as any).address
+                    : undefined
+                }
+              />
+            ))}
+          </Box>
+        </Paper>
+      )}
+
+      {/* No Orders Message */}
+      {totalOrders === 0 && (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Box sx={{ py: 4 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              {t('dashboard.noOrders')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('dashboard.noOrdersDescription')}
+            </Typography>
+          </Box>
+        </Paper>
+      )}
 
       {/* Success/Error Notifications */}
       <Snackbar

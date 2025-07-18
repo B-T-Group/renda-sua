@@ -102,10 +102,15 @@
     "noBusinessProfile": "Aucun profil d'entreprise trouvé. Veuillez compléter votre profil d'entreprise en premier.",
     "activeOrders": "Commandes Actives",
     "pendingOrders": "Commandes en Attente",
+    "inProgressOrders": "Commandes en cours",
+    "completedOrders": "Commandes terminées",
+    "cancelledOrders": "Commandes annulées",
     "noActiveOrders": "Aucune commande active pour le moment",
     "noPendingOrders": "Aucune commande en attente disponible",
+    "noOrders": "Aucune commande",
+    "noOrdersDescription": "Vous n'avez aucune commande assignée pour le moment.",
     "newOrdersWillAppear": "Les nouvelles commandes apparaîtront ici lorsqu'elles seront disponibles",
-    "manageDeliveryOrders": "Gérez vos commandes de livraison ici",
+    "manageDeliveryOrders": "Gérez vos commandes de livraison et suivez leur progression.",
     "pickUpPendingOrders": "Récupérez des commandes en attente pour commencer"
   },
   "orderStatus": {
@@ -125,6 +130,7 @@
     "cancelled": "annulé",
     "failed": "échoué",
     "refunded": "remboursé",
+    "complete": "complétée",
     "ready_for_pickup": "Prêt pour le ramassage"
   },
   "orderHistory": {
@@ -690,6 +696,10 @@
     "agentProfileNotFound": "Profil d'agent non trouvé. Veuillez d'abord compléter votre profil.",
     "orderPickupSuccess": "Commande #{{orderNumber}} récupérée avec succès !",
     "orderPickupError": "Échec de la récupération de la commande. Veuillez réessayer.",
+    "orderAssignedSuccess": "Commande #{{orderNumber}} assignée avec succès ! Montant retenu : {{holdAmount}}",
+    "orderAssignmentError": "Échec de l'assignation de la commande. Veuillez réessayer.",
+    "orderDropSuccess": "Commande #{{orderNumber}} abandonnée avec succès !",
+    "orderDropError": "Échec de l'abandon de la commande. Veuillez réessayer.",
     "orderStatusUpdateSuccess": "Statut de la commande mis à jour vers {{status}} avec succès !",
     "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande. Veuillez réessayer."
   },
@@ -698,7 +708,11 @@
     "pickup": "Récupération",
     "delivery": "Livraison",
     "items": "Articles",
-    "moreItems": "articles supplémentaires"
+    "moreItems": "articles supplémentaires",
+    "deliveryDistance": "Distance de livraison",
+    "deliveryTime": "Temps de livraison",
+    "businessDistance": "Distance de l'entreprise",
+    "businessTime": "Temps vers l'entreprise"
   },
   "agent": {
     "dashboard": {
@@ -706,8 +720,15 @@
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord agent.",
       "activeOrders": "Commandes actives",
       "pendingOrders": "Commandes en attente",
+      "inProgressOrders": "Commandes en cours",
+      "completedOrders": "Commandes terminées",
+      "cancelledOrders": "Commandes annulées",
       "noActiveOrders": "Aucune commande active pour le moment.",
-      "noPendingOrders": "Aucune commande en attente pour le moment."
+      "noPendingOrders": "Aucune commande en attente pour le moment.",
+      "noOrders": "Aucune commande",
+      "noOrdersDescription": "Vous n'avez aucune commande assignée pour le moment.",
+      "welcomeBack": "Bon retour",
+      "manageDeliveryOrders": "Gérez vos commandes de livraison et suivez leur progression."
     },
     "orders": {
       "pickup": "Ramasser la commande",

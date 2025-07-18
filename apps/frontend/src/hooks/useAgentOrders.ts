@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { useBackendOrders } from './useBackendOrders';
+import { useDistanceMatrix } from './useDistanceMatrix';
 
 export interface OrderItem {
   id: string;
@@ -124,13 +125,7 @@ export interface Order {
   }>;
 }
 
-export interface ActiveOrdersResponse {
-  success: boolean;
-  orders: Order[];
-  message?: string;
-}
-
-export interface PendingOrdersResponse {
+export interface OrdersResponse {
   success: boolean;
   orders: Order[];
   message?: string;
@@ -142,16 +137,91 @@ export interface PickUpOrderResponse {
   message: string;
 }
 
+// Helper function to categorize orders by status
+const categorizeOrders = <T extends Order>(orders: T[]) => {
+  const categorized = {
+    active: [] as T[],
+    inProgress: [] as T[],
+    completed: [] as T[],
+    cancelled: [] as T[],
+  };
+
+  orders.forEach((order) => {
+    switch (order.current_status) {
+      case 'assigned_to_agent':
+      case 'picked_up':
+      case 'in_transit':
+      case 'out_for_delivery':
+        categorized.active.push(order);
+        break;
+      case 'delivered':
+      case 'complete':
+        categorized.completed.push(order);
+        break;
+      case 'cancelled':
+      case 'failed':
+      case 'refunded':
+        categorized.cancelled.push(order);
+        break;
+      default:
+        // Any other status goes to in progress
+        categorized.inProgress.push(order);
+        break;
+    }
+  });
+
+  // Sort orders by creation date (newest first)
+  Object.keys(categorized).forEach((key) => {
+    categorized[key as keyof typeof categorized].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  });
+
+  return categorized;
+};
+
 export const useAgentOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [ordersWithDistance, setOrdersWithDistance] = useState<
+    (Order & {
+      deliveryDistance: string;
+      deliveryEstTime: string;
+      businessDistance: string;
+      businessEstTime: string;
+    })[]
+  >([]);
+  const [categorizedOrders, setCategorizedOrders] = useState({
+    active: [] as (Order & {
+      deliveryDistance: string;
+      deliveryEstTime: string;
+      businessDistance: string;
+      businessEstTime: string;
+    })[],
+    inProgress: [] as (Order & {
+      deliveryDistance: string;
+      deliveryEstTime: string;
+      businessDistance: string;
+      businessEstTime: string;
+    })[],
+    completed: [] as (Order & {
+      deliveryDistance: string;
+      deliveryEstTime: string;
+      businessDistance: string;
+      businessEstTime: string;
+    })[],
+    cancelled: [] as (Order & {
+      deliveryDistance: string;
+      deliveryEstTime: string;
+      businessDistance: string;
+      businessEstTime: string;
+    })[],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
   const {
-    getOrder,
     pickUpOrder: backendPickUpOrder,
     startTransit,
     outForDelivery,
@@ -159,92 +229,61 @@ export const useAgentOrders = () => {
     failDelivery,
   } = useBackendOrders();
 
-  const fetchActiveOrders = useCallback(async () => {
-    if (!apiClient) {
-      setError('API client not available');
-      return [];
-    }
-
-    try {
-      const response = await apiClient.get<ActiveOrdersResponse>(
-        '/agents/active_orders'
-      );
-
-      if (response.data.success) {
-        setActiveOrders(response.data.orders);
-        return response.data.orders;
-      } else {
-        setError('Failed to fetch active orders');
-        setActiveOrders([]);
-        return [];
-      }
-    } catch (err: any) {
-      console.error('Error fetching active orders:', err);
-      setError(
-        err.response?.data?.error ||
-          err.message ||
-          'Failed to fetch active orders'
-      );
-      setActiveOrders([]);
-      return [];
-    }
-  }, [apiClient]);
-
-  const fetchPendingOrders = useCallback(async () => {
-    if (!apiClient) {
-      setError('API client not available');
-      return [];
-    }
-
-    try {
-      const response = await apiClient.get<PendingOrdersResponse>(
-        '/orders/open'
-      );
-
-      if (response.data.success) {
-        setPendingOrders(response.data.orders);
-        return response.data.orders;
-      } else {
-        setError('Failed to fetch pending orders');
-        return [];
-      }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          err.message ||
-          'Failed to fetch pending orders'
-      );
-      return [];
-    }
-  }, [apiClient]);
-
   const fetchAllOrders = useCallback(async () => {
+    if (!apiClient) {
+      setError('API client not available');
+      return [];
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const result = await Promise.all([
-        fetchActiveOrders(),
-        fetchPendingOrders(),
-      ]);
-      console.log('result', result);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
+      const response = await apiClient.get<OrdersResponse>(
+        '/agents/active_orders'
+      );
+
+      if (response.data.success) {
+        const allOrders = response.data.orders;
+        setOrders(allOrders);
+        // Initially categorize without distance info - will be updated when distance calculation completes
+        const categorized = categorizeOrders(allOrders);
+        setCategorizedOrders(categorized as any);
+        return allOrders;
+      } else {
+        setError('Failed to fetch orders');
+        setOrders([]);
+        setCategorizedOrders({
+          active: [],
+          inProgress: [],
+          completed: [],
+          cancelled: [],
+        });
+        return [];
+      }
+    } catch (err: any) {
+      console.error('Error fetching orders:', err);
+      setError(
+        err.response?.data?.error || err.message || 'Failed to fetch orders'
+      );
+      setOrders([]);
+      setCategorizedOrders({
+        active: [],
+        inProgress: [],
+        completed: [],
+        cancelled: [],
+      });
+      return [];
     } finally {
       setLoading(false);
     }
-  }, [fetchActiveOrders, fetchPendingOrders]);
+  }, [apiClient]);
 
   useEffect(() => {
     setTimeout(() => {
       fetchAllOrders();
     }, 0);
   }, [fetchAllOrders]);
-
-  // Combine active and pending orders for the main orders state
-  useEffect(() => {
-    setOrders([...activeOrders, ...pendingOrders]);
-  }, [activeOrders, pendingOrders]);
 
   const pickUpOrder = useCallback(
     async (orderId: string) => {
@@ -258,7 +297,7 @@ export const useAgentOrders = () => {
         });
 
         if (response.success) {
-          // Refresh both active and pending orders after successful pickup
+          // Refresh all orders after successful pickup
           await fetchAllOrders();
           return response.order;
         } else {
@@ -299,8 +338,8 @@ export const useAgentOrders = () => {
         }
 
         if (response.success) {
-          // Refresh active orders after status update
-          await fetchActiveOrders();
+          // Refresh all orders after status update
+          await fetchAllOrders();
           return response.order;
         } else {
           throw new Error(response.message || 'Failed to update order status');
@@ -310,13 +349,7 @@ export const useAgentOrders = () => {
         throw error;
       }
     },
-    [
-      startTransit,
-      outForDelivery,
-      deliverOrder,
-      failDelivery,
-      fetchActiveOrders,
-    ]
+    [startTransit, outForDelivery, deliverOrder, failDelivery, fetchAllOrders]
   );
 
   const dropOrder = useCallback(
@@ -345,10 +378,71 @@ export const useAgentOrders = () => {
     [apiClient, fetchAllOrders]
   );
 
+  const { fetchDistanceMatrix } = useDistanceMatrix();
+
+  useEffect(() => {
+    if (orders.length > 0) {
+      (async () => {
+        console.log('fetching distance matrix');
+        const deliveryAddressIds = orders.reduce((acc, order) => {
+          if (!acc.includes(order.delivery_address_id)) {
+            acc.push(order.delivery_address_id);
+          }
+          return acc;
+        }, [] as string[]);
+
+        const sourceAddressIds = orders.reduce((acc, order) => {
+          if (!acc.includes(order.business_location.address.id)) {
+            acc.push(order.business_location.address.id);
+          }
+          return acc;
+        }, deliveryAddressIds);
+
+        const distanceMatrix = await fetchDistanceMatrix({
+          destination_address_ids: sourceAddressIds,
+        });
+
+        const ordersWithDistance = orders.map((order) => {
+          const idx = distanceMatrix.destination_ids.indexOf(
+            order.delivery_address_id
+          );
+          const sourceIdx = distanceMatrix.destination_ids.indexOf(
+            order.business_location.address.id
+          );
+
+          return {
+            ...order,
+            deliveryDistance:
+              idx !== -1
+                ? distanceMatrix.rows[0].elements[idx].distance?.text
+                : 'N/A',
+            deliveryEstTime:
+              idx !== -1
+                ? distanceMatrix.rows[0].elements[idx].duration?.text
+                : 'N/A',
+            businessDistance:
+              sourceIdx !== -1
+                ? distanceMatrix.rows[0].elements[sourceIdx].distance?.text
+                : 'N/A',
+            businessEstTime:
+              sourceIdx !== -1
+                ? distanceMatrix.rows[0].elements[sourceIdx].duration?.text
+                : 'N/A',
+          };
+        });
+
+        setOrdersWithDistance(ordersWithDistance);
+
+        // Update categorized orders with distance information
+        const categorizedWithDistance = categorizeOrders(ordersWithDistance);
+        setCategorizedOrders(categorizedWithDistance);
+      })();
+    }
+  }, [orders]);
+
   return {
     orders,
-    activeOrders,
-    pendingOrders,
+    categorizedOrders,
     loading,
     error,
     refetch: fetchAllOrders,

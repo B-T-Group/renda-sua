@@ -378,7 +378,7 @@ export class AddressesService {
         }
       }
     `;
-    const result = await this.hasuraUserService.executeQuery(query, {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       ids: addressIds,
     });
     return result.addresses || [];
@@ -388,87 +388,12 @@ export class AddressesService {
    * Fetch the current user's primary address (returns null if not found)
    */
   async getCurrentUserPrimaryAddress(): Promise<AddressResponse | null> {
-    const identifier = this.hasuraUserService.getIdentifier();
-    const user = await this.getUserInfo(identifier);
-    let query = '';
-    let variables: any = {};
-    if (user.user_type_id === 'client' && user.client) {
-      query = `
-        query GetPrimaryClientAddress($clientId: uuid!) {
-          client_addresses(where: {client_id: {_eq: $clientId}, address: {is_primary: {_eq: true}}}) {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              latitude
-              longitude
-              created_at
-              updated_at
-            }
-          }
-        }
-      `;
-      variables = { clientId: user.client.id };
-    } else if (user.user_type_id === 'business' && user.business) {
-      query = `
-        query GetPrimaryBusinessAddress($businessId: uuid!) {
-          business_addresses(where: {business_id: {_eq: $businessId}, address: {is_primary: {_eq: true}}}) {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              latitude
-              longitude
-              created_at
-              updated_at
-            }
-          }
-        }
-      `;
-      variables = { businessId: user.business.id };
-    } else if (user.user_type_id === 'agent' && user.agent) {
-      query = `
-        query GetPrimaryAgentAddress($agentId: uuid!) {
-          agent_addresses(where: {agent_id: {_eq: $agentId}, address: {is_primary: {_eq: true}}}) {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              latitude
-              longitude
-              created_at
-              updated_at
-            }
-          }
-        }
-      `;
-      variables = { agentId: user.agent.id };
-    } else {
-      return null;
-    }
-    const result = await this.hasuraUserService.executeQuery(query, variables);
-    const addresses =
-      result.client_addresses ||
-      result.business_addresses ||
-      result.agent_addresses;
-    return addresses && addresses.length > 0 ? addresses[0].address : null;
+    const user = await this.hasuraUserService.getUser();
+    console.log(user);
+    return (
+      user.addresses?.find((address) => address.is_primary) ||
+      user.addresses?.[0] ||
+      null
+    );
   }
 }

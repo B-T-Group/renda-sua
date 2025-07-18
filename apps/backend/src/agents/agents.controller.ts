@@ -1,13 +1,13 @@
 import {
-  Controller,
-  Post,
-  Get,
   Body,
+  Controller,
+  Get,
   HttpException,
   HttpStatus,
+  Post,
 } from '@nestjs/common';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -121,7 +121,6 @@ export class AgentsController {
           orders(
             where: {
               assigned_agent_id: { _eq: $agentId }
-              current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
             }
             order_by: { created_at: desc }
           ) {
