@@ -1298,7 +1298,7 @@ export class OrdersService {
           clientId: order.client_id,
           currency: order.currency,
           clientHoldAmount: order.total_amount,
-          deliveryFees: order.delivery_fee,
+          deliveryFees: deliveryFees ?? 0,
         }
       );
 
