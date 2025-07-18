@@ -1467,6 +1467,14 @@ export class OrdersService {
       referenceId: referenceId,
     });
 
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: orderHold.delivery_fees,
+      transactionType: 'deposit',
+      memo: `Delivery fee received for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
+
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
@@ -1477,6 +1485,14 @@ export class OrdersService {
       amount: orderHold.client_hold_amount,
       transactionType: 'release',
       memo: `Hold released for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
+
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount: orderHold.delivery_fees,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number} delivery fee`,
       referenceId: referenceId,
     });
 
