@@ -22,6 +22,7 @@ select_permissions:
         - agent_id
         - client_hold_amount
         - agent_hold_amount
+        - delivery_fees
         - currency
         - status
         - created_at
@@ -41,6 +42,7 @@ select_permissions:
         - agent_id
         - client_hold_amount
         - agent_hold_amount
+        - delivery_fees
         - currency
         - status
         - created_at
@@ -61,6 +63,7 @@ select_permissions:
         - agent_id
         - client_hold_amount
         - agent_hold_amount
+        - delivery_fees
         - currency
         - status
         - created_at

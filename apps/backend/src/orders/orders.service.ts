@@ -991,6 +991,10 @@ export class OrdersService {
       );
     }
 
+    const fees = await this.hasuraSystemService.getDeliveryFee(
+      businessInventory.item.currency
+    );
+
     if (orderData.item.quantity > businessInventory.available_quantity) {
       throw new Error(
         `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderData.item.quantity}`
@@ -1011,9 +1015,11 @@ export class OrdersService {
       throw new Error(`No account found for currency ${currency}`);
     }
 
-    if (account.available_balance < totalAmount) {
+    if (account.total_balance < totalAmount + fees) {
       throw new Error(
-        `Insufficient funds for currency ${currency}. Required: ${totalAmount}, Available: ${account.available_balance}`
+        `Insufficient funds for currency ${currency}. Required: ${
+          totalAmount + fees
+        }, Available: ${account.total_balance}`
       );
     }
 
@@ -1189,10 +1195,18 @@ export class OrdersService {
       referenceId: order.id,
     });
 
+    await this.accountsService.registerTransaction({
+      accountId: account.id,
+      amount: fees,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number} delivery fee`,
+      referenceId: order.id,
+    });
     const orderHold = await this.getOrCreateOrderHold(order.id);
 
     await this.updateOrderHold(orderHold.id, {
       client_hold_amount: totalAmount,
+      delivery_fees: fees,
     });
 
     return {
@@ -1204,7 +1218,10 @@ export class OrdersService {
   /**
    * Get or create an order hold for the given order ID
    */
-  private async getOrCreateOrderHold(orderId: string): Promise<any> {
+  private async getOrCreateOrderHold(
+    orderId: string,
+    deliveryFees: number = 0
+  ): Promise<any> {
     // First, try to get the existing order hold
     const getOrderHoldQuery = `
       query GetOrderHold($orderId: uuid!) {
@@ -1215,6 +1232,7 @@ export class OrdersService {
           agent_id
           client_hold_amount
           agent_hold_amount
+          delivery_fees
           currency
           status
           created_at
@@ -1245,7 +1263,8 @@ export class OrdersService {
           $orderId: uuid!,
           $clientId: uuid!,
           $currency: currency_enum!,
-          $clientHoldAmount: numeric!
+          $clientHoldAmount: numeric!,
+          $deliveryFees: numeric!
         ) {
           insert_order_holds_one(object: {
             order_id: $orderId,
@@ -1253,6 +1272,7 @@ export class OrdersService {
             agent_id: null,
             client_hold_amount: $clientHoldAmount,
             agent_hold_amount: 0,
+            delivery_fees: $deliveryFees,
             currency: $currency,
             status: "active"
           }) {
@@ -1262,6 +1282,7 @@ export class OrdersService {
             agent_id
             client_hold_amount
             agent_hold_amount
+            delivery_fees
             currency
             status
             created_at
@@ -1277,6 +1298,7 @@ export class OrdersService {
           clientId: order.client_id,
           currency: order.currency,
           clientHoldAmount: order.total_amount,
+          deliveryFees: order.delivery_fee,
         }
       );
 
@@ -1295,6 +1317,7 @@ export class OrdersService {
       status?: string;
       client_hold_amount?: number;
       agent_hold_amount?: number;
+      delivery_fees?: number;
       agent_id?: string | null;
     }
   ): Promise<any> {
@@ -1307,6 +1330,7 @@ export class OrdersService {
         agent_id
         client_hold_amount
         agent_hold_amount
+        delivery_fees
         currency
         status
         created_at
@@ -1324,6 +1348,7 @@ export class OrdersService {
           status: updates.status ?? undefined,
           client_hold_amount: updates.client_hold_amount ?? undefined,
           agent_hold_amount: updates.agent_hold_amount ?? undefined,
+          delivery_fees: updates.delivery_fees ?? undefined,
           agent_id: updates.agent_id ?? undefined,
         },
       }

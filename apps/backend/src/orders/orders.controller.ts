@@ -10,7 +10,6 @@ import {
   Query,
 } from '@nestjs/common';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   GetOrderRequest,
@@ -25,7 +24,6 @@ export interface UpdateOrderStatusRequest {
 @Controller('orders')
 export class OrdersController {
   constructor(
-    private readonly hasuraUserService: HasuraUserService,
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService
   ) {}
