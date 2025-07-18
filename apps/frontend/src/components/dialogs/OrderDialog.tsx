@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import React from 'react';
+import { DeliveryFee } from '../../hooks/useDeliveryFees';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 interface OrderDialogProps {
@@ -26,6 +27,7 @@ interface OrderDialogProps {
   specialInstructions: string;
   orderLoading: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
+  deliveryFee: DeliveryFee | null;
   onClose: () => void;
   onQuantityChange: (quantity: number) => void;
   onSpecialInstructionsChange: (instructions: string) => void;
@@ -39,6 +41,7 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
   specialInstructions,
   orderLoading,
   formatCurrency,
+  deliveryFee,
   onClose,
   onQuantityChange,
   onSpecialInstructionsChange,
@@ -189,12 +192,18 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
                 {formatCurrency(selectedItem.selling_price * quantity)}
               </Typography>
               <Typography variant="body2">
-                Delivery Fee: {formatCurrency(0)}
+                Delivery Fee:{' '}
+                {formatCurrency(deliveryFee?.fee || 0, deliveryFee?.currency)}
               </Typography>
               <Typography variant="body2">Tax: {formatCurrency(0)}</Typography>
               <Divider sx={{ my: 1 }} />
               <Typography variant="h6">
-                Total: {formatCurrency(selectedItem.selling_price * quantity)}
+                Total:{' '}
+                {formatCurrency(
+                  selectedItem.selling_price * quantity +
+                    (deliveryFee?.fee || 0),
+                  deliveryFee?.currency || 'USD'
+                )}
               </Typography>
             </Box>
 

@@ -12,6 +12,7 @@ import React, { useMemo, useState } from 'react';
 import {
   useAccountInfo,
   useBackendOrders,
+  useDeliveryFees,
   useInventoryItems,
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
@@ -31,6 +32,12 @@ const Dashboard: React.FC = () => {
     loading: accountLoading,
     error: accountError,
   } = useAccountInfo();
+  const {
+    deliveryFees,
+    loading: deliveryFeesLoading,
+    error: deliveryFeesError,
+    getDeliveryFeeForCurrency,
+  } = useDeliveryFees();
   const {
     createOrder,
     loading: orderLoading,
@@ -171,7 +178,7 @@ const Dashboard: React.FC = () => {
     }).format(amount);
   };
 
-  if (inventoryLoading || accountLoading) {
+  if (inventoryLoading || accountLoading || deliveryFeesLoading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box
@@ -186,7 +193,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (inventoryError || accountError) {
+  if (inventoryError || accountError || deliveryFeesError) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Alert severity="error">
@@ -299,6 +306,9 @@ const Dashboard: React.FC = () => {
         specialInstructions={specialInstructions}
         orderLoading={orderLoading}
         formatCurrency={formatCurrency}
+        deliveryFee={
+          selectedItem ? getDeliveryFeeForCurrency(DEFAULT_ITEM_CURRENCY) : null
+        }
         onQuantityChange={setQuantity}
         onSpecialInstructionsChange={setSpecialInstructions}
         onSubmit={handleOrderSubmit}

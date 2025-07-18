@@ -16,6 +16,7 @@ export { useGraphQLRequest } from './useGraphQLRequest';
 export { useBackendOrders } from './useBackendOrders';
 export { useClients } from './useClients';
 export { useCreateOrder } from './useCreateOrder';
+export { useDeliveryFees } from './useDeliveryFees';
 export { useInventoryItems } from './useInventoryItems';
 
 // Agent hooks
