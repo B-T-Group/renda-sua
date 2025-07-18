@@ -1,0 +1,37 @@
+table:
+  name: delivery_fees
+  schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - conditions
+        - fee
+        - currency
+        - created_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+  - role: agent
+    permission:
+      columns:
+        - id
+        - conditions
+        - fee
+        - currency
+        - created_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - conditions
+        - fee
+        - currency
+        - created_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true

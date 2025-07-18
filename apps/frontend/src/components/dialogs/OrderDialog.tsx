@@ -197,6 +197,37 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
                 Total: {formatCurrency(selectedItem.selling_price * quantity)}
               </Typography>
             </Box>
+
+            {/* Account Hold Notice */}
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: 'info.light',
+                borderRadius: 1,
+                mt: 2,
+                border: '2px solid',
+                borderColor: 'info.main',
+              }}
+            >
+              <Typography
+                variant="subtitle1"
+                color="info.dark"
+                gutterBottom
+                fontWeight="bold"
+              >
+                💳 Account Hold Information
+              </Typography>
+              <Typography
+                variant="body2"
+                color="info.dark"
+                sx={{ lineHeight: 1.5 }}
+              >
+                <strong>Important:</strong> A hold of{' '}
+                {formatCurrency(selectedItem.selling_price * quantity)} will be
+                placed on your account. This amount will only be released to the
+                seller after you confirm receipt of your order.
+              </Typography>
+            </Box>
           </Box>
         )}
       </DialogContent>

@@ -142,11 +142,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
     <>
       <Card
         sx={{
-          width: {
-            xs: '100%',
-            sm: 'calc(50% - 8px)',
-            md: 'calc(33.333% - 12px)',
-          },
+          width: '100%',
         }}
       >
         <CardContent>

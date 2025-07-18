@@ -7,6 +7,7 @@
 - '!include public_business_locations.yaml'
 - '!include public_businesses.yaml'
 - '!include public_clients.yaml'
+- '!include public_delivery_fees.yaml'
 - '!include public_item_categories.yaml'
 - '!include public_item_images.yaml'
 - '!include public_item_sub_categories.yaml'

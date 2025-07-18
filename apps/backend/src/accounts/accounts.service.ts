@@ -141,13 +141,13 @@ export class AccountsService {
       case 'hold':
         return {
           isCredit: false,
-          balanceUpdate: { available: -amount, withheld: amount },
+          balanceUpdate: { available: 0, withheld: -amount },
         };
 
       case 'release':
         return {
           isCredit: true,
-          balanceUpdate: { available: amount, withheld: -amount },
+          balanceUpdate: { available: 0, withheld: amount },
         };
 
       case 'transfer':

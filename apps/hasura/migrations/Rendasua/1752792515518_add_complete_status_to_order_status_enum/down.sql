@@ -11,3 +11,4 @@
 -- 4. Rename the new enum to the original name
 
 -- This is a complex operation and should be done manually if needed
+

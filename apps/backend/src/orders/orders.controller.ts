@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { OrderStatusService } from './order-status.service';
 import type {
   GetOrderRequest,
   OrderStatusChangeRequest,
@@ -25,7 +26,8 @@ export interface UpdateOrderStatusRequest {
 export class OrdersController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly ordersService: OrdersService
+    private readonly ordersService: OrdersService,
+    private readonly orderStatusService: OrderStatusService
   ) {}
 
   @Post()
@@ -74,7 +76,7 @@ export class OrdersController {
     @Body() updateData: UpdateOrderStatusRequest
   ) {
     try {
-      const order = await this.hasuraUserService.updateOrderStatus(
+      const order = await this.orderStatusService.updateOrderStatus(
         orderId,
         updateData.status
       );

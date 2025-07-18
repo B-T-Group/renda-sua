@@ -30,8 +30,10 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AccountInformation from '../common/AccountInformation';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 const getStatusColor = (status: string) => {
@@ -529,6 +531,11 @@ const AgentDashboard: React.FC = () => {
   const { profile } = useUserProfile();
   const agentOrders = useAgentOrders();
   const {
+    accounts,
+    loading: accountLoading,
+    error: accountError,
+  } = useAccountInfo();
+  const {
     activeOrders,
     pendingOrders,
     loading,
@@ -547,6 +554,18 @@ const AgentDashboard: React.FC = () => {
     message: '',
     severity: 'success',
   });
+
+  const handleTopUpClick = () => {
+    // Navigate to profile page for account management
+    window.location.href = '/profile';
+  };
+
+  const formatCurrency = (amount: number, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
 
   const handlePickUp = async (orderId: string) => {
     if (!profile?.id) {
@@ -661,7 +680,7 @@ const AgentDashboard: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading || accountLoading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box
@@ -690,11 +709,18 @@ const AgentDashboard: React.FC = () => {
         </Typography>
       </Box>
 
-      {error && (
+      {(error || accountError) && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
+          {error || accountError}
         </Alert>
       )}
+
+      {/* Account Information */}
+      <AccountInformation
+        accounts={accounts}
+        onTopUpClick={handleTopUpClick}
+        formatCurrency={formatCurrency}
+      />
 
       {/* Active Orders Section */}
       <Paper sx={{ p: 3, mb: 3 }}>

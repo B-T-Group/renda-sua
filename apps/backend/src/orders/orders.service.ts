@@ -4,6 +4,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -19,7 +20,8 @@ export class OrdersService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly accountsService: AccountsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly orderStatusService: OrderStatusService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -42,7 +44,7 @@ export class OrdersService {
         `Cannot confirm order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed'
     );
@@ -81,7 +83,7 @@ export class OrdersService {
         `Cannot start preparing order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'preparing'
     );
@@ -120,7 +122,7 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup'
     );
@@ -226,7 +228,7 @@ export class OrdersService {
         `Cannot pick up order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'picked_up'
     );
@@ -265,7 +267,7 @@ export class OrdersService {
         `Cannot start transit for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'in_transit'
     );
@@ -307,7 +309,7 @@ export class OrdersService {
         `Cannot mark order as out for delivery in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'out_for_delivery'
     );
@@ -347,7 +349,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'delivered'
     );
@@ -390,13 +392,13 @@ export class OrdersService {
 
     await this.releaseHoldAndProcessPayment(order.id);
 
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      'completed'
+      'complete'
     );
     await this.createStatusHistoryEntry(
       request.orderId,
-      'completed',
+      'complete',
       'Order completed by client',
       'client',
       user.id,
@@ -433,7 +435,7 @@ export class OrdersService {
     // Release the hold since delivery failed
     await this.releaseOrderHold(order, user.id);
 
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'failed'
     );
@@ -481,7 +483,7 @@ export class OrdersService {
       await this.releaseOrderHold(order, order.assigned_agent.user_id);
     }
 
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'cancelled'
     );
@@ -524,7 +526,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    const updatedOrder = await this.hasuraUserService.updateOrderStatus(
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'refunded'
     );
