@@ -336,7 +336,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
                           <Avatar
                             src={order_item.item.item_images[0].image_url}
                             alt={order_item.item_name}
-                            sx={{ width: 56, height: 56, mr: 2 }}
+                            sx={{ width: 150, height: 150, mr: 2 }}
                             variant="rounded"
                           />
                         )}

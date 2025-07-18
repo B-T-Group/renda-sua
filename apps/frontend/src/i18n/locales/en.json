@@ -541,7 +541,16 @@
       "caption": "Caption",
       "maxImagesReached": "Maximum of {{max}} images reached",
       "uploadImages": "Upload Images",
-      "deleteInventoryConfirm": "Are you sure you want to delete this inventory item? This action cannot be undone."
+      "deleteInventoryConfirm": "Are you sure you want to delete this inventory item? This action cannot be undone.",
+      "selectLocationRequired": "Please select a location",
+      "selectLocation": "Select Location",
+      "itemInformation": "Item Information",
+      "quantities": "Quantities",
+      "totalQuantity": "Total Quantity",
+      "reorderQuantity": "Reorder Quantity",
+      "updateInventoryFor": "Update Inventory for {{itemName}}",
+      "inventoryUpdatedSuccessfully": "Inventory updated successfully",
+      "failedToUpdateInventory": "Failed to update inventory"
     },
     "locations": {
       "title": "Business Locations",

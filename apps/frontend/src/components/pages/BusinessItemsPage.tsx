@@ -12,9 +12,6 @@ import {
   Avatar,
   Box,
   Button,
-  Card,
-  CardContent,
-  CardMedia,
   Chip,
   Container,
   Dialog,
@@ -47,10 +44,10 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
+import BusinessItemCardView from '../business/BusinessItemCardView';
 import CSVUploadDialog from '../business/CSVUploadDialog';
 import EditItemDialog from '../business/EditItemDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
@@ -112,23 +109,19 @@ const BusinessItemsPage: React.FC = () => {
   } = useItems(profile?.business?.id);
 
   const {
-    inventory,
     businessLocations,
     loading: inventoryLoading,
-    error: inventoryError,
     refreshBusinessLocations,
   } = useBusinessInventory(profile?.business?.id);
-
-  const { loading: locationsLoading } = useBusinessLocations();
 
   // Fetch data when component mounts
   useEffect(() => {
     if (profile?.business?.id) {
-      fetchItems();
+      fetchItems(false);
       fetchBrands();
       fetchItemSubCategories();
     }
-  }, [profile?.business?.id, fetchItems, fetchBrands, fetchItemSubCategories]);
+  }, [profile?.business?.id]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -171,11 +164,6 @@ const BusinessItemsPage: React.FC = () => {
     const inventoryItem = item.business_inventories?.[0] || item;
     setUpdatingInventoryItem(inventoryItem);
     setShowUpdateInventoryDialog(true);
-  };
-
-  const handleDeleteInventoryItem = (item: any) => {
-    setUpdatingInventoryItem(item);
-    setShowDeleteConfirm(true);
   };
 
   const handleRefreshLocations = async () => {
@@ -376,7 +364,7 @@ const BusinessItemsPage: React.FC = () => {
     },
     {
       field: 'stock_status',
-      headerName: t('business.inventory.status.title'),
+      headerName: t('business.inventory.stockStatus'),
       width: 130,
       renderCell: (params: GridRenderCellParams) => {
         const inventory = params.row.business_inventories?.[0];
@@ -604,210 +592,16 @@ const BusinessItemsPage: React.FC = () => {
               <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
             ) : (
               <Grid container spacing={3}>
-                {items.map((item) => {
-                  const mainImage = item.item_images?.find(
-                    (img) => img.image_type === 'main'
-                  );
-                  const itemInventory = item.business_inventories?.[0];
-                  const stockStatus = itemInventory
-                    ? getStockStatus(
-                        itemInventory.available_quantity,
-                        itemInventory.reorder_point
-                      )
-                    : null;
-
-                  return (
-                    <Grid item={true} xs={12} sm={6} md={4} key={item.id}>
-                      <Card
-                        sx={{
-                          height: '100%',
-                          width: '100%',
-                          minHeight: 400,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          transition:
-                            'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                          '&:hover': {
-                            transform: 'translateY(-4px)',
-                            boxShadow: theme.shadows[8],
-                          },
-                        }}
-                      >
-                        {/* Image Section */}
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={
-                            mainImage?.image_url || '/src/assets/no-image.svg'
-                          }
-                          alt={mainImage?.alt_text || item.name}
-                          sx={{
-                            objectFit: 'cover',
-                            backgroundColor: theme.palette.grey[100],
-                          }}
-                        />
-
-                        <CardContent
-                          sx={{
-                            flexGrow: 1,
-                            p: 2,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            height: '100%',
-                          }}
-                        >
-                          {/* Item Section */}
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="h6" gutterBottom noWrap>
-                              {item.name}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                mb: 1,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {item.description}
-                            </Typography>
-                            <Typography
-                              variant="h6"
-                              color="primary"
-                              gutterBottom
-                            >
-                              {formatCurrency(item.price, item.currency)}
-                            </Typography>
-                            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                              <Chip
-                                label={item.sku}
-                                size="small"
-                                variant="outlined"
-                              />
-                              {item.is_active ? (
-                                <Chip
-                                  label={t('business.items.active')}
-                                  size="small"
-                                  color="success"
-                                />
-                              ) : (
-                                <Chip
-                                  label={t('business.items.inactive')}
-                                  size="small"
-                                  color="default"
-                                />
-                              )}
-                            </Stack>
-                          </Box>
-
-                          {/* Inventory Section */}
-                          <Box sx={{ mb: 2 }}>
-                            <Typography
-                              variant="subtitle2"
-                              color="text.secondary"
-                              gutterBottom
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                              }}
-                            >
-                              <InventoryIcon fontSize="small" />
-                              {t('business.inventory.title')}
-                            </Typography>
-                            {itemInventory ? (
-                              <Stack spacing={1}>
-                                <Box
-                                  display="flex"
-                                  justifyContent="space-between"
-                                >
-                                  <Typography variant="body2">
-                                    {t('business.inventory.available')}:
-                                  </Typography>
-                                  <Typography variant="body2" fontWeight="bold">
-                                    {itemInventory.available_quantity}
-                                  </Typography>
-                                </Box>
-                                <Box
-                                  display="flex"
-                                  justifyContent="space-between"
-                                >
-                                  <Typography variant="body2">
-                                    {t('business.inventory.sellingPrice')}:
-                                  </Typography>
-                                  <Typography variant="body2" fontWeight="bold">
-                                    {formatCurrency(
-                                      itemInventory.selling_price,
-                                      item.currency
-                                    )}
-                                  </Typography>
-                                </Box>
-                                <Chip
-                                  label={t(
-                                    `business.inventory.status.${stockStatus?.status}`
-                                  )}
-                                  size="small"
-                                  color={stockStatus?.color}
-                                  sx={{ alignSelf: 'flex-start' }}
-                                />
-                              </Stack>
-                            ) : (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontStyle: 'italic' }}
-                              >
-                                {t('business.inventory.noInventory')}
-                              </Typography>
-                            )}
-                          </Box>
-
-                          {/* Actions */}
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            sx={{ mt: 'auto' }}
-                          >
-                            <Tooltip title={t('business.items.editItem')}>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleEditItem(item)}
-                                sx={{ color: theme.palette.primary.main }}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
-                            {itemInventory && (
-                              <Tooltip title={t('business.inventory.restock')}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    handleRestockInventoryItem(item)
-                                  }
-                                  sx={{ color: theme.palette.warning.main }}
-                                >
-                                  <InventoryIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            <Tooltip title={t('business.items.deleteItem')}>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDeleteItem(item)}
-                                sx={{ color: theme.palette.error.main }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  );
-                })}
+                {items.map((item) => (
+                  <Grid item xs={12} sm={6} md={4} key={item.id}>
+                    <BusinessItemCardView
+                      item={item}
+                      onEditItem={handleEditItem}
+                      onDeleteItem={handleDeleteItem}
+                      onRestockInventoryItem={handleRestockInventoryItem}
+                    />
+                  </Grid>
+                ))}
               </Grid>
             )}
           </Box>

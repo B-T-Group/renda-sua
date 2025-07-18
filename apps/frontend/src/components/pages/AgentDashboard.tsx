@@ -331,7 +331,7 @@ const OrderCard: React.FC<{
                       <Avatar
                         src={order_item.item.item_images[0].image_url}
                         alt={order_item.item_name}
-                        sx={{ width: 96, height: 96, mr: 2, mt: 0.5 }}
+                        sx={{ width: 150, height: 150, mr: 2, mt: 0.5 }}
                         variant="rounded"
                       />
                     )}

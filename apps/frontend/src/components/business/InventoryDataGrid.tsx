@@ -236,7 +236,7 @@ export default function InventoryDataGrid({
     },
     {
       field: 'status',
-      headerName: t('business.inventory.status'),
+      headerName: t('business.inventory.stockStatus'),
       flex: 0.6,
       minWidth: 100,
       renderCell: (params: GridRenderCellParams<Item>) => (

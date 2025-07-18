@@ -186,7 +186,7 @@ export default function InventoryTable({
               <TableCell
                 sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}
               >
-                {t('business.inventory.status')}
+                {t('business.inventory.stockStatus')}
               </TableCell>
               <TableCell
                 sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}

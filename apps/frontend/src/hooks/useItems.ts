@@ -398,68 +398,71 @@ export const useItems = (businessId?: string) => {
   `;
   const { execute: executeUpdateItem } = useGraphQLRequest(updateItemMutation);
 
-  const fetchItems = useCallback(async () => {
-    if (!businessId) {
-      console.log('useItems: No businessId provided, skipping fetch');
-      return;
-    }
-
-    console.log('useItems: Fetching items for businessId:', businessId);
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await executeItemsQuery({ businessId });
-      console.log('useItems: Fetch result:', result);
-      const fetchedItems = result.items || [];
-      // Collect unique destination address IDs from all business_inventories
-      const allAddressIds = fetchedItems
-        .flatMap((item: any) =>
-          (item.business_inventories || []).map((inv: any) =>
-            String(inv.business_location?.address_id)
-          )
-        )
-        .filter(Boolean);
-      const uniqueAddressIds: string[] = Array.from(new Set(allAddressIds));
-      // Call distance-matrix API if there are addresses
-      let distanceMatrix: any = null;
-      if (uniqueAddressIds.length > 0) {
-        try {
-          distanceMatrix = await fetchDistanceMatrix({
-            destination_address_ids: uniqueAddressIds,
-          });
-        } catch (e) {
-          console.warn('Failed to fetch distance matrix:', e);
-        }
+  const fetchItems = useCallback(
+    async (withDistanceMatrix = true) => {
+      if (!businessId) {
+        console.log('useItems: No businessId provided, skipping fetch');
+        return;
       }
-      // Map distances/times to items
-      const updatedItems = fetchedItems.map((item: any) => {
-        let estDeliveryTime: string | null = null;
-        let estDistance: string | null = null;
-        const addressId =
-          item.business_inventories?.[0]?.business_location?.address_id;
-        if (distanceMatrix && addressId) {
-          const idx = distanceMatrix.destination_ids.indexOf(addressId);
-          if (idx !== -1 && distanceMatrix.rows[0]?.elements[idx]) {
-            const el = distanceMatrix.rows[0].elements[idx];
-            estDeliveryTime = el.duration?.text || null;
-            estDistance = el.distance?.text || null;
+
+      console.log('useItems: Fetching items for businessId:', businessId);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await executeItemsQuery({ businessId });
+        console.log('useItems: Fetch result:', result);
+        const fetchedItems = result.items || [];
+        // Collect unique destination address IDs from all business_inventories
+        const allAddressIds = fetchedItems
+          .flatMap((item: any) =>
+            (item.business_inventories || []).map((inv: any) =>
+              String(inv.business_location?.address_id)
+            )
+          )
+          .filter(Boolean);
+        const uniqueAddressIds: string[] = Array.from(new Set(allAddressIds));
+        // Call distance-matrix API if there are addresses
+        let distanceMatrix: any = null;
+        if (uniqueAddressIds.length > 0 && withDistanceMatrix) {
+          try {
+            distanceMatrix = await fetchDistanceMatrix({
+              destination_address_ids: uniqueAddressIds,
+            });
+          } catch (e) {
+            console.warn('Failed to fetch distance matrix:', e);
           }
         }
-        return {
-          ...item,
-          estimated_delivery_time_text: estDeliveryTime,
-          estimated_distance_text: estDistance,
-        };
-      });
-      setItems(updatedItems);
-    } catch (err) {
-      console.error('useItems: Fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch items');
-    } finally {
-      setLoading(false);
-    }
-  }, [executeItemsQuery, businessId, fetchDistanceMatrix]);
+        // Map distances/times to items
+        const updatedItems = fetchedItems.map((item: any) => {
+          let estDeliveryTime: string | null = null;
+          let estDistance: string | null = null;
+          const addressId =
+            item.business_inventories?.[0]?.business_location?.address_id;
+          if (distanceMatrix && addressId) {
+            const idx = distanceMatrix.destination_ids.indexOf(addressId);
+            if (idx !== -1 && distanceMatrix.rows[0]?.elements[idx]) {
+              const el = distanceMatrix.rows[0].elements[idx];
+              estDeliveryTime = el.duration?.text || null;
+              estDistance = el.distance?.text || null;
+            }
+          }
+          return {
+            ...item,
+            estimated_delivery_time_text: estDeliveryTime,
+            estimated_distance_text: estDistance,
+          };
+        });
+        setItems(updatedItems);
+      } catch (err) {
+        console.error('useItems: Fetch error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch items');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [businessId]
+  );
 
   const fetchSingleItem = useCallback(
     async (itemId: string) => {
@@ -560,7 +563,7 @@ export const useItems = (businessId?: string) => {
   useEffect(() => {
     console.log('useItems: useEffect triggered, businessId:', businessId);
     if (businessId) {
-      fetchItems();
+      fetchItems(false);
     }
   }, [businessId]);
 

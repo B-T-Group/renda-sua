@@ -384,7 +384,7 @@ export default function ItemViewPage() {
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  {t('business.inventory.status')}
+                  {t('business.inventory.stockStatus')}
                 </Typography>
                 <Chip
                   label={

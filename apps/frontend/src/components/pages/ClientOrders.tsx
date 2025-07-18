@@ -631,8 +631,8 @@ const ClientOrders: React.FC = () => {
                                       src={item.item.item_images[0].image_url}
                                       alt={item.item_name}
                                       sx={{
-                                        width: 60,
-                                        height: 60,
+                                        width: 150,
+                                        height: 150,
                                         borderRadius: 1,
                                         border: '1px solid',
                                         borderColor: 'divider',
@@ -647,8 +647,8 @@ const ClientOrders: React.FC = () => {
                                   {!item.item?.item_images?.[0]?.image_url && (
                                     <Avatar
                                       sx={{
-                                        width: 60,
-                                        height: 60,
+                                        width: 150,
+                                        height: 150,
                                         borderRadius: 1,
                                         bgcolor: 'grey.100',
                                         border: '1px solid',

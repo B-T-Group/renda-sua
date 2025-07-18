@@ -640,7 +640,7 @@ export default function EditItemDialog({
             {/* Status */}
             <Box>
               <Typography variant="h6" gutterBottom>
-                {t('business.inventory.status')}
+                {t('business.inventory.stockStatus')}
               </Typography>
               <Divider sx={{ mb: 2 }} />
 
