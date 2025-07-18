@@ -238,4 +238,30 @@ export class HasuraSystemService {
 
     return result.update_accounts_by_pk;
   }
+
+  /**
+   * Get delivery fee for a specific currency
+   * Returns the delivery fee amount or 0 if no fee is found for the currency
+   */
+  async getDeliveryFee(currency: string): Promise<number> {
+    const query = `
+      query GetDeliveryFee($currency: currency_enum!) {
+        delivery_fees(where: { currency: { _eq: $currency } }, limit: 1) {
+          fee
+        }
+      }
+    `;
+
+    try {
+      const result = await this.executeQuery(query, { currency });
+      const deliveryFee = result.delivery_fees[0];
+      return deliveryFee ? deliveryFee.fee : 0;
+    } catch (error) {
+      console.error(
+        `Error fetching delivery fee for currency ${currency}:`,
+        error
+      );
+      return 0;
+    }
+  }
 }
