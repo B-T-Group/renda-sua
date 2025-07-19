@@ -231,8 +231,9 @@ export const useAgentOrders = () => {
   } = useBackendOrders();
 
   // Get current location
-  const { location: currentLocation, getCurrentLocation } =
-    useCurrentLocation();
+  const { location: currentLocation, getCurrentLocation } = useCurrentLocation(
+    10 * 60 * 1000
+  );
 
   const fetchAllOrders = useCallback(async () => {
     if (!apiClient) {

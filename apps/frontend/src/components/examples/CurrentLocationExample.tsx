@@ -14,12 +14,26 @@ import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 
 const CurrentLocationExample: React.FC = () => {
   const { t } = useTranslation();
-  const { location, loading, error, getCurrentLocation, clearLocation } =
-    useCurrentLocation();
+  const {
+    location,
+    loading,
+    error,
+    getCurrentLocation,
+    clearLocation,
+    clearCache,
+  } = useCurrentLocation();
 
   const handleGetLocation = async () => {
     try {
       await getCurrentLocation();
+    } catch (error) {
+      console.error('Error getting location:', error);
+    }
+  };
+
+  const handleForceRefresh = async () => {
+    try {
+      await getCurrentLocation(true); // Force refresh
     } catch (error) {
       console.error('Error getting location:', error);
     }
@@ -43,14 +57,33 @@ const CurrentLocationExample: React.FC = () => {
             {loading ? <CircularProgress size={20} /> : 'Get Current Location'}
           </Button>
 
+          <Button
+            variant="outlined"
+            onClick={handleForceRefresh}
+            disabled={loading}
+            sx={{ mr: 2 }}
+          >
+            Force Refresh
+          </Button>
+
           {location && (
-            <Button
-              variant="outlined"
-              onClick={clearLocation}
-              disabled={loading}
-            >
-              Clear Location
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                onClick={clearLocation}
+                disabled={loading}
+                sx={{ mr: 2 }}
+              >
+                Clear Location
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={clearCache}
+                disabled={loading}
+              >
+                Clear Cache
+              </Button>
+            </>
           )}
         </Box>
 
