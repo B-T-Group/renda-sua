@@ -5,6 +5,8 @@ import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { AgentsModule } from '../agents/agents.module';
+import { AirtelMoneyController } from '../airtel-money/airtel-money.controller';
+import { AirtelMoneyModule } from '../airtel-money/airtel-money.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
@@ -49,9 +51,15 @@ import { AppService } from './app.service';
     AgentsModule,
     AwsModule,
     MtnMomoModule,
+    AirtelMoneyModule,
     GoogleModule,
   ],
-  controllers: [AppController, AccountsController, MtnMomoController],
+  controllers: [
+    AppController,
+    AccountsController,
+    MtnMomoController,
+    AirtelMoneyController,
+  ],
   providers: [AppService],
 })
 export class AppModule {}

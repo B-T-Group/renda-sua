@@ -65,6 +65,19 @@ export interface MtnMomoConfig {
   callbackUrl?: string;
 }
 
+export interface AirtelMoneyConfig {
+  clientId?: string;
+  clientSecret?: string;
+  targetEnvironment?: string;
+  callbackUrl?: string;
+  country?: string;
+  currency?: string;
+  disbursementPrimaryKey?: string;
+  disbursementSecondaryKey?: string;
+  remittancePrimaryKey?: string;
+  remittanceSecondaryKey?: string;
+}
+
 export interface OrderConfig {
   agentHoldPercentage: number;
 }
@@ -81,6 +94,7 @@ export interface Configuration {
   redis: RedisConfig;
   externalApi: ExternalApiConfig;
   mtnMomo: MtnMomoConfig;
+  airtelMoney: AirtelMoneyConfig;
   order: OrderConfig;
 }
 
@@ -121,6 +135,24 @@ export default async (): Promise<Configuration> => {
 
   return {
     GOOGLE_MAPS_API_KEY: secrets.GOOGLE_MAPS_API_KEY,
+    airtelMoney: {
+      clientId:
+        process.env.AIRTEL_MONEY_CLIENT_ID ??
+        '80d9a954-e12a-43a8-8fd5-7dcb926ce6af',
+      clientSecret: secrets.AIRTEL_MONEY_CLIENT_SECRET ?? '',
+      targetEnvironment:
+        process.env.AIRTEL_MONEY_TARGET_ENVIRONMENT ?? 'sandbox',
+      callbackUrl: process.env.AIRTEL_MONEY_CALLBACK_URL ?? '',
+      country: process.env.AIRTEL_MONEY_COUNTRY ?? 'UG',
+      currency: process.env.AIRTEL_MONEY_CURRENCY ?? 'UGX',
+      disbursementPrimaryKey:
+        secrets.AIRTEL_MONEY_DISBURSEMENT_PRIMARY_KEY ?? '',
+      disbursementSecondaryKey:
+        secrets.AIRTEL_MONEY_DISBURSEMENT_SECONDARY_KEY ?? '',
+      remittancePrimaryKey: secrets.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
+      remittanceSecondaryKey:
+        secrets.AIRTEL_MONEY_REMITTANCE_SECONDARY_KEY ?? '',
+    },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),
       nodeEnv: process.env.NODE_ENV || 'development',
