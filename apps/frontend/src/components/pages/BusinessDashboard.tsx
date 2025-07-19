@@ -48,7 +48,7 @@ const BusinessDashboard: React.FC = () => {
 
   const dashboardCards = [
     {
-      title: t('business.dashboard.orders'),
+      title: t('common.orders'),
       description: t('business.dashboard.ordersDescription'),
       icon: <OrdersIcon sx={{ fontSize: 40 }} />,
       count: orders.length,
@@ -56,7 +56,7 @@ const BusinessDashboard: React.FC = () => {
       path: '/business/orders',
     },
     {
-      title: t('business.dashboard.items'),
+      title: t('common.items'),
       description: t('business.dashboard.itemsDescription'),
       icon: <ItemsIcon sx={{ fontSize: 40 }} />,
       count: items.length,
@@ -64,7 +64,7 @@ const BusinessDashboard: React.FC = () => {
       path: '/business/items',
     },
     {
-      title: t('business.dashboard.locations'),
+      title: t('common.locations'),
       description: t('business.dashboard.locationsDescription'),
       icon: <LocationsIcon sx={{ fontSize: 40 }} />,
       count: locations.length,
@@ -72,7 +72,7 @@ const BusinessDashboard: React.FC = () => {
       path: '/business/locations',
     },
     {
-      title: t('business.dashboard.analytics'),
+      title: t('common.analytics'),
       description: t('business.dashboard.analyticsDescription'),
       icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
       count: null,
@@ -85,7 +85,9 @@ const BusinessDashboard: React.FC = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error">
-          {t('business.dashboard.noBusinessProfile')}
+          <Typography variant="h6" color="text.secondary">
+            {t('business.dashboard.noBusinessProfile')}
+          </Typography>
         </Alert>
       </Container>
     );
@@ -169,7 +171,7 @@ const BusinessDashboard: React.FC = () => {
                   },
                 }}
               >
-                {t('business.dashboard.manage')}
+                {t('common.manage')}
               </Button>
             </CardActions>
           </Card>
@@ -179,7 +181,7 @@ const BusinessDashboard: React.FC = () => {
       {/* Quick Stats Section */}
       <Box sx={{ mt: 6 }}>
         <Typography variant="h5" gutterBottom>
-          {t('business.dashboard.quickStats')}
+          {t('common.quickStats')}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
           <Card
@@ -193,7 +195,7 @@ const BusinessDashboard: React.FC = () => {
           >
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                {t('business.dashboard.totalOrders')}
+                {t('common.totalOrders')}
               </Typography>
               <Typography variant="h4">{orders.length}</Typography>
             </CardContent>
@@ -209,7 +211,7 @@ const BusinessDashboard: React.FC = () => {
           >
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                {t('business.dashboard.totalItems')}
+                {t('common.totalItems')}
               </Typography>
               <Typography variant="h4">{items.length}</Typography>
             </CardContent>
@@ -225,7 +227,7 @@ const BusinessDashboard: React.FC = () => {
           >
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                {t('business.dashboard.totalLocations')}
+                {t('common.totalLocations')}
               </Typography>
               <Typography variant="h4">{locations.length}</Typography>
             </CardContent>
@@ -241,7 +243,7 @@ const BusinessDashboard: React.FC = () => {
           >
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                {t('business.dashboard.totalInventory')}
+                {t('common.totalInventory')}
               </Typography>
               <Typography variant="h4">{inventory.length}</Typography>
             </CardContent>

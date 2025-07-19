@@ -265,7 +265,7 @@ const OrderCard: React.FC<{
             </Typography>
             <Chip
               icon={getStatusIcon(order.current_status)}
-              label={t(`orderStatus.${order.current_status}`)}
+              label={t(`common.orderStatus.${order.current_status}`)}
               color={getStatusColor(order.current_status) as any}
               size="small"
             />
@@ -656,7 +656,7 @@ const AgentDashboard: React.FC = () => {
       setNotification({
         open: true,
         message: t('messages.orderStatusUpdateSuccess', {
-          status: t(`orderStatus.${status}`),
+          status: t(`common.orderStatus.${status}`),
         }),
         severity: 'success',
       });
@@ -732,8 +732,8 @@ const AgentDashboard: React.FC = () => {
           {t('agent.dashboard.title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          {t('dashboard.welcomeBack')}, {user?.name}!{' '}
-          {t('dashboard.manageDeliveryOrders')}
+          {t('common.welcomeBack')}, {user?.name}!{' '}
+          {t('common.manageDeliveryOrders')}
         </Typography>
       </Box>
 
@@ -759,7 +759,7 @@ const AgentDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <LocalShipping sx={{ mr: 2, color: 'primary.main' }} />
             <Typography variant="h5" component="h2">
-              {t('dashboard.activeOrders')} ({categorizedOrders.active.length})
+              {t('common.activeOrders')} ({categorizedOrders.active.length})
             </Typography>
           </Box>
 
@@ -789,7 +789,7 @@ const AgentDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <Pending sx={{ mr: 2, color: 'warning.main' }} />
             <Typography variant="h5" component="h2">
-              {t('dashboard.inProgressOrders')} (
+              {t('common.inProgressOrders')} (
               {categorizedOrders.inProgress.length})
             </Typography>
           </Box>
@@ -821,7 +821,7 @@ const AgentDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <Cancel sx={{ mr: 2, color: 'error.main' }} />
             <Typography variant="h5" component="h2">
-              {t('dashboard.cancelledOrders')} (
+              {t('common.cancelledOrders')} (
               {categorizedOrders.cancelled.length})
             </Typography>
           </Box>
@@ -849,7 +849,7 @@ const AgentDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <CheckCircle sx={{ mr: 2, color: 'success.main' }} />
             <Typography variant="h5" component="h2">
-              {t('dashboard.completedOrders')} (
+              {t('common.completedOrders')} (
               {categorizedOrders.completed.length})
             </Typography>
           </Box>
@@ -876,10 +876,10 @@ const AgentDashboard: React.FC = () => {
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Box sx={{ py: 4 }}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              {t('dashboard.noOrders')}
+              {t('common.noOrders')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t('dashboard.noOrdersDescription')}
+              {t('common.noOrdersDescription')}
             </Typography>
           </Box>
         </Paper>
