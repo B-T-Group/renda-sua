@@ -28,7 +28,8 @@ const DistanceMatrixExample: React.FC = () => {
   const [originAddressId, setOriginAddressId] = useState('');
   const [destinationIds, setDestinationIds] = useState('');
 
-  const { data, loading, error, fetchDistanceMatrix } = useDistanceMatrix();
+  const { data, loading, error, fetchDistanceMatrix, clearCache, clearData } =
+    useDistanceMatrix();
   const { location, getCurrentLocation } = useCurrentLocation();
 
   const handleGetCurrentLocation = async () => {
@@ -82,7 +83,7 @@ const DistanceMatrixExample: React.FC = () => {
           break;
       }
 
-      await fetchDistanceMatrix(payload);
+      await fetchDistanceMatrix(payload, false); // Use cache
     } catch (error) {
       console.error('Error calculating distance:', error);
     }
@@ -167,8 +168,13 @@ const DistanceMatrixExample: React.FC = () => {
             startIcon={
               loading ? <CircularProgress size={20} /> : <DirectionsCar />
             }
+            sx={{ mr: 2 }}
           >
             Calculate Distance Matrix
+          </Button>
+
+          <Button variant="outlined" onClick={clearCache} disabled={loading}>
+            Clear Cache
           </Button>
         </Box>
 

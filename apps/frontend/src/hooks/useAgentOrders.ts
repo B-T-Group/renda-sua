@@ -424,7 +424,10 @@ export const useAgentOrders = () => {
           distanceMatrixPayload.origin_address = userLocation.address;
         }
 
-        const distanceMatrix = await fetchDistanceMatrix(distanceMatrixPayload);
+        const distanceMatrix = await fetchDistanceMatrix(
+          distanceMatrixPayload,
+          false
+        ); // Use cache
 
         const ordersWithDistance = orders.map((order) => {
           const idx = distanceMatrix.destination_ids.indexOf(
@@ -438,19 +441,21 @@ export const useAgentOrders = () => {
             ...order,
             deliveryDistance:
               idx !== -1
-                ? distanceMatrix.rows[0].elements[idx].distance?.text
+                ? distanceMatrix.rows[0].elements[idx].distance?.text || 'N/A'
                 : 'N/A',
             deliveryEstTime:
               idx !== -1
-                ? distanceMatrix.rows[0].elements[idx].duration?.text
+                ? distanceMatrix.rows[0].elements[idx].duration?.text || 'N/A'
                 : 'N/A',
             businessDistance:
               sourceIdx !== -1
-                ? distanceMatrix.rows[0].elements[sourceIdx].distance?.text
+                ? distanceMatrix.rows[0].elements[sourceIdx].distance?.text ||
+                  'N/A'
                 : 'N/A',
             businessEstTime:
               sourceIdx !== -1
-                ? distanceMatrix.rows[0].elements[sourceIdx].duration?.text
+                ? distanceMatrix.rows[0].elements[sourceIdx].duration?.text ||
+                  'N/A'
                 : 'N/A',
           };
         });
