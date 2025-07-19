@@ -8,17 +8,28 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PhoneInput from '../common/PhoneInput';
+
+type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'credit-card';
 
 interface TopUpModalProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (phoneNumber: string, amount: string) => Promise<boolean>;
+  onConfirm: (
+    phoneNumber: string,
+    amount: string,
+    paymentMethod: PaymentMethod
+  ) => Promise<boolean>;
   userPhoneNumber?: string;
   currency: string;
   loading?: boolean;
@@ -32,11 +43,13 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
   currency,
   loading = false,
 }) => {
+  const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mtn-momo');
 
   // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
@@ -66,16 +79,25 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
       return;
     }
 
+    if (paymentMethod === 'credit-card') {
+      setError(
+        'Credit card payments are not yet supported. Please select MTN MoMo or Airtel Money.'
+      );
+      return;
+    }
+
     setError('');
     setSuccess('');
     setShowResult(false);
 
     try {
-      const success = await onConfirm(phoneNumber, amount);
+      const success = await onConfirm(phoneNumber, amount, paymentMethod);
 
       if (success) {
         setSuccess(
-          'Payment request sent successfully! Please check your MTN MoMo app to approve the payment.'
+          paymentMethod === 'mtn-momo'
+            ? t('accounts.paymentMessages.mtnMomoSuccess')
+            : t('accounts.paymentMessages.airtelMoneySuccess')
         );
         setShowResult(true);
         setAmount('');
@@ -161,9 +183,12 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
           {!showResult && (
             <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                A payment request will be sent via MTN MoMo to the phone number
-                provided. Once you approve the payment in your MoMo app, your
-                account will be credited.
+                {paymentMethod === 'mtn-momo' &&
+                  t('accounts.paymentMessages.mtnMomoInfo')}
+                {paymentMethod === 'airtel-money' &&
+                  t('accounts.paymentMessages.airtelMoneyInfo')}
+                {paymentMethod === 'credit-card' &&
+                  t('accounts.paymentMessages.creditCardNotSupported')}
               </Typography>
             </Alert>
           )}
@@ -171,6 +196,30 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
           {/* Form - only show when no result is displayed */}
           {!showResult && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel id="payment-method-label">
+                  {t('accounts.paymentMethods.title')}
+                </InputLabel>
+                <Select
+                  labelId="payment-method-label"
+                  value={paymentMethod}
+                  label={t('accounts.paymentMethods.title')}
+                  onChange={(e) =>
+                    setPaymentMethod(e.target.value as PaymentMethod)
+                  }
+                >
+                  <MenuItem value="mtn-momo">
+                    {t('accounts.paymentMethods.mtnMomo')}
+                  </MenuItem>
+                  <MenuItem value="airtel-money">
+                    {t('accounts.paymentMethods.airtelMoney')}
+                  </MenuItem>
+                  <MenuItem value="credit-card" disabled>
+                    {t('accounts.paymentMethods.creditCardComingSoon')}
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
               <PhoneInput
                 label="Phone Number"
                 value={phoneNumber}
@@ -179,6 +228,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                 required
                 error={!!error && !phoneNumber.trim()}
                 helperText={error && !phoneNumber.trim() ? error : ''}
+                disabled={paymentMethod === 'credit-card'}
               />
 
               <TextField
@@ -199,6 +249,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                   min: 0,
                   step: 0.01,
                 }}
+                disabled={paymentMethod === 'credit-card'}
               />
             </Box>
           )}
@@ -210,10 +261,19 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
           <Button
             onClick={handleConfirm}
             variant="contained"
-            disabled={loading || !phoneNumber.trim() || !amount.trim()}
+            disabled={
+              loading ||
+              !phoneNumber.trim() ||
+              !amount.trim() ||
+              paymentMethod === 'credit-card'
+            }
             startIcon={loading ? <CircularProgress size={16} /> : null}
           >
-            {loading ? 'Processing...' : 'Send Payment Request'}
+            {loading
+              ? 'Processing...'
+              : paymentMethod === 'credit-card'
+              ? 'Not Available'
+              : 'Send Payment Request'}
           </Button>
         )}
       </DialogActions>

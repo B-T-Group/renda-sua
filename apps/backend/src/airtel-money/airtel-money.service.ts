@@ -97,7 +97,7 @@ export class AirtelMoneyService {
 
     this.baseUrl =
       this.config.targetEnvironment === 'production'
-        ? 'https://openapiuat.airtel.africa'
+        ? 'https://openapi.airtel.africa'
         : 'https://openapiuat.airtel.africa';
 
     this.httpClient = axios.create({

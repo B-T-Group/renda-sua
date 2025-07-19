@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -10,9 +11,17 @@ import {
   MenuItem,
   Select,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
 } from '@mui/material';
 import { City, Country, State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useGoogleMapsApiKey } from '../../hooks/useGoogleMapsApiKey';
+import { parseGooglePlaceResult } from '../../utils/addressConverter';
+import ErrorBoundary from '../common/ErrorBoundary';
+import GooglePlacesAutocomplete from '../common/GooglePlacesAutocomplete';
 
 export interface AddressFormData {
   address_line_1: string;
@@ -61,10 +70,33 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   onSave,
   onAddressChange,
 }) => {
+  const { t } = useTranslation();
+
+  // Input mode state
+  const [inputMode, setInputMode] = useState<'manual' | 'autocomplete'>(
+    'manual'
+  );
+
   // Location data
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
+
+  // Google Places API key from hook
+  const googleMapsApiKey = useGoogleMapsApiKey();
+
+  // Handle Google Places selection
+  const handlePlaceSelect = (place: any) => {
+    try {
+      const parsedAddress = parseGooglePlaceResult(place);
+      onAddressChange({
+        ...addressData,
+        ...parsedAddress,
+      });
+    } catch (error) {
+      console.error('Error parsing Google Places result:', error);
+    }
+  };
 
   // Load countries on component mount
   useEffect(() => {
@@ -121,6 +153,26 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
+        {/* Input Mode Toggle */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            {t('addresses.inputMode', 'Input Mode')}
+          </Typography>
+          <ToggleButtonGroup
+            value={inputMode}
+            exclusive
+            onChange={(_, newMode) => newMode && setInputMode(newMode)}
+            size="small"
+          >
+            <ToggleButton value="manual">
+              {t('addresses.manualInput', 'Manual Input')}
+            </ToggleButton>
+            <ToggleButton value="autocomplete">
+              {t('addresses.googleAutocomplete', 'Google Autocomplete')}
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
         <Box
           sx={{
             display: 'grid',
@@ -129,6 +181,39 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             mt: 1,
           }}
         >
+          {/* Google Places Autocomplete */}
+          {inputMode === 'autocomplete' && (
+            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+              {googleMapsApiKey ? (
+                <ErrorBoundary>
+                  <GooglePlacesAutocomplete
+                    fullWidth
+                    label={t('addresses.searchAddress', 'Search Address')}
+                    value={addressData.address_line_1}
+                    onChange={(value) =>
+                      handleInputChange('address_line_1', value)
+                    }
+                    onPlaceSelect={handlePlaceSelect}
+                    placeholder={t(
+                      'addresses.enterAddressToSearch',
+                      'Enter address to search...'
+                    )}
+                    apiKey={googleMapsApiKey}
+                    required
+                  />
+                </ErrorBoundary>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Google Maps API key is not configured. Please set the
+                    REACT_APP_GOOGLE_MAPS_API_KEY environment variable to enable
+                    address autocomplete.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
+
           {/* Address Line 1 */}
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
             <TextField
@@ -139,6 +224,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
                 handleInputChange('address_line_1', e.target.value)
               }
               required
+              disabled={inputMode === 'autocomplete'}
             />
           </Box>
 
@@ -161,6 +247,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               value={addressData.country}
               onChange={(e) => handleInputChange('country', e.target.value)}
               label="Country"
+              disabled={inputMode === 'autocomplete'}
             >
               {countries.map((country) => (
                 <MenuItem key={country.isoCode} value={country.isoCode}>
@@ -177,7 +264,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               value={addressData.state}
               onChange={(e) => handleInputChange('state', e.target.value)}
               label="State/Province"
-              disabled={!addressData.country}
+              disabled={!addressData.country || inputMode === 'autocomplete'}
             >
               {states.map((state) => (
                 <MenuItem key={state.isoCode} value={state.isoCode}>
@@ -194,7 +281,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               value={addressData.city}
               onChange={(e) => handleInputChange('city', e.target.value)}
               label="City"
-              disabled={!addressData.state}
+              disabled={!addressData.state || inputMode === 'autocomplete'}
             >
               {cities.map((city) => (
                 <MenuItem key={city.name} value={city.name}>
@@ -211,6 +298,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             value={addressData.postal_code}
             onChange={(e) => handleInputChange('postal_code', e.target.value)}
             required
+            disabled={inputMode === 'autocomplete'}
           />
 
           {/* Address Type (optional) */}

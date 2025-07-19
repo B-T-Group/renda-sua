@@ -772,7 +772,12 @@
       "store": "Magasin",
       "warehouse": "Entrepôt",
       "office": "Bureau"
-    }
+    },
+    "inputMode": "Mode de Saisie",
+    "manualInput": "Saisie Manuelle",
+    "googleAutocomplete": "Autocomplétion Google",
+    "searchAddress": "Rechercher une Adresse",
+    "enterAddressToSearch": "Entrez une adresse à rechercher..."
   },
   "accounts": {
     "title": "Comptes",
@@ -803,6 +808,25 @@
       "refund": "Remboursement",
       "fee": "Frais",
       "commission": "Commission"
+    },
+    "noDescription": "Aucune description",
+    "balanceNotAvailable": "Solde non disponible",
+    "topUp": "Recharger",
+    "viewTransactions": "Voir les Transactions",
+    "creditAccount": "Créditer le Compte",
+    "paymentMethods": {
+      "title": "Méthode de Paiement",
+      "mtnMomo": "MTN MoMo",
+      "airtelMoney": "Airtel Money",
+      "creditCard": "Carte de Crédit",
+      "creditCardComingSoon": "Carte de Crédit (Bientôt Disponible)"
+    },
+    "paymentMessages": {
+      "mtnMomoInfo": "Une demande de paiement sera envoyée via MTN MoMo au numéro de téléphone fourni. Une fois que vous approuvez le paiement dans votre application MoMo, votre compte sera crédité.",
+      "airtelMoneyInfo": "Une demande de paiement sera envoyée via Airtel Money au numéro de téléphone fourni. Une fois que vous approuvez le paiement dans votre application Airtel Money, votre compte sera crédité.",
+      "creditCardNotSupported": "Les paiements par carte de crédit ne sont pas encore pris en charge. Veuillez sélectionner MTN MoMo ou Airtel Money pour l'instant.",
+      "mtnMomoSuccess": "Demande de paiement envoyée avec succès ! Veuillez vérifier votre application MTN MoMo pour approuver le paiement.",
+      "airtelMoneySuccess": "Demande de paiement envoyée avec succès ! Veuillez vérifier votre application Airtel Money pour approuver le paiement."
     }
   },
   "profile": {

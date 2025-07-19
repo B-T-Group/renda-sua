@@ -1,5 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Box, Typography, Alert, Button } from '@mui/material';
+import { Alert, Box, Button, Typography } from '@mui/material';
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -9,7 +9,6 @@ interface Props {
 interface State {
   hasError: boolean;
   error?: Error;
-  errorInfo?: ErrorInfo;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -22,13 +21,12 @@ class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    this.setState({ error, errorInfo });
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+    this.setState({ hasError: false, error: undefined });
   };
 
   render() {
@@ -38,28 +36,16 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <Box p={3}>
-          <Alert severity="error" sx={{ mb: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Something went wrong
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Box>
+            <Typography variant="body2" gutterBottom>
+              Something went wrong with this component.
             </Typography>
-            <Typography variant="body2" paragraph>
-              An error occurred while loading the application. This might be related to the Apollo Client setup.
-            </Typography>
-            {this.state.error && (
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                Error: {this.state.error.message}
-              </Typography>
-            )}
-            <Button 
-              variant="contained" 
-              onClick={this.handleRetry}
-              sx={{ mt: 2 }}
-            >
+            <Button size="small" onClick={this.handleRetry} sx={{ mt: 1 }}>
               Try Again
             </Button>
-          </Alert>
-        </Box>
+          </Box>
+        </Alert>
       );
     }
 
@@ -67,4 +53,4 @@ class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-export default ErrorBoundary; 
+export default ErrorBoundary;

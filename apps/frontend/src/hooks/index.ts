@@ -35,6 +35,11 @@ export { useClientOrders } from './useClientOrders';
 // API client
 export { useApiClient } from './useApiClient';
 
+// Payment hooks
+export { useAirtelMoney } from './useAirtelMoney';
+export { useGoogleMapsApiKey } from './useGoogleMapsApiKey';
+export { useMtnMomoTopUp } from './useMtnMomoTopUp';
+
 // AWS hooks
 export { useAws } from './useAws';
 

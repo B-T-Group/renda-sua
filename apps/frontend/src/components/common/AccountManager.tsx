@@ -1,5 +1,6 @@
 import {
   AccountBalance as AccountBalanceIcon,
+  Add as AddIcon,
   History as HistoryIcon,
   Refresh as RefreshIcon,
   TrendingDown as TrendingDownIcon,
@@ -36,6 +37,10 @@ import {
   EntityType,
   useAccountManager,
 } from '../../hooks/useAccountManager';
+import { useAirtelMoney } from '../../hooks/useAirtelMoney';
+import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
+import { useProfile } from '../../hooks/useProfile';
+import TopUpModal from '../business/TopUpModal';
 
 interface AccountManagerProps {
   entityType: EntityType;
@@ -97,6 +102,20 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     // Dialog state
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
+    // Top-up modal state
+    const [topUpModalOpen, setTopUpModalOpen] = useState(false);
+    const [selectedAccountForTopUp, setSelectedAccountForTopUp] =
+      useState<Account | null>(null);
+
+    // MTN MoMo top-up hook
+    const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
+
+    // Airtel Money hook
+    const { requestPayment, loading: airtelLoading } = useAirtelMoney();
+
+    // Get user profile for phone number
+    const { userProfile } = useProfile();
+
     // Handle view account details
     const handleViewAccount = (account: Account) => {
       selectAccount(account);
@@ -108,6 +127,66 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     // Handle refresh accounts
     const handleRefreshAccounts = async () => {
       await fetchAccounts();
+    };
+
+    // Handle top-up account
+    const handleTopUp = (account: Account) => {
+      setSelectedAccountForTopUp(account);
+      setTopUpModalOpen(true);
+    };
+
+    // Handle top-up confirmation
+    const handleTopUpConfirm = async (
+      phoneNumber: string,
+      amount: string,
+      paymentMethod: 'mtn-momo' | 'airtel-money' | 'credit-card'
+    ): Promise<boolean> => {
+      if (!selectedAccountForTopUp) return false;
+
+      try {
+        let success = false;
+
+        if (paymentMethod === 'mtn-momo') {
+          success = await requestTopUp({
+            phoneNumber,
+            amount,
+            currency: selectedAccountForTopUp.currency,
+          });
+        } else if (paymentMethod === 'airtel-money') {
+          const response = await requestPayment({
+            reference: `topup_${Date.now()}_${Math.random()
+              .toString(36)
+              .substr(2, 9)}`,
+            subscriber: {
+              country: 'UG',
+              currency: selectedAccountForTopUp.currency,
+              msisdn: phoneNumber.replace(/\D/g, ''), // Remove non-digits
+            },
+            transaction: {
+              amount,
+              country: 'UG',
+              currency: selectedAccountForTopUp.currency,
+              id: `topup_${Date.now()}_${Math.random()
+                .toString(36)
+                .substr(2, 9)}`,
+            },
+          });
+          success = response.status;
+        } else if (paymentMethod === 'credit-card') {
+          // Credit card not supported yet
+          return false;
+        }
+
+        if (success) {
+          // Refresh accounts after successful top-up
+          await fetchAccounts();
+        }
+
+        return success;
+      } catch (error) {
+        console.error('Top-up error:', error);
+        return false;
+      }
     };
 
     // Format currency amount
@@ -369,12 +448,44 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
                         </Box>
 
                         {showTransactions && (
-                          <IconButton
-                            onClick={() => handleViewAccount(account)}
-                            disabled={loading}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <IconButton
+                              onClick={() => handleViewAccount(account)}
+                              disabled={loading}
+                              title={t('accounts.viewTransactions')}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                            <Button
+                              onClick={() => handleTopUp(account)}
+                              disabled={loading}
+                              variant="contained"
+                              size="small"
+                              startIcon={<AddIcon />}
+                              sx={{
+                                background:
+                                  'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
+                                color: 'white',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                boxShadow:
+                                  '0 3px 5px 2px rgba(76, 175, 80, .3)',
+                                '&:hover': {
+                                  background:
+                                    'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
+                                  boxShadow:
+                                    '0 4px 8px 2px rgba(76, 175, 80, .4)',
+                                },
+                                '&:disabled': {
+                                  background:
+                                    'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
+                                  boxShadow: 'none',
+                                },
+                              }}
+                            >
+                              {t('accounts.creditAccount')}
+                            </Button>
+                          </Box>
                         )}
                       </Box>
                     </CardContent>
@@ -530,7 +641,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {transaction.description}
+                              {transaction.memo || t('accounts.noDescription')}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
@@ -546,16 +657,13 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
                               {transaction.amount >= 0 ? '+' : ''}
                               {formatCurrency(
                                 transaction.amount,
-                                transaction.currency
+                                transaction.account.currency
                               )}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body2" fontWeight="medium">
-                              {formatCurrency(
-                                transaction.balance_after,
-                                transaction.currency
-                              )}
+                              {t('accounts.balanceNotAvailable')}
                             </Typography>
                           </TableCell>
                         </TableRow>
@@ -584,6 +692,21 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Top Up Modal */}
+        {selectedAccountForTopUp && (
+          <TopUpModal
+            open={topUpModalOpen}
+            onClose={() => {
+              setTopUpModalOpen(false);
+              setSelectedAccountForTopUp(null);
+            }}
+            userPhoneNumber={userProfile?.phone_number || ''}
+            currency={selectedAccountForTopUp.currency}
+            loading={topUpLoading || airtelLoading}
+            onConfirm={handleTopUpConfirm}
+          />
+        )}
       </>
     );
   }

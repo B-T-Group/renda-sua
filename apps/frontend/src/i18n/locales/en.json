@@ -708,7 +708,12 @@
       "store": "Store",
       "warehouse": "Warehouse",
       "office": "Office"
-    }
+    },
+    "inputMode": "Input Mode",
+    "manualInput": "Manual Input",
+    "googleAutocomplete": "Google Autocomplete",
+    "searchAddress": "Search Address",
+    "enterAddressToSearch": "Enter address to search..."
   },
   "accounts": {
     "title": "Accounts",
@@ -739,6 +744,25 @@
       "refund": "Refund",
       "fee": "Fee",
       "commission": "Commission"
+    },
+    "noDescription": "No description",
+    "balanceNotAvailable": "Balance not available",
+    "topUp": "Top Up",
+    "viewTransactions": "View Transactions",
+    "creditAccount": "Credit Account",
+    "paymentMethods": {
+      "title": "Payment Method",
+      "mtnMomo": "MTN MoMo",
+      "airtelMoney": "Airtel Money",
+      "creditCard": "Credit Card",
+      "creditCardComingSoon": "Credit Card (Coming Soon)"
+    },
+    "paymentMessages": {
+      "mtnMomoInfo": "A payment request will be sent via MTN MoMo to the phone number provided. Once you approve the payment in your MoMo app, your account will be credited.",
+      "airtelMoneyInfo": "A payment request will be sent via Airtel Money to the phone number provided. Once you approve the payment in your Airtel Money app, your account will be credited.",
+      "creditCardNotSupported": "Credit card payments are not yet supported. Please select MTN MoMo or Airtel Money for now.",
+      "mtnMomoSuccess": "Payment request sent successfully! Please check your MTN MoMo app to approve the payment.",
+      "airtelMoneySuccess": "Payment request sent successfully! Please check your Airtel Money app to approve the payment."
     }
   },
   "profile": {

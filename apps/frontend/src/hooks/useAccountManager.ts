@@ -49,14 +49,12 @@ const GET_ACCOUNT_TRANSACTIONS = `
       account_id
       transaction_type
       amount
-      currency
-      description
+      memo
       reference_id
-      reference_type
-      balance_before
-      balance_after
       created_at
-      updated_at
+      account {
+        currency
+      }
     }
   }
 `;
@@ -64,22 +62,14 @@ const GET_ACCOUNT_TRANSACTIONS = `
 export interface AccountTransaction {
   id: string;
   account_id: string;
-  transaction_type:
-    | 'credit'
-    | 'debit'
-    | 'transfer'
-    | 'refund'
-    | 'fee'
-    | 'commission';
+  transaction_type: string;
   amount: number;
-  currency: string;
-  description: string;
+  memo?: string;
   reference_id?: string;
-  reference_type?: string;
-  balance_before: number;
-  balance_after: number;
   created_at: string;
-  updated_at: string;
+  account: {
+    currency: string;
+  };
 }
 
 export const useAccountManager = (config: AccountManagerConfig) => {

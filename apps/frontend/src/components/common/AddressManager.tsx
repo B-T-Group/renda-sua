@@ -74,7 +74,6 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     loading,
     error,
     successMessage,
-    fetchAddresses,
     addAddress,
     updateAddress,
     deleteAddress,
