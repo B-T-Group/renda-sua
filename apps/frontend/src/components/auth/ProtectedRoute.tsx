@@ -1,8 +1,8 @@
-import React from "react";
-import { useAuth0 } from "@auth0/auth0-react";
-import { Box, Typography } from "@mui/material";
-import { Lock } from "@mui/icons-material";
-import LoadingPage from "../common/LoadingPage";
+import { useAuth0 } from '@auth0/auth0-react';
+import { Lock } from '@mui/icons-material';
+import { Box, Typography } from '@mui/material';
+import React from 'react';
+import LoadingPage from '../common/LoadingPage';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,7 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (isLoading) {
     return (
-      <LoadingPage 
+      <LoadingPage
         message="Authenticating"
         subtitle="Please wait while we verify your credentials"
         showProgress={true}
@@ -45,4 +45,4 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
-export default ProtectedRoute; 
+export default ProtectedRoute;

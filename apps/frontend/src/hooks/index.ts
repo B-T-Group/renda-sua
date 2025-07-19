@@ -37,7 +37,6 @@ export { useApiClient } from './useApiClient';
 
 // Payment hooks
 export { useAirtelMoney } from './useAirtelMoney';
-export { useGoogleMapsApiKey } from './useGoogleMapsApiKey';
 export { useMtnMomoTopUp } from './useMtnMomoTopUp';
 
 // AWS hooks
