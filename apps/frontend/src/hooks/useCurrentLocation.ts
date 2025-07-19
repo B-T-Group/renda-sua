@@ -29,16 +29,22 @@ export const useCurrentLocation = (): UseCurrentLocationReturn => {
   const reverseGeocode = useCallback(
     async (latitude: number, longitude: number): Promise<Partial<Location>> => {
       if (!apiClient) {
-        throw new Error('API client not available');
+        console.warn('API client not available, skipping reverse geocoding');
+        return {};
       }
 
       try {
+        console.log(
+          'Making geocode request to:',
+          `/google/geocode?lat=${latitude}&lng=${longitude}`
+        );
         const response = await apiClient.get('/google/geocode', {
           params: {
             lat: latitude,
             lng: longitude,
           },
         });
+        console.log('Geocode response:', response.data);
 
         if (response.data.success) {
           const result = response.data.result;
@@ -54,13 +60,15 @@ export const useCurrentLocation = (): UseCurrentLocationReturn => {
         }
       } catch (err: any) {
         console.error('Error reverse geocoding:', err);
-        throw new Error('Failed to get address for current location');
+        // Don't throw error, just return empty object to allow coordinates-only location
+        return {};
       }
     },
     [apiClient]
   );
 
   const getCurrentLocation = useCallback(async (): Promise<Location> => {
+    console.log('getCurrentLocation called');
     setLoading(true);
     setError(null);
 
@@ -82,6 +90,7 @@ export const useCurrentLocation = (): UseCurrentLocationReturn => {
       );
 
       const { latitude, longitude } = position.coords;
+      console.log('Got coordinates:', { latitude, longitude });
 
       // Create basic location object
       const basicLocation: Location = {

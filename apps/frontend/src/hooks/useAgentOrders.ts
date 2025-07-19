@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import { useBackendOrders } from './useBackendOrders';
+import { useCurrentLocation } from './useCurrentLocation';
 import { useDistanceMatrix } from './useDistanceMatrix';
 
 export interface OrderItem {
@@ -116,8 +117,8 @@ export interface Order {
       };
       client?: {
         user: {
-          email: string;
           first_name: string;
+          email: string;
           last_name: string;
         };
       };
@@ -228,6 +229,10 @@ export const useAgentOrders = () => {
     deliverOrder,
     failDelivery,
   } = useBackendOrders();
+
+  // Get current location
+  const { location: currentLocation, getCurrentLocation } =
+    useCurrentLocation();
 
   const fetchAllOrders = useCallback(async () => {
     if (!apiClient) {
@@ -383,7 +388,17 @@ export const useAgentOrders = () => {
   useEffect(() => {
     if (orders.length > 0) {
       (async () => {
-        console.log('fetching distance matrix');
+        // Get current location if not already available
+        let userLocation = currentLocation;
+        if (!userLocation) {
+          try {
+            userLocation = await getCurrentLocation();
+          } catch (error) {
+            console.warn(error);
+            // If we can't get current location, we'll still calculate distances between business and delivery addresses
+          }
+        }
+
         const deliveryAddressIds = orders.reduce((acc, order) => {
           if (!acc.includes(order.delivery_address_id)) {
             acc.push(order.delivery_address_id);
@@ -398,9 +413,17 @@ export const useAgentOrders = () => {
           return acc;
         }, deliveryAddressIds);
 
-        const distanceMatrix = await fetchDistanceMatrix({
+        // Prepare distance matrix payload
+        const distanceMatrixPayload: any = {
           destination_address_ids: sourceAddressIds,
-        });
+        };
+
+        // Use current location as origin if available
+        if (userLocation) {
+          distanceMatrixPayload.origin_address = userLocation.address;
+        }
+
+        const distanceMatrix = await fetchDistanceMatrix(distanceMatrixPayload);
 
         const ordersWithDistance = orders.map((order) => {
           const idx = distanceMatrix.destination_ids.indexOf(
@@ -438,7 +461,7 @@ export const useAgentOrders = () => {
         setCategorizedOrders(categorizedWithDistance);
       })();
     }
-  }, [orders]);
+  }, [orders, currentLocation]);
 
   return {
     orders,
