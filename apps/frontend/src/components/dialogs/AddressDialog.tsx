@@ -1,7 +1,9 @@
+import { LocationOn as LocationOnIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,6 +20,7 @@ import {
 import { City, Country, State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 import { useGoogleMapsApiKey } from '../../hooks/useGoogleMapsApiKey';
 import { parseGooglePlaceResult } from '../../utils/addressConverter';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -85,6 +88,233 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   // Google Places API key from hook
   const googleMapsApiKey = useGoogleMapsApiKey();
 
+  // Current location hook
+  const {
+    getCurrentLocation,
+    loading: locationLoading,
+    error: locationError,
+  } = useCurrentLocation();
+
+  // Helper function to find country code by name
+  const findCountryCode = (countryName: string): string => {
+    if (!countryName) return '';
+
+    console.log('Finding country code for:', countryName);
+
+    // Try exact match first
+    const exactMatch = Country.getAllCountries().find(
+      (country) => country.name.toLowerCase() === countryName.toLowerCase()
+    );
+    if (exactMatch) {
+      console.log('Found exact country match:', exactMatch.isoCode);
+      return exactMatch.isoCode;
+    }
+
+    // Try partial match
+    const partialMatch = Country.getAllCountries().find(
+      (country) =>
+        country.name.toLowerCase().includes(countryName.toLowerCase()) ||
+        countryName.toLowerCase().includes(country.name.toLowerCase())
+    );
+    if (partialMatch) {
+      console.log('Found partial country match:', partialMatch.isoCode);
+      return partialMatch.isoCode;
+    }
+
+    // Try common name variations
+    const commonNames: { [key: string]: string } = {
+      'united states': 'US',
+      usa: 'US',
+      'united states of america': 'US',
+      canada: 'CA',
+      'united kingdom': 'GB',
+      uk: 'GB',
+      'great britain': 'GB',
+      france: 'FR',
+      germany: 'DE',
+      spain: 'ES',
+      italy: 'IT',
+      japan: 'JP',
+      china: 'CN',
+      india: 'IN',
+      brazil: 'BR',
+      australia: 'AU',
+      nigeria: 'NG',
+      kenya: 'KE',
+      uganda: 'UG',
+      tanzania: 'TZ',
+      ghana: 'GH',
+      'south africa': 'ZA',
+      ethiopia: 'ET',
+      egypt: 'EG',
+      morocco: 'MA',
+      algeria: 'DZ',
+      tunisia: 'TN',
+      libya: 'LY',
+      sudan: 'SD',
+      'south sudan': 'SS',
+      chad: 'TD',
+      niger: 'NE',
+      mali: 'ML',
+      'burkina faso': 'BF',
+      senegal: 'SN',
+      guinea: 'GN',
+      'sierra leone': 'SL',
+      liberia: 'LR',
+      'ivory coast': 'CI',
+      "cote d'ivoire": 'CI',
+      benin: 'BJ',
+      togo: 'TG',
+      cameroon: 'CM',
+      'central african republic': 'CF',
+      'equatorial guinea': 'GQ',
+      gabon: 'GA',
+      congo: 'CG',
+      'democratic republic of the congo': 'CD',
+      'democratic republic of congo': 'CD',
+      drc: 'CD',
+      angola: 'AO',
+      zambia: 'ZM',
+      zimbabwe: 'ZW',
+      botswana: 'BW',
+      namibia: 'NA',
+      lesotho: 'LS',
+      eswatini: 'SZ',
+      swaziland: 'SZ',
+      mozambique: 'MZ',
+      madagascar: 'MG',
+      mauritius: 'MU',
+      seychelles: 'SC',
+      comoros: 'KM',
+      djibouti: 'DJ',
+      somalia: 'SO',
+      eritrea: 'ER',
+      burundi: 'BI',
+      rwanda: 'RW',
+    };
+
+    const normalizedName = countryName.toLowerCase().trim();
+    const commonMatch = commonNames[normalizedName];
+    if (commonMatch) {
+      console.log('Found common country name match:', commonMatch);
+      return commonMatch;
+    }
+
+    console.log('No country code found for:', countryName);
+    return '';
+  };
+
+  // Helper function to find state code by name and country code
+  const findStateCode = (stateName: string, countryCode: string): string => {
+    if (!stateName || !countryCode) return '';
+
+    console.log(
+      'Finding state code for:',
+      stateName,
+      'in country:',
+      countryCode
+    );
+
+    const states = State.getStatesOfCountry(countryCode);
+    if (!states.length) {
+      console.log('No states found for country:', countryCode);
+      return '';
+    }
+
+    // Try exact match first
+    const exactMatch = states.find(
+      (state) => state.name.toLowerCase() === stateName.toLowerCase()
+    );
+    if (exactMatch) {
+      console.log('Found exact state match:', exactMatch.isoCode);
+      return exactMatch.isoCode;
+    }
+
+    // Try partial match
+    const partialMatch = states.find(
+      (state) =>
+        state.name.toLowerCase().includes(stateName.toLowerCase()) ||
+        stateName.toLowerCase().includes(state.name.toLowerCase())
+    );
+    if (partialMatch) {
+      console.log('Found partial state match:', partialMatch.isoCode);
+      return partialMatch.isoCode;
+    }
+
+    // Try common name variations for US states
+    if (countryCode === 'US') {
+      const usStateNames: { [key: string]: string } = {
+        california: 'CA',
+        'new york': 'NY',
+        texas: 'TX',
+        florida: 'FL',
+        illinois: 'IL',
+        pennsylvania: 'PA',
+        ohio: 'OH',
+        georgia: 'GA',
+        'north carolina': 'NC',
+        michigan: 'MI',
+        'new jersey': 'NJ',
+        virginia: 'VA',
+        washington: 'WA',
+        arizona: 'AZ',
+        massachusetts: 'MA',
+        tennessee: 'TN',
+        indiana: 'IN',
+        missouri: 'MO',
+        maryland: 'MD',
+        colorado: 'CO',
+        wisconsin: 'WI',
+        minnesota: 'MN',
+        'south carolina': 'SC',
+        alabama: 'AL',
+        louisiana: 'LA',
+        kentucky: 'KY',
+        oregon: 'OR',
+        oklahoma: 'OK',
+        connecticut: 'CT',
+        utah: 'UT',
+        nevada: 'NV',
+        arkansas: 'AR',
+        mississippi: 'MS',
+        iowa: 'IA',
+        kansas: 'KS',
+        idaho: 'ID',
+        nebraska: 'NE',
+        'west virginia': 'WV',
+        'new mexico': 'NM',
+        maine: 'ME',
+        'new hampshire': 'NH',
+        hawaii: 'HI',
+        'rhode island': 'RI',
+        montana: 'MT',
+        delaware: 'DE',
+        'south dakota': 'SD',
+        'north dakota': 'ND',
+        alaska: 'AK',
+        vermont: 'VT',
+        wyoming: 'WY',
+        'district of columbia': 'DC',
+        dc: 'DC',
+      };
+
+      const normalizedName = stateName.toLowerCase().trim();
+      const commonMatch = usStateNames[normalizedName];
+      if (commonMatch) {
+        console.log('Found common US state name match:', commonMatch);
+        return commonMatch;
+      }
+    }
+
+    console.log(
+      'No state code found for:',
+      stateName,
+      'in country:',
+      countryCode
+    );
+    return '';
+  };
+
   // Handle Google Places selection
   const handlePlaceSelect = (place: any) => {
     try {
@@ -95,6 +325,49 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       });
     } catch (error) {
       console.error('Error parsing Google Places result:', error);
+    }
+  };
+
+  // Handle get current location
+  const handleGetCurrentLocation = async () => {
+    try {
+      const location = await getCurrentLocation();
+
+      if (location.address) {
+        console.log('Location data received:', location);
+
+        // Convert country and state names to codes
+        const countryCode = findCountryCode(location.country || '');
+        const stateCode = findStateCode(location.state || '', countryCode);
+
+        console.log('Conversion results:', {
+          originalCountry: location.country,
+          countryCode,
+          originalState: location.state,
+          stateCode,
+        });
+
+        // Update the address form with current location data
+        onAddressChange({
+          ...addressData,
+          address_line_1: location.address || '',
+          city: location.city || '',
+          state: stateCode, // Use state code instead of name
+          country: countryCode, // Use country code instead of name
+          postal_code: location.postalCode || '',
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+      } else {
+        // If no address but we have coordinates, just update coordinates
+        onAddressChange({
+          ...addressData,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
     }
   };
 
@@ -172,6 +445,34 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
+
+        {/* Get Current Location Button - only show in manual mode */}
+        {inputMode === 'manual' && (
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={handleGetCurrentLocation}
+              disabled={locationLoading}
+              startIcon={
+                locationLoading ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <LocationOnIcon />
+                )
+              }
+              fullWidth
+            >
+              {locationLoading
+                ? t('addresses.gettingLocation', 'Getting Location...')
+                : t('addresses.getCurrentLocation', 'Get Current Location')}
+            </Button>
+            {locationError && (
+              <Alert severity="error" sx={{ mt: 1 }}>
+                <Typography variant="body2">{locationError}</Typography>
+              </Alert>
+            )}
+          </Box>
+        )}
 
         <Box
           sx={{

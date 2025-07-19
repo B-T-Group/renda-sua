@@ -713,7 +713,9 @@
     "manualInput": "Manual Input",
     "googleAutocomplete": "Google Autocomplete",
     "searchAddress": "Search Address",
-    "enterAddressToSearch": "Enter address to search..."
+    "enterAddressToSearch": "Enter address to search...",
+    "getCurrentLocation": "Get Current Location",
+    "gettingLocation": "Getting Location..."
   },
   "accounts": {
     "title": "Accounts",

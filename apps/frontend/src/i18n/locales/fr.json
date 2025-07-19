@@ -777,7 +777,9 @@
     "manualInput": "Saisie Manuelle",
     "googleAutocomplete": "Autocomplétion Google",
     "searchAddress": "Rechercher une Adresse",
-    "enterAddressToSearch": "Entrez une adresse à rechercher..."
+    "enterAddressToSearch": "Entrez une adresse à rechercher...",
+    "getCurrentLocation": "Obtenir l'Emplacement Actuel",
+    "gettingLocation": "Obtention de l'Emplacement..."
   },
   "accounts": {
     "title": "Comptes",
