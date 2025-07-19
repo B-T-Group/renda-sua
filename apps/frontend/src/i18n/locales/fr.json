@@ -764,6 +764,8 @@
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ? Cette action ne peut pas être annulée.",
     "accountCreated": "Nouveau compte créé avec la devise {{currency}}",
     "accountAlreadyExists": "Un compte existe déjà pour la devise de ce pays",
+    "missingAddressTitle": "Adresse Requise",
+    "missingAddressMessage": "Vous devez ajouter une adresse à votre profil pour utiliser les services de livraison et recevoir des commandes. Cela nous aide à fournir des estimations de livraison précises et à assurer un traitement fluide des commandes.",
     "types": {
       "home": "Domicile",
       "work": "Travail",

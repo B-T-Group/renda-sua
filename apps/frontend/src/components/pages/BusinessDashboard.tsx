@@ -22,6 +22,7 @@ import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AddressAlert from '../common/AddressAlert';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
@@ -105,6 +106,9 @@ const BusinessDashboard: React.FC = () => {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
         {t('business.dashboard.subtitle')}
       </Typography>
+
+      {/* Address Alert */}
+      <AddressAlert />
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 6 }}>
         {dashboardCards.map((card, index) => (

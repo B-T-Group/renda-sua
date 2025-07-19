@@ -33,6 +33,7 @@ import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useClientOrders } from '../../hooks/useClientOrders';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AddressAlert from '../common/AddressAlert';
 import ConfirmationModal from '../common/ConfirmationModal';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import SEOHead from '../seo/SEOHead';
@@ -340,6 +341,9 @@ const ClientOrders: React.FC = () => {
             {t('client.orders.subtitle')}
           </Typography>
         </Box>
+
+        {/* Address Alert */}
+        <AddressAlert />
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>

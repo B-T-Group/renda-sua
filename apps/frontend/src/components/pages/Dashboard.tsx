@@ -17,6 +17,7 @@ import {
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import AccountInformation from '../common/AccountInformation';
+import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import OrderDialog from '../dialogs/OrderDialog';
 
@@ -229,6 +230,9 @@ const Dashboard: React.FC = () => {
           orders.
         </Typography>
       </Box>
+
+      {/* Address Alert */}
+      <AddressAlert />
 
       {/* Account Information */}
       <AccountInformation

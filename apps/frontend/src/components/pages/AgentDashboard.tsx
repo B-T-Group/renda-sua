@@ -34,6 +34,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
+import AddressAlert from '../common/AddressAlert';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 const getStatusColor = (status: string) => {
@@ -735,6 +736,9 @@ const AgentDashboard: React.FC = () => {
           {t('dashboard.manageDeliveryOrders')}
         </Typography>
       </Box>
+
+      {/* Address Alert */}
+      <AddressAlert />
 
       {(error || accountError) && (
         <Alert severity="error" sx={{ mb: 3 }}>

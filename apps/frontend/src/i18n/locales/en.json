@@ -700,6 +700,8 @@
     "deleteConfirmMessage": "Are you sure you want to delete this address? This action cannot be undone.",
     "accountCreated": "New account created with currency {{currency}}",
     "accountAlreadyExists": "Account already exists for this country's currency",
+    "missingAddressTitle": "Address Required",
+    "missingAddressMessage": "You need to add an address to your profile to use delivery services and receive orders. This helps us provide accurate delivery estimates and ensure smooth order processing.",
     "types": {
       "home": "Home",
       "work": "Work",
