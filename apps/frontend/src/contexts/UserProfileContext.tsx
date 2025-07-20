@@ -89,7 +89,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [userType, setUserType] = useState<UserType | null>(null);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
 
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, isLoading } = useAuth0();
   const apiClient = useApiClient();
 
   const checkProfile = async () => {
@@ -164,16 +164,17 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
 
   // Fetch profile when authenticated and API client is available
   useEffect(() => {
-    if (isAuthenticated && apiClient) {
+    if (isLoading) return;
+    if (isAuthenticated) {
       checkProfile();
     } else if (!isAuthenticated) {
       clearProfile();
     }
-  }, [isAuthenticated, apiClient]);
+  }, [isAuthenticated, isLoading]);
 
   const value: UserProfileContextType = {
     profile,
-    loading,
+    loading: loading || isLoading,
     error,
     userType,
     isProfileComplete,

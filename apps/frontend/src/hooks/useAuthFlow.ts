@@ -26,11 +26,13 @@ export const useAuthFlow = () => {
     // Wait for profile to be loaded
     if (!profileLoading) {
       // Check if user profile exists
-      if (
-        profileError === 'Profile not found' ||
-        !profile ||
-        !isProfileComplete
-      ) {
+
+      if (!isAuthenticated) {
+        navigate('/');
+        return;
+      }
+
+      if (profileError === 'Profile not found') {
         // User doesn't have a profile, redirect to complete profile
         navigate('/complete-profile');
       } else if (profile && isProfileComplete) {
@@ -69,7 +71,6 @@ export const useAuthFlow = () => {
     profileError,
     userType,
     isProfileComplete,
-    navigate,
     location.pathname,
   ]);
 
