@@ -466,7 +466,7 @@ const ClientOrders: React.FC = () => {
                         mb={2}
                       >
                         <Typography variant="h6" component="div">
-                          {t('orders.table.orderNumber', {
+                          {t('common.orderNumber', {
                             number: order.order_number,
                           })}
                         </Typography>

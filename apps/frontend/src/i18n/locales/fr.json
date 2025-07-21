@@ -210,7 +210,29 @@
       "subtitle": "Afficher et gérer l'historique de vos commandes",
       "noOrdersFound": "Aucune commande trouvée. Commencez à faire des achats pour voir vos commandes ici.",
       "actions": {
-        "viewHistory": "Historique"
+        "viewHistory": "Historique",
+        "complete": "Compléter la commande"
+      },
+      "completionWarning": "Veuillez compléter votre commande dans les 4 heures suivant la réception de l'article pour finaliser la transaction. Des pénalités peuvent s'appliquer si elle n'est pas complétée à temps.",
+      "confirmation": {
+        "title": "Commande Confirmée !",
+        "orderPlaced": "Votre commande #{{orderNumber}} a été passée avec succès !",
+        "thankYou": "Merci pour votre commande ! Voici ce que vous pouvez attendre ensuite :",
+        "whatToExpect": "Ce à quoi s'attendre :",
+        "step1": {
+          "title": "Confirmation et Préparation de la Commande",
+          "description": "L'entreprise confirmera votre commande et commencera à la préparer pour le ramassage. Vous recevrez des mises à jour au fur et à mesure que votre commande progresse."
+        },
+        "step2": {
+          "title": "Ramassage et Livraison",
+          "description": "Un livreur récupérera votre commande et la livrera à votre adresse spécifiée. Vous pouvez suivre les progrès de la livraison en temps réel."
+        },
+        "tracking": {
+          "title": "Suivez Votre Commande",
+          "description": "Vous pouvez suivre le statut de votre commande et les progrès de la livraison dans la section 'Mes Commandes'. Vous recevrez également des notifications pour les mises à jour importantes."
+        },
+        "continueShopping": "Continuer les Achats",
+        "viewOrders": "Voir Mes Commandes"
       }
     }
   },

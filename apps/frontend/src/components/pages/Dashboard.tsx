@@ -19,6 +19,7 @@ import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
+import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 import OrderDialog from '../dialogs/OrderDialog';
 
 const Dashboard: React.FC = () => {
@@ -49,7 +50,8 @@ const Dashboard: React.FC = () => {
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
+  const [lastOrderNumber, setLastOrderNumber] = useState<string>('');
 
   // Assume USD as default currency for items since business_inventory doesn't have currency field
   const DEFAULT_ITEM_CURRENCY = 'USD';
@@ -163,10 +165,11 @@ const Dashboard: React.FC = () => {
         special_instructions: specialInstructions,
       };
 
-      await createOrder(orderData);
-      setOrderSuccess(true);
+      const result = await createOrder(orderData);
+      // The order number might not be available in the basic OrderResult
+      // We'll show the confirmation without the specific order number
       setOrderDialogOpen(false);
-      setTimeout(() => setOrderSuccess(false), 3000);
+      setConfirmationModalOpen(true);
     } catch (error) {
       console.error('Error creating order:', error);
     }
@@ -206,13 +209,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Success Alert */}
-      {orderSuccess && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          Order placed successfully! You will receive a confirmation shortly.
-        </Alert>
-      )}
-
       {/* Error Alert */}
       {orderError && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -316,6 +312,12 @@ const Dashboard: React.FC = () => {
         onQuantityChange={setQuantity}
         onSpecialInstructionsChange={setSpecialInstructions}
         onSubmit={handleOrderSubmit}
+      />
+
+      <OrderConfirmationModal
+        open={confirmationModalOpen}
+        onClose={() => setConfirmationModalOpen(false)}
+        orderNumber={lastOrderNumber}
       />
     </Container>
   );

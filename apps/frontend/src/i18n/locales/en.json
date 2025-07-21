@@ -239,8 +239,65 @@
       "title": "My Orders",
       "subtitle": "View and manage your order history",
       "noOrdersFound": "No orders found. Start shopping to see your orders here.",
+      "table": {
+        "orderNumber": "Order #{{number}}",
+        "customer": "Customer",
+        "items": "Items",
+        "total": "Total",
+        "status": "Status",
+        "deliveryAddress": "Delivery Address",
+        "agent": "Agent",
+        "createdAt": "Created At",
+        "actions": "Actions",
+        "unassigned": "Unassigned"
+      },
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "preparing": "Preparing",
+        "ready_for_pickup": "Ready for Pickup",
+        "assigned_to_agent": "Assigned to Agent",
+        "picked_up": "Picked Up",
+        "in_transit": "In Transit",
+        "out_for_delivery": "Out for Delivery",
+        "delivered": "Delivered",
+        "complete": "Complete",
+        "cancelled": "Cancelled",
+        "failed": "Failed",
+        "refunded": "Refunded",
+        "completed": "Completed",
+        "unknown": "Unknown"
+      },
+      "orderItems": "Order Items",
+      "specialInstructions": "Special Instructions",
+      "brand": "Brand",
+      "model": "Model",
+      "color": "Color",
+      "size": "Size",
       "actions": {
-        "viewHistory": "History"
+        "viewHistory": "History",
+        "complete": "Complete Order"
+      },
+      "completionWarning": "Please complete your order within 4 hours of receiving the item to finalize the transaction. Penalties may apply if not completed on time.",
+      "confirmation": {
+        "title": "Order Confirmed!",
+        "orderPlaced": "Your order #{{orderNumber}} has been placed successfully!",
+        "thankYou": "Thank you for your order! Here's what you can expect next:",
+        "whatToExpect": "What to Expect:",
+        "step1": {
+          "title": "Order Confirmation & Preparation",
+          "description": "The business will confirm your order and begin preparing it for pickup. You'll receive updates as your order progresses."
+        },
+        "step2": {
+          "title": "Pickup & Delivery",
+          "description": "A delivery person will pick up your order and deliver it to your specified address. You can track the delivery progress in real-time."
+        },
+        "tracking": {
+          "title": "Track Your Order",
+          "description": "You can track your order status and delivery progress in the 'My Orders' section. You'll also receive notifications for important updates."
+        },
+        "continueShopping": "Continue Shopping",
+        "viewOrders": "View My Orders"
       }
     }
   },
