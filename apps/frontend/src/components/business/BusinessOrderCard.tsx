@@ -159,7 +159,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             </Typography>
             <Chip
               label={t(
-                `business.orders.status.${order.current_status || 'unknown'}`
+                `common.orderStatus.${order.current_status || 'unknown'}`
               )}
               color={getStatusColor(order.current_status || 'unknown') as any}
               size="small"

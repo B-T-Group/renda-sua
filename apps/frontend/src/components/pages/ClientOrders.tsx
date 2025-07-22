@@ -373,38 +373,40 @@ const ClientOrders: React.FC = () => {
                   {t('business.orders.filters.allStatuses')}
                 </MenuItem>
                 <MenuItem value="pending">
-                  {t('orders.status.pending')}
+                  {t('common.orderStatus.pending')}
                 </MenuItem>
                 <MenuItem value="confirmed">
-                  {t('orders.status.confirmed')}
+                  {t('common.orderStatus.confirmed')}
                 </MenuItem>
                 <MenuItem value="preparing">
-                  {t('orders.status.preparing')}
+                  {t('common.orderStatus.preparing')}
                 </MenuItem>
                 <MenuItem value="ready_for_pickup">
-                  {t('orders.status.ready_for_pickup')}
+                  {t('common.orderStatus.ready_for_pickup')}
                 </MenuItem>
                 <MenuItem value="assigned_to_agent">
-                  {t('orders.status.assigned_to_agent')}
+                  {t('common.orderStatus.assigned_to_agent')}
                 </MenuItem>
                 <MenuItem value="picked_up">
-                  {t('orders.status.picked_up')}
+                  {t('common.orderStatus.picked_up')}
                 </MenuItem>
                 <MenuItem value="in_transit">
-                  {t('orders.status.in_transit')}
+                  {t('common.orderStatus.in_transit')}
                 </MenuItem>
                 <MenuItem value="out_for_delivery">
-                  {t('orders.status.out_for_delivery')}
+                  {t('common.orderStatus.out_for_delivery')}
                 </MenuItem>
                 <MenuItem value="delivered">
-                  {t('orders.status.delivered')}
+                  {t('common.orderStatus.delivered')}
                 </MenuItem>
                 <MenuItem value="cancelled">
-                  {t('orders.status.cancelled')}
+                  {t('common.orderStatus.cancelled')}
                 </MenuItem>
-                <MenuItem value="failed">{t('orders.status.failed')}</MenuItem>
+                <MenuItem value="failed">
+                  {t('common.orderStatus.failed')}
+                </MenuItem>
                 <MenuItem value="refunded">
-                  {t('orders.status.refunded')}
+                  {t('common.orderStatus.refunded')}
                 </MenuItem>
               </Select>
             </FormControl>
@@ -472,7 +474,9 @@ const ClientOrders: React.FC = () => {
                         </Typography>
                         <Chip
                           label={t(
-                            `orders.status.${order.current_status || 'unknown'}`
+                            `common.orderStatus.${
+                              order.current_status || 'unknown'
+                            }`
                           )}
                           color={
                             getStatusColor(
@@ -786,7 +790,7 @@ const ClientOrders: React.FC = () => {
             ? t('business.orders.confirmStatusUpdate', {
                 orderNumber: orders.find((o) => o.id === pendingAction.orderId)
                   ?.order_number,
-                newStatus: t(`orders.status.${pendingAction.status}`),
+                newStatus: t(`common.orderStatus.${pendingAction.status}`),
               })
             : ''
         }

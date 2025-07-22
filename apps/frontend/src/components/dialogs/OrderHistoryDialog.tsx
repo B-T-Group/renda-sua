@@ -204,7 +204,7 @@ const OrderHistoryDialog: React.FC<OrderHistoryDialogProps> = ({
                       fontWeight="bold"
                     >
                       {t(
-                        `orderStatus.${historyItem.status}`,
+                        `common.orderStatus.${historyItem.status}`,
                         historyItem.status.replace(/_/g, ' ')
                       )}
                     </Typography>
@@ -232,7 +232,7 @@ const OrderHistoryDialog: React.FC<OrderHistoryDialogProps> = ({
                       >
                         {t('orderHistory.fromStatus', 'From')}:{' '}
                         {t(
-                          `orderStatus.${historyItem.previous_status}`,
+                          `common.orderStatus.${historyItem.previous_status}`,
                           historyItem.previous_status.replace(/_/g, ' ')
                         )}
                       </Typography>

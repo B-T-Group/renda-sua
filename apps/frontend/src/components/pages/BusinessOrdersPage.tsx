@@ -335,43 +335,43 @@ const BusinessOrdersPage: React.FC = () => {
                   {t('business.orders.filters.allStatuses')}
                 </MenuItem>
                 <MenuItem value="pending">
-                  {t('business.orders.status.pending')}
+                  {t('common.orderStatus.pending')}
                 </MenuItem>
                 <MenuItem value="confirmed">
-                  {t('business.orders.status.confirmed')}
+                  {t('common.orderStatus.confirmed')}
                 </MenuItem>
                 <MenuItem value="preparing">
-                  {t('business.orders.status.preparing')}
+                  {t('common.orderStatus.preparing')}
                 </MenuItem>
                 <MenuItem value="complete_preparation">
-                  {t('business.orders.status.complete_preparation')}
+                  {t('common.orderStatus.complete_preparation')}
                 </MenuItem>
                 <MenuItem value="ready_for_pickup">
-                  {t('business.orders.status.ready_for_pickup')}
+                  {t('common.orderStatus.ready_for_pickup')}
                 </MenuItem>
                 <MenuItem value="assigned_to_agent">
-                  {t('business.orders.status.assigned_to_agent')}
+                  {t('common.orderStatus.assigned_to_agent')}
                 </MenuItem>
                 <MenuItem value="picked_up">
-                  {t('business.orders.status.picked_up')}
+                  {t('common.orderStatus.picked_up')}
                 </MenuItem>
                 <MenuItem value="in_transit">
-                  {t('business.orders.status.in_transit')}
+                  {t('common.orderStatus.in_transit')}
                 </MenuItem>
                 <MenuItem value="out_for_delivery">
-                  {t('business.orders.status.out_for_delivery')}
+                  {t('common.orderStatus.out_for_delivery')}
                 </MenuItem>
                 <MenuItem value="delivered">
-                  {t('business.orders.status.delivered')}
+                  {t('common.orderStatus.delivered')}
                 </MenuItem>
                 <MenuItem value="cancelled">
-                  {t('business.orders.status.cancelled')}
+                  {t('common.orderStatus.cancelled')}
                 </MenuItem>
                 <MenuItem value="failed">
-                  {t('business.orders.status.failed')}
+                  {t('common.orderStatus.failed')}
                 </MenuItem>
                 <MenuItem value="refunded">
-                  {t('business.orders.status.refunded')}
+                  {t('common.orderStatus.refunded')}
                 </MenuItem>
               </Select>
             </FormControl>
@@ -415,9 +415,9 @@ const BusinessOrdersPage: React.FC = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label={t('orders.allOrders')} />
-            <Tab label={t('business.orders.status.preparing')} />
-            <Tab label={t('business.orders.status.in_transit')} />
-            <Tab label={t('business.orders.status.completed')} />
+            <Tab label={t('common.orderStatus.preparing')} />
+            <Tab label={t('common.orderStatus.in_transit')} />
+            <Tab label={t('common.orderStatus.completed')} />
           </Tabs>
         </Box>
 
