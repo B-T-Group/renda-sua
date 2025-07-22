@@ -732,6 +732,15 @@ export class OrdersService {
           business {
             name
           }
+          client {
+              user {
+                id
+                first_name
+                last_name
+                phone_number
+                email
+              }
+            }
           business_location {
             id
             name

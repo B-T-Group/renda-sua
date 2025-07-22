@@ -9,6 +9,7 @@ import {
   LocationOn,
   Pending,
   Person,
+  Phone,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -32,6 +33,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
+import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
@@ -74,11 +76,6 @@ const getStatusIcon = (status: string) => {
     default:
       return <Pending />;
   }
-};
-
-const formatAddress = (address: any) => {
-  if (!address) return 'No address';
-  return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
 };
 
 const formatCurrency = (amount: number, currency: string) => {
@@ -315,6 +312,14 @@ const OrderCard: React.FC<{
                 {order.client?.user.first_name} {order.client?.user.last_name}
               </Typography>
             </Box>
+            {order.client?.user.phone_number && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Phone sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.phone')}: {order.client.user.phone_number}
+                </Typography>
+              </Box>
+            )}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <LocationOn sx={{ mr: 1, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">
@@ -488,8 +493,15 @@ const OrderCard: React.FC<{
           order.current_status === 'ready_for_pickup') && (
           <Box sx={{ mt: 2 }}>
             <Alert severity="warning" variant="outlined">
-              Once you claim this order, you must deliver it within 24 hours or
-              penalties may apply.
+              {order.current_status === 'ready_for_pickup'
+                ? t(
+                    'agent.orders.readyForPickupNotice',
+                    'Please contact the client and confirm delivery arrangements.'
+                  )
+                : t(
+                    'agent.orders.assignedNotice',
+                    'Once you claim this order, you must deliver it within 24 hours or penalties may apply.'
+                  )}
             </Alert>
           </Box>
         )}
@@ -554,6 +566,12 @@ const AgentDashboard: React.FC = () => {
   const { profile } = useUserProfile();
   const agentOrders = useAgentOrders();
   const {
+    openOrders,
+    loading: openOrdersLoading,
+    error: openOrdersError,
+    refetch: refetchOpenOrders,
+  } = useOpenOrders();
+  const {
     accounts,
     loading: accountLoading,
     error: accountError,
@@ -608,6 +626,8 @@ const AgentDashboard: React.FC = () => {
         }),
         severity: 'success',
       });
+      // Refresh open orders after pickup
+      await refetchOpenOrders();
     } catch (error: any) {
       setNotification({
         open: true,
@@ -637,6 +657,8 @@ const AgentDashboard: React.FC = () => {
         }),
         severity: 'success',
       });
+      // Refresh open orders after claiming
+      await refetchOpenOrders();
     } catch (error: any) {
       setNotification({
         open: true,
@@ -693,6 +715,8 @@ const AgentDashboard: React.FC = () => {
         }),
         severity: 'success',
       });
+      // Refresh open orders after dropping
+      await refetchOpenOrders();
     } catch (error: any) {
       setNotification({
         open: true,
@@ -702,7 +726,7 @@ const AgentDashboard: React.FC = () => {
     }
   };
 
-  if (loading || accountLoading) {
+  if (loading || accountLoading || openOrdersLoading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box
@@ -740,9 +764,9 @@ const AgentDashboard: React.FC = () => {
       {/* Address Alert */}
       <AddressAlert />
 
-      {(error || accountError) && (
+      {(error || accountError || openOrdersError) && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error || accountError}
+          {error || accountError || openOrdersError}
         </Alert>
       )}
 
@@ -752,6 +776,34 @@ const AgentDashboard: React.FC = () => {
         onTopUpClick={handleTopUpClick}
         formatCurrency={formatCurrency}
       />
+
+      {/* Open Orders Section */}
+      {openOrders.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Business sx={{ mr: 2, color: 'info.main' }} />
+            <Typography variant="h5" component="h2">
+              {t('agent.dashboard.openOrders')} ({openOrders.length})
+            </Typography>
+          </Box>
+
+          <Box>
+            {openOrders.map((order: Order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onClaim={handleGetOrder}
+                showActions={true}
+                agentAddress={
+                  profile?.agent && (profile.agent as any).address
+                    ? (profile.agent as any).address
+                    : undefined
+                }
+              />
+            ))}
+          </Box>
+        </Paper>
+      )}
 
       {/* Active Orders Section */}
       {categorizedOrders.active.length > 0 && (

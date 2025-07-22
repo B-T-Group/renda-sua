@@ -3,6 +3,7 @@ import {
   History as HistoryIcon,
   LocalShipping as LocalShippingIcon,
   Person as PersonIcon,
+  Phone as PhoneIcon,
   Receipt as ReceiptIcon,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
@@ -177,6 +178,18 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
               {order.client?.user?.first_name} {order.client?.user?.last_name}
             </Typography>
+            {order.client?.user?.phone_number && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                display="flex"
+                alignItems="center"
+                mb={1}
+              >
+                <PhoneIcon sx={{ mr: 1, fontSize: 16 }} />
+                {t('common.phone')}: {order.client.user.phone_number}
+              </Typography>
+            )}
             <Typography
               variant="body2"
               color="text.secondary"

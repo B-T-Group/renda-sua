@@ -642,6 +642,7 @@
       "welcome": "Welcome back, {{name}}! This is your agent dashboard.",
       "activeOrders": "Active Orders",
       "pendingOrders": "Pending Orders",
+      "openOrders": "Open Orders",
       "noActiveOrders": "No active orders at the moment.",
       "noPendingOrders": "No pending orders at the moment."
     },
@@ -649,6 +650,8 @@
       "pickup": "Pick Up Order",
       "pickupSuccess": "Order picked up successfully!",
       "pickupError": "Failed to pick up order",
+      "readyForPickupNotice": "Please contact the client and confirm delivery arrangements.",
+      "assignedNotice": "Once you claim this order, you must deliver it within 24 hours or penalties may apply.",
       "status": {
         "pending": "Pending",
         "confirmed": "Confirmed",

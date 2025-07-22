@@ -639,6 +639,7 @@
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord agent.",
       "activeOrders": "Commandes actives",
       "pendingOrders": "Commandes en attente",
+      "openOrders": "Commandes ouvertes",
       "inProgressOrders": "Commandes en cours",
       "completedOrders": "Commandes terminées",
       "cancelledOrders": "Commandes annulées",
@@ -653,6 +654,8 @@
       "pickup": "Ramasser la commande",
       "pickupSuccess": "Commande ramassée avec succès !",
       "pickupError": "Échec du ramassage de la commande",
+      "readyForPickupNotice": "Veuillez contacter le client et confirmer les arrangements de livraison.",
+      "assignedNotice": "Une fois que vous réclamez cette commande, vous devez la livrer dans les 24 heures ou des pénalités peuvent s'appliquer.",
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmée",
