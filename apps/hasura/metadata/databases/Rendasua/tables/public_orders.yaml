@@ -66,6 +66,7 @@ insert_permissions:
         - business_location_id
         - client_id
         - delivery_address_id
+        - verified_agent_delivery
 select_permissions:
   - role: agent
     permission:
@@ -91,6 +92,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - verified_agent_delivery
       filter:
         assigned_agent:
           user:
@@ -120,6 +122,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - verified_agent_delivery
       filter:
         business:
           user:
@@ -149,6 +152,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - verified_agent_delivery
       filter:
         client:
           user:
@@ -161,6 +165,7 @@ update_permissions:
         - current_status
         - actual_delivery_time
         - updated_at
+        - verified_agent_delivery
       filter:
         assigned_agent:
           user:
@@ -174,6 +179,7 @@ update_permissions:
         - assigned_agent_id
         - estimated_delivery_time
         - updated_at
+        - verified_agent_delivery
       filter:
         business:
           user:
@@ -186,6 +192,7 @@ update_permissions:
         - special_instructions
         - preferred_delivery_time
         - updated_at
+        - verified_agent_delivery
       filter:
         client:
           user:

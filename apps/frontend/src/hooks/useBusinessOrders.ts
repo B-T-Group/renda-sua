@@ -153,6 +153,7 @@ const GET_BUSINESS_ORDERS = `
           email
         }
       }
+      verified_agent_delivery
       order_items {
         id
         item_name

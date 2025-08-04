@@ -39,6 +39,7 @@ export interface UserProfile {
     id: string;
     user_id: string;
     vehicle_type_id: string;
+    is_verified: boolean;
     created_at: string;
     updated_at: string;
   };

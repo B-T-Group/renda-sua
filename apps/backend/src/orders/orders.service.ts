@@ -156,6 +156,14 @@ export class OrdersService {
         `Cannot get order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+
+    // Check if order requires verified agent and if agent is verified
+    if (order.verified_agent_delivery && !user.agent.is_verified) {
+      throw new HttpException(
+        'This order requires a verified agent. Please contact support to get your account verified.',
+        HttpStatus.FORBIDDEN
+      );
+    }
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
     const holdAmount = (order.total_amount * holdPercentage) / 100;
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -761,6 +769,7 @@ export class OrdersService {
           total_amount
           currency
           current_status
+          verified_agent_delivery
           created_at
           order_items {
             id

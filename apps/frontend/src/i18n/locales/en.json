@@ -652,6 +652,7 @@
       "pickupError": "Failed to pick up order",
       "readyForPickupNotice": "Please contact the client and confirm delivery arrangements.",
       "assignedNotice": "Once you claim this order, you must deliver it within 24 hours or penalties may apply.",
+      "verificationRequired": "This order requires a verified agent. Please contact support to get your account verified.",
       "status": {
         "pending": "Pending",
         "confirmed": "Confirmed",

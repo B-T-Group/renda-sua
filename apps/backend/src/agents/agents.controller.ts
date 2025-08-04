@@ -167,6 +167,7 @@ export class AgentsController {
                 email
               }
             }
+            verified_agent_delivery
             business_location {
               id
               name

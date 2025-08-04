@@ -100,6 +100,7 @@ const OrderCard: React.FC<{
   ) => Promise<void>;
   showActions?: boolean;
   agentAddress?: any;
+  agentVerified?: boolean;
 }> = ({
   order,
   onPickUp,
@@ -108,6 +109,7 @@ const OrderCard: React.FC<{
   onStatusUpdate,
   showActions = true,
   agentAddress,
+  agentVerified = false,
 }) => {
   const { t } = useTranslation();
   const [updating, setUpdating] = useState(false);
@@ -176,12 +178,17 @@ const OrderCard: React.FC<{
     const actions = [];
     switch (order.current_status) {
       case 'ready_for_pickup':
-        actions.push({
-          label: t('orderActions.claimOrder', 'Claim'),
-          action: handleClaim,
-          color: 'primary' as const,
-          icon: <CheckCircle />,
-        });
+        // Check if order requires verified agent and if agent is not verified
+        if (order.verified_agent_delivery && !agentVerified) {
+          // Don't add claim action - it will be handled in the UI with a message
+        } else {
+          actions.push({
+            label: t('orderActions.claimOrder', 'Claim'),
+            action: handleClaim,
+            color: 'primary' as const,
+            icon: <CheckCircle />,
+          });
+        }
         break;
       case 'assigned_to_agent':
         actions.push({
@@ -508,6 +515,20 @@ const OrderCard: React.FC<{
             </Alert>
           </Box>
         )}
+
+        {/* Show verification requirement message */}
+        {order.current_status === 'ready_for_pickup' &&
+          order.verified_agent_delivery &&
+          !agentVerified && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="info" variant="outlined">
+                {t(
+                  'agent.orders.verificationRequired',
+                  'This order requires a verified agent. Please contact support to get your account verified.'
+                )}
+              </Alert>
+            </Box>
+          )}
       </CardContent>
 
       {showActions && (
@@ -805,6 +826,7 @@ const AgentDashboard: React.FC = () => {
                     ? (profile.agent as any).address
                     : undefined
                 }
+                agentVerified={profile?.agent?.is_verified || false}
               />
             ))}
           </Box>
@@ -835,6 +857,7 @@ const AgentDashboard: React.FC = () => {
                     ? (profile.agent as any).address
                     : undefined
                 }
+                agentVerified={profile?.agent?.is_verified || false}
               />
             ))}
           </Box>
@@ -867,6 +890,7 @@ const AgentDashboard: React.FC = () => {
                     ? (profile.agent as any).address
                     : undefined
                 }
+                agentVerified={profile?.agent?.is_verified || false}
               />
             ))}
           </Box>
@@ -929,6 +953,7 @@ const AgentDashboard: React.FC = () => {
                       ? (profile.agent as any).address
                       : undefined
                   }
+                  agentVerified={profile?.agent?.is_verified || false}
                 />
               ))}
             </Box>
@@ -992,6 +1017,7 @@ const AgentDashboard: React.FC = () => {
                       ? (profile.agent as any).address
                       : undefined
                   }
+                  agentVerified={profile?.agent?.is_verified || false}
                 />
               ))}
             </Box>

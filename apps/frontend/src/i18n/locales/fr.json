@@ -656,6 +656,7 @@
       "pickupError": "Échec du ramassage de la commande",
       "readyForPickupNotice": "Veuillez contacter le client et confirmer les arrangements de livraison.",
       "assignedNotice": "Une fois que vous réclamez cette commande, vous devez la livrer dans les 24 heures ou des pénalités peuvent s'appliquer.",
+      "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez contacter le support pour faire vérifier votre compte.",
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmée",

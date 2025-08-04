@@ -85,6 +85,7 @@ export interface Order {
   preferred_delivery_time?: string;
   payment_method?: string;
   payment_status?: string;
+  verified_agent_delivery?: boolean;
   created_at: string;
   updated_at: string;
   client: Client;
