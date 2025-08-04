@@ -69,6 +69,8 @@
     "warning": "Avertissement",
     "info": "Information",
     "language": "Langue",
+    "verified": "Vérifié",
+    "admin": "Administrateur",
     "showDetails": "Afficher les détails",
     "hideDetails": "Masquer les détails",
     "title": "Titre",
@@ -178,7 +180,14 @@
     "login": "Connexion",
     "logout": "Déconnexion",
     "profile": "Profil",
-    "welcome": "Bienvenue"
+    "welcome": "Bienvenue",
+    "emailVerification": {
+      "title": "Veuillez vérifier votre adresse e-mail",
+      "message": "Nous avons envoyé un e-mail de vérification à {{email}}. Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification pour finaliser la configuration de votre compte.",
+      "resendButton": "Demander un nouvel e-mail de vérification",
+      "resendSuccess": "Redirection vers la page de vérification...",
+      "resendError": "Échec de la redirection vers la page de vérification. Veuillez réessayer."
+    }
   },
   "orderHistory": {
     "title": "Historique des commandes",

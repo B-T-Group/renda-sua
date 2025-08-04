@@ -23,6 +23,7 @@ import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressAlert from '../common/AddressAlert';
+import StatusBadge from '../common/StatusBadge';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
@@ -101,9 +102,15 @@ const BusinessDashboard: React.FC = () => {
         keywords={t('seo.business-dashboard.keywords')}
       />
 
-      <Typography variant="h4" gutterBottom>
-        {t('business.dashboard.welcome', { name: profile.business.name })}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+        <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
+          {t('business.dashboard.welcome', { name: profile.business.name })}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {profile.business.is_verified && <StatusBadge type="verified" />}
+          {profile.business.is_admin && <StatusBadge type="admin" />}
+        </Box>
+      </Box>
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
         {t('business.dashboard.subtitle')}

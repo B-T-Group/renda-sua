@@ -19,6 +19,7 @@ import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
+import StatusBadge from '../common/StatusBadge';
 import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 import OrderDialog from '../dialogs/OrderDialog';
 
@@ -218,9 +219,12 @@ const Dashboard: React.FC = () => {
 
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Client Dashboard
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 0 }}>
+            Client Dashboard
+          </Typography>
+          {user?.email_verified && <StatusBadge type="verified" />}
+        </Box>
         <Typography variant="body1" color="text.secondary">
           Welcome back, {user?.name}! Browse available items and manage your
           orders.

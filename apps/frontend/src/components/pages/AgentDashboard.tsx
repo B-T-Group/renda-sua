@@ -40,6 +40,7 @@ import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
+import StatusBadge from '../common/StatusBadge';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 const getStatusColor = (status: string) => {
@@ -779,9 +780,12 @@ const AgentDashboard: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {t('agent.dashboard.title')}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 0 }}>
+            {t('agent.dashboard.title')}
+          </Typography>
+          {profile?.agent?.is_verified && <StatusBadge type="verified" />}
+        </Box>
         <Typography variant="body1" color="text.secondary">
           {t('common.welcomeBack')}, {user?.name}!{' '}
           {t('common.manageDeliveryOrders')}

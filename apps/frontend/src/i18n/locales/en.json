@@ -48,6 +48,8 @@
     "warning": "Warning",
     "info": "Information",
     "language": "Language",
+    "verified": "Verified",
+    "admin": "Admin",
     "loadingData": "Loading data...",
     "savingData": "Saving data...",
     "updatingData": "Updating data...",
@@ -179,7 +181,14 @@
     "login": "Login",
     "logout": "Logout",
     "profile": "Profile",
-    "welcome": "Welcome"
+    "welcome": "Welcome",
+    "emailVerification": {
+      "title": "Please verify your email address",
+      "message": "We sent a verification email to {{email}}. Please check your inbox and click the verification link to complete your account setup.",
+      "resendButton": "Request new verification email",
+      "resendSuccess": "Redirecting to verification page...",
+      "resendError": "Failed to redirect to verification page. Please try again."
+    }
   },
   "dashboard": {
     "title": "Dashboard",
