@@ -4,7 +4,13 @@ import { useGraphQLRequest } from './useGraphQLRequest';
 
 const GET_INVENTORY_ITEMS = `
   query GetInventoryItems {
-    business_inventory {
+    business_inventory(
+      where: {
+        business_location: {
+          business: { is_verified: { _eq: true } }
+        }
+      }
+    ) {
       id
       business_location_id
       item_id
@@ -65,6 +71,11 @@ const GET_INVENTORY_ITEMS = `
         name
         location_type
         is_primary
+        business {
+          id
+          name
+          is_verified
+        }
         address {
           id
           address_line_1
@@ -140,6 +151,11 @@ export interface InventoryItem {
     name: string;
     location_type: string;
     is_primary: boolean;
+    business: {
+      id: string;
+      name: string;
+      is_verified: boolean;
+    };
     address: {
       id: string;
       address_line_1: string;

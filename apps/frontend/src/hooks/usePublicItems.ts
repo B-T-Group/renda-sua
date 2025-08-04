@@ -9,7 +9,10 @@ interface PublicItemsResponse {
 const GET_PUBLIC_ITEMS = `
   query GetPublicItems {
     items(
-      where: { is_active: { _eq: true } }
+      where: { 
+        is_active: { _eq: true },
+        business: { is_verified: { _eq: true } }
+      }
       order_by: { name: asc }
     ) {
       id
@@ -38,6 +41,11 @@ const GET_PUBLIC_ITEMS = `
       business_id
       created_at
       updated_at
+      business {
+        id
+        name
+        is_verified
+      }
       brand {
         id
         name

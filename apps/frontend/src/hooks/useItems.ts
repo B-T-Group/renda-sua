@@ -30,6 +30,11 @@ export interface Item {
   business_id: string;
   created_at: string;
   updated_at: string;
+  business?: {
+    id: string;
+    name: string;
+    is_verified: boolean;
+  };
   brand?: {
     id: string;
     name: string;

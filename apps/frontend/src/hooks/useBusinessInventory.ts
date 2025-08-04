@@ -154,7 +154,10 @@ const GET_BUSINESS_INVENTORY = `
 const GET_AVAILABLE_ITEMS = `
   query GetAvailableItems {
     items(
-      where: { is_active: { _eq: true } }
+      where: { 
+        is_active: { _eq: true },
+        business: { is_verified: { _eq: true } }
+      }
       order_by: { name: asc }
     ) {
       id
@@ -183,6 +186,11 @@ const GET_AVAILABLE_ITEMS = `
       min_order_quantity
       max_order_quantity
       is_active
+      business {
+        id
+        name
+        is_verified
+      }
     }
   }
 `;
