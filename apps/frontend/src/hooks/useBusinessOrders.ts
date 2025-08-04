@@ -145,6 +145,7 @@ const GET_BUSINESS_ORDERS = `
       }
       assigned_agent {
         id
+        is_verified
         user {
           id
           first_name

@@ -158,6 +158,8 @@ export class AgentsController {
             business {
               id
               name
+              is_admin
+              is_verified
               user {
                 id
                 first_name

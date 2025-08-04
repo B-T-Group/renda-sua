@@ -52,6 +52,8 @@ insert_permissions:
       columns:
         - user_id
         - name
+        - is_admin
+        - is_verified
   - role: user
     permission:
       check: {}
@@ -61,6 +63,8 @@ insert_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
   - role: client
     permission:
       check: {}
@@ -70,6 +74,8 @@ insert_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
   - role: agent
     permission:
       check: {}
@@ -79,6 +85,8 @@ insert_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
 select_permissions:
   - role: business
     permission:
@@ -88,6 +96,8 @@ select_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
       filter: {}
   - role: client
     permission:
@@ -97,6 +107,8 @@ select_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
       filter: {}
   - role: agent
     permission:
@@ -106,6 +118,8 @@ select_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
       filter: {}
   - role: anonymous
     permission:
@@ -114,6 +128,8 @@ select_permissions:
         - name
         - created_at
         - updated_at
+        - is_admin
+        - is_verified
       filter: {}
 update_permissions:
   - role: business
@@ -121,6 +137,8 @@ update_permissions:
       columns:
         - name
         - updated_at
+        - is_admin
+        - is_verified
       filter:
         user:
           identifier:

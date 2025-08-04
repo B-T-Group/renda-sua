@@ -145,6 +145,9 @@ export class HasuraSystemService {
         businesses(where: { id: { _eq: $id } }) {
           id
           user_id
+          name
+          is_admin
+          is_verified
         }
       }
     `;
@@ -161,6 +164,8 @@ export class HasuraSystemService {
         agents(where: { id: { _eq: $id } }) {
           id
           user_id
+          vehicle_type_id
+          is_verified
         }
       }
     `;

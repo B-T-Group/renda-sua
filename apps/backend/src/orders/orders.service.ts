@@ -907,6 +907,7 @@ export class OrdersService {
           total_amount
           currency
           business_id
+          verified_agent_delivery
           business {
             user_id
           }

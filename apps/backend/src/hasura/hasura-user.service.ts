@@ -48,6 +48,7 @@ export interface AgentRecord {
   id: string;
   user_id: string;
   vehicle_type_id: string;
+  is_verified: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,8 @@ export interface BusinessRecord {
   id: string;
   user_id: string;
   name: string;
+  is_admin: boolean;
+  is_verified: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -346,6 +349,7 @@ export class HasuraUserService {
             id
             user_id
             vehicle_type_id
+            is_verified
             created_at
             updated_at
           }
@@ -383,6 +387,7 @@ export class HasuraUserService {
         id: agent.id,
         user_id: agent.user_id,
         vehicle_type_id: agent.vehicle_type_id,
+        is_verified: agent.is_verified,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
       },
@@ -437,6 +442,8 @@ export class HasuraUserService {
             id
             user_id
             name
+            is_admin
+            is_verified
             created_at
             updated_at
           }
@@ -474,6 +481,8 @@ export class HasuraUserService {
         id: business.id,
         user_id: business.user_id,
         name: business.name,
+        is_admin: business.is_admin,
+        is_verified: business.is_verified,
         created_at: business.created_at,
         updated_at: business.updated_at,
       },
@@ -805,6 +814,8 @@ export class HasuraUserService {
             }
           }
           name
+          is_admin
+          is_verified
           created_at
           updated_at
         }
@@ -824,6 +835,7 @@ export class HasuraUserService {
           id
           user_id
           vehicle_type_id
+          is_verified
           agent_addresses {
             address {
               id

@@ -37,6 +37,7 @@ insert_permissions:
       columns:
         - user_id
         - vehicle_type_id
+        - is_verified
   - role: user
     permission:
       check: {}
@@ -46,6 +47,7 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
   - role: client
     permission:
       check: {}
@@ -55,6 +57,7 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
   - role: business
     permission:
       check: {}
@@ -64,6 +67,7 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
 select_permissions:
   - role: agent
     permission:
@@ -73,6 +77,7 @@ select_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
       filter:
         user:
           identifier:
@@ -85,6 +90,7 @@ select_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
       filter:
         user:
           identifier:
@@ -97,6 +103,7 @@ select_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
       filter:
         user:
           identifier:
@@ -109,6 +116,7 @@ select_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
+        - is_verified
       filter:
         user:
           identifier:
@@ -119,6 +127,7 @@ update_permissions:
       columns:
         - vehicle_type_id
         - updated_at
+        - is_verified
       filter:
         user:
           identifier:

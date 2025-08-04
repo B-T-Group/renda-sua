@@ -248,6 +248,8 @@ export class AppController {
                   id
                   user_id
                   name
+                  is_admin
+                  is_verified
                   created_at
                   updated_at
                 }
