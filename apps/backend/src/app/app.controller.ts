@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
+import { Public } from '../auth/public.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { AppService } from './app.service';
 
@@ -20,6 +21,7 @@ export class AppController {
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger
   ) {}
 
+  @Public()
   @Get('health')
   getHealth(): { status: string; timestamp: string } {
     this.logger.info('GET /health endpoint called', {

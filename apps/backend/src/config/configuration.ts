@@ -78,6 +78,11 @@ export interface AirtelMoneyConfig {
   remittanceSecondaryKey?: string;
 }
 
+export interface Auth0Config {
+  domain: string;
+  audience: string;
+}
+
 export interface OrderConfig {
   agentHoldPercentage: number;
 }
@@ -96,6 +101,7 @@ export interface Configuration {
   mtnMomo: MtnMomoConfig;
   airtelMoney: AirtelMoneyConfig;
   order: OrderConfig;
+  auth0: Auth0Config;
 }
 
 import {
@@ -225,6 +231,11 @@ export default async (): Promise<Configuration> => {
       agentHoldPercentage: parseFloat(
         process.env.AGENT_HOLD_PERCENTAGE || '80'
       ),
+    },
+    auth0: {
+      domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
+      audience:
+        process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
     },
   };
 };

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { environment } from '../config/environment';
 
 export const useGraphQLClient = () => {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } =
+    useAuth0();
   const [client, setClient] = useState<GraphQLClient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,9 +86,26 @@ export const useGraphQLClient = () => {
         });
       } catch (error) {
         console.error('Error getting authenticated client:', error);
-        return null;
+        // Try to refresh token
+        try {
+          await getAccessTokenSilently({ cacheMode: 'off' });
+          const newToken = await getAccessTokenSilently();
+          return new GraphQLClient(environment.hasuraUrl, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${newToken}`,
+            },
+          });
+        } catch (refreshError) {
+          console.error(
+            'Token refresh failed, redirecting to login:',
+            refreshError
+          );
+          await loginWithRedirect();
+          return null;
+        }
       }
-    }, [isAuthenticated, getAccessTokenSilently]);
+    }, [isAuthenticated, getAccessTokenSilently, loginWithRedirect]);
 
   return {
     client,

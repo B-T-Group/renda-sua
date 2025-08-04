@@ -7,6 +7,7 @@ import { AddressesModule } from '../addresses/addresses.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AirtelMoneyController } from '../airtel-money/airtel-money.controller';
 import { AirtelMoneyModule } from '../airtel-money/airtel-money.module';
+import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
@@ -43,6 +44,7 @@ import { AppService } from './app.service';
         });
       },
     }),
+    AuthModule,
     HasuraModule,
     UsersModule,
     AccountsModule,

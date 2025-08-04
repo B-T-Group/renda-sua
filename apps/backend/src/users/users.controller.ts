@@ -1,13 +1,14 @@
 import {
-  Controller,
-  Post,
   Body,
+  Controller,
   Get,
   HttpException,
   HttpStatus,
+  Post,
 } from '@nestjs/common';
-import { HasuraUserService } from '../hasura/hasura-user.service';
+import { CurrentUser } from '../auth/user.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 
 @Controller('users')
 export class UsersController {
@@ -17,7 +18,7 @@ export class UsersController {
   ) {}
 
   @Get('me')
-  async getCurrentUser() {
+  async getCurrentUser(@CurrentUser() auth0User: any) {
     try {
       const user = await this.hasuraUserService.getUser();
 
@@ -27,6 +28,11 @@ export class UsersController {
         success: true,
         user,
         identifier,
+        auth0User: {
+          sub: auth0User.sub,
+          email: auth0User.email,
+          email_verified: auth0User.email_verified,
+        },
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
