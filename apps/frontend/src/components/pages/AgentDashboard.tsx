@@ -4,6 +4,7 @@ import {
   Cancel,
   CheckCircle,
   DirectionsCar,
+  ExpandMore,
   History,
   LocalShipping,
   LocationOn,
@@ -21,7 +22,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
   Container,
+  IconButton,
   List,
   ListItem,
   ListItemText,
@@ -595,6 +598,9 @@ const AgentDashboard: React.FC = () => {
     severity: 'success',
   });
 
+  const [completedOrdersExpanded, setCompletedOrdersExpanded] = useState(false);
+  const [cancelledOrdersExpanded, setCancelledOrdersExpanded] = useState(false);
+
   const handleTopUpClick = () => {
     // Navigate to profile page for account management
     window.location.href = '/profile';
@@ -870,56 +876,126 @@ const AgentDashboard: React.FC = () => {
       {/* Cancelled/Failed Orders Section */}
       {categorizedOrders.cancelled.length > 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mb: 3,
+              cursor: 'pointer',
+            }}
+            onClick={() => setCancelledOrdersExpanded(!cancelledOrdersExpanded)}
+            role="button"
+            tabIndex={0}
+            aria-expanded={cancelledOrdersExpanded}
+            aria-label={
+              cancelledOrdersExpanded
+                ? 'Collapse cancelled orders'
+                : 'Expand cancelled orders'
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setCancelledOrdersExpanded(!cancelledOrdersExpanded);
+              }
+            }}
+          >
             <Cancel sx={{ mr: 2, color: 'error.main' }} />
-            <Typography variant="h5" component="h2">
+            <Typography variant="h5" component="h2" sx={{ flexGrow: 1 }}>
               {t('common.cancelledOrders')} (
               {categorizedOrders.cancelled.length})
             </Typography>
+            <IconButton
+              size="small"
+              sx={{
+                transform: cancelledOrdersExpanded
+                  ? 'rotate(180deg)'
+                  : 'rotate(0deg)',
+                transition: 'transform 0.3s ease-in-out',
+              }}
+            >
+              <ExpandMore />
+            </IconButton>
           </Box>
 
-          <Box>
-            {categorizedOrders.cancelled.map((order: Order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                showActions={false}
-                agentAddress={
-                  profile?.agent && (profile.agent as any).address
-                    ? (profile.agent as any).address
-                    : undefined
-                }
-              />
-            ))}
-          </Box>
+          <Collapse in={cancelledOrdersExpanded}>
+            <Box>
+              {categorizedOrders.cancelled.map((order: Order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  showActions={false}
+                  agentAddress={
+                    profile?.agent && (profile.agent as any).address
+                      ? (profile.agent as any).address
+                      : undefined
+                  }
+                />
+              ))}
+            </Box>
+          </Collapse>
         </Paper>
       )}
 
       {/* Completed Orders Section - At the bottom */}
       {categorizedOrders.completed.length > 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mb: 3,
+              cursor: 'pointer',
+            }}
+            onClick={() => setCompletedOrdersExpanded(!completedOrdersExpanded)}
+            role="button"
+            tabIndex={0}
+            aria-expanded={completedOrdersExpanded}
+            aria-label={
+              completedOrdersExpanded
+                ? 'Collapse completed orders'
+                : 'Expand completed orders'
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setCompletedOrdersExpanded(!completedOrdersExpanded);
+              }
+            }}
+          >
             <CheckCircle sx={{ mr: 2, color: 'success.main' }} />
-            <Typography variant="h5" component="h2">
+            <Typography variant="h5" component="h2" sx={{ flexGrow: 1 }}>
               {t('common.completedOrders')} (
               {categorizedOrders.completed.length})
             </Typography>
+            <IconButton
+              size="small"
+              sx={{
+                transform: completedOrdersExpanded
+                  ? 'rotate(180deg)'
+                  : 'rotate(0deg)',
+                transition: 'transform 0.3s ease-in-out',
+              }}
+            >
+              <ExpandMore />
+            </IconButton>
           </Box>
 
-          <Box>
-            {categorizedOrders.completed.map((order: Order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                showActions={false}
-                agentAddress={
-                  profile?.agent && (profile.agent as any).address
-                    ? (profile.agent as any).address
-                    : undefined
-                }
-              />
-            ))}
-          </Box>
+          <Collapse in={completedOrdersExpanded}>
+            <Box>
+              {categorizedOrders.completed.map((order: Order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  showActions={false}
+                  agentAddress={
+                    profile?.agent && (profile.agent as any).address
+                      ? (profile.agent as any).address
+                      : undefined
+                  }
+                />
+              ))}
+            </Box>
+          </Collapse>
         </Paper>
       )}
 
