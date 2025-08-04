@@ -25,17 +25,33 @@ export class AuthGuard implements CanActivate {
     private configService: ConfigService,
     private reflector: Reflector
   ) {
-    const auth0Config = this.configService.get('auth0');
-    if (!auth0Config?.domain) {
-      throw new Error('AUTH0_DOMAIN environment variable is required');
-    }
+    // Initialize JWKS client lazily to ensure configuration is loaded
+    this.jwksClient = null as any;
+  }
 
-    this.jwksClient = new jwksClient.JwksClient({
-      jwksUri: `https://${auth0Config.domain}/.well-known/jwks.json`,
-      cache: true,
-      cacheMaxEntries: 5,
-      cacheMaxAge: 600000, // 10 minutes
-    });
+  private getJwksClient(): jwksClient.JwksClient {
+    if (!this.jwksClient) {
+      const auth0Config = this.configService.get('auth0');
+
+      this.logger.debug('Auth0 config:', { auth0Config });
+
+      if (!auth0Config?.domain) {
+        this.logger.error('AUTH0_DOMAIN environment variable is required');
+        throw new Error('AUTH0_DOMAIN environment variable is required');
+      }
+
+      this.logger.log(
+        `Initializing JWKS client for domain: ${auth0Config.domain}`
+      );
+
+      this.jwksClient = new jwksClient.JwksClient({
+        jwksUri: `https://${auth0Config.domain}/.well-known/jwks.json`,
+        cache: true,
+        cacheMaxEntries: 5,
+        cacheMaxAge: 600000, // 10 minutes
+      });
+    }
+    return this.jwksClient;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -45,6 +61,7 @@ export class AuthGuard implements CanActivate {
     ]);
 
     if (isPublic) {
+      this.logger.debug('Public route, skipping authentication');
       return true;
     }
 
@@ -59,6 +76,7 @@ export class AuthGuard implements CanActivate {
     try {
       const payload = await this.verifyToken(token);
       request.user = payload;
+      this.logger.debug('Token verified successfully');
       return true;
     } catch (error) {
       this.logger.error('Token verification failed', (error as Error).message);
@@ -73,12 +91,13 @@ export class AuthGuard implements CanActivate {
 
   private async verifyToken(token: string): Promise<any> {
     const auth0Config = this.configService.get('auth0');
+    const jwksClient = this.getJwksClient();
 
     return new Promise((resolve, reject) => {
       jwt.verify(
         token,
         (header, callback) => {
-          this.jwksClient.getSigningKey(header.kid, (err, key) => {
+          jwksClient.getSigningKey(header.kid, (err, key) => {
             if (err) {
               return callback(err);
             }
