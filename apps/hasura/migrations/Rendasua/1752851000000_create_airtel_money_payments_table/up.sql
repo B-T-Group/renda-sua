@@ -21,8 +21,24 @@ CREATE INDEX idx_airtel_money_payments_reference ON public.airtel_money_payments
 CREATE INDEX idx_airtel_money_payments_status ON public.airtel_money_payments(status);
 CREATE INDEX idx_airtel_money_payments_created_at ON public.airtel_money_payments(created_at);
 
+-- Create or replace the updated_at trigger function (if it doesn't exist)
+CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()
+RETURNS TRIGGER AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
+  RETURN _new;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Add updated_at trigger
 CREATE TRIGGER set_airtel_money_payments_updated_at
     BEFORE UPDATE ON public.airtel_money_payments
     FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at(); 
+    EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+-- Add comment to the trigger
+COMMENT ON TRIGGER set_airtel_money_payments_updated_at ON public.airtel_money_payments
+    IS 'trigger to set value of column "updated_at" to current timestamp on row update'; 
