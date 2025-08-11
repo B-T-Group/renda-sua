@@ -66,8 +66,15 @@ export const useAdminAgents = () => {
         () => client.get(`/admin/agents?${params.toString()}`),
         'admin.loading.fetchAgents'
       );
-      setAgents(data.items || []);
-      setTotal(data.total || 0);
+      const items = data.items || data.agents || [];
+      setAgents(items);
+      setTotal(
+        typeof data.total === 'number'
+          ? data.total
+          : Array.isArray(items)
+          ? items.length
+          : 0
+      );
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchAgents');
     } finally {

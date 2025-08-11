@@ -86,8 +86,15 @@ export const useAdminClients = () => {
         () => client.get(`/admin/clients?${params.toString()}`),
         'admin.loading.fetchClients'
       );
-      setClients(data.items || []);
-      setTotal(data.total || 0);
+      const items = data.items || data.clients || [];
+      setClients(items);
+      setTotal(
+        typeof data.total === 'number'
+          ? data.total
+          : Array.isArray(items)
+          ? items.length
+          : 0
+      );
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchClients');
     } finally {

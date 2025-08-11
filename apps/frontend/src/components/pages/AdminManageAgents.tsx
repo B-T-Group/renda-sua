@@ -17,13 +17,28 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageAgents: React.FC = () => {
-  const { agents, loading, error, fetchAgents, updateAgent } = useAdminAgents();
+  const {
+    agents,
+    total,
+    page,
+    limit,
+    search,
+    setPage,
+    setLimit,
+    setSearch,
+    loading,
+    error,
+    fetchAgents,
+    updateAgent,
+  } = useAdminAgents();
   const { vehicleTypes } = useVehicleTypes();
+  const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -49,15 +64,54 @@ const AdminManageAgents: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h5">Manage Agents</Typography>
-        <Button
-          startIcon={<RefreshIcon />}
-          variant="outlined"
-          onClick={fetchAgents}
-        >
-          Refresh
-        </Button>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Typography variant="h5">
+          {t('admin.manageAgents', 'Manage Agents')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            label={t('common.search', 'Search')}
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="agents-page-size">
+              {t('common.pageSize', 'Page size')}
+            </InputLabel>
+            <Select
+              labelId="agents-page-size"
+              label={t('common.pageSize', 'Page size')}
+              value={String(limit)}
+              onChange={(e) => {
+                setPage(1);
+                setLimit(Number(e.target.value));
+              }}
+            >
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={25}>25</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            startIcon={<RefreshIcon />}
+            variant="outlined"
+            onClick={fetchAgents}
+          >
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -96,6 +150,42 @@ const AdminManageAgents: React.FC = () => {
                   }
                 />
               ))}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.results', '{{count}} results', { count: total })}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    {t('common.prev', 'Prev')}
+                  </Button>
+                  <Typography variant="body2">
+                    {t('common.page', 'Page')} {page} /{' '}
+                    {Math.max(1, Math.ceil((total || 0) / (limit || 1)))}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={
+                      page >=
+                      Math.max(1, Math.ceil((total || 0) / (limit || 1)))
+                    }
+                    onClick={() => setPage(page + 1)}
+                  >
+                    {t('common.next', 'Next')}
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           )}
         </CardContent>

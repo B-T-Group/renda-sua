@@ -67,8 +67,15 @@ export const useAdminBusinesses = () => {
         () => client.get(`/admin/businesses?${params.toString()}`),
         'admin.loading.fetchBusinesses'
       );
-      setBusinesses(data.items || []);
-      setTotal(data.total || 0);
+      const items = data.items || data.businesses || [];
+      setBusinesses(items);
+      setTotal(
+        typeof data.total === 'number'
+          ? data.total
+          : Array.isArray(items)
+          ? items.length
+          : 0
+      );
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchBusinesses');
     } finally {

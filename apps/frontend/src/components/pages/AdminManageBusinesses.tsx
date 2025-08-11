@@ -8,17 +8,35 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   Switch,
   TextField,
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
 import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageBusinesses: React.FC = () => {
-  const { businesses, loading, error, fetchBusinesses, updateBusiness } =
-    useAdminBusinesses();
+  const {
+    businesses,
+    total,
+    page,
+    limit,
+    search,
+    setPage,
+    setLimit,
+    setSearch,
+    loading,
+    error,
+    fetchBusinesses,
+    updateBusiness,
+  } = useAdminBusinesses();
+  const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -47,15 +65,54 @@ const AdminManageBusinesses: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h5">Manage Businesses</Typography>
-        <Button
-          startIcon={<RefreshIcon />}
-          variant="outlined"
-          onClick={fetchBusinesses}
-        >
-          Refresh
-        </Button>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Typography variant="h5">
+          {t('admin.manageBusinesses', 'Manage Businesses')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            label={t('common.search', 'Search')}
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="businesses-page-size">
+              {t('common.pageSize', 'Page size')}
+            </InputLabel>
+            <Select
+              labelId="businesses-page-size"
+              label={t('common.pageSize', 'Page size')}
+              value={String(limit)}
+              onChange={(e) => {
+                setPage(1);
+                setLimit(Number(e.target.value));
+              }}
+            >
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={25}>25</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            startIcon={<RefreshIcon />}
+            variant="outlined"
+            onClick={fetchBusinesses}
+          >
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -94,6 +151,42 @@ const AdminManageBusinesses: React.FC = () => {
                   }
                 />
               ))}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.results', '{{count}} results', { count: total })}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    {t('common.prev', 'Prev')}
+                  </Button>
+                  <Typography variant="body2">
+                    {t('common.page', 'Page')} {page} /{' '}
+                    {Math.max(1, Math.ceil((total || 0) / (limit || 1)))}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={
+                      page >=
+                      Math.max(1, Math.ceil((total || 0) / (limit || 1)))
+                    }
+                    onClick={() => setPage(page + 1)}
+                  >
+                    {t('common.next', 'Next')}
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           )}
         </CardContent>
