@@ -2,6 +2,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Alert, Box, Button, Snackbar, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserVerification } from '../../hooks/useUserVerification';
 
 /**
  * EmailVerificationNotice Component
@@ -25,6 +26,7 @@ const EmailVerificationNotice: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const { resendVerificationEmail } = useUserVerification();
 
   // Don't show if user is not authenticated or email is already verified
   if (!isAuthenticated || !user || user.email_verified) {
@@ -34,20 +36,10 @@ const EmailVerificationNotice: React.FC = () => {
   const handleResendEmail = async () => {
     setIsResending(true);
     try {
-      // For Auth0, we need to redirect to their verification page
-      // This will allow users to request a new verification email
-      const auth0Domain = process.env.REACT_APP_AUTH0_DOMAIN;
-      const clientId = process.env.REACT_APP_AUTH0_CLIENT_ID;
-      const redirectUri = window.location.origin;
-
-      // Redirect to Auth0's verification page
-      const verificationUrl = `https://${auth0Domain}/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&scope=openid%20profile%20email&prompt=login&screen_hint=signup`;
-
-      window.location.href = verificationUrl;
+      await resendVerificationEmail();
+      setShowSuccess(true);
     } catch (error) {
-      console.error('Error redirecting to verification page:', error);
+      console.error('Error resending verification email:', error);
       setShowError(true);
     } finally {
       setIsResending(false);
