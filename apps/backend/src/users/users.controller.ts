@@ -2,10 +2,12 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -14,7 +16,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 export class UsersController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly auth0Service: Auth0Service
   ) {}
 
   @Get('me')
@@ -247,6 +250,27 @@ export class UsersController {
           error: error.message,
         },
         HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post('resend_verification')
+  @HttpCode(202)
+  async resendVerification(@CurrentUser() auth0User: any) {
+    try {
+      const userId = auth0User?.sub;
+      if (!userId) {
+        throw new Error('Invalid current user');
+      }
+      await this.auth0Service.resendVerificationEmail(userId);
+      return { success: true };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to resend verification email',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

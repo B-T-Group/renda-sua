@@ -54,6 +54,7 @@
     }
   },
   "dependencies": {
+    "auth0": "^4.28.0",
     "@aws-sdk/client-s3": "^3.839.0",
     "@aws-sdk/s3-request-presigner": "^3.839.0",
     "@nestjs/config": "^4.0.2",
