@@ -62,3 +62,4 @@ export { useAdminClients } from './useAdminClients';
 export { useApiWithLoading } from './useApiWithLoading';
 export { useCurrentLocation } from './useCurrentLocation';
 export * from './useDistanceMatrix';
+export { useVehicleTypes } from './useVehicleTypes';

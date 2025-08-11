@@ -18,51 +18,21 @@ array_relationships:
 select_permissions:
   - role: client
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - item_category_id
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: agent
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - item_category_id
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: business
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - item_category_id
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: user
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - item_category_id
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: anonymous
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - item_category_id
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}

@@ -18,9 +18,11 @@ import {
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
+import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 
 const AdminManageAgents: React.FC = () => {
   const { agents, loading, error, fetchAgents, updateAgent } = useAdminAgents();
+  const { vehicleTypes } = useVehicleTypes();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -154,10 +156,11 @@ const AdminManageAgents: React.FC = () => {
                   }))
                 }
               >
-                <MenuItem value="bike">Bike</MenuItem>
-                <MenuItem value="car">Car</MenuItem>
-                <MenuItem value="van">Van</MenuItem>
-                <MenuItem value="other">Other</MenuItem>
+                {vehicleTypes.map((vt) => (
+                  <MenuItem key={vt.id} value={vt.id}>
+                    {vt.comment || vt.id}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

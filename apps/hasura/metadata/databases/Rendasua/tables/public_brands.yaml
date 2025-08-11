@@ -12,50 +12,25 @@ array_relationships:
           name: items
           schema: public
 select_permissions:
+  - role: client
+    permission:
+      columns: '*'
+      filter: {}
   - role: agent
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: business
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - created_at
-        - updated_at
-      filter: {}
-  - role: client
-    permission:
-      columns:
-        - id
-        - name
-        - description
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: user
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
   - role: anonymous
     permission:
-      columns:
-        - id
-        - name
-        - description
-        - created_at
-        - updated_at
+      columns: '*'
       filter: {}
 insert_permissions:
   - role: business

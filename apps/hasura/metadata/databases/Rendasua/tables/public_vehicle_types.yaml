@@ -12,3 +12,24 @@ array_relationships:
         remote_table:
           name: agents
           schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns: '*'
+      filter: {}
+  - role: agent
+    permission:
+      columns: '*'
+      filter: {}
+  - role: business
+    permission:
+      columns: '*'
+      filter: {}
+  - role: user
+    permission:
+      columns: '*'
+      filter: {}
+  - role: anonymous
+    permission:
+      columns: '*'
+      filter: {}
