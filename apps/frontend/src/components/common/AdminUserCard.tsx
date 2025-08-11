@@ -68,15 +68,41 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
         {!!accounts?.length && (
           <Box>
             <Typography variant="subtitle2">Accounts</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            <Box
+              sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}
+            >
               {accounts.map((acc) => (
-                <Chip
+                <Box
                   key={acc.id}
-                  label={`${acc.currency}: ${acc.total_balance}`}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                />
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Chip label={acc.currency} size="small" />
+                  {typeof acc.available_balance === 'number' && (
+                    <Chip
+                      label={`Available: ${acc.available_balance}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                  {typeof acc.withheld_balance === 'number' && (
+                    <Chip
+                      label={`Withheld: ${acc.withheld_balance}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                  <Chip
+                    label={`Total: ${acc.total_balance}`}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                </Box>
               ))}
             </Box>
           </Box>
