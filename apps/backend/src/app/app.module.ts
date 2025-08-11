@@ -17,6 +17,7 @@ import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrdersModule } from '../orders/orders.module';
 import { UsersModule } from '../users/users.module';
+import { AdminModule } from '../admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -55,6 +56,7 @@ import { AppService } from './app.service';
     MtnMomoModule,
     AirtelMoneyModule,
     GoogleModule,
+    AdminModule,
   ],
   controllers: [
     AppController,
