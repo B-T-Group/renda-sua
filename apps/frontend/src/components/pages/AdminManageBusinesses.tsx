@@ -81,6 +81,7 @@ const AdminManageBusinesses: React.FC = () => {
                   } • Admin: ${b.is_admin ? 'Yes' : 'No'}`}
                   accounts={(b.user as any).accounts}
                   addresses={(b as any).addresses}
+                  admin={!!b.is_admin}
                   footer={
                     <Button
                       size="small"

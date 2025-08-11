@@ -83,6 +83,7 @@ const AdminManageAgents: React.FC = () => {
                   } • Verified: ${a.is_verified ? 'Yes' : 'No'}`}
                   accounts={(a.user as any).accounts}
                   addresses={(a as any).addresses}
+                  verified={!!a.is_verified}
                   footer={
                     <Button
                       size="small"

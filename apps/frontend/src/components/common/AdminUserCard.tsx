@@ -8,6 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import React from 'react';
+import StatusBadge from './StatusBadge';
 
 export interface AdminAccount {
   id: string;
@@ -34,6 +35,8 @@ interface AdminUserCardProps {
   addresses?: AdminAddress[];
   footer?: React.ReactNode;
   headerRight?: React.ReactNode;
+  verified?: boolean;
+  admin?: boolean;
 }
 
 const AdminUserCard: React.FC<AdminUserCardProps> = ({
@@ -43,6 +46,8 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
   addresses = [],
   footer,
   headerRight,
+  verified,
+  admin,
 }) => {
   return (
     <Card sx={{ p: 2, width: '100%' }}>
@@ -62,7 +67,11 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
               </Typography>
             )}
           </Box>
-          {headerRight}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {verified && <StatusBadge type="verified" />}
+            {admin && <StatusBadge type="admin" />}
+            {headerRight}
+          </Box>
         </Box>
 
         {!!accounts?.length && (

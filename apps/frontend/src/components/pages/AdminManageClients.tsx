@@ -76,6 +76,7 @@ const AdminManageClients: React.FC = () => {
                   subtitle={c.user.email}
                   accounts={c.user.accounts}
                   addresses={c.addresses}
+                  verified={undefined}
                   footer={
                     <Button
                       size="small"
