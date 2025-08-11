@@ -38,6 +38,10 @@ export const useAdminBusinesses = () => {
     loadingMessage: 'admin.loading.default',
   });
   const [businesses, setBusinesses] = useState<AdminBusiness[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,17 +58,23 @@ export const useAdminBusinesses = () => {
     setError(null);
     try {
       const client = ensureClient(apiClient);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (search) params.set('search', search);
       const { data } = await callWithLoading(
-        () => client.get('/admin/businesses'),
+        () => client.get(`/admin/businesses?${params.toString()}`),
         'admin.loading.fetchBusinesses'
       );
-      setBusinesses(data.businesses || []);
+      setBusinesses(data.items || []);
+      setTotal(data.total || 0);
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchBusinesses');
     } finally {
       setLoading(false);
     }
-  }, [apiClient, callWithLoading, ensureClient]);
+  }, [apiClient, callWithLoading, ensureClient, page, limit, search]);
 
   const updateBusiness = useCallback(
     async (id: string, updates: UpdateBusinessPayload) => {
@@ -83,7 +93,30 @@ export const useAdminBusinesses = () => {
   }, [fetchBusinesses]);
 
   return useMemo(
-    () => ({ businesses, loading, error, fetchBusinesses, updateBusiness }),
-    [businesses, loading, error, fetchBusinesses, updateBusiness]
+    () => ({
+      businesses,
+      total,
+      page,
+      limit,
+      search,
+      setPage,
+      setLimit,
+      setSearch,
+      loading,
+      error,
+      fetchBusinesses,
+      updateBusiness,
+    }),
+    [
+      businesses,
+      total,
+      page,
+      limit,
+      search,
+      loading,
+      error,
+      fetchBusinesses,
+      updateBusiness,
+    ]
   );
 };

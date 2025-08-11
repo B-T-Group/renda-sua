@@ -37,6 +37,10 @@ export const useAdminAgents = () => {
     loadingMessage: 'admin.loading.default',
   });
   const [agents, setAgents] = useState<AdminAgent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,17 +57,23 @@ export const useAdminAgents = () => {
     setError(null);
     try {
       const client = ensureClient(apiClient);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (search) params.set('search', search);
       const { data } = await callWithLoading(
-        () => client.get('/admin/agents'),
+        () => client.get(`/admin/agents?${params.toString()}`),
         'admin.loading.fetchAgents'
       );
-      setAgents(data.agents || []);
+      setAgents(data.items || []);
+      setTotal(data.total || 0);
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchAgents');
     } finally {
       setLoading(false);
     }
-  }, [apiClient, callWithLoading, ensureClient]);
+  }, [apiClient, callWithLoading, ensureClient, page, limit, search]);
 
   const updateAgent = useCallback(
     async (id: string, updates: UpdateAgentPayload) => {
@@ -82,7 +92,30 @@ export const useAdminAgents = () => {
   }, [fetchAgents]);
 
   return useMemo(
-    () => ({ agents, loading, error, fetchAgents, updateAgent }),
-    [agents, loading, error, fetchAgents, updateAgent]
+    () => ({
+      agents,
+      total,
+      page,
+      limit,
+      search,
+      setPage,
+      setLimit,
+      setSearch,
+      loading,
+      error,
+      fetchAgents,
+      updateAgent,
+    }),
+    [
+      agents,
+      total,
+      page,
+      limit,
+      search,
+      loading,
+      error,
+      fetchAgents,
+      updateAgent,
+    ]
   );
 };

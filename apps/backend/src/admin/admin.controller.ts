@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
@@ -16,21 +17,45 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('agents')
-  async getAgents() {
-    const agents = await this.adminService.getAgentsWithDetails();
-    return { success: true, agents };
+  async getAgents(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
+    const result = await this.adminService.getAgentsPaginated({
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+      search: search || '',
+    });
+    return { success: true, ...result };
   }
 
   @Get('clients')
-  async getClients() {
-    const clients = await this.adminService.getClientsWithDetails();
-    return { success: true, clients };
+  async getClients(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
+    const result = await this.adminService.getClientsPaginated({
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+      search: search || '',
+    });
+    return { success: true, ...result };
   }
 
   @Get('businesses')
-  async getBusinesses() {
-    const businesses = await this.adminService.getBusinessesWithDetails();
-    return { success: true, businesses };
+  async getBusinesses(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
+    const result = await this.adminService.getBusinessesPaginated({
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+      search: search || '',
+    });
+    return { success: true, ...result };
   }
 
   @Patch('agents/:id')

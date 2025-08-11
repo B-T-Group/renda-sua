@@ -188,6 +188,145 @@ const UPDATE_BUSINESS_MUTATION = `
 export class AdminService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
+  private buildAgentWhere(search: string): any {
+    if (!search) return {};
+    const pattern = `%${search}%`;
+    return {
+      _or: [
+        { user: { email: { _ilike: pattern } } },
+        { user: { first_name: { _ilike: pattern } } },
+        { user: { last_name: { _ilike: pattern } } },
+        {
+          _and: [
+            { user: { first_name: { _ilike: pattern } } },
+            { user: { last_name: { _ilike: pattern } } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private buildClientWhere(search: string): any {
+    if (!search) return {};
+    const pattern = `%${search}%`;
+    return {
+      _or: [
+        { user: { email: { _ilike: pattern } } },
+        { user: { first_name: { _ilike: pattern } } },
+        { user: { last_name: { _ilike: pattern } } },
+        {
+          _and: [
+            { user: { first_name: { _ilike: pattern } } },
+            { user: { last_name: { _ilike: pattern } } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private buildBusinessWhere(search: string): any {
+    if (!search) return {};
+    const pattern = `%${search}%`;
+    return {
+      _or: [
+        { name: { _ilike: pattern } },
+        { user: { email: { _ilike: pattern } } },
+        { user: { first_name: { _ilike: pattern } } },
+        { user: { last_name: { _ilike: pattern } } },
+      ],
+    };
+  }
+
+  async getAgentsPaginated(params: {
+    page: number;
+    limit: number;
+    search: string;
+  }) {
+    const { page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const query = `
+      query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!) {
+        agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+          id user_id vehicle_type_id is_verified created_at updated_at
+          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          agent_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+        }
+        agents_aggregate(where: $where) { aggregate { count } }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      where: this.buildAgentWhere(search),
+      limit,
+      offset,
+    });
+    const items = (result.agents || []).map((a: any) => ({
+      ...a,
+      addresses: (a.agent_addresses || []).map((x: any) => x.address),
+    }));
+    const total = result.agents_aggregate?.aggregate?.count || 0;
+    return { items, total, page, limit };
+  }
+
+  async getClientsPaginated(params: {
+    page: number;
+    limit: number;
+    search: string;
+  }) {
+    const { page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const query = `
+      query GetClients($where: clients_bool_exp, $limit: Int!, $offset: Int!) {
+        clients(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+          id user_id created_at updated_at
+          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          client_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+        }
+        clients_aggregate(where: $where) { aggregate { count } }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      where: this.buildClientWhere(search),
+      limit,
+      offset,
+    });
+    const items = (result.clients || []).map((c: any) => ({
+      ...c,
+      addresses: (c.client_addresses || []).map((x: any) => x.address),
+    }));
+    const total = result.clients_aggregate?.aggregate?.count || 0;
+    return { items, total, page, limit };
+  }
+
+  async getBusinessesPaginated(params: {
+    page: number;
+    limit: number;
+    search: string;
+  }) {
+    const { page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const query = `
+      query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
+        businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
+          id user_id name is_admin is_verified created_at updated_at
+          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          business_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+        }
+        businesses_aggregate(where: $where) { aggregate { count } }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      where: this.buildBusinessWhere(search),
+      limit,
+      offset,
+    });
+    const items = (result.businesses || []).map((b: any) => ({
+      ...b,
+      addresses: (b.business_addresses || []).map((x: any) => x.address),
+    }));
+    const total = result.businesses_aggregate?.aggregate?.count || 0;
+    return { items, total, page, limit };
+  }
+
   async getAgentsWithDetails() {
     const result = await this.hasuraSystemService.executeQuery(
       GET_AGENTS_QUERY

@@ -57,6 +57,10 @@ export const useAdminClients = () => {
     loadingMessage: 'admin.loading.default',
   });
   const [clients, setClients] = useState<AdminClient[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,17 +77,23 @@ export const useAdminClients = () => {
     setError(null);
     try {
       const client = ensureClient(apiClient);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (search) params.set('search', search);
       const { data } = await callWithLoading(
-        () => client.get('/admin/clients'),
+        () => client.get(`/admin/clients?${params.toString()}`),
         'admin.loading.fetchClients'
       );
-      setClients(data.clients || []);
+      setClients(data.items || []);
+      setTotal(data.total || 0);
     } catch (err: any) {
       setError(err?.message || 'admin.errors.fetchClients');
     } finally {
       setLoading(false);
     }
-  }, [apiClient, callWithLoading, ensureClient]);
+  }, [apiClient, callWithLoading, ensureClient, page, limit, search]);
 
   const updateClient = useCallback(
     async (id: string, updates: UpdateClientPayload) => {
@@ -102,7 +112,30 @@ export const useAdminClients = () => {
   }, [fetchClients]);
 
   return useMemo(
-    () => ({ clients, loading, error, fetchClients, updateClient }),
-    [clients, loading, error, fetchClients, updateClient]
+    () => ({
+      clients,
+      total,
+      page,
+      limit,
+      search,
+      setPage,
+      setLimit,
+      setSearch,
+      loading,
+      error,
+      fetchClients,
+      updateClient,
+    }),
+    [
+      clients,
+      total,
+      page,
+      limit,
+      search,
+      loading,
+      error,
+      fetchClients,
+      updateClient,
+    ]
   );
 };
