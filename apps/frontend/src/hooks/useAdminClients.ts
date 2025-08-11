@@ -10,6 +10,16 @@ export interface AdminClientUser {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  accounts?: Array<{
+    id: string;
+    currency: string;
+    available_balance: number;
+    withheld_balance: number;
+    total_balance: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 export interface AdminClient {
@@ -18,7 +28,21 @@ export interface AdminClient {
   created_at: string;
   updated_at: string;
   user: AdminClientUser;
-  addresses: any[];
+  addresses: Array<{
+    id: string;
+    address_line_1: string;
+    address_line_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+    is_primary: boolean;
+    address_type: string;
+    latitude?: number;
+    longitude?: number;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 export interface UpdateClientPayload {

@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useAdminBusinesses } from '../../hooks/useAdminBusinesses';
+import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageBusinesses: React.FC = () => {
   const { businesses, loading, error, fetchBusinesses, updateBusiness } =
@@ -70,23 +71,17 @@ const AdminManageBusinesses: React.FC = () => {
           {loading ? (
             <Typography>Loading...</Typography>
           ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 2,
-              }}
-            >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {businesses.map((b) => (
-                <Card key={b.id} sx={{ p: 2 }}>
-                  <Typography variant="h6">{b.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Owner: {b.user.first_name} {b.user.last_name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Admin: {b.is_admin ? 'Yes' : 'No'}
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
+                <AdminUserCard
+                  key={b.id}
+                  title={b.name}
+                  subtitle={`Owner: ${b.user.first_name} ${
+                    b.user.last_name
+                  } • Admin: ${b.is_admin ? 'Yes' : 'No'}`}
+                  accounts={(b.user as any).accounts}
+                  addresses={(b as any).addresses}
+                  footer={
                     <Button
                       size="small"
                       variant="contained"
@@ -95,8 +90,8 @@ const AdminManageBusinesses: React.FC = () => {
                     >
                       Edit
                     </Button>
-                  </Box>
-                </Card>
+                  }
+                />
               ))}
             </Box>
           )}

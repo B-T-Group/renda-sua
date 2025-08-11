@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useAdminClients } from '../../hooks/useAdminClients';
+import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageClients: React.FC = () => {
   const { clients, loading, error, fetchClients, updateClient } =
@@ -67,22 +68,15 @@ const AdminManageClients: React.FC = () => {
           {loading ? (
             <Typography>Loading...</Typography>
           ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 2,
-              }}
-            >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {clients.map((c) => (
-                <Card key={c.id} sx={{ p: 2 }}>
-                  <Typography variant="h6">
-                    {c.user.first_name} {c.user.last_name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {c.user.email}
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
+                <AdminUserCard
+                  key={c.id}
+                  title={`${c.user.first_name} ${c.user.last_name}`}
+                  subtitle={c.user.email}
+                  accounts={c.user.accounts}
+                  addresses={c.addresses}
+                  footer={
                     <Button
                       size="small"
                       variant="contained"
@@ -91,8 +85,8 @@ const AdminManageClients: React.FC = () => {
                     >
                       Edit
                     </Button>
-                  </Box>
-                </Card>
+                  }
+                />
               ))}
             </Box>
           )}

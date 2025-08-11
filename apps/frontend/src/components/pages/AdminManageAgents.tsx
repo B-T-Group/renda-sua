@@ -16,9 +16,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
+import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageAgents: React.FC = () => {
   const { agents, loading, error, fetchAgents, updateAgent } = useAdminAgents();
@@ -26,10 +27,7 @@ const AdminManageAgents: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
-  const current = useMemo(
-    () => agents.find((a) => a.id === editingId),
-    [agents, editingId]
-  );
+  // Note: Removed unused memoized current agent per project rule
 
   const openEdit = (id: string) => {
     const target = agents.find((a) => a.id === id);
@@ -75,28 +73,17 @@ const AdminManageAgents: React.FC = () => {
           {loading ? (
             <Typography>Loading...</Typography>
           ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 2,
-              }}
-            >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {agents.map((a) => (
-                <Card key={a.id} sx={{ p: 2 }}>
-                  <Typography variant="h6">
-                    {a.user.first_name} {a.user.last_name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {a.user.email}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Vehicle: {a.vehicle_type_id}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Verified: {a.is_verified ? 'Yes' : 'No'}
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
+                <AdminUserCard
+                  key={a.id}
+                  title={`${a.user.first_name} ${a.user.last_name}`}
+                  subtitle={`${a.user.email} • Vehicle: ${
+                    a.vehicle_type_id
+                  } • Verified: ${a.is_verified ? 'Yes' : 'No'}`}
+                  accounts={(a.user as any).accounts}
+                  addresses={(a as any).addresses}
+                  footer={
                     <Button
                       size="small"
                       variant="contained"
@@ -105,8 +92,8 @@ const AdminManageAgents: React.FC = () => {
                     >
                       Edit
                     </Button>
-                  </Box>
-                </Card>
+                  }
+                />
               ))}
             </Box>
           )}
