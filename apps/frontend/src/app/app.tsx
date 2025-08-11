@@ -4,12 +4,15 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container } from '@mui/material';
 import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import ProtectedRoute from '../components/auth/ProtectedRoute';
 import EmailVerificationNotice from '../components/auth/EmailVerificationNotice';
+import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
+import AdminManageAgents from '../components/pages/AdminManageAgents';
+import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
+import AdminManageClients from '../components/pages/AdminManageClients';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
 import BusinessDashboard from '../components/pages/BusinessDashboard';
@@ -107,6 +110,30 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/agents"
+              element={
+                <ProtectedRoute>
+                  <AdminManageAgents />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/clients"
+              element={
+                <ProtectedRoute>
+                  <AdminManageClients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/businesses"
+              element={
+                <ProtectedRoute>
+                  <AdminManageBusinesses />
                 </ProtectedRoute>
               }
             />

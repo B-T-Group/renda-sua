@@ -1,8 +1,11 @@
 import {
+  Person as AgentIcon,
   TrendingUp as AnalyticsIcon,
+  Business as BizIcon,
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
+  Group as UsersIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -79,6 +82,30 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#d32f2f',
       path: '/business/analytics',
+    },
+    {
+      title: 'Manage Agents',
+      description: 'View and update agents',
+      icon: <AgentIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#2e7d32',
+      path: '/admin/agents',
+    },
+    {
+      title: 'Manage Clients',
+      description: 'View and update clients',
+      icon: <UsersIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#0288d1',
+      path: '/admin/clients',
+    },
+    {
+      title: 'Manage Businesses',
+      description: 'View and update businesses',
+      icon: <BizIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#6d4c41',
+      path: '/admin/businesses',
     },
   ];
 

@@ -56,6 +56,9 @@ export { default as LoadingSpinner } from '../components/common/LoadingSpinner';
 // New export
 export { usePublicItems } from './usePublicItems';
 
+export { useAdminAgents } from './useAdminAgents';
+export { useAdminBusinesses } from './useAdminBusinesses';
+export { useAdminClients } from './useAdminClients';
 export { useApiWithLoading } from './useApiWithLoading';
 export { useCurrentLocation } from './useCurrentLocation';
 export * from './useDistanceMatrix';
