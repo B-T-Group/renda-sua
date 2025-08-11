@@ -35,6 +35,10 @@
     "invalidInput": "Saisie invalide",
     "requiredField": "Champ requis",
     "refresh": "Actualiser",
+    "pageSize": "Taille de page",
+    "results": "{{count}} résultats",
+    "page": "Page",
+    "prev": "Préc.",
     "yes": "Oui",
     "no": "Non",
     "actions": "Actions",
@@ -175,6 +179,11 @@
       "allLocations": "Tous les Emplacements",
       "showing": "Affichage"
     }
+  },
+  "admin": {
+    "manageAgents": "Gérer les Agents",
+    "manageClients": "Gérer les Clients",
+    "manageBusinesses": "Gérer les Entreprises"
   },
   "auth": {
     "login": "Connexion",
@@ -510,6 +519,7 @@
       "editLocation": "Modifier l'emplacement",
       "deleteLocation": "Supprimer l'emplacement",
       "name": "Nom de l'emplacement",
+      "locationName": "Nom de l'emplacement",
       "address": "Adresse",
       "phone": "Téléphone",
       "email": "E-mail",

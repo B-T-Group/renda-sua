@@ -35,6 +35,10 @@
     "invalidInput": "Invalid input",
     "requiredField": "Required field",
     "refresh": "Refresh",
+    "pageSize": "Page size",
+    "results": "{{count}} results",
+    "page": "Page",
+    "prev": "Prev",
     "actions": "Actions",
     "view": "View",
     "rowsPerPage": "Rows per page:",
@@ -176,6 +180,11 @@
       "allLocations": "All Locations",
       "showing": "Showing"
     }
+  },
+  "admin": {
+    "manageAgents": "Manage Agents",
+    "manageClients": "Manage Clients",
+    "manageBusinesses": "Manage Businesses"
   },
   "auth": {
     "login": "Login",
@@ -553,6 +562,7 @@
       "editLocation": "Edit Location",
       "deleteLocation": "Delete Location",
       "name": "Location Name",
+      "locationName": "Location Name",
       "address": "Address",
       "phone": "Phone",
       "email": "Email",
@@ -583,7 +593,10 @@
       "locationsRefreshed": "Locations refreshed successfully",
       "refreshError": "Failed to refresh locations"
     },
+
     "items": {
+      "weight": "Weight",
+      "color": "Color",
       "title": "Item Management",
       "subtitle": "Manage your product catalog, inventory levels, and item information",
       "addItem": "Add Item",
