@@ -27,7 +27,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useClientOrders } from '../../hooks/useClientOrders';
@@ -296,6 +296,49 @@ const ClientOrders: React.FC = () => {
     });
   };
 
+  // Group by status and order statuses with 'complete' last
+  const statusOrder = useMemo(
+    () => [
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'assigned_to_agent',
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+      'delivered',
+      'cancelled',
+      'failed',
+      'refunded',
+      'complete',
+    ],
+    []
+  );
+
+  const groupedByStatus = useMemo(() => {
+    const buckets: Record<string, any[]> = {};
+    (orders || []).forEach((o) => {
+      const s = o.current_status || 'unknown';
+      if (!buckets[s]) buckets[s] = [];
+      buckets[s].push(o);
+    });
+    return buckets;
+  }, [orders]);
+
+  const orderedStatuses = useMemo(() => {
+    const seen = Array.from(
+      new Set((orders || []).map((o) => o.current_status || 'unknown'))
+    );
+    return seen.sort((a, b) => {
+      const ia = statusOrder.indexOf(a);
+      const ib = statusOrder.indexOf(b);
+      const va = ia === -1 ? 999 : ia;
+      const vb = ib === -1 ? 999 : ib;
+      return va - vb;
+    });
+  }, [orders, statusOrder]);
+
   useEffect(() => {
     fetchOrders({});
   }, [fetchOrders]);
@@ -454,330 +497,354 @@ const ClientOrders: React.FC = () => {
             </Typography>
           </Paper>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {orders.map((order) => {
-              const distanceInfo = getOrderDistanceInfo(order);
-              return (
-                <Box key={order.id} sx={{ width: '100%' }}>
-                  <Card>
-                    <CardContent>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography variant="h6" component="div">
-                          {t('common.orderNumber', {
-                            number: order.order_number,
-                          })}
-                        </Typography>
-                        <Chip
-                          label={t(
-                            `common.orderStatus.${
-                              order.current_status || 'unknown'
-                            }`
-                          )}
-                          color={
-                            getStatusColor(
-                              order.current_status || 'unknown'
-                            ) as any
-                          }
-                          size="small"
-                        />
-                      </Box>
-
-                      <Box mb={2}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <ShoppingCartIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {order.business?.name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          {/* <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} /> */}
-                          {order.order_items?.length || 0}{' '}
-                          {t('orders.table.items')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatAddress(order.delivery_address)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          display="flex"
-                          alignItems="center"
-                        >
-                          <ScheduleIcon sx={{ mr: 1, fontSize: 16 }} />
-                          {formatDate(order.created_at)}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography variant="h6" color="primary">
-                          {formatCurrency(order.total_amount, order.currency)}
-                        </Typography>
-                        {order.assigned_agent && (
-                          <Chip
-                            label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
-                            size="small"
-                            color="secondary"
-                          />
-                        )}
-                      </Box>
-
-                      {/* Order Actions */}
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        {getAvailableActions(order).map((action) => (
-                          <Button
-                            key={action.status}
-                            size="small"
-                            color={action.color}
-                            variant="outlined"
-                            onClick={() =>
-                              handleActionClick(order.id, action.status)
-                            }
-                            disabled={updateLoading}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {orderedStatuses.map((statusKey) => (
+              <Box key={statusKey} sx={{ width: '100%' }}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  {t(`common.orderStatus.${statusKey}`)} (
+                  {groupedByStatus[statusKey]?.length || 0})
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {(groupedByStatus[statusKey] || []).map((order) => {
+                    const distanceInfo = getOrderDistanceInfo(order);
+                    return (
+                      <Card key={order.id}>
+                        <CardContent>
+                          <Box
+                            display="flex"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            mb={2}
                           >
-                            {action.label}
-                          </Button>
-                        ))}
-                        <Button
-                          size="small"
-                          color="info"
-                          variant="outlined"
-                          startIcon={<HistoryIcon />}
-                          onClick={() => {
-                            setSelectedOrderForHistory(order);
-                            setHistoryDialogOpen(true);
-                          }}
-                          disabled={updateLoading}
-                        >
-                          {t('orders.actions.viewHistory', 'History')}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="text"
-                          onClick={() => handleExpandOrder(order.id)}
-                          endIcon={
-                            expandedOrder === order.id ? (
-                              <ExpandLessIcon />
-                            ) : (
-                              <ExpandMoreIcon />
-                            )
-                          }
-                        >
-                          {expandedOrder === order.id
-                            ? t('common.hideDetails')
-                            : t('common.showDetails')}
-                        </Button>
-                      </Box>
+                            <Typography variant="h6" component="div">
+                              {t('common.orderNumber', {
+                                number: order.order_number,
+                              })}
+                            </Typography>
+                            <Chip
+                              label={t(
+                                `common.orderStatus.${
+                                  order.current_status || 'unknown'
+                                }`
+                              )}
+                              color={
+                                getStatusColor(
+                                  order.current_status || 'unknown'
+                                ) as any
+                              }
+                              size="small"
+                            />
+                          </Box>
 
-                      {/* Warning for delivered orders */}
-                      {order.current_status === 'delivered' && (
-                        <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
-                          <Typography variant="body2">
-                            {t(
-                              'orders.completionWarning',
-                              'Please complete your order within 8 hours to finalize the transaction. Penalties may apply if not completed on time.'
+                          <Box mb={2}>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              display="flex"
+                              alignItems="center"
+                              mb={1}
+                            >
+                              <ShoppingCartIcon sx={{ mr: 1, fontSize: 16 }} />
+                              {order.business?.name}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              display="flex"
+                              alignItems="center"
+                              mb={1}
+                            >
+                              {/* <ReceiptIcon sx={{ mr: 1, fontSize: 16 }} /> */}
+                              {order.order_items?.length || 0}{' '}
+                              {t('orders.table.items')}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              display="flex"
+                              alignItems="center"
+                              mb={1}
+                            >
+                              <LocalShippingIcon sx={{ mr: 1, fontSize: 16 }} />
+                              {formatAddress(order.delivery_address)}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              display="flex"
+                              alignItems="center"
+                            >
+                              <ScheduleIcon sx={{ mr: 1, fontSize: 16 }} />
+                              {formatDate(order.created_at)}
+                            </Typography>
+                          </Box>
+
+                          <Box
+                            display="flex"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            mb={2}
+                          >
+                            <Typography variant="h6" color="primary">
+                              {formatCurrency(
+                                order.total_amount,
+                                order.currency
+                              )}
+                            </Typography>
+                            {order.assigned_agent && (
+                              <Chip
+                                label={`${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`}
+                                size="small"
+                                color="secondary"
+                              />
                             )}
-                          </Typography>
-                        </Alert>
-                      )}
+                          </Box>
 
-                      {/* Order Details */}
-                      <Collapse in={expandedOrder === order.id}>
-                        <Divider sx={{ my: 2 }} />
-                        <Typography variant="subtitle2" gutterBottom>
-                          {t('orders.orderItems')}
-                        </Typography>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 1,
-                          }}
-                        >
-                          {order.order_items?.map((item: any) => (
-                            <Box key={item.id} sx={{ width: '100%' }}>
-                              <Paper
+                          {/* Order Actions */}
+                          <Box
+                            sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}
+                          >
+                            {getAvailableActions(order).map((action) => (
+                              <Button
+                                key={action.status}
+                                size="small"
+                                color={action.color}
                                 variant="outlined"
-                                sx={{
-                                  p: 2,
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  gap: 2,
-                                }}
+                                onClick={() =>
+                                  handleActionClick(order.id, action.status)
+                                }
+                                disabled={updateLoading}
                               >
-                                {/* Item Image */}
-                                <Box sx={{ flexShrink: 0 }}>
-                                  {item.item?.item_images?.[0]?.image_url ? (
-                                    <Avatar
-                                      src={item.item.item_images[0].image_url}
-                                      alt={item.item_name}
-                                      sx={{
-                                        width: 150,
-                                        height: 150,
-                                        borderRadius: 1,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                      }}
-                                      variant="rounded"
-                                      onError={(e) => {
-                                        // Hide the image on error and show fallback
-                                        e.currentTarget.style.display = 'none';
-                                      }}
-                                    />
-                                  ) : null}
-                                  {!item.item?.item_images?.[0]?.image_url && (
-                                    <Avatar
-                                      sx={{
-                                        width: 150,
-                                        height: 150,
-                                        borderRadius: 1,
-                                        bgcolor: 'grey.100',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        color: 'grey.500',
-                                      }}
-                                      variant="rounded"
-                                    >
-                                      <ShoppingCartIcon />
-                                    </Avatar>
-                                  )}
-                                </Box>
+                                {action.label}
+                              </Button>
+                            ))}
+                            <Button
+                              size="small"
+                              color="info"
+                              variant="outlined"
+                              startIcon={<HistoryIcon />}
+                              onClick={() => {
+                                setSelectedOrderForHistory(order);
+                                setHistoryDialogOpen(true);
+                              }}
+                              disabled={updateLoading}
+                            >
+                              {t('orders.actions.viewHistory', 'History')}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => handleExpandOrder(order.id)}
+                              endIcon={
+                                expandedOrder === order.id ? (
+                                  <ExpandLessIcon />
+                                ) : (
+                                  <ExpandMoreIcon />
+                                )
+                              }
+                            >
+                              {expandedOrder === order.id
+                                ? t('common.hideDetails')
+                                : t('common.showDetails')}
+                            </Button>
+                          </Box>
 
-                                {/* Item Details */}
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography
-                                    variant="body1"
-                                    fontWeight="medium"
-                                    noWrap
-                                  >
-                                    {item.item_name}
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {item.quantity} x{' '}
-                                    {formatCurrency(
-                                      item.unit_price,
-                                      order.currency
-                                    )}
-                                  </Typography>
-                                  {item.item?.brand?.name && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      {t('orders.brand')}:{' '}
-                                      {item.item.brand.name}
-                                    </Typography>
-                                  )}
-                                  {item.item?.model && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                      display="block"
-                                    >
-                                      {t('orders.model')}: {item.item.model}
-                                    </Typography>
-                                  )}
-                                  {item.item?.color && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                      display="block"
-                                    >
-                                      {t('orders.color')}: {item.item.color}
-                                    </Typography>
-                                  )}
-                                  {item.item?.size && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                      display="block"
-                                    >
-                                      {t('orders.size')}: {item.item.size}{' '}
-                                      {item.item.size_unit}
-                                    </Typography>
-                                  )}
-                                </Box>
+                          {/* Warning for delivered orders */}
+                          {order.current_status === 'delivered' && (
+                            <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+                              <Typography variant="body2">
+                                {t(
+                                  'orders.completionWarning',
+                                  'Please complete your order within 8 hours to finalize the transaction. Penalties may apply if not completed on time.'
+                                )}
+                              </Typography>
+                            </Alert>
+                          )}
 
-                                {/* Price */}
-                                <Box textAlign="right" sx={{ flexShrink: 0 }}>
-                                  <Typography
-                                    variant="body1"
-                                    fontWeight="medium"
-                                  >
-                                    {formatCurrency(
-                                      item.total_price,
-                                      order.currency
-                                    )}
-                                  </Typography>
-                                </Box>
-                              </Paper>
-                            </Box>
-                          ))}
-                        </Box>
-                        {order.special_instructions && (
-                          <>
+                          {/* Order Details */}
+                          <Collapse in={expandedOrder === order.id}>
                             <Divider sx={{ my: 2 }} />
                             <Typography variant="subtitle2" gutterBottom>
-                              {t('orders.specialInstructions')}
+                              {t('orders.orderItems')}
                             </Typography>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 1,
+                              }}
+                            >
+                              {order.order_items?.map((item: any) => (
+                                <Box key={item.id} sx={{ width: '100%' }}>
+                                  <Paper
+                                    variant="outlined"
+                                    sx={{
+                                      p: 2,
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      gap: 2,
+                                    }}
+                                  >
+                                    {/* Item Image */}
+                                    <Box sx={{ flexShrink: 0 }}>
+                                      {item.item?.item_images?.[0]
+                                        ?.image_url ? (
+                                        <Avatar
+                                          src={
+                                            item.item.item_images[0].image_url
+                                          }
+                                          alt={item.item_name}
+                                          sx={{
+                                            width: 150,
+                                            height: 150,
+                                            borderRadius: 1,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                          }}
+                                          variant="rounded"
+                                          onError={(e) => {
+                                            // Hide the image on error and show fallback
+                                            e.currentTarget.style.display =
+                                              'none';
+                                          }}
+                                        />
+                                      ) : null}
+                                      {!item.item?.item_images?.[0]
+                                        ?.image_url && (
+                                        <Avatar
+                                          sx={{
+                                            width: 150,
+                                            height: 150,
+                                            borderRadius: 1,
+                                            bgcolor: 'grey.100',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            color: 'grey.500',
+                                          }}
+                                          variant="rounded"
+                                        >
+                                          <ShoppingCartIcon />
+                                        </Avatar>
+                                      )}
+                                    </Box>
+
+                                    {/* Item Details */}
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography
+                                        variant="body1"
+                                        fontWeight="medium"
+                                        noWrap
+                                      >
+                                        {item.item_name}
+                                      </Typography>
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                      >
+                                        {item.quantity} x{' '}
+                                        {formatCurrency(
+                                          item.unit_price,
+                                          order.currency
+                                        )}
+                                      </Typography>
+                                      {item.item?.brand?.name && (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                        >
+                                          {t('orders.brand')}:{' '}
+                                          {item.item.brand.name}
+                                        </Typography>
+                                      )}
+                                      {item.item?.model && (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                          display="block"
+                                        >
+                                          {t('orders.model')}: {item.item.model}
+                                        </Typography>
+                                      )}
+                                      {item.item?.color && (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                          display="block"
+                                        >
+                                          {t('orders.color')}: {item.item.color}
+                                        </Typography>
+                                      )}
+                                      {item.item?.size && (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                          display="block"
+                                        >
+                                          {t('orders.size')}: {item.item.size}{' '}
+                                          {item.item.size_unit}
+                                        </Typography>
+                                      )}
+                                    </Box>
+
+                                    {/* Price */}
+                                    <Box
+                                      textAlign="right"
+                                      sx={{ flexShrink: 0 }}
+                                    >
+                                      <Typography
+                                        variant="body1"
+                                        fontWeight="medium"
+                                      >
+                                        {formatCurrency(
+                                          item.total_price,
+                                          order.currency
+                                        )}
+                                      </Typography>
+                                    </Box>
+                                  </Paper>
+                                </Box>
+                              ))}
+                            </Box>
+                            {order.special_instructions && (
+                              <>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle2" gutterBottom>
+                                  {t('orders.specialInstructions')}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {order.special_instructions}
+                                </Typography>
+                              </>
+                            )}
+                          </Collapse>
+                          {/* Distance Matrix display */}
+                          {distanceLoading && (
                             <Typography variant="body2" color="text.secondary">
-                              {order.special_instructions}
+                              {t('common.loading')} distance...
                             </Typography>
-                          </>
-                        )}
-                      </Collapse>
-                      {/* Distance Matrix display */}
-                      {distanceLoading && (
-                        <Typography variant="body2" color="text.secondary">
-                          {t('common.loading')} distance...
-                        </Typography>
-                      )}
-                      {distanceError && (
-                        <Typography variant="body2" color="error">
-                          {t('common.error')}: {distanceError}
-                        </Typography>
-                      )}
-                      {distanceInfo && (
-                        <Typography variant="body2" color="text.secondary">
-                          {t('Distance')}: {distanceInfo.distance},{' '}
-                          {t('Duration')}: {distanceInfo.duration}
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </Card>
+                          )}
+                          {distanceError && (
+                            <Typography variant="body2" color="error">
+                              {t('common.error')}: {distanceError}
+                            </Typography>
+                          )}
+                          {distanceInfo && (
+                            <Typography variant="body2" color="text.secondary">
+                              {t('Distance')}: {distanceInfo.distance},{' '}
+                              {t('Duration')}: {distanceInfo.duration}
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </Box>
-              );
-            })}
+              </Box>
+            ))}
           </Box>
         )}
       </Container>
