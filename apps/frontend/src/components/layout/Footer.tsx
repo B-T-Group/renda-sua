@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import Logo from '../common/Logo';
 
 const Footer: React.FC = () => {
@@ -77,6 +78,15 @@ const Footer: React.FC = () => {
                   {t('footer.support')}
                 </Typography>
                 <Stack spacing={0.5}>
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/faq"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.faq', 'FAQ')}
+                  </Typography>
                   <Typography variant="body2" color="grey.400">
                     {t('footer.helpCenter')}
                   </Typography>

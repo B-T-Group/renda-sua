@@ -912,6 +912,38 @@
       "tryDifferentFilters": "Try adjusting your search or filters to find what you're looking for."
     }
   },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "subtitle": "Answers for clients, agents, and businesses on Rendasua",
+    "client": {
+      "topup": {
+        "q": "How do clients pay for orders?",
+        "a": "Clients must top up their Rendasua account via Mobile Money before placing an order. The purchase amount is held until delivery is confirmed."
+      }
+    },
+    "agent": {
+      "hold": {
+        "q": "What balance do agents need to deliver an item?",
+        "a": "Agents can only deliver an item if they have a required percentage of the item's value in their account. When an agent claims a delivery, this amount is placed on hold until the delivery is confirmed."
+      },
+      "verifiedLessHold": {
+        "q": "Do verified agents have lower hold requirements?",
+        "a": "Yes. Verified agents have a lower hold requirement compared to unverified agents."
+      }
+    },
+    "business": {
+      "verification": {
+        "q": "When are business items visible on the site?",
+        "a": "A business must be verified by Rendasua before their items become visible to clients."
+      }
+    },
+    "settlement": {
+      "release": {
+        "q": "When are holds released and who gets paid?",
+        "a": "After the item is delivered and the client confirms, the agent's hold is released and delivery fees are paid. The client's purchase amount on hold is released to the business that provided the item."
+      }
+    }
+  },
   "footer": {
     "description": "Empowering businesses, agents, and clients with a comprehensive platform for seamless operations, inventory management, and growth.",
     "platform": "Platform",
@@ -922,6 +954,7 @@
     "helpCenter": "Help Center",
     "contact": "Contact Us",
     "documentation": "Documentation",
+    "faq": "FAQ",
     "company": "Company",
     "about": "About Us",
     "privacy": "Privacy Policy",

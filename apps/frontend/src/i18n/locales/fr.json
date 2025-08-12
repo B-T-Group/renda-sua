@@ -878,6 +878,38 @@
       "tryDifferentFilters": "Essayez d'ajuster votre recherche ou vos filtres pour trouver ce que vous cherchez."
     }
   },
+  "faq": {
+    "title": "Questions fréquentes",
+    "subtitle": "Réponses pour les clients, agents et entreprises sur Rendasua",
+    "client": {
+      "topup": {
+        "q": "Comment les clients paient-ils leurs commandes ?",
+        "a": "Les clients doivent recharger leur compte Rendasua via Mobile Money avant de passer une commande. Le montant de l'achat est bloqué jusqu'à la confirmation de la livraison."
+      }
+    },
+    "agent": {
+      "hold": {
+        "q": "Quel solde les agents doivent-ils avoir pour livrer un article ?",
+        "a": "Les agents ne peuvent livrer un article que s'ils ont un pourcentage requis de la valeur de l'article sur leur compte. Lorsqu'un agent revendique une livraison, ce montant est mis en attente jusqu'à confirmation de la livraison."
+      },
+      "verifiedLessHold": {
+        "q": "Les agents vérifiés ont-ils une exigence de blocage plus faible ?",
+        "a": "Oui. Les agents vérifiés ont une exigence de blocage inférieure à celle des agents non vérifiés."
+      }
+    },
+    "business": {
+      "verification": {
+        "q": "Quand les articles d'une entreprise sont-ils visibles sur le site ?",
+        "a": "Une entreprise doit être vérifiée par Rendasua avant que ses articles ne deviennent visibles pour les clients."
+      }
+    },
+    "settlement": {
+      "release": {
+        "q": "Quand les fonds bloqués sont-ils libérés et qui est payé ?",
+        "a": "Après la livraison de l'article et la confirmation par le client, le blocage sur le compte de l'agent est levé et les frais de livraison sont payés. Le montant d'achat du client est libéré à l'entreprise qui a fourni l'article."
+      }
+    }
+  },
   "footer": {
     "description": "Autonomiser les entreprises, les agents et les clients avec une plateforme complète pour des opérations fluides, la gestion d'inventaire et la croissance.",
     "platform": "Plateforme",
@@ -888,6 +920,7 @@
     "helpCenter": "Centre d'Aide",
     "contact": "Nous Contacter",
     "documentation": "Documentation",
+    "faq": "FAQ",
     "company": "Entreprise",
     "about": "À Propos",
     "privacy": "Politique de Confidentialité",

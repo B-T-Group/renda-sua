@@ -22,6 +22,7 @@ import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
 import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
+import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
@@ -158,6 +159,9 @@ function App() {
 
             {/* Demo route */}
             <Route path="/loading-demo" element={<LoadingDemo />} />
+
+            {/* FAQ route */}
+            <Route path="/faq" element={<FAQ />} />
 
             {/* Client Orders route */}
             <Route
