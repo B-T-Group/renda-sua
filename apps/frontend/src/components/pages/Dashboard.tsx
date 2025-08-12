@@ -36,7 +36,6 @@ const Dashboard: React.FC = () => {
     error: accountError,
   } = useAccountInfo();
   const {
-    deliveryFees,
     loading: deliveryFeesLoading,
     error: deliveryFeesError,
     getDeliveryFeeForCurrency,
@@ -51,6 +50,7 @@ const Dashboard: React.FC = () => {
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState<string>('');
 
@@ -146,6 +146,7 @@ const Dashboard: React.FC = () => {
     setOrderDialogOpen(true);
     setQuantity(1);
     setSpecialInstructions('');
+    setVerifiedAgentDelivery(false);
   };
 
   const handleTopUpClick = () => {
@@ -164,6 +165,7 @@ const Dashboard: React.FC = () => {
           quantity: quantity,
         },
         special_instructions: specialInstructions,
+        verified_agent_delivery: verifiedAgentDelivery,
       };
 
       const result = await createOrder(orderData);

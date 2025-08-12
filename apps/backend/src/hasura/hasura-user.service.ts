@@ -86,6 +86,7 @@ export interface OrderItem {
 export interface CreateOrderRequest {
   item: OrderItem;
   special_instructions?: string;
+  verified_agent_delivery?: boolean;
 }
 
 export interface Item {

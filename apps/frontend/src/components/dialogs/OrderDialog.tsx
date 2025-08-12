@@ -10,9 +10,11 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -182,6 +184,13 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
               onChange={(e) => onSpecialInstructionsChange(e.target.value)}
               sx={{ mb: 2 }}
             />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <FormControlLabel
+                control={<Switch color="primary" />}
+                label="Require verified agent for delivery"
+              />
+            </Box>
 
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>

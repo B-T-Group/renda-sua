@@ -1058,6 +1058,7 @@ export class OrdersService {
     const preferred_delivery_time = null;
     const actual_delivery_time = null;
     const assigned_agent_id = null;
+    const verified_agent_delivery = !!orderData.verified_agent_delivery;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -1081,6 +1082,7 @@ export class OrdersService {
         $preferredDeliveryTime: timestamptz,
         $actualDeliveryTime: timestamptz,
         $assignedAgentId: uuid
+        $verifiedAgentDelivery: Boolean!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -1101,6 +1103,7 @@ export class OrdersService {
           preferred_delivery_time: $preferredDeliveryTime,
           current_status: $currentStatus,
           assigned_agent_id: $assignedAgentId,
+          verified_agent_delivery: $verifiedAgentDelivery,
           order_items: {
             data: $orderItems
           }
@@ -1175,6 +1178,7 @@ export class OrdersService {
         preferredDeliveryTime: preferred_delivery_time,
         actualDeliveryTime: actual_delivery_time,
         assignedAgentId: assigned_agent_id,
+        verifiedAgentDelivery: verified_agent_delivery,
       }
     );
 
