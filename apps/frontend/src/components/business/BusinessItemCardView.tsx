@@ -2,6 +2,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import {
   Box,
@@ -20,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 interface BusinessItemCardViewProps {
   item: any;
+  onViewItem: (item: any) => void;
   onEditItem: (item: any) => void;
   onDeleteItem: (item: any) => void;
   onRestockInventoryItem: (item: any) => void;
@@ -27,6 +29,7 @@ interface BusinessItemCardViewProps {
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   item,
+  onViewItem,
   onEditItem,
   onDeleteItem,
   onRestockInventoryItem,
@@ -190,6 +193,15 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
 
         {/* Actions */}
         <Stack direction="row" spacing={1} sx={{ mt: 'auto' }}>
+          <Tooltip title={t('business.items.viewItem')}>
+            <IconButton
+              size="small"
+              onClick={() => onViewItem(item)}
+              sx={{ color: theme.palette.info.main }}
+            >
+              <ViewIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title={t('business.items.editItem')}>
             <IconButton
               size="small"

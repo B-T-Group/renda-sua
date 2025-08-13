@@ -119,6 +119,134 @@ if (loading) {
 }
 ```
 
+## 📝 Form Layout Rules - MANDATORY
+
+### ✅ REQUIRED Form Layout Patterns
+
+**Always put each input on a separate line unless otherwise noted.**
+
+#### 1. Standard Form Layout
+
+```tsx
+<Grid container spacing={3}>
+  <Grid item xs={12} md={6}>
+    <TextField fullWidth label={t('form.fieldName')} value={formData.fieldName} onChange={(e) => handleInputChange('fieldName', e.target.value)} />
+  </Grid>
+  <Grid item xs={12} md={6}>
+    <TextField fullWidth label={t('form.anotherField')} value={formData.anotherField} onChange={(e) => handleInputChange('anotherField', e.target.value)} />
+  </Grid>
+</Grid>
+```
+
+#### 2. EXCEPTIONS - Related Fields on Same Line
+
+**Price and Currency:**
+
+```tsx
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.price')}
+    type="number"
+    value={formData.price}
+    onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
+  />
+</Grid>
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.currency')}
+    value={formData.currency}
+    onChange={(e) => handleInputChange('currency', e.target.value)}
+  />
+</Grid>
+```
+
+**Size and Size Unit:**
+
+```tsx
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.size')}
+    type="number"
+    value={formData.size || ''}
+    onChange={(e) => handleInputChange('size', parseFloat(e.target.value) || null)}
+  />
+</Grid>
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.sizeUnit')}
+    value={formData.size_unit}
+    onChange={(e) => handleInputChange('size_unit', e.target.value)}
+  />
+</Grid>
+```
+
+**Weight and Weight Unit:**
+
+```tsx
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.weight')}
+    type="number"
+    value={formData.weight || ''}
+    onChange={(e) => handleInputChange('weight', parseFloat(e.target.value) || null)}
+  />
+</Grid>
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.weightUnit')}
+    value={formData.weight_unit}
+    onChange={(e) => handleInputChange('weight_unit', e.target.value)}
+  />
+</Grid>
+```
+
+**Min and Max Order Quantity:**
+
+```tsx
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.minOrderQuantity')}
+    type="number"
+    value={formData.min_order_quantity}
+    onChange={(e) => handleInputChange('min_order_quantity', parseInt(e.target.value) || 1)}
+  />
+</Grid>
+<Grid item xs={12} md={6}>
+  <TextField
+    fullWidth
+    label={t('form.maxOrderQuantity')}
+    type="number"
+    value={formData.max_order_quantity || ''}
+    onChange={(e) => handleInputChange('max_order_quantity', parseInt(e.target.value) || null)}
+  />
+</Grid>
+```
+
+### ❌ FORBIDDEN Form Layout Patterns
+
+```tsx
+// DON'T put unrelated fields on the same line
+<Grid item xs={12} md={6}>
+  <TextField label="Name" />
+  <TextField label="Email" /> {/* WRONG - should be separate */}
+</Grid>
+
+// DON'T put related fields on separate lines when they should be together
+<Grid item xs={12}>
+  <TextField label="Price" />
+</Grid>
+<Grid item xs={12}>
+  <TextField label="Currency" /> {/* WRONG - should be with price */}
+</Grid>
+```
+
 ## 📦 Available Reusable Components
 
 ### Common Components (`src/components/common/`)

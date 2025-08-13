@@ -10,6 +10,7 @@ import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
+import AddItemPage from '../components/pages/AddItemPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -22,6 +23,7 @@ import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
 import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
+import EditItemPage from '../components/pages/EditItemPage';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
@@ -205,6 +207,26 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessItemsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Add Item route */}
+            <Route
+              path="/business/items/add"
+              element={
+                <ProtectedRoute>
+                  <AddItemPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Edit Item route */}
+            <Route
+              path="/business/items/:itemId/edit"
+              element={
+                <ProtectedRoute>
+                  <EditItemPage />
                 </ProtectedRoute>
               }
             />

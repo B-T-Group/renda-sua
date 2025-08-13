@@ -2,35 +2,63 @@ import {
   ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
+  PhotoCamera as PhotoCameraIcon,
 } from '@mui/icons-material';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
+  CardMedia,
   Chip,
   Container,
   Grid,
-  IconButton,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
+import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import EditItemDialog from '../business/EditItemDialog';
-import ImageUploadDialog from '../business/ImageUploadDialog';
-import ItemImageGallery from '../business/ItemImageGallery';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
+import SEOHead from '../seo/SEOHead';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`item-tabpanel-${index}`}
+      aria-labelledby={`item-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 export default function ItemViewPage() {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
@@ -39,6 +67,7 @@ export default function ItemViewPage() {
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tabValue, setTabValue] = useState(0);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
@@ -48,10 +77,15 @@ export default function ItemViewPage() {
     profile?.business?.id
   );
   const { businessLocations, fetchBusinessLocations } = useBusinessInventory();
+  const { fetchItemImages, uploadItemImage, deleteItemImage } = useItemImages();
+  const [itemImages, setItemImages] = useState<any[]>([]);
 
   useEffect(() => {
     if (itemId) {
       fetchItemDetails();
+      fetchItemImages(itemId)
+        .then(setItemImages)
+        .catch(() => {});
     }
   }, [itemId]);
 
@@ -97,7 +131,11 @@ export default function ItemViewPage() {
   };
 
   const handleBack = () => {
-    navigate('/business-dashboard');
+    navigate('/business/items');
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
   };
 
   const formatCurrency = (amount: number, currency: string) => {
@@ -110,7 +148,7 @@ export default function ItemViewPage() {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -119,38 +157,64 @@ export default function ItemViewPage() {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box display="flex" justifyContent="center" p={4}>
-          <Typography>{t('common.loading')}</Typography>
-        </Box>
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Typography>{t('common.loading')}</Typography>
       </Container>
     );
   }
 
   if (error || !item) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Alert severity="error">
           {error || t('business.inventory.itemNotFound')}
         </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={handleBack}
+          sx={{ mt: 2 }}
+        >
           {t('common.back')}
         </Button>
       </Container>
     );
   }
 
+  const mainImage = item.item_images?.find(
+    (img: any) => img.image_type === 'main'
+  );
+  const galleryImages =
+    item.item_images?.filter((img: any) => img.image_type === 'gallery') || [];
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <SEOHead
+        title={item.name}
+        description={item.description}
+        keywords={`${item.name}, ${item.brand?.name || ''}, ${
+          item.item_sub_category?.name || ''
+        }`}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-          <IconButton onClick={handleBack}>
-            <ArrowBackIcon />
-          </IconButton>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={handleBack}
+            variant="outlined"
+          >
+            {t('common.back')}
+          </Button>
           <Typography variant="h4" component="h1">
             {item.name}
           </Typography>
+          <Chip
+            label={item.is_active ? t('common.active') : t('common.inactive')}
+            color={item.is_active ? 'success' : 'default'}
+            size="small"
+          />
         </Stack>
 
         <Stack direction="row" spacing={2}>
@@ -168,273 +232,350 @@ export default function ItemViewPage() {
           >
             {t('business.inventory.updateInventory')}
           </Button>
-          <Button variant="outlined" onClick={handleManageImages}>
+          <Button
+            variant="outlined"
+            startIcon={<PhotoCameraIcon />}
+            onClick={handleManageImages}
+          >
             {t('business.inventory.manageImages')}
           </Button>
         </Stack>
       </Box>
 
+      {/* Main Content */}
       <Grid container spacing={3}>
-        {/* Item Details */}
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.itemDetails')}
-            </Typography>
-
-            <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.inventory.description')}
-                </Typography>
-                <Typography variant="body1">{item.description}</Typography>
-              </Box>
-
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.sku')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.sku || t('business.inventory.noSku')}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.category')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.item_sub_category?.item_category?.name} -{' '}
-                    {item.item_sub_category?.name}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.brand')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.brand?.name || t('business.inventory.noBrand')}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.price')}
-                  </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {formatCurrency(item.price, item.currency)}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Stack>
-          </Paper>
-
-          {/* Item Images */}
-          <Box sx={{ mt: 3 }}>
-            <ItemImageGallery
-              images={item.item_images || []}
-              itemName={item.name}
+        {/* Item Images */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardMedia
+              component="img"
+              height="400"
+              image={mainImage?.image_url || '/src/assets/no-image.svg'}
+              alt={item.name}
+              sx={{ objectFit: 'cover' }}
             />
-          </Box>
-
-          {/* Physical Properties */}
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.physicalProperties')}
-            </Typography>
-
-            <Grid container spacing={2}>
-              {item.size && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.size')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.size} {item.size_unit}
-                  </Typography>
-                </Grid>
-              )}
-              {item.weight && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.weight')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.weight} {item.weight_unit}
-                  </Typography>
-                </Grid>
-              )}
-              {item.color && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.color')}
-                  </Typography>
-                  <Typography variant="body1">{item.color}</Typography>
-                </Grid>
-              )}
-              {item.model && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.model')}
-                  </Typography>
-                  <Typography variant="body1">{item.model}</Typography>
-                </Grid>
-              )}
-              {item.material && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.material')}
-                  </Typography>
-                  <Typography variant="body1">{item.material}</Typography>
-                </Grid>
-              )}
-            </Grid>
-          </Paper>
-
-          {/* Special Properties */}
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.specialProperties')}
-            </Typography>
-
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              {item.is_fragile && (
-                <Chip
-                  label={t('business.inventory.isFragile')}
-                  color="warning"
-                  variant="outlined"
-                />
-              )}
-              {item.is_perishable && (
-                <Chip
-                  label={t('business.inventory.isPerishable')}
-                  color="warning"
-                  variant="outlined"
-                />
-              )}
-              {item.requires_special_handling && (
-                <Chip
-                  label={t('business.inventory.requiresSpecialHandling')}
-                  color="warning"
-                  variant="outlined"
-                />
-              )}
-              {!item.is_fragile &&
-                !item.is_perishable &&
-                !item.requires_special_handling && (
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.noSpecialProperties')}
-                  </Typography>
-                )}
-            </Stack>
-          </Paper>
-
-          {/* Order and Delivery Properties */}
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('business.inventory.orderAndDelivery')}
-            </Typography>
-
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.inventory.minOrderQuantity')}
+            {galleryImages.length > 0 && (
+              <Box sx={{ p: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  {t('business.items.galleryImages')}
                 </Typography>
-                <Typography variant="body1">
-                  {item.min_order_quantity}
-                </Typography>
-              </Grid>
-              {item.max_order_quantity && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.maxOrderQuantity')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.max_order_quantity}
-                  </Typography>
-                </Grid>
-              )}
-              {item.max_delivery_distance && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.maxDeliveryDistance')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.max_delivery_distance} km
-                  </Typography>
-                </Grid>
-              )}
-              {item.estimated_delivery_time && (
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.inventory.estimatedDeliveryTime')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {item.estimated_delivery_time} hours
-                  </Typography>
-                </Grid>
-              )}
-            </Grid>
-          </Paper>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {galleryImages.slice(0, 4).map((image: any) => (
+                    <Avatar
+                      key={image.id}
+                      src={image.image_url}
+                      alt={image.alt_text || item.name}
+                      sx={{ width: 60, height: 60, cursor: 'pointer' }}
+                      variant="rounded"
+                    />
+                  ))}
+                  {galleryImages.length > 4 && (
+                    <Avatar
+                      sx={{ width: 60, height: 60, bgcolor: 'grey.300' }}
+                      variant="rounded"
+                    >
+                      <Typography variant="caption">
+                        +{galleryImages.length - 4}
+                      </Typography>
+                    </Avatar>
+                  )}
+                </Box>
+              </Box>
+            )}
+          </Card>
         </Grid>
 
-        {/* Sidebar */}
-        <Grid item xs={12} md={4}>
-          <Stack spacing={3}>
-            {/* Status Card */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t('business.inventory.stockStatus')}
-                </Typography>
-                <Chip
-                  label={
-                    item.is_active
-                      ? t('business.inventory.active')
-                      : t('business.inventory.inactive')
-                  }
-                  color={item.is_active ? 'success' : 'default'}
-                  sx={{ mb: 2 }}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.inventory.createdAt')}:{' '}
-                  {formatDate(item.created_at)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.inventory.updatedAt')}:{' '}
-                  {formatDate(item.updated_at)}
-                </Typography>
-              </CardContent>
-            </Card>
+        {/* Item Details */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h5" gutterBottom>
+                {item.name}
+              </Typography>
 
-            {/* Quick Actions */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t('business.inventory.quickActions')}
-                </Typography>
-                <Stack spacing={1}>
-                  <Button
-                    variant="contained"
-                    startIcon={<InventoryIcon />}
-                    onClick={handleUpdateInventory}
-                    fullWidth
-                  >
-                    {t('business.inventory.updateInventory')}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={handleEditItem}
-                    fullWidth
-                  >
-                    {t('business.inventory.editItemButton')}
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                {item.description}
+              </Typography>
+
+              <Typography variant="h4" color="primary" gutterBottom>
+                {formatCurrency(item.price, item.currency)}
+              </Typography>
+
+              <Stack spacing={2}>
+                {item.sku && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.sku')}
+                    </Typography>
+                    <Typography variant="body1">{item.sku}</Typography>
+                  </Box>
+                )}
+
+                {item.brand && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.brand')}
+                    </Typography>
+                    <Typography variant="body1">{item.brand.name}</Typography>
+                  </Box>
+                )}
+
+                {item.item_sub_category && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.category')}
+                    </Typography>
+                    <Typography variant="body1">
+                      {item.item_sub_category.item_category?.name} &gt;{' '}
+                      {item.item_sub_category.name}
+                    </Typography>
+                  </Box>
+                )}
+
+                {item.model && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.model')}
+                    </Typography>
+                    <Typography variant="body1">{item.model}</Typography>
+                  </Box>
+                )}
+
+                {item.color && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.color')}
+                    </Typography>
+                    <Typography variant="body1">{item.color}</Typography>
+                  </Box>
+                )}
+
+                {item.material && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.material')}
+                    </Typography>
+                    <Typography variant="body1">{item.material}</Typography>
+                  </Box>
+                )}
+
+                {(item.size || item.weight) && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {t('business.items.dimensions')}
+                    </Typography>
+                    <Typography variant="body1">
+                      {item.size && `${item.size} ${item.size_unit}`}
+                      {item.size && item.weight && ' • '}
+                      {item.weight && `${item.weight} ${item.weight_unit}`}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('business.items.orderLimits')}
+                  </Typography>
+                  <Typography variant="body1">
+                    {t('business.items.minOrder')}: {item.min_order_quantity}
+                    {item.max_order_quantity &&
+                      ` • ${t('business.items.maxOrder')}: ${
+                        item.max_order_quantity
+                      }`}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('business.items.specialHandling')}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    {item.is_fragile && (
+                      <Chip
+                        label={t('business.items.fragile')}
+                        size="small"
+                        color="warning"
+                      />
+                    )}
+                    {item.is_perishable && (
+                      <Chip
+                        label={t('business.items.perishable')}
+                        size="small"
+                        color="error"
+                      />
+                    )}
+                    {item.requires_special_handling && (
+                      <Chip
+                        label={t('business.items.specialHandling')}
+                        size="small"
+                        color="info"
+                      />
+                    )}
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('business.items.createdAt')}
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(item.created_at)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
+
+      {/* Tabs for Inventory and Images */}
+      <Paper sx={{ mt: 4 }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          aria-label="item tabs"
+        >
+          <Tab label={t('business.inventory.title')} />
+          <Tab label={t('business.items.images')} />
+        </Tabs>
+
+        <TabPanel value={tabValue} index={0}>
+          {/* Inventory Management */}
+          <Typography variant="h6" gutterBottom>
+            {t('business.inventory.inventoryManagement')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            {t('business.inventory.inventoryDescription')}
+          </Typography>
+
+          {item.business_inventories && item.business_inventories.length > 0 ? (
+            <Grid container spacing={2}>
+              {item.business_inventories.map((inventory: any) => (
+                <Grid size={{ xs: 12, md: 6 }} key={inventory.id}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        {inventory.business_location?.name}
+                      </Typography>
+                      <Stack spacing={1}>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('business.inventory.availableQuantity')}
+                          </Typography>
+                          <Typography variant="h5" color="primary">
+                            {inventory.available_quantity}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('business.inventory.totalQuantity')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {inventory.quantity}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('business.inventory.reservedQuantity')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {inventory.reserved_quantity}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('business.inventory.sellingPrice')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {formatCurrency(
+                              inventory.selling_price,
+                              item.currency
+                            )}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('business.inventory.reorderPoint')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {inventory.reorder_point}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Alert severity="info">
+              {t('business.inventory.noInventoryFound')}
+            </Alert>
+          )}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={1}>
+          {/* Image Management */}
+          <Typography variant="h6" gutterBottom>
+            {t('business.items.imageManagement')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            {t('business.items.imageManagementDescription')}
+          </Typography>
+
+          {itemImages && itemImages.length > 0 ? (
+            <Grid container spacing={2}>
+              {itemImages.map((image: any) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={image.id}>
+                  <Card>
+                    <CardMedia
+                      component="img"
+                      height="200"
+                      image={image.image_url}
+                      alt={image.alt_text || item.name}
+                      sx={{ objectFit: 'cover' }}
+                    />
+                    <CardContent>
+                      <Typography variant="subtitle2" gutterBottom>
+                        {t(`business.items.imageTypes.${image.image_type}`)}
+                      </Typography>
+                      {image.alt_text && (
+                        <Typography variant="body2" color="text.secondary">
+                          {image.alt_text}
+                        </Typography>
+                      )}
+                      {image.caption && (
+                        <Typography variant="body2" color="text.secondary">
+                          {image.caption}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Alert severity="info">{t('business.items.noImagesFound')}</Alert>
+          )}
+        </TabPanel>
+      </Paper>
 
       {/* Dialogs */}
       <EditItemDialog
@@ -449,13 +590,6 @@ export default function ItemViewPage() {
         onClose={() => setShowUpdateInventoryDialog(false)}
         item={item}
         businessLocations={businessLocations}
-      />
-
-      <ImageUploadDialog
-        open={showImageUploadDialog}
-        onClose={() => setShowImageUploadDialog(false)}
-        itemId={item.id}
-        itemName={item.name}
       />
     </Container>
   );

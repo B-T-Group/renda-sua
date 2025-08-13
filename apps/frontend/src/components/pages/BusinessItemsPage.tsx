@@ -6,6 +6,7 @@ import {
   Inventory as InventoryIcon,
   Refresh as RefreshIcon,
   Upload as UploadIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -51,6 +52,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -246,6 +248,8 @@ const BusinessItemsPage: React.FC = () => {
     refreshBusinessLocations,
   } = useBusinessInventory(profile?.business?.id);
 
+  const navigate = useNavigate();
+
   // Fetch data when component mounts
   useEffect(() => {
     if (profile?.business?.id) {
@@ -260,8 +264,13 @@ const BusinessItemsPage: React.FC = () => {
   };
 
   const handleEditItem = (item: any) => {
-    setEditingItem(item);
-    setShowEditItemDialog(true);
+    // Navigate to the edit page instead of opening dialog
+    navigate(`/business/items/edit/${item.id}`);
+  };
+
+  const handleViewItem = (item: any) => {
+    // Navigate to the view page
+    navigate(`/business/items/${item.id}`);
   };
 
   const handleCloseEditItemDialog = () => {
@@ -541,9 +550,18 @@ const BusinessItemsPage: React.FC = () => {
     {
       field: 'actions',
       headerName: t('common.actions'),
-      width: 150,
+      width: 200,
       renderCell: (params: GridRenderCellParams) => (
         <Stack direction="row" spacing={1}>
+          <Tooltip title={t('business.items.viewItem')}>
+            <IconButton
+              size="small"
+              onClick={() => handleViewItem(params.row)}
+              sx={{ color: theme.palette.info.main }}
+            >
+              <ViewIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title={t('business.items.editItem')}>
             <IconButton
               size="small"
@@ -701,9 +719,8 @@ const BusinessItemsPage: React.FC = () => {
                           );
                           return;
                         }
-                        // Refresh business locations before opening dialog
-                        refreshBusinessLocations();
-                        setShowAddItemDialog(true);
+                        // Navigate to add item page
+                        navigate('/business/items/add');
                       }}
                       disabled={businessLocations.length === 0}
                     >
@@ -735,6 +752,7 @@ const BusinessItemsPage: React.FC = () => {
                   >
                     <BusinessItemCardView
                       item={item}
+                      onViewItem={handleViewItem}
                       onEditItem={handleEditItem}
                       onDeleteItem={handleDeleteItem}
                       onRestockInventoryItem={handleRestockInventoryItem}
