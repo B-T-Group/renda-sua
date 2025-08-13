@@ -12,6 +12,8 @@ import {
   Avatar,
   Box,
   Button,
+  Card,
+  CardContent,
   Chip,
   Container,
   Dialog,
@@ -20,14 +22,20 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
-  Grid,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
+  Skeleton,
   Stack,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
   Tooltip,
@@ -74,6 +82,130 @@ function TabPanel(props: TabPanelProps) {
     </div>
   );
 }
+
+// Skeleton loading components
+const ItemsCardsSkeleton: React.FC = () => {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+      {Array.from(new Array(6)).map((_, index) => (
+        <Box
+          key={index}
+          sx={{
+            flex: {
+              xs: '1 1 100%',
+              sm: '1 1 calc(50% - 12px)',
+              md: '1 1 calc(33.333% - 16px)',
+            },
+          }}
+        >
+          <Card>
+            <Skeleton variant="rectangular" height={200} />
+            <CardContent>
+              <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
+              <Skeleton variant="text" height={20} sx={{ mb: 1 }} />
+              <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Skeleton variant="rectangular" width={80} height={32} />
+                <Box display="flex" gap={1}>
+                  <Skeleton variant="circular" width={40} height={40} />
+                  <Skeleton variant="circular" width={40} height={40} />
+                  <Skeleton variant="circular" width={40} height={40} />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
+const ItemsTableSkeleton: React.FC = () => {
+  return (
+    <TableContainer component={Paper}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>
+              <Skeleton variant="text" width={60} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={100} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={80} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={100} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={100} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={80} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={100} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={80} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={80} />
+            </TableCell>
+            <TableCell>
+              <Skeleton variant="text" width={120} />
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {Array.from(new Array(5)).map((_, index) => (
+            <TableRow key={index}>
+              <TableCell>
+                <Skeleton variant="circular" width={40} height={40} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={150} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={80} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={100} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={100} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={60} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="text" width={80} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="rectangular" width={60} height={24} />
+              </TableCell>
+              <TableCell>
+                <Skeleton variant="rectangular" width={60} height={24} />
+              </TableCell>
+              <TableCell>
+                <Box display="flex" gap={1}>
+                  <Skeleton variant="circular" width={32} height={32} />
+                  <Skeleton variant="circular" width={32} height={32} />
+                  <Skeleton variant="circular" width={32} height={32} />
+                </Box>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+};
 
 const BusinessItemsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -583,26 +715,33 @@ const BusinessItemsPage: React.FC = () => {
             </Box>
 
             {itemsLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <Typography>{t('common.loading')}</Typography>
-              </Box>
+              <ItemsCardsSkeleton />
             ) : itemsError ? (
               <Alert severity="error">{itemsError}</Alert>
             ) : !items || items.length === 0 ? (
               <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
             ) : (
-              <Grid container spacing={3}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 {items.map((item) => (
-                  <Grid item xs={12} sm={6} md={4} key={item.id}>
+                  <Box
+                    key={item.id}
+                    sx={{
+                      flex: {
+                        xs: '1 1 100%',
+                        sm: '1 1 calc(50% - 12px)',
+                        md: '1 1 calc(33.333% - 16px)',
+                      },
+                    }}
+                  >
                     <BusinessItemCardView
                       item={item}
                       onEditItem={handleEditItem}
                       onDeleteItem={handleDeleteItem}
                       onRestockInventoryItem={handleRestockInventoryItem}
                     />
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             )}
           </Box>
         </TabPanel>
@@ -756,9 +895,7 @@ const BusinessItemsPage: React.FC = () => {
 
             {/* DataGrid */}
             {itemsLoading ? (
-              <Box display="flex" justifyContent="center" p={3}>
-                <Typography>{t('common.loading')}</Typography>
-              </Box>
+              <ItemsTableSkeleton />
             ) : itemsError ? (
               <Alert severity="error">{itemsError}</Alert>
             ) : (
