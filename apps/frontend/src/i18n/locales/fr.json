@@ -42,12 +42,31 @@
       "delivered": "Livré",
       "cancelled": "Annulé",
       "failed": "Échoué",
-      "refunded": "Remboursé"
-    }
+      "refunded": "Remboursé",
+      "completed": "Terminé",
+      "complete": "Terminé",
+      "complete_preparation": "Préparation terminée",
+      "unknown": "Inconnu"
+    },
+    "activeOrders": "Commandes actives",
+    "inProgressOrders": "Commandes en cours",
+    "cancelledOrders": "Commandes annulées",
+    "completedOrders": "Commandes terminées",
+    "manageDeliveryOrders": "Gérez vos commandes de livraison et suivez leur progression.",
+    "orderNumber": "Commande #{{number}}",
+    "orders": "Commandes",
+    "manage": "Gérer"
   },
   "business": {
     "dashboard": {
-      "noBusinessProfile": "Aucun profil d'entreprise trouvé"
+      "title": "Tableau de bord",
+      "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
+      "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
+      "noBusinessProfile": "Aucun profil d'entreprise trouvé",
+      "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
+      "itemsDescription": "Gérez votre catalogue de produits, ajoutez de nouveaux articles et mettez à jour les informations produit.",
+      "locationsDescription": "Gérez vos emplacements commerciaux, adresses et paramètres opérationnels.",
+      "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance."
     },
     "items": {
       "title": "Articles",
@@ -132,7 +151,10 @@
       "status": {
         "in_stock": "En stock",
         "low_stock": "Stock faible",
-        "out_of_stock": "Rupture de stock"
+        "out_of_stock": "Rupture de stock",
+        "inStock": "En stock",
+        "lowStock": "Stock faible",
+        "outOfStock": "Rupture de stock"
       },
       "restock": "Réapprovisionner",
       "editItemButton": "Modifier l'article",
@@ -175,17 +197,39 @@
     },
     "orders": {
       "title": "Commandes",
+      "subtitle": "Gérez et suivez toutes vos commandes clients",
       "filters": {
         "search": "Rechercher des commandes...",
         "status": "Statut",
         "allStatuses": "Tous les statuts",
         "dateFrom": "Date de début",
-        "dateTo": "Date de fin"
+        "dateTo": "Date de fin",
+        "address": "Adresse"
       },
       "actions": {
-        "cancel": "Annuler la commande",
-        "refund": "Rembourser la commande"
-      }
+        "confirm": "Confirmer",
+        "cancel": "Annuler",
+        "startPreparing": "Commencer la préparation",
+        "completePreparation": "Terminer la préparation",
+        "readyForPickup": "Prêt pour le ramassage",
+        "refund": "Rembourser",
+        "viewItems": "Voir les articles",
+        "viewHistory": "Voir l'historique"
+      },
+      "confirmTitle": "Confirmer la mise à jour du statut",
+      "confirmStatusUpdate": "Êtes-vous sûr de vouloir mettre à jour le statut de la commande {{orderNumber}} vers {{newStatus}} ?",
+      "notes": "Notes",
+      "notesPlaceholder": "Ajouter des notes supplémentaires sur ce changement de statut...",
+      "table": {
+        "items": "Articles",
+        "distance": "Distance",
+        "duration": "Durée",
+        "quantity": "Quantité",
+        "unitPrice": "Prix unitaire",
+        "totalPrice": "Total"
+      },
+      "itemsInOrder": "Articles de commande",
+      "noItems": "Aucun article dans cette commande."
     },
     "specialInstructions": "Instructions spéciales"
   },
@@ -214,6 +258,8 @@
     }
   },
   "orders": {
+    "allOrders": "Toutes les commandes",
+    "noOrdersFound": "Aucune commande trouvée",
     "table": {
       "items": "Articles"
     },
@@ -225,7 +271,12 @@
     "specialInstructions": "Instructions spéciales",
     "confirmTitle": "Confirmer l'action",
     "notes": "Notes",
-    "notesPlaceholder": "Ajouter des notes supplémentaires..."
+    "notesPlaceholder": "Ajouter des notes supplémentaires...",
+    "actions": {
+      "complete": "Terminer la commande",
+      "viewHistory": "Voir l'historique"
+    },
+    "completionWarning": "Veuillez terminer votre commande dans les 4 heures suivant la réception de l'article pour finaliser la transaction. Des pénalités peuvent s'appliquer si elle n'est pas terminée à temps."
   },
   "orderActions": {
     "pickUpOrder": "Récupérer la commande",
@@ -235,11 +286,24 @@
     "markAsFailed": "Marquer comme échoué"
   },
   "orderCard": {
+    "orderNumber": "Commande #{{orderNumber}}",
     "pickup": "Ramassage",
     "businessDistance": "Distance de l'entreprise",
     "delivery": "Livraison",
     "deliveryDistance": "Distance de livraison",
-    "items": "Articles"
+    "items": "Articles",
+    "moreItems": "articles supplémentaires"
+  },
+  "agent": {
+    "dashboard": {
+      "title": "Tableau de bord Agent",
+      "openOrders": "Commandes ouvertes"
+    },
+    "orders": {
+      "readyForPickupNotice": "Veuillez contacter le client et confirmer les arrangements de livraison.",
+      "assignedNotice": "Une fois que vous réclamez cette commande, vous devez la livrer dans les 24 heures ou des pénalités peuvent s'appliquer.",
+      "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez contacter le support pour faire vérifier votre compte."
+    }
   },
   "messages": {
     "agentProfileNotFound": "Profil d'agent non trouvé",
@@ -304,6 +368,17 @@
     "balanceNotAvailable": "Solde non disponible",
     "loadMore": "Charger plus"
   },
+  "auth": {
+    "profile": "Profil",
+    "logout": "Déconnexion",
+    "emailVerification": {
+      "title": "Veuillez vérifier votre adresse e-mail",
+      "message": "Nous avons envoyé un e-mail de vérification à {{email}}. Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification pour finaliser la configuration de votre compte.",
+      "resendButton": "Demander un nouvel e-mail de vérification",
+      "resendSuccess": "E-mail de vérification envoyé avec succès",
+      "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer."
+    }
+  },
   "addresses": {
     "title": "Adresses",
     "addAddress": "Ajouter une adresse",
@@ -331,5 +406,23 @@
       "description": "Parcourez et découvrez des produits incroyables d'entreprises locales",
       "keywords": "produits locaux, parcourir les articles, acheter local"
     }
+  },
+  "footer": {
+    "description": "Autonomiser les entreprises, les agents et les clients avec une plateforme complète pour des opérations fluides, la gestion d'inventaire et la croissance.",
+    "platform": "Plateforme",
+    "forBusinesses": "Pour les Entreprises",
+    "forAgents": "Pour les Agents",
+    "forClients": "Pour les Clients",
+    "support": "Support",
+    "helpCenter": "Centre d'Aide",
+    "contact": "Nous Contacter",
+    "documentation": "Documentation",
+    "faq": "FAQ",
+    "company": "Entreprise",
+    "about": "À Propos",
+    "privacy": "Politique de Confidentialité",
+    "terms": "Conditions de Service",
+    "allRightsReserved": "Tous droits réservés.",
+    "designedBy": "Conçu par"
   }
 }

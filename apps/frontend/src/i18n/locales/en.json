@@ -42,12 +42,31 @@
       "delivered": "Delivered",
       "cancelled": "Cancelled",
       "failed": "Failed",
-      "refunded": "Refunded"
-    }
+      "refunded": "Refunded",
+      "completed": "Completed",
+      "complete": "Complete",
+      "complete_preparation": "Complete Preparation",
+      "unknown": "Unknown"
+    },
+    "activeOrders": "Active Orders",
+    "inProgressOrders": "In Progress Orders",
+    "cancelledOrders": "Cancelled Orders",
+    "completedOrders": "Completed Orders",
+    "manageDeliveryOrders": "Manage your delivery orders and track their progress.",
+    "orderNumber": "Order #{{number}}",
+    "orders": "Orders",
+    "manage": "Manage"
   },
   "business": {
     "dashboard": {
-      "noBusinessProfile": "No business profile found"
+      "title": "Dashboard",
+      "welcome": "Welcome back, {{name}}! This is your business dashboard.",
+      "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
+      "noBusinessProfile": "No business profile found",
+      "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
+      "itemsDescription": "Manage your product catalog, add new items, and update product information.",
+      "locationsDescription": "Manage your business locations, addresses, and operational settings.",
+      "analyticsDescription": "View business analytics, sales reports, and performance metrics."
     },
     "items": {
       "title": "Items",
@@ -132,7 +151,10 @@
       "status": {
         "in_stock": "In Stock",
         "low_stock": "Low Stock",
-        "out_of_stock": "Out of Stock"
+        "out_of_stock": "Out of Stock",
+        "inStock": "In Stock",
+        "lowStock": "Low Stock",
+        "outOfStock": "Out of Stock"
       },
       "restock": "Restock",
       "editItemButton": "Edit Item",
@@ -175,17 +197,39 @@
     },
     "orders": {
       "title": "Orders",
+      "subtitle": "Manage and track all your customer orders",
       "filters": {
         "search": "Search orders...",
         "status": "Status",
         "allStatuses": "All Statuses",
         "dateFrom": "Date From",
-        "dateTo": "Date To"
+        "dateTo": "Date To",
+        "address": "Address"
       },
       "actions": {
-        "cancel": "Cancel Order",
-        "refund": "Refund Order"
-      }
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "startPreparing": "Start Preparing",
+        "completePreparation": "Complete Preparation",
+        "readyForPickup": "Ready for Pickup",
+        "refund": "Refund",
+        "viewItems": "View Items",
+        "viewHistory": "View History"
+      },
+      "confirmTitle": "Confirm Status Update",
+      "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",
+      "notes": "Notes",
+      "notesPlaceholder": "Add any additional notes about this status change...",
+      "table": {
+        "items": "Items",
+        "distance": "Distance",
+        "duration": "Duration",
+        "quantity": "Quantity",
+        "unitPrice": "Unit Price",
+        "totalPrice": "Total"
+      },
+      "itemsInOrder": "Order Items",
+      "noItems": "No items in this order."
     },
     "specialInstructions": "Special Instructions"
   },
@@ -214,6 +258,8 @@
     }
   },
   "orders": {
+    "allOrders": "All Orders",
+    "noOrdersFound": "No orders found",
     "table": {
       "items": "Items"
     },
@@ -225,7 +271,12 @@
     "specialInstructions": "Special Instructions",
     "confirmTitle": "Confirm Action",
     "notes": "Notes",
-    "notesPlaceholder": "Add any additional notes..."
+    "notesPlaceholder": "Add any additional notes...",
+    "actions": {
+      "complete": "Complete Order",
+      "viewHistory": "View History"
+    },
+    "completionWarning": "Please complete your order within 4 hours of receiving the item to finalize the transaction. Penalties may apply if not completed on time."
   },
   "orderActions": {
     "pickUpOrder": "Pick Up Order",
@@ -235,11 +286,24 @@
     "markAsFailed": "Mark as Failed"
   },
   "orderCard": {
+    "orderNumber": "Order #{{orderNumber}}",
     "pickup": "Pickup",
     "businessDistance": "Business Distance",
     "delivery": "Delivery",
     "deliveryDistance": "Delivery Distance",
-    "items": "Items"
+    "items": "Items",
+    "moreItems": "more items"
+  },
+  "agent": {
+    "dashboard": {
+      "title": "Agent Dashboard",
+      "openOrders": "Open Orders"
+    },
+    "orders": {
+      "readyForPickupNotice": "Please contact the client and confirm delivery arrangements.",
+      "assignedNotice": "Once you claim this order, you must deliver it within 24 hours or penalties may apply.",
+      "verificationRequired": "This order requires a verified agent. Please contact support to get your account verified."
+    }
   },
   "messages": {
     "agentProfileNotFound": "Agent profile not found",
@@ -304,6 +368,17 @@
     "balanceNotAvailable": "Balance not available",
     "loadMore": "Load More"
   },
+  "auth": {
+    "profile": "Profile",
+    "logout": "Logout",
+    "emailVerification": {
+      "title": "Please verify your email address",
+      "message": "We sent a verification email to {{email}}. Please check your inbox and click the verification link to complete your account setup.",
+      "resendButton": "Request new verification email",
+      "resendSuccess": "Verification email sent successfully",
+      "resendError": "Failed to send verification email. Please try again."
+    }
+  },
   "addresses": {
     "title": "Addresses",
     "addAddress": "Add Address",
@@ -331,5 +406,23 @@
       "description": "Browse and discover amazing products from local businesses",
       "keywords": "local products, browse items, shop local"
     }
+  },
+  "footer": {
+    "description": "Empowering businesses, agents, and clients with a comprehensive platform for seamless operations, inventory management, and growth.",
+    "platform": "Platform",
+    "forBusinesses": "For Businesses",
+    "forAgents": "For Agents",
+    "forClients": "For Clients",
+    "support": "Support",
+    "helpCenter": "Help Center",
+    "contact": "Contact Us",
+    "documentation": "Documentation",
+    "faq": "FAQ",
+    "company": "Company",
+    "about": "About Us",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "allRightsReserved": "All rights reserved.",
+    "designedBy": "Designed by"
   }
 }
