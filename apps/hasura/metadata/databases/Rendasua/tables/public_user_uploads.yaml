@@ -1,0 +1,216 @@
+table:
+  name: user_uploads
+  schema: public
+array_relationships:
+  - name: document_type
+    using:
+      foreign_key_constraint_on:
+        column: document_type_id
+        table:
+          name: document_types
+          schema: public
+  - name: user
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: users
+          schema: public
+insert_permissions:
+  - role: admin
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+  - role: agent
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+select_permissions:
+  - role: admin
+    permission:
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+update_permissions:
+  - role: admin
+    permission:
+      columns:
+        - id
+        - user_id
+        - document_type_id
+        - note
+        - content_type
+        - key
+        - file_name
+        - file_size
+        - is_approved
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - note
+        - is_approved
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - note
+        - is_approved
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - note
+        - is_approved
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+delete_permissions:
+  - role: admin
+    permission:
+      filter: {}
+  - role: agent
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+event_triggers: []
+computed_fields: []
