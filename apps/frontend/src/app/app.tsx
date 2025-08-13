@@ -23,6 +23,7 @@ import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
 import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
+import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import EditItemPage from '../components/pages/EditItemPage';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
@@ -227,6 +228,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <EditItemPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Document Management route */}
+            <Route
+              path="/documents"
+              element={
+                <ProtectedRoute>
+                  <DocumentManagementPage />
                 </ProtectedRoute>
               }
             />

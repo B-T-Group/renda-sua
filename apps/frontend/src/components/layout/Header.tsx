@@ -1,6 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
   Dashboard,
+  Description,
   Home,
   Inventory,
   LocationOn,
@@ -113,16 +114,37 @@ const Header: React.FC = () => {
           label: t('business.locations.title'),
           path: '/business/locations',
           icon: <LocationOn />,
+        },
+        {
+          label: 'Documents',
+          path: '/documents',
+          icon: <Description />,
         }
       );
     }
 
     // Add client-specific navigation
     if (userType === 'client') {
+      items.push(
+        {
+          label: t('business.orders.title'),
+          path: '/client-orders',
+          icon: <ShoppingCart />,
+        },
+        {
+          label: 'Documents',
+          path: '/documents',
+          icon: <Description />,
+        }
+      );
+    }
+
+    // Add agent-specific navigation
+    if (userType === 'agent') {
       items.push({
-        label: t('business.orders.title'),
-        path: '/client-orders',
-        icon: <ShoppingCart />,
+        label: 'Documents',
+        path: '/documents',
+        icon: <Description />,
       });
     }
 
@@ -386,6 +408,18 @@ const Header: React.FC = () => {
                         <Person fontSize="small" />
                       </ListItemIcon>
                       {t('auth.profile')}
+                    </MenuItem>
+
+                    <MenuItem
+                      component={RouterLink}
+                      to="/documents"
+                      onClick={handleUserMenuClose}
+                      sx={{ py: 1.5 }}
+                    >
+                      <ListItemIcon>
+                        <Description fontSize="small" />
+                      </ListItemIcon>
+                      Documents
                     </MenuItem>
 
                     <Divider />

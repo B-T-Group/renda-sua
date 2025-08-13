@@ -9,26 +9,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: order_id
 insert_permissions:
-  - role: client
-    permission:
-      check:
-        order:
-          client:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
-      columns:
-        - id
-        - order_id
-        - status
-        - previous_status
-        - changed_by_user_id
-        - changed_by_type
-        - notes
-        - location_lat
-        - location_lng
-        - location_address
-        - created_at
   - role: agent
     permission:
       check:
@@ -52,6 +32,26 @@ insert_permissions:
       check:
         order:
           business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - order_id
+        - status
+        - previous_status
+        - changed_by_user_id
+        - changed_by_type
+        - notes
+        - location_lat
+        - location_lng
+        - location_address
+        - created_at
+  - role: client
+    permission:
+      check:
+        order:
+          client:
             user:
               identifier:
                 _eq: X-Hasura-User-Id
@@ -68,26 +68,6 @@ insert_permissions:
         - location_address
         - created_at
 select_permissions:
-  - role: client
-    permission:
-      columns:
-        - id
-        - order_id
-        - status
-        - previous_status
-        - changed_by_user_id
-        - changed_by_type
-        - notes
-        - location_lat
-        - location_lng
-        - location_address
-        - created_at
-      filter:
-        order:
-          client:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
   - role: agent
     permission:
       columns:
@@ -123,6 +103,26 @@ select_permissions:
       filter:
         order:
           business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - status
+        - previous_status
+        - changed_by_user_id
+        - changed_by_type
+        - notes
+        - location_lat
+        - location_lng
+        - location_address
+        - created_at
+      filter:
+        order:
+          client:
             user:
               identifier:
                 _eq: X-Hasura-User-Id

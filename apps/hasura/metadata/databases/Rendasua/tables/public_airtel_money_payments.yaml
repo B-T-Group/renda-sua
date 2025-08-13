@@ -1,0 +1,166 @@
+table:
+  name: airtel_money_payments
+  schema: public
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - reference
+        - amount
+        - currency
+        - status
+        - message
+        - notes
+        - callback_data
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - status
+        - message
+        - notes
+        - callback_data
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: business
+    permission:
+      columns:
+        - status
+        - message
+        - notes
+        - callback_data
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: client
+    permission:
+      columns:
+        - status
+        - message
+        - notes
+        - callback_data
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: agent
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id

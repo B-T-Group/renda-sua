@@ -11,27 +11,6 @@ array_relationships:
         remote_table:
           name: items
           schema: public
-select_permissions:
-  - role: client
-    permission:
-      columns: '*'
-      filter: {}
-  - role: agent
-    permission:
-      columns: '*'
-      filter: {}
-  - role: business
-    permission:
-      columns: '*'
-      filter: {}
-  - role: user
-    permission:
-      columns: '*'
-      filter: {}
-  - role: anonymous
-    permission:
-      columns: '*'
-      filter: {}
 insert_permissions:
   - role: business
     permission:
@@ -39,3 +18,24 @@ insert_permissions:
       columns:
         - name
         - description
+select_permissions:
+  - role: agent
+    permission:
+      columns: '*'
+      filter: {}
+  - role: anonymous
+    permission:
+      columns: '*'
+      filter: {}
+  - role: business
+    permission:
+      columns: '*'
+      filter: {}
+  - role: client
+    permission:
+      columns: '*'
+      filter: {}
+  - role: user
+    permission:
+      columns: '*'
+      filter: {}

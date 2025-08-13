@@ -39,6 +39,22 @@ insert_permissions:
         - selling_price
         - is_active
 select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - available_quantity
+        - selling_price
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        available_quantity:
+          _gt: 0
+        is_active:
+          _eq: true
   - role: business
     permission:
       columns:
@@ -63,22 +79,6 @@ select_permissions:
               identifier:
                 _eq: X-Hasura-User-Id
   - role: client
-    permission:
-      columns:
-        - id
-        - business_location_id
-        - item_id
-        - available_quantity
-        - selling_price
-        - is_active
-        - created_at
-        - updated_at
-      filter:
-        available_quantity:
-          _gt: 0
-        is_active:
-          _eq: true
-  - role: agent
     permission:
       columns:
         - id

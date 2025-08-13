@@ -6,21 +6,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: account_id
 select_permissions:
-  - role: client
-    permission:
-      columns:
-        - id
-        - account_id
-        - transaction_type
-        - amount
-        - memo
-        - reference_id
-        - created_at
-      filter:
-        account:
-          user:
-            identifier:
-              _eq: X-Hasura-User-Id
   - role: agent
     permission:
       columns:
@@ -37,6 +22,21 @@ select_permissions:
             identifier:
               _eq: X-Hasura-User-Id
   - role: business
+    permission:
+      columns:
+        - id
+        - account_id
+        - transaction_type
+        - amount
+        - memo
+        - reference_id
+        - created_at
+      filter:
+        account:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: client
     permission:
       columns:
         - id

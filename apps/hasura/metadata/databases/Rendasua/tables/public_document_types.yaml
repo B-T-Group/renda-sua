@@ -1,48 +1,31 @@
 table:
   name: document_types
   schema: public
-array_relationships: []
-insert_permissions: []
 select_permissions:
-- role: admin
-  permission:
-    columns:
-    - id
-    - name
-    - description
-    - created_at
-    - updated_at
-    filter: {}
-- role: agent
-  permission:
-    columns:
-    - id
-    - name
-    - description
-    - created_at
-    - updated_at
-    filter: {}
-- role: business
-  permission:
-    columns:
-    - id
-    - name
-    - description
-    - created_at
-    - updated_at
-    filter: {}
-- role: client
-  permission:
-    columns:
-    - id
-    - name
-    - description
-    - created_at
-    - updated_at
-    filter: {}
-update_permissions: []
-delete_permissions: []
-event_triggers: []
-computed_fields: []
-
-
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      filter: {}

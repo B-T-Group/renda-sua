@@ -1,42 +1,31 @@
 table:
   name: user_uploads
   schema: public
-array_relationships:
+object_relationships:
   - name: document_type
     using:
-      foreign_key_constraint_on:
-        column: document_type_id
-        table:
+      manual_configuration:
+        remote_table:
           name: document_types
           schema: public
+        column_mapping:
+          document_type_id: id
   - name: user
     using:
-      foreign_key_constraint_on:
-        column: user_id
-        table:
+      manual_configuration:
+        remote_table:
           name: users
           schema: public
+        column_mapping:
+          user_id: id
+array_relationships: []
 insert_permissions:
-  - role: admin
-    permission:
-      check: {}
-      columns:
-        - id
-        - user_id
-        - document_type_id
-        - note
-        - content_type
-        - key
-        - file_name
-        - file_size
-        - is_approved
-        - created_at
-        - updated_at
   - role: agent
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - id
         - user_id
@@ -46,14 +35,14 @@ insert_permissions:
         - key
         - file_name
         - file_size
-        - is_approved
         - created_at
         - updated_at
   - role: business
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - id
         - user_id
@@ -63,14 +52,14 @@ insert_permissions:
         - key
         - file_name
         - file_size
-        - is_approved
         - created_at
         - updated_at
   - role: client
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
       columns:
         - id
         - user_id
@@ -80,25 +69,9 @@ insert_permissions:
         - key
         - file_name
         - file_size
-        - is_approved
         - created_at
         - updated_at
 select_permissions:
-  - role: admin
-    permission:
-      columns:
-        - id
-        - user_id
-        - document_type_id
-        - note
-        - content_type
-        - key
-        - file_name
-        - file_size
-        - is_approved
-        - created_at
-        - updated_at
-      filter: {}
   - role: agent
     permission:
       columns:
@@ -114,8 +87,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: business
     permission:
       columns:
@@ -131,8 +105,9 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -148,69 +123,56 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
 update_permissions:
-  - role: admin
-    permission:
-      columns:
-        - id
-        - user_id
-        - document_type_id
-        - note
-        - content_type
-        - key
-        - file_name
-        - file_size
-        - is_approved
-        - created_at
-        - updated_at
-      filter: {}
   - role: agent
     permission:
       columns:
         - note
-        - is_approved
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      check: null
   - role: business
     permission:
       columns:
         - note
-        - is_approved
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      check: null
   - role: client
     permission:
       columns:
         - note
-        - is_approved
         - updated_at
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      check: null
 delete_permissions:
-  - role: admin
-    permission:
-      filter: {}
   - role: agent
     permission:
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: business
     permission:
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: client
     permission:
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
-event_triggers: []
-computed_fields: []
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id

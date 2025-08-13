@@ -2,15 +2,15 @@ table:
   name: items
   schema: public
 object_relationships:
-  - name: item_sub_category
-    using:
-      foreign_key_constraint_on: item_sub_category_id
-  - name: business
-    using:
-      foreign_key_constraint_on: business_id
   - name: brand
     using:
       foreign_key_constraint_on: brand_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: item_sub_category
+    using:
+      foreign_key_constraint_on: item_sub_category_id
 array_relationships:
   - name: business_inventories
     using:
@@ -39,8 +39,70 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      columns:
+        - name
+        - description
+        - item_sub_category_id
+        - size
+        - size_unit
+        - weight
+        - weight_unit
+        - price
+        - currency
+        - sku
+        - brand_id
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
+        - business_id
 select_permissions:
   - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - price
+        - currency
+        - weight
+        - weight_unit
+        - size
+        - size_unit
+        - item_sub_category_id
+        - business_id
+        - brand_id
+        - sku
+        - model
+        - color
+        - material
+        - is_fragile
+        - is_perishable
+        - requires_special_handling
+        - max_delivery_distance
+        - estimated_delivery_time
+        - min_order_quantity
+        - max_order_quantity
+        - is_active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: anonymous
     permission:
       columns:
         - id
@@ -164,70 +226,6 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: anonymous
-    permission:
-      columns:
-        - id
-        - name
-        - description
-        - price
-        - currency
-        - weight
-        - weight_unit
-        - size
-        - size_unit
-        - item_sub_category_id
-        - business_id
-        - brand_id
-        - sku
-        - model
-        - color
-        - material
-        - is_fragile
-        - is_perishable
-        - requires_special_handling
-        - max_delivery_distance
-        - estimated_delivery_time
-        - min_order_quantity
-        - max_order_quantity
-        - is_active
-        - created_at
-        - updated_at
-      filter: {}
-
-insert_permissions:
-  - role: business
-    permission:
-      check:
-        business:
-          user:
-            identifier:
-              _eq: X-Hasura-User-Id
-      columns:
-        - name
-        - description
-        - item_sub_category_id
-        - size
-        - size_unit
-        - weight
-        - weight_unit
-        - price
-        - currency
-        - sku
-        - brand_id
-        - model
-        - color
-        - material
-        - is_fragile
-        - is_perishable
-        - requires_special_handling
-        - max_delivery_distance
-        - estimated_delivery_time
-        - min_order_quantity
-        - max_order_quantity
-        - is_active
-        - business_id
-
 update_permissions:
   - role: business
     permission:

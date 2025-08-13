@@ -1,14 +1,16 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Inventory } from '@mui/icons-material';
+import { Description, Inventory } from '@mui/icons-material';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   Container,
   Paper,
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useAccountInfo,
   useBackendOrders,
@@ -25,6 +27,7 @@ import OrderDialog from '../dialogs/OrderDialog';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
+  const navigate = useNavigate();
   const {
     inventoryItems,
     loading: inventoryLoading,
@@ -242,6 +245,28 @@ const Dashboard: React.FC = () => {
         onTopUpClick={handleTopUpClick}
         formatCurrency={formatCurrency}
       />
+
+      {/* Document Management */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+        >
+          <Description color="primary" />
+          Document Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Upload and manage your important documents, contracts, and files.
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<Description />}
+          onClick={() => navigate('/documents')}
+        >
+          Manage Documents
+        </Button>
+      </Paper>
 
       {/* Inventory Items */}
       <Paper sx={{ p: 3 }}>

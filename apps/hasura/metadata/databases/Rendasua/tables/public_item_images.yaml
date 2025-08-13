@@ -8,39 +8,16 @@ object_relationships:
   - name: uploaded_by_user
     using:
       foreign_key_constraint_on: uploaded_by
-select_permissions:
-  - role: client
-    permission:
-      columns:
-        - id
-        - item_id
-        - image_url
-        - image_type
-        - alt_text
-        - caption
-        - display_order
-        - uploaded_by
-        - created_at
-        - updated_at
-      filter: {}
-  - role: agent
-    permission:
-      columns:
-        - id
-        - item_id
-        - image_url
-        - image_type
-        - alt_text
-        - caption
-        - display_order
-        - uploaded_by
-        - created_at
-        - updated_at
-      filter: {}
+insert_permissions:
   - role: business
     permission:
+      check:
+        item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
       columns:
-        - id
         - item_id
         - image_url
         - image_type
@@ -48,10 +25,8 @@ select_permissions:
         - caption
         - display_order
         - uploaded_by
-        - created_at
-        - updated_at
-      filter: {}
-  - role: user
+select_permissions:
+  - role: agent
     permission:
       columns:
         - id
@@ -79,17 +54,10 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-
-insert_permissions:
   - role: business
     permission:
-      check:
-        item:
-          business:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
       columns:
+        - id
         - item_id
         - image_url
         - image_type
@@ -97,7 +65,37 @@ insert_permissions:
         - caption
         - display_order
         - uploaded_by
-
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_id
+        - image_url
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - uploaded_by
+        - created_at
+        - updated_at
+      filter: {}
 delete_permissions:
   - role: business
     permission:

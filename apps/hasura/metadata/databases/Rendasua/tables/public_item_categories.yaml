@@ -12,11 +12,11 @@ array_relationships:
           name: item_sub_categories
           schema: public
 select_permissions:
-  - role: client
+  - role: agent
     permission:
       columns: '*'
       filter: {}
-  - role: agent
+  - role: anonymous
     permission:
       columns: '*'
       filter: {}
@@ -24,11 +24,11 @@ select_permissions:
     permission:
       columns: '*'
       filter: {}
-  - role: user
+  - role: client
     permission:
       columns: '*'
       filter: {}
-  - role: anonymous
+  - role: user
     permission:
       columns: '*'
       filter: {}

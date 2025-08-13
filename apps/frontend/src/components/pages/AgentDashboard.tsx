@@ -3,6 +3,7 @@ import {
   Business,
   Cancel,
   CheckCircle,
+  Description,
   DirectionsCar,
   ExpandMore,
   History,
@@ -34,6 +35,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { Order, useAgentOrders } from '../../hooks/useAgentOrders';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
@@ -587,6 +589,7 @@ const OrderCard: React.FC<{
 
 const AgentDashboard: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useAuth0();
   const { profile } = useUserProfile();
   const agentOrders = useAgentOrders();
@@ -807,6 +810,28 @@ const AgentDashboard: React.FC = () => {
         onTopUpClick={handleTopUpClick}
         formatCurrency={formatCurrency}
       />
+
+      {/* Document Management */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+        >
+          <Description color="primary" />
+          Document Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Upload and manage your important documents, contracts, and files.
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<Description />}
+          onClick={() => navigate('/documents')}
+        >
+          Manage Documents
+        </Button>
+      </Paper>
 
       {/* Open Orders Section */}
       {openOrders.length > 0 && (

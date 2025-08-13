@@ -6,15 +6,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: user_id
 array_relationships:
-  - name: orders
-    using:
-      manual_configuration:
-        column_mapping:
-          id: client_id
-        insertion_order: null
-        remote_table:
-          name: orders
-          schema: public
   - name: client_addresses
     using:
       manual_configuration:
@@ -24,23 +15,16 @@ array_relationships:
         remote_table:
           name: client_addresses
           schema: public
+  - name: orders
+    using:
+      manual_configuration:
+        column_mapping:
+          id: client_id
+        insertion_order: null
+        remote_table:
+          name: orders
+          schema: public
 insert_permissions:
-  - role: client
-    permission:
-      check:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
-      columns:
-        - user_id
-  - role: user
-    permission:
-      check: {}
-      columns:
-        - id
-        - user_id
-        - created_at
-        - updated_at
   - role: agent
     permission:
       check: {}
@@ -57,18 +41,23 @@ insert_permissions:
         - user_id
         - created_at
         - updated_at
-select_permissions:
   - role: client
     permission:
+      check:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+  - role: user
+    permission:
+      check: {}
       columns:
         - id
         - user_id
         - created_at
         - updated_at
-      filter:
-        user:
-          identifier:
-            _eq: X-Hasura-User-Id
+select_permissions:
   - role: agent
     permission:
       columns:
@@ -93,6 +82,17 @@ select_permissions:
             user:
               identifier:
                 _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
   - role: user
     permission:
       columns:

@@ -2,15 +2,12 @@ table:
   name: agent_addresses
   schema: public
 object_relationships:
-  - name: agent
-    using:
-      foreign_key_constraint_on: agent_id
   - name: address
     using:
       foreign_key_constraint_on: address_id
-      insertion_order: after_parent
-array_relationships: []
-
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
 insert_permissions:
   - role: agent
     permission:

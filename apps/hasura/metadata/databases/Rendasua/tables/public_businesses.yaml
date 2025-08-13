@@ -6,24 +6,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: user_id
 array_relationships:
-  - name: business_locations
-    using:
-      manual_configuration:
-        column_mapping:
-          id: business_id
-        insertion_order: null
-        remote_table:
-          name: business_locations
-          schema: public
-  - name: orders
-    using:
-      manual_configuration:
-        column_mapping:
-          id: business_id
-        insertion_order: null
-        remote_table:
-          name: orders
-          schema: public
   - name: business_addresses
     using:
       manual_configuration:
@@ -32,6 +14,15 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: business_addresses
+          schema: public
+  - name: business_locations
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: business_locations
           schema: public
   - name: items
     using:
@@ -42,7 +33,27 @@ array_relationships:
         remote_table:
           name: items
           schema: public
+  - name: orders
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: orders
+          schema: public
 insert_permissions:
+  - role: agent
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
+        - is_admin
+        - is_verified
   - role: business
     permission:
       check:
@@ -52,6 +63,17 @@ insert_permissions:
       columns:
         - user_id
         - name
+        - is_admin
+        - is_verified
+  - role: client
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
         - is_admin
         - is_verified
   - role: user
@@ -65,51 +87,7 @@ insert_permissions:
         - updated_at
         - is_admin
         - is_verified
-  - role: client
-    permission:
-      check: {}
-      columns:
-        - id
-        - user_id
-        - name
-        - created_at
-        - updated_at
-        - is_admin
-        - is_verified
-  - role: agent
-    permission:
-      check: {}
-      columns:
-        - id
-        - user_id
-        - name
-        - created_at
-        - updated_at
-        - is_admin
-        - is_verified
 select_permissions:
-  - role: business
-    permission:
-      columns:
-        - id
-        - user_id
-        - name
-        - created_at
-        - updated_at
-        - is_admin
-        - is_verified
-      filter: {}
-  - role: client
-    permission:
-      columns:
-        - id
-        - user_id
-        - name
-        - created_at
-        - updated_at
-        - is_admin
-        - is_verified
-      filter: {}
   - role: agent
     permission:
       columns:
@@ -125,6 +103,28 @@ select_permissions:
     permission:
       columns:
         - id
+        - name
+        - created_at
+        - updated_at
+        - is_admin
+        - is_verified
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - name
+        - created_at
+        - updated_at
+        - is_admin
+        - is_verified
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
         - name
         - created_at
         - updated_at

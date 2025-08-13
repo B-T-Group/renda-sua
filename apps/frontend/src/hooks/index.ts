@@ -63,3 +63,17 @@ export { useApiWithLoading } from './useApiWithLoading';
 export { useCurrentLocation } from './useCurrentLocation';
 export * from './useDistanceMatrix';
 export { useVehicleTypes } from './useVehicleTypes';
+
+// Document management hooks
+export { useDocumentManagement } from './useDocumentManagement';
+export type {
+  DocumentFilters,
+  DocumentType,
+  UserDocument,
+} from './useDocumentManagement';
+export { useDocumentUpload } from './useDocumentUpload';
+export type {
+  UploadProgress,
+  UploadUrlRequest,
+  UploadUrlResponse,
+} from './useDocumentUpload';

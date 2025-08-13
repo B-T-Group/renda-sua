@@ -49,7 +49,7 @@ insert_permissions:
         - created_at
         - updated_at
 select_permissions:
-  - role: client
+  - role: agent
     permission:
       columns:
         - id
@@ -65,7 +65,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: agent
+  - role: anonymous
     permission:
       columns:
         - id
@@ -101,7 +101,7 @@ select_permissions:
           user:
             identifier:
               _eq: X-Hasura-User-Id
-  - role: user
+  - role: client
     permission:
       columns:
         - id
@@ -117,7 +117,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: anonymous
+  - role: user
     permission:
       columns:
         - id

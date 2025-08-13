@@ -2,6 +2,7 @@ import {
   Person as AgentIcon,
   TrendingUp as AnalyticsIcon,
   Business as BizIcon,
+  Description as DocumentsIcon,
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
@@ -74,6 +75,14 @@ const BusinessDashboard: React.FC = () => {
       count: locations.length,
       color: '#f57c00',
       path: '/business/locations',
+    },
+    {
+      title: 'Documents',
+      description: 'Manage your business documents and files',
+      icon: <DocumentsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#795548',
+      path: '/documents',
     },
     {
       title: t('common.analytics'),

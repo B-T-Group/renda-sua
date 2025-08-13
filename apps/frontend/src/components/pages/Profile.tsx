@@ -16,12 +16,14 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
+import { SimpleDocumentUpload } from '../common/SimpleDocumentUpload';
 
 const Profile: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState(false);
@@ -50,6 +52,9 @@ const Profile: React.FC = () => {
 
   // Get addresses from UserProfileContext
   const { profile: userProfileWithAddresses } = useUserProfileContext();
+
+  // Document management
+  const { documentTypes } = useDocumentManagement();
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -245,6 +250,31 @@ const Profile: React.FC = () => {
             showCoordinates={false}
             onAccountCreated={handleAccountCreated}
           />
+        )}
+
+        {/* Document Upload */}
+        {documentTypes.length > 0 && (
+          <Card sx={{ mt: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Upload Documents
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Upload important documents for your account verification.
+              </Typography>
+              <SimpleDocumentUpload
+                documentTypes={documentTypes}
+                compact={true}
+                showNote={true}
+                onUploadSuccess={(document) => {
+                  console.log('Document uploaded:', document);
+                }}
+                onUploadError={(error) => {
+                  console.error('Upload failed:', error);
+                }}
+              />
+            </CardContent>
+          </Card>
         )}
       </Box>
 
