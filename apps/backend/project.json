@@ -85,6 +85,20 @@
         }
       }
     },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ts-node --watch src/main.ts",
+        "cwd": "apps/backend"
+      }
+    },
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "docker build -f apps/backend/Dockerfile . -t rendasua-backend"
+      }
+    },
     "test": {
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],

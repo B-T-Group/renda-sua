@@ -23,7 +23,9 @@
     "typecheck:backend": "nx typecheck backend",
     "dev": "nx run-many --target=serve --all --parallel",
     "dev:frontend": "nx serve frontend",
-    "dev:backend": "nx serve backend"
+    "dev:backend": "nx serve backend",
+    "dev:backend:fast": "nx run backend:dev",
+    "docker:build:backend": "nx run backend:docker-build"
   },
   "private": true,
   "dependencies": {
