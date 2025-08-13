@@ -31,6 +31,7 @@ import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import EditItemDialog from '../business/EditItemDialog';
+import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -590,6 +591,13 @@ export default function ItemViewPage() {
         onClose={() => setShowUpdateInventoryDialog(false)}
         item={item}
         businessLocations={businessLocations}
+      />
+
+      <ImageUploadDialog
+        open={showImageUploadDialog}
+        onClose={() => setShowImageUploadDialog(false)}
+        itemId={itemId || ''}
+        itemName={item?.name || ''}
       />
     </Container>
   );
