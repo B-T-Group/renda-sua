@@ -1,0 +1,210 @@
+# Backend Cursor Rules - Business Logic Separation
+
+## Controller-Service Separation Rules
+
+### Controller Responsibilities
+
+Controllers should ONLY handle:
+
+- HTTP request/response handling
+- Input validation (basic format validation)
+- Calling appropriate service methods
+- Error response formatting
+- HTTP status code mapping
+
+### Service Responsibilities
+
+Services should handle ALL business logic including:
+
+- Complex validation logic
+- Data transformation and processing
+- Business rule enforcement
+- Database operations coordination
+- External API calls
+- Business workflow orchestration
+
+### What Should NOT Be in Controllers
+
+1. **Complex Business Logic**: Any logic that involves multiple steps, conditions, or business rules
+2. **Data Processing**: Transformations, calculations, or data manipulation
+3. **Validation Logic**: Complex validation that goes beyond basic format checking
+4. **Database Queries**: Direct database operations or complex query building
+5. **External Service Calls**: API calls to external services
+6. **Workflow Orchestration**: Coordinating multiple service calls or operations
+
+### Examples of What to Move to Services
+
+#### ❌ Controller (Bad)
+
+```typescript
+@Post('profile')
+async createUserProfile(@Body() profileData: any) {
+  // Business logic in controller
+  const userTypeMap: { [key: string]: string } = {
+    client: 'client',
+    agent: 'agent',
+    business: 'business',
+  };
+
+  const userTypeId = userTypeMap[profileData.userType];
+  if (!userTypeId) {
+    throw new Error('Invalid user type');
+  }
+
+  let result: any;
+  switch (userTypeId) {
+    case 'client':
+      result = await this.hasuraUserService.createUserWithClient({...});
+      break;
+    case 'agent':
+      result = await this.hasuraUserService.createUserWithAgent({...});
+      break;
+    // ... more business logic
+  }
+}
+```
+
+#### ✅ Controller (Good)
+
+```typescript
+@Post('profile')
+async createUserProfile(@Body() profileData: any) {
+  try {
+    const result = await this.usersService.createUserProfile(profileData);
+    return { success: true, data: result };
+  } catch (error) {
+    throw new HttpException(
+      { success: false, error: error.message },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+}
+```
+
+#### ✅ Service (Good)
+
+```typescript
+async createUserProfile(profileData: any) {
+  // All business logic here
+  const userTypeMap = this.getUserTypeMapping();
+  const userTypeId = this.validateAndMapUserType(profileData.userType, userTypeMap);
+
+  switch (userTypeId) {
+    case 'client':
+      return await this.createClientProfile(profileData);
+    case 'agent':
+      return await this.createAgentProfile(profileData);
+    // ... etc
+  }
+}
+```
+
+### Specific Patterns to Avoid in Controllers
+
+1. **Switch Statements**: Move complex switch logic to services
+2. **Data Mapping**: User type mapping, status mapping, etc.
+3. **Validation Chains**: Multiple validation steps
+4. **Conditional Logic**: Complex if/else chains
+5. **Data Transformation**: Converting between formats
+6. **Business Rule Checks**: Permission checks, status validations
+7. **External API Coordination**: Multiple service calls
+
+### Controller Template Pattern
+
+```typescript
+@Controller('example')
+export class ExampleController {
+  constructor(private readonly exampleService: ExampleService) {}
+
+  @Post()
+  async create(@Body() data: CreateDto) {
+    try {
+      const result = await this.exampleService.create(data);
+      return { success: true, data: result };
+    } catch (error) {
+      throw new HttpException(
+        { success: false, error: error.message },
+        this.mapErrorToHttpStatus(error)
+      );
+    }
+  }
+
+  private mapErrorToHttpStatus(error: any): HttpStatus {
+    // Only basic error mapping logic here
+    if (error.message.includes('not found')) return HttpStatus.NOT_FOUND;
+    if (error.message.includes('validation')) return HttpStatus.BAD_REQUEST;
+    return HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+}
+```
+
+### Service Template Pattern
+
+```typescript
+@Injectable()
+export class ExampleService {
+  constructor(
+    private readonly hasuraService: HasuraService,
+    private readonly externalService: ExternalService
+  ) {}
+
+  async create(data: CreateDto) {
+    // All business logic here
+    await this.validateData(data);
+    const processedData = await this.processData(data);
+    const result = await this.persistData(processedData);
+    await this.notifyExternalServices(result);
+    return result;
+  }
+
+  private async validateData(data: CreateDto) {
+    // Complex validation logic
+  }
+
+  private async processData(data: CreateDto) {
+    // Data processing and transformation
+  }
+
+  private async persistData(data: any) {
+    // Database operations
+  }
+
+  private async notifyExternalServices(data: any) {
+    // External API calls
+  }
+}
+```
+
+### Enforcement Guidelines
+
+1. **Before Writing Controller Code**: Ask "Is this business logic or HTTP handling?"
+2. **Code Review**: Check if controllers contain business logic
+3. **Refactoring**: Move business logic from controllers to services
+4. **Testing**: Services should be unit testable, controllers integration testable
+
+### Common Anti-Patterns to Avoid
+
+1. **Fat Controllers**: Controllers with many methods or complex logic
+2. **Controller Business Logic**: Any business rules in controllers
+3. **Controller Data Access**: Direct database operations in controllers
+4. **Controller External Calls**: API calls to external services in controllers
+5. **Controller Validation**: Complex validation logic in controllers
+
+### Migration Strategy
+
+When refactoring existing code:
+
+1. Identify business logic in controllers
+2. Create or extend appropriate services
+3. Move business logic to services
+4. Update controllers to only handle HTTP concerns
+5. Update tests to reflect new structure
+6. Ensure proper error handling in both layers
+
+This separation ensures:
+
+- Better testability (services can be unit tested)
+- Improved maintainability (business logic is centralized)
+- Clear separation of concerns
+- Easier debugging and troubleshooting
+- Better code reusability

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
+import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -17,7 +18,8 @@ export class UsersController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly auth0Service: Auth0Service
+    private readonly auth0Service: Auth0Service,
+    private readonly awsService: AwsService
   ) {}
 
   @Get('me')
@@ -271,6 +273,117 @@ export class UsersController {
           error: error.message || 'Failed to resend verification email',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('get_upload_url')
+  async getUploadUrl(
+    @Body()
+    uploadData: {
+      file_name: string;
+      content_type: string;
+      file_size: number;
+      note?: string;
+      document_type_id: number;
+    }
+  ) {
+    try {
+      // Get current user information
+      const user = await this.hasuraUserService.getUser();
+
+      // Validate required fields
+      if (
+        !uploadData.file_name ||
+        !uploadData.content_type ||
+        !uploadData.file_size ||
+        !uploadData.document_type_id
+      ) {
+        throw new Error(
+          'Missing required fields: file_name, content_type, file_size, document_type_id'
+        );
+      }
+
+      // Validate file size (e.g., max 10MB)
+      const maxFileSize = 10 * 1024 * 1024; // 10MB
+      if (uploadData.file_size > maxFileSize) {
+        throw new Error('File size exceeds maximum allowed size of 10MB');
+      }
+
+      // Generate S3 key using the specified format: {user_type}/{user_id}/document_type_id/file_name
+      const key = `${user.user_type_id}/${user.id}/${uploadData.document_type_id}/${uploadData.file_name}`;
+
+      // Generate presigned URL for S3 upload
+      const presignedUrlResponse =
+        await this.awsService.generatePresignedUploadUrl({
+          bucketName: 'rendasua-user-uploads',
+          key: key,
+          contentType: uploadData.content_type,
+          expiresIn: 3600, // 1 hour
+          metadata: {
+            'user-id': user.id,
+            'user-type': user.user_type_id,
+            'document-type-id': uploadData.document_type_id.toString(),
+            'file-size': uploadData.file_size.toString(),
+            'uploaded-at': new Date().toISOString(),
+          },
+        });
+
+      // Save record in user_uploads table
+      const insertMutation = `
+        mutation InsertUserUpload($user_id: uuid!, $document_type_id: Int!, $note: String, $content_type: String!, $key: String!, $file_name: String!, $file_size: bigint!) {
+          insert_user_uploads_one(object: {
+            user_id: $user_id,
+            document_type_id: $document_type_id,
+            note: $note,
+            content_type: $content_type,
+            key: $key,
+            file_name: $file_name,
+            file_size: $file_size,
+            is_approved: false
+          }) {
+            id
+            user_id
+            document_type_id
+            note
+            content_type
+            key
+            file_name
+            file_size
+            is_approved
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const uploadRecord = await this.hasuraSystemService.executeMutation(
+        insertMutation,
+        {
+          user_id: user.id,
+          document_type_id: uploadData.document_type_id,
+          note: uploadData.note || null,
+          content_type: uploadData.content_type,
+          key: key,
+          file_name: uploadData.file_name,
+          file_size: uploadData.file_size,
+        }
+      );
+
+      return {
+        success: true,
+        upload_record: uploadRecord.insert_user_uploads_one,
+        presigned_url: presignedUrlResponse.url,
+        expires_at: presignedUrlResponse.expiresAt,
+        fields: presignedUrlResponse.fields,
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to generate upload URL',
+        },
+        HttpStatus.BAD_REQUEST
       );
     }
   }
