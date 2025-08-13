@@ -223,7 +223,7 @@ function App() {
 
             {/* Edit Item route */}
             <Route
-              path="/business/items/:itemId/edit"
+              path="/business/items/edit/:itemId"
               element={
                 <ProtectedRoute>
                   <EditItemPage />
