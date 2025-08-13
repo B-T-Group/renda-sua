@@ -98,6 +98,20 @@ const AddItemPage: React.FC = () => {
     }
   }, [profile?.business?.id]);
 
+  // Auto-select a default subcategory if none chosen (Option A)
+  useEffect(() => {
+    if (
+      !formData.item_sub_category_id &&
+      itemSubCategories &&
+      itemSubCategories.length > 0
+    ) {
+      setFormData((prev) => ({
+        ...prev,
+        item_sub_category_id: itemSubCategories[0].id,
+      }));
+    }
+  }, [itemSubCategories, formData.item_sub_category_id]);
+
   const handleInputChange = (field: keyof ItemFormData, value: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -126,7 +140,8 @@ const AddItemPage: React.FC = () => {
         max_delivery_distance: formData.max_delivery_distance ?? undefined,
         estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
         max_order_quantity: formData.max_order_quantity ?? undefined,
-        item_sub_category_id: formData.item_sub_category_id ?? undefined,
+        item_sub_category_id: (formData.item_sub_category_id ??
+          itemSubCategories?.[0]?.id) as number,
       };
 
       const newItem = await createItem(itemData);
