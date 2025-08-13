@@ -1,0 +1,39 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Workspace Rule: Hasura CLI Compatibility
+
+- Always run `unset NODE_OPTIONS` before any Hasura CLI command to avoid Node.js compatibility errors.
+- When creating queries or mutations for hasura (in frontend or backend), always validate the attributes being used by checking the migrations
+
+In this file I describe general rules to follow.
+
+## General Rules
+
+- Do not have methods that are more that 20 lines of code
+
+## General Backend Rules
+
+These rules apply to the backend application
+
+- Only generate controller paths if explicitely mentioned
+- Build all backend APIs to be JSON API spec compliant according to documentation in https://jsonapi.org/format/
+
+## General Frontend Rules
+
+- Always use material UI styling
+- For requests, create doman specific react hooks
+- Prioritize mordern standards and making components beautiful
+- Create all hooks under a hooks directory in src/hooks
+- always use React best practices
+- Prioritize calling backend APIs before GraphQL APIs
+
+## Hasura Rules
+
+- always track tables created
+- Always create seeds using the `hasura seed create` command with the `--from-table` flag to generate proper seed files
+- Use `hasura seed apply --file filename.sql` to apply specific seed files
+- Never manually create seed files - always use the CLI to ensure proper formatting and structure

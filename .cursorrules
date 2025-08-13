@@ -1,0 +1,88 @@
+# Cursor Rules for Rendasua Project
+
+## Code Quality Rules
+
+### Remove Unused Code
+
+- Always remove any method/variable that is unused
+- Check for unused imports and remove them
+- Remove unused private methods and properties
+- Remove unused interface properties
+- Remove unused constants and enums
+
+### Code Cleanup Guidelines
+
+- Before committing code, ensure no unused methods or variables remain
+- Use TypeScript strict mode to catch unused variables
+- Run linters to identify unused code
+- Remove dead code to improve maintainability
+
+### Examples of What to Remove
+
+- Unused private methods like `generateReferenceId()` if not called anywhere
+- Unused imports like `randomUUID` if the method using it is removed
+- Unused interface properties that are never accessed
+- Unused constants or configuration values
+- Unused error handling variables
+
+## General Project Rules
+
+### Code Quality Standards
+
+1. **Method Length**: Keep methods under 20 lines of code
+2. **Component Reusability**: Create reusable components instead of duplicating code
+3. **Type Safety**: Always use proper TypeScript interfaces and types
+4. **Error Handling**: Include proper try-catch blocks and error states
+
+### Frontend Rules (React/Material-UI)
+
+1. **Material-UI Styling**: Always use Material-UI components and styling system
+2. **React Hooks**: Create domain-specific custom hooks in `src/hooks/`
+3. **Modern Standards**: Follow React best practices and modern patterns
+4. **Beautiful Components**: Prioritize modern, beautiful UI design
+5. **Translations**: Use i18n translation keys, never hardcode strings
+6. **State Management**: Use appropriate state management patterns (useState, useEffect, custom hooks)
+
+### Backend Rules (NestJS)
+
+1. **Path Generation**: Only generate controller paths when explicitly mentioned
+2. **Service Injection**: Use proper dependency injection patterns
+3. **Error Handling**: Include comprehensive error handling and validation
+4. **Module Organization**: Follow NestJS module structure conventions
+
+### Hasura Rules
+
+1. **Table Tracking**: Always track tables after creation
+2. **Admin Secret**: When applying migrations, use admin secret `myadminsecretkey`
+3. **Migration Naming**: Follow timestamp-based migration naming convention
+4. **Relationship Setup**: Define proper relationships in metadata after table creation
+
+### File Organization
+
+1. **Component Location**:
+
+   - Common reusable components in `src/components/common/`
+   - Business-specific components in `src/components/business/`
+   - Page components in `src/components/pages/`
+   - Dialog components in `src/components/dialogs/`
+
+2. **Hook Organization**: All custom hooks in `src/hooks/` with descriptive names
+
+3. **Type Definitions**: Define proper TypeScript interfaces for all data structures
+
+### Refactoring Guidelines
+
+1. **DRY Principle**: Eliminate code duplication by creating reusable components
+2. **Component Extraction**: Extract large components into smaller, focused ones
+3. **Props Interface**: Always define clear, typed props interfaces
+4. **Confirmation Patterns**: Use ConfirmationModal for destructive actions
+5. **Loading States**: Include proper loading and error states in all components
+
+### Database and API Guidelines
+
+1. **Schema First**: Always check database schema before writing queries
+2. **Relationship Validation**: Verify relationship names and paths
+3. **Permission Checks**: Understand and respect Hasura permissions
+4. **Data Refresh**: Implement proper data refresh patterns after mutations
+
+These rules ensure consistency, maintainability, and prevent common errors across the Rendasua project.

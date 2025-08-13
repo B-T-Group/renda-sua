@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+In this file I describe general rules to follow. 
+
+## General Rules
+- Do not have methods that are more that 20 lines of code
+
+## General Backend Rules
+
+These rules apply to the backend application
+
+- Only generate controller paths if explicitely mentioned
+
+## General Frontend Rules
+
+- Always use material UI styling
+- For requests, create doman specific react hooks
+- Prioritize mordern standards and making components beautiful
+- Create all hooks under a hooks directory in src/hooks
+- always use React best practices
+
+## Hasura Rules
+- always track tables created
+- whenever applying hasura migrations, always provide hasura admin secret myadminsecretkey
+
