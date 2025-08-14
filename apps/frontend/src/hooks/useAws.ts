@@ -15,7 +15,6 @@ export interface GeneratePresignedUrlResponse {
   success: boolean;
   data?: {
     url: string;
-    fields: Record<string, string>;
     expiresAt: Date;
     key: string;
   };

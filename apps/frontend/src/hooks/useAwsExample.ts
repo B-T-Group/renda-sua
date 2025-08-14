@@ -19,15 +19,13 @@ export const useImageUploadExample = () => {
     const response = await generateImageUploadUrl(request);
 
     if (response?.data) {
-      // Use the presigned URL to upload directly to S3
-      const formData = new FormData();
-      Object.entries(response.data.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-      formData.append('file', file);
-
+      // Use the presigned URL to upload directly to S3 using PUT
       try {
-        await axios.post(response.data.url, formData);
+        await axios.put(response.data.url, file, {
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
       } catch (err) {
         console.error('Failed to upload image:', err);
@@ -61,15 +59,13 @@ export const useDocumentUploadExample = () => {
     const response = await generateDocumentUploadUrl(request);
 
     if (response?.data) {
-      // Upload logic similar to image upload
-      const formData = new FormData();
-      Object.entries(response.data.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-      formData.append('file', file);
-
+      // Upload logic similar to image upload using PUT
       try {
-        await axios.post(response.data.url, formData);
+        await axios.put(response.data.url, file, {
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
       } catch (err) {
         console.error('Failed to upload document:', err);
@@ -107,14 +103,12 @@ export const useGenericUploadExample = () => {
     const response = await generatePresignedUrl(request);
 
     if (response?.data) {
-      const formData = new FormData();
-      Object.entries(response.data.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-      formData.append('file', file);
-
       try {
-        await axios.post(response.data.url, formData);
+        await axios.put(response.data.url, file, {
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
         return `https://${bucketName}.s3.amazonaws.com/${response.data.key}`;
       } catch (err) {
         console.error('Failed to upload file:', err);

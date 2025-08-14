@@ -375,7 +375,6 @@ export class UsersController {
         upload_record: uploadRecord.insert_user_uploads_one,
         presigned_url: presignedUrlResponse.url,
         expires_at: presignedUrlResponse.expiresAt,
-        fields: presignedUrlResponse.fields,
       };
     } catch (error: any) {
       throw new HttpException(

@@ -14,7 +14,6 @@ export interface PresignedUrlOptions {
 
 export interface PresignedUrlResponse {
   url: string;
-  fields: Record<string, string>;
   expiresAt: Date;
 }
 
@@ -77,12 +76,6 @@ export class AwsService {
 
       return {
         url,
-        fields: {
-          bucket: bucketName,
-          key,
-          'Content-Type': contentType,
-          ...metadata,
-        },
         expiresAt,
       };
     } catch (error: any) {

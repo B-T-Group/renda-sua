@@ -53,21 +53,13 @@ const ImageUploadExample: React.FC = () => {
         return;
       }
 
-      // Step 2: Upload file directly to S3 using the presigned URL
-      const formData = new FormData();
-
-      // Add the presigned URL fields
-      Object.entries(presignedResponse.data.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-
-      // Add the file
-      formData.append('file', selectedFile);
-
-      // Upload to S3
+      // Step 2: Upload file directly to S3 using PUT with presigned URL
       const uploadResponse = await fetch(presignedResponse.data.url, {
-        method: 'POST',
-        body: formData,
+        method: 'PUT',
+        headers: {
+          'Content-Type': selectedFile.type,
+        },
+        body: selectedFile,
       });
 
       if (uploadResponse.ok) {

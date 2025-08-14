@@ -266,3 +266,4 @@ export const SimpleDocumentUpload: React.FC<SimpleDocumentUploadProps> = ({
     </Box>
   );
 };
+

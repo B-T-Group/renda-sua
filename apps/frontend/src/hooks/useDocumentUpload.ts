@@ -26,7 +26,6 @@ export interface UploadUrlResponse {
   };
   presigned_url: string;
   expires_at: string;
-  fields: Record<string, string>;
 }
 
 export interface UploadProgress {
@@ -74,20 +73,9 @@ export const useDocumentUpload = () => {
           throw new Error('Failed to get upload URL');
         }
 
-        const { presigned_url, fields, upload_record } = uploadUrlResponse.data;
+        const { presigned_url, upload_record } = uploadUrlResponse.data;
 
-        // Step 2: Upload file to AWS S3 using presigned URL
-        const formData = new FormData();
-
-        // Add the fields from the presigned URL response
-        Object.entries(fields).forEach(([key, value]) => {
-          formData.append(key, value);
-        });
-
-        // Add the file last
-        formData.append('file', file);
-
-        // Upload to S3 with progress tracking
+        // Step 2: Upload file to AWS S3 using PUT with presigned URL
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
 
@@ -118,8 +106,10 @@ export const useDocumentUpload = () => {
             reject(new Error('Upload aborted'));
           });
 
-          xhr.open('POST', presigned_url);
-          xhr.send(formData);
+          // Use PUT method and send file directly
+          xhr.open('PUT', presigned_url);
+          xhr.setRequestHeader('Content-Type', file.type);
+          xhr.send(file);
         });
 
         return upload_record;

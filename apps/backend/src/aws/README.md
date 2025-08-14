@@ -47,13 +47,6 @@ AWS_SECRET_ACCESS_KEY=your_secret_key
   "success": true,
   "data": {
     "url": "https://your-bucket.s3.amazonaws.com/...",
-    "fields": {
-      "bucket": "your-bucket-name",
-      "key": "uploads/1234567890-abc123-example.jpg",
-      "Content-Type": "image/jpeg",
-      "user-id": "123",
-      "category": "profile"
-    },
     "expiresAt": "2024-01-01T12:00:00.000Z",
     "key": "uploads/1234567890-abc123-example.jpg"
   }
@@ -121,16 +114,13 @@ const response = await fetch('/api/aws/presigned-url/image', {
 
 const { data } = await response.json();
 
-// Upload file directly to S3
-const formData = new FormData();
-Object.entries(data.fields).forEach(([key, value]) => {
-  formData.append(key, value);
-});
-formData.append('file', file);
-
+// Upload file directly to S3 using PUT
 await fetch(data.url, {
-  method: 'POST',
-  body: formData,
+  method: 'PUT',
+  headers: {
+    'Content-Type': file.type,
+  },
+  body: file,
 });
 ```
 

@@ -1,10 +1,10 @@
 import {
-  Controller,
-  Post,
   Body,
+  Controller,
+  Get,
   HttpException,
   HttpStatus,
-  Get,
+  Post,
   Query,
 } from '@nestjs/common';
 import { AwsService } from './aws.service';
@@ -23,7 +23,6 @@ export interface GeneratePresignedUrlResponse {
   success: boolean;
   data?: {
     url: string;
-    fields: Record<string, string>;
     expiresAt: Date;
     key: string;
   };
