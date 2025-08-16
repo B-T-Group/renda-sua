@@ -55,7 +55,12 @@
     "manageDeliveryOrders": "Gérez vos commandes de livraison et suivez leur progression.",
     "orderNumber": "Commande #{{number}}",
     "orders": "Commandes",
-    "manage": "Gérer"
+    "manage": "Gérer",
+    "items": "Articles",
+    "analytics": "Analyses",
+    "locations": "Emplacements",
+    "totalInventory": "Inventaire Total",
+    "remove": "Supprimer"
   },
   "business": {
     "dashboard": {
@@ -170,7 +175,11 @@
       "reorderPoint": "Point de réapprovisionnement",
       "noInventoryFound": "Aucun inventaire trouvé",
       "noLocationsError": "Aucun emplacement d'entreprise trouvé. Veuillez d'abord ajouter des emplacements.",
-      "deleteInventoryConfirm": "Êtes-vous sûr de vouloir supprimer cet enregistrement d'inventaire ?"
+      "deleteInventoryConfirm": "Êtes-vous sûr de vouloir supprimer cet enregistrement d'inventaire ?",
+      "addNewImages": "Ajouter de nouvelles images",
+      "currentImages": "Images actuelles",
+      "uploadImagesFor": "Télécharger des images pour",
+      "selectImages": "Sélectionner des images"
     },
     "locations": {
       "title": "Emplacements",

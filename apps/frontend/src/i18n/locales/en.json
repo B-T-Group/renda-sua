@@ -55,7 +55,12 @@
     "manageDeliveryOrders": "Manage your delivery orders and track their progress.",
     "orderNumber": "Order #{{number}}",
     "orders": "Orders",
-    "manage": "Manage"
+    "manage": "Manage",
+    "items": "Items",
+    "analytics": "Analytics",
+    "locations": "Locations",
+    "totalInventory": "Total Inventory",
+    "remove": "Remove"
   },
   "business": {
     "dashboard": {
@@ -170,7 +175,11 @@
       "reorderPoint": "Reorder Point",
       "noInventoryFound": "No inventory found",
       "noLocationsError": "No business locations found. Please add locations first.",
-      "deleteInventoryConfirm": "Are you sure you want to delete this inventory record?"
+      "deleteInventoryConfirm": "Are you sure you want to delete this inventory record?",
+      "addNewImages": "Add New Images",
+      "currentImages": "Current Images",
+      "uploadImagesFor": "Upload Images for",
+      "selectImages": "Select Images"
     },
     "locations": {
       "title": "Locations",
