@@ -98,3 +98,6 @@ export type {
   AdminMessageRequest,
   AdminMessageResponse,
 } from './useAdminMessage';
+
+// User details hook
+export { useUserDetails } from './useUserDetails';

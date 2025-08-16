@@ -1,36 +1,40 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ArrowBack,
-  Description,
-} from '@mui/icons-material';
+import { ArrowBack, Description } from '@mui/icons-material';
 import {
   Box,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Container,
   Typography,
 } from '@mui/material';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+import React from 'react';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
+import { useUserDetails } from '../../hooks/useUserDetails';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { DocumentList } from '../common/DocumentList';
 
 const AdminUserDocumentsPage: React.FC = () => {
-  const { userType, userId } = useParams<{ userType: string; userId: string }>();
+  const { userType, userId } = useParams<{
+    userType: string;
+    userId: string;
+  }>();
   const { profile: currentUser } = useUserProfile();
-  const [userName, setUserName] = useState<string>('');
+  const { user, loading: userLoading, userName } = useUserDetails(userId || '');
+  const {
+    documents,
+    documentTypes,
+    loading: documentsLoading,
+    error: documentsError,
+    deleteDocument,
+    updateDocumentNote,
+    fetchDocuments,
+  } = useDocumentManagement();
 
   // Check if current user is admin
-  const isAdmin = currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
-
-  useEffect(() => {
-    // Set user name based on user type
-    if (userType && userId) {
-      // This would typically come from an API call to get user details
-      setUserName(`User ${userId}`);
-    }
-  }, [userType, userId]);
+  const isAdmin =
+    currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
 
   if (!isAdmin) {
     return (
@@ -39,9 +43,7 @@ const AdminUserDocumentsPage: React.FC = () => {
           <Typography variant="h4" color="error">
             Access Denied
           </Typography>
-          <Typography>
-            You don't have permission to view this page.
-          </Typography>
+          <Typography>You don't have permission to view this page.</Typography>
         </Box>
       </Container>
     );
@@ -61,12 +63,15 @@ const AdminUserDocumentsPage: React.FC = () => {
             Back to {userType}s
           </Button>
           <Box>
-            <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h4"
+              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <Description />
               {userName}'s Documents
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Manage documents for {userType}: {userId}
+              Manage documents for {userName || `${userType} ${userId}`}
             </Typography>
           </Box>
         </Box>
@@ -74,10 +79,21 @@ const AdminUserDocumentsPage: React.FC = () => {
         {/* Documents List */}
         <Card>
           <CardContent>
-            <DocumentList 
-              userId={userId}
-              showUserInfo={false}
-            />
+            {userLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <DocumentList
+                documents={documents}
+                documentTypes={documentTypes}
+                loading={documentsLoading}
+                error={documentsError}
+                onDelete={deleteDocument}
+                onUpdateNote={updateDocumentNote}
+                onRefresh={fetchDocuments}
+              />
+            )}
           </CardContent>
         </Card>
       </Box>

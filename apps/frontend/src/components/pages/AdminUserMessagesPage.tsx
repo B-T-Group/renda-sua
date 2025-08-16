@@ -4,11 +4,14 @@ import {
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Container,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useUserDetails } from '../../hooks/useUserDetails';
+import { useUserMessages } from '../../hooks/useUserMessages';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { UserMessageList } from '../common/UserMessageList';
 
@@ -18,19 +21,12 @@ const AdminUserMessagesPage: React.FC = () => {
     userId: string;
   }>();
   const { profile: currentUser } = useUserProfile();
-  const [userName, setUserName] = useState<string>('');
+  const { user, loading: userLoading, userName } = useUserDetails(userId || '');
+  const { loading: messagesLoading } = useUserMessages(userId);
 
   // Check if current user is admin
   const isAdmin =
     currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
-
-  useEffect(() => {
-    // Set user name based on user type
-    if (userType && userId) {
-      // This would typically come from an API call to get user details
-      setUserName(`User ${userId}`);
-    }
-  }, [userType, userId]);
 
   if (!isAdmin) {
     return (
@@ -67,7 +63,7 @@ const AdminUserMessagesPage: React.FC = () => {
               {userName}'s Messages
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              View messages for {userType}: {userId}
+              View messages for {userName || `${userType} ${userId}`}
             </Typography>
           </Box>
         </Box>
@@ -75,7 +71,13 @@ const AdminUserMessagesPage: React.FC = () => {
         {/* Messages List */}
         <Card>
           <CardContent>
-            <UserMessageList userId={userId} showUserInfo={false} />
+            {userLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <UserMessageList />
+            )}
           </CardContent>
         </Card>
       </Box>
