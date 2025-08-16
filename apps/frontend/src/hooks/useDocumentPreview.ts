@@ -1,3 +1,4 @@
+import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
@@ -17,14 +18,25 @@ export interface DocumentPreviewResponse {
 }
 
 export const useDocumentPreview = () => {
-  const { apiClient } = useApiClient();
+  const { isAuthenticated, isLoading } = useAuth0();
+  const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const getDocumentPreviewUrl = useCallback(
     async (documentId: string): Promise<string | null> => {
+      if (isLoading) {
+        setError('Authentication is still loading');
+        return null;
+      }
+
+      if (!isAuthenticated) {
+        setError('User not authenticated');
+        return null;
+      }
+
       if (!apiClient) {
-        setError('API client not available');
+        setError('API client not available - please try refreshing the page');
         return null;
       }
 
@@ -32,6 +44,12 @@ export const useDocumentPreview = () => {
       setError(null);
 
       try {
+        console.log(
+          'Making API request to:',
+          `/users/upload/${documentId}/view`
+        );
+        console.log('API client base URL:', apiClient.defaults.baseURL);
+
         const response = await apiClient.get<DocumentPreviewResponse>(
           `/users/upload/${documentId}/view`
         );
@@ -54,7 +72,7 @@ export const useDocumentPreview = () => {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, isAuthenticated, isLoading]
   );
 
   return {
