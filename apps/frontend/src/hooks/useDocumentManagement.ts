@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLClient } from './useGraphQLClient';
+import { useUserProfile } from './useUserProfile';
 
 export interface DocumentType {
   id: number;
@@ -22,6 +23,12 @@ export interface UserDocument {
   created_at: string;
   updated_at: string;
   document_type: DocumentType;
+  user?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
 }
 
 export interface DocumentFilters {
@@ -32,6 +39,7 @@ export interface DocumentFilters {
 
 export const useDocumentManagement = () => {
   const { client } = useGraphQLClient();
+  const { profile: user } = useUserProfile();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,6 +105,14 @@ export const useDocumentManagement = () => {
           }
         }
 
+        // For business admins, show all uploads. For others, show only their own
+        if (user?.user_type_id === 'business' && user?.is_admin) {
+          // Business admins can see all uploads - no user_id filter
+        } else {
+          // Regular users can only see their own uploads
+          whereClause.user_id = { _eq: user?.id };
+        }
+
         const query = `
         query GetUserDocuments($where: user_uploads_bool_exp!) {
           user_uploads(where: $where, order_by: {created_at: desc}) {
@@ -118,6 +134,12 @@ export const useDocumentManagement = () => {
               created_at
               updated_at
             }
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
           }
         }
       `;
@@ -132,19 +154,18 @@ export const useDocumentManagement = () => {
         setLoading(false);
       }
     },
-    [client]
+    [client, user?.id, user?.user_type_id, user?.is_admin]
   );
 
   // Delete document - now handled by useDocumentDelete hook
-  const deleteDocument = useCallback(
-    async (documentId: string) => {
-      // This is now a placeholder - actual deletion is handled by useDocumentDelete
-      // We keep this for backward compatibility but it should be replaced
-      console.warn('deleteDocument in useDocumentManagement is deprecated. Use useDocumentDelete hook instead.');
-      return false;
-    },
-    []
-  );
+  const deleteDocument = useCallback(async (documentId: string) => {
+    // This is now a placeholder - actual deletion is handled by useDocumentDelete
+    // We keep this for backward compatibility but it should be replaced
+    console.warn(
+      'deleteDocument in useDocumentManagement is deprecated. Use useDocumentDelete hook instead.'
+    );
+    return false;
+  }, []);
 
   // Update document note
   const updateDocumentNote = useCallback(

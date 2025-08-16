@@ -228,4 +228,14 @@ export class PermissionService {
       return false;
     }
   }
+
+  /**
+   * Check if user can view uploads from other users (business admins)
+   * @param userId User ID
+   * @returns Promise<boolean>
+   */
+  async canViewOtherUserUploads(userId: string): Promise<boolean> {
+    const isAdmin = await this.isBusinessAdmin(userId);
+    return isAdmin;
+  }
 }

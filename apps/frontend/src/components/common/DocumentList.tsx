@@ -1,4 +1,5 @@
 import {
+  CheckCircle,
   Clear,
   Delete,
   Download,
@@ -38,7 +39,9 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+
 import React, { useCallback, useState } from 'react';
+import { useDocumentApprove } from '../../hooks/useDocumentApprove';
 import { useDocumentDelete } from '../../hooks/useDocumentDelete';
 import {
   DocumentFilters,
@@ -46,6 +49,7 @@ import {
   UserDocument,
 } from '../../hooks/useDocumentManagement';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface DocumentListProps {
   documents: UserDocument[];
@@ -79,6 +83,14 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     loading: deleteLoading,
     error: deleteError,
   } = useDocumentDelete();
+
+  const {
+    approveDocument,
+    loading: approveLoading,
+    error: approveError,
+  } = useDocumentApprove();
+
+  const { profile: user } = useUserProfile();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocumentType, setSelectedDocumentType] = useState<number | ''>(
@@ -104,6 +116,14 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     note: '',
   });
   const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    document: UserDocument | null;
+  }>({
+    open: false,
+    document: null,
+  });
+
+  const [approveDialog, setApproveDialog] = useState<{
     open: boolean;
     document: UserDocument | null;
   }>({
@@ -196,6 +216,21 @@ export const DocumentList: React.FC<DocumentListProps> = ({
       onRefresh(filters);
     }
   }, [deleteDialog.document, deleteDocumentApi, onRefresh, filters]);
+
+  const handleApprove = useCallback((document: UserDocument) => {
+    setApproveDialog({ open: true, document });
+  }, []);
+
+  const handleConfirmApprove = useCallback(async () => {
+    if (!approveDialog.document) return;
+
+    const success = await approveDocument(approveDialog.document.id);
+    if (success) {
+      setApproveDialog({ open: false, document: null });
+      // Refresh the documents list after successful approval
+      onRefresh(filters);
+    }
+  }, [approveDialog.document, approveDocument, onRefresh, filters]);
 
   const handleConfirmEdit = useCallback(async () => {
     if (!editDialog.document) return;
@@ -458,6 +493,21 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                             </IconButton>
                           </Tooltip>
 
+                          {/* Show approve button only for business admins and unapproved documents */}
+                          {user?.user_type_id === 'business' &&
+                            user?.business?.is_admin &&
+                            !document.is_approved && (
+                              <Tooltip title="Approve Document">
+                                <IconButton
+                                  size="small"
+                                  color="success"
+                                  onClick={() => handleApprove(document)}
+                                >
+                                  <CheckCircle />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+
                           <Tooltip title="Delete">
                             <IconButton
                               size="small"
@@ -615,6 +665,44 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             variant="contained"
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Approve Confirmation Dialog */}
+      <Dialog
+        open={approveDialog.open}
+        onClose={() => setApproveDialog({ open: false, document: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Approve Document</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to approve "
+            {approveDialog.document?.file_name}
+            "? This will mark the document as approved.
+          </Typography>
+          {approveDialog.document?.user && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Uploaded by: {approveDialog.document.user.first_name}{' '}
+              {approveDialog.document.user.last_name}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setApproveDialog({ open: false, document: null })}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmApprove}
+            color="success"
+            variant="contained"
+            disabled={approveLoading}
+          >
+            {approveLoading ? 'Approving...' : 'Approve'}
           </Button>
         </DialogActions>
       </Dialog>

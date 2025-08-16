@@ -67,6 +67,8 @@ export { useVehicleTypes } from './useVehicleTypes';
 // Document management hooks
 export { useDocumentDelete } from './useDocumentDelete';
 export type { DeleteUploadResponse } from './useDocumentDelete';
+export { useDocumentApprove } from './useDocumentApprove';
+export type { ApproveUploadResponse } from './useDocumentApprove';
 export { useDocumentManagement } from './useDocumentManagement';
 export type {
   DocumentFilters,

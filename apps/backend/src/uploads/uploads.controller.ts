@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
 } from '@nestjs/common';
 import { PermissionService } from '../auth/permission.service';
@@ -125,6 +126,44 @@ export class UploadsController {
         {
           success: false,
           error: error.message || 'Failed to delete upload',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Patch(':id/approve')
+  async approveUpload(@Param('id') uploadId: string) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+
+      // Check if user is a business admin
+      const isAdmin = await this.permissionService.isBusinessAdmin(user.id);
+      if (!isAdmin) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Access denied. Only business admins can approve documents.',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      // Business logic delegated to upload service
+      await this.uploadService.approveUpload(uploadId);
+
+      return {
+        success: true,
+        message: 'Document approved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to approve document',
         },
         HttpStatus.BAD_REQUEST
       );

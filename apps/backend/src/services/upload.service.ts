@@ -323,4 +323,38 @@ export class UploadService {
 
     return result.update_user_uploads_by_pk;
   }
+
+  /**
+   * Approve a user upload record
+   * @param uploadId Upload record ID
+   * @returns Promise<void>
+   */
+  async approveUpload(uploadId: string): Promise<void> {
+    const approveMutation = `
+      mutation ApproveUserUpload($uploadId: uuid!) {
+        update_user_uploads_by_pk(
+          pk_columns: { id: $uploadId }
+          _set: { is_approved: true }
+        ) {
+          id
+          is_approved
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(
+      approveMutation,
+      { uploadId }
+    );
+
+    if (!result.update_user_uploads_by_pk) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Upload record not found or could not be approved',
+        },
+        HttpStatus.NOT_FOUND
+      );
+    }
+  }
 }
