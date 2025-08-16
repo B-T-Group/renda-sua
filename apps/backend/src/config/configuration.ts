@@ -182,8 +182,9 @@ export default async (): Promise<Configuration> => {
     },
     aws: {
       region: process.env.AWS_REGION || 'ca-central-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID,
+      secretAccessKey:
+        process.env.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY,
       s3BucketName: process.env.S3_BUCKET_NAME,
       s3BucketRegion:
         process.env.S3_BUCKET_REGION ||
