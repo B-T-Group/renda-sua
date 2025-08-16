@@ -210,7 +210,7 @@ export const SimpleDocumentUpload: React.FC<SimpleDocumentUploadProps> = ({
         >
           {documentTypes.map((type) => (
             <MenuItem key={type.id} value={type.id}>
-              {type.name}
+              {type.description}
             </MenuItem>
           ))}
         </Select>
@@ -266,5 +266,3 @@ export const SimpleDocumentUpload: React.FC<SimpleDocumentUploadProps> = ({
     </Box>
   );
 };
-
-

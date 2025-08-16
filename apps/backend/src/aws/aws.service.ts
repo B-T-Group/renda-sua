@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -161,6 +161,55 @@ export class AwsService {
    */
   getS3Client(): S3Client {
     return this.s3Client;
+  }
+
+  /**
+   * Generate a presigned URL for S3 download/viewing
+   * @param options Configuration options for the presigned URL
+   * @returns Promise<PresignedUrlResponse> Object containing the presigned URL and metadata
+   */
+  async generatePresignedDownloadUrl(
+    options: PresignedUrlOptions
+  ): Promise<PresignedUrlResponse> {
+    const {
+      bucketName,
+      key,
+      expiresIn = 3600,
+    } = options;
+
+    // Validate required parameters
+    if (!bucketName) {
+      throw new Error('Bucket name is required');
+    }
+    if (!key) {
+      throw new Error('Object key is required');
+    }
+
+    // Create the GetObject command
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    try {
+      // Generate the presigned URL
+      const url = await getSignedUrl(this.s3Client, command, {
+        expiresIn,
+      });
+
+      // Calculate expiration time
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + expiresIn);
+
+      return {
+        url,
+        expiresAt,
+      };
+    } catch (error: any) {
+      throw new Error(
+        `Failed to generate presigned download URL: ${error.message || 'Unknown error'}`
+      );
+    }
   }
 
   /**

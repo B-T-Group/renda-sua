@@ -1,0 +1,156 @@
+# Backend Authentication and Permission Rules
+
+## General Rules
+
+- Do all authentication and permission checks in a dedicated permission service
+- Do most business logic in services rather than controllers
+- Controllers should only handle HTTP concerns, validation, and service orchestration
+
+## Authentication and Permission Service Rules
+
+### Responsibilities
+
+- **Permission Service**: Handle all authentication and authorization logic
+- **Business Services**: Handle business logic, data processing, and external API calls
+- **Controllers**: Handle HTTP requests, basic validation, and service orchestration
+
+### Permission Service Structure
+
+```typescript
+// Example permission service method
+async canAccessUserUpload(userId: string, uploadId: string): Promise<boolean> {
+  // Check if user owns the resource or has admin privileges
+  // Return true/false based on permissions
+}
+
+async canViewUserUpload(userId: string, uploadId: string): Promise<boolean> {
+  // Check if user can view specific upload
+  // Consider ownership, admin status, and business rules
+}
+```
+
+### Controller Pattern
+
+```typescript
+// Good: Controller delegates to services
+@Get('upload/:id/view')
+async getUserUploadPresignedUrl(@Param('id') uploadId: string) {
+  const user = await this.hasuraUserService.getUser();
+
+  // Permission check in service
+  const canAccess = await this.permissionService.canViewUserUpload(user.id, uploadId);
+  if (!canAccess) {
+    throw new HttpException('Access denied', HttpStatus.FORBIDDEN);
+  }
+
+  // Business logic in service
+  return this.uploadService.generateViewUrl(uploadId);
+}
+
+// Bad: Controller contains business logic
+@Get('upload/:id/view')
+async getUserUploadPresignedUrl(@Param('id') uploadId: string) {
+  // Don't put complex permission checks here
+  // Don't put business logic here
+}
+```
+
+### Service Pattern
+
+```typescript
+// Good: Business logic in service
+@Injectable()
+export class UploadService {
+  async generateViewUrl(uploadId: string) {
+    // All business logic here
+    // Database queries, external API calls, data processing
+  }
+}
+
+// Bad: Business logic in controller
+@Controller()
+export class UploadController {
+  @Get()
+  async getUpload() {
+    // Don't put business logic here
+  }
+}
+```
+
+## Anti-Patterns to Avoid
+
+### ❌ Don't do this:
+
+- Put complex permission checks in controllers
+- Put business logic in controllers
+- Mix authentication logic with business logic
+- Hard-code permission checks in multiple places
+
+### ✅ Do this instead:
+
+- Create dedicated permission service methods
+- Delegate all business logic to services
+- Keep controllers thin and focused on HTTP concerns
+- Reuse permission service methods across controllers
+
+## File Organization
+
+```
+src/
+├── auth/
+│   ├── permission.service.ts    # All permission checks
+│   └── auth.service.ts          # Authentication logic
+├── services/
+│   ├── upload.service.ts        # Upload business logic
+│   └── user.service.ts          # User business logic
+└── controllers/
+    ├── upload.controller.ts     # HTTP handling only
+    └── user.controller.ts       # HTTP handling only
+```
+
+## Examples
+
+### Permission Service Methods
+
+```typescript
+// permission.service.ts
+async canViewUserUpload(userId: string, uploadId: string): Promise<boolean>
+async canEditUserUpload(userId: string, uploadId: string): Promise<boolean>
+async canDeleteUserUpload(userId: string, uploadId: string): Promise<boolean>
+async isBusinessAdmin(userId: string): Promise<boolean>
+async canAccessBusinessData(userId: string, businessId: string): Promise<boolean>
+```
+
+### Business Service Methods
+
+```typescript
+// upload.service.ts
+async generateViewUrl(uploadId: string): Promise<PresignedUrlResponse>
+async generateUploadUrl(uploadData: UploadData): Promise<PresignedUrlResponse>
+async deleteUpload(uploadId: string): Promise<void>
+```
+
+### Controller Methods
+
+```typescript
+// upload.controller.ts
+@Get('upload/:id/view')
+async getUserUploadPresignedUrl(@Param('id') uploadId: string) {
+  const user = await this.hasuraUserService.getUser();
+
+  // Permission check
+  const canAccess = await this.permissionService.canViewUserUpload(user.id, uploadId);
+  if (!canAccess) {
+    throw new HttpException('Access denied', HttpStatus.FORBIDDEN);
+  }
+
+  // Business logic
+  return this.uploadService.generateViewUrl(uploadId);
+}
+```
+
+description:
+globs:
+alwaysApply: false
+
+---

@@ -261,7 +261,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           >
             {documentTypes.map((type) => (
               <MenuItem key={type.id} value={type.id}>
-                {type.name}
+                {type.description}
               </MenuItem>
             ))}
           </Select>
@@ -346,5 +346,3 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     </Card>
   );
 };
-
-

@@ -71,6 +71,8 @@ export type {
   DocumentType,
   UserDocument,
 } from './useDocumentManagement';
+export { useDocumentPreview } from './useDocumentPreview';
+export type { DocumentPreviewResponse } from './useDocumentPreview';
 export { useDocumentUpload } from './useDocumentUpload';
 export type {
   UploadProgress,

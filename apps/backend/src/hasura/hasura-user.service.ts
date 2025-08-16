@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
 import { Configuration } from '../config/configuration';
-import { HasuraSystemService } from './hasura-system.service';
 
 export interface AddressRecord {
   id: string;
@@ -122,7 +121,6 @@ export class HasuraUserService {
   private readonly client: GraphQLClient;
   constructor(
     @Inject(REQUEST) private readonly request: any,
-    private readonly hasuraSystemService: HasuraSystemService,
     private readonly configService: ConfigService<Configuration>
   ) {
     const hasuraConfig = this.configService.get('hasura');

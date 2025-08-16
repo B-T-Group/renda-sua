@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { HasuraSystemService } from './hasura-system.service';
 import { HasuraUserService } from './hasura-user.service';
 
@@ -9,7 +9,7 @@ import { HasuraUserService } from './hasura-user.service';
 export class HasuraController {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
 
   @Get('system/status')
@@ -21,12 +21,15 @@ export class HasuraController {
   }
 
   @Post('user/create')
-  async createUser(@Body() userData: { 
-    email: string; 
-    first_name: string;
-    last_name: string;
-    user_type_id: string;
-  }) {
+  async createUser(
+    @Body()
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    }
+  ) {
     try {
       const user = await this.hasuraUserService.createUser(userData);
       return {
@@ -43,14 +46,19 @@ export class HasuraController {
   }
 
   @Post('user/create_with_client')
-  async createUserWithClient(@Body() userData: { 
-    email: string; 
-    first_name: string;
-    last_name: string;
-    user_type_id: string;
-  }) {
+  async createUserWithClient(
+    @Body()
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      user_type_id: string;
+    }
+  ) {
     try {
-      const result = await this.hasuraUserService.createUserWithClient(userData);
+      const result = await this.hasuraUserService.createUserWithClient(
+        userData
+      );
       return {
         success: true,
         user: result.user,
@@ -66,19 +74,25 @@ export class HasuraController {
   }
 
   @Post('user/create_with_agent')
-  async createUserWithAgent(@Body() data: { 
-    user: {
-      email: string; 
-      first_name: string;
-      last_name: string;
-      user_type_id: string;
-    };
-    agent: {
-      vehicle_type_id: string;
-    };
-  }) {
+  async createUserWithAgent(
+    @Body()
+    data: {
+      user: {
+        email: string;
+        first_name: string;
+        last_name: string;
+        user_type_id: string;
+      };
+      agent: {
+        vehicle_type_id: string;
+      };
+    }
+  ) {
     try {
-      const result = await this.hasuraUserService.createUserWithAgent(data.user, data.agent);
+      const result = await this.hasuraUserService.createUserWithAgent(
+        data.user,
+        data.agent
+      );
       return {
         success: true,
         user: result.user,
@@ -94,19 +108,25 @@ export class HasuraController {
   }
 
   @Post('user/create_with_business')
-  async createUserWithBusiness(@Body() data: { 
-    user: {
-      email: string; 
-      first_name: string;
-      last_name: string;
-      user_type_id: string;
-    };
-    business: {
-      name: string;
-    };
-  }) {
+  async createUserWithBusiness(
+    @Body()
+    data: {
+      user: {
+        email: string;
+        first_name: string;
+        last_name: string;
+        user_type_id: string;
+      };
+      business: {
+        name: string;
+      };
+    }
+  ) {
     try {
-      const result = await this.hasuraUserService.createUserWithBusiness(data.user, data.business);
+      const result = await this.hasuraUserService.createUserWithBusiness(
+        data.user,
+        data.business
+      );
       return {
         success: true,
         user: result.user,
@@ -128,4 +148,4 @@ export class HasuraController {
       identifier: this.hasuraUserService.getIdentifier(),
     };
   }
-} 
+}

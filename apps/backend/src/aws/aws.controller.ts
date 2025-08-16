@@ -29,6 +29,22 @@ export interface GeneratePresignedUrlResponse {
   error?: string;
 }
 
+export interface GenerateDownloadUrlRequest {
+  bucketName: string;
+  key: string;
+  expiresIn?: number;
+}
+
+export interface GenerateDownloadUrlResponse {
+  success: boolean;
+  data?: {
+    url: string;
+    expiresAt: Date;
+    key: string;
+  };
+  error?: string;
+}
+
 @Controller('aws')
 export class AwsController {
   constructor(private readonly awsService: AwsService) {}
@@ -116,7 +132,6 @@ export class AwsController {
         contentType = 'image/jpeg',
         expiresIn = 3600,
         prefix = 'images',
-        metadata = {},
       } = request;
 
       // Validate required parameters
@@ -186,7 +201,6 @@ export class AwsController {
         contentType = 'application/pdf',
         expiresIn = 3600,
         prefix = 'documents',
-        metadata = {},
       } = request;
 
       // Validate required parameters
@@ -238,6 +252,63 @@ export class AwsController {
         {
           success: false,
           error: error.message || 'Failed to generate document upload URL',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('download-url')
+  async generateDownloadUrl(
+    @Body() request: GenerateDownloadUrlRequest
+  ): Promise<GenerateDownloadUrlResponse> {
+    try {
+      const { bucketName, key, expiresIn = 3600 } = request;
+
+      // Validate required parameters
+      if (!bucketName) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Bucket name is required',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (!key) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Key is required',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Generate presigned download URL
+      const result = await this.awsService.generatePresignedDownloadUrl({
+        bucketName,
+        key,
+        expiresIn,
+      });
+
+      return {
+        success: true,
+        data: {
+          ...result,
+          key,
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to generate download URL',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

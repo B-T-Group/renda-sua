@@ -4,6 +4,7 @@ import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
+import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AirtelMoneyController } from '../airtel-money/airtel-money.controller';
 import { AirtelMoneyModule } from '../airtel-money/airtel-money.module';
@@ -16,8 +17,8 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrdersModule } from '../orders/orders.module';
+import { ServicesModule } from '../services/services.module';
 import { UsersModule } from '../users/users.module';
-import { AdminModule } from '../admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -47,6 +48,7 @@ import { AppService } from './app.service';
     }),
     AuthModule,
     HasuraModule,
+    ServicesModule,
     UsersModule,
     AccountsModule,
     AddressesModule,

@@ -44,6 +44,7 @@ import {
   DocumentType,
   UserDocument,
 } from '../../hooks/useDocumentManagement';
+import { useDocumentPreview } from '../../hooks/useDocumentPreview';
 
 interface DocumentListProps {
   documents: UserDocument[];
@@ -66,6 +67,11 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   onRefresh,
   className,
 }) => {
+  const {
+    getDocumentPreviewUrl,
+    loading: previewLoading,
+    error: previewError,
+  } = useDocumentPreview();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocumentType, setSelectedDocumentType] = useState<number | ''>(
@@ -75,9 +81,11 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   const [previewDialog, setPreviewDialog] = useState<{
     open: boolean;
     document: UserDocument | null;
+    previewUrl: string | null;
   }>({
     open: false,
     document: null,
+    previewUrl: null,
   });
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
@@ -150,9 +158,18 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     onRefresh();
   }, [onRefresh]);
 
-  const handlePreview = useCallback((document: UserDocument) => {
-    setPreviewDialog({ open: true, document });
-  }, []);
+  const handlePreview = useCallback(
+    async (document: UserDocument) => {
+      setPreviewDialog({ open: true, document, previewUrl: null });
+
+      // Get presigned URL from backend
+      const previewUrl = await getDocumentPreviewUrl(document.id);
+      if (previewUrl) {
+        setPreviewDialog({ open: true, document, previewUrl });
+      }
+    },
+    [getDocumentPreviewUrl]
+  );
 
   const handleEdit = useCallback((document: UserDocument) => {
     setEditDialog({ open: true, document, note: document.note || '' });
@@ -180,11 +197,16 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     }
   }, [editDialog.document, editDialog.note, onUpdateNote]);
 
-  const handleDownload = useCallback((document: UserDocument) => {
-    // This would need to be implemented based on your S3 setup
-    const url = `https://rendasua-user-uploads.s3.amazonaws.com/${document.key}`;
-    window.open(url, '_blank');
-  }, []);
+  const handleDownload = useCallback(
+    async (document: UserDocument) => {
+      // Get presigned URL from backend for download
+      const downloadUrl = await getDocumentPreviewUrl(document.id);
+      if (downloadUrl) {
+        window.open(downloadUrl, '_blank');
+      }
+    },
+    [getDocumentPreviewUrl]
+  );
 
   const filteredDocuments = documents.filter((doc) => {
     if (filters.search) {
@@ -233,7 +255,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                 <MenuItem value="">All Types</MenuItem>
                 {documentTypes.map((type) => (
                   <MenuItem key={type.id} value={type.id}>
-                    {type.name}
+                    {type.description}
                   </MenuItem>
                 ))}
               </Select>
@@ -361,7 +383,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={document.document_type.name}
+                          label={document.document_type.description}
                           size="small"
                           variant="outlined"
                         />
@@ -450,7 +472,9 @@ export const DocumentList: React.FC<DocumentListProps> = ({
       {/* Preview Dialog */}
       <Dialog
         open={previewDialog.open}
-        onClose={() => setPreviewDialog({ open: false, document: null })}
+        onClose={() =>
+          setPreviewDialog({ open: false, document: null, previewUrl: null })
+        }
         maxWidth="md"
         fullWidth
       >
@@ -458,27 +482,49 @@ export const DocumentList: React.FC<DocumentListProps> = ({
         <DialogContent>
           {previewDialog.document && (
             <Box>
-              {previewDialog.document.content_type.startsWith('image/') ? (
-                <img
-                  src={`https://rendasua-user-uploads.s3.amazonaws.com/${previewDialog.document.key}`}
-                  alt={previewDialog.document.file_name}
-                  style={{ maxWidth: '100%', height: 'auto' }}
-                />
-              ) : (
+              {previewLoading ? (
                 <Box sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h4" sx={{ mb: 2 }}>
-                    {getFileIcon(previewDialog.document.content_type)}
-                  </Typography>
-                  <Typography variant="body1">
-                    Preview not available for this file type.
+                  <Typography>Loading preview...</Typography>
+                </Box>
+              ) : previewError ? (
+                <Box sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography color="error" sx={{ mb: 2 }}>
+                    Error loading preview: {previewError}
                   </Typography>
                   <Button
                     variant="contained"
                     onClick={() => handleDownload(previewDialog.document!)}
-                    sx={{ mt: 2 }}
                   >
                     Download to View
                   </Button>
+                </Box>
+              ) : previewDialog.previewUrl ? (
+                previewDialog.document.content_type.startsWith('image/') ? (
+                  <img
+                    src={previewDialog.previewUrl}
+                    alt={previewDialog.document.file_name}
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                ) : (
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" sx={{ mb: 2 }}>
+                      {getFileIcon(previewDialog.document.content_type)}
+                    </Typography>
+                    <Typography variant="body1">
+                      Preview not available for this file type.
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      onClick={() => handleDownload(previewDialog.document!)}
+                      sx={{ mt: 2 }}
+                    >
+                      Download to View
+                    </Button>
+                  </Box>
+                )
+              ) : (
+                <Box sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography>Loading preview...</Typography>
                 </Box>
               )}
             </Box>
@@ -486,7 +532,13 @@ export const DocumentList: React.FC<DocumentListProps> = ({
         </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => setPreviewDialog({ open: false, document: null })}
+            onClick={() =>
+              setPreviewDialog({
+                open: false,
+                document: null,
+                previewUrl: null,
+              })
+            }
           >
             Close
           </Button>
@@ -560,5 +612,3 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     </Box>
   );
 };
-
-
