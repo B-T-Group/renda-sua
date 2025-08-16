@@ -25,6 +25,8 @@ import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
+import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
+import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import EditItemPage from '../components/pages/EditItemPage';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
@@ -249,6 +251,26 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MessagesCenterPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin User Documents route */}
+            <Route
+              path="/admin/:userType/:userId/documents"
+              element={
+                <ProtectedRoute>
+                  <AdminUserDocumentsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin User Messages route */}
+            <Route
+              path="/admin/:userType/:userId/messages"
+              element={
+                <ProtectedRoute>
+                  <AdminUserMessagesPage />
                 </ProtectedRoute>
               }
             />

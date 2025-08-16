@@ -139,6 +139,8 @@ const AdminManageBusinesses: React.FC = () => {
                   accounts={(b.user as any).accounts}
                   addresses={(b as any).addresses}
                   admin={!!b.is_admin}
+                  userId={b.user.id}
+                  userType="business"
                   footer={
                     <Button
                       size="small"

@@ -138,6 +138,8 @@ const AdminManageAgents: React.FC = () => {
                   accounts={(a.user as any).accounts}
                   addresses={(a as any).addresses}
                   verified={!!a.is_verified}
+                  userId={a.user.id}
+                  userType="agent"
                   footer={
                     <Button
                       size="small"

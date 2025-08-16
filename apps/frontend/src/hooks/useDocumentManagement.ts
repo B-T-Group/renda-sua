@@ -37,7 +37,7 @@ export interface DocumentFilters {
   search?: string;
 }
 
-export const useDocumentManagement = () => {
+export const useDocumentManagement = (adminUserId?: string) => {
   const { client } = useGraphQLClient();
   const { profile: user } = useUserProfile();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
@@ -106,7 +106,10 @@ export const useDocumentManagement = () => {
         }
 
         // For business admins, show all uploads. For others, show only their own
-        if (user?.user_type_id === 'business' && user?.is_admin) {
+        if (adminUserId) {
+          // Admin is viewing specific user's documents
+          whereClause.user_id = { _eq: adminUserId };
+        } else if (user?.user_type_id === 'business' && user?.business?.is_admin) {
           // Business admins can see all uploads - no user_id filter
         } else {
           // Regular users can only see their own uploads

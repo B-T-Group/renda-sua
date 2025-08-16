@@ -74,6 +74,10 @@ export { useDocumentManagement } from './useDocumentManagement';
 // User messages hooks
 export { useUserMessages } from './useUserMessages';
 export type { EntityType, UserMessage, MessageFilters } from './useUserMessages';
+
+// Admin message hooks
+export { useAdminMessage } from './useAdminMessage';
+export type { AdminMessageRequest, AdminMessageResponse } from './useAdminMessage';
 export type {
   DocumentFilters,
   DocumentType,

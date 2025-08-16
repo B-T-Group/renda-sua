@@ -1,13 +1,16 @@
-import { Home as HomeIcon } from '@mui/icons-material';
+import { Description, Home as HomeIcon, Message } from '@mui/icons-material';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
   Divider,
+  Stack,
   Typography,
 } from '@mui/material';
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import StatusBadge from './StatusBadge';
 
 export interface AdminAccount {
@@ -37,6 +40,8 @@ interface AdminUserCardProps {
   headerRight?: React.ReactNode;
   verified?: boolean;
   admin?: boolean;
+  userId?: string;
+  userType?: 'agent' | 'client' | 'business';
 }
 
 const AdminUserCard: React.FC<AdminUserCardProps> = ({
@@ -48,6 +53,8 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
   headerRight,
   verified,
   admin,
+  userId,
+  userType,
 }) => {
   return (
     <Card sx={{ p: 2, width: '100%' }}>
@@ -143,6 +150,35 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({
         )}
 
         {footer && <Box sx={{ mt: 1 }}>{footer}</Box>}
+        
+        {/* Admin Action Buttons */}
+        {userId && userType && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Admin Actions
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <Button
+                component={RouterLink}
+                to={`/admin/${userType}s/${userId}/documents`}
+                size="small"
+                variant="outlined"
+                startIcon={<Description />}
+              >
+                Documents
+              </Button>
+              <Button
+                component={RouterLink}
+                to={`/admin/${userType}s/${userId}/messages`}
+                size="small"
+                variant="outlined"
+                startIcon={<Message />}
+              >
+                Messages
+              </Button>
+            </Stack>
+          </Box>
+        )}
       </CardContent>
     </Card>
   );

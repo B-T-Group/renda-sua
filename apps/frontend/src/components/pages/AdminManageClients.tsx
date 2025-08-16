@@ -134,6 +134,8 @@ const AdminManageClients: React.FC = () => {
                   accounts={c.user.accounts}
                   addresses={c.addresses}
                   verified={undefined}
+                  userId={c.user.id}
+                  userType="client"
                   footer={
                     <Button
                       size="small"
