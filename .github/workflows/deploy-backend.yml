@@ -45,7 +45,8 @@ jobs:
         run: |
           cp apps/backend/.env.development ./apps/backend/.env  
           sed -i "s/HASURA_GRAPHQL_ADMIN_SECRET=.*/HASURA_GRAPHQL_ADMIN_SECRET=${{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}/" apps/backend/.env
-          npx nx build backend --configuration=development
+          # Use build script to ensure proper exit
+          ./scripts/build-backend.sh
           cp apps/backend/.env dist/apps/backend/.env
 
       - name: Configure AWS credentials

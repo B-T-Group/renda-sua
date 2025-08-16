@@ -2,7 +2,9 @@ const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { join } = require('path');
 
 module.exports = (options, context) => {
-  const isWatch = context?.watch || process.env.NODE_ENV === 'development';
+  // Only enable watch mode if explicitly requested via context.watch
+  // Don't enable watch mode just because NODE_ENV is development
+  const isWatch = context?.watch || false;
 
   return {
     output: {
