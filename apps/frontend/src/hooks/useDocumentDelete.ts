@@ -1,73 +1,60 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useState } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
 
-export interface DocumentPreviewResponse {
+export interface DeleteUploadResponse {
   success: boolean;
-  upload_record: {
-    id: string;
-    file_name: string;
-    content_type: string;
-    file_size: number;
-    note?: string;
-    is_approved: boolean;
-    created_at: string;
-  };
-  presigned_url: string;
-  expires_at: string;
+  message: string;
 }
 
-export const useDocumentPreview = () => {
+export const useDocumentDelete = () => {
   const { isAuthenticated, isLoading } = useAuth0();
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getDocumentPreviewUrl = useCallback(
-    async (documentId: string): Promise<string | null> => {
+  const deleteDocument = useCallback(
+    async (documentId: string): Promise<boolean> => {
       if (isLoading) {
         setError('Authentication is still loading');
-        return null;
+        return false;
       }
 
       if (!isAuthenticated) {
         setError('User not authenticated');
-        return null;
+        return false;
       }
 
       if (!apiClient) {
         setError('API client not available - please try refreshing the page');
-        return null;
+        return false;
       }
 
       setLoading(true);
       setError(null);
 
       try {
-        console.log(
-          'Making API request to:',
-          `/users/upload/${documentId}/view`
-        );
+        console.log('Deleting document:', documentId);
         console.log('API client base URL:', apiClient.defaults.baseURL);
 
-        const response = await apiClient.get<DocumentPreviewResponse>(
-          `/uploads/${documentId}/view`
+        const response = await apiClient.delete<DeleteUploadResponse>(
+          `/uploads/${documentId}`
         );
 
         if (response.data.success) {
-          return response.data.presigned_url;
+          return true;
         } else {
-          setError('Failed to get document preview URL');
-          return null;
+          setError('Failed to delete document');
+          return false;
         }
       } catch (err: any) {
-        console.error('Error getting document preview URL:', err);
+        console.error('Error deleting document:', err);
         const errorMessage =
           err.response?.data?.error ||
           err.message ||
-          'Failed to get document preview URL';
+          'Failed to delete document';
         setError(errorMessage);
-        return null;
+        return false;
       } finally {
         setLoading(false);
       }
@@ -76,7 +63,7 @@ export const useDocumentPreview = () => {
   );
 
   return {
-    getDocumentPreviewUrl,
+    deleteDocument,
     loading,
     error,
   };

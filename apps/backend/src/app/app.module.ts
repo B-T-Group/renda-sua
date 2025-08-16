@@ -18,6 +18,7 @@ import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrdersModule } from '../orders/orders.module';
 import { ServicesModule } from '../services/services.module';
+import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -49,6 +50,7 @@ import { AppService } from './app.service';
     AuthModule,
     HasuraModule,
     ServicesModule,
+    UploadsModule,
     UsersModule,
     AccountsModule,
     AddressesModule,

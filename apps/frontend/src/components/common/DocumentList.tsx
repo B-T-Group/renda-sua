@@ -39,6 +39,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useCallback, useState } from 'react';
+import { useDocumentDelete } from '../../hooks/useDocumentDelete';
 import {
   DocumentFilters,
   DocumentType,
@@ -72,6 +73,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     loading: previewLoading,
     error: previewError,
   } = useDocumentPreview();
+
+  const {
+    deleteDocument: deleteDocumentApi,
+    loading: deleteLoading,
+    error: deleteError,
+  } = useDocumentDelete();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocumentType, setSelectedDocumentType] = useState<number | ''>(
@@ -182,11 +189,13 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteDialog.document) return;
 
-    const success = await onDelete(deleteDialog.document.id);
+    const success = await deleteDocumentApi(deleteDialog.document.id);
     if (success) {
       setDeleteDialog({ open: false, document: null });
+      // Refresh the documents list after successful deletion
+      onRefresh(filters);
     }
-  }, [deleteDialog.document, onDelete]);
+  }, [deleteDialog.document, deleteDocumentApi, onRefresh, filters]);
 
   const handleConfirmEdit = useCallback(async () => {
     if (!editDialog.document) return;
@@ -271,8 +280,8 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                 }
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value={true}>Approved</MenuItem>
-                <MenuItem value={false}>Pending</MenuItem>
+                <MenuItem value="true">Approved</MenuItem>
+                <MenuItem value="false">Pending</MenuItem>
               </Select>
             </FormControl>
 

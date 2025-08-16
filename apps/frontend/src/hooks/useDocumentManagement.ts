@@ -135,33 +135,15 @@ export const useDocumentManagement = () => {
     [client]
   );
 
-  // Delete document
+  // Delete document - now handled by useDocumentDelete hook
   const deleteDocument = useCallback(
     async (documentId: string) => {
-      if (!client) return false;
-
-      try {
-        const mutation = `
-        mutation DeleteDocument($id: uuid!) {
-          delete_user_uploads_by_pk(id: $id) {
-            id
-          }
-        }
-      `;
-
-        await client.request(mutation, { id: documentId });
-
-        // Remove from local state
-        setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
-
-        return true;
-      } catch (err) {
-        console.error('Error deleting document:', err);
-        setError('Failed to delete document');
-        return false;
-      }
+      // This is now a placeholder - actual deletion is handled by useDocumentDelete
+      // We keep this for backward compatibility but it should be replaced
+      console.warn('deleteDocument in useDocumentManagement is deprecated. Use useDocumentDelete hook instead.');
+      return false;
     },
-    [client]
+    []
   );
 
   // Update document note

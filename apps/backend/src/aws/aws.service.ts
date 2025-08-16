@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -208,6 +208,37 @@ export class AwsService {
     } catch (error: any) {
       throw new Error(
         `Failed to generate presigned download URL: ${error.message || 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Delete an object from S3
+   * @param bucketName S3 bucket name
+   * @param key Object key to delete
+   * @returns Promise<void>
+   */
+  async deleteObject(bucketName: string, key: string): Promise<void> {
+    // Validate required parameters
+    if (!bucketName) {
+      throw new Error('Bucket name is required');
+    }
+    if (!key) {
+      throw new Error('Object key is required');
+    }
+
+    // Create the DeleteObject command
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    try {
+      // Delete the object
+      await this.s3Client.send(command);
+    } catch (error: any) {
+      throw new Error(
+        `Failed to delete object from S3: ${error.message || 'Unknown error'}`
       );
     }
   }

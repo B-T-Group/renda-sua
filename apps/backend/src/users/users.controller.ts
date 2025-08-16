@@ -5,16 +5,13 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
-  Param,
   Post,
 } from '@nestjs/common';
 import { Auth0Service } from '../auth/auth0.service';
 import { PermissionService } from '../auth/permission.service';
 import { CurrentUser } from '../auth/user.decorator';
-
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { UploadService } from '../services/upload.service';
 
 @Controller('users')
 export class UsersController {
@@ -22,8 +19,7 @@ export class UsersController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
-    private readonly permissionService: PermissionService,
-    private readonly uploadService: UploadService
+    private readonly permissionService: PermissionService
   ) {}
 
   @Get('me')
@@ -277,77 +273,6 @@ export class UsersController {
           error: error.message || 'Failed to resend verification email',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  @Post('get_upload_url')
-  async getUploadUrl(
-    @Body()
-    uploadData: {
-      file_name: string;
-      content_type: string;
-      file_size: number;
-      note?: string;
-      document_type_id: number;
-    }
-  ) {
-    try {
-      // Business logic delegated to upload service
-      const result = await this.uploadService.generateUploadUrl(uploadData);
-
-      return {
-        success: true,
-        ...result,
-      };
-    } catch (error: any) {
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to generate upload URL',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-  }
-
-  @Get('upload/:id/view')
-  async getUserUploadPresignedUrl(@Param('id') uploadId: string) {
-    try {
-      const user = await this.hasuraUserService.getUser();
-
-      // Permission check using permission service
-      const canAccess = await this.permissionService.canViewUserUpload(
-        user.id,
-        uploadId
-      );
-      if (!canAccess) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'Access denied. You can only view your own uploads.',
-          },
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      // Business logic delegated to upload service
-      const result = await this.uploadService.generateViewUrl(uploadId);
-
-      return {
-        success: true,
-        ...result,
-      };
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message || 'Failed to generate view URL',
-        },
-        HttpStatus.BAD_REQUEST
       );
     }
   }

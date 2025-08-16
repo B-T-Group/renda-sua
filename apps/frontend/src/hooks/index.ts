@@ -65,6 +65,8 @@ export * from './useDistanceMatrix';
 export { useVehicleTypes } from './useVehicleTypes';
 
 // Document management hooks
+export { useDocumentDelete } from './useDocumentDelete';
+export type { DeleteUploadResponse } from './useDocumentDelete';
 export { useDocumentManagement } from './useDocumentManagement';
 export type {
   DocumentFilters,

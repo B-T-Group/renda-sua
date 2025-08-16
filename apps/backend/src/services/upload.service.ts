@@ -201,31 +201,90 @@ export class UploadService {
   }
 
   /**
-   * Delete a user upload record
+   * Delete a user upload record and the associated S3 object
    * @param uploadId Upload record ID
    * @returns Promise<void>
    */
   async deleteUpload(uploadId: string): Promise<void> {
-    const deleteMutation = `
-      mutation DeleteUserUpload($uploadId: uuid!) {
-        delete_user_uploads_by_pk(id: $uploadId) {
+    // First, get the upload record to get the S3 key
+    const getUploadQuery = `
+      query GetUserUpload($uploadId: uuid!) {
+        user_uploads_by_pk(id: $uploadId) {
           id
+          key
+          file_name
         }
       }
     `;
 
-    const result = await this.hasuraSystemService.executeMutation(
-      deleteMutation,
+    const uploadResult = await this.hasuraUserService.executeQuery(
+      getUploadQuery,
       { uploadId }
     );
 
-    if (!result.delete_user_uploads_by_pk) {
+    if (!uploadResult.user_uploads_by_pk) {
       throw new HttpException(
         {
           success: false,
-          error: 'Upload record not found or could not be deleted',
+          error: 'Upload record not found',
         },
         HttpStatus.NOT_FOUND
+      );
+    }
+
+    const uploadRecord = uploadResult.user_uploads_by_pk;
+
+    try {
+      // Delete the S3 object first
+      await this.awsService.deleteObject('rendasua-user-uploads', uploadRecord.key);
+
+      // Then delete the database record
+      const deleteMutation = `
+        mutation DeleteUserUpload($uploadId: uuid!) {
+          delete_user_uploads_by_pk(id: $uploadId) {
+            id
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeMutation(
+        deleteMutation,
+        { uploadId }
+      );
+
+      if (!result.delete_user_uploads_by_pk) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Failed to delete upload record from database',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+    } catch (error: any) {
+      // If S3 deletion fails, still try to delete the database record
+      // This prevents orphaned database records
+      console.error('Failed to delete S3 object:', error);
+      
+      const deleteMutation = `
+        mutation DeleteUserUpload($uploadId: uuid!) {
+          delete_user_uploads_by_pk(id: $uploadId) {
+            id
+          }
+        }
+      `;
+
+      await this.hasuraSystemService.executeMutation(
+        deleteMutation,
+        { uploadId }
+      );
+
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Upload deleted from database but S3 object deletion failed',
+        },
+        HttpStatus.PARTIAL_CONTENT
       );
     }
   }

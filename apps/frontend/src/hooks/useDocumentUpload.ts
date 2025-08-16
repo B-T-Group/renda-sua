@@ -65,7 +65,7 @@ export const useDocumentUpload = () => {
         };
 
         const uploadUrlResponse = await apiClient.post<UploadUrlResponse>(
-          '/users/get_upload_url',
+          '/uploads/get_upload_url',
           uploadUrlRequest
         );
 
