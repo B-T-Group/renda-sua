@@ -1,8 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ArrowBack,
-  Message,
-} from '@mui/icons-material';
+import { ArrowBack, Message } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -11,18 +7,22 @@ import {
   Container,
   Typography,
 } from '@mui/material';
-import { useParams, Link as RouterLink } from 'react-router-dom';
-import { useUserMessages } from '../../hooks/useUserMessages';
+import React, { useEffect, useState } from 'react';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { UserMessageList } from '../common/UserMessageList';
 
 const AdminUserMessagesPage: React.FC = () => {
-  const { userType, userId } = useParams<{ userType: string; userId: string }>();
+  const { userType, userId } = useParams<{
+    userType: string;
+    userId: string;
+  }>();
   const { profile: currentUser } = useUserProfile();
   const [userName, setUserName] = useState<string>('');
 
   // Check if current user is admin
-  const isAdmin = currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
+  const isAdmin =
+    currentUser?.user_type_id === 'business' && currentUser?.business?.is_admin;
 
   useEffect(() => {
     // Set user name based on user type
@@ -39,9 +39,7 @@ const AdminUserMessagesPage: React.FC = () => {
           <Typography variant="h4" color="error">
             Access Denied
           </Typography>
-          <Typography>
-            You don't have permission to view this page.
-          </Typography>
+          <Typography>You don't have permission to view this page.</Typography>
         </Box>
       </Container>
     );
@@ -61,7 +59,10 @@ const AdminUserMessagesPage: React.FC = () => {
             Back to {userType}s
           </Button>
           <Box>
-            <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h4"
+              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <Message />
               {userName}'s Messages
             </Typography>
@@ -74,10 +75,7 @@ const AdminUserMessagesPage: React.FC = () => {
         {/* Messages List */}
         <Card>
           <CardContent>
-            <UserMessageList 
-              userId={userId}
-              showUserInfo={false}
-            />
+            <UserMessageList userId={userId} showUserInfo={false} />
           </CardContent>
         </Card>
       </Box>

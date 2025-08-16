@@ -30,7 +30,7 @@ export interface MessageFilters {
   search?: string;
 }
 
-export const useUserMessages = (adminUserId?: string) => {
+export const useUserMessages = () => {
   const { client } = useGraphQLClient();
   const { profile: user } = useUserProfile();
   const [messages, setMessages] = useState<UserMessage[]>([]);
@@ -86,10 +86,7 @@ export const useUserMessages = (adminUserId?: string) => {
         }
 
         // For business admins, show all messages. For others, show only their own
-        if (adminUserId) {
-          // Admin is viewing specific user's messages
-          whereClause.user_id = { _eq: adminUserId };
-        } else if (user?.user_type_id === 'business' && user?.business?.is_admin) {
+        if (user?.user_type_id === 'business' && user?.business?.is_admin) {
           // Business admins can see all messages - no user_id filter
         } else {
           // Regular users can only see their own messages

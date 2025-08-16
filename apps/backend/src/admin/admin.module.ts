@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { HasuraModule } from '../hasura/hasura.module';
 import { AuthModule } from '../auth/auth.module';
+import { HasuraModule } from '../hasura/hasura.module';
+import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
-import { BusinessAdminGuard } from './business-admin.guard';
 
 @Module({
-  imports: [HasuraModule, AuthModule],
+  imports: [AuthModule, HasuraModule],
   controllers: [AdminController],
-  providers: [AdminService, BusinessAdminGuard],
+  providers: [AdminMessageService, AdminService],
+  exports: [AdminMessageService, AdminService],
 })
 export class AdminModule {}

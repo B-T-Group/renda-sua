@@ -20,6 +20,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
+import { AdminMessagePost } from '../common/AdminMessagePost';
 import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageAgents: React.FC = () => {
@@ -77,6 +78,7 @@ const AdminManageAgents: React.FC = () => {
           {t('admin.manageAgents', 'Manage Agents')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <AdminMessagePost />
           <TextField
             size="small"
             label={t('common.search', 'Search')}

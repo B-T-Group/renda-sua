@@ -36,14 +36,10 @@ export const useAdminMessage = () => {
           messageData
         );
 
-        if (response.data.success) {
-          return response.data;
-        } else {
-          setError(response.data.error || 'Failed to post message');
-          return response.data;
-        }
+        return response.data;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.error || err.message || 'Failed to post message';
+        const errorMessage =
+          err.response?.data?.error || err.message || 'Failed to post message';
         setError(errorMessage);
         return {
           success: false,
