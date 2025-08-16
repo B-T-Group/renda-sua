@@ -8,8 +8,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { PermissionService } from '../auth/permission.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
@@ -34,8 +32,6 @@ export interface AdminMessageResponse {
 @UseGuards(AdminAuthGuard)
 export class AdminController {
   constructor(
-    private readonly hasuraUserService: HasuraUserService,
-    private readonly permissionService: PermissionService,
     private readonly adminMessageService: AdminMessageService,
     private readonly adminService: AdminService
   ) {}

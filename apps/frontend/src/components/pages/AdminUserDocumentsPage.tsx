@@ -21,7 +21,7 @@ const AdminUserDocumentsPage: React.FC = () => {
     userId: string;
   }>();
   const { profile: currentUser } = useUserProfile();
-  const { user, loading: userLoading, userName } = useUserDetails(userId || '');
+  const { loading: userLoading, userName } = useUserDetails(userId || '');
   const {
     documents,
     documentTypes,

@@ -130,7 +130,13 @@ export const useUserMessages = (specificUserId?: string) => {
         setLoading(false);
       }
     },
-    [client, user?.id, user?.user_type_id, user?.business?.is_admin]
+    [
+      client,
+      user?.id,
+      user?.user_type_id,
+      user?.business?.is_admin,
+      specificUserId,
+    ]
   );
 
   // Create a new message

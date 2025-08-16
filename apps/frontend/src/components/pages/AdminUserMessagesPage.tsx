@@ -21,8 +21,8 @@ const AdminUserMessagesPage: React.FC = () => {
     userId: string;
   }>();
   const { profile: currentUser } = useUserProfile();
-  const { user, loading: userLoading, userName } = useUserDetails(userId || '');
-  const { loading: messagesLoading } = useUserMessages(userId);
+  const { loading: userLoading, userName } = useUserDetails(userId || '');
+  useUserMessages(userId);
 
   // Check if current user is admin
   const isAdmin =
