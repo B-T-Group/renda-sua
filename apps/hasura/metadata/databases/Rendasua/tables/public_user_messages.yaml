@@ -1,0 +1,142 @@
+table:
+  name: user_messages
+  schema: public
+array_relationships: []
+object_relationships:
+  - name: user
+    using:
+      manual_configuration:
+        remote_table:
+          name: users
+          schema: public
+        column_mapping:
+          user_id: id
+  - name: entity_type_info
+    using:
+      manual_configuration:
+        remote_table:
+          name: entity_types
+          schema: public
+        column_mapping:
+          entity_type: id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+  - role: agent
+    permission:
+      check:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+  - role: business
+    permission:
+      check:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - entity_type
+        - entity_id
+        - message
+update_permissions:
+  - role: client
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - message
+  - role: agent
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - message
+  - role: business
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      columns:
+        - message
+delete_permissions:
+  - role: client
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id

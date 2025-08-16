@@ -24,6 +24,15 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: order_holds
+    using:
+      manual_configuration:
+        column_mapping:
+          id: client_id
+        insertion_order: null
+        remote_table:
+          name: order_holds
+          schema: public
 insert_permissions:
   - role: agent
     permission:

@@ -24,6 +24,7 @@ import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import Dashboard from '../components/pages/Dashboard';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
+import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import EditItemPage from '../components/pages/EditItemPage';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
@@ -238,6 +239,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DocumentManagementPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Messages Center route */}
+            <Route
+              path="/messages"
+              element={
+                <ProtectedRoute>
+                  <MessagesCenterPage />
                 </ProtectedRoute>
               }
             />

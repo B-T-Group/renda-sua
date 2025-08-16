@@ -1,42 +1,43 @@
 table:
-  name: document_types
+  name: entity_types
   schema: public
-object_relationships: []
+is_enum: true
 array_relationships:
-  - name: user_uploads
+  - name: user_messages
     using:
       manual_configuration:
         column_mapping:
-          id: document_type_id
+          id: entity_type
         insertion_order: null
         remote_table:
-          name: user_uploads
+          name: user_messages
           schema: public
+object_relationships: []
+insert_permissions: []
 select_permissions:
   - role: agent
     permission:
       columns:
         - id
-        - name
-        - description
-        - created_at
-        - updated_at
+        - comment
       filter: {}
   - role: business
     permission:
       columns:
         - id
-        - name
-        - description
-        - created_at
-        - updated_at
+        - comment
       filter: {}
   - role: client
     permission:
       columns:
         - id
-        - name
-        - description
-        - created_at
-        - updated_at
+        - comment
       filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - comment
+      filter: {}
+update_permissions: []
+delete_permissions: []

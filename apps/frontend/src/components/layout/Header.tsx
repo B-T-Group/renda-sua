@@ -6,6 +6,7 @@ import {
   Inventory,
   LocationOn,
   Menu,
+  Message,
   Person,
   ShoppingCart,
   Store,
@@ -119,6 +120,11 @@ const Header: React.FC = () => {
           label: 'Documents',
           path: '/documents',
           icon: <Description />,
+        },
+        {
+          label: 'Messages',
+          path: '/messages',
+          icon: <Message />,
         }
       );
     }
@@ -135,17 +141,29 @@ const Header: React.FC = () => {
           label: 'Documents',
           path: '/documents',
           icon: <Description />,
+        },
+        {
+          label: 'Messages',
+          path: '/messages',
+          icon: <Message />,
         }
       );
     }
 
     // Add agent-specific navigation
     if (userType === 'agent') {
-      items.push({
-        label: 'Documents',
-        path: '/documents',
-        icon: <Description />,
-      });
+      items.push(
+        {
+          label: 'Documents',
+          path: '/documents',
+          icon: <Description />,
+        },
+        {
+          label: 'Messages',
+          path: '/messages',
+          icon: <Message />,
+        }
+      );
     }
 
     return items;

@@ -24,5 +24,7 @@
 - '!include public_orders.yaml'
 - '!include public_user_types.yaml'
 - '!include public_user_uploads.yaml'
+- '!include public_user_messages.yaml'
 - '!include public_users.yaml'
 - '!include public_vehicle_types.yaml'
+- '!include public_entity_types.yaml'

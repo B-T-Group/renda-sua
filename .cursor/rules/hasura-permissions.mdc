@@ -1,0 +1,163 @@
+# Hasura Permission Rules
+
+## Permission Check Standards
+
+### User Identification
+
+- **ALWAYS** use `user.identifier` for permission checks, NOT `user.id`
+- The `user.identifier` field contains the Auth0 user ID and is the correct field for permission matching
+- `user.id` is the internal database ID and should not be used for permission checks
+
+### Table Permission Patterns
+
+#### Correct Pattern (✅)
+
+```yaml
+# For user_uploads table
+permissions:
+  select:
+    filter:
+      user:
+        identifier:
+          _eq: X-Hasura-User-Id
+  insert:
+    check:
+      user:
+        identifier:
+          _eq: X-Hasura-User-Id
+  update:
+    filter:
+      user:
+        identifier:
+          _eq: X-Hasura-User-Id
+  delete:
+    filter:
+      user:
+        identifier:
+          _eq: X-Hasura-User-Id
+```
+
+#### Incorrect Pattern (❌)
+
+```yaml
+# DO NOT use user.id for permissions
+permissions:
+  select:
+    filter:
+      user_id:
+        _eq: X-Hasura-User-Id # Wrong! Should use user.identifier
+```
+
+### Business Admin Permissions
+
+- Business admins should be able to access data based on their admin status
+- Use the `businesses` table relationship to check `is_admin` field
+- Example for business admin access:
+
+```yaml
+# Business admin can view all uploads
+permissions:
+  select:
+    _or:
+      - user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      - user:
+          businesses:
+            is_admin:
+              _eq: true
+```
+
+### Common Tables Requiring Permission Updates
+
+- `user_uploads` - Document uploads
+- `clients` - Client records
+- `agents` - Agent records
+- `businesses` - Business records
+- `orders` - Order records
+- Any table with user-specific data
+
+### Migration Guidelines
+
+1. **Check existing permissions** - Review all table permissions
+2. **Update filter conditions** - Replace `user_id` with `user.identifier`
+3. **Test thoroughly** - Verify permissions work correctly
+4. **Apply metadata** - Run `hasura metadata apply` after changes
+
+### Anti-Patterns to Avoid
+
+- ❌ Using `user_id` directly in permission filters
+- ❌ Mixing `user.id` and `user.identifier` in the same table
+- ❌ Not considering business admin access patterns
+- ❌ Forgetting to update both filter and check conditions
+
+### Examples of Correct Implementation
+
+#### User Uploads Table
+
+```yaml
+table:
+  name: user_uploads
+  schema: public
+permissions:
+  - role: client
+    permission:
+      select:
+        filter:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      insert:
+        check:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      update:
+        filter:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      delete:
+        filter:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      select:
+        _or:
+          - user:
+              identifier:
+                _eq: X-Hasura-User-Id
+          - user:
+              businesses:
+                is_admin:
+                  _eq: true
+```
+
+### Verification Checklist
+
+- [ ] All permission filters use `user.identifier`
+- [ ] No direct `user_id` references in permissions
+- [ ] Business admin access patterns are implemented
+- [ ] Both `filter` and `check` conditions are updated
+- [ ] Permissions are tested with different user types
+- [ ] Metadata is applied after changes
+
+### Commands to Apply Changes
+
+```bash
+# Apply metadata changes
+unset NODE_OPTIONS
+hasura metadata apply --admin-secret myadminsecretkey
+
+# Check for inconsistencies
+hasura metadata inconsistency list --admin-secret myadminsecretkey
+```
+
+This rule ensures consistent and secure permission handling across all Hasura tables.
+description:
+globs:
+alwaysApply: false
+
+---

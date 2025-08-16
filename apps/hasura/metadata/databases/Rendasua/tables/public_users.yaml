@@ -54,6 +54,42 @@ array_relationships:
         remote_table:
           name: order_status_history
           schema: public
+  - name: airtel_money_payments
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: airtel_money_payments
+          schema: public
+  - name: mtn_momo_payment_requests
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: mtn_momo_payment_requests
+          schema: public
+  - name: user_messages
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: user_messages
+          schema: public
+  - name: user_uploads
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: user_uploads
+          schema: public
 insert_permissions:
   - role: agent
     permission:

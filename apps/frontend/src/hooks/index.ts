@@ -70,6 +70,10 @@ export type { DeleteUploadResponse } from './useDocumentDelete';
 export { useDocumentApprove } from './useDocumentApprove';
 export type { ApproveUploadResponse } from './useDocumentApprove';
 export { useDocumentManagement } from './useDocumentManagement';
+
+// User messages hooks
+export { useUserMessages } from './useUserMessages';
+export type { EntityType, UserMessage, MessageFilters } from './useUserMessages';
 export type {
   DocumentFilters,
   DocumentType,
