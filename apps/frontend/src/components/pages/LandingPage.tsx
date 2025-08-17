@@ -25,14 +25,37 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useSEO } from '../../hooks/useSEO';
 import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
 
 const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuth0();
+  const navigate = useNavigate();
+  const { userType, loading, isProfileComplete } = useUserProfileContext();
+
+  // Redirect authenticated users to their appropriate home page
+  useEffect(() => {
+    if (isAuthenticated && !loading && isProfileComplete && userType) {
+      switch (userType) {
+        case 'client':
+          navigate('/items');
+          break;
+        case 'agent':
+          navigate('/agent-dashboard');
+          break;
+        case 'business':
+          navigate('/business-dashboard');
+          break;
+        default:
+          // Stay on landing page for unknown user types
+          break;
+      }
+    }
+  }, [isAuthenticated, loading, isProfileComplete, userType, navigate]);
 
   // SEO configuration for landing page
   const seoConfig = useSEO({

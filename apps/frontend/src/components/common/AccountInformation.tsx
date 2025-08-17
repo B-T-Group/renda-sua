@@ -53,16 +53,27 @@ const AccountInformation: React.FC<AccountInformationProps> = ({
       </Typography>
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            md: 'repeat(auto-fit, minmax(300px, 1fr))',
-          },
+          display: 'flex',
+          flexDirection: 'row',
+          width: '100%',
           gap: 2,
+          flexWrap: 'wrap',
+          justifyContent: 'center',
         }}
       >
         {accounts.map((account) => (
-          <Card key={account.id} variant="outlined">
+          <Card
+            key={account.id}
+            variant="outlined"
+            sx={{
+              flex: {
+                xs: '1 1 100%', // Full width on extra small screens
+                sm: '1 1 calc(33.33% - 10.67px)', // sm-4 equivalent (4/12 = 33.33%), minus gap
+                md: '1 1 calc(33.33% - 10.67px)', // Maintain sm-4 on medium screens
+              },
+              minWidth: '280px', // Ensure minimum width for readability
+            }}
+          >
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 {account.currency} Account

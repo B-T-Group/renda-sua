@@ -36,13 +36,13 @@ export const useAuthFlow = () => {
         // User doesn't have a profile, redirect to complete profile
         navigate('/complete-profile');
       } else if (profile && isProfileComplete) {
-        // User has a complete profile, redirect to appropriate dashboard
+        // User has a complete profile, redirect to appropriate page
         switch (userType) {
           case 'client':
-            navigate('/dashboard');
+            navigate('/items'); // Redirect clients to items list
             break;
           case 'agent':
-            navigate('/agent-dashboard');
+            navigate('/agent-dashboard'); // Redirect agents to their orders list
             break;
           case 'business':
             navigate('/business-dashboard');

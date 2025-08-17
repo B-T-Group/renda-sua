@@ -21,11 +21,13 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import SEOHead from '../seo/SEOHead';
@@ -39,6 +41,11 @@ const BusinessDashboard: React.FC = () => {
   const { inventory } = useBusinessInventory(profile?.business?.id);
   const { locations } = useBusinessLocations(profile?.business?.id);
   const { items } = useItems(profile?.business?.id);
+  const {
+    accounts,
+    loading: accountLoading,
+    error: accountError,
+  } = useAccountInfo();
 
   // Debug logging
   console.log('Business Dashboard Data:', {
@@ -154,6 +161,31 @@ const BusinessDashboard: React.FC = () => {
 
       {/* Address Alert */}
       <AddressAlert />
+
+      {/* Account Summary Section */}
+      <Box sx={{ mb: 4 }}>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{ mb: 3, textAlign: 'center' }}
+        >
+          Account Summary
+        </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
+          <AccountInformation
+            accounts={accounts}
+            loading={accountLoading}
+            error={accountError}
+          />
+        </Box>
+      </Box>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 6 }}>
         {dashboardCards.map((card, index) => (
