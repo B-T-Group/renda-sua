@@ -42,7 +42,7 @@ const LandingPage: React.FC = () => {
     if (isAuthenticated && !loading && isProfileComplete && userType) {
       switch (userType) {
         case 'client':
-          navigate('/items');
+          navigate('/dashboard');
           break;
         case 'agent':
           navigate('/agent-dashboard');

@@ -39,7 +39,7 @@ export const useAuthFlow = () => {
         // User has a complete profile, redirect to appropriate page
         switch (userType) {
           case 'client':
-            navigate('/items'); // Redirect clients to items list
+            navigate('/dashboard'); // Redirect clients to dashboard
             break;
           case 'agent':
             navigate('/agent-dashboard'); // Redirect agents to their orders list
