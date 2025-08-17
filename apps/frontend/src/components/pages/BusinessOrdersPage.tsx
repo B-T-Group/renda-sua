@@ -151,13 +151,13 @@ const BusinessOrdersPage: React.FC = () => {
     switch (status) {
       case 'pending':
         actions.push({
-          label: t('business.orders.actions.confirm'),
+          label: t('orders.actions.confirm'),
           status: 'confirmed',
           color: 'success' as const,
           icon: CheckCircleIcon,
         });
         actions.push({
-          label: t('business.orders.actions.cancel'),
+          label: t('orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
           icon: CancelIcon,
@@ -165,13 +165,13 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'confirmed':
         actions.push({
-          label: t('business.orders.actions.startPreparing'),
+          label: t('orders.actions.startPreparing'),
           status: 'preparing',
           color: 'primary' as const,
           icon: PlayArrowIcon,
         });
         actions.push({
-          label: t('business.orders.actions.cancel'),
+          label: t('orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
           icon: CancelIcon,
@@ -179,7 +179,7 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'preparing':
         actions.push({
-          label: t('business.orders.actions.completePreparation'),
+          label: t('orders.actions.completePreparation'),
           status: 'complete_preparation',
           color: 'info' as const,
           icon: CheckCircleIcon,
@@ -187,7 +187,7 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'complete_preparation':
         actions.push({
-          label: t('business.orders.actions.readyForPickup'),
+          label: t('orders.actions.readyForPickup'),
           status: 'ready_for_pickup',
           color: 'success' as const,
           icon: LocalShippingOutlinedIcon,
@@ -195,7 +195,7 @@ const BusinessOrdersPage: React.FC = () => {
         break;
       case 'delivered':
         actions.push({
-          label: t('business.orders.actions.refund'),
+          label: t('orders.actions.refund'),
           status: 'refunded',
           color: 'warning' as const,
           icon: CancelIcon,

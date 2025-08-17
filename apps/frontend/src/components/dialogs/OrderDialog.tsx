@@ -220,30 +220,41 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
             <Box
               sx={{
                 p: 2,
-                bgcolor: 'info.light',
+                bgcolor: 'rgba(25, 118, 210, 0.08)',
                 borderRadius: 1,
                 mt: 2,
-                border: '2px solid',
+                border: '1px solid',
                 borderColor: 'info.main',
               }}
             >
               <Typography
                 variant="subtitle1"
-                color="info.dark"
+                color="text.primary"
                 gutterBottom
                 fontWeight="bold"
+                sx={{
+                  color: '#1976d2',
+                  textShadow: '0 0 0 rgba(255,255,255,0.8)',
+                }}
               >
                 💳 Account Hold Information
               </Typography>
               <Typography
                 variant="body2"
-                color="info.dark"
-                sx={{ lineHeight: 1.5 }}
+                color="text.primary"
+                sx={{
+                  lineHeight: 1.6,
+                  color: '#424242',
+                  fontWeight: 500,
+                }}
               >
-                <strong>Important:</strong> A hold of{' '}
-                {formatCurrency(selectedItem.selling_price * quantity)} will be
-                placed on your account. This amount will only be released to the
-                seller after you confirm receipt of your order.
+                <strong style={{ color: '#1976d2' }}>Important:</strong> A hold
+                of{' '}
+                <strong style={{ color: '#1976d2' }}>
+                  {formatCurrency(selectedItem.selling_price * quantity)}
+                </strong>{' '}
+                will be placed on your account. This amount will only be
+                released to the seller after you confirm receipt of your order.
               </Typography>
             </Box>
           </Box>

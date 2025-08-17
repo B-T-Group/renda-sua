@@ -281,15 +281,9 @@
         "dateTo": "Date To",
         "address": "Address"
       },
-      "actions": {
-        "startPreparing": "Start Preparing",
-        "refund": "Refund",
-        "viewItems": "View Items",
-        "viewHistory": "View History"
-      },
+      "actions": {},
       "confirmTitle": "Confirm Status Update",
       "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",
-      "notes": "Notes",
       "notesPlaceholder": "Add any additional notes about this status change...",
       "table": {
         "items": "Items",
@@ -364,12 +358,23 @@
     }
   },
   "orders": {
-    "actions": {},
+    "actions": {
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "complete": "Complete",
+      "completePreparation": "Complete Preparation",
+      "readyForPickup": "Ready for Pickup",
+      "refund": "Refund",
+      "startPreparing": "Start Preparing",
+      "viewItems": "View Items",
+      "viewHistory": "View History"
+    },
     "allOrders": "All Orders",
     "brand": "Brand",
     "color": "Color",
     "confirmTitle": "Confirm Action",
     "model": "Model",
+    "notes": "Notes",
     "notesPlaceholder": "Add notes...",
     "size": "Size",
     "table": {
@@ -497,6 +502,56 @@
     "deleteConfirmTitle": "Delete Address",
     "deleteConfirmMessage": "Are you sure you want to delete this address?",
     "maxAddressesReached": "Maximum {{max}} addresses allowed"
+  },
+  "support": {
+    "title": "Support & Help Center",
+    "subtitle": "We're here to help you every step of the way",
+    "contact": {
+      "title": "Contact Support",
+      "description": "Choose the best way to reach us based on your needs"
+    },
+    "faq": {
+      "title": "Frequently Asked Questions"
+    },
+    "selfhelp": {
+      "title": "Self-Help Resources"
+    },
+    "emergency": {
+      "title": "Emergency Support",
+      "message": "For urgent delivery issues, safety concerns, or emergencies, call our 24/7 emergency line",
+      "call": "Call Now"
+    },
+    "safety": {
+      "title": "Safety & Security",
+      "description": "Your safety is our priority. Learn about our safety measures and report any concerns.",
+      "guidelines": "Safety Guidelines",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
+    },
+    "feedback": {
+      "title": "Send Feedback",
+      "description": "Help us improve Rendasua by sharing your thoughts and suggestions",
+      "name": "Name",
+      "email": "Email",
+      "subject": "Subject",
+      "message": "Message",
+      "submit": "Send Feedback"
+    },
+    "quickactions": {
+      "message": "Need help with a specific order? Check your dashboard for order status and tracking.",
+      "dashboard": "Go to Dashboard"
+    },
+    "orderhelp": {
+      "title": "Order Help",
+      "description": "Need help with a specific order?",
+      "vieworders": "View My Orders",
+      "trackorder": "Track Current Orders"
+    },
+    "seo": {
+      "title": "Support & Help Center - Rendasua",
+      "description": "Get help with orders, deliveries, payments, and account issues. Contact our support team 24/7.",
+      "keywords": "support, help, customer service, contact, FAQ, delivery help"
+    }
   },
   "seo": {
     "business-dashboard": {

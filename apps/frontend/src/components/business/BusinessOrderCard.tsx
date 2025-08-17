@@ -284,7 +284,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             onClick={() => setItemsDialogOpen(true)}
             disabled={loading}
           >
-            {t('business.orders.actions.viewItems', 'View Items')}
+            {t('orders.actions.viewItems', 'View Items')}
           </Button>
           <Button
             size="small"
@@ -294,7 +294,7 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             onClick={() => setHistoryDialogOpen(true)}
             disabled={loading}
           >
-            {t('business.orders.actions.viewHistory', 'History')}
+            {t('orders.actions.viewHistory', 'History')}
           </Button>
         </CardActions>
       </Card>
@@ -318,10 +318,10 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             fullWidth
             multiline
             rows={3}
-            label={t('business.orders.notes')}
+            label={t('orders.notes')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder={t('business.orders.notesPlaceholder')}
+            placeholder={t('orders.notesPlaceholder')}
             sx={{ mt: 2 }}
           />
         }

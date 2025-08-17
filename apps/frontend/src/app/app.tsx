@@ -34,6 +34,7 @@ import LoadingDemo from '../components/pages/LoadingDemo';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
+import SupportPage from '../components/pages/SupportPage';
 import { useLoading } from '../contexts/LoadingContext';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
@@ -84,6 +85,7 @@ function App() {
 
             {/* Public routes */}
             <Route path="/items" element={<PublicItemsPage />} />
+            <Route path="/support" element={<SupportPage />} />
 
             {/* App route - redirects to appropriate dashboard based on auth flow */}
             <Route

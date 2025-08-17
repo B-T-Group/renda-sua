@@ -91,17 +91,31 @@ const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
         <Box
           sx={{
             p: 2,
-            bgcolor: 'info.light',
+            bgcolor: 'rgba(25, 118, 210, 0.08)',
             borderRadius: 1,
             mt: 2,
             border: '1px solid',
             borderColor: 'info.main',
           }}
         >
-          <Typography variant="subtitle2" color="info.dark" gutterBottom>
+          <Typography
+            variant="subtitle2"
+            gutterBottom
+            sx={{
+              color: '#1976d2',
+              fontWeight: 'bold',
+            }}
+          >
             {t('client.orders.confirmation.tracking.title')}
           </Typography>
-          <Typography variant="body2" color="info.dark">
+          <Typography
+            variant="body2"
+            sx={{
+              color: '#424242',
+              fontWeight: 500,
+              lineHeight: 1.6,
+            }}
+          >
             {t('client.orders.confirmation.tracking.description')}
           </Typography>
         </Box>

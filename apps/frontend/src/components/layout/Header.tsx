@@ -1,17 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import {
-  Dashboard,
-  Description,
-  Home,
-  Inventory,
-  LocationOn,
-  Menu,
-  Message,
-  Person,
-  Search,
-  ShoppingCart,
-  Store,
-} from '@mui/icons-material';
+import { Description, Menu, Person } from '@mui/icons-material';
 import {
   AppBar,
   Avatar,
@@ -30,7 +18,6 @@ import {
   MenuItem,
   Stack,
   Toolbar,
-  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
@@ -41,9 +28,9 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
+import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
-import HeaderSearch from '../common/HeaderSearch';
 
 const Header: React.FC = () => {
   const { isAuthenticated, user } = useAuth0();
@@ -80,8 +67,6 @@ const Header: React.FC = () => {
     if (!isAuthenticated) {
       return [
         { label: 'Store', path: '/items' },
-        { label: 'Business', path: '/business' },
-        { label: 'Agents', path: '/agents' },
         { label: 'Support', path: '/support' },
       ];
     }
@@ -147,7 +132,8 @@ const Header: React.FC = () => {
         textTransform: 'none',
         fontWeight: 400,
         fontSize: '0.875rem',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         px: 2,
         py: 1,
         minWidth: 'auto',
@@ -298,10 +284,10 @@ const Header: React.FC = () => {
 
             {/* Desktop Navigation */}
             {!isMobile && (
-              <Stack 
-                direction="row" 
+              <Stack
+                direction="row"
                 spacing={0}
-                sx={{ 
+                sx={{
                   position: 'absolute',
                   left: '50%',
                   transform: 'translateX(-50%)',
@@ -344,7 +330,8 @@ const Header: React.FC = () => {
                         fontSize: '0.75rem',
                         backgroundColor: '#007aff',
                         color: 'white',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        fontFamily:
+                          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                       }}
                     >
                       {getUserInitials()}

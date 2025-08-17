@@ -193,16 +193,9 @@
         "dateTo": "Date de fin",
         "address": "Adresse"
       },
-      "actions": {
-        "startPreparing": "Commencer la préparation",
-        "completePreparation": "Terminer la préparation",
-        "refund": "Rembourser",
-        "viewItems": "Voir les articles",
-        "viewHistory": "Voir l'historique"
-      },
+      "actions": {},
       "confirmTitle": "Confirmer la mise à jour du statut",
       "confirmStatusUpdate": "Êtes-vous sûr de vouloir mettre à jour le statut de la commande {{orderNumber}} vers {{newStatus}} ?",
-      "notes": "Notes",
       "notesPlaceholder": "Ajouter des notes supplémentaires sur ce changement de statut...",
       "table": {
         "items": "Articles",
@@ -262,13 +255,22 @@
   },
   "orders": {
     "actions": {
-      "complete": "Terminer"
+      "cancel": "Annuler",
+      "confirm": "Confirmer",
+      "complete": "Terminer",
+      "completePreparation": "Terminer la préparation",
+      "readyForPickup": "Prêt pour enlèvement",
+      "refund": "Rembourser",
+      "startPreparing": "Commencer la préparation",
+      "viewItems": "Voir les articles",
+      "viewHistory": "Voir l'historique"
     },
     "allOrders": "Toutes les Commandes",
     "brand": "Marque",
     "color": "Couleur",
     "confirmTitle": "Confirmer l'Action",
     "model": "Modèle",
+    "notes": "Notes",
     "notesPlaceholder": "Ajouter des notes...",
     "orderItems": "Articles de Commande",
     "size": "Taille",
@@ -397,6 +399,56 @@
     "deleteConfirmTitle": "Supprimer l'Adresse",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ?",
     "maxAddressesReached": "Maximum {{max}} adresses autorisées"
+  },
+  "support": {
+    "title": "Centre d'Aide et de Support",
+    "subtitle": "Nous sommes là pour vous aider à chaque étape",
+    "contact": {
+      "title": "Contacter le Support",
+      "description": "Choisissez la meilleure façon de nous joindre selon vos besoins"
+    },
+    "faq": {
+      "title": "Questions Fréquemment Posées"
+    },
+    "selfhelp": {
+      "title": "Ressources d'Auto-assistance"
+    },
+    "emergency": {
+      "title": "Support d'Urgence",
+      "message": "Pour les problèmes urgents de livraison, les préoccupations de sécurité ou les urgences, appelez notre ligne d'urgence 24h/24",
+      "call": "Appeler Maintenant"
+    },
+    "safety": {
+      "title": "Sécurité et Sûreté",
+      "description": "Votre sécurité est notre priorité. Découvrez nos mesures de sécurité et signalez toute préoccupation.",
+      "guidelines": "Directives de Sécurité",
+      "privacy": "Politique de Confidentialité",
+      "terms": "Conditions de Service"
+    },
+    "feedback": {
+      "title": "Envoyer des Commentaires",
+      "description": "Aidez-nous à améliorer Rendasua en partageant vos pensées et suggestions",
+      "name": "Nom",
+      "email": "Email",
+      "subject": "Sujet",
+      "message": "Message",
+      "submit": "Envoyer les Commentaires"
+    },
+    "quickactions": {
+      "message": "Besoin d'aide pour une commande spécifique ? Vérifiez votre tableau de bord pour le statut et le suivi des commandes.",
+      "dashboard": "Aller au Tableau de Bord"
+    },
+    "orderhelp": {
+      "title": "Aide aux Commandes",
+      "description": "Besoin d'aide pour une commande spécifique ?",
+      "vieworders": "Voir Mes Commandes",
+      "trackorder": "Suivre les Commandes Actuelles"
+    },
+    "seo": {
+      "title": "Centre d'Aide et de Support - Rendasua",
+      "description": "Obtenez de l'aide avec les commandes, livraisons, paiements et problèmes de compte. Contactez notre équipe de support 24h/24.",
+      "keywords": "support, aide, service client, contact, FAQ, aide livraison"
+    }
   },
   "seo": {
     "business-dashboard": {

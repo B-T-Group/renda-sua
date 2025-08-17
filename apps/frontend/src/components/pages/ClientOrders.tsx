@@ -212,7 +212,7 @@ const ClientOrders: React.FC = () => {
       case 'confirmed':
       case 'preparing':
         actions.push({
-          label: t('business.orders.actions.cancel'),
+          label: t('orders.actions.cancel'),
           status: 'cancelled',
           color: 'error' as const,
         });
@@ -224,7 +224,7 @@ const ClientOrders: React.FC = () => {
           color: 'success' as const,
         });
         actions.push({
-          label: t('business.orders.actions.refund'),
+          label: t('orders.actions.refund'),
           status: 'refunded',
           color: 'warning' as const,
         });
