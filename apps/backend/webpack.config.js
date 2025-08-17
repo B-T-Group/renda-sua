@@ -11,12 +11,12 @@ module.exports = (options, context) => {
       path: join(__dirname, '../../dist/apps/backend'),
     },
     watch: isWatch,
-    watchOptions: isWatch
-      ? {
-          ignored: /node_modules/,
-          poll: 1000,
-        }
-      : false,
+    ...(isWatch && {
+      watchOptions: {
+        ignored: /node_modules/,
+        poll: 1000,
+      },
+    }),
     plugins: [
       new NxAppWebpackPlugin({
         target: 'node',
