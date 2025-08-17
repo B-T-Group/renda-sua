@@ -83,7 +83,8 @@
     "showing": "Affichage",
     "verified": "Vérifié",
     "view": "Voir",
-    "yes": "Oui"
+    "yes": "Oui",
+    "language": "Langue"
   },
   "business": {
     "dashboard": {
@@ -567,6 +568,11 @@
       "title": "Tableau de Bord Entreprise - Gérez vos Opérations",
       "description": "Tableau de bord complet pour gérer les commandes, l'inventaire et les opérations commerciales",
       "keywords": "tableau de bord entreprise, gestion des commandes, gestion d'inventaire, opérations commerciales"
+    },
+    "public-items": {
+      "title": "Parcourir les Articles - Découvrez les Produits Locaux",
+      "description": "Parcourez et découvrez des produits incroyables d'entreprises locales de votre région",
+      "keywords": "produits locaux, parcourir articles, acheter local, marché, découvrir produits"
     }
   }
 }

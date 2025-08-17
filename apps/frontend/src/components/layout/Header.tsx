@@ -8,6 +8,7 @@ import {
   Menu,
   Message,
   Person,
+  Search,
   ShoppingCart,
   Store,
 } from '@mui/icons-material';
@@ -42,6 +43,7 @@ import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
+import HeaderSearch from '../common/HeaderSearch';
 
 const Header: React.FC = () => {
   const { isAuthenticated, user } = useAuth0();
@@ -77,96 +79,41 @@ const Header: React.FC = () => {
   const getNavigationItems = () => {
     if (!isAuthenticated) {
       return [
-        {
-          label: t('public.items.title'),
-          path: '/items',
-          icon: <Store />,
-        },
+        { label: 'Store', path: '/items' },
+        { label: 'Business', path: '/business' },
+        { label: 'Agents', path: '/agents' },
+        { label: 'Support', path: '/support' },
       ];
     }
 
-    const items = [
-      {
-        label: t('common.home'),
-        path: '/',
-        icon: <Home />,
-      },
-      {
-        label: t('business.dashboard.title'),
-        path: '/app',
-        icon: <Dashboard />,
-      },
+    const baseItems = [
+      { label: 'Home', path: '/' },
+      { label: 'Dashboard', path: '/app' },
     ];
 
-    // Add business-specific navigation
+    // Add role-specific navigation
     if (userType === 'business') {
-      items.push(
-        {
-          label: t('business.orders.title'),
-          path: '/business/orders',
-          icon: <ShoppingCart />,
-        },
-        {
-          label: t('business.items.title'),
-          path: '/business/items',
-          icon: <Inventory />,
-        },
-        {
-          label: t('business.locations.title'),
-          path: '/business/locations',
-          icon: <LocationOn />,
-        },
-        {
-          label: 'Documents',
-          path: '/documents',
-          icon: <Description />,
-        },
-        {
-          label: 'Messages',
-          path: '/messages',
-          icon: <Message />,
-        }
+      baseItems.push(
+        { label: 'Orders', path: '/business/orders' },
+        { label: 'Items', path: '/business/items' },
+        { label: 'Locations', path: '/business/locations' },
+        { label: 'Documents', path: '/documents' },
+        { label: 'Messages', path: '/messages' }
+      );
+    } else if (userType === 'client') {
+      baseItems.push(
+        { label: 'Orders', path: '/client-orders' },
+        { label: 'Documents', path: '/documents' },
+        { label: 'Messages', path: '/messages' }
+      );
+    } else if (userType === 'agent') {
+      baseItems.push(
+        { label: 'Documents', path: '/documents' },
+        { label: 'Messages', path: '/messages' }
       );
     }
 
-    // Add client-specific navigation
-    if (userType === 'client') {
-      items.push(
-        {
-          label: t('business.orders.title'),
-          path: '/client-orders',
-          icon: <ShoppingCart />,
-        },
-        {
-          label: 'Documents',
-          path: '/documents',
-          icon: <Description />,
-        },
-        {
-          label: 'Messages',
-          path: '/messages',
-          icon: <Message />,
-        }
-      );
-    }
-
-    // Add agent-specific navigation
-    if (userType === 'agent') {
-      items.push(
-        {
-          label: 'Documents',
-          path: '/documents',
-          icon: <Description />,
-        },
-        {
-          label: 'Messages',
-          path: '/messages',
-          icon: <Message />,
-        }
-      );
-    }
-
-    return items;
+    return baseItems;
   };
 
   const getUserInitials = () => {
@@ -195,24 +142,35 @@ const Header: React.FC = () => {
     <Button
       component={RouterLink}
       to={item.path}
-      startIcon={item.icon}
       sx={{
-        color: '#1e40af',
+        color: isActiveRoute(item.path) ? '#000' : '#1d1d1f',
         textTransform: 'none',
-        fontWeight: 500,
+        fontWeight: 400,
+        fontSize: '0.875rem',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         px: 2,
         py: 1,
-        borderRadius: 2,
-        transition: 'all 0.2s ease-in-out',
-        backgroundColor: isActiveRoute(item.path)
-          ? 'rgba(30, 64, 175, 0.1)'
-          : 'transparent',
+        minWidth: 'auto',
+        borderRadius: 0,
+        transition: 'color 0.2s ease-in-out',
         '&:hover': {
-          backgroundColor: 'rgba(30, 64, 175, 0.15)',
-          transform: 'translateY(-1px)',
+          color: '#000',
+          backgroundColor: 'transparent',
         },
-        '&.active': {
-          backgroundColor: 'rgba(30, 64, 175, 0.2)',
+        '&:after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -8,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: isActiveRoute(item.path) ? '100%' : '0%',
+          height: '2px',
+          backgroundColor: '#007aff',
+          transition: 'width 0.3s ease-in-out',
+        },
+        position: 'relative',
+        '&:hover:after': {
+          width: '100%',
         },
       }}
     >
@@ -313,33 +271,42 @@ const Header: React.FC = () => {
         position="sticky"
         elevation={0}
         sx={{
-          backgroundColor: 'white',
-          backdropFilter: 'blur(10px)',
-          borderBottom: '2px solid #1e40af',
-          boxShadow: '0 2px 12px rgba(30, 64, 175, 0.1)',
+          backgroundColor: 'rgba(251, 251, 253, 0.8)',
+          backdropFilter: 'saturate(180%) blur(20px)',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+          color: '#1d1d1f',
           '& .MuiToolbar-root': {
-            backgroundColor: 'white',
+            backgroundColor: 'transparent',
           },
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth="xl" disableGutters>
           <Toolbar
             disableGutters
             sx={{
-              minHeight: { xs: 64, md: 72 },
-              py: { xs: 1, md: 1.5 },
+              minHeight: { xs: 48, md: 48 },
+              px: { xs: 2, md: 4 },
+              justifyContent: 'space-between',
             }}
           >
             {/* Logo Section */}
-            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <RouterLink to="/" style={{ textDecoration: 'none' }}>
-                <Logo variant="compact" color="primary" size="medium" />
+                <Logo variant="compact" color="primary" size="small" />
               </RouterLink>
             </Box>
 
             {/* Desktop Navigation */}
             {!isMobile && (
-              <Stack direction="row" spacing={1} sx={{ mr: 3 }}>
+              <Stack 
+                direction="row" 
+                spacing={0}
+                sx={{ 
+                  position: 'absolute',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                }}
+              >
                 {getNavigationItems().map((item) => (
                   <NavigationButton key={item.path} item={item} />
                 ))}
@@ -348,40 +315,41 @@ const Header: React.FC = () => {
 
             {/* Right Section */}
             <Stack direction="row" spacing={1} alignItems="center">
+              {/* Search */}
+              <Box sx={{ position: 'relative' }}>
+                <HeaderSearch />
+              </Box>
+
               {/* Language Switcher */}
-              <Tooltip title={t('common.language')}>
-                <Box>
-                  <LanguageSwitcher />
-                </Box>
-              </Tooltip>
+              <LanguageSwitcher />
 
               {isAuthenticated ? (
                 <>
                   {/* User Menu */}
-                  <Tooltip title={getUserDisplayName()}>
-                    <IconButton
-                      onClick={handleUserMenuOpen}
+                  <IconButton
+                    onClick={handleUserMenuOpen}
+                    size="small"
+                    sx={{
+                      color: '#1d1d1f',
+                      padding: '6px',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                      },
+                    }}
+                  >
+                    <Avatar
                       sx={{
-                        color: '#1e40af',
-                        backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                        '&:hover': {
-                          backgroundColor: 'rgba(30, 64, 175, 0.2)',
-                        },
+                        width: 28,
+                        height: 28,
+                        fontSize: '0.75rem',
+                        backgroundColor: '#007aff',
+                        color: 'white',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                       }}
                     >
-                      <Avatar
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          fontSize: '0.875rem',
-                          backgroundColor: '#1e40af',
-                          color: 'white',
-                        }}
-                      >
-                        {getUserInitials()}
-                      </Avatar>
-                    </IconButton>
-                  </Tooltip>
+                      {getUserInitials()}
+                    </Avatar>
+                  </IconButton>
 
                   <MenuComponent
                     anchorEl={userMenuAnchor}
@@ -454,20 +422,17 @@ const Header: React.FC = () => {
               {/* Mobile Menu Button */}
               {isMobile && (
                 <IconButton
-                  color="inherit"
-                  aria-label="open drawer"
-                  edge="end"
                   onClick={handleDrawerToggle}
+                  size="small"
                   sx={{
-                    ml: 1,
-                    color: '#1e40af',
-                    backgroundColor: 'rgba(30, 64, 175, 0.1)',
+                    color: '#1d1d1f',
+                    padding: '8px',
                     '&:hover': {
-                      backgroundColor: 'rgba(30, 64, 175, 0.2)',
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
                     },
                   }}
                 >
-                  <Menu />
+                  <Menu fontSize="small" />
                 </IconButton>
               )}
             </Stack>

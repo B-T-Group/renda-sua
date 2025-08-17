@@ -83,7 +83,8 @@
     "showing": "Showing",
     "verified": "Verified",
     "view": "View",
-    "yes": "Yes"
+    "yes": "Yes",
+    "language": "Language"
   },
   "business": {
     "dashboard": {
@@ -760,6 +761,11 @@
       "title": "Business Dashboard - Manage Your Operations",
       "description": "Comprehensive business dashboard for managing orders, inventory, and business operations",
       "keywords": "business dashboard, order management, inventory management, business operations"
+    },
+    "public-items": {
+      "title": "Browse Items - Discover Local Products",
+      "description": "Browse and discover amazing products from local businesses in your area",
+      "keywords": "local products, browse items, shop local, marketplace, discover products"
     }
   }
 }

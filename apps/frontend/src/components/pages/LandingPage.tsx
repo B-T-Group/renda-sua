@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material';
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { useSEO } from '../../hooks/useSEO';
 import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
@@ -133,7 +134,7 @@ const LandingPage: React.FC = () => {
               variant="h5"
               component="h2"
               sx={{
-                mb: 6,
+                mb: 4,
                 opacity: 0.95,
                 maxWidth: 700,
                 mx: 'auto',
@@ -144,6 +145,52 @@ const LandingPage: React.FC = () => {
               Connect with trusted delivery agents and get your packages
               delivered safely and on time, every time
             </Typography>
+
+            {/* Browse Items Button */}
+            <Box sx={{ mb: 6 }}>
+              <Button
+                variant="contained"
+                size="large"
+                component={RouterLink}
+                to="/items"
+                sx={{
+                  bgcolor: 'rgba(255, 255, 255, 0.95)',
+                  color: '#1e40af',
+                  px: 8,
+                  py: 2.5,
+                  fontSize: '1.2rem',
+                  fontWeight: 700,
+                  borderRadius: 4,
+                  textTransform: 'none',
+                  boxShadow: '0 8px 32px rgba(255, 255, 255, 0.4)',
+                  border: '2px solid rgba(255, 255, 255, 0.8)',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    bgcolor: 'white',
+                    transform: 'translateY(-3px)',
+                    boxShadow: '0 16px 48px rgba(255, 255, 255, 0.6)',
+                    border: '2px solid white',
+                  },
+                  '&:active': {
+                    transform: 'translateY(-1px)',
+                  },
+                }}
+                endIcon={
+                  <ArrowForward
+                    sx={{
+                      fontSize: '1.2rem',
+                      transition: 'transform 0.3s ease',
+                      '.MuiButton-root:hover &': {
+                        transform: 'translateX(4px)',
+                      },
+                    }}
+                  />
+                }
+              >
+                Browse Items
+              </Button>
+            </Box>
             {!isAuthenticated && (
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}

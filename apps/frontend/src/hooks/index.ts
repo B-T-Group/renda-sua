@@ -101,3 +101,7 @@ export type {
 
 // User details hook
 export { useUserDetails } from './useUserDetails';
+
+// Search hooks
+export { useItemSearch } from './useItemSearch';
+export type { SearchResult } from './useItemSearch';
