@@ -1,13 +1,10 @@
 import { Auth0Provider } from '@auth0/auth0-react';
-import '@fontsource/roboto/300.css';
-import '@fontsource/roboto/400.css';
-import '@fontsource/roboto/500.css';
-import '@fontsource/roboto/700.css';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import './styles/apple-fonts.css';
 
 import App from './app/app';
 import { environment } from './config/environment';

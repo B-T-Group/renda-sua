@@ -135,11 +135,12 @@ const LandingPage: React.FC = () => {
               component="h2"
               sx={{
                 mb: 4,
-                opacity: 0.95,
+                color: 'rgba(255, 255, 255, 0.9)',
                 maxWidth: 700,
                 mx: 'auto',
                 fontWeight: 400,
                 lineHeight: 1.4,
+                textShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
               }}
             >
               Connect with trusted delivery agents and get your packages

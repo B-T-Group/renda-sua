@@ -36,78 +36,91 @@ export const theme = createTheme({
       dark: '#0e7490',
     },
     background: {
-      default: '#f8fafc', // Clean light background
+      default: '#fbfbfd', // Apple-like light background
       paper: '#ffffff',
     },
     text: {
-      primary: '#0f172a', // Dark slate for primary text
-      secondary: '#475569', // Medium slate for secondary text
+      primary: '#1d1d1f', // Apple's primary text color
+      secondary: '#86868b', // Apple's secondary text color
     },
     divider: '#e2e8f0',
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     h1: {
-      fontWeight: 800,
-      fontSize: '2.5rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      fontWeight: 700,
+      fontSize: '3rem',
+      color: '#1d1d1f',
+      letterSpacing: '-0.02em',
+      lineHeight: 1.1,
     },
     h2: {
-      fontWeight: 700,
-      fontSize: '2rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      fontWeight: 600,
+      fontSize: '2.25rem',
+      color: '#1d1d1f',
+      letterSpacing: '-0.02em',
+      lineHeight: 1.2,
     },
     h3: {
       fontWeight: 600,
-      fontSize: '1.75rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      fontSize: '1.875rem',
+      color: '#1d1d1f',
+      letterSpacing: '-0.015em',
+      lineHeight: 1.25,
     },
     h4: {
       fontWeight: 600,
       fontSize: '1.5rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      color: '#1d1d1f',
+      letterSpacing: '-0.015em',
+      lineHeight: 1.3,
     },
     h5: {
       fontWeight: 600,
       fontSize: '1.25rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      color: '#1d1d1f',
+      letterSpacing: '-0.01em',
+      lineHeight: 1.4,
     },
     h6: {
       fontWeight: 600,
-      fontSize: '1rem',
-      color: '#0f172a',
-      letterSpacing: '-0.025em',
+      fontSize: '1.125rem',
+      color: '#1d1d1f',
+      letterSpacing: '-0.01em',
+      lineHeight: 1.4,
     },
     button: {
       textTransform: 'none',
-      fontWeight: 600,
+      fontWeight: 400,
       fontSize: '0.875rem',
-      letterSpacing: '0.025em',
+      letterSpacing: '0',
     },
     body1: {
-      fontSize: '1rem',
-      lineHeight: 1.6,
-      color: '#334155',
+      fontSize: '1.0625rem',
+      fontWeight: 400,
+      lineHeight: 1.47,
+      color: '#1d1d1f',
+      letterSpacing: '0.011em',
     },
     body2: {
       fontSize: '0.875rem',
-      lineHeight: 1.5,
-      color: '#475569',
+      fontWeight: 400,
+      lineHeight: 1.43,
+      color: '#86868b',
+      letterSpacing: '0.016em',
     },
     subtitle1: {
       fontSize: '1rem',
       fontWeight: 500,
-      color: '#334155',
+      color: '#1d1d1f',
+      lineHeight: 1.5,
     },
     subtitle2: {
       fontSize: '0.875rem',
       fontWeight: 500,
-      color: '#475569',
+      color: '#86868b',
+      lineHeight: 1.57,
     },
   },
   shape: {
@@ -144,15 +157,16 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          padding: '12px 24px',
+          borderRadius: 22,
+          padding: '8px 20px',
           fontSize: '0.875rem',
-          fontWeight: 600,
+          fontWeight: 400,
           textTransform: 'none',
           transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          letterSpacing: '0.025em',
+          letterSpacing: '0',
+          minHeight: '44px',
           '&:hover': {
-            transform: 'translateY(-1px)',
+            transform: 'none',
           },
         },
         contained: {
