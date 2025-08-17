@@ -1,15 +1,10 @@
 {
   "common": {
-    "home": "Accueil",
     "back": "Retour",
     "cancel": "Annuler",
-    "confirm": "Confirmer",
-    "delete": "Supprimer",
-    "edit": "Modifier",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "loading": "Chargement...",
-    "error": "Erreur",
     "search": "Rechercher",
     "clear": "Effacer",
     "clearFilters": "Effacer les filtres",
@@ -17,16 +12,10 @@
     "actions": "Actions",
     "active": "Actif",
     "inactive": "Inactif",
-    "verified": "Vérifié",
     "admin": "Administrateur",
-    "yes": "Oui",
-    "no": "Non",
     "showDetails": "Afficher les détails",
     "hideDetails": "Masquer les détails",
     "created": "Créé",
-    "phone": "Téléphone",
-    "showing": "Affichage",
-    "of": "sur",
     "allCategories": "Toutes les catégories",
     "allBrands": "Toutes les marques",
     "errorLoadingData": "Erreur lors du chargement des données",
@@ -44,19 +33,14 @@
       "failed": "Échoué",
       "refunded": "Remboursé",
       "completed": "Terminé",
-      "complete": "Terminé",
       "complete_preparation": "Préparation terminée",
       "unknown": "Inconnu"
     },
     "activeOrders": "Commandes actives",
-    "inProgressOrders": "Commandes en cours",
     "cancelledOrders": "Commandes annulées",
-    "completedOrders": "Commandes terminées",
     "manageDeliveryOrders": "Gérez vos commandes de livraison et suivez leur progression.",
     "orderNumber": "Commande #{{number}}",
-    "orders": "Commandes",
     "manage": "Gérer",
-    "items": "Articles",
     "analytics": "Analyses",
     "locations": "Emplacements",
     "totalInventory": "Inventaire Total",
@@ -64,26 +48,6 @@
     "totalOrders": "Total des Commandes",
     "quickStats": "Statistiques Rapides",
     "totalLocations": "Total des Emplacements",
-    "remove": "Supprimer",
-    "completedOrders": "Commandes Terminées",
-    "confirm": "Confirmer",
-    "delete": "Supprimer",
-    "done": "Terminé",
-    "edit": "Modifier",
-    "error": "Erreur",
-    "home": "Accueil",
-    "inProgressOrders": "Commandes en Cours",
-    "items": "Articles",
-    "no": "Non",
-    "noOrders": "Aucune Commande",
-    "noOrdersDescription": "Vous n'avez pas encore passé de commande",
-    "of": "sur",
-    "orders": "Commandes",
-    "phone": "Téléphone",
-    "showing": "Affichage",
-    "verified": "Vérifié",
-    "view": "Voir",
-    "yes": "Oui",
     "language": "Langue"
   },
   "business": {
@@ -118,7 +82,6 @@
       "description": "Description",
       "sku": "Référence",
       "skuHelper": "Code article unique - identifiant unique pour l'article",
-      "price": "Prix",
       "currency": "Devise",
       "size": "Taille",
       "sizeUnit": "Unité de taille",
@@ -171,25 +134,16 @@
     },
     "inventory": {
       "title": "Inventaire",
-      "cardsView": "Vue cartes",
-      "tableView": "Vue tableau",
-      "addItem": "Ajouter un article",
-      "available": "Disponible",
       "stockStatus": "Statut du stock",
       "noInventory": "Aucun inventaire",
       "status": {
         "in_stock": "En stock",
         "low_stock": "Stock faible",
-        "out_of_stock": "Rupture de stock",
-        "inStock": "En stock",
-        "lowStock": "Stock faible",
-        "outOfStock": "Rupture de stock"
+        "out_of_stock": "Rupture de stock"
       },
       "restock": "Réapprovisionner",
-      "editItemButton": "Modifier l'article",
       "updateInventory": "Mettre à jour l'inventaire",
       "manageImages": "Gérer les images",
-      "itemNotFound": "Article non trouvé",
       "inventoryManagement": "Gestion de l'inventaire",
       "inventoryDescription": "Gérer les niveaux d'inventaire dans tous les emplacements",
       "availableQuantity": "Quantité disponible",
@@ -206,7 +160,6 @@
       "selectImages": "Sélectionner des images"
     },
     "locations": {
-      "title": "Emplacements",
       "addLocation": "Ajouter un emplacement",
       "editLocation": "Modifier l'emplacement",
       "deleteLocation": "Supprimer l'emplacement",
@@ -227,12 +180,10 @@
       "refreshLocations": "Actualiser les emplacements",
       "locationsRefreshed": "Emplacements actualisés avec succès",
       "refreshError": "Échec de l'actualisation des emplacements",
-      "stor": "Magasin",
-      "address": "Adresse",
+      "store": "Magasin",
       "isPrimary": "Emplacement Principal"
     },
     "orders": {
-      "title": "Commandes",
       "subtitle": "Gérez et suivez toutes vos commandes clients",
       "filters": {
         "search": "Rechercher des commandes...",
@@ -243,11 +194,8 @@
         "address": "Adresse"
       },
       "actions": {
-        "confirm": "Confirmer",
-        "cancel": "Annuler",
         "startPreparing": "Commencer la préparation",
         "completePreparation": "Terminer la préparation",
-        "readyForPickup": "Prêt pour le ramassage",
         "refund": "Rembourser",
         "viewItems": "Voir les articles",
         "viewHistory": "Voir l'historique"
@@ -281,7 +229,6 @@
         "thankYou": "Merci pour votre commande !",
         "whatToExpect": "Voici ce à quoi vous attendre :",
         "step1": {
-          "title": "Confirmation de Commande",
           "description": "Vous recevrez un e-mail de confirmation avec les détails de la commande"
         },
         "step2": {
@@ -299,71 +246,63 @@
   },
   "public": {
     "items": {
-      "title": "Parcourir les articles",
-      "subtitle": "Découvrez des produits incroyables d'entreprises locales",
-      "searchPlaceholder": "Rechercher des articles...",
-      "category": "Catégorie",
+      "allBrands": "Toutes les Marques",
+      "allCategories": "Toutes les Catégories",
+      "authenticationMessage": "Veuillez vous inscrire ou vous connecter pour acheter des articles",
       "brand": "Marque",
-      "allCategories": "Toutes les catégories",
-      "allBrands": "Toutes les marques",
+      "category": "Catégorie",
+      "login": "Se Connecter",
       "noItemsFound": "Aucun article trouvé",
-      "tryDifferentFilters": "Essayez différents filtres",
+      "searchPlaceholder": "Rechercher des articles...",
       "signUp": "S'inscrire",
-      "login": "Se connecter",
-      "authenticationMessage": "Veuillez vous inscrire ou vous connecter pour acheter des articles"
+      "subtitle": "Découvrez des produits incroyables d'entreprises locales",
+      "title": "Parcourir les Articles",
+      "tryDifferentFilters": "Essayez différents filtres"
     }
   },
   "orders": {
-    "allOrders": "Toutes les commandes",
-    "noOrdersFound": "Aucune commande trouvée",
+    "actions": {
+      "complete": "Terminer"
+    },
+    "allOrders": "Toutes les Commandes",
+    "brand": "Marque",
+    "color": "Couleur",
+    "confirmTitle": "Confirmer l'Action",
+    "model": "Modèle",
+    "notesPlaceholder": "Ajouter des notes...",
+    "orderItems": "Articles de Commande",
+    "size": "Taille",
+    "specialInstructions": "Instructions Spéciales",
     "table": {
       "items": "Articles"
-    },
-    "orderItems": "Articles de commande",
-    "brand": "Marque",
-    "model": "Modèle",
-    "color": "Couleur",
-    "size": "Taille",
-    "specialInstructions": "Instructions spéciales",
-    "confirmTitle": "Confirmer l'action",
-    "notes": "Notes",
-    "notesPlaceholder": "Ajouter des notes supplémentaires...",
-    "actions": {
-      "complete": "Terminer la commande",
-      "viewHistory": "Voir l'historique"
-    },
-    "completionWarning": "Veuillez terminer votre commande dans les 4 heures suivant la réception de l'article pour finaliser la transaction. Des pénalités peuvent s'appliquer si elle n'est pas terminée à temps."
+    }
   },
   "orderActions": {
-    "pickUpOrder": "Récupérer la commande",
-    "markAsInTransit": "Marquer comme en transit",
-    "markAsOutForDelivery": "Marquer comme en livraison",
-    "markAsDelivered": "Marquer comme livré",
-    "markAsFailed": "Marquer comme échoué"
+    "markAsDelivered": "Marquer comme Livré",
+    "markAsFailed": "Marquer comme Échoué",
+    "markAsInTransit": "Marquer comme En Transit",
+    "markAsOutForDelivery": "Marquer comme En Livraison",
+    "pickUpOrder": "Récupérer la Commande"
   },
   "orderCard": {
-    "orderNumber": "Commande #{{orderNumber}}",
-    "pickup": "Ramassage",
-    "businessDistance": "Distance de l'entreprise",
+    "businessDistance": "Distance de l'Entreprise",
     "delivery": "Livraison",
-    "deliveryDistance": "Distance de livraison",
+    "deliveryDistance": "Distance de Livraison",
     "items": "Articles",
-    "moreItems": "articles supplémentaires"
+    "pickup": "Récupération"
   },
   "agent": {
     "dashboard": {
-      "title": "Tableau de bord Agent",
-      "openOrders": "Commandes ouvertes"
-    },
-    "orders": {
-      "readyForPickupNotice": "Veuillez contacter le client et confirmer les arrangements de livraison.",
-      "assignedNotice": "Une fois que vous réclamez cette commande, vous devez la livrer dans les 24 heures ou des pénalités peuvent s'appliquer.",
-      "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez contacter le support pour faire vérifier votre compte."
+      "title": "Tableau de Bord Agent",
+      "openOrders": "Commandes Ouvertes"
     }
   },
   "messages": {
     "agentProfileNotFound": "Profil d'agent non trouvé",
-    "orderPickupError": "Échec de la récupération de la commande"
+    "orderAssignmentError": "Échec de l'attribution de la commande à l'agent",
+    "orderDropError": "Échec de l'abandon de la commande",
+    "orderPickupError": "Échec de la récupération de la commande",
+    "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande"
   },
   "faq": {
     "title": "Questions fréquemment posées",
@@ -412,7 +351,6 @@
     "viewTransactions": "Voir les transactions",
     "creditAccount": "Créditer le compte",
     "transactionHistory": "Historique des transactions",
-    "accountSummary": "Résumé du compte",
     "recentTransactions": "Transactions récentes",
     "noTransactions": "Aucune transaction trouvée",
     "date": "Date",
@@ -448,18 +386,11 @@
       "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer."
     }
   },
-  "agent": {
-    "dashboard": {
-      "title": "Tableau de Bord Agent",
-      "openOrders": "Commandes Ouvertes"
-    }
-  },
   "addresses": {
     "title": "Adresses",
     "addAddress": "Ajouter une adresse",
     "noAddresses": "Aucune adresse trouvée",
     "addFirstAddress": "Ajouter votre première adresse",
-    "missingAddressTitle": "Aucune adresse trouvée",
     "missingAddressMessage": "Veuillez ajouter une adresse pour continuer avec votre commande.",
     "coordinates": "Coordonnées",
     "editAddress": "Modifier l'Adresse",
@@ -468,25 +399,15 @@
     "maxAddressesReached": "Maximum {{max}} adresses autorisées"
   },
   "seo": {
-    "business-items": {
-      "title": "Articles d'entreprise - Gérez votre catalogue",
-      "description": "Gérez votre catalogue d'articles d'entreprise, ajoutez de nouveaux articles et suivez les niveaux d'inventaire",
-      "keywords": "articles d'entreprise, gestion de catalogue, inventaire, ajouter des articles"
-    },
-    "business-locations": {
-      "title": "Emplacements d'entreprise - Gérez vos emplacements",
-      "description": "Gérez vos emplacements d'entreprise et zones de livraison",
-      "keywords": "emplacements d'entreprise, zones de livraison, gestion d'adresses"
-    },
-    "business-inventory": {
-      "title": "Inventaire d'entreprise - Suivez les niveaux de stock",
-      "description": "Suivez et gérez les niveaux d'inventaire dans tous vos emplacements d'entreprise",
-      "keywords": "gestion d'inventaire, niveaux de stock, inventaire d'entreprise"
+    "business-dashboard": {
+      "title": "Tableau de Bord Entreprise - Gérez vos Opérations",
+      "description": "Tableau de bord complet pour gérer les commandes, l'inventaire et les opérations commerciales",
+      "keywords": "tableau de bord entreprise, gestion des commandes, gestion d'inventaire, opérations commerciales"
     },
     "public-items": {
-      "title": "Parcourir les articles - Découvrez les produits locaux",
-      "description": "Parcourez et découvrez des produits incroyables d'entreprises locales",
-      "keywords": "produits locaux, parcourir les articles, acheter local"
+      "title": "Parcourir les Articles - Découvrez les Produits Locaux",
+      "description": "Parcourez et découvrez des produits incroyables d'entreprises locales de votre région",
+      "keywords": "produits locaux, parcourir articles, acheter local, marché, découvrir produits"
     }
   },
   "footer": {
@@ -506,73 +427,5 @@
     "terms": "Conditions de Service",
     "allRightsReserved": "Tous droits réservés.",
     "designedBy": "Conçu par"
-  },
-  "messages": {
-    "agentProfileNotFound": "Profil d'agent non trouvé",
-    "orderAssignmentError": "Échec de l'attribution de la commande à l'agent",
-    "orderDropError": "Échec de l'abandon de la commande",
-    "orderPickupError": "Échec de la récupération de la commande",
-    "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande"
-  },
-  "orderActions": {
-    "markAsDelivered": "Marquer comme Livré",
-    "markAsFailed": "Marquer comme Échoué",
-    "markAsInTransit": "Marquer comme En Transit",
-    "markAsOutForDelivery": "Marquer comme En Livraison",
-    "pickUpOrder": "Récupérer la Commande"
-  },
-  "orderCard": {
-    "businessDistance": "Distance de l'Entreprise",
-    "delivery": "Livraison",
-    "deliveryDistance": "Distance de Livraison",
-    "items": "Articles",
-    "pickup": "Récupération"
-  },
-  "orders": {
-    "actions": {
-      "complete": "Terminer"
-    },
-    "allOrders": "Toutes les Commandes",
-    "brand": "Marque",
-    "color": "Couleur",
-    "confirmTitle": "Confirmer l'Action",
-    "model": "Modèle",
-    "noOrdersFound": "Aucune commande trouvée",
-    "notes": "Notes",
-    "notesPlaceholder": "Ajouter des notes...",
-    "orderItems": "Articles de Commande",
-    "size": "Taille",
-    "specialInstructions": "Instructions Spéciales",
-    "table": {
-      "items": "Articles"
-    }
-  },
-  "public": {
-    "items": {
-      "allBrands": "Toutes les Marques",
-      "allCategories": "Toutes les Catégories",
-      "authenticationMessage": "Veuillez vous inscrire ou vous connecter pour acheter des articles",
-      "brand": "Marque",
-      "category": "Catégorie",
-      "login": "Se Connecter",
-      "noItemsFound": "Aucun article trouvé",
-      "searchPlaceholder": "Rechercher des articles...",
-      "signUp": "S'inscrire",
-      "subtitle": "Découvrez des produits incroyables d'entreprises locales",
-      "title": "Parcourir les Articles",
-      "tryDifferentFilters": "Essayez différents filtres"
-    }
-  },
-  "seo": {
-    "business-dashboard": {
-      "title": "Tableau de Bord Entreprise - Gérez vos Opérations",
-      "description": "Tableau de bord complet pour gérer les commandes, l'inventaire et les opérations commerciales",
-      "keywords": "tableau de bord entreprise, gestion des commandes, gestion d'inventaire, opérations commerciales"
-    },
-    "public-items": {
-      "title": "Parcourir les Articles - Découvrez les Produits Locaux",
-      "description": "Parcourez et découvrez des produits incroyables d'entreprises locales de votre région",
-      "keywords": "produits locaux, parcourir articles, acheter local, marché, découvrir produits"
-    }
   }
 }

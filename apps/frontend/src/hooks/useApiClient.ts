@@ -3,6 +3,7 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 import { useCallback, useMemo } from 'react';
 import { environment } from '../config/environment';
 import { useLoading } from '../contexts/LoadingContext';
+import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 
 export const useApiClient = (): AxiosInstance | null => {
   const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } =
@@ -19,14 +20,32 @@ export const useApiClient = (): AxiosInstance | null => {
 
   const { showLoading, hideLoading } = loadingContext || {};
 
+  // Safely get token refresh context
+  let tokenRefreshContext;
+  try {
+    tokenRefreshContext = useTokenRefresh();
+  } catch (error) {
+    // Token refresh context not available yet, continue without it
+    tokenRefreshContext = null;
+  }
+
+  const { getValidToken, refreshToken } = tokenRefreshContext || {};
+
   const handleTokenRefresh = useCallback(async () => {
     try {
-      await getAccessTokenSilently({ cacheMode: 'off' });
+      if (refreshToken) {
+        return await refreshToken();
+      } else {
+        // Fallback to direct Auth0 call if context not available
+        await getAccessTokenSilently({ cacheMode: 'off' });
+        return await getAccessTokenSilently();
+      }
     } catch (error) {
       console.error('Token refresh failed, redirecting to login:', error);
       await loginWithRedirect();
+      throw error;
     }
-  }, [getAccessTokenSilently, loginWithRedirect]);
+  }, [refreshToken, getAccessTokenSilently, loginWithRedirect]);
 
   const apiClient = useMemo(() => {
     if (!isAuthenticated) return null;
@@ -41,7 +60,11 @@ export const useApiClient = (): AxiosInstance | null => {
 
     instance.interceptors.request.use(async (config) => {
       try {
-        const token = await getAccessTokenSilently();
+        // Use token refresh context if available, otherwise fallback to direct Auth0 call
+        const token = getValidToken 
+          ? await getValidToken() 
+          : await getAccessTokenSilently();
+          
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         } else {
@@ -82,20 +105,18 @@ export const useApiClient = (): AxiosInstance | null => {
         if (error.response?.status === 401) {
           console.log('Token expired, attempting refresh...');
           try {
-            await handleTokenRefresh();
+            const newToken = await handleTokenRefresh();
+            
             // Retry the original request with new token
             const originalRequest = error.config;
-            if (originalRequest) {
-              const token = await getAccessTokenSilently();
-              if (token) {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return instance.request(originalRequest);
-              }
+            if (originalRequest && newToken) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              return instance.request(originalRequest);
             }
           } catch (refreshError) {
             console.error('Token refresh failed:', refreshError);
-            // Redirect to login if refresh fails
-            await loginWithRedirect();
+            // Don't redirect here as handleTokenRefresh already handles it
+            throw refreshError;
           }
         }
 
@@ -111,6 +132,7 @@ export const useApiClient = (): AxiosInstance | null => {
     hideLoading,
     handleTokenRefresh,
     loginWithRedirect,
+    getValidToken,
   ]);
 
   return apiClient;

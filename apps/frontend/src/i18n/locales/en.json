@@ -1,15 +1,10 @@
 {
   "common": {
-    "home": "Home",
     "back": "Back",
     "cancel": "Cancel",
-    "confirm": "Confirm",
-    "delete": "Delete",
-    "edit": "Edit",
     "save": "Save",
     "saving": "Saving...",
     "loading": "Loading...",
-    "error": "Error",
     "search": "Search",
     "clear": "Clear",
     "clearFilters": "Clear Filters",
@@ -17,16 +12,10 @@
     "actions": "Actions",
     "active": "Active",
     "inactive": "Inactive",
-    "verified": "Verified",
     "admin": "Admin",
-    "yes": "Yes",
-    "no": "No",
     "showDetails": "Show Details",
     "hideDetails": "Hide Details",
     "created": "Created",
-    "phone": "Phone",
-    "showing": "Showing",
-    "of": "of",
     "allCategories": "All Categories",
     "allBrands": "All Brands",
     "errorLoadingData": "Error loading data",
@@ -49,14 +38,10 @@
       "unknown": "Unknown"
     },
     "activeOrders": "Active Orders",
-    "inProgressOrders": "In Progress Orders",
     "cancelledOrders": "Cancelled Orders",
-    "completedOrders": "Completed Orders",
     "manageDeliveryOrders": "Manage your delivery orders and track their progress.",
     "orderNumber": "Order #{{number}}",
-    "orders": "Orders",
     "manage": "Manage",
-    "items": "Items",
     "analytics": "Analytics",
     "locations": "Locations",
     "totalInventory": "Total Inventory",
@@ -65,25 +50,6 @@
     "quickStats": "Quick Stats",
     "totalLocations": "Total Locations",
     "remove": "Remove",
-    "completedOrders": "Completed Orders",
-    "confirm": "Confirm",
-    "delete": "Delete",
-    "done": "Done",
-    "edit": "Edit",
-    "error": "Error",
-    "home": "Home",
-    "inProgressOrders": "In Progress Orders",
-    "items": "Items",
-    "no": "No",
-    "noOrders": "No Orders",
-    "noOrdersDescription": "You haven't placed any orders yet",
-    "of": "of",
-    "orders": "Orders",
-    "phone": "Phone",
-    "showing": "Showing",
-    "verified": "Verified",
-    "view": "View",
-    "yes": "Yes",
     "language": "Language"
   },
   "business": {
@@ -141,13 +107,10 @@
       "cardsView": "Cards View",
       "tableView": "Table View",
       "download": "Download",
-      "downloadTemplate": "Download Template",
-      "csvUpload": "CSV Upload",
       "noItemsFound": "No items found",
       "noItemsToDownload": "No items to download",
       "downloadSuccess": "Items downloaded successfully",
       "image": "Image",
-      "items": "items",
       "fragile": "Fragile",
       "perishable": "Perishable",
       "specialHandling": "Special Handling",
@@ -168,64 +131,27 @@
         "gallery": "Gallery",
         "angle": "Angle"
       },
-      "color": "Color",
-      "confirmDelete": "Confirm Delete",
-      "currency": "Currency",
-      "deleteError": "Failed to delete item",
-      "deleteItem": "Delete Item",
-      "dimensions": "Dimensions",
-      "editItem": "Edit Item",
       "filters": {
-        "allBrands": "All Brands",
-        "allCategories": "All Categories",
         "allStatuses": "All Statuses",
         "brand": "Brand",
         "category": "Category",
-        "search": "Search items...",
-        "showing": "Showing",
         "status": "Status"
       },
-      "itemDeleted": "Item deleted successfully",
-      "itemNotFound": "Item not found",
-      "items": "Items",
-      "minOrder": "Min Order",
-      "model": "Model",
-      "noItems": "No items",
-      "noItemsFound": "No items found",
-      "orderLimits": "Order Limits",
-      "orderSettings": "Order Settings",
-      "price": "Price",
-      "pricing": "Pricing",
-      "size": "Size",
-      "sizeUnit": "Size Unit",
-      "sku": "SKU",
-      "skuHelper": "Stock Keeping Unit - unique identifier for the item",
-      "title": "Items",
-      "viewItem": "View Item",
-      "weight": "Weight",
-      "weightUnit": "Weight Unit"
+      "noItems": "No items"
     },
     "inventory": {
       "title": "Inventory",
-      "cardsView": "Cards View",
       "tableView": "TableView",
-      "addItem": "Add Item",
-      "available": "Available",
       "stockStatus": "Stock Status",
       "noInventory": "No Inventory",
       "status": {
         "in_stock": "In Stock",
         "low_stock": "Low Stock",
-        "out_of_stock": "Out of Stock",
-        "inStock": "In Stock",
-        "lowStock": "Low Stock",
-        "outOfStock": "Out of Stock"
+        "out_of_stock": "Out of Stock"
       },
       "restock": "Restock",
-      "editItemButton": "Edit Item",
       "updateInventory": "Update Inventory",
       "manageImages": "Manage Images",
-      "itemNotFound": "Item not found",
       "inventoryManagement": "Inventory Management",
       "inventoryDescription": "Manage inventory levels across all locations",
       "availableQuantity": "Available Quantity",
@@ -241,13 +167,11 @@
       "uploadImagesFor": "Upload Images for",
       "selectImages": "Select Images",
       "addImages": "Add Images",
-      "createItem": "Create Item",
       "createNew": "Create New",
       "createBrand": "Create Brand",
       "addNewBrand": "Add New Brand",
       "addToInventory": "Add to Inventory",
       "altText": "Alt Text",
-      "basicInformation": "Basic Information",
       "brandCreated": "Brand created successfully",
       "brandDescription": "Brand Description",
       "brandName": "Brand Name",
@@ -256,7 +180,6 @@
       "categoryRequired": "Category is required",
       "confirmDeleteText": "Are you sure you want to delete this item?",
       "currencyRequired": "Currency is required",
-      "deleteError": "Failed to delete item",
       "deliveryProperties": "Delivery Properties",
       "descriptionRequired": "Description is required",
       "estimatedDeliveryTime": "Estimated Delivery Time",
@@ -270,83 +193,58 @@
       "failedToUploadImages": "Failed to upload images",
       "filters": {
         "allLocations": "All Locations",
-        "allStatuses": "All Statuses",
         "location": "Location",
         "search": "Search inventory...",
-        "showing": "Showing",
         "stockStatus": "Stock Status"
       },
       "imageCount": "Image Count",
       "imageDeletedSuccessfully": "Image deleted successfully",
       "imageType": "Image Type",
-      "images": "Images",
       "imagesUploadedSuccessfully": "Images uploaded successfully",
-      "inStock": "In Stock",
       "inactive": "Inactive",
       "inventoryUpdatedSuccessfully": "Inventory updated successfully",
       "isFragile": "Is Fragile",
       "isPerishable": "Is Perishable",
       "itemAddedToInventory": "Item added to inventory successfully",
-      "itemCreated": "Item created successfully",
-      "itemDeleted": "Item deleted successfully",
       "itemInformation": "Item Information",
       "itemName": "Item Name",
       "itemNameRequired": "Item name is required",
-      "itemUpdatedSuccessfully": "Item updated successfully",
       "lastRestocked": "Last Restocked",
       "loadingBrands": "Loading brands...",
       "loadingCategories": "Loading categories...",
       "loadingItems": "Loading items...",
-      "location": "Location",
-      "lowStock": "Low Stock",
-      "material": "Material",
       "maxDeliveryDistance": "Max Delivery Distance",
-      "maxOrderQuantity": "Max Order Quantity",
       "maxOrderQuantityInvalid": "Max order quantity must be greater than min order quantity",
-      "minOrderQuantity": "Min Order Quantity",
       "minOrderQuantityInvalid": "Min order quantity must be greater than 0",
-      "model": "Model",
       "neverRestocked": "Never Restocked",
       "noBrand": "No Brand",
       "noBrandsFound": "No brands found",
       "noCategoriesFound": "No categories found",
       "noDeliveryProperties": "No delivery properties",
       "noImages": "No images",
-      "noItems": "No items",
-      "noItemsFound": "No items found",
       "noLocationsAvailable": "No locations available",
       "noProperties": "No properties",
       "noSku": "No SKU",
       "noSpecialProperties": "No special properties",
       "orderQuantities": "Order Quantities",
-      "outOfStock": "Out of Stock",
       "physicalProperties": "Physical Properties",
       "pleaseFixValidationErrors": "Please fix validation errors",
-      "price": "Price",
       "priceRequired": "Price is required",
-      "pricing": "Pricing",
       "quantities": "Quantities",
-      "quantity": "Quantity",
       "reorderQuantity": "Reorder Quantity",
       "requiresSpecialHandling": "Requires Special Handling",
       "selectExisting": "Select Existing",
       "selectItem": "Select Item",
       "selectLocation": "Select Location",
       "selectLocationRequired": "Please select a location",
-      "sku": "SKU",
       "skuPlaceholder": "Enter SKU",
       "specialProperties": "Special Properties",
-      "stockStatus": "Stock Status",
       "unitCost": "Unit Cost",
       "unknown": "Unknown",
       "uploadImages": "Upload Images",
-      "userIdRequired": "User ID is required",
-      "viewItem": "View Item",
-      "weight": "Weight",
-      "weightUnit": "Weight Unit"
+      "userIdRequired": "User ID is required"
     },
     "locations": {
-      "title": "Locations",
       "addLocation": "Add Location",
       "editLocation": "Edit Location",
       "deleteLocation": "Delete Location",
@@ -367,37 +265,13 @@
       "refreshLocations": "Refresh Locations",
       "locationsRefreshed": "Locations refreshed successfully",
       "refreshError": "Failed to refresh locations",
-      "stor": "Store",
-      "address": "Address",
+      "store": "Store",
       "isPrimary": "Primary Location",
-      "activate": "Activate",
-      "active": "Active",
-      "addLocation": "Add Location",
-      "deactivate": "Deactivate",
-      "deleteConfirm": "Are you sure you want to delete this location?",
-      "deleteError": "Failed to delete location",
-      "deleteLocation": "Delete Location",
-      "editLocation": "Edit Location",
       "email": "Email",
-      "inactive": "Inactive",
-      "locationAdded": "Location added successfully",
-      "locationDeleted": "Location deleted successfully",
       "locationName": "Location Name",
-      "locationType": "Location Type",
-      "locationUpdated": "Location updated successfully",
-      "locationsRefreshed": "Locations refreshed successfully",
-      "noLocations": "No locations found",
-      "phone": "Phone",
-      "primary": "Primary",
-      "primaryLocationWarning": "This is your primary location. You cannot delete it.",
-      "refresh": "Refresh",
-      "refreshError": "Failed to refresh locations",
-      "refreshLocations": "Refresh Locations",
-      "saveError": "Failed to save location",
-      "title": "Locations"
+      "locationType": "Location Type"
     },
     "orders": {
-      "title": "Orders",
       "subtitle": "Manage and track all your customer orders",
       "filters": {
         "search": "Search orders...",
@@ -408,11 +282,7 @@
         "address": "Address"
       },
       "actions": {
-        "confirm": "Confirm",
-        "cancel": "Cancel",
         "startPreparing": "Start Preparing",
-        "completePreparation": "Complete Preparation",
-        "readyForPickup": "Ready for Pickup",
         "refund": "Refund",
         "viewItems": "View Items",
         "viewHistory": "View History"
@@ -430,11 +300,7 @@
         "totalPrice": "Total"
       },
       "itemsInOrder": "Order Items",
-      "noItems": "No items in this order.",
-      "notes": "Notes",
-      "notesPlaceholder": "Add any additional notes about this status change...",
-      "subtitle": "Manage and track all your customer orders",
-      "title": "Orders"
+      "noItems": "No items in this order."
     },
     "specialInstructions": "Special Instructions",
     "csvUpload": {
@@ -468,7 +334,6 @@
         "thankYou": "Thank you for your order!",
         "whatToExpect": "Here's what to expect:",
         "step1": {
-          "title": "Order Confirmation",
           "description": "You'll receive an email confirmation with order details"
         },
         "step2": {
@@ -486,71 +351,57 @@
   },
   "public": {
     "items": {
-      "title": "Browse Items",
-      "subtitle": "Discover amazing products from local businesses",
-      "searchPlaceholder": "Search items...",
-      "category": "Category",
+      "authenticationMessage": "Please sign up or login to purchase items",
       "brand": "Brand",
-      "allCategories": "All Categories",
-      "allBrands": "All Brands",
-      "noItemsFound": "No items found",
-      "tryDifferentFilters": "Try different filters",
-      "signUp": "Sign Up",
+      "category": "Category",
       "login": "Login",
-      "authenticationMessage": "Please sign up or login to purchase items"
+      "noItemsFound": "No items found",
+      "searchPlaceholder": "Search items...",
+      "signUp": "Sign Up",
+      "subtitle": "Discover amazing products from local businesses",
+      "title": "Browse Items",
+      "tryDifferentFilters": "Try different filters"
     }
   },
   "orders": {
+    "actions": {},
     "allOrders": "All Orders",
-    "noOrdersFound": "No orders found",
+    "brand": "Brand",
+    "color": "Color",
+    "confirmTitle": "Confirm Action",
+    "model": "Model",
+    "notesPlaceholder": "Add notes...",
+    "size": "Size",
     "table": {
       "items": "Items"
-    },
-    "orderItems": "Order Items",
-    "brand": "Brand",
-    "model": "Model",
-    "color": "Color",
-    "size": "Size",
-    "specialInstructions": "Special Instructions",
-    "confirmTitle": "Confirm Action",
-    "notes": "Notes",
-    "notesPlaceholder": "Add any additional notes...",
-    "actions": {
-      "complete": "Complete Order",
-      "viewHistory": "View History"
-    },
-    "completionWarning": "Please complete your order within 4 hours of receiving the item to finalize the transaction. Penalties may apply if not completed on time."
+    }
   },
   "orderActions": {
-    "pickUpOrder": "Pick Up Order",
+    "markAsDelivered": "Mark as Delivered",
+    "markAsFailed": "Mark as Failed",
     "markAsInTransit": "Mark as In Transit",
     "markAsOutForDelivery": "Mark as Out for Delivery",
-    "markAsDelivered": "Mark as Delivered",
-    "markAsFailed": "Mark as Failed"
+    "pickUpOrder": "Pick Up Order"
   },
   "orderCard": {
-    "orderNumber": "Order #{{orderNumber}}",
-    "pickup": "Pickup",
     "businessDistance": "Business Distance",
     "delivery": "Delivery",
     "deliveryDistance": "Delivery Distance",
     "items": "Items",
-    "moreItems": "more items"
+    "pickup": "Pickup"
   },
   "agent": {
     "dashboard": {
       "title": "Agent Dashboard",
       "openOrders": "Open Orders"
-    },
-    "orders": {
-      "readyForPickupNotice": "Please contact the client and confirm delivery arrangements.",
-      "assignedNotice": "Once you claim this order, you must deliver it within 24 hours or penalties may apply.",
-      "verificationRequired": "This order requires a verified agent. Please contact support to get your account verified."
     }
   },
   "messages": {
     "agentProfileNotFound": "Agent profile not found",
-    "orderPickupError": "Failed to pick up order"
+    "orderAssignmentError": "Failed to assign order to agent",
+    "orderDropError": "Failed to drop order",
+    "orderPickupError": "Failed to pick up order",
+    "orderStatusUpdateError": "Failed to update order status"
   },
   "faq": {
     "title": "Frequently Asked Questions",
@@ -599,7 +450,6 @@
     "viewTransactions": "View Transactions",
     "creditAccount": "Credit Account",
     "transactionHistory": "Transaction History",
-    "accountSummary": "Account Summary",
     "recentTransactions": "Recent Transactions",
     "noTransactions": "No transactions found",
     "date": "Date",
@@ -635,12 +485,6 @@
       "resendError": "Failed to send verification email. Please try again."
     }
   },
-  "agent": {
-    "dashboard": {
-      "title": "Agent Dashboard",
-      "openOrders": "Open Orders"
-    }
-  },
   "addresses": {
     "title": "Addresses",
     "addAddress": "Add Address",
@@ -655,25 +499,15 @@
     "maxAddressesReached": "Maximum {{max}} addresses allowed"
   },
   "seo": {
-    "business-items": {
-      "title": "Business Items - Manage Your Catalog",
-      "description": "Manage your business item catalog, add new items, and track inventory levels",
-      "keywords": "business items, catalog management, inventory, add items"
-    },
-    "business-locations": {
-      "title": "Business Locations - Manage Your Locations",
-      "description": "Manage your business locations and delivery areas",
-      "keywords": "business locations, delivery areas, address management"
-    },
-    "business-inventory": {
-      "title": "Business Inventory - Track Stock Levels",
-      "description": "Track and manage inventory levels across all your business locations",
-      "keywords": "inventory management, stock levels, business inventory"
+    "business-dashboard": {
+      "title": "Business Dashboard - Manage Your Operations",
+      "description": "Comprehensive business dashboard for managing orders, inventory, and business operations",
+      "keywords": "business dashboard, order management, inventory management, business operations"
     },
     "public-items": {
       "title": "Browse Items - Discover Local Products",
-      "description": "Browse and discover amazing products from local businesses",
-      "keywords": "local products, browse items, shop local"
+      "description": "Browse and discover amazing products from local businesses in your area",
+      "keywords": "local products, browse items, shop local, marketplace, discover products"
     }
   },
   "footer": {
@@ -692,80 +526,6 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
     "allRightsReserved": "All rights reserved.",
-    "designedBy": "Designed by",
-    "forAgents": "For Agents",
-    "forBusinesses": "For Businesses",
-    "forClients": "For Clients",
-    "helpCenter": "Help Center",
-    "support": "Support",
-    "terms": "Terms of Service"
-  },
-  "messages": {
-    "agentProfileNotFound": "Agent profile not found",
-    "orderAssignmentError": "Failed to assign order to agent",
-    "orderDropError": "Failed to drop order",
-    "orderPickupError": "Failed to pick up order",
-    "orderStatusUpdateError": "Failed to update order status"
-  },
-  "orderActions": {
-    "markAsDelivered": "Mark as Delivered",
-    "markAsFailed": "Mark as Failed",
-    "markAsInTransit": "Mark as In Transit",
-    "markAsOutForDelivery": "Mark as Out for Delivery",
-    "pickUpOrder": "Pick Up Order"
-  },
-  "orderCard": {
-    "businessDistance": "Business Distance",
-    "delivery": "Delivery",
-    "deliveryDistance": "Delivery Distance",
-    "items": "Items",
-    "pickup": "Pickup"
-  },
-  "orders": {
-    "actions": {
-      "complete": "Complete"
-    },
-    "allOrders": "All Orders",
-    "brand": "Brand",
-    "color": "Color",
-    "confirmTitle": "Confirm Action",
-    "model": "Model",
-    "noOrdersFound": "No orders found",
-    "notes": "Notes",
-    "notesPlaceholder": "Add notes...",
-    "orderItems": "Order Items",
-    "size": "Size",
-    "specialInstructions": "Special Instructions",
-    "table": {
-      "items": "Items"
-    }
-  },
-  "public": {
-    "items": {
-      "allBrands": "All Brands",
-      "allCategories": "All Categories",
-      "authenticationMessage": "Please sign up or login to purchase items",
-      "brand": "Brand",
-      "category": "Category",
-      "login": "Login",
-      "noItemsFound": "No items found",
-      "searchPlaceholder": "Search items...",
-      "signUp": "Sign Up",
-      "subtitle": "Discover amazing products from local businesses",
-      "title": "Browse Items",
-      "tryDifferentFilters": "Try different filters"
-    }
-  },
-  "seo": {
-    "business-dashboard": {
-      "title": "Business Dashboard - Manage Your Operations",
-      "description": "Comprehensive business dashboard for managing orders, inventory, and business operations",
-      "keywords": "business dashboard, order management, inventory management, business operations"
-    },
-    "public-items": {
-      "title": "Browse Items - Discover Local Products",
-      "description": "Browse and discover amazing products from local businesses in your area",
-      "keywords": "local products, browse items, shop local, marketplace, discover products"
-    }
+    "designedBy": "Designed by"
   }
 }
