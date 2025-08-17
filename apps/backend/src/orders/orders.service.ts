@@ -464,22 +464,37 @@ export class OrdersService {
 
   async cancelOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business)
+    
+    // Allow both business users and clients to cancel orders
+    if (!user.business && !user.client)
       throw new HttpException(
-        'Only business users can cancel orders',
+        'Only business users and clients can cancel orders',
         HttpStatus.FORBIDDEN
       );
+    
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.business.user_id !== user.id)
+    
+    // Check authorization - business can cancel their orders, client can cancel their own orders
+    const isBusinessOwner = user.business && order.business.user_id === user.id;
+    const isOrderOwner = user.client && order.client_id === user.client.id;
+    
+    if (!isBusinessOwner && !isOrderOwner)
       throw new HttpException(
         'Unauthorized to cancel this order',
         HttpStatus.FORBIDDEN
       );
 
-    // Check if order can be cancelled
-    const cancellableStatuses = ['pending', 'confirmed', 'preparing'];
+    // Business can cancel orders in more statuses than clients
+    let cancellableStatuses: string[];
+    if (isBusinessOwner) {
+      cancellableStatuses = ['pending', 'confirmed', 'preparing'];
+    } else {
+      // Clients can only cancel pending or confirmed orders
+      cancellableStatuses = ['pending', 'confirmed'];
+    }
+    
     if (!cancellableStatuses.includes(order.current_status))
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status`,
@@ -495,14 +510,22 @@ export class OrdersService {
       request.orderId,
       'cancelled'
     );
+    
+    // Create appropriate status history entry based on who cancelled
+    const cancelledBy = isBusinessOwner ? 'business' : 'client';
+    const cancelMessage = isBusinessOwner 
+      ? 'Order cancelled by business' 
+      : 'Order cancelled by client';
+    
     await this.createStatusHistoryEntry(
       request.orderId,
       'cancelled',
-      'Order cancelled by business',
-      'business',
+      cancelMessage,
+      cancelledBy,
       user.id,
       request.notes
     );
+    
     return {
       success: true,
       order: updatedOrder,

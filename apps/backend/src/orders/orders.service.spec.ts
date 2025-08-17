@@ -38,6 +38,20 @@ describe('OrdersService', () => {
     agent: { id: 'agent-123', user_id: 'agent-123' },
   } as any;
 
+  const mockClientUser = {
+    id: 'client-456',
+    identifier: 'client@example.com',
+    email: 'client@example.com',
+    first_name: 'Client',
+    last_name: 'User',
+    user_type_id: 'client',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    business: null,
+    client: { id: 'client-123', user_id: 'client-456' },
+    agent: null,
+  } as any;
+
   const mockOrder = {
     id: 'order-123',
     order_number: 'ORD-20241201-000001',
@@ -45,6 +59,7 @@ describe('OrdersService', () => {
     total_amount: 100.0,
     currency: 'USD',
     business: { user_id: 'user-123' },
+    client_id: 'client-123',
     assigned_agent_id: null,
     assigned_agent: null,
   };
@@ -527,6 +542,96 @@ describe('OrdersService', () => {
         new HttpException(
           'Cannot cancel order in delivered status',
           HttpStatus.BAD_REQUEST
+        )
+      );
+    });
+
+    it('should allow client to cancel their own order in pending status', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'pending' },
+      });
+      hasuraUserService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'cancelled',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.cancelOrder({
+        orderId: 'order-123',
+        notes: 'Cancelled by client',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order.current_status).toBe('cancelled');
+    });
+
+    it('should allow client to cancel their own order in confirmed status', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+      });
+      hasuraUserService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'cancelled',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.cancelOrder({
+        orderId: 'order-123',
+        notes: 'Changed my mind',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order.current_status).toBe('cancelled');
+    });
+
+    it('should not allow client to cancel order in preparing status', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'preparing' },
+      });
+
+      await expect(
+        service.cancelOrder({ orderId: 'order-123' })
+      ).rejects.toThrow(
+        new HttpException(
+          'Cannot cancel order in preparing status',
+          HttpStatus.BAD_REQUEST
+        )
+      );
+    });
+
+    it('should not allow client to cancel order that does not belong to them', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, client_id: 'different-client', current_status: 'pending' },
+      });
+
+      await expect(
+        service.cancelOrder({ orderId: 'order-123' })
+      ).rejects.toThrow(
+        new HttpException(
+          'Unauthorized to cancel this order',
+          HttpStatus.FORBIDDEN
+        )
+      );
+    });
+
+    it('should not allow non-business and non-client users to cancel orders', async () => {
+      const mockInvalidUser = {
+        ...mockUser,
+        business: null,
+        client: null,
+      };
+      hasuraUserService.getUser.mockResolvedValue(mockInvalidUser);
+
+      await expect(
+        service.cancelOrder({ orderId: 'order-123' })
+      ).rejects.toThrow(
+        new HttpException(
+          'Only business users and clients can cancel orders',
+          HttpStatus.FORBIDDEN
         )
       );
     });
