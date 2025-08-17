@@ -64,7 +64,26 @@
     "totalOrders": "Total des Commandes",
     "quickStats": "Statistiques Rapides",
     "totalLocations": "Total des Emplacements",
-    "remove": "Supprimer"
+    "remove": "Supprimer",
+    "completedOrders": "Commandes Terminées",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "done": "Terminé",
+    "edit": "Modifier",
+    "error": "Erreur",
+    "home": "Accueil",
+    "inProgressOrders": "Commandes en Cours",
+    "items": "Articles",
+    "no": "Non",
+    "noOrders": "Aucune Commande",
+    "noOrdersDescription": "Vous n'avez pas encore passé de commande",
+    "of": "sur",
+    "orders": "Commandes",
+    "phone": "Téléphone",
+    "showing": "Affichage",
+    "verified": "Vérifié",
+    "view": "Voir",
+    "yes": "Oui"
   },
   "business": {
     "dashboard": {
@@ -254,7 +273,27 @@
       "title": "Mes commandes",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "noOrdersFound": "Aucune commande trouvée",
-      "signUpToPurchase": "Inscrivez-vous pour acheter des articles"
+      "signUpToPurchase": "Inscrivez-vous pour acheter des articles",
+      "confirmation": {
+        "title": "Confirmation de Commande",
+        "orderPlaced": "La commande #{{orderNumber}} a été passée avec succès !",
+        "thankYou": "Merci pour votre commande !",
+        "whatToExpect": "Voici ce à quoi vous attendre :",
+        "step1": {
+          "title": "Confirmation de Commande",
+          "description": "Vous recevrez un e-mail de confirmation avec les détails de la commande"
+        },
+        "step2": {
+          "title": "Traitement de la Commande",
+          "description": "Nous commencerons à traiter votre commande et à la préparer pour la livraison"
+        },
+        "tracking": {
+          "title": "Suivre Votre Commande",
+          "description": "Vous pouvez suivre le statut de votre commande dans votre compte"
+        },
+        "continueShopping": "Continuer les Achats",
+        "viewOrders": "Voir Mes Commandes"
+      }
     }
   },
   "public": {
@@ -382,7 +421,20 @@
     "balance": "Solde",
     "noDescription": "Aucune description",
     "balanceNotAvailable": "Solde non disponible",
-    "loadMore": "Charger plus"
+    "loadMore": "Charger plus",
+    "paymentMethods": {
+      "title": "Méthodes de Paiement",
+      "airtelMoney": "Airtel Money",
+      "mtnMomo": "MTN Mobile Money",
+      "creditCardComingSoon": "Carte de Crédit (Bientôt Disponible)"
+    },
+    "paymentMessages": {
+      "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
+      "airtelMoneySuccess": "Compte rechargé avec succès via Airtel Money",
+      "mtnMomoInfo": "Rechargez votre compte en utilisant MTN Mobile Money",
+      "mtnMomoSuccess": "Compte rechargé avec succès via MTN Mobile Money",
+      "creditCardNotSupported": "Les paiements par carte de crédit ne sont pas encore pris en charge"
+    }
   },
   "auth": {
     "profile": "Profil",
@@ -395,13 +447,24 @@
       "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer."
     }
   },
+  "agent": {
+    "dashboard": {
+      "title": "Tableau de Bord Agent",
+      "openOrders": "Commandes Ouvertes"
+    }
+  },
   "addresses": {
     "title": "Adresses",
     "addAddress": "Ajouter une adresse",
     "noAddresses": "Aucune adresse trouvée",
     "addFirstAddress": "Ajouter votre première adresse",
     "missingAddressTitle": "Aucune adresse trouvée",
-    "missingAddressMessage": "Veuillez ajouter une adresse pour continuer avec votre commande."
+    "missingAddressMessage": "Veuillez ajouter une adresse pour continuer avec votre commande.",
+    "coordinates": "Coordonnées",
+    "editAddress": "Modifier l'Adresse",
+    "deleteConfirmTitle": "Supprimer l'Adresse",
+    "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ?",
+    "maxAddressesReached": "Maximum {{max}} adresses autorisées"
   },
   "seo": {
     "business-items": {
@@ -442,5 +505,68 @@
     "terms": "Conditions de Service",
     "allRightsReserved": "Tous droits réservés.",
     "designedBy": "Conçu par"
+  },
+  "messages": {
+    "agentProfileNotFound": "Profil d'agent non trouvé",
+    "orderAssignmentError": "Échec de l'attribution de la commande à l'agent",
+    "orderDropError": "Échec de l'abandon de la commande",
+    "orderPickupError": "Échec de la récupération de la commande",
+    "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande"
+  },
+  "orderActions": {
+    "markAsDelivered": "Marquer comme Livré",
+    "markAsFailed": "Marquer comme Échoué",
+    "markAsInTransit": "Marquer comme En Transit",
+    "markAsOutForDelivery": "Marquer comme En Livraison",
+    "pickUpOrder": "Récupérer la Commande"
+  },
+  "orderCard": {
+    "businessDistance": "Distance de l'Entreprise",
+    "delivery": "Livraison",
+    "deliveryDistance": "Distance de Livraison",
+    "items": "Articles",
+    "pickup": "Récupération"
+  },
+  "orders": {
+    "actions": {
+      "complete": "Terminer"
+    },
+    "allOrders": "Toutes les Commandes",
+    "brand": "Marque",
+    "color": "Couleur",
+    "confirmTitle": "Confirmer l'Action",
+    "model": "Modèle",
+    "noOrdersFound": "Aucune commande trouvée",
+    "notes": "Notes",
+    "notesPlaceholder": "Ajouter des notes...",
+    "orderItems": "Articles de Commande",
+    "size": "Taille",
+    "specialInstructions": "Instructions Spéciales",
+    "table": {
+      "items": "Articles"
+    }
+  },
+  "public": {
+    "items": {
+      "allBrands": "Toutes les Marques",
+      "allCategories": "Toutes les Catégories",
+      "authenticationMessage": "Veuillez vous inscrire ou vous connecter pour acheter des articles",
+      "brand": "Marque",
+      "category": "Catégorie",
+      "login": "Se Connecter",
+      "noItemsFound": "Aucun article trouvé",
+      "searchPlaceholder": "Rechercher des articles...",
+      "signUp": "S'inscrire",
+      "subtitle": "Découvrez des produits incroyables d'entreprises locales",
+      "title": "Parcourir les Articles",
+      "tryDifferentFilters": "Essayez différents filtres"
+    }
+  },
+  "seo": {
+    "business-dashboard": {
+      "title": "Tableau de Bord Entreprise - Gérez vos Opérations",
+      "description": "Tableau de bord complet pour gérer les commandes, l'inventaire et les opérations commerciales",
+      "keywords": "tableau de bord entreprise, gestion des commandes, gestion d'inventaire, opérations commerciales"
+    }
   }
 }

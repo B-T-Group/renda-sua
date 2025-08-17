@@ -64,7 +64,26 @@
     "totalOrders": "Total Orders",
     "quickStats": "Quick Stats",
     "totalLocations": "Total Locations",
-    "remove": "Remove"
+    "remove": "Remove",
+    "completedOrders": "Completed Orders",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "done": "Done",
+    "edit": "Edit",
+    "error": "Error",
+    "home": "Home",
+    "inProgressOrders": "In Progress Orders",
+    "items": "Items",
+    "no": "No",
+    "noOrders": "No Orders",
+    "noOrdersDescription": "You haven't placed any orders yet",
+    "of": "of",
+    "orders": "Orders",
+    "phone": "Phone",
+    "showing": "Showing",
+    "verified": "Verified",
+    "view": "View",
+    "yes": "Yes"
   },
   "business": {
     "dashboard": {
@@ -147,7 +166,43 @@
         "detail": "Detail",
         "gallery": "Gallery",
         "angle": "Angle"
-      }
+      },
+      "color": "Color",
+      "confirmDelete": "Confirm Delete",
+      "currency": "Currency",
+      "deleteError": "Failed to delete item",
+      "deleteItem": "Delete Item",
+      "dimensions": "Dimensions",
+      "editItem": "Edit Item",
+      "filters": {
+        "allBrands": "All Brands",
+        "allCategories": "All Categories",
+        "allStatuses": "All Statuses",
+        "brand": "Brand",
+        "category": "Category",
+        "search": "Search items...",
+        "showing": "Showing",
+        "status": "Status"
+      },
+      "itemDeleted": "Item deleted successfully",
+      "itemNotFound": "Item not found",
+      "items": "Items",
+      "minOrder": "Min Order",
+      "model": "Model",
+      "noItems": "No items",
+      "noItemsFound": "No items found",
+      "orderLimits": "Order Limits",
+      "orderSettings": "Order Settings",
+      "price": "Price",
+      "pricing": "Pricing",
+      "size": "Size",
+      "sizeUnit": "Size Unit",
+      "sku": "SKU",
+      "skuHelper": "Stock Keeping Unit - unique identifier for the item",
+      "title": "Items",
+      "viewItem": "View Item",
+      "weight": "Weight",
+      "weightUnit": "Weight Unit"
     },
     "inventory": {
       "title": "Inventory",
@@ -183,7 +238,111 @@
       "addNewImages": "Add New Images",
       "currentImages": "Current Images",
       "uploadImagesFor": "Upload Images for",
-      "selectImages": "Select Images"
+      "selectImages": "Select Images",
+      "addImages": "Add Images",
+      "createItem": "Create Item",
+      "createNew": "Create New",
+      "createBrand": "Create Brand",
+      "addNewBrand": "Add New Brand",
+      "addToInventory": "Add to Inventory",
+      "altText": "Alt Text",
+      "basicInformation": "Basic Information",
+      "brandCreated": "Brand created successfully",
+      "brandDescription": "Brand Description",
+      "brandName": "Brand Name",
+      "businessIdRequired": "Business ID is required",
+      "caption": "Caption",
+      "categoryRequired": "Category is required",
+      "confirmDeleteText": "Are you sure you want to delete this item?",
+      "currencyRequired": "Currency is required",
+      "deleteError": "Failed to delete item",
+      "deliveryProperties": "Delivery Properties",
+      "descriptionRequired": "Description is required",
+      "estimatedDeliveryTime": "Estimated Delivery Time",
+      "failedToAddToInventory": "Failed to add item to inventory",
+      "failedToCreateBrand": "Failed to create brand",
+      "failedToCreateItem": "Failed to create item",
+      "failedToDeleteImage": "Failed to delete image",
+      "failedToLoadImages": "Failed to load images",
+      "failedToUpdateInventory": "Failed to update inventory",
+      "failedToUpdateItem": "Failed to update item",
+      "failedToUploadImages": "Failed to upload images",
+      "filters": {
+        "allLocations": "All Locations",
+        "allStatuses": "All Statuses",
+        "location": "Location",
+        "search": "Search inventory...",
+        "showing": "Showing",
+        "stockStatus": "Stock Status"
+      },
+      "imageCount": "Image Count",
+      "imageDeletedSuccessfully": "Image deleted successfully",
+      "imageType": "Image Type",
+      "images": "Images",
+      "imagesUploadedSuccessfully": "Images uploaded successfully",
+      "inStock": "In Stock",
+      "inactive": "Inactive",
+      "inventoryUpdatedSuccessfully": "Inventory updated successfully",
+      "isFragile": "Is Fragile",
+      "isPerishable": "Is Perishable",
+      "itemAddedToInventory": "Item added to inventory successfully",
+      "itemCreated": "Item created successfully",
+      "itemDeleted": "Item deleted successfully",
+      "itemInformation": "Item Information",
+      "itemName": "Item Name",
+      "itemNameRequired": "Item name is required",
+      "itemUpdatedSuccessfully": "Item updated successfully",
+      "lastRestocked": "Last Restocked",
+      "loadingBrands": "Loading brands...",
+      "loadingCategories": "Loading categories...",
+      "loadingItems": "Loading items...",
+      "location": "Location",
+      "lowStock": "Low Stock",
+      "material": "Material",
+      "maxDeliveryDistance": "Max Delivery Distance",
+      "maxOrderQuantity": "Max Order Quantity",
+      "maxOrderQuantityInvalid": "Max order quantity must be greater than min order quantity",
+      "minOrderQuantity": "Min Order Quantity",
+      "minOrderQuantityInvalid": "Min order quantity must be greater than 0",
+      "model": "Model",
+      "neverRestocked": "Never Restocked",
+      "noBrand": "No Brand",
+      "noBrandsFound": "No brands found",
+      "noCategoriesFound": "No categories found",
+      "noDeliveryProperties": "No delivery properties",
+      "noImages": "No images",
+      "noItems": "No items",
+      "noItemsFound": "No items found",
+      "noLocationsAvailable": "No locations available",
+      "noProperties": "No properties",
+      "noSku": "No SKU",
+      "noSpecialProperties": "No special properties",
+      "orderQuantities": "Order Quantities",
+      "outOfStock": "Out of Stock",
+      "physicalProperties": "Physical Properties",
+      "pleaseFixValidationErrors": "Please fix validation errors",
+      "price": "Price",
+      "priceRequired": "Price is required",
+      "pricing": "Pricing",
+      "quantities": "Quantities",
+      "quantity": "Quantity",
+      "reorderQuantity": "Reorder Quantity",
+      "requiresSpecialHandling": "Requires Special Handling",
+      "selectExisting": "Select Existing",
+      "selectItem": "Select Item",
+      "selectLocation": "Select Location",
+      "selectLocationRequired": "Please select a location",
+      "sku": "SKU",
+      "skuPlaceholder": "Enter SKU",
+      "specialProperties": "Special Properties",
+      "stockStatus": "Stock Status",
+      "unitCost": "Unit Cost",
+      "unknown": "Unknown",
+      "uploadImages": "Upload Images",
+      "userIdRequired": "User ID is required",
+      "viewItem": "View Item",
+      "weight": "Weight",
+      "weightUnit": "Weight Unit"
     },
     "locations": {
       "title": "Locations",
@@ -209,7 +368,32 @@
       "refreshError": "Failed to refresh locations",
       "stor": "Store",
       "address": "Address",
-      "isPrimary": "Primary Location"
+      "isPrimary": "Primary Location",
+      "activate": "Activate",
+      "active": "Active",
+      "addLocation": "Add Location",
+      "deactivate": "Deactivate",
+      "deleteConfirm": "Are you sure you want to delete this location?",
+      "deleteError": "Failed to delete location",
+      "deleteLocation": "Delete Location",
+      "editLocation": "Edit Location",
+      "email": "Email",
+      "inactive": "Inactive",
+      "locationAdded": "Location added successfully",
+      "locationDeleted": "Location deleted successfully",
+      "locationName": "Location Name",
+      "locationType": "Location Type",
+      "locationUpdated": "Location updated successfully",
+      "locationsRefreshed": "Locations refreshed successfully",
+      "noLocations": "No locations found",
+      "phone": "Phone",
+      "primary": "Primary",
+      "primaryLocationWarning": "This is your primary location. You cannot delete it.",
+      "refresh": "Refresh",
+      "refreshError": "Failed to refresh locations",
+      "refreshLocations": "Refresh Locations",
+      "saveError": "Failed to save location",
+      "title": "Locations"
     },
     "orders": {
       "title": "Orders",
@@ -245,16 +429,58 @@
         "totalPrice": "Total"
       },
       "itemsInOrder": "Order Items",
-      "noItems": "No items in this order."
+      "noItems": "No items in this order.",
+      "notes": "Notes",
+      "notesPlaceholder": "Add any additional notes about this status change...",
+      "subtitle": "Manage and track all your customer orders",
+      "title": "Orders"
     },
-    "specialInstructions": "Special Instructions"
+    "specialInstructions": "Special Instructions",
+    "csvUpload": {
+      "title": "CSV Upload",
+      "selectFile": "Select CSV File",
+      "upload": "Upload",
+      "uploading": "Uploading...",
+      "downloadTemplate": "Download Template",
+      "howToUse": "How to Use",
+      "preview": "Preview",
+      "results": "Results",
+      "inserted": "Inserted",
+      "updated": "Updated",
+      "errors": "Errors",
+      "errorDetails": "Error Details",
+      "noData": "No data found",
+      "emptyFile": "File is empty",
+      "invalidFileType": "Invalid file type. Please upload a CSV file.",
+      "parseError": "Error parsing CSV file"
+    }
   },
   "client": {
     "orders": {
       "title": "My Orders",
       "subtitle": "Track your order status and history",
       "noOrdersFound": "No orders found",
-      "signUpToPurchase": "Sign up to purchase items"
+      "signUpToPurchase": "Sign up to purchase items",
+      "confirmation": {
+        "title": "Order Confirmation",
+        "orderPlaced": "Order #{{orderNumber}} has been placed successfully!",
+        "thankYou": "Thank you for your order!",
+        "whatToExpect": "Here's what to expect:",
+        "step1": {
+          "title": "Order Confirmation",
+          "description": "You'll receive an email confirmation with order details"
+        },
+        "step2": {
+          "title": "Order Processing",
+          "description": "We'll start processing your order and prepare it for delivery"
+        },
+        "tracking": {
+          "title": "Track Your Order",
+          "description": "You can track your order status in your account"
+        },
+        "continueShopping": "Continue Shopping",
+        "viewOrders": "View My Orders"
+      }
     }
   },
   "public": {
@@ -382,7 +608,20 @@
     "balance": "Balance",
     "noDescription": "No description",
     "balanceNotAvailable": "Balance not available",
-    "loadMore": "Load More"
+    "loadMore": "Load More",
+    "paymentMethods": {
+      "title": "Payment Methods",
+      "airtelMoney": "Airtel Money",
+      "mtnMomo": "MTN Mobile Money",
+      "creditCardComingSoon": "Credit Card (Coming Soon)"
+    },
+    "paymentMessages": {
+      "airtelMoneyInfo": "Top up your account using Airtel Money",
+      "airtelMoneySuccess": "Account topped up successfully with Airtel Money",
+      "mtnMomoInfo": "Top up your account using MTN Mobile Money",
+      "mtnMomoSuccess": "Account topped up successfully with MTN Mobile Money",
+      "creditCardNotSupported": "Credit card payments are not supported yet"
+    }
   },
   "auth": {
     "profile": "Profile",
@@ -395,13 +634,24 @@
       "resendError": "Failed to send verification email. Please try again."
     }
   },
+  "agent": {
+    "dashboard": {
+      "title": "Agent Dashboard",
+      "openOrders": "Open Orders"
+    }
+  },
   "addresses": {
     "title": "Addresses",
     "addAddress": "Add Address",
     "noAddresses": "No addresses found",
     "addFirstAddress": "Add your first address",
     "missingAddressTitle": "No Address Found",
-    "missingAddressMessage": "Please add an address to continue with your order."
+    "missingAddressMessage": "Please add an address to continue with your order.",
+    "coordinates": "Coordinates",
+    "editAddress": "Edit Address",
+    "deleteConfirmTitle": "Delete Address",
+    "deleteConfirmMessage": "Are you sure you want to delete this address?",
+    "maxAddressesReached": "Maximum {{max}} addresses allowed"
   },
   "seo": {
     "business-items": {
@@ -441,6 +691,75 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
     "allRightsReserved": "All rights reserved.",
-    "designedBy": "Designed by"
+    "designedBy": "Designed by",
+    "forAgents": "For Agents",
+    "forBusinesses": "For Businesses",
+    "forClients": "For Clients",
+    "helpCenter": "Help Center",
+    "support": "Support",
+    "terms": "Terms of Service"
+  },
+  "messages": {
+    "agentProfileNotFound": "Agent profile not found",
+    "orderAssignmentError": "Failed to assign order to agent",
+    "orderDropError": "Failed to drop order",
+    "orderPickupError": "Failed to pick up order",
+    "orderStatusUpdateError": "Failed to update order status"
+  },
+  "orderActions": {
+    "markAsDelivered": "Mark as Delivered",
+    "markAsFailed": "Mark as Failed",
+    "markAsInTransit": "Mark as In Transit",
+    "markAsOutForDelivery": "Mark as Out for Delivery",
+    "pickUpOrder": "Pick Up Order"
+  },
+  "orderCard": {
+    "businessDistance": "Business Distance",
+    "delivery": "Delivery",
+    "deliveryDistance": "Delivery Distance",
+    "items": "Items",
+    "pickup": "Pickup"
+  },
+  "orders": {
+    "actions": {
+      "complete": "Complete"
+    },
+    "allOrders": "All Orders",
+    "brand": "Brand",
+    "color": "Color",
+    "confirmTitle": "Confirm Action",
+    "model": "Model",
+    "noOrdersFound": "No orders found",
+    "notes": "Notes",
+    "notesPlaceholder": "Add notes...",
+    "orderItems": "Order Items",
+    "size": "Size",
+    "specialInstructions": "Special Instructions",
+    "table": {
+      "items": "Items"
+    }
+  },
+  "public": {
+    "items": {
+      "allBrands": "All Brands",
+      "allCategories": "All Categories",
+      "authenticationMessage": "Please sign up or login to purchase items",
+      "brand": "Brand",
+      "category": "Category",
+      "login": "Login",
+      "noItemsFound": "No items found",
+      "searchPlaceholder": "Search items...",
+      "signUp": "Sign Up",
+      "subtitle": "Discover amazing products from local businesses",
+      "title": "Browse Items",
+      "tryDifferentFilters": "Try different filters"
+    }
+  },
+  "seo": {
+    "business-dashboard": {
+      "title": "Business Dashboard - Manage Your Operations",
+      "description": "Comprehensive business dashboard for managing orders, inventory, and business operations",
+      "keywords": "business dashboard, order management, inventory management, business operations"
+    }
   }
 }
