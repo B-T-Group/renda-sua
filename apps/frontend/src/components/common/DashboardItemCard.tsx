@@ -33,6 +33,10 @@ interface DashboardItemCardProps {
   estimatedDuration?: string | null;
   distanceLoading?: boolean;
   distanceError?: string | null;
+  // New props for customization
+  isPublicView?: boolean;
+  loginButtonText?: string;
+  orderButtonText?: string;
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
@@ -47,6 +51,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   estimatedDuration,
   distanceLoading,
   distanceError,
+  isPublicView = false,
+  loginButtonText = 'Login to Order',
+  orderButtonText = 'Order Now',
 }) => {
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
@@ -239,6 +246,16 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           <Button variant="outlined" fullWidth disabled>
             Not Available
           </Button>
+        ) : isPublicView && !canAfford ? (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<ShoppingCart />}
+            fullWidth
+            onClick={() => onOrderClick(item)}
+          >
+            {loginButtonText}
+          </Button>
         ) : canAfford ? (
           <Button
             variant="contained"
@@ -246,7 +263,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             fullWidth
             onClick={() => onOrderClick(item)}
           >
-            Order Now
+            {orderButtonText}
           </Button>
         ) : (
           <Button

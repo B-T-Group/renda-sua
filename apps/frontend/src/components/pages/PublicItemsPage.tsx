@@ -1,16 +1,12 @@
+import { useAuth0 } from '@auth0/auth0-react';
 import {
   AccountCircle as AccountIcon,
-  ShoppingCart as CartIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  CardMedia,
-  Chip,
   Container,
   FormControl,
   InputAdornment,
@@ -25,13 +21,91 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { InventoryItem } from '../../hooks/useInventoryItems';
 import { Item } from '../../hooks/useItems';
 import { usePublicItems } from '../../hooks/usePublicItems';
+import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
+
+// Adapter function to convert Item to InventoryItem format for DashboardItemCard
+const adaptItemToInventoryItem = (item: Item): InventoryItem => {
+  return {
+    id: `public-${item.id}`, // Use a different ID format for public items
+    business_location_id: '',
+    item_id: item.id,
+    available_quantity: 1, // Default to 1 for public view
+    selling_price: item.price,
+    is_active: item.is_active,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    item: {
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      price: item.price,
+      currency: item.currency,
+      weight: item.weight || 0,
+      weight_unit: item.weight_unit || '',
+      size: item.size || 0,
+      size_unit: item.size_unit || '',
+      item_sub_category_id: item.item_sub_category_id,
+      sku: item.sku || '',
+      brand: item.brand || { id: '', name: '' },
+      model: item.model || '',
+      color: item.color || '',
+      material: item.material || '',
+      is_fragile: item.is_fragile,
+      is_perishable: item.is_perishable,
+      requires_special_handling: item.requires_special_handling,
+      max_delivery_distance: item.max_delivery_distance || 0,
+      estimated_delivery_time: item.estimated_delivery_time || 0,
+      min_order_quantity: item.min_order_quantity,
+      max_order_quantity: item.max_order_quantity || 0,
+      is_active: item.is_active,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      item_sub_category: item.item_sub_category || {
+        id: 0,
+        name: '',
+        item_category: { id: 0, name: '' },
+      },
+      item_images: (item.item_images || []).map((img) => ({
+        ...img,
+        display_order: img.display_order || 0,
+        alt_text: img.alt_text || '',
+        caption: img.caption || '',
+      })),
+    },
+    business_location: {
+      id: '',
+      business_id: item.business_id,
+      name: item.business?.name || 'Unknown Business',
+      location_type: 'store',
+      is_primary: true,
+      business: {
+        id: item.business_id,
+        name: item.business?.name || 'Unknown Business',
+        is_verified: item.business?.is_verified || false,
+      },
+      address: {
+        id: '',
+        address_line_1: '',
+        address_line_2: '',
+        city: 'Unknown',
+        state: 'Unknown',
+        postal_code: '',
+        country: '',
+      },
+    },
+  };
+};
 
 const PublicItemsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { userType, isProfileComplete } = useUserProfileContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
@@ -40,6 +114,10 @@ const PublicItemsPage: React.FC = () => {
 
   // Fetch all items (no business filter for public view)
   const { items, loading, error } = usePublicItems();
+
+  // Check if user is an authenticated client
+  const isAuthenticatedClient =
+    isAuthenticated && userType === 'client' && isProfileComplete;
 
   // Filter items based on search and filters
   const filteredItems = items.filter((item: Item) => {
@@ -80,12 +158,34 @@ const PublicItemsPage: React.FC = () => {
     setCurrentPage(value);
   };
 
+  // Handler functions
   const handleSignUp = () => {
     navigate('/auth/signup');
   };
 
   const handleLogin = () => {
-    navigate('/auth/login');
+    loginWithRedirect();
+  };
+
+  const handleOrderClick = (item: InventoryItem) => {
+    if (!isAuthenticatedClient) {
+      handleLogin();
+      return;
+    }
+    // For authenticated clients, redirect to dashboard to place order
+    navigate('/dashboard');
+  };
+
+  const handleTopUpClick = () => {
+    navigate('/dashboard');
+  };
+
+  // Format currency helper
+  const formatCurrency = (amount: number, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
   };
 
   if (error) {
@@ -226,135 +326,73 @@ const PublicItemsPage: React.FC = () => {
       {/* Results Count */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="body2" color="text.secondary">
-          {t('public.items.resultsCount', { count: filteredItems.length })}
+          {t('common.showing')} {filteredItems.length}{' '}
+          {filteredItems.length === 1 ? 'item' : 'items'}
         </Typography>
       </Box>
 
       {/* Items Grid */}
       {loading ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(3, 1fr)',
+              lg: 'repeat(4, 1fr)',
+            },
+            gap: 3,
+          }}
+        >
           {Array.from(new Array(itemsPerPage)).map((_, index) => (
-            <Box
+            <Skeleton
               key={index}
-              sx={{
-                flex: {
-                  xs: '1 1 100%',
-                  sm: '1 1 calc(50% - 12px)',
-                  md: '1 1 calc(33.333% - 16px)',
-                  lg: '1 1 calc(25% - 18px)',
-                },
-              }}
-            >
-              <Card>
-                <Skeleton variant="rectangular" height={200} />
-                <CardContent>
-                  <Skeleton variant="text" height={24} sx={{ mb: 1 }} />
-                  <Skeleton variant="text" height={20} sx={{ mb: 1 }} />
-                  <Skeleton variant="text" height={20} width="60%" />
-                </CardContent>
-              </Card>
-            </Box>
+              variant="rectangular"
+              height={400}
+              sx={{ borderRadius: 1 }}
+            />
           ))}
         </Box>
       ) : (
         <>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {paginatedItems.map((item) => (
-              <Box
-                key={item.id}
-                sx={{
-                  flex: {
-                    xs: '1 1 100%',
-                    sm: '1 1 calc(50% - 12px)',
-                    md: '1 1 calc(33.333% - 16px)',
-                    lg: '1 1 calc(25% - 18px)',
-                  },
-                }}
-              >
-                <Card
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'transform 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: 4,
-                    },
-                  }}
-                >
-                  <CardMedia
-                    component="img"
-                    height="200"
-                    image={
-                      item.item_images?.[0]?.image_url ||
-                      '/src/assets/no-image.svg'
-                    }
-                    alt={item.name}
-                    sx={{ objectFit: 'cover' }}
-                  />
-                  <CardContent
-                    sx={{
-                      flexGrow: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <Typography variant="h6" component="h3" gutterBottom>
-                      {item.name}
-                    </Typography>
-
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 2, flexGrow: 1 }}
-                    >
-                      {item.description}
-                    </Typography>
-
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="h6" color="primary" gutterBottom>
-                        {t('public.items.price', {
-                          price: item.price,
-                          currency: item.currency || 'USD',
-                        })}
-                      </Typography>
-                    </Box>
-
-                    <Box
-                      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}
-                    >
-                      {item.item_sub_category?.item_category && (
-                        <Chip
-                          label={item.item_sub_category.item_category.name}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      )}
-                      {item.brand && (
-                        <Chip
-                          label={item.brand.name}
-                          size="small"
-                          color="secondary"
-                          variant="outlined"
-                        />
-                      )}
-                    </Box>
-
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<CartIcon />}
-                      disabled
-                      sx={{ mt: 'auto' }}
-                    >
-                      {t('public.items.signUpToPurchase')}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Box>
-            ))}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
+              },
+              gap: 3,
+            }}
+          >
+            {paginatedItems.map((item) => {
+              const adaptedItem = adaptItemToInventoryItem(item);
+              return (
+                <DashboardItemCard
+                  key={item.id}
+                  item={adaptedItem}
+                  canAfford={isAuthenticatedClient} // Only clients can afford items
+                  formatCurrency={formatCurrency}
+                  onOrderClick={handleOrderClick}
+                  onTopUpClick={handleTopUpClick}
+                  insufficientFundsMessage={
+                    isAuthenticatedClient
+                      ? undefined
+                      : t('public.items.authenticationMessage')
+                  }
+                  estimatedDistance={null}
+                  estimatedDuration={null}
+                  distanceLoading={false}
+                  distanceError={null}
+                  isPublicView={true}
+                  loginButtonText={t('public.items.login')}
+                  orderButtonText={t('common.orderNow', 'Order Now')}
+                />
+              );
+            })}
           </Box>
 
           {/* Pagination */}
