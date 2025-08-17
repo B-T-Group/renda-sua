@@ -60,6 +60,10 @@
     "analytics": "Analyses",
     "locations": "Emplacements",
     "totalInventory": "Inventaire Total",
+    "totalItems": "Total des Articles",
+    "totalOrders": "Total des Commandes",
+    "quickStats": "Statistiques Rapides",
+    "totalLocations": "Total des Emplacements",
     "remove": "Supprimer"
   },
   "business": {
@@ -202,7 +206,10 @@
       "refresh": "Actualiser",
       "refreshLocations": "Actualiser les emplacements",
       "locationsRefreshed": "Emplacements actualisés avec succès",
-      "refreshError": "Échec de l'actualisation des emplacements"
+      "refreshError": "Échec de l'actualisation des emplacements",
+      "stor": "Magasin",
+      "address": "Adresse",
+      "isPrimary": "Emplacement Principal"
     },
     "orders": {
       "title": "Commandes",
@@ -392,7 +399,9 @@
     "title": "Adresses",
     "addAddress": "Ajouter une adresse",
     "noAddresses": "Aucune adresse trouvée",
-    "addFirstAddress": "Ajouter votre première adresse"
+    "addFirstAddress": "Ajouter votre première adresse",
+    "missingAddressTitle": "Aucune adresse trouvée",
+    "missingAddressMessage": "Veuillez ajouter une adresse pour continuer avec votre commande."
   },
   "seo": {
     "business-items": {

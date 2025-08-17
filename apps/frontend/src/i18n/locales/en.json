@@ -60,6 +60,10 @@
     "analytics": "Analytics",
     "locations": "Locations",
     "totalInventory": "Total Inventory",
+    "totalItems": "Total Items",
+    "totalOrders": "Total Orders",
+    "quickStats": "Quick Stats",
+    "totalLocations": "Total Locations",
     "remove": "Remove"
   },
   "business": {
@@ -202,7 +206,10 @@
       "refresh": "Refresh",
       "refreshLocations": "Refresh Locations",
       "locationsRefreshed": "Locations refreshed successfully",
-      "refreshError": "Failed to refresh locations"
+      "refreshError": "Failed to refresh locations",
+      "stor": "Store",
+      "address": "Address",
+      "isPrimary": "Primary Location"
     },
     "orders": {
       "title": "Orders",
@@ -392,7 +399,9 @@
     "title": "Addresses",
     "addAddress": "Add Address",
     "noAddresses": "No addresses found",
-    "addFirstAddress": "Add your first address"
+    "addFirstAddress": "Add your first address",
+    "missingAddressTitle": "No Address Found",
+    "missingAddressMessage": "Please add an address to continue with your order."
   },
   "seo": {
     "business-items": {
