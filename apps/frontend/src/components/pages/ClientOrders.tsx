@@ -29,10 +29,12 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBackendOrders } from '../../hooks/useBackendOrders';
+import { useNavigate } from 'react-router-dom';
+import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useClientOrders } from '../../hooks/useClientOrders';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import ConfirmationModal from '../common/ConfirmationModal';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
@@ -47,7 +49,13 @@ interface OrderFilters {
 
 const ClientOrders: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { profile } = useUserProfile();
+  const {
+    accounts,
+    loading: accountLoading,
+    error: accountError,
+  } = useAccountInfo();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
@@ -339,11 +347,15 @@ const ClientOrders: React.FC = () => {
     });
   }, [orders, statusOrder]);
 
+  const handleTopUpClick = () => {
+    navigate('/profile');
+  };
+
   useEffect(() => {
     fetchOrders({});
   }, [fetchOrders]);
 
-  if (loading) {
+  if (loading || accountLoading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box
@@ -358,12 +370,16 @@ const ClientOrders: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error || accountError) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
-          Error loading orders:{' '}
-          {typeof error === 'string' ? error : (error as any)?.message}
+          Error loading data:{' '}
+          {typeof error === 'string'
+            ? error
+            : (error as any)?.message || typeof accountError === 'string'
+            ? accountError
+            : (accountError as any)?.message}
         </Alert>
       </Container>
     );
@@ -387,6 +403,12 @@ const ClientOrders: React.FC = () => {
 
         {/* Address Alert */}
         <AddressAlert />
+
+        {/* Account Information */}
+        <AccountInformation
+          accounts={accounts}
+          onTopUpClick={handleTopUpClick}
+        />
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>

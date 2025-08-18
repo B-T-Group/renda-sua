@@ -1,9 +1,11 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AccountsService } from '../accounts/accounts.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersService', () => {
@@ -11,6 +13,8 @@ describe('OrdersService', () => {
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let configService: jest.Mocked<ConfigService<Configuration>>;
+  let accountsService: jest.Mocked<any>;
+  let orderStatusService: jest.Mocked<any>;
 
   const mockUser = {
     id: 'user-123',
@@ -87,10 +91,19 @@ describe('OrdersService', () => {
     const mockHasuraSystemService = {
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
+      getAccount: jest.fn(),
     };
 
     const mockConfigService = {
       get: jest.fn(),
+    };
+
+    const mockAccountsService = {
+      registerTransaction: jest.fn(),
+    };
+
+    const mockOrderStatusService = {
+      updateOrderStatus: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -108,6 +121,14 @@ describe('OrdersService', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: AccountsService,
+          useValue: mockAccountsService,
+        },
+        {
+          provide: OrderStatusService,
+          useValue: mockOrderStatusService,
+        },
       ],
     }).compile();
 
@@ -115,6 +136,8 @@ describe('OrdersService', () => {
     hasuraUserService = module.get(HasuraUserService);
     hasuraSystemService = module.get(HasuraSystemService);
     configService = module.get(ConfigService);
+    accountsService = module.get(AccountsService);
+    orderStatusService = module.get(OrderStatusService);
   });
 
   describe('confirmOrder', () => {
@@ -123,7 +146,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: mockOrder,
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'confirmed',
       });
@@ -136,7 +159,7 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('confirmed');
-      expect(hasuraUserService.updateOrderStatus).toHaveBeenCalledWith(
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
         'order-123',
         'confirmed'
       );
@@ -189,7 +212,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'preparing',
       });
@@ -227,7 +250,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'preparing' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'ready_for_pickup',
       });
@@ -344,7 +367,7 @@ describe('OrdersService', () => {
           assigned_agent_id: 'agent-123',
         },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'picked_up',
       });
@@ -403,7 +426,7 @@ describe('OrdersService', () => {
           assigned_agent_id: 'agent-123',
         },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'in_transit',
       });
@@ -429,7 +452,7 @@ describe('OrdersService', () => {
           assigned_agent_id: 'agent-123',
         },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'out_for_delivery',
       });
@@ -461,7 +484,7 @@ describe('OrdersService', () => {
       hasuraSystemService.executeMutation.mockResolvedValue({
         affected_rows: 1,
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'delivered',
       });
@@ -479,25 +502,45 @@ describe('OrdersService', () => {
 
   describe('failDelivery', () => {
     it('should mark delivery as failed successfully', async () => {
+      const mockFailedOrder = {
+        ...mockOrder,
+        current_status: 'out_for_delivery',
+        assigned_agent_id: 'agent-123',
+        assigned_agent: { user_id: 'agent-123' },
+        client: { user_id: 'client-456' },
+      };
+
+      const mockOrderHold = {
+        id: 'hold-123',
+        client_hold_amount: 100.0,
+        agent_hold_amount: 80.0,
+      };
+
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
       hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...mockOrder,
-          current_status: 'out_for_delivery',
-          assigned_agent_id: 'agent-123',
-        },
+        orders_by_pk: mockFailedOrder,
       });
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        accounts: [mockAgentAccount],
-      });
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        affected_rows: 1,
-      });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockFailedOrder,
         current_status: 'failed',
       });
       hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      // Mock the getOrCreateOrderHold method
+      jest
+        .spyOn(service as any, 'getOrCreateOrderHold')
+        .mockResolvedValue(mockOrderHold);
+
+      // Mock hasuraSystemService.getAccount for both agent and client
+      hasuraSystemService.getAccount
+        .mockResolvedValueOnce({
+          id: 'agent-account-123',
+          available_balance: 1000.0,
+        })
+        .mockResolvedValueOnce({
+          id: 'client-account-123',
+          available_balance: 1000.0,
+        });
 
       const result = await service.failDelivery({
         orderId: 'order-123',
@@ -506,6 +549,23 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('failed');
+
+      // Verify that both agent and client hold release transactions were registered
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+        accountId: 'agent-account-123',
+        amount: 80.0,
+        transactionType: 'release',
+        memo: 'Hold released for order ORD-20241201-000001',
+        referenceId: 'order-123',
+      });
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+        accountId: 'client-account-123',
+        amount: 100.0,
+        transactionType: 'release',
+        memo: 'Hold released for order ORD-20241201-000001',
+        referenceId: 'order-123',
+      });
     });
   });
 
@@ -515,7 +575,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'pending' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'cancelled',
       });
@@ -551,7 +611,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'pending' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'cancelled',
       });
@@ -566,12 +626,133 @@ describe('OrdersService', () => {
       expect(result.order.current_status).toBe('cancelled');
     });
 
+    it('should release client hold when order is cancelled', async () => {
+      const mockOrderWithHold = {
+        ...mockOrder,
+        current_status: 'pending',
+        client: { user_id: 'client-456' },
+        assigned_agent: null,
+      };
+
+      const mockOrderHold = {
+        id: 'hold-123',
+        client_hold_amount: 100.0,
+        agent_hold_amount: 0,
+      };
+
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: mockOrderWithHold,
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrderWithHold,
+        current_status: 'cancelled',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      // Mock the getOrCreateOrderHold method
+      jest
+        .spyOn(service as any, 'getOrCreateOrderHold')
+        .mockResolvedValue(mockOrderHold);
+
+      // Mock hasuraSystemService.getAccount for client
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'client-account-123',
+        available_balance: 1000.0,
+      });
+
+      const result = await service.cancelOrder({
+        orderId: 'order-123',
+        notes: 'Cancelled by client',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order.current_status).toBe('cancelled');
+
+      // Verify that client hold release transaction was registered
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+        accountId: 'client-account-123',
+        amount: 100.0,
+        transactionType: 'release',
+        memo: 'Hold released for order ORD-20241201-000001',
+        referenceId: 'order-123',
+      });
+    });
+
+    it('should release both agent and client holds when assigned order is cancelled', async () => {
+      const mockOrderWithAgentAndHold = {
+        ...mockOrder,
+        current_status: 'assigned_to_agent',
+        client: { user_id: 'client-456' },
+        assigned_agent: { user_id: 'agent-123' },
+        assigned_agent_id: 'agent-123',
+      };
+
+      const mockOrderHold = {
+        id: 'hold-123',
+        client_hold_amount: 100.0,
+        agent_hold_amount: 80.0,
+      };
+
+      hasuraUserService.getUser.mockResolvedValue(mockUser); // Business user cancelling
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: mockOrderWithAgentAndHold,
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrderWithAgentAndHold,
+        current_status: 'cancelled',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      // Mock the getOrCreateOrderHold method
+      jest
+        .spyOn(service as any, 'getOrCreateOrderHold')
+        .mockResolvedValue(mockOrderHold);
+
+      // Mock hasuraSystemService.getAccount for both agent and client
+      hasuraSystemService.getAccount
+        .mockResolvedValueOnce({
+          id: 'agent-account-123',
+          available_balance: 1000.0,
+        })
+        .mockResolvedValueOnce({
+          id: 'client-account-123',
+          available_balance: 1000.0,
+        });
+
+      const result = await service.cancelOrder({
+        orderId: 'order-123',
+        notes: 'Cancelled by business',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order.current_status).toBe('cancelled');
+
+      // Verify that agent hold release transaction was registered
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+        accountId: 'agent-account-123',
+        amount: 80.0,
+        transactionType: 'release',
+        memo: 'Hold released for order ORD-20241201-000001',
+        referenceId: 'order-123',
+      });
+
+      // Verify that client hold release transaction was registered
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+        accountId: 'client-account-123',
+        amount: 100.0,
+        transactionType: 'release',
+        memo: 'Hold released for order ORD-20241201-000001',
+        referenceId: 'order-123',
+      });
+    });
+
     it('should allow client to cancel their own order in confirmed status', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'cancelled',
       });
@@ -605,7 +786,11 @@ describe('OrdersService', () => {
     it('should not allow client to cancel order that does not belong to them', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, client_id: 'different-client', current_status: 'pending' },
+        orders_by_pk: {
+          ...mockOrder,
+          client_id: 'different-client',
+          current_status: 'pending',
+        },
       });
 
       await expect(
@@ -643,7 +828,7 @@ describe('OrdersService', () => {
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'delivered' },
       });
-      hasuraUserService.updateOrderStatus.mockResolvedValue({
+      orderStatusService.updateOrderStatus.mockResolvedValue({
         ...mockOrder,
         current_status: 'refunded',
       });

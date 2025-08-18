@@ -441,7 +441,7 @@ export class OrdersService {
       );
 
     // Release the hold since delivery failed
-    await this.releaseOrderHold(order, user.id);
+    await this.releaseOrderHold(order, 'failed');
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
@@ -464,22 +464,22 @@ export class OrdersService {
 
   async cancelOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    
+
     // Allow both business users and clients to cancel orders
     if (!user.business && !user.client)
       throw new HttpException(
         'Only business users and clients can cancel orders',
         HttpStatus.FORBIDDEN
       );
-    
+
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    
+
     // Check authorization - business can cancel their orders, client can cancel their own orders
     const isBusinessOwner = user.business && order.business.user_id === user.id;
     const isOrderOwner = user.client && order.client_id === user.client.id;
-    
+
     if (!isBusinessOwner && !isOrderOwner)
       throw new HttpException(
         'Unauthorized to cancel this order',
@@ -494,29 +494,27 @@ export class OrdersService {
       // Clients can only cancel pending or confirmed orders
       cancellableStatuses = ['pending', 'confirmed'];
     }
-    
+
     if (!cancellableStatuses.includes(order.current_status))
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
 
-    // If order was assigned to agent, release the hold
-    if (order.assigned_agent_id) {
-      await this.releaseOrderHold(order, order.assigned_agent.user_id);
-    }
+    // If order was assigned to agent, release the agent hold
+    await this.releaseOrderHold(order, 'cancelled');
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'cancelled'
     );
-    
+
     // Create appropriate status history entry based on who cancelled
     const cancelledBy = isBusinessOwner ? 'business' : 'client';
-    const cancelMessage = isBusinessOwner 
-      ? 'Order cancelled by business' 
+    const cancelMessage = isBusinessOwner
+      ? 'Order cancelled by business'
       : 'Order cancelled by client';
-    
+
     await this.createStatusHistoryEntry(
       request.orderId,
       'cancelled',
@@ -525,7 +523,7 @@ export class OrdersService {
       user.id,
       request.notes
     );
-    
+
     return {
       success: true,
       order: updatedOrder,
@@ -1465,22 +1463,39 @@ export class OrdersService {
     });
   }
 
-  private async releaseOrderHold(order: any, userId: string) {
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      userId,
+  private async releaseOrderHold(order: any, status: string) {
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+
+    if (order.assigned_agent?.user_id) {
+      const agentAccount = await this.hasuraSystemService.getAccount(
+        order.assigned_agent.user_id,
+        order.currency
+      );
+
+      await this.accountsService.registerTransaction({
+        accountId: agentAccount.id,
+        amount: orderHold.agent_hold_amount,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+    }
+
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
       order.currency
     );
-    if (!agentAccount) return;
-
-    const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.total_amount * holdPercentage) / 100;
 
     await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: holdAmount,
+      accountId: clientAccount.id,
+      amount: orderHold.client_hold_amount,
       transactionType: 'release',
       memo: `Hold released for order ${order.order_number}`,
       referenceId: order.id,
+    });
+
+    await this.updateOrderHold(orderHold.id, {
+      status: status,
     });
   }
 

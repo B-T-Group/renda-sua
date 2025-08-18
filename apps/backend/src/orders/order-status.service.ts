@@ -168,8 +168,16 @@ export class OrderStatusService {
     isClient: boolean
   ): string[] {
     const transitions: { [key: string]: string[] } = {
-      pending: isBusinessOwner ? ['confirmed', 'cancelled'] : (isClient ? ['cancelled'] : []),
-      confirmed: isBusinessOwner ? ['preparing', 'cancelled'] : (isClient ? ['cancelled'] : []),
+      pending: isBusinessOwner
+        ? ['confirmed', 'cancelled']
+        : isClient
+        ? ['cancelled']
+        : [],
+      confirmed: isBusinessOwner
+        ? ['preparing', 'cancelled']
+        : isClient
+        ? ['cancelled']
+        : [],
       preparing: isBusinessOwner ? ['ready_for_pickup', 'cancelled'] : [],
       ready_for_pickup: isAssignedAgent ? ['assigned_to_agent'] : [],
       assigned_to_agent: isAssignedAgent ? ['picked_up'] : [],
