@@ -37,6 +37,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import ConfirmationModal from '../common/ConfirmationModal';
+import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -842,6 +843,19 @@ const ClientOrders: React.FC = () => {
                                 </Typography>
                               </>
                             )}
+
+                            {/* Messages Section */}
+                            <UserMessagesComponent
+                              entityType="order"
+                              entityId={order.id}
+                              title={t(
+                                'messages.orderMessages',
+                                'Order Messages'
+                              )}
+                              defaultExpanded={false}
+                              maxVisibleMessages={3}
+                              compact={true}
+                            />
                           </Collapse>
                           {/* Distance Matrix display */}
                           {distanceLoading && (

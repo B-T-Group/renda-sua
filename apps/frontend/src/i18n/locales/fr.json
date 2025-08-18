@@ -305,7 +305,17 @@
     "orderAssignmentError": "Échec de l'attribution de la commande à l'agent",
     "orderDropError": "Échec de l'abandon de la commande",
     "orderPickupError": "Échec de la récupération de la commande",
-    "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande"
+    "orderStatusUpdateError": "Échec de la mise à jour du statut de la commande",
+    "title": "Messages",
+    "orderMessages": "Messages de Commande",
+    "noMessages": "Aucun message encore",
+    "addNew": "Ajouter un Message",
+    "placeholder": "Tapez votre message...",
+    "send": "Envoyer",
+    "sending": "Envoi en cours...",
+    "viewAll": "Voir Tous les Messages",
+    "allMessages": "Tous les Messages",
+    "error": "Échec du chargement des messages"
   },
   "faq": {
     "title": "Questions fréquemment posées",

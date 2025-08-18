@@ -43,6 +43,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
+import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 const getStatusColor = (status: string) => {
@@ -532,6 +533,16 @@ const OrderCard: React.FC<{
               </Alert>
             </Box>
           )}
+
+        {/* Messages Section */}
+        <UserMessagesComponent
+          entityType="order"
+          entityId={order.id}
+          title={t('messages.orderMessages', 'Order Messages')}
+          defaultExpanded={false}
+          maxVisibleMessages={3}
+          compact={true}
+        />
       </CardContent>
 
       {showActions && (

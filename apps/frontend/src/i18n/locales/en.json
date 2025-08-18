@@ -407,7 +407,17 @@
     "orderAssignmentError": "Failed to assign order to agent",
     "orderDropError": "Failed to drop order",
     "orderPickupError": "Failed to pick up order",
-    "orderStatusUpdateError": "Failed to update order status"
+    "orderStatusUpdateError": "Failed to update order status",
+    "title": "Messages",
+    "orderMessages": "Order Messages",
+    "noMessages": "No messages yet",
+    "addNew": "Add Message",
+    "placeholder": "Type your message...",
+    "send": "Send",
+    "sending": "Sending...",
+    "viewAll": "View All Messages",
+    "allMessages": "All Messages",
+    "error": "Failed to load messages"
   },
   "faq": {
     "title": "Frequently Asked Questions",

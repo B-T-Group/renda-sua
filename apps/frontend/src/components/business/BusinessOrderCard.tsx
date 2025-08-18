@@ -29,6 +29,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import ConfirmationModal from '../common/ConfirmationModal';
+import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 
 interface OrderAction {
@@ -258,6 +259,16 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
               />
             )}
           </Box>
+
+          {/* Messages Section */}
+          <UserMessagesComponent
+            entityType="order"
+            entityId={order.id}
+            title={t('messages.orderMessages', 'Order Messages')}
+            defaultExpanded={false}
+            maxVisibleMessages={3}
+            compact={true}
+          />
         </CardContent>
         <CardActions>
           {getAvailableActions(order).map((action) => {
