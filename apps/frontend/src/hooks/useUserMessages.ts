@@ -146,7 +146,7 @@ export const useUserMessages = (specificUserId?: string) => {
 
       try {
         const mutation = `
-          mutation CreateUserMessage($user_id: uuid!, $entity_type: String!, $entity_id: uuid!, $message: String!) {
+          mutation CreateUserMessage($user_id: uuid!, $entity_type: entity_types_enum!, $entity_id: uuid!, $message: String!) {
             insert_user_messages_one(object: {
               user_id: $user_id,
               entity_type: $entity_type,
