@@ -149,3 +149,4 @@ const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose }) => {
 };
 
 export default HeaderSearch;
+
