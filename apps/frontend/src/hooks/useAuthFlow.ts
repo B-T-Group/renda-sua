@@ -19,7 +19,7 @@ export const useAuthFlow = () => {
   useEffect(() => {
     // Only run auth flow on /app route or when user first authenticates
     if (!isAuthenticated || !user) return;
-    if (location.pathname !== '/app') return;
+    if (!['/app', '/app/'].includes(location.pathname)) return;
 
     setIsCheckingProfile(true);
 
