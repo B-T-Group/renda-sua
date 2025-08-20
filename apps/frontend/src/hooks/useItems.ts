@@ -269,6 +269,35 @@ const GET_SINGLE_ITEM = `
         display_order
         created_at
       }
+      business_inventories {
+        id
+        business_location_id
+        quantity
+        available_quantity
+        reserved_quantity
+        reorder_point
+        reorder_quantity
+        unit_cost
+        selling_price
+        is_active
+        last_restocked_at
+        created_at
+        updated_at
+        business_location {
+          id
+          name
+          location_type
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+          }
+        }
+      }
     }
   }
 `;

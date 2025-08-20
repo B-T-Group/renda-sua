@@ -4,6 +4,7 @@ import {
   Download as DownloadIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
+  LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
@@ -256,8 +257,38 @@ const BusinessItemsPage: React.FC = () => {
       fetchItems(false);
       fetchBrands();
       fetchItemSubCategories();
+      refreshBusinessLocations(); // Ensure business locations are loaded
     }
-  }, [profile?.business?.id]);
+  }, [
+    profile?.business?.id,
+    fetchItems,
+    fetchBrands,
+    fetchItemSubCategories,
+    refreshBusinessLocations,
+  ]);
+
+  // Refresh locations when window regains focus or becomes visible (useful when returning from locations page)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (profile?.business?.id) {
+        refreshBusinessLocations();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && profile?.business?.id) {
+        refreshBusinessLocations();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [profile?.business?.id, refreshBusinessLocations]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -728,6 +759,16 @@ const BusinessItemsPage: React.FC = () => {
                     </Button>
                   </span>
                 </Tooltip>
+                {businessLocations.length === 0 && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<LocationOnIcon />}
+                    onClick={() => navigate('/business/locations')}
+                    color="primary"
+                  >
+                    {t('business.locations.addLocation')}
+                  </Button>
+                )}
               </Stack>
             </Box>
 
@@ -983,7 +1024,10 @@ const BusinessItemsPage: React.FC = () => {
               null
             : null
         }
-        businessLocations={businessLocations}
+        selectedInventory={updatingInventoryItem}
+        onInventoryUpdated={() => {
+          fetchItems(false); // Refresh items list
+        }}
       />
 
       <CSVUploadDialog

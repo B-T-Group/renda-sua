@@ -72,6 +72,7 @@ export default function ItemViewPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
+  const [selectedInventory, setSelectedInventory] = useState<any>(null);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
 
   const { fetchItems, fetchSingleItem, updateItem, items } = useItems(
@@ -123,7 +124,8 @@ export default function ItemViewPage() {
     setShowEditDialog(true);
   };
 
-  const handleUpdateInventory = () => {
+  const handleUpdateInventory = (inventory?: any) => {
+    setSelectedInventory(inventory || null);
     setShowUpdateInventoryDialog(true);
   };
 
@@ -520,6 +522,16 @@ export default function ItemViewPage() {
                           </Typography>
                         </Box>
                       </Stack>
+                      <Box sx={{ mt: 2 }}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => handleUpdateInventory(inventory)}
+                          startIcon={<EditIcon />}
+                        >
+                          {t('business.inventory.editItemButton')}
+                        </Button>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -590,7 +602,10 @@ export default function ItemViewPage() {
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
         item={item}
-        businessLocations={businessLocations}
+        selectedInventory={selectedInventory}
+        onInventoryUpdated={() => {
+          fetchItemDetails(); // Refresh item details
+        }}
       />
 
       <ImageUploadDialog

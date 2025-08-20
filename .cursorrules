@@ -42,6 +42,23 @@
 4. **Beautiful Components**: Prioritize modern, beautiful UI design
 5. **Translations**: Use i18n translation keys, never hardcode strings
 6. **State Management**: Use appropriate state management patterns (useState, useEffect, custom hooks)
+7. **Self-Contained Components**: Prioritize self-contained components that manage their own data and dependencies
+
+### Self-Contained Component Rules
+
+1. **Internal Data Loading**: Components should load their own data using hooks rather than receiving it as props when possible
+2. **Reduced Prop Drilling**: Minimize passing data through multiple component layers
+3. **Independent Functionality**: Components should be functional on their own without requiring extensive setup from parent components
+4. **Error Boundary**: Each component should handle its own loading, error, and empty states
+5. **Hook Usage**: Use domain-specific hooks (useBusinessLocations, useItems, etc.) directly in components that need the data
+6. **Simplified Interfaces**: Keep component prop interfaces minimal and focused on configuration rather than data
+
+### Examples of Self-Contained Components
+
+- **Good**: `UpdateInventoryDialog` loads business locations internally using `useBusinessLocations()`
+- **Bad**: `UpdateInventoryDialog` receives business locations as props from parent
+- **Good**: Modal dialogs that fetch their own data when opened
+- **Bad**: Components that require parents to pre-fetch and pass all necessary data
 
 ### Backend Rules (NestJS)
 

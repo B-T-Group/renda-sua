@@ -19,6 +19,8 @@
     "created": "Créé",
     "allCategories": "Toutes les catégories",
     "allBrands": "Toutes les marques",
+    "orderNow": "Commander maintenant",
+    "showing": "Affichage",
     "errorLoadingData": "Erreur lors du chargement des données",
     "orderStatus": {
       "pending": "En attente",
@@ -49,7 +51,10 @@
     "totalOrders": "Total des Commandes",
     "quickStats": "Statistiques Rapides",
     "totalLocations": "Total des Emplacements",
-    "language": "Langue"
+    "language": "Langue",
+    "orders": "Commandes",
+    "items": "Articles",
+    "fetchingItems": "Récupération des articles..."
   },
   "business": {
     "dashboard": {
@@ -125,6 +130,7 @@
       "imageManagementDescription": "Gérer les images pour cet article",
       "noImagesFound": "Aucune image trouvée",
       "galleryImages": "Images de galerie",
+      "csvUpload": "Téléchargement CSV",
       "imageTypes": {
         "main": "Image principale",
         "thumbnail": "Miniature",
@@ -158,9 +164,19 @@
       "addNewImages": "Ajouter de nouvelles images",
       "currentImages": "Images actuelles",
       "uploadImagesFor": "Télécharger des images pour",
-      "selectImages": "Sélectionner des images"
+      "selectImages": "Sélectionner des images",
+      "editItemButton": "Modifier l'article",
+      "updateInventoryFor": "Mettre à jour l'inventaire pour {{itemName}}",
+      "addInventoryFor": "Ajouter un inventaire pour {{itemName}}",
+      "inventoryAddedSuccessfully": "Inventaire ajouté avec succès",
+      "failedToAddInventory": "Échec de l'ajout de l'inventaire",
+      "existingInventoryLoaded": "Données d'inventaire existantes chargées pour {{locationName}}",
+      "sku": "Référence",
+      "category": "Catégorie",
+      "pricing": "Tarification"
     },
     "locations": {
+      "title": "Emplacements",
       "addLocation": "Ajouter un emplacement",
       "editLocation": "Modifier l'emplacement",
       "deleteLocation": "Supprimer l'emplacement",
@@ -182,7 +198,21 @@
       "locationsRefreshed": "Emplacements actualisés avec succès",
       "refreshError": "Échec de l'actualisation des emplacements",
       "store": "Magasin",
-      "isPrimary": "Emplacement Principal"
+      "isPrimary": "Emplacement Principal",
+      "email": "Email",
+      "phone": "Téléphone",
+      "address": "Adresse",
+      "locationName": "Nom de l'emplacement",
+      "locationType": "Type d'emplacement",
+      "locationTypes": {
+        "store": "Magasin",
+        "warehouse": "Entrepôt",
+        "office": "Bureau",
+        "showroom": "Salle d'exposition",
+        "pickup_point": "Point de retrait"
+      },
+      "operatingHours": "Heures d'ouverture",
+      "contactInformation": "Informations de contact"
     },
     "orders": {
       "subtitle": "Gérez et suivez toutes vos commandes clients",
@@ -409,7 +439,8 @@
     "editAddress": "Modifier l'Adresse",
     "deleteConfirmTitle": "Supprimer l'Adresse",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ?",
-    "maxAddressesReached": "Maximum {{max}} adresses autorisées"
+    "maxAddressesReached": "Maximum {{max}} adresses autorisées",
+    "primary": "Principal"
   },
   "support": {
     "title": "Centre d'Aide et de Support",

@@ -64,6 +64,7 @@ const BusinessInventoryPage: React.FC = () => {
     businessLocations,
     loading: inventoryLoading,
     error: inventoryError,
+    fetchInventory,
     updateInventoryItem,
     deleteInventoryItem,
     refreshBusinessLocations,
@@ -306,7 +307,10 @@ const BusinessInventoryPage: React.FC = () => {
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
         item={updatingInventoryItem}
-        businessLocations={businessLocations}
+        selectedInventory={updatingInventoryItem}
+        onInventoryUpdated={() => {
+          fetchInventory(); // Refresh inventory list
+        }}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -86,6 +86,7 @@ export default function AddItemDialog({
     business_id: businessId,
     is_active: true,
     min_order_quantity: 1,
+    max_order_quantity: 1,
   });
   const [newBrandData, setNewBrandData] = useState<CreateBrandData>({
     name: '',

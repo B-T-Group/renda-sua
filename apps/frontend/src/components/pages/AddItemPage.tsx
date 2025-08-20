@@ -8,8 +8,12 @@ import {
   Button,
   Container,
   Divider,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -18,6 +22,7 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { CURRENCIES } from '../../constants/enums';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
@@ -73,7 +78,7 @@ const AddItemPage: React.FC = () => {
     max_delivery_distance: null,
     estimated_delivery_time: null,
     min_order_quantity: 1,
-    max_order_quantity: null,
+    max_order_quantity: 1,
     item_sub_category_id: null,
     is_active: true,
   });
@@ -82,9 +87,7 @@ const AddItemPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const {
-    brands,
     itemSubCategories,
-    loading: dataLoading,
     error: dataError,
     fetchBrands,
     fetchItemSubCategories,
@@ -134,9 +137,10 @@ const AddItemPage: React.FC = () => {
       const itemData = {
         ...formData,
         business_id: profile.business.id,
-        // Coerce nullable numerics to undefined to satisfy CreateItemData
+        // Coerce nullable values to undefined to satisfy CreateItemData
         size: formData.size ?? undefined,
         weight: formData.weight ?? undefined,
+        brand_id: formData.brand_id ?? undefined,
         max_delivery_distance: formData.max_delivery_distance ?? undefined,
         estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
         max_order_quantity: formData.max_order_quantity ?? undefined,
@@ -276,15 +280,22 @@ const AddItemPage: React.FC = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={t('business.items.currency')}
-                value={formData.currency}
-                onChange={(e) => handleInputChange('currency', e.target.value)}
-                required
-                disabled={loading}
-                defaultValue="USD"
-              />
+              <FormControl fullWidth required disabled={loading}>
+                <InputLabel>{t('business.items.currency')}</InputLabel>
+                <Select
+                  value={formData.currency}
+                  onChange={(e) =>
+                    handleInputChange('currency', e.target.value)
+                  }
+                  label={t('business.items.currency')}
+                >
+                  {CURRENCIES.map((currency) => (
+                    <MenuItem key={currency} value={currency}>
+                      {currency}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             {/* Specifications */}

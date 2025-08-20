@@ -1,7 +1,14 @@
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Close as CloseIcon,
+  Delete as DeleteIcon,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
+  Card,
+  CardActions,
+  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -10,6 +17,7 @@ import {
   ImageList,
   ImageListItem,
   ImageListItemBar,
+  Paper,
   Stack,
   TextField,
   Typography,
@@ -174,21 +182,52 @@ export default function ImageUploadDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        {t('business.inventory.uploadImagesFor', { itemName })}
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6" component="div">
+            {t('business.inventory.uploadImagesFor', { itemName })}
+          </Typography>
+          <IconButton
+            edge="end"
+            color="inherit"
+            onClick={onClose}
+            aria-label={t('common.close')}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3}>
           {/* Current Images */}
           {images.length > 0 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
+            <Paper variant="outlined" sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ color: 'primary.main', fontWeight: 600 }}
+              >
                 {t('business.inventory.currentImages')} ({images.length}/
                 {MAX_IMAGES})
               </Typography>
               <ImageList
-                sx={{ width: '100%', height: 200 }}
+                sx={{
+                  width: '100%',
+                  height: 240,
+                  '& .MuiImageListItem-root': {
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    transition:
+                      'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                    },
+                  },
+                }}
                 cols={3}
-                rowHeight={164}
+                rowHeight={180}
+                gap={12}
               >
                 {images.map((image) => (
                   <ImageListItem key={image.id}>
@@ -196,12 +235,29 @@ export default function ImageUploadDialog({
                       src={image.image_url}
                       alt={image.alt_text || itemName}
                       loading="lazy"
-                      style={{ objectFit: 'cover' }}
+                      style={{
+                        objectFit: 'cover',
+                        height: '100%',
+                        width: '100%',
+                      }}
                     />
                     <ImageListItemBar
+                      position="bottom"
+                      sx={{
+                        background:
+                          'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+                        '& .MuiImageListItemBar-actionIcon': {
+                          color: 'white',
+                        },
+                      }}
                       actionIcon={
                         <IconButton
-                          sx={{ color: 'white' }}
+                          sx={{
+                            color: 'white',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.2)',
+                            },
+                          }}
                           aria-label={t('common.delete')}
                           onClick={() => handleDeleteImage(image.id)}
                         >
@@ -212,22 +268,43 @@ export default function ImageUploadDialog({
                   </ImageListItem>
                 ))}
               </ImageList>
-            </Box>
+            </Paper>
           )}
 
           {/* File Upload */}
           {canUploadMore && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                {t('business.inventory.addNewImages')} ({selectedFiles.length}{' '}
-                selected)
+            <Paper variant="outlined" sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ color: 'primary.main', fontWeight: 600 }}
+              >
+                {t('business.inventory.addNewImages')}
+                {selectedFiles.length > 0 && (
+                  <Typography
+                    component="span"
+                    sx={{ color: 'text.secondary', fontWeight: 400, ml: 1 }}
+                  >
+                    ({selectedFiles.length} selected)
+                  </Typography>
+                )}
               </Typography>
 
               <Button
-                variant="outlined"
+                variant="contained"
                 component="label"
                 startIcon={<AddIcon />}
-                sx={{ mb: 2 }}
+                sx={{
+                  mb: 2,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  px: 3,
+                  py: 1.5,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  '&:hover': {
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  },
+                }}
               >
                 {t('business.inventory.selectImages')}
                 <input
@@ -241,90 +318,178 @@ export default function ImageUploadDialog({
 
               {/* Selected Files */}
               {selectedFiles.length > 0 && (
-                <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      'repeat(auto-fill, minmax(240px, 1fr))',
+                    gap: 2,
+                  }}
+                >
                   {selectedFiles.map((file, index) => (
-                    <Box
+                    <Card
                       key={index}
                       sx={{
-                        width: 200,
-                        border: 1,
-                        borderColor: 'grey.300',
-                        borderRadius: 1,
-                        p: 2,
+                        borderRadius: 2,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        transition:
+                          'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                        },
                       }}
                     >
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={file.name}
-                        style={{
-                          width: '100%',
-                          height: 120,
-                          objectFit: 'cover',
-                          borderRadius: 4,
-                        }}
-                      />
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        sx={{ mt: 1 }}
-                      >
-                        {file.name}
-                      </Typography>
+                      <CardContent sx={{ p: 2 }}>
+                        <Box
+                          sx={{
+                            position: 'relative',
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            mb: 2,
+                          }}
+                        >
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            style={{
+                              width: '100%',
+                              height: 140,
+                              objectFit: 'cover',
+                            }}
+                          />
+                        </Box>
 
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label={t('business.inventory.altText')}
-                        value={altTexts[`file-${index}`] || ''}
-                        onChange={(e) =>
-                          setAltTexts((prev) => ({
-                            ...prev,
-                            [`file-${index}`]: e.target.value,
-                          }))
-                        }
-                        sx={{ mt: 1 }}
-                      />
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{
+                            mb: 2,
+                            fontWeight: 500,
+                            color: 'text.secondary',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {file.name}
+                        </Typography>
 
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label={t('business.inventory.caption')}
-                        value={captions[`file-${index}`] || ''}
-                        onChange={(e) =>
-                          setCaptions((prev) => ({
-                            ...prev,
-                            [`file-${index}`]: e.target.value,
-                          }))
-                        }
-                        sx={{ mt: 1 }}
-                      />
+                        <Stack spacing={1.5}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label={t('business.inventory.altText')}
+                            value={altTexts[`file-${index}`] || ''}
+                            onChange={(e) =>
+                              setAltTexts((prev) => ({
+                                ...prev,
+                                [`file-${index}`]: e.target.value,
+                              }))
+                            }
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                              },
+                            }}
+                          />
 
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => removeSelectedFile(index)}
-                        sx={{ mt: 1 }}
-                      >
-                        {t('common.remove')}
-                      </Button>
-                    </Box>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label={t('business.inventory.caption')}
+                            value={captions[`file-${index}`] || ''}
+                            onChange={(e) =>
+                              setCaptions((prev) => ({
+                                ...prev,
+                                [`file-${index}`]: e.target.value,
+                              }))
+                            }
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                              },
+                            }}
+                          />
+                        </Stack>
+                      </CardContent>
+
+                      <CardActions sx={{ p: 2, pt: 0 }}>
+                        <Button
+                          fullWidth
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => removeSelectedFile(index)}
+                          sx={{
+                            borderRadius: 1.5,
+                            textTransform: 'none',
+                          }}
+                        >
+                          {t('common.remove')}
+                        </Button>
+                      </CardActions>
+                    </Card>
                   ))}
-                </Stack>
+                </Box>
               )}
-            </Box>
+            </Paper>
           )}
 
           {!canUploadMore && (
-            <Typography color="text.secondary">
-              {t('business.inventory.maxImagesReached', { max: MAX_IMAGES })}
-            </Typography>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 3,
+                textAlign: 'center',
+                backgroundColor: 'grey.50',
+                border: '1px dashed',
+                borderColor: 'grey.300',
+              }}
+            >
+              <Typography
+                color="text.secondary"
+                sx={{
+                  fontWeight: 500,
+                  fontSize: '1rem',
+                }}
+              >
+                {t('business.inventory.maxImagesReached', { max: MAX_IMAGES })}
+              </Typography>
+            </Paper>
           )}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
+      <DialogActions sx={{ p: 3, gap: 2, backgroundColor: 'grey.50' }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          sx={{
+            borderRadius: 2,
+            textTransform: 'none',
+            px: 3,
+            py: 1,
+          }}
+        >
+          {t('common.cancel')}
+        </Button>
         {selectedFiles.length > 0 && (
-          <Button onClick={handleUpload} variant="contained" disabled={loading}>
+          <Button
+            onClick={handleUpload}
+            variant="contained"
+            disabled={loading}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              px: 3,
+              py: 1,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              '&:hover': {
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              },
+            }}
+          >
             {loading
               ? t('common.uploading')
               : t('business.inventory.uploadImages')}
