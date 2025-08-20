@@ -17,10 +17,14 @@
     "showDetails": "Afficher les détails",
     "hideDetails": "Masquer les détails",
     "created": "Créé",
+    "verified": "Vérifié",
     "allCategories": "Toutes les catégories",
     "allBrands": "Toutes les marques",
     "orderNow": "Commander maintenant",
     "showing": "Affichage",
+    "of": "de",
+    "delete": "Supprimer",
+    "done": "Terminé",
     "errorLoadingData": "Erreur lors du chargement des données",
     "orderStatus": {
       "pending": "En attente",
@@ -87,6 +91,9 @@
       "name": "Nom",
       "description": "Description",
       "sku": "Référence",
+      "downloadTemplate": "Télécharger le modèle",
+      "csvUpload": "Téléchargement CSV",
+      "items": "Articles",
       "skuHelper": "Code article unique - identifiant unique pour l'article",
       "currency": "Devise",
       "size": "Taille",
@@ -110,13 +117,10 @@
       "cardsView": "Vue cartes",
       "tableView": "Vue tableau",
       "download": "Télécharger",
-      "downloadTemplate": "Télécharger le modèle",
-      "csvUpload": "Téléchargement CSV",
       "noItemsFound": "Aucun article trouvé",
       "noItemsToDownload": "Aucun article à télécharger",
       "downloadSuccess": "Articles téléchargés avec succès",
       "image": "Image",
-      "items": "articles",
       "fragile": "Fragile",
       "perishable": "Périssable",
       "specialHandling": "Manutention spéciale",
@@ -130,7 +134,6 @@
       "imageManagementDescription": "Gérer les images pour cet article",
       "noImagesFound": "Aucune image trouvée",
       "galleryImages": "Images de galerie",
-      "csvUpload": "Téléchargement CSV",
       "imageTypes": {
         "main": "Image principale",
         "thumbnail": "Miniature",
@@ -153,12 +156,15 @@
       "manageImages": "Gérer les images",
       "inventoryManagement": "Gestion de l'inventaire",
       "inventoryDescription": "Gérer les niveaux d'inventaire dans tous les emplacements",
+      "available": "Disponible",
       "availableQuantity": "Quantité disponible",
       "totalQuantity": "Quantité totale",
       "reservedQuantity": "Quantité réservée",
       "sellingPrice": "Prix de vente",
       "reorderPoint": "Point de réapprovisionnement",
+      "addItem": "Ajouter un article",
       "noInventoryFound": "Aucun inventaire trouvé",
+      "noItemsFound": "Aucun article trouvé",
       "noLocationsError": "Aucun emplacement d'entreprise trouvé. Veuillez d'abord ajouter des emplacements.",
       "deleteInventoryConfirm": "Êtes-vous sûr de vouloir supprimer cet enregistrement d'inventaire ?",
       "addNewImages": "Ajouter de nouvelles images",
@@ -173,7 +179,18 @@
       "existingInventoryLoaded": "Données d'inventaire existantes chargées pour {{locationName}}",
       "sku": "Référence",
       "category": "Catégorie",
-      "pricing": "Tarification"
+      "pricing": "Tarification",
+      "description": "Description",
+      "price": "Prix",
+      "currency": "Devise",
+      "size": "Taille",
+      "sizeUnit": "Unité de taille",
+      "weight": "Poids",
+      "weightUnit": "Unité de poids",
+      "color": "Couleur",
+      "model": "Modèle",
+      "brand": "Marque",
+      "active": "Actif"
     },
     "locations": {
       "title": "Emplacements",
@@ -215,6 +232,7 @@
       "contactInformation": "Informations de contact"
     },
     "orders": {
+      "title": "Commandes",
       "subtitle": "Gérez et suivez toutes vos commandes clients",
       "filters": {
         "search": "Rechercher des commandes...",
@@ -253,6 +271,7 @@
         "thankYou": "Merci pour votre commande !",
         "whatToExpect": "Voici ce à quoi vous attendre :",
         "step1": {
+          "title": "Confirmation par E-mail",
           "description": "Vous recevrez un e-mail de confirmation avec les détails de la commande"
         },
         "step2": {
@@ -297,6 +316,7 @@
       "viewHistory": "Voir l'historique"
     },
     "allOrders": "Toutes les Commandes",
+    "noOrdersFound": "Aucune commande trouvée",
     "brand": "Marque",
     "color": "Couleur",
     "confirmTitle": "Confirmer l'Action",
@@ -493,10 +513,20 @@
     }
   },
   "seo": {
+    "home": {
+      "title": "Rendasua - Marché d'Entreprises Locales",
+      "description": "Découvrez des produits incroyables d'entreprises locales. Commandez en ligne, suivez les livraisons et soutenez votre communauté.",
+      "keywords": "marché local, entreprise locale, achats en ligne, marché communautaire, service de livraison"
+    },
     "business-dashboard": {
       "title": "Tableau de Bord Entreprise - Gérez vos Opérations",
       "description": "Tableau de bord complet pour gérer les commandes, l'inventaire et les opérations commerciales",
       "keywords": "tableau de bord entreprise, gestion des commandes, gestion d'inventaire, opérations commerciales"
+    },
+    "business-items": {
+      "title": "Articles d'Entreprise - Gérez votre Catalogue de Produits",
+      "description": "Gérez votre catalogue de produits d'entreprise, ajoutez de nouveaux articles, mettez à jour les prix et organisez l'inventaire dans tous les emplacements",
+      "keywords": "articles d'entreprise, catalogue de produits, gestion d'inventaire, gestion d'articles, produits d'entreprise"
     },
     "public-items": {
       "title": "Parcourir les Articles - Découvrez les Produits Locaux",
