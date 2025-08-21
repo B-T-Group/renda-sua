@@ -101,7 +101,6 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     // Grant EventBridge permission to invoke the Lambda function
     refreshMobilePaymentsKeyFunction.addPermission('EventBridgeInvoke', {
       principal: new iam.ServicePrincipal('events.amazonaws.com'),
-      sourceArn: refreshKeyRule.ruleArn,
       action: 'lambda:InvokeFunction',
     });
 
