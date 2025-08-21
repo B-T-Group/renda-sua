@@ -1,0 +1,456 @@
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  MyPVitPaymentRequest,
+  MyPVitService,
+} from './providers/mypvit.service';
+
+export interface MobilePaymentRequest {
+  amount: number;
+  currency: string;
+  reference: string;
+  description: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  callbackUrl?: string;
+  returnUrl?: string;
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
+  paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
+}
+
+export interface MobilePaymentResponse {
+  success: boolean;
+  transactionId?: string;
+  paymentUrl?: string;
+  message?: string;
+  errorCode?: string;
+  provider?: string;
+}
+
+export interface MobileTransactionStatus {
+  transactionId: string;
+  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  amount: number;
+  currency: string;
+  reference: string;
+  message?: string;
+  provider?: string;
+}
+
+export interface PaymentProvider {
+  name: string;
+  supportedMethods: string[];
+  supportedCurrencies: string[];
+  isAvailable: boolean;
+}
+
+@Injectable()
+export class MobilePaymentsService {
+  private readonly logger = new Logger(MobilePaymentsService.name);
+  private readonly providers: Map<string, any> = new Map();
+
+  constructor(private readonly myPVitService: MyPVitService) {
+    // Register payment providers
+    this.providers.set('mypvit', myPVitService);
+  }
+
+  /**
+   * Get available payment providers
+   */
+  async getAvailableProviders(): Promise<PaymentProvider[]> {
+    const providers: PaymentProvider[] = [];
+
+    // MyPVit provider
+    const mypvitAvailable = await this.myPVitService.testConnection();
+    providers.push({
+      name: 'MyPVit',
+      supportedMethods: ['mobile_money', 'card'],
+      supportedCurrencies: ['XAF', 'USD', 'EUR'],
+      isAvailable: mypvitAvailable,
+    });
+
+    return providers;
+  }
+
+  /**
+   * Get supported payment methods for a provider
+   */
+  async getSupportedPaymentMethods(provider: string): Promise<string[]> {
+    switch (provider.toLowerCase()) {
+      case 'mypvit':
+        return await this.myPVitService.getSupportedPaymentMethods();
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Initiate a mobile payment
+   */
+  async initiatePayment(
+    paymentRequest: MobilePaymentRequest
+  ): Promise<MobilePaymentResponse> {
+    try {
+      this.logger.log(
+        `Initiating mobile payment for reference: ${paymentRequest.reference}`
+      );
+
+      // Determine the best provider based on request
+      const provider = this.selectProvider(paymentRequest);
+
+      if (!provider) {
+        return {
+          success: false,
+          message: 'No suitable payment provider available',
+          errorCode: 'NO_PROVIDER_AVAILABLE',
+        };
+      }
+
+      // Convert to provider-specific request
+      const providerRequest = this.convertToProviderRequest(
+        paymentRequest,
+        provider
+      );
+
+      let response: MobilePaymentResponse;
+
+      switch (provider) {
+        case 'mypvit':
+          const mypvitResponse = await this.myPVitService.initiatePayment(
+            providerRequest as MyPVitPaymentRequest
+          );
+          response = {
+            success: mypvitResponse.success,
+            transactionId: mypvitResponse.transactionId,
+            paymentUrl: mypvitResponse.paymentUrl,
+            message: mypvitResponse.message,
+            errorCode: mypvitResponse.errorCode,
+            provider: 'mypvit',
+          };
+          break;
+        default:
+          return {
+            success: false,
+            message: `Unsupported payment provider: ${provider}`,
+            errorCode: 'UNSUPPORTED_PROVIDER',
+          };
+      }
+
+      // Log the payment initiation
+      await this.logPaymentInitiation(paymentRequest, response);
+
+      return response;
+    } catch (error) {
+      this.logger.error('Failed to initiate mobile payment:', error);
+      return {
+        success: false,
+        message: 'Failed to initiate payment',
+        errorCode: 'INITIATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Check transaction status
+   */
+  async checkTransactionStatus(
+    transactionId: string,
+    provider?: string
+  ): Promise<MobileTransactionStatus> {
+    try {
+      this.logger.log(`Checking transaction status for: ${transactionId}`);
+
+      // Determine provider if not specified
+      const paymentProvider =
+        provider || (await this.detectProvider(transactionId));
+
+      if (!paymentProvider) {
+        throw new Error('Unable to determine payment provider');
+      }
+
+      let status: MobileTransactionStatus;
+
+      switch (paymentProvider) {
+        case 'mypvit':
+          const mypvitStatus = await this.myPVitService.checkTransactionStatus(
+            transactionId
+          );
+          status = {
+            transactionId: mypvitStatus.transactionId,
+            status: mypvitStatus.status,
+            amount: mypvitStatus.amount,
+            currency: mypvitStatus.currency,
+            reference: mypvitStatus.reference,
+            message: mypvitStatus.message,
+            provider: 'mypvit',
+          };
+          break;
+        default:
+          throw new Error(`Unsupported payment provider: ${paymentProvider}`);
+      }
+
+      // Log the status check
+      await this.logStatusCheck(transactionId, status);
+
+      return status;
+    } catch (error) {
+      this.logger.error('Failed to check transaction status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel a pending transaction
+   */
+  async cancelTransaction(
+    transactionId: string,
+    provider?: string
+  ): Promise<boolean> {
+    try {
+      this.logger.log(`Cancelling transaction: ${transactionId}`);
+
+      const paymentProvider =
+        provider || (await this.detectProvider(transactionId));
+
+      if (!paymentProvider) {
+        throw new Error('Unable to determine payment provider');
+      }
+
+      let success: boolean;
+
+      switch (paymentProvider) {
+        case 'mypvit':
+          success = await this.myPVitService.cancelTransaction(transactionId);
+          break;
+        default:
+          throw new Error(`Unsupported payment provider: ${paymentProvider}`);
+      }
+
+      // Log the cancellation
+      await this.logTransactionCancellation(transactionId, success);
+
+      return success;
+    } catch (error) {
+      this.logger.error('Failed to cancel transaction:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verify payment callback
+   */
+  async verifyCallback(
+    payload: any,
+    signature: string,
+    timestamp: string,
+    provider: string
+  ): Promise<boolean> {
+    try {
+      switch (provider.toLowerCase()) {
+        case 'mypvit':
+          return await this.myPVitService.verifyCallback(
+            payload,
+            signature,
+            timestamp
+          );
+        default:
+          this.logger.warn(
+            `Unsupported provider for callback verification: ${provider}`
+          );
+          return false;
+      }
+    } catch (error) {
+      this.logger.error('Failed to verify callback:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get transaction history
+   */
+  async getTransactionHistory(filters?: {
+    provider?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<any[]> {
+    try {
+      const provider = filters?.provider || 'mypvit';
+
+      switch (provider.toLowerCase()) {
+        case 'mypvit':
+          return await this.myPVitService.getTransactionHistory(filters);
+        default:
+          this.logger.warn(
+            `Unsupported provider for transaction history: ${provider}`
+          );
+          return [];
+      }
+    } catch (error) {
+      this.logger.error('Failed to get transaction history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check merchant balance
+   */
+  async checkBalance(
+    provider: string = 'mypvit'
+  ): Promise<{ balance: number; currency: string }> {
+    try {
+      switch (provider.toLowerCase()) {
+        case 'mypvit':
+          return await this.myPVitService.checkBalance();
+        default:
+          throw new Error(
+            `Unsupported provider for balance check: ${provider}`
+          );
+      }
+    } catch (error) {
+      this.logger.error('Failed to check balance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Renew secret key
+   */
+  async renewSecretKey(
+    provider: string = 'mypvit'
+  ): Promise<{ success: boolean; newSecretKey?: string; message?: string }> {
+    try {
+      switch (provider.toLowerCase()) {
+        case 'mypvit':
+          return await this.myPVitService.renewSecretKey();
+        default:
+          throw new Error(
+            `Unsupported provider for secret key renewal: ${provider}`
+          );
+      }
+    } catch (error) {
+      this.logger.error('Failed to renew secret key:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Perform KYC verification
+   */
+  async performKYC(
+    kycData: {
+      customerPhone: string;
+      customerName: string;
+      customerId?: string;
+      customerEmail?: string;
+    },
+    provider: string = 'mypvit'
+  ): Promise<{ success: boolean; kycStatus: string; message?: string }> {
+    try {
+      switch (provider.toLowerCase()) {
+        case 'mypvit':
+          return await this.myPVitService.performKYC(kycData);
+        default:
+          throw new Error(`Unsupported provider for KYC: ${provider}`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to perform KYC:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Select the best payment provider based on request
+   */
+  private selectProvider(request: MobilePaymentRequest): string | null {
+    // If provider is explicitly specified, use it
+    if (request.provider) {
+      return request.provider;
+    }
+
+    // Default to MyPVit for now
+    return 'mypvit';
+  }
+
+  /**
+   * Convert generic request to provider-specific request
+   */
+  private convertToProviderRequest(
+    request: MobilePaymentRequest,
+    provider: string
+  ): any {
+    switch (provider) {
+      case 'mypvit':
+        return {
+          amount: request.amount,
+          currency: request.currency,
+          reference: request.reference,
+          description: request.description,
+          customerPhone: request.customerPhone,
+          customerEmail: request.customerEmail,
+          callbackUrl: request.callbackUrl,
+          returnUrl: request.returnUrl,
+        } as MyPVitPaymentRequest;
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+  }
+
+  /**
+   * Detect provider from transaction ID
+   */
+  private async detectProvider(transactionId: string): Promise<string | null> {
+    // This is a simplified implementation
+    // In a real scenario, you might store provider information with the transaction
+    // For now, we'll try MyPVit first
+    try {
+      await this.myPVitService.checkTransactionStatus(transactionId);
+      return 'mypvit';
+    } catch (error) {
+      // Try other providers here when they're implemented
+      return null;
+    }
+  }
+
+  /**
+   * Log payment initiation
+   */
+  private async logPaymentInitiation(
+    request: MobilePaymentRequest,
+    response: MobilePaymentResponse
+  ): Promise<void> {
+    // TODO: Implement logging to database
+    this.logger.log(
+      `Payment initiated: ${request.reference} -> ${
+        response.success ? 'SUCCESS' : 'FAILED'
+      }`
+    );
+  }
+
+  /**
+   * Log status check
+   */
+  private async logStatusCheck(
+    transactionId: string,
+    status: MobileTransactionStatus
+  ): Promise<void> {
+    // TODO: Implement logging to database
+    this.logger.log(`Status checked: ${transactionId} -> ${status.status}`);
+  }
+
+  /**
+   * Log transaction cancellation
+   */
+  private async logTransactionCancellation(
+    transactionId: string,
+    success: boolean
+  ): Promise<void> {
+    // TODO: Implement logging to database
+    this.logger.log(
+      `Transaction cancelled: ${transactionId} -> ${
+        success ? 'SUCCESS' : 'FAILED'
+      }`
+    );
+  }
+}

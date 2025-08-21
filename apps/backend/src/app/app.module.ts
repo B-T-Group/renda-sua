@@ -6,14 +6,13 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
-import { AirtelMoneyController } from '../airtel-money/airtel-money.controller';
-import { AirtelMoneyModule } from '../airtel-money/airtel-money.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrdersModule } from '../orders/orders.module';
@@ -58,16 +57,11 @@ import { AppService } from './app.service';
     AgentsModule,
     AwsModule,
     MtnMomoModule,
-    AirtelMoneyModule,
+    MobilePaymentsModule,
     GoogleModule,
     AdminModule,
   ],
-  controllers: [
-    AppController,
-    AccountsController,
-    MtnMomoController,
-    AirtelMoneyController,
-  ],
+  controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],
 })
 export class AppModule {}
