@@ -90,14 +90,12 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         ruleName: `refresh-mobile-payments-key-rule-${environment}`,
         description: 'Triggers mobile payments key refresh every 45 minutes',
         schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
+        targets: [
+          new targets.LambdaFunction(refreshMobilePaymentsKeyFunction, {
+            retryAttempts: 3,
+          }),
+        ],
       }
-    );
-
-    // Add Lambda function as target to the rule
-    refreshKeyRule.addTarget(
-      new targets.LambdaFunction(refreshMobilePaymentsKeyFunction, {
-        retryAttempts: 3,
-      })
     );
 
     // Output the function ARN
