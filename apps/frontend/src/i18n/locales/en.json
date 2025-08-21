@@ -25,6 +25,13 @@
     "of": "of",
     "delete": "Delete",
     "done": "Done",
+    "filters": "Filters",
+    "business": "Business",
+    "location": "Location",
+    "category": "Category",
+    "subcategory": "Subcategory",
+    "searchItems": "Search items...",
+    "priceRange": "Price Range",
     "errorLoadingData": "Error loading data",
     "orderStatus": {
       "pending": "Pending",

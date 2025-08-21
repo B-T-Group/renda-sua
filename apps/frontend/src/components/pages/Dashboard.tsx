@@ -18,9 +18,11 @@ import {
   useInventoryItems,
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
+import { InventoryItem } from '../../hooks/useInventoryItems';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
+import ItemsFilter from '../common/ItemsFilter';
 import StatusBadge from '../common/StatusBadge';
 import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 import OrderDialog from '../dialogs/OrderDialog';
@@ -56,6 +58,7 @@ const Dashboard: React.FC = () => {
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState<string>('');
+  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
 
   // Assume USD as default currency for items since business_inventory doesn't have currency field
   const DEFAULT_ITEM_CURRENCY = 'USD';
@@ -83,6 +86,11 @@ const Dashboard: React.FC = () => {
       fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
     }
   }, [destinationAddressIds.join(',')]);
+
+  // Initialize filtered items when inventory items change
+  React.useEffect(() => {
+    setFilteredItems(inventoryItems);
+  }, [inventoryItems]);
 
   // Helper to get distance/duration for an item
   const getItemDistanceInfo = (item: any) => {
@@ -279,6 +287,15 @@ const Dashboard: React.FC = () => {
           Available Items
         </Typography>
 
+        {/* Filter Component */}
+        {inventoryItems.length > 0 && (
+          <ItemsFilter
+            items={inventoryItems}
+            onFilterChange={setFilteredItems}
+            loading={inventoryLoading}
+          />
+        )}
+
         {inventoryItems.length === 0 ? (
           <Box
             display="flex"
@@ -303,27 +320,29 @@ const Dashboard: React.FC = () => {
               gap: 3,
             }}
           >
-            {inventoryItems.map((item) => {
-              const canAfford = canAffordItem(item);
-              const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
-              const distanceInfo = getItemDistanceInfo(item);
-              return (
-                <DashboardItemCard
-                  key={item.id}
-                  item={item}
-                  canAfford={canAfford}
-                  account={account}
-                  insufficientFundsMessage={getInsufficientFundsMessage(item)}
-                  formatCurrency={formatCurrency}
-                  onOrderClick={handleOrderClick}
-                  onTopUpClick={handleTopUpClick}
-                  estimatedDistance={distanceInfo?.distance}
-                  estimatedDuration={distanceInfo?.duration}
-                  distanceLoading={distanceLoading}
-                  distanceError={distanceError}
-                />
-              );
-            })}
+            {(filteredItems.length > 0 ? filteredItems : inventoryItems).map(
+              (item) => {
+                const canAfford = canAffordItem(item);
+                const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
+                const distanceInfo = getItemDistanceInfo(item);
+                return (
+                  <DashboardItemCard
+                    key={item.id}
+                    item={item}
+                    canAfford={canAfford}
+                    account={account}
+                    insufficientFundsMessage={getInsufficientFundsMessage(item)}
+                    formatCurrency={formatCurrency}
+                    onOrderClick={handleOrderClick}
+                    onTopUpClick={handleTopUpClick}
+                    estimatedDistance={distanceInfo?.distance}
+                    estimatedDuration={distanceInfo?.duration}
+                    distanceLoading={distanceLoading}
+                    distanceError={distanceError}
+                  />
+                );
+              }
+            )}
           </Box>
         )}
       </Paper>

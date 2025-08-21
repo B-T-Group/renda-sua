@@ -25,6 +25,13 @@
     "of": "de",
     "delete": "Supprimer",
     "done": "Terminé",
+    "filters": "Filtres",
+    "business": "Entreprise",
+    "location": "Emplacement",
+    "category": "Catégorie",
+    "subcategory": "Sous-catégorie",
+    "searchItems": "Rechercher des articles...",
+    "priceRange": "Fourchette de prix",
     "errorLoadingData": "Erreur lors du chargement des données",
     "orderStatus": {
       "pending": "En attente",
