@@ -11,6 +11,9 @@
     },
     {
       "path": "./apps/backend-e2e.bak"
+    },
+    {
+      "path": "./apps/cdk"
     }
   ]
 }

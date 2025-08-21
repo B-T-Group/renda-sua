@@ -77,5 +77,3 @@ jobs:
           echo "Deployed resources:"
           cd apps/cdk
           cdk list --context environment=${{ github.event.inputs.environment }}
-
-

@@ -14,7 +14,7 @@ describe('RendasuaInfrastructureStack', () => {
     // Check that Lambda function is created
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'refresh-mobile-payments-key-test',
-      Runtime: 'nodejs18.x',
+      Runtime: 'python3.9',
       Handler: 'refresh-mobile-payments-key.handler',
       Timeout: 300,
       MemorySize: 256,
@@ -48,8 +48,9 @@ describe('RendasuaInfrastructureStack', () => {
           {
             Effect: 'Allow',
             Action: [
-              'secretsmanager:UpdateSecret',
               'secretsmanager:GetSecretValue',
+              'secretsmanager:DescribeSecret',
+              'secretsmanager:ListSecrets',
             ],
           },
         ],

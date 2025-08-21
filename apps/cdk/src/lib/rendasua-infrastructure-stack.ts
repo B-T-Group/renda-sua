@@ -35,7 +35,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         functionName: `refresh-mobile-payments-key-${environment}`,
         runtime: lambda.Runtime.PYTHON_3_9,
         handler: 'refresh-mobile-payments-key.handler',
-        code: lambda.Code.fromAsset('../lambda'),
+        code: lambda.Code.fromAsset('lambda'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 256,
         layers: [requestsLayer],
@@ -44,17 +44,41 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           OPERATION_ACCOUNT_CODE: 'ACC_68A722C33473B', // Replace with actual operation account code
           RECEPTION_URL_CODE: 'TRUVU', // Replace with actual reception URL code
         },
-        logRetention: logs.RetentionDays.ONE_WEEK,
       }
     );
 
-    // Add permissions for Secrets Manager
+    // Add comprehensive permissions for Secrets Manager
     refreshMobilePaymentsKeyFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['secretsmanager:GetSecretValue'],
+        actions: [
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:DescribeSecret',
+          'secretsmanager:ListSecrets',
+        ],
         resources: [
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*-rendasua-backend-secrets*`,
           `arn:aws:secretsmanager:${this.region}:${this.account}:secret:development-rendasua-backend-secrets*`,
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:production-rendasua-backend-secrets*`,
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:staging-rendasua-backend-secrets*`,
+        ],
+      })
+    );
+
+    // Add CloudWatch Logs permissions for better logging
+    refreshMobilePaymentsKeyFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:DescribeLogGroups',
+          'logs:DescribeLogStreams',
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${refreshMobilePaymentsKeyFunction.functionName}:*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${refreshMobilePaymentsKeyFunction.functionName}`,
         ],
       })
     );
