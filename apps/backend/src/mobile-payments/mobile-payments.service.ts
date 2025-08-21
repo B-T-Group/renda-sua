@@ -315,27 +315,6 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Renew secret key
-   */
-  async renewSecretKey(
-    provider: string = 'mypvit'
-  ): Promise<{ success: boolean; newSecretKey?: string; message?: string }> {
-    try {
-      switch (provider.toLowerCase()) {
-        case 'mypvit':
-          return await this.myPVitService.renewSecretKey();
-        default:
-          throw new Error(
-            `Unsupported provider for secret key renewal: ${provider}`
-          );
-      }
-    } catch (error) {
-      this.logger.error('Failed to renew secret key:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Perform KYC verification
    */
   async performKYC(
@@ -356,6 +335,91 @@ export class MobilePaymentsService {
       }
     } catch (error) {
       this.logger.error('Failed to perform KYC:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update secret in AWS Secrets Manager
+   */
+  async updateSecretInSecretsManager(
+    secretName: string,
+    key: string,
+    value: string,
+    metadata?: Record<string, any>
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      this.logger.log(`Updating secret ${secretName} with key ${key}`);
+
+      // Get current secret value
+      const currentSecret = await this.getSecretValue(secretName);
+
+      // Update the secret with new key-value pair
+      const updatedSecret = {
+        ...currentSecret,
+        [key]: value,
+        ...metadata,
+      };
+
+      // Update the secret in AWS Secrets Manager
+      const { SecretsManagerClient, UpdateSecretCommand } = await import(
+        '@aws-sdk/client-secrets-manager'
+      );
+      const secretsManager = new SecretsManagerClient();
+
+      const command = new UpdateSecretCommand({
+        SecretId: secretName,
+        SecretString: JSON.stringify(updatedSecret),
+      });
+
+      await secretsManager.send(command);
+
+      this.logger.log(`Successfully updated secret ${secretName}`);
+
+      return {
+        success: true,
+        message: 'Secret updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to update secret ${secretName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get secret value from AWS Secrets Manager
+   */
+  private async getSecretValue(
+    secretName: string
+  ): Promise<Record<string, any>> {
+    try {
+      const { SecretsManagerClient, GetSecretValueCommand } = await import(
+        '@aws-sdk/client-secrets-manager'
+      );
+      const secretsManager = new SecretsManagerClient();
+
+      const command = new GetSecretValueCommand({
+        SecretId: secretName,
+      });
+
+      const response = await secretsManager.send(command);
+
+      if (!response.SecretString) {
+        return {};
+      }
+
+      return JSON.parse(response.SecretString);
+    } catch (error) {
+      // If secret doesn't exist, return empty object
+      if (
+        error instanceof Error &&
+        error.name === 'ResourceNotFoundException'
+      ) {
+        this.logger.warn(
+          `Secret ${secretName} not found, will create new secret`
+        );
+        return {};
+      }
       throw error;
     }
   }

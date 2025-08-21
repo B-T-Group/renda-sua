@@ -471,24 +471,68 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Renew secret key
+   * Handle secret refresh webhook callback
    */
-  @Post('renew-secret')
-  async renewSecretKey(@Query('provider') provider?: string) {
+  @Post('callback/secret-refresh')
+  async handleSecretRefreshCallback(
+    @Body()
+    webhookData: {
+      operation_account_code: string;
+      secret_key: string;
+      expires_in: number;
+    },
+    @Query('provider') provider?: string
+  ) {
     try {
-      const result = await this.mobilePaymentsService.renewSecretKey(provider);
+      console.log('Received secret refresh webhook:', {
+        operation_account_code: webhookData.operation_account_code,
+        secret_key: webhookData.secret_key.substring(0, 10) + '...',
+        expires_in: webhookData.expires_in,
+        provider,
+      });
+
+      // Validate webhook data
+      if (!webhookData.operation_account_code || !webhookData.secret_key) {
+        throw new Error(
+          'Missing required webhook data: operation_account_code or secret_key'
+        );
+      }
+
+      // Get environment from configuration or default to 'development'
+      const environment = process.env.NODE_ENV || 'development';
+      const secretName = `${environment}-rendasua-backend-secrets`;
+
+      console.log('Updating secret in AWS Secrets Manager:', secretName);
+
+      // Update the secret in AWS Secrets Manager
+      const result =
+        await this.mobilePaymentsService.updateSecretInSecretsManager(
+          secretName,
+          'MYPVIT_SECRET_KEY',
+          webhookData.secret_key,
+          {
+            operation_account_code: webhookData.operation_account_code,
+            expires_in: webhookData.expires_in,
+            updated_at: new Date().toISOString(),
+          }
+        );
+
       return {
-        success: result.success,
+        success: true,
         data: {
-          newSecretKey: result.newSecretKey,
-          message: result.message,
+          message: 'Secret key updated successfully',
+          secretName,
+          operation_account_code: webhookData.operation_account_code,
+          expires_in: webhookData.expires_in,
+          updated_at: new Date().toISOString(),
         },
       };
     } catch (error) {
+      console.error('Error handling secret refresh webhook:', error);
       throw new HttpException(
         {
           success: false,
-          message: 'Failed to renew secret key',
+          message: 'Failed to handle secret refresh webhook',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR

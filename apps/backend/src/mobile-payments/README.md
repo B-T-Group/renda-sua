@@ -71,10 +71,35 @@ POST /mobile-payments/initiate
 GET /mobile-payments/balance?provider=mypvit
 ```
 
-#### Renew Secret Key
+#### Secret Refresh Webhook Callback
 
 ```http
-POST /mobile-payments/renew-secret?provider=mypvit
+POST /mobile-payments/callback/secret-refresh?provider=mypvit
+```
+
+**Request Body:**
+
+```json
+{
+  "operation_account_code": "ACC_672CD66E148BD",
+  "secret_key": "sk_live_xxx",
+  "expires_in": 3600
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Secret key updated successfully",
+    "secretName": "development-rendasua-backend-secrets",
+    "operation_account_code": "ACC_672CD66E148BD",
+    "expires_in": 3600,
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
+}
 ```
 
 #### Perform KYC

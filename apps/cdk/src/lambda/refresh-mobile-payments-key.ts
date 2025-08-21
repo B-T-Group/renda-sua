@@ -23,8 +23,9 @@ export const handler = async (
 
   try {
     // Get environment variables
-    const operationAccountCode = process.env.OPERATION_ACCOUNT_CODE || '';
-    const receptionUrlCode = process.env.RECEPTION_URL_CODE || '';
+    const operationAccountCode =
+      process.env.OPERATION_ACCOUNT_CODE || 'ACC_68A722C33473B';
+    const receptionUrlCode = process.env.RECEPTION_URL_CODE || 'TRUVU';
 
     if (!operationAccountCode || !receptionUrlCode) {
       throw new Error(

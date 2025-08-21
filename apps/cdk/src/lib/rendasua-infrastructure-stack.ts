@@ -33,8 +33,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         memorySize: 256,
         environment: {
           ENVIRONMENT: environment,
-          OPERATION_ACCOUNT_CODE: 'XXXXXXXX', // Replace with actual operation account code
-          RECEPTION_URL_CODE: 'XXXXXXXX', // Replace with actual reception URL code
+          OPERATION_ACCOUNT_CODE: 'ACC_68A722C33473B', // Replace with actual operation account code
+          RECEPTION_URL_CODE: 'TRUVU', // Replace with actual reception URL code
         },
         logRetention: logs.RetentionDays.ONE_WEEK,
       }
@@ -44,9 +44,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     refreshMobilePaymentsKeyFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'secretsmanager:GetSecretValue',
-        ],
+        actions: ['secretsmanager:GetSecretValue'],
         resources: [
           `arn:aws:secretsmanager:${this.region}:${this.account}:secret:development-rendasua-backend-secrets*`,
         ],

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HasuraService } from '../hasura/hasura.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -47,7 +47,7 @@ export interface UpdateTransactionData {
 export class MobilePaymentsDatabaseService {
   private readonly logger = new Logger(MobilePaymentsDatabaseService.name);
 
-  constructor(private readonly hasuraService: HasuraService) {}
+  constructor(private readonly hasuraService: HasuraSystemService) {}
 
   /**
    * Create a new mobile payment transaction
@@ -88,7 +88,10 @@ export class MobilePaymentsDatabaseService {
         },
       };
 
-      const response = await this.hasuraService.request(mutation, variables);
+      const response = await this.hasuraService.executeMutation(
+        mutation,
+        variables
+      );
       return response.insert_mobile_payment_transactions_one;
     } catch (error) {
       this.logger.error('Failed to create mobile payment transaction:', error);
@@ -140,7 +143,10 @@ export class MobilePaymentsDatabaseService {
         },
       };
 
-      const response = await this.hasuraService.request(mutation, variables);
+      const response = await this.hasuraService.executeMutation(
+        mutation,
+        variables
+      );
       return response.update_mobile_payment_transactions_by_pk;
     } catch (error) {
       this.logger.error('Failed to update mobile payment transaction:', error);
@@ -181,7 +187,7 @@ export class MobilePaymentsDatabaseService {
       `;
 
       const variables = { id };
-      const response = await this.hasuraService.request(query, variables);
+      const response = await this.hasuraService.executeQuery(query, variables);
       return response.mobile_payment_transactions_by_pk;
     } catch (error) {
       this.logger.error('Failed to get mobile payment transaction:', error);
