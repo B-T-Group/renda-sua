@@ -35,7 +35,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         functionName: `refresh-mobile-payments-key-${environment}`,
         runtime: lambda.Runtime.PYTHON_3_9,
         handler: 'refresh-mobile-payments-key.handler',
-        code: lambda.Code.fromAsset('lambda'),
+        code: lambda.Code.fromAsset('src/lambda'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 256,
         layers: [requestsLayer],
