@@ -20,17 +20,25 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
 
     const { environment } = props;
 
+    // Create Lambda layer for requests dependency
+    const requestsLayer = lambda.LayerVersion.fromLayerVersionArn(
+      this,
+      `RequestsLayer-${environment}`,
+      'arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p39-requests:1'
+    );
+
     // Create the mobile payments key refresh Lambda function
     const refreshMobilePaymentsKeyFunction = new lambda.Function(
       this,
       `RefreshMobilePaymentsKey-${environment}`,
       {
         functionName: `refresh-mobile-payments-key-${environment}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
+        runtime: lambda.Runtime.PYTHON_3_9,
         handler: 'refresh-mobile-payments-key.handler',
         code: lambda.Code.fromAsset('../lambda'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 256,
+        layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
           OPERATION_ACCOUNT_CODE: 'ACC_68A722C33473B', // Replace with actual operation account code
