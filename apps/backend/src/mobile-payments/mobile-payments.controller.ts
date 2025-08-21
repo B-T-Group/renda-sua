@@ -11,6 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Public } from '../auth/public.decorator';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -57,7 +58,7 @@ export class MobilePaymentsController {
         success: true,
         data: providers,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -81,7 +82,7 @@ export class MobilePaymentsController {
         success: true,
         data: methods,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -142,7 +143,7 @@ export class MobilePaymentsController {
           provider: paymentResponse.provider,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -183,7 +184,7 @@ export class MobilePaymentsController {
         success: true,
         data: status,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -221,7 +222,7 @@ export class MobilePaymentsController {
           ? 'Transaction cancelled successfully'
           : 'Failed to cancel transaction',
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -257,7 +258,7 @@ export class MobilePaymentsController {
         success: true,
         data: transaction,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
       }
@@ -296,7 +297,7 @@ export class MobilePaymentsController {
         success: true,
         data: transaction,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
       }
@@ -337,7 +338,7 @@ export class MobilePaymentsController {
         success: true,
         data: transactions,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -369,7 +370,7 @@ export class MobilePaymentsController {
         success: true,
         data: stats,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -384,6 +385,7 @@ export class MobilePaymentsController {
   /**
    * Payment callback endpoint
    */
+  @Public()
   @Post('callback/:provider')
   async paymentCallback(
     @Param('provider') provider: string,
@@ -427,7 +429,11 @@ export class MobilePaymentsController {
           );
         if (transaction) {
           await this.databaseService.updateTransaction(transaction.id, {
-            status: callbackData.status as any,
+            status: callbackData.status as
+              | 'pending'
+              | 'completed'
+              | 'failed'
+              | 'cancelled',
             error_message: callbackData.message,
           });
         }
@@ -438,7 +444,7 @@ export class MobilePaymentsController {
         success: true,
         message: 'Callback processed successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: 'Failed to process callback',
@@ -458,7 +464,7 @@ export class MobilePaymentsController {
         success: true,
         data: balance,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -473,6 +479,7 @@ export class MobilePaymentsController {
   /**
    * Handle secret refresh webhook callback
    */
+  @Public()
   @Post('callback/secret-refresh')
   async handleSecretRefreshCallback(
     @Body()
@@ -505,17 +512,16 @@ export class MobilePaymentsController {
       console.log('Updating secret in AWS Secrets Manager:', secretName);
 
       // Update the secret in AWS Secrets Manager
-      const result =
-        await this.mobilePaymentsService.updateSecretInSecretsManager(
-          secretName,
-          'MYPVIT_SECRET_KEY',
-          webhookData.secret_key,
-          {
-            operation_account_code: webhookData.operation_account_code,
-            expires_in: webhookData.expires_in,
-            updated_at: new Date().toISOString(),
-          }
-        );
+      await this.mobilePaymentsService.updateSecretInSecretsManager(
+        secretName,
+        'MYPVIT_SECRET_KEY',
+        webhookData.secret_key,
+        {
+          operation_account_code: webhookData.operation_account_code,
+          expires_in: webhookData.expires_in,
+          updated_at: new Date().toISOString(),
+        }
+      );
 
       return {
         success: true,
@@ -527,7 +533,7 @@ export class MobilePaymentsController {
           updated_at: new Date().toISOString(),
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error handling secret refresh webhook:', error);
       throw new HttpException(
         {
@@ -566,7 +572,7 @@ export class MobilePaymentsController {
           message: result.message,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
@@ -597,7 +603,7 @@ export class MobilePaymentsController {
           providers: availableProviders.map((p) => p.name),
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
         data: {
