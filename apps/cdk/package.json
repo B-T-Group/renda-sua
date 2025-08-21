@@ -1,0 +1,25 @@
+{
+  "name": "@rendasua/cdk",
+  "version": "0.0.0",
+  "description": "AWS CDK infrastructure for Rendasua",
+  "main": "src/main.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "diff": "cdk diff",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.0.0",
+    "typescript": "~5.8.2"
+  }
+}
