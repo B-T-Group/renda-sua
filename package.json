@@ -31,9 +31,13 @@
     "dev:backend:fast": "nx run backend:dev",
     "docker:build:backend": "nx run backend:docker-build",
     "cdk:deploy": "cd apps/cdk && cdk deploy",
+    "cdk:deploy:dev": "cd apps/cdk && cdk deploy --context environment=dev",
+    "cdk:deploy:staging": "cd apps/cdk && cdk deploy --context environment=staging",
+    "cdk:deploy:prod": "cd apps/cdk && cdk deploy --context environment=production",
     "cdk:destroy": "cd apps/cdk && cdk destroy",
     "cdk:diff": "cd apps/cdk && cdk diff",
-    "cdk:synth": "cd apps/cdk && cdk synth"
+    "cdk:synth": "cd apps/cdk && cdk synth",
+    "cdk:bootstrap": "cd apps/cdk && cdk bootstrap"
   },
   "private": true,
   "dependencies": {

@@ -1,0 +1,79 @@
+name: Deploy CDK Infrastructure to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  AWS_REGION: ca-central-1
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-cdk-production:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Bootstrap CDK (if needed)
+        run: |
+          cd apps/cdk
+          cdk bootstrap --require-approval never || echo "CDK already bootstrapped"
+
+      - name: Build CDK app
+        run: |
+          cd apps/cdk
+          npm run build
+
+      - name: Show deployment plan
+        run: |
+          cd apps/cdk
+          cdk diff --context environment=${{ github.event.inputs.environment }}
+
+      - name: Deploy CDK infrastructure to production
+        run: |
+          cd apps/cdk
+          cdk deploy --context environment=${{ github.event.inputs.environment }} --require-approval never
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Verify production deployment
+        run: |
+          echo "CDK production deployment completed successfully!"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Deployed resources:"
+          cd apps/cdk
+          cdk list --context environment=${{ github.event.inputs.environment }}

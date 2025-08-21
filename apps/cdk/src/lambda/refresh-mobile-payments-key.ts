@@ -2,7 +2,7 @@ import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
-import * as axios from 'axios';
+import axios from 'axios';
 
 interface RefreshMobilePaymentsKeyEvent {
   environment: string;
