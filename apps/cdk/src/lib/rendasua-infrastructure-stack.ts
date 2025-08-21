@@ -3,7 +3,6 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export interface RendasuaInfrastructureStackProps extends cdk.StackProps {
@@ -103,13 +102,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     refreshMobilePaymentsKeyFunction.addPermission('EventBridgeInvoke', {
       principal: new iam.ServicePrincipal('events.amazonaws.com'),
       sourceArn: refreshKeyRule.ruleArn,
-    });
-
-    // Create CloudWatch Log Group for the function
-    new logs.LogGroup(this, `RefreshMobilePaymentsKeyLogGroup-${environment}`, {
-      logGroupName: `/aws/lambda/${refreshMobilePaymentsKeyFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      action: 'lambda:InvokeFunction',
     });
 
     // Output the function ARN

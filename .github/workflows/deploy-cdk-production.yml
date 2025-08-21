@@ -22,7 +22,6 @@ permissions:
 jobs:
   deploy-cdk-production:
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
       - name: Checkout code
