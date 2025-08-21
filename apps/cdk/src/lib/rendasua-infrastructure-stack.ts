@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
@@ -46,57 +45,13 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Add comprehensive permissions for Secrets Manager
-    refreshMobilePaymentsKeyFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'secretsmanager:GetSecretValue',
-          'secretsmanager:DescribeSecret',
-          'secretsmanager:ListSecrets',
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*-rendasua-backend-secrets*`,
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:development-rendasua-backend-secrets*`,
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:production-rendasua-backend-secrets*`,
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:staging-rendasua-backend-secrets*`,
-        ],
-      })
-    );
-
-    // Add CloudWatch Logs permissions for better logging
-    refreshMobilePaymentsKeyFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogGroups',
-          'logs:DescribeLogStreams',
-        ],
-        resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${refreshMobilePaymentsKeyFunction.functionName}:*`,
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${refreshMobilePaymentsKeyFunction.functionName}`,
-        ],
-      })
-    );
-
     // Create EventBridge rule to trigger the function every 45 minutes
-    const refreshKeyRule = new events.Rule(
-      this,
-      `RefreshMobilePaymentsKeyRule-${environment}`,
-      {
-        ruleName: `refresh-mobile-payments-key-rule-${environment}`,
-        description: 'Triggers mobile payments key refresh every 45 minutes',
-        schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
-        targets: [
-          new targets.LambdaFunction(refreshMobilePaymentsKeyFunction, {
-            retryAttempts: 3,
-          }),
-        ],
-      }
-    );
+    new events.Rule(this, `RefreshMobilePaymentsKeyRule-${environment}`, {
+      ruleName: `refresh-mobile-payments-key-rule-${environment}`,
+      description: 'Triggers mobile payments key refresh every 45 minutes',
+      schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
+      targets: [new targets.LambdaFunction(refreshMobilePaymentsKeyFunction)],
+    });
 
     // Output the function ARN
     new cdk.CfnOutput(
@@ -119,12 +74,5 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         exportName: `RefreshMobilePaymentsKeyFunctionName-${environment}`,
       }
     );
-
-    // Output the EventBridge rule ARN
-    new cdk.CfnOutput(this, `RefreshMobilePaymentsKeyRuleArn-${environment}`, {
-      value: refreshKeyRule.ruleArn,
-      description: 'ARN of the mobile payments key refresh EventBridge rule',
-      exportName: `RefreshMobilePaymentsKeyRuleArn-${environment}`,
-    });
   }
 }
