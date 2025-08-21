@@ -480,7 +480,7 @@ export class MobilePaymentsController {
    * Handle secret refresh webhook callback
    */
   @Public()
-  @Post('callback/secret-refresh')
+  @Post('secret-refresh')
   async handleSecretRefreshCallback(
     @Body()
     webhookData: {

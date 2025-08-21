@@ -1,3 +1,7 @@
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -43,6 +47,7 @@ export class MyPVitService {
   private readonly logger = new Logger(MyPVitService.name);
   private readonly httpClient: AxiosInstance;
   private readonly config: MyPVitConfig;
+  private readonly secretsManager: SecretsManagerClient;
 
   constructor(private readonly configService: ConfigService) {
     this.config = {
@@ -52,12 +57,17 @@ export class MyPVitService {
       merchantSlug:
         this.configService.get<string>('MYPVIT_MERCHANT_SLUG') ||
         'MR_1755783875',
-      secretKey: this.configService.get<string>('MYPVIT_SECRET_KEY') || '',
+      secretKey: '', // Will be fetched from AWS Secrets Manager
       environment:
         (this.configService.get<string>('MYPVIT_ENVIRONMENT') as
           | 'test'
           | 'production') || 'test',
     };
+
+    // Initialize AWS Secrets Manager client
+    this.secretsManager = new SecretsManagerClient({
+      region: this.configService.get<string>('AWS_REGION') || 'ca-central-1',
+    });
 
     this.httpClient = axios.create({
       baseURL: this.config.baseUrl,
@@ -69,10 +79,20 @@ export class MyPVitService {
     });
 
     // Add request interceptor for authentication
-    this.httpClient.interceptors.request.use((config) => {
-      const timestamp = Date.now().toString();
-      const signature = this.generateSignature(config.data, timestamp);
+    this.httpClient.interceptors.request.use(async (config) => {
+      // Fetch secret from AWS Secrets Manager for every request
+      const secretKey = await this.getSecretKey();
 
+      const timestamp = Date.now().toString();
+      const signature = this.generateSignature(
+        config.data,
+        timestamp,
+        secretKey
+      );
+
+      config.headers['Content-Type'] = 'application/json';
+      config.headers['X-Secret'] = secretKey;
+      config.headers['X-Callback-MediaType'] = 'application/json';
       config.headers['X-Merchant-Slug'] = this.config.merchantSlug;
       config.headers['X-Timestamp'] = timestamp;
       config.headers['X-Signature'] = signature;
@@ -100,10 +120,50 @@ export class MyPVitService {
   }
 
   /**
+   * Get secret key from AWS Secrets Manager
+   */
+  private async getSecretKey(): Promise<string> {
+    try {
+      const environment =
+        this.configService.get<string>('NODE_ENV') || 'development';
+      const secretName = `${environment}-rendasua-backend-secrets`;
+
+      const command = new GetSecretValueCommand({
+        SecretId: secretName,
+      });
+
+      const response = await this.secretsManager.send(command);
+
+      if (!response.SecretString) {
+        throw new Error('Secret value is empty or not found');
+      }
+
+      const secretData = JSON.parse(response.SecretString);
+      const secretKey = secretData.MYPVIT_SECRET_KEY;
+
+      if (!secretKey) {
+        throw new Error('MYPVIT_SECRET_KEY not found in secret');
+      }
+
+      return secretKey;
+    } catch (error) {
+      this.logger.error(
+        'Failed to get secret key from AWS Secrets Manager:',
+        error
+      );
+      throw new Error('Failed to get MyPVit secret key');
+    }
+  }
+
+  /**
    * Generate signature for API authentication
    */
-  private generateSignature(data: any, timestamp: string): string {
-    const payload = JSON.stringify(data) + timestamp + this.config.secretKey;
+  private generateSignature(
+    data: any,
+    timestamp: string,
+    secretKey: string
+  ): string {
+    const payload = JSON.stringify(data) + timestamp + secretKey;
     return crypto.createHash('sha256').update(payload).digest('hex');
   }
 
@@ -201,7 +261,12 @@ export class MyPVitService {
     timestamp: string
   ): Promise<boolean> {
     try {
-      const expectedSignature = this.generateSignature(payload, timestamp);
+      const secretKey = await this.getSecretKey();
+      const expectedSignature = this.generateSignature(
+        payload,
+        timestamp,
+        secretKey
+      );
       return signature === expectedSignature;
     } catch (error) {
       this.logger.error('Failed to verify callback signature:', error);
