@@ -50,6 +50,11 @@ jobs:
           cd apps/cdk
           cdk bootstrap --require-approval never || echo "CDK already bootstrapped"
 
+      - name: Build Lambda layer
+        run: |
+          cd apps/cdk/src/lambda-layer
+          python3 build.py
+
       - name: Build CDK app
         run: |
           cd apps/cdk

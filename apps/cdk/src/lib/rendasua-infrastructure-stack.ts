@@ -19,10 +19,15 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     const { environment } = props;
 
     // Create Lambda layer for requests dependency
-    const requestsLayer = lambda.LayerVersion.fromLayerVersionArn(
+    const requestsLayer = new lambda.LayerVersion(
       this,
       `RequestsLayer-${environment}`,
-      'arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p39-requests:1'
+      {
+        layerVersionName: `requests-layer-${environment}`,
+        description: 'Lambda layer containing requests library',
+        code: lambda.Code.fromAsset('src/lambda-layer/requests-layer.zip'),
+        compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
+      }
     );
 
     // Create the mobile payments key refresh Lambda function
