@@ -17,10 +17,7 @@ import {
  * removeCountryCode('123456789', 'GA') -> '123456789'
  * removeCountryCode('') -> ''
  */
-function removeCountryCode(
-  phoneNumber: string,
-  defaultRegion: string = 'GA'
-): string {
+function removeCountryCode(phoneNumber: string, defaultRegion = 'GA'): string {
   if (!phoneNumber) return '';
 
   try {
@@ -35,7 +32,7 @@ function removeCountryCode(
 
     // Return the national number as string
     return nationalNumber ? nationalNumber.toString() : phoneNumber;
-  } catch (error) {
+  } catch {
     // If parsing fails, return the original number
     // This handles cases where the number format is not recognized
     return phoneNumber;
@@ -50,7 +47,7 @@ function removeCountryCode(
  */
 function validatePhoneNumber(
   phoneNumber: string,
-  defaultRegion: string = 'GA'
+  defaultRegion = 'GA'
 ): {
   isValid: boolean;
   isPossible: boolean;
@@ -79,7 +76,7 @@ function validatePhoneNumber(
       nationalNumber: parsedNumber.getNationalNumber()?.toString() || '',
       regionCode: phoneUtil.getRegionCodeForNumber(parsedNumber) || '',
     };
-  } catch (error) {
+  } catch {
     return {
       isValid: false,
       isPossible: false,
@@ -132,7 +129,7 @@ export interface PaymentProvider {
 @Injectable()
 export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
-  private readonly providers: Map<string, any> = new Map();
+  private readonly providers: Map<string, unknown> = new Map();
 
   constructor(private readonly myPVitService: MyPVitService) {
     // Register payment providers
@@ -227,10 +224,11 @@ export class MobilePaymentsService {
       switch (provider) {
         case 'mypvit':
         case 'airtel':
-        case 'moov':
+        case 'moov': {
           const mypvitResponse = await this.myPVitService.initiatePayment(
             providerRequest as MyPVitPaymentRequest
           );
+
           response = {
             success: mypvitResponse.success,
             transactionId: mypvitResponse.transactionId,
@@ -240,6 +238,7 @@ export class MobilePaymentsService {
             provider: 'mypvit',
           };
           break;
+        }
         default:
           return {
             success: false,
@@ -283,20 +282,25 @@ export class MobilePaymentsService {
       let status: MobileTransactionStatus;
 
       switch (paymentProvider) {
-        case 'mypvit':
+        case 'mypvit': {
           const mypvitStatus = await this.myPVitService.checkTransactionStatus(
             transactionId
           );
           status = {
             transactionId: mypvitStatus.transactionId,
-            status: mypvitStatus.status,
-            amount: mypvitStatus.amount,
-            currency: mypvitStatus.currency,
-            reference: mypvitStatus.reference,
+            status: mypvitStatus.status as
+              | 'pending'
+              | 'success'
+              | 'failed'
+              | 'cancelled',
+            amount: mypvitStatus.amount || 0,
+            currency: mypvitStatus.currency || 'XAF',
+            reference: mypvitStatus.reference || '',
             message: mypvitStatus.message,
             provider: 'mypvit',
           };
           break;
+        }
         default:
           throw new Error(`Unsupported payment provider: ${paymentProvider}`);
       }
@@ -352,7 +356,7 @@ export class MobilePaymentsService {
    * Verify payment callback
    */
   async verifyCallback(
-    payload: any,
+    payload: unknown,
     signature: string,
     timestamp: string,
     provider: string
@@ -387,7 +391,7 @@ export class MobilePaymentsService {
     status?: string;
     limit?: number;
     offset?: number;
-  }): Promise<any[]> {
+  }): Promise<unknown[]> {
     try {
       const provider = filters?.provider || 'mypvit';
 
@@ -410,7 +414,7 @@ export class MobilePaymentsService {
    * Check merchant balance
    */
   async checkBalance(
-    provider: string = 'mypvit'
+    provider = 'mypvit'
   ): Promise<{ balance: number; currency: string }> {
     try {
       switch (provider.toLowerCase()) {
@@ -437,7 +441,7 @@ export class MobilePaymentsService {
       customerId?: string;
       customerEmail?: string;
     },
-    provider: string = 'mypvit'
+    provider = 'mypvit'
   ): Promise<{ success: boolean; kycStatus: string; message?: string }> {
     try {
       switch (provider.toLowerCase()) {
@@ -459,7 +463,7 @@ export class MobilePaymentsService {
     secretName: string,
     key: string,
     value: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<{ success: boolean; message?: string }> {
     try {
       this.logger.log(`Updating secret ${secretName} with key ${key}`);
@@ -504,7 +508,7 @@ export class MobilePaymentsService {
    */
   private async getSecretValue(
     secretName: string
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     try {
       const { SecretsManagerClient, GetSecretValueCommand } = await import(
         '@aws-sdk/client-secrets-manager'
@@ -556,7 +560,7 @@ export class MobilePaymentsService {
   private convertToProviderRequest(
     request: MobilePaymentRequest,
     provider: string
-  ): any {
+  ): unknown {
     switch (provider) {
       case 'mypvit':
       case 'airtel':
@@ -589,7 +593,7 @@ export class MobilePaymentsService {
     try {
       await this.myPVitService.checkTransactionStatus(transactionId);
       return 'mypvit';
-    } catch (error) {
+    } catch {
       // Try other providers here when they're implemented
       return null;
     }

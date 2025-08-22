@@ -32,14 +32,25 @@ export interface MyPVitPaymentResponse {
   paymentUrl?: string;
   message?: string;
   errorCode?: string;
+  status?: string;
+  status_code?: string;
+  operator?: string;
+  reference_id?: string;
+  merchant_reference_id?: string;
+  merchant_operation_account_code?: string;
 }
 
 export interface MyPVitTransactionStatus {
   transactionId: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
-  amount: number;
-  currency: string;
-  reference: string;
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | string;
+  status_code?: string;
+  amount?: number;
+  currency?: string;
+  reference?: string;
+  reference_id?: string;
+  merchant_reference_id?: string;
+  operator?: string;
+  merchant_operation_account_code?: string;
   message?: string;
 }
 
@@ -173,7 +184,7 @@ export class MyPVitService {
         reference: reference,
         service: paymentRequest.service,
         callback_url_code: paymentRequest.callback_url_code,
-        customer_account_number: paymentRequest.customer_account_number,
+        customer_account_number: '0' + paymentRequest.customer_account_number,
         merchant_operation_account_code:
           paymentRequest.merchant_operation_account_code,
         transaction_type: paymentRequest.transaction_type,
@@ -187,18 +198,29 @@ export class MyPVitService {
         payload
       );
 
-      if (response.data.success) {
+      console.log('response.data', response.data);
+
+      // Check if the response indicates success based on status_code
+      if (response.data.status_code === '200') {
         return {
           success: true,
-          transactionId: response.data.transaction_id,
-          paymentUrl: response.data.payment_url,
+          transactionId: response.data.reference_id,
+          status: response.data.status,
+          status_code: response.data.status_code,
+          operator: response.data.operator,
+          reference_id: response.data.reference_id,
+          merchant_reference_id: response.data.merchant_reference_id,
+          merchant_operation_account_code:
+            response.data.merchant_operation_account_code,
           message: response.data.message,
         };
       } else {
         return {
           success: false,
-          message: response.data.message,
-          errorCode: response.data.error_code,
+          message: response.data.message || 'Payment initiation failed',
+          errorCode: response.data.status_code || 'UNKNOWN_ERROR',
+          status: response.data.status,
+          status_code: response.data.status_code,
         };
       }
     } catch (error) {
@@ -207,6 +229,8 @@ export class MyPVitService {
         success: false,
         message: 'Failed to initiate payment',
         errorCode: 'INITIATION_FAILED',
+        status: 'FAILED',
+        status_code: '500',
       };
     }
   }
@@ -224,13 +248,21 @@ export class MyPVitService {
         `/RYXA6SLFNRBFFQJX/status/${transactionId}`
       );
 
-      if (response.data.success) {
+      // Check if the response indicates success based on status_code
+      if (response.data.status_code === '200') {
         return {
-          transactionId: response.data.transaction_id,
+          transactionId:
+            response.data.reference_id || response.data.transaction_id,
           status: response.data.status,
+          status_code: response.data.status_code,
           amount: response.data.amount,
           currency: response.data.currency,
           reference: response.data.reference,
+          reference_id: response.data.reference_id,
+          merchant_reference_id: response.data.merchant_reference_id,
+          operator: response.data.operator,
+          merchant_operation_account_code:
+            response.data.merchant_operation_account_code,
           message: response.data.message,
         };
       } else {
