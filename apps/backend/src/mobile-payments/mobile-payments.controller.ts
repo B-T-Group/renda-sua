@@ -499,7 +499,7 @@ export class MobilePaymentsController {
 
       // Return success response
       return {
-        responseCode: 200,
+        responseCode: callbackData.code,
         transactionId: callbackData.transactionId,
       };
     } catch (error: any) {
