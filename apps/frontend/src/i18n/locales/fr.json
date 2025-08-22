@@ -351,13 +351,7 @@
     "markAsOutForDelivery": "Marquer comme En Livraison",
     "pickUpOrder": "Récupérer la Commande"
   },
-  "orderCard": {
-    "businessDistance": "Distance de l'Entreprise",
-    "delivery": "Livraison",
-    "deliveryDistance": "Distance de Livraison",
-    "items": "Articles",
-    "pickup": "Récupération"
-  },
+
   "agent": {
     "dashboard": {
       "title": "Tableau de Bord Agent",
@@ -418,6 +412,7 @@
   },
   "accounts": {
     "title": "Comptes",
+    "account": "Compte",
     "summary": "Résumé du compte",
     "totalBalance": "Solde total",
     "available": "Disponible",
@@ -507,7 +502,9 @@
     "fondsInsuffisants": "Fonds insuffisants",
     "topUpSuccess": "Demande de recharge envoyée avec succès ! Votre compte sera mis à jour sous peu.",
     "withdrawSuccess": "Demande de retrait envoyée avec succès ! Votre compte sera mis à jour sous peu.",
-    "accountNotFound": "Compte introuvable"
+    "accountNotFound": "Compte introuvable",
+    "available": "Disponible",
+    "creditAccount": "Recharger"
   },
   "auth": {
     "profile": "Profil",
@@ -636,5 +633,16 @@
   "orderHistory": {
     "title": "Historique des Commandes",
     "noHistory": "Aucun historique de commande disponible."
+  },
+  "orders": {
+    "orderCard": {
+      "orderNumber": "Commande #{{orderNumber}}",
+      "businessDistance": "Distance de l'Entreprise",
+      "delivery": "Livraison",
+      "deliveryDistance": "Distance de Livraison",
+      "items": "Articles",
+      "pickup": "Récupération",
+      "moreItems": "plus d'articles"
+    }
   }
 }

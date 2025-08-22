@@ -44,6 +44,66 @@
 6. **State Management**: Use appropriate state management patterns (useState, useEffect, custom hooks)
 7. **Self-Contained Components**: Prioritize self-contained components that manage their own data and dependencies
 
+### Translation Key Organization Rules
+
+1. **Nested Translation Structure**: When a translation key like `orderCard.items` exists but is nested within another object (e.g., `orders.orderCard.items`), always update the translation key to use the nested structure for better organization.
+
+2. **Context-Based Grouping**: Group related translation keys under logical parent objects:
+
+   - Order-related keys under `orders.*`
+   - Account-related keys under `accounts.*`
+   - Business-related keys under `business.*`
+   - Agent-related keys under `agent.*`
+
+3. **Translation Key Discovery**: When encountering a missing translation error, always check if the key exists in a nested structure with similar context before adding it as a standalone key.
+
+4. **Consistent Naming**: Maintain consistent naming patterns within each translation group:
+
+   - Use camelCase for key names
+   - Use descriptive, context-aware names
+   - Group related functionality together
+
+5. **Migration Strategy**: When updating translation key structures:
+   - Update both English (`en.json`) and French (`fr.json`) files
+   - Maintain the same nested structure in both files
+   - Update any code references to use the new nested key path
+
+### Examples of Translation Key Organization
+
+**Before (Standalone):**
+
+```json
+{
+  "orderCard": {
+    "orderNumber": "Order #{{orderNumber}}",
+    "items": "Items"
+  }
+}
+```
+
+**After (Nested):**
+
+```json
+{
+  "orders": {
+    "orderCard": {
+      "orderNumber": "Order #{{orderNumber}}",
+      "items": "Items"
+    }
+  }
+}
+```
+
+**Usage in Code:**
+
+```typescript
+// Update from:
+t('orderCard.items');
+
+// To:
+t('orders.orderCard.items');
+```
+
 ### Self-Contained Component Rules
 
 1. **Internal Data Loading**: Components should load their own data using hooks rather than receiving it as props when possible

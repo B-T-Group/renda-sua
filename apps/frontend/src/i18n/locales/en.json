@@ -461,15 +461,7 @@
     "dropOrder": "Drop Order",
     "viewHistory": "History"
   },
-  "orderCard": {
-    "orderNumber": "Order #{{orderNumber}}",
-    "businessDistance": "Business Distance",
-    "delivery": "Delivery",
-    "deliveryDistance": "Delivery Distance",
-    "items": "Items",
-    "pickup": "Pickup",
-    "moreItems": "more items"
-  },
+
   "agent": {
     "dashboard": {
       "title": "Agent Dashboard",
@@ -530,6 +522,7 @@
   },
   "accounts": {
     "title": "Accounts",
+    "account": "Account",
     "accountNumber": "Account Number",
     "balance": "Balance",
     "currency": "Currency",
@@ -552,7 +545,27 @@
     "topUpSuccess": "Top-up request sent successfully! Your account will be updated shortly.",
     "withdrawSuccess": "Withdrawal request sent successfully! Your account will be updated shortly.",
     "withheld": "Withheld",
-    "accountNotFound": "Account not found"
+    "accountNotFound": "Account not found",
+    "available": "Available",
+    "creditAccount": "Top Up",
+    "availableBalance": "Available Balance",
+    "amount": "Amount",
+    "paymentMethods": {
+      "title": "Payment Methods",
+      "airtelMoney": "Airtel Money",
+      "moovMoney": "MOOV Money",
+      "mtnMomo": "MTN Mobile Money",
+      "creditCardComingSoon": "Credit Card (Coming Soon)"
+    },
+    "paymentMessages": {
+      "airtelMoneyInfo": "Top up your account using Airtel Money",
+      "airtelMoneySuccess": "Topup request successfully sent.",
+      "moovMoneyInfo": "Top up your account using MOOV Money",
+      "moovMoneySuccess": "Account topped up successfully with MOOV Money",
+      "mtnMomoInfo": "Top up your account using MTN Mobile Money",
+      "mtnMomoSuccess": "Account topped up successfully with MTN Mobile Money",
+      "creditCardNotSupported": "Credit card payments are not supported yet"
+    }
   },
   "auth": {
     "profile": "Profile",
@@ -682,5 +695,16 @@
   "orderHistory": {
     "title": "Order History",
     "noHistory": "No order history available."
+  },
+  "orders": {
+    "orderCard": {
+      "orderNumber": "Order #{{orderNumber}}",
+      "businessDistance": "Business Distance",
+      "delivery": "Delivery",
+      "deliveryDistance": "Delivery Distance",
+      "items": "Items",
+      "pickup": "Pickup",
+      "moreItems": "more items"
+    }
   }
 }
