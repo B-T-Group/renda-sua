@@ -39,6 +39,7 @@ const Dashboard: React.FC = () => {
     accounts,
     loading: accountLoading,
     error: accountError,
+    refetch,
   } = useAccountInfo();
   const {
     loading: deliveryFeesLoading,
@@ -250,8 +251,9 @@ const Dashboard: React.FC = () => {
       {/* Account Information */}
       <AccountInformation
         accounts={accounts}
-        onTopUpClick={handleTopUpClick}
-        formatCurrency={formatCurrency}
+        onRefresh={refetch}
+        compactView={true}
+        showTransactions={true}
       />
 
       {/* Document Management */}

@@ -1,12 +1,9 @@
 import {
   AccountBalance as AccountBalanceIcon,
-  Add as AddIcon,
   History as HistoryIcon,
   Refresh as RefreshIcon,
-  Remove as RemoveIcon,
   TrendingDown as TrendingDownIcon,
   TrendingUp as TrendingUpIcon,
-  Visibility as VisibilityIcon,
   Wifi as WifiIcon,
   WifiOff as WifiOffIcon,
 } from '@mui/icons-material';
@@ -41,12 +38,8 @@ import {
   EntityType,
   useAccountManager,
 } from '../../hooks/useAccountManager';
-import { useAirtelMoney } from '../../hooks/useAirtelMoney';
-import { useMobilePayments } from '../../hooks/useMobilePayments';
-import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
-import TopUpModal from '../business/TopUpModal';
-import WithdrawModal from '../business/WithdrawModal';
+import UserAccount from './UserAccount';
 
 interface AccountManagerProps {
   entityType: EntityType;
@@ -108,28 +101,8 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
       [fetchAccounts]
     );
 
-    // Dialog state
+    // State for transaction dialog
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
-
-    // State for top-up modal
-    const [topUpModalOpen, setTopUpModalOpen] = useState(false);
-    const [selectedAccountForTopUp, setSelectedAccountForTopUp] =
-      useState<Account | null>(null);
-
-    // State for withdraw modal
-    const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
-    const [selectedAccountForWithdraw, setSelectedAccountForWithdraw] =
-      useState<Account | null>(null);
-
-    // MTN MoMo top-up hook
-    const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
-
-    // Airtel Money hook
-    const { requestPayment, loading: airtelLoading } = useAirtelMoney();
-
-    // Mobile payments hook for Airtel Money and MOOV
-    const { initiatePayment, loading: mobilePaymentsLoading } =
-      useMobilePayments();
 
     // Get user profile for phone number
     const { userProfile } = useProfile();
@@ -145,131 +118,6 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     // Handle refresh accounts
     const handleRefreshAccounts = async () => {
       await fetchAccounts();
-    };
-
-    // Handle top-up account
-    const handleTopUp = (account: Account) => {
-      setSelectedAccountForTopUp(account);
-      setTopUpModalOpen(true);
-    };
-
-    // Handle top-up confirmation
-    const handleTopUpConfirm = async (
-      phoneNumber: string,
-      amount: string,
-      paymentMethod: 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card'
-    ): Promise<boolean> => {
-      if (!selectedAccountForTopUp) return false;
-
-      try {
-        let success = false;
-
-        if (paymentMethod === 'mtn-momo') {
-          success = await requestTopUp({
-            phoneNumber,
-            amount,
-            currency: selectedAccountForTopUp.currency,
-          });
-        } else if (
-          paymentMethod === 'airtel-money' ||
-          paymentMethod === 'moov-money'
-        ) {
-          // Use the unified mobile payments API for Airtel Money and MOOV
-          const provider = paymentMethod === 'airtel-money' ? 'airtel' : 'moov';
-
-          const response = await initiatePayment({
-            amount: parseFloat(amount),
-            currency: selectedAccountForTopUp.currency,
-            description: 'Account Top Up',
-            customerPhone: phoneNumber,
-            accountId: selectedAccountForTopUp.id, // Fallback for customer_account_number if phone number not available
-            provider,
-            paymentMethod: 'mobile_money',
-          });
-
-          success = response.success;
-        } else if (paymentMethod === 'credit-card') {
-          // Credit card not supported yet
-          return false;
-        }
-
-        if (success) {
-          // Refresh accounts after successful top-up
-          await fetchAccounts();
-        }
-
-        return success;
-      } catch (error) {
-        console.error('Top-up error:', error);
-        return false;
-      }
-    };
-
-    // Handle withdraw account
-    const handleWithdraw = (account: Account) => {
-      setSelectedAccountForWithdraw(account);
-      setWithdrawModalOpen(true);
-    };
-
-    // Handle withdraw confirmation
-    const handleWithdrawConfirm = async (
-      phoneNumber: string,
-      amount: string,
-      paymentMethod: 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card'
-    ): Promise<boolean> => {
-      if (!selectedAccountForWithdraw) return false;
-
-      try {
-        let success = false;
-
-        if (paymentMethod === 'mtn-momo') {
-          // For MTN MoMo, we'll use the mobile payments API with GIVE_CHANGE type
-          const response = await initiatePayment({
-            amount: parseFloat(amount),
-            currency: selectedAccountForWithdraw.currency,
-            description: 'Withdrawal',
-            customerPhone: phoneNumber,
-            accountId: selectedAccountForWithdraw.id,
-            provider: 'mypvit',
-            paymentMethod: 'mobile_money',
-            transactionType: 'GIVE_CHANGE',
-          });
-
-          success = response.success;
-        } else if (
-          paymentMethod === 'airtel-money' ||
-          paymentMethod === 'moov-money'
-        ) {
-          // Use the unified mobile payments API for Airtel Money and MOOV
-          const provider = paymentMethod === 'airtel-money' ? 'airtel' : 'moov';
-
-          const response = await initiatePayment({
-            amount: parseFloat(amount),
-            currency: selectedAccountForWithdraw.currency,
-            description: 'Withdrawal',
-            customerPhone: phoneNumber,
-            accountId: selectedAccountForWithdraw.id,
-            provider,
-            paymentMethod: 'mobile_money',
-            transactionType: 'GIVE_CHANGE',
-          });
-
-          success = response.success;
-        } else if (paymentMethod === 'credit-card') {
-          // Credit card not supported yet
-          return false;
-        }
-
-        if (success) {
-          // Refresh accounts after successful withdrawal
-          await fetchAccounts();
-        }
-
-        return success;
-      } catch (error) {
-        console.error('Withdrawal error:', error);
-        return false;
-      }
     };
 
     // Format currency amount
@@ -484,166 +332,14 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             ) : (
               <Stack spacing={2}>
                 {accounts.map((account) => (
-                  <Card key={account.id} variant="outlined">
-                    <CardContent>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                      >
-                        <Box flex={1}>
-                          <Box
-                            display="flex"
-                            alignItems="center"
-                            gap={1}
-                            mb={1}
-                          >
-                            <Typography variant="h6" color="primary">
-                              {account.currency} {t('accounts.account')}
-                            </Typography>
-                            <Chip
-                              label={
-                                account.is_active
-                                  ? t('accounts.active')
-                                  : t('accounts.inactive')
-                              }
-                              size="small"
-                              color={account.is_active ? 'success' : 'default'}
-                            />
-                          </Box>
-
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="h4" color="text.primary">
-                              {formatCurrency(
-                                account.available_balance,
-                                account.currency
-                              )}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {t('accounts.availableBalance')}
-                            </Typography>
-                          </Box>
-
-                          {!compactView && (
-                            <Box
-                              sx={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                gap: 2,
-                                mt: 2,
-                              }}
-                            >
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t('accounts.totalBalance')}
-                                </Typography>
-                                <Typography variant="body1" fontWeight="medium">
-                                  {formatCurrency(
-                                    account.total_balance,
-                                    account.currency
-                                  )}
-                                </Typography>
-                              </Box>
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t('accounts.withheldBalance')}
-                                </Typography>
-                                <Typography variant="body1" fontWeight="medium">
-                                  {formatCurrency(
-                                    account.withheld_balance,
-                                    account.currency
-                                  )}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          )}
-
-                          <Typography variant="caption" color="text.secondary">
-                            {t('accounts.createdAt')}:{' '}
-                            {formatDate(new Date(account.created_at), 'PPP')}
-                          </Typography>
-                        </Box>
-
-                        {showTransactions && (
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <IconButton
-                              onClick={() => handleViewAccount(account)}
-                              disabled={loading}
-                              title={t('accounts.viewTransactions')}
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                            <Button
-                              onClick={() => handleTopUp(account)}
-                              disabled={loading}
-                              variant="contained"
-                              size="small"
-                              startIcon={<AddIcon />}
-                              sx={{
-                                background:
-                                  'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
-                                color: 'white',
-                                fontWeight: 600,
-                                textTransform: 'none',
-                                boxShadow:
-                                  '0 3px 5px 2px rgba(76, 175, 80, .3)',
-                                '&:hover': {
-                                  background:
-                                    'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
-                                  boxShadow:
-                                    '0 4px 8px 2px rgba(76, 175, 80, .4)',
-                                },
-                                '&:disabled': {
-                                  background:
-                                    'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
-                                  boxShadow: 'none',
-                                },
-                              }}
-                            >
-                              {t('accounts.creditAccount')}
-                            </Button>
-                            {account.available_balance > 0 && (
-                              <Button
-                                onClick={() => handleWithdraw(account)}
-                                disabled={loading}
-                                variant="contained"
-                                size="small"
-                                startIcon={<RemoveIcon />}
-                                sx={{
-                                  background:
-                                    'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
-                                  color: 'white',
-                                  fontWeight: 600,
-                                  textTransform: 'none',
-                                  boxShadow:
-                                    '0 3px 5px 2px rgba(255, 87, 34, .3)',
-                                  '&:hover': {
-                                    background:
-                                      'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
-                                    boxShadow:
-                                      '0 4px 8px 2px rgba(255, 87, 34, .4)',
-                                  },
-                                  '&:disabled': {
-                                    background:
-                                      'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
-                                    boxShadow: 'none',
-                                  },
-                                }}
-                              >
-                                {t('accounts.withdraw')}
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-                      </Box>
-                    </CardContent>
-                  </Card>
+                  <UserAccount
+                    key={account.id}
+                    account={account}
+                    loading={loading}
+                    compactView={compactView}
+                    showTransactions={showTransactions}
+                    onRefresh={fetchAccounts}
+                  />
                 ))}
               </Stack>
             )}
@@ -847,36 +543,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
           </DialogContent>
         </Dialog>
 
-        {/* Top Up Modal */}
-        {selectedAccountForTopUp && (
-          <TopUpModal
-            open={topUpModalOpen}
-            onClose={() => {
-              setTopUpModalOpen(false);
-              setSelectedAccountForTopUp(null);
-            }}
-            userPhoneNumber={userProfile?.phone_number || ''}
-            currency={selectedAccountForTopUp.currency}
-            loading={topUpLoading || airtelLoading || mobilePaymentsLoading}
-            onConfirm={handleTopUpConfirm}
-          />
-        )}
-
-        {/* Withdraw Modal */}
-        {selectedAccountForWithdraw && (
-          <WithdrawModal
-            open={withdrawModalOpen}
-            onClose={() => {
-              setWithdrawModalOpen(false);
-              setSelectedAccountForWithdraw(null);
-            }}
-            userPhoneNumber={userProfile?.phone_number || ''}
-            currency={selectedAccountForWithdraw.currency}
-            availableBalance={selectedAccountForWithdraw.available_balance}
-            loading={mobilePaymentsLoading}
-            onConfirm={handleWithdrawConfirm}
-          />
-        )}
+        {/* Modals are now handled in UserAccount component */}
       </>
     );
   }

@@ -45,6 +45,7 @@ const BusinessDashboard: React.FC = () => {
     accounts,
     loading: accountLoading,
     error: accountError,
+    refetch,
   } = useAccountInfo();
 
   // Debug logging
@@ -181,8 +182,9 @@ const BusinessDashboard: React.FC = () => {
         >
           <AccountInformation
             accounts={accounts}
-            loading={accountLoading}
-            error={accountError}
+            onRefresh={refetch}
+            compactView={true}
+            showTransactions={true}
           />
         </Box>
       </Box>

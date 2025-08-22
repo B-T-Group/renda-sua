@@ -1,42 +1,22 @@
-import { AccountBalance, AccountBalanceWallet } from '@mui/icons-material';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Paper,
-  Typography,
-} from '@mui/material';
+import { AccountBalance } from '@mui/icons-material';
+import { Box, Paper, Typography } from '@mui/material';
 import React from 'react';
 import { Account } from '../../hooks/useAccountInfo';
+import UserAccount from './UserAccount';
 
 interface AccountInformationProps {
   accounts: Account[];
-  onTopUpClick?: () => void;
-  formatCurrency?: (amount: number, currency?: string) => string;
+  onRefresh?: (() => Promise<void>) | (() => void);
+  compactView?: boolean;
+  showTransactions?: boolean;
 }
-
-const defaultFormatCurrency = (amount: number, currency = 'USD') => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount);
-};
 
 const AccountInformation: React.FC<AccountInformationProps> = ({
   accounts,
-  onTopUpClick,
-  formatCurrency = defaultFormatCurrency,
+  onRefresh,
+  compactView = true,
+  showTransactions = true,
 }) => {
-  const handleTopUpClick = () => {
-    if (onTopUpClick) {
-      onTopUpClick();
-    } else {
-      // Default behavior: navigate to profile page
-      window.location.href = '/profile';
-    }
-  };
-
   if (accounts.length === 0) {
     return null;
   }
@@ -54,53 +34,30 @@ const AccountInformation: React.FC<AccountInformationProps> = ({
       <Box
         sx={{
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: { xs: 'column', sm: 'row' },
           width: '100%',
           gap: 2,
           flexWrap: 'wrap',
-          justifyContent: 'center',
+          justifyContent: { xs: 'center', sm: 'flex-start' },
+          alignItems: { xs: 'center', sm: 'flex-start' },
         }}
       >
         {accounts.map((account) => (
-          <Card
+          <Box
             key={account.id}
-            variant="outlined"
             sx={{
-              flex: {
-                xs: '1 1 100%', // Full width on extra small screens
-                sm: '1 1 calc(33.33% - 10.67px)', // sm-4 equivalent (4/12 = 33.33%), minus gap
-                md: '1 1 calc(33.33% - 10.67px)', // Maintain sm-4 on medium screens
-              },
-              minWidth: '280px', // Ensure minimum width for readability
+              width: { xs: '100%', sm: '24rem' }, // Full width on mobile, fixed width on larger screens
+              minWidth: { xs: '100%', sm: '24rem' },
+              maxWidth: { xs: '100%', sm: '24rem' },
             }}
           >
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {account.currency} Account
-              </Typography>
-              <Typography variant="h4" color="primary" gutterBottom>
-                {formatCurrency(account.total_balance, account.currency)}
-              </Typography>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Available:{' '}
-                  {formatCurrency(account.available_balance, account.currency)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Withheld:{' '}
-                  {formatCurrency(account.withheld_balance, account.currency)}
-                </Typography>
-              </Box>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<AccountBalanceWallet />}
-                onClick={handleTopUpClick}
-              >
-                Top Up Account
-              </Button>
-            </CardContent>
-          </Card>
+            <UserAccount
+              account={account}
+              compactView={compactView}
+              showTransactions={showTransactions}
+              onRefresh={onRefresh}
+            />
+          </Box>
         ))}
       </Box>
     </Paper>

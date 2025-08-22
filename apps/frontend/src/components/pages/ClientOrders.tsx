@@ -56,6 +56,7 @@ const ClientOrders: React.FC = () => {
     accounts,
     loading: accountLoading,
     error: accountError,
+    refetch,
   } = useAccountInfo();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderFilters>({
@@ -408,7 +409,9 @@ const ClientOrders: React.FC = () => {
         {/* Account Information */}
         <AccountInformation
           accounts={accounts}
-          onTopUpClick={handleTopUpClick}
+          onRefresh={refreshOrders}
+          compactView={true}
+          showTransactions={true}
         />
 
         {/* Filters */}

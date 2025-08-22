@@ -10,6 +10,7 @@ const GET_ACCOUNT_INFO = `
       available_balance
       withheld_balance
       total_balance
+      is_active
       created_at
       updated_at
       account_transactions {
@@ -37,6 +38,7 @@ export interface Account {
   available_balance: number;
   withheld_balance: number;
   total_balance: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   account_transactions: Array<{
@@ -61,7 +63,7 @@ export const useAccountInfo = () => {
     accounts: Account[];
     clients: ClientInfo[];
   }>(GET_ACCOUNT_INFO);
-  
+
   const hasExecuted = useRef(false);
 
   useEffect(() => {
@@ -83,4 +85,4 @@ export const useAccountInfo = () => {
     error,
     refetch: () => refetch(),
   };
-}; 
+};

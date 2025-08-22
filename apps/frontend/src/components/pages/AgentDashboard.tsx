@@ -614,6 +614,7 @@ const AgentDashboard: React.FC = () => {
     accounts,
     loading: accountLoading,
     error: accountError,
+    refetch,
   } = useAccountInfo();
   const {
     categorizedOrders,
@@ -818,8 +819,9 @@ const AgentDashboard: React.FC = () => {
       {/* Account Information */}
       <AccountInformation
         accounts={accounts}
-        onTopUpClick={handleTopUpClick}
-        formatCurrency={formatCurrency}
+        onRefresh={refetch}
+        compactView={true}
+        showTransactions={true}
       />
 
       {/* Document Management */}
