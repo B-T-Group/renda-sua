@@ -24,6 +24,7 @@ export interface InitiatePaymentDto {
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
+  transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
 }
 
 export interface PaymentCallbackDto {
@@ -137,6 +138,7 @@ export class MobilePaymentsController {
         callback_url: callbackUrl,
         return_url: paymentRequest.returnUrl,
         account_id: paymentRequest.accountId,
+        transaction_type: paymentRequest.transactionType || 'PAYMENT',
       });
 
       // Initiate payment with provider
@@ -461,8 +463,12 @@ export class MobilePaymentsController {
           `Updated transaction ${transaction.id} with status: ${status}`
         );
 
-        // If payment is successful, credit the account
-        if (callbackData.status === 'SUCCESS' && transaction.account_id) {
+        // If payment is successful, credit the account only for PAYMENT transactions
+        if (
+          callbackData.status === 'SUCCESS' &&
+          transaction.account_id &&
+          transaction.transaction_type === 'PAYMENT'
+        ) {
           try {
             const creditResult = await this.accountsService.registerTransaction(
               {
@@ -488,6 +494,37 @@ export class MobilePaymentsController {
             console.error(
               `Error crediting account ${transaction.account_id}:`,
               creditError
+            );
+          }
+        } else if (
+          callbackData.status === 'SUCCESS' &&
+          transaction.account_id &&
+          transaction.transaction_type === 'GIVE_CHANGE'
+        ) {
+          try {
+            const withdrawalResult =
+              await this.accountsService.registerTransaction({
+                accountId: transaction.account_id,
+                amount: transaction.amount,
+                transactionType: 'withdrawal',
+                memo: `Mobile payment give change - ${transaction.reference}`,
+                referenceId: transaction.id,
+              });
+
+            if (withdrawalResult.success) {
+              console.log(
+                `Successfully withdrew ${transaction.amount} ${transaction.currency} from account ${transaction.account_id} for give change`
+              );
+              console.log('New balance:', withdrawalResult.newBalance);
+            } else {
+              console.error(
+                `Failed to withdraw from account ${transaction.account_id}: ${withdrawalResult.error}`
+              );
+            }
+          } catch (withdrawalError) {
+            console.error(
+              `Error withdrawing from account ${transaction.account_id}:`,
+              withdrawalError
             );
           }
         }

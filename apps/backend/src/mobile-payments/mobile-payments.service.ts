@@ -98,6 +98,7 @@ export interface MobilePaymentRequest {
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
+  transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
 }
 
 export interface MobilePaymentResponse {
@@ -576,7 +577,7 @@ export class MobilePaymentsService {
           ),
           merchant_operation_account_code:
             this.myPVitService.getMerchantOperationAccountCode(),
-          transaction_type: 'PAYMENT',
+          transaction_type: request.transactionType || 'PAYMENT',
           owner_charge: 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
