@@ -1,6 +1,15 @@
-import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import {
+  ApolloClient,
+  InMemoryCache,
+  createHttpLink,
+  from,
+  split,
+} from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { getMainDefinition } from '@apollo/client/utilities';
 import { useAuth0 } from '@auth0/auth0-react';
+import { createClient } from 'graphql-ws';
 import { useEffect, useState } from 'react';
 import { environment } from '../config/environment';
 
@@ -27,12 +36,12 @@ export const useGraphQLSubscription = () => {
         setIsLoading(true);
         setError(null);
 
-        // Create HTTP link
+        // Create HTTP link for queries and mutations
         const httpLink = createHttpLink({
           uri: environment.hasuraUrl,
         });
 
-        // Add authentication context
+        // Add authentication context for HTTP requests
         const authLink = setContext(async (_, { headers }) => {
           try {
             const token = await getAccessTokenSilently();
@@ -52,9 +61,65 @@ export const useGraphQLSubscription = () => {
           }
         });
 
-        // Create Apollo Client with HTTP link only for now
+        // Create WebSocket link for subscriptions
+        let wsLink = null;
+        try {
+          const wsUrl = environment.hasuraUrl
+            .replace(/^http:\/\//, 'ws://')
+            .replace(/^https:\/\//, 'wss://');
+
+          console.log('Creating WebSocket connection to:', wsUrl);
+
+          const wsClient = createClient({
+            url: wsUrl,
+            connectionParams: async () => {
+              try {
+                const token = await getAccessTokenSilently();
+                return {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                };
+              } catch (error) {
+                console.error('Failed to get token for WebSocket:', error);
+                return {};
+              }
+            },
+            retryAttempts: 3,
+            retryWait: (retryCount) =>
+              new Promise((resolve) =>
+                setTimeout(resolve, Math.min(1000 * 2 ** retryCount, 10000))
+              ),
+            shouldRetry: (errOrCloseEvent) => {
+              console.log('WebSocket retry condition:', errOrCloseEvent);
+              return true;
+            },
+          });
+
+          wsLink = new GraphQLWsLink(wsClient);
+          console.log('WebSocket link created successfully');
+        } catch (wsError) {
+          console.warn('WebSocket link creation failed:', wsError);
+        }
+
+        // Create the final link - split between WebSocket and HTTP
+        const link = wsLink
+          ? split(
+              ({ query }) => {
+                const definition = getMainDefinition(query);
+                return (
+                  definition.kind === 'OperationDefinition' &&
+                  definition.operation === 'subscription'
+                );
+              },
+              wsLink,
+              from([authLink, httpLink])
+            )
+          : from([authLink, httpLink]);
+
+        // Create Apollo Client
         const apolloClient = new ApolloClient({
-          link: authLink.concat(httpLink),
+          link,
           cache: new InMemoryCache(),
           defaultOptions: {
             watchQuery: {
