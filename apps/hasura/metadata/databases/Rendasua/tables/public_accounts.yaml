@@ -15,6 +15,15 @@ array_relationships:
         remote_table:
           name: account_transactions
           schema: public
+  - name: mobile_payment_transactions
+    using:
+      manual_configuration:
+        column_mapping:
+          id: account_id
+        insertion_order: null
+        remote_table:
+          name: mobile_payment_transactions
+          schema: public
 insert_permissions:
   - role: user
     permission:

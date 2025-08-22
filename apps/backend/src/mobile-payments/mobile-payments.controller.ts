@@ -134,6 +134,7 @@ export class MobilePaymentsController {
         customer_email: paymentRequest.customerEmail,
         callback_url: callbackUrl,
         return_url: paymentRequest.returnUrl,
+        account_id: paymentRequest.accountId,
       });
 
       // Initiate payment with provider
@@ -412,6 +413,8 @@ export class MobilePaymentsController {
   @Post('callback/mypvit')
   async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
     try {
+      console.log('callbackData', callbackData);
+
       // Validate required fields
       if (
         !callbackData.transactionId ||

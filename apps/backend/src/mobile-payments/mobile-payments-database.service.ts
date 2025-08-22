@@ -18,6 +18,7 @@ export interface MobilePaymentTransaction {
   return_url?: string;
   error_message?: string;
   error_code?: string;
+  account_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +34,7 @@ export interface CreateTransactionData {
   customer_email?: string;
   callback_url?: string;
   return_url?: string;
+  account_id?: string;
 }
 
 export interface UpdateTransactionData {
@@ -75,6 +77,7 @@ export class MobilePaymentsDatabaseService {
             return_url
             error_message
             error_code
+            account_id
             created_at
             updated_at
           }
