@@ -227,7 +227,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
           const response = await initiatePayment({
             amount: parseFloat(amount),
             currency: selectedAccountForWithdraw.currency,
-            description: 'Account Withdrawal',
+            description: 'Withdrawal',
             customerPhone: phoneNumber,
             accountId: selectedAccountForWithdraw.id,
             provider: 'mypvit',
@@ -246,7 +246,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
           const response = await initiatePayment({
             amount: parseFloat(amount),
             currency: selectedAccountForWithdraw.currency,
-            description: 'Account Withdrawal',
+            description: 'Withdrawal',
             customerPhone: phoneNumber,
             accountId: selectedAccountForWithdraw.id,
             provider,
