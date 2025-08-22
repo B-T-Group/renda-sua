@@ -6,6 +6,8 @@ import {
   TrendingDown as TrendingDownIcon,
   TrendingUp as TrendingUpIcon,
   Visibility as VisibilityIcon,
+  Wifi as WifiIcon,
+  WifiOff as WifiOffIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -27,6 +29,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 // Using native Date formatting instead of date-fns
@@ -82,6 +85,9 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
       loading,
       transactionsLoading,
       error,
+      subscriptionLoading,
+      subscriptionError,
+      subscriptionFailed,
       fetchAccounts,
       fetchAccountTransactions,
       selectAccount,
@@ -285,10 +291,38 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
               alignItems="center"
               mb={2}
             >
-              <Typography variant="h6">
-                {title ||
-                  `${capitalizeEntityType(entityType)} ${t('accounts.title')}`}
-              </Typography>
+              <Box display="flex" alignItems="center" gap={1}>
+                <Typography variant="h6">
+                  {title ||
+                    `${capitalizeEntityType(entityType)} ${t(
+                      'accounts.title'
+                    )}`}
+                </Typography>
+                {/* Subscription status indicator */}
+                <Tooltip
+                  title={
+                    subscriptionLoading
+                      ? t('accounts.subscriptionConnecting')
+                      : subscriptionFailed
+                      ? t('accounts.subscriptionFailed')
+                      : subscriptionError
+                      ? t('accounts.subscriptionError')
+                      : t('accounts.subscriptionConnected')
+                  }
+                >
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    {subscriptionLoading ? (
+                      <WifiIcon fontSize="small" color="action" />
+                    ) : subscriptionFailed ? (
+                      <WifiOffIcon fontSize="small" color="error" />
+                    ) : subscriptionError ? (
+                      <WifiOffIcon fontSize="small" color="warning" />
+                    ) : (
+                      <WifiIcon fontSize="small" color="success" />
+                    )}
+                  </Box>
+                </Tooltip>
+              </Box>
               <IconButton
                 onClick={handleRefreshAccounts}
                 disabled={loading}
@@ -298,10 +332,22 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
               </IconButton>
             </Box>
 
-            {/* Error Message */}
+            {/* Error Messages */}
             {error && (
               <Alert severity="error" sx={{ mb: 2 }} onClose={clearError}>
                 {error}
+              </Alert>
+            )}
+
+            {subscriptionError && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {t('accounts.subscriptionError')} - {subscriptionError.message}
+              </Alert>
+            )}
+
+            {subscriptionFailed && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {t('accounts.subscriptionFailed')}
               </Alert>
             )}
 

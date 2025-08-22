@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAccountSubscription } from './useAccountSubscription';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Account {
@@ -81,6 +82,20 @@ export const useAccountManager = (config: AccountManagerConfig) => {
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+
+  // Set up account subscription
+  const {
+    loading: subscriptionLoading,
+    error: subscriptionError,
+    subscriptionFailed,
+  } = useAccountSubscription({
+    userId: entityId,
+    onAccountUpdate: (updatedAccounts) => {
+      console.log('Account subscription update received:', updatedAccounts);
+      setAccounts(updatedAccounts);
+    },
+    enabled: autoFetch && !!entityId,
+  });
 
   // GraphQL hooks
   const { execute: executeAccountsQuery } =
@@ -209,6 +224,9 @@ export const useAccountManager = (config: AccountManagerConfig) => {
     loading,
     transactionsLoading,
     error,
+    subscriptionLoading,
+    subscriptionError,
+    subscriptionFailed,
 
     // Actions
     fetchAccounts,

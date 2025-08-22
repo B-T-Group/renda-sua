@@ -11,6 +11,7 @@ import { environment } from './config/environment';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import './i18n'; // Initialize i18n
+import ApolloProvider from './providers/ApolloProvider';
 import { theme } from './theme/theme';
 
 // Create auth0 config from environment
@@ -45,7 +46,9 @@ root.render(
         >
           <LoadingProvider>
             <UserProfileProvider>
-              <App />
+              <ApolloProvider>
+                <App />
+              </ApolloProvider>
             </UserProfileProvider>
           </LoadingProvider>
         </BrowserRouter>
