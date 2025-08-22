@@ -499,97 +499,11 @@ export class MobilePaymentsController {
 
       // Return success response
       return {
-        success: true,
-        message: 'Callback processed successfully',
+        responseCode: 200,
         transactionId: callbackData.transactionId,
-        merchantReferenceId: callbackData.merchantReferenceId,
-        status: callbackData.status,
       };
     } catch (error: any) {
       console.error('MyPVIT callback processing error:', error);
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to process callback',
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  /**
-   * Generic payment callback endpoint (for backward compatibility)
-   */
-  @Public()
-  @Post('callback/:provider')
-  async paymentCallback(
-    @Param('provider') provider: string,
-    @Body() callbackData: PaymentCallbackDto
-  ) {
-    try {
-      // Log the callback
-      if (callbackData.transaction_id) {
-        await this.databaseService.logCallback(
-          callbackData.transaction_id,
-          callbackData
-        );
-      }
-
-      // Update transaction status if we have a reference
-      if (callbackData.reference) {
-        const transaction =
-          await this.databaseService.getTransactionByReference(
-            callbackData.reference
-          );
-        if (transaction) {
-          await this.databaseService.updateTransaction(transaction.id, {
-            status: callbackData.status as
-              | 'pending'
-              | 'success'
-              | 'failed'
-              | 'cancelled',
-            error_message: callbackData.message,
-          });
-
-          // If payment is successful, credit the account
-          if (callbackData.status === 'success' && transaction.account_id) {
-            try {
-              const creditResult =
-                await this.accountsService.registerTransaction({
-                  accountId: transaction.account_id,
-                  amount: transaction.amount,
-                  transactionType: 'deposit',
-                  memo: `Mobile payment deposit - ${transaction.reference}`,
-                  referenceId: transaction.id,
-                });
-
-              if (creditResult.success) {
-                console.log(
-                  `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
-                );
-                console.log('New balance:', creditResult.newBalance);
-              } else {
-                console.error(
-                  `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
-                );
-              }
-            } catch (creditError) {
-              console.error(
-                `Error crediting account ${transaction.account_id}:`,
-                creditError
-              );
-            }
-          }
-        }
-      }
-
-      // Return success response
-      return {
-        success: true,
-        message: 'Callback processed successfully',
-      };
-    } catch (error: any) {
       throw new HttpException(
         {
           success: false,
