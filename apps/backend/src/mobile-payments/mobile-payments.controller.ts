@@ -113,6 +113,43 @@ export class MobilePaymentsController {
   @Post('initiate')
   async initiatePayment(@Body() paymentRequest: InitiatePaymentDto) {
     try {
+      // Validate account balance for GIVE_CHANGE transactions
+      if (
+        paymentRequest.transactionType === 'GIVE_CHANGE' &&
+        paymentRequest.accountId
+      ) {
+        const accountBalance = await this.accountsService.getAccountBalance(
+          paymentRequest.accountId
+        );
+
+        if (!accountBalance) {
+          throw new HttpException(
+            {
+              success: false,
+              message: 'Account not found',
+              error: 'ACCOUNT_NOT_FOUND',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+
+        if (accountBalance.availableBalance < paymentRequest.amount) {
+          throw new HttpException(
+            {
+              success: false,
+              message: 'Insufficient funds',
+              error: 'INSUFFICIENT_FUNDS',
+              data: {
+                required: paymentRequest.amount,
+                available: accountBalance.availableBalance,
+                currency: paymentRequest.currency,
+              },
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
+
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
         paymentRequest.callbackUrl ||
@@ -420,8 +457,6 @@ export class MobilePaymentsController {
   @Post('callback/mypvit')
   async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
     try {
-      console.log('callbackData', callbackData);
-
       // Validate required fields
       if (
         !callbackData.transactionId ||
