@@ -242,6 +242,9 @@
     },
     "orders": {
       "title": "Commandes",
+      "orderItems": "Articles de Commande",
+      "specialInstructions": "Instructions Spéciales",
+      "status": "Statut",
       "subtitle": "Gérez et suivez toutes vos commandes clients",
       "filters": {
         "search": "Rechercher des commandes...",
@@ -333,8 +336,8 @@
     "notes": "Notes",
     "notesPlaceholder": "Ajouter des notes...",
     "orderItems": "Articles de Commande",
-    "size": "Taille",
     "specialInstructions": "Instructions Spéciales",
+    "size": "Taille",
     "table": {
       "items": "Articles"
     }

@@ -330,6 +330,9 @@
     },
     "orders": {
       "title": "Orders",
+      "orderItems": "Order Items",
+      "specialInstructions": "Special Instructions",
+      "status": "Status",
       "subtitle": "Manage and track all your customer orders",
       "filters": {
         "search": "Search orders...",
