@@ -301,6 +301,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
                   flexDirection: 'column',
                   gap: 1,
                   width: '100%',
+                  alignItems: 'flex-end',
                 }}
               >
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -318,8 +319,8 @@ const UserAccount: React.FC<UserAccountProps> = ({
                   variant="contained"
                   size="small"
                   startIcon={<AddIcon />}
-                  fullWidth={true}
                   sx={{
+                    width: '150px',
                     background:
                       'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
                     color: 'white',
@@ -347,8 +348,8 @@ const UserAccount: React.FC<UserAccountProps> = ({
                     variant="contained"
                     size="small"
                     startIcon={<RemoveIcon />}
-                    fullWidth={true}
                     sx={{
+                      width: '150px',
                       background:
                         'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
                       color: 'white',
