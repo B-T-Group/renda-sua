@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
@@ -53,7 +54,8 @@ export interface MyPVitCallbackDto {
 export class MobilePaymentsController {
   constructor(
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly databaseService: MobilePaymentsDatabaseService
+    private readonly databaseService: MobilePaymentsDatabaseService,
+    private readonly accountsService: AccountsService
   ) {}
 
   /**
@@ -455,6 +457,37 @@ export class MobilePaymentsController {
         console.log(
           `Updated transaction ${transaction.id} with status: ${status}`
         );
+
+        // If payment is successful, credit the account
+        if (callbackData.status === 'SUCCESS' && transaction.account_id) {
+          try {
+            const creditResult = await this.accountsService.registerTransaction(
+              {
+                accountId: transaction.account_id,
+                amount: transaction.amount,
+                transactionType: 'deposit',
+                memo: `Mobile payment deposit - ${transaction.reference}`,
+                referenceId: transaction.id,
+              }
+            );
+
+            if (creditResult.success) {
+              console.log(
+                `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
+              );
+              console.log('New balance:', creditResult.newBalance);
+            } else {
+              console.error(
+                `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
+              );
+            }
+          } catch (creditError) {
+            console.error(
+              `Error crediting account ${transaction.account_id}:`,
+              creditError
+            );
+          }
+        }
       } else {
         console.warn(
           `Transaction not found for reference: ${callbackData.merchantReferenceId}`
@@ -515,6 +548,36 @@ export class MobilePaymentsController {
               | 'cancelled',
             error_message: callbackData.message,
           });
+
+          // If payment is successful, credit the account
+          if (callbackData.status === 'success' && transaction.account_id) {
+            try {
+              const creditResult =
+                await this.accountsService.registerTransaction({
+                  accountId: transaction.account_id,
+                  amount: transaction.amount,
+                  transactionType: 'deposit',
+                  memo: `Mobile payment deposit - ${transaction.reference}`,
+                  referenceId: transaction.id,
+                });
+
+              if (creditResult.success) {
+                console.log(
+                  `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
+                );
+                console.log('New balance:', creditResult.newBalance);
+              } else {
+                console.error(
+                  `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
+                );
+              }
+            } catch (creditError) {
+              console.error(
+                `Error crediting account ${transaction.account_id}:`,
+                creditError
+              );
+            }
+          }
         }
       }
 
