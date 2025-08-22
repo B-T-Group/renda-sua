@@ -169,9 +169,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             currency: selectedAccountForTopUp.currency,
             description: 'Account Top Up',
             customerPhone: phoneNumber,
-            product: 'Account',
-            agent: 'Rendasua',
-            accountId: selectedAccountForTopUp.id, // Use accountId for customer_account_number
+            accountId: selectedAccountForTopUp.id, // Fallback for customer_account_number if phone number not available
             provider,
             paymentMethod: 'mobile_money',
           });

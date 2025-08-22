@@ -4,6 +4,44 @@ import {
   MyPVitService,
 } from './providers/mypvit.service';
 
+/**
+ * Remove country code from phone number
+ * @param phoneNumber - Phone number with or without country code
+ * @returns Phone number without country code
+ *
+ * Examples:
+ * removeCountryCode('+241123456789') -> '123456789'
+ * removeCountryCode('+33123456789') -> '123456789'
+ * removeCountryCode('123456789') -> '123456789'
+ * removeCountryCode('') -> ''
+ */
+function removeCountryCode(phoneNumber: string): string {
+  if (!phoneNumber) return '';
+
+  // Remove common country codes
+  const countryCodes = [
+    '+241',
+    '+33',
+    '+1',
+    '+44',
+    '+49',
+    '+86',
+    '+91',
+    '+81',
+    '+7',
+    '+55',
+  ];
+
+  for (const code of countryCodes) {
+    if (phoneNumber.startsWith(code)) {
+      return phoneNumber.substring(code.length);
+    }
+  }
+
+  // If no country code found, return as is
+  return phoneNumber;
+}
+
 export interface MobilePaymentRequest {
   amount: number;
   currency: string;
@@ -14,8 +52,6 @@ export interface MobilePaymentRequest {
   returnUrl?: string;
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
-  agent?: string;
-  product?: string;
   accountId?: string; // Account ID for top-up operations
 }
 
@@ -94,7 +130,9 @@ export class MobilePaymentsService {
     try {
       this.logger.log(
         `Initiating mobile payment for account: ${
-          paymentRequest.accountId || 'unknown'
+          paymentRequest.customerPhone
+            ? removeCountryCode(paymentRequest.customerPhone)
+            : paymentRequest.accountId || 'unknown'
         }`
       );
 
@@ -119,6 +157,8 @@ export class MobilePaymentsService {
 
       switch (provider) {
         case 'mypvit':
+        case 'airtel':
+        case 'moov':
           const mypvitResponse = await this.myPVitService.initiatePayment(
             providerRequest as MyPVitPaymentRequest
           );
@@ -450,19 +490,19 @@ export class MobilePaymentsService {
   ): any {
     switch (provider) {
       case 'mypvit':
+      case 'airtel':
+      case 'moov':
         return {
-          agent: request.agent,
           amount: request.amount,
-          product: request.product || 'Rendasua Payment',
           service: 'RESTFUL',
           callback_url_code: this.myPVitService.getCallbackUrlCode(),
-          customer_account_number:
-            request.accountId || request.customerPhone || '',
+          customer_account_number: removeCountryCode(
+            request.customerPhone || ''
+          ),
           merchant_operation_account_code:
             this.myPVitService.getMerchantOperationAccountCode(),
           transaction_type: 'PAYMENT',
           owner_charge: 'CUSTOMER',
-          operator_owner_charge: 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
       default:
@@ -495,9 +535,11 @@ export class MobilePaymentsService {
   ): Promise<void> {
     // TODO: Implement logging to database
     this.logger.log(
-      `Payment initiated: ${request.accountId || 'unknown'} -> ${
-        response.success ? 'SUCCESS' : 'FAILED'
-      }`
+      `Payment initiated: ${
+        request.customerPhone
+          ? removeCountryCode(request.customerPhone)
+          : request.accountId || 'unknown'
+      } -> ${response.success ? 'SUCCESS' : 'FAILED'}`
     );
   }
 

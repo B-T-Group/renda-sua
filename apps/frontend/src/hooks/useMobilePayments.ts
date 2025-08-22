@@ -11,8 +11,6 @@ export interface MobilePaymentRequest {
   returnUrl?: string;
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
-  agent?: string;
-  product?: string;
   accountId?: string; // Account ID for top-up operations
 }
 

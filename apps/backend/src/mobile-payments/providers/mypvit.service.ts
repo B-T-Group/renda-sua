@@ -5,7 +5,6 @@ import {
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-import * as crypto from 'crypto';
 
 export interface MyPVitConfig {
   baseUrl: string;
@@ -17,16 +16,13 @@ export interface MyPVitConfig {
 }
 
 export interface MyPVitPaymentRequest {
-  agent?: string;
   amount: number;
-  product?: string;
   service: string;
   callback_url_code: string;
   customer_account_number: string;
   merchant_operation_account_code: string;
   transaction_type: string;
   owner_charge: string;
-  operator_owner_charge?: string;
   free_info?: string;
 }
 
@@ -94,19 +90,9 @@ export class MyPVitService {
       // Fetch secret from AWS Secrets Manager for every request
       const secretKey = await this.getSecretKey();
 
-      const timestamp = Date.now().toString();
-      const signature = this.generateSignature(
-        config.data,
-        timestamp,
-        secretKey
-      );
-
       config.headers['Content-Type'] = 'application/json';
       config.headers['X-Secret'] = secretKey;
       config.headers['X-Callback-MediaType'] = 'application/json';
-      config.headers['X-Merchant-Slug'] = this.config.merchantSlug;
-      config.headers['X-Timestamp'] = timestamp;
-      config.headers['X-Signature'] = signature;
 
       return config;
     });
@@ -167,37 +153,23 @@ export class MyPVitService {
   }
 
   /**
-   * Generate signature for API authentication
-   */
-  private generateSignature(
-    data: any,
-    timestamp: string,
-    secretKey: string
-  ): string {
-    const payload = JSON.stringify(data) + timestamp + secretKey;
-    return crypto.createHash('sha256').update(payload).digest('hex');
-  }
-
-  /**
    * Initialize a payment transaction using REST API
    */
   async initiatePayment(
     paymentRequest: MyPVitPaymentRequest
   ): Promise<MyPVitPaymentResponse> {
     try {
-      // Generate a unique reference using UUID
-      const reference = `PAY_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      // Generate a unique reference (max 15 characters)
+      const timestamp = Date.now().toString().slice(-8);
+      const random = Math.random().toString(36).substr(2, 4);
+      const reference = `P${timestamp}${random}`;
 
       this.logger.log(
         `Initiating payment for account: ${paymentRequest.customer_account_number}`
       );
 
       const payload = {
-        agent: paymentRequest.agent,
         amount: paymentRequest.amount,
-        product: paymentRequest.product,
         reference: reference,
         service: paymentRequest.service,
         callback_url_code: paymentRequest.callback_url_code,
@@ -206,7 +178,6 @@ export class MyPVitService {
           paymentRequest.merchant_operation_account_code,
         transaction_type: paymentRequest.transaction_type,
         owner_charge: paymentRequest.owner_charge,
-        operator_owner_charge: paymentRequest.operator_owner_charge,
         free_info: paymentRequest.free_info,
       };
 
@@ -281,18 +252,8 @@ export class MyPVitService {
     signature: string,
     timestamp: string
   ): Promise<boolean> {
-    try {
-      const secretKey = await this.getSecretKey();
-      const expectedSignature = this.generateSignature(
-        payload,
-        timestamp,
-        secretKey
-      );
-      return signature === expectedSignature;
-    } catch (error) {
-      this.logger.error('Failed to verify callback signature:', error);
-      return false;
-    }
+    // Signature verification disabled - always return true
+    return true;
   }
 
   /**

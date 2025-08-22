@@ -8,12 +8,6 @@ const config = {
   secretKey: 'CTCNJRBWZIDALEGT',
 };
 
-// Generate signature for authentication
-function generateSignature(data, timestamp) {
-  const payload = JSON.stringify(data) + timestamp + config.secretKey;
-  return crypto.createHash('sha256').update(payload).digest('hex');
-}
-
 // Create HTTP client with interceptors
 const httpClient = axios.create({
   baseURL: config.baseUrl,
@@ -26,13 +20,6 @@ const httpClient = axios.create({
 
 // Add request interceptor for authentication
 httpClient.interceptors.request.use((config) => {
-  const timestamp = Date.now().toString();
-  const signature = generateSignature(config.data, timestamp);
-
-  config.headers['X-Merchant-Slug'] = config.merchantSlug;
-  config.headers['X-Timestamp'] = timestamp;
-  config.headers['X-Signature'] = signature;
-
   return config;
 });
 
@@ -62,7 +49,7 @@ async function testPaymentInitiation() {
     const paymentData = {
       amount: 1000,
       currency: 'XAF',
-      reference: 'TEST-' + Date.now(),
+      reference: 'T' + Date.now().toString().slice(-8),
       description: 'Test payment from Rendasua',
       customer_phone: '+241123456789',
       customer_email: 'test@rendasua.com',

@@ -18,7 +18,6 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
@@ -225,10 +224,11 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                 </Select>
               </FormControl>
 
-              <PhoneInput
+              <TextField
+                fullWidth
                 label="Phone Number"
                 value={phoneNumber}
-                onChange={(value) => setPhoneNumber(value || '')}
+                onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="Enter phone number for payment"
                 required
                 error={!!error && !phoneNumber.trim()}
