@@ -215,6 +215,72 @@ export class MobilePaymentsController {
           transaction_id: paymentResponse.transactionId,
           payment_url: paymentResponse.paymentUrl,
         });
+
+        // For GIVE_CHANGE transactions, withdraw from account only after successful payment initiation
+        if (
+          paymentRequest.transactionType === 'GIVE_CHANGE' &&
+          paymentRequest.accountId
+        ) {
+          try {
+            const withdrawalResult =
+              await this.accountsService.registerTransaction({
+                accountId: paymentRequest.accountId,
+                amount: paymentRequest.amount,
+                transactionType: 'withdrawal',
+                memo: `Mobile payment give change - ${reference}`,
+                referenceId: transaction.id,
+              });
+
+            if (withdrawalResult.success) {
+              console.log(
+                `Successfully withdrew ${paymentRequest.amount} ${paymentRequest.currency} from account ${paymentRequest.accountId} for give change`
+              );
+              console.log('New balance:', withdrawalResult.newBalance);
+            } else {
+              console.error(
+                `Failed to withdraw from account ${paymentRequest.accountId}: ${withdrawalResult.error}`
+              );
+              // Update transaction status to failed
+              await this.databaseService.updateTransaction(transaction.id, {
+                status: 'failed',
+                error_message: `Withdrawal failed: ${withdrawalResult.error}`,
+                error_code: 'WITHDRAWAL_FAILED',
+              });
+              throw new HttpException(
+                {
+                  success: false,
+                  message: 'Failed to process withdrawal',
+                  error: 'WITHDRAWAL_FAILED',
+                  data: {
+                    accountId: paymentRequest.accountId,
+                    amount: paymentRequest.amount,
+                    error: withdrawalResult.error,
+                  },
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+              );
+            }
+          } catch (withdrawalError) {
+            console.error(
+              `Error withdrawing from account ${paymentRequest.accountId}:`,
+              withdrawalError
+            );
+            // Update transaction status to failed
+            await this.databaseService.updateTransaction(transaction.id, {
+              status: 'failed',
+              error_message: 'Withdrawal processing error',
+              error_code: 'WITHDRAWAL_ERROR',
+            });
+            throw new HttpException(
+              {
+                success: false,
+                message: 'Failed to process withdrawal',
+                error: 'WITHDRAWAL_ERROR',
+              },
+              HttpStatus.INTERNAL_SERVER_ERROR
+            );
+          }
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
@@ -551,37 +617,6 @@ export class MobilePaymentsController {
             console.error(
               `Error crediting account ${transaction.account_id}:`,
               creditError
-            );
-          }
-        } else if (
-          callbackData.status === 'SUCCESS' &&
-          transaction.account_id &&
-          transaction.transaction_type === 'GIVE_CHANGE'
-        ) {
-          try {
-            const withdrawalResult =
-              await this.accountsService.registerTransaction({
-                accountId: transaction.account_id,
-                amount: transaction.amount,
-                transactionType: 'withdrawal',
-                memo: `Mobile payment give change - ${transaction.reference}`,
-                referenceId: transaction.id,
-              });
-
-            if (withdrawalResult.success) {
-              console.log(
-                `Successfully withdrew ${transaction.amount} ${transaction.currency} from account ${transaction.account_id} for give change`
-              );
-              console.log('New balance:', withdrawalResult.newBalance);
-            } else {
-              console.error(
-                `Failed to withdraw from account ${transaction.account_id}: ${withdrawalResult.error}`
-              );
-            }
-          } catch (withdrawalError) {
-            console.error(
-              `Error withdrawing from account ${transaction.account_id}:`,
-              withdrawalError
             );
           }
         }
