@@ -61,7 +61,9 @@ POST /mobile-payments/initiate
   "callbackUrl": "https://api.rendasua.com/mobile-payments/callback/pvit",
   "returnUrl": "https://rendasua.com/payment/success",
   "provider": "mypvit",
-  "paymentMethod": "mobile_money"
+  "paymentMethod": "mobile_money",
+  "agent": "AGENT-1",
+  "product": "PRODUIT-1"
 }
 ```
 
@@ -255,6 +257,8 @@ MYPVIT_BASE_URL=https://api.mypvit.pro
 MYPVIT_MERCHANT_SLUG=MR_1755783875
 MYPVIT_SECRET_KEY=CTCNJRBWZIDALEGT
 MYPVIT_ENVIRONMENT=test  # or production
+MYPVIT_CALLBACK_URL_CODE=FJXSU
+MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE=ACC_68A722C33473B
 API_BASE_URL=https://api.rendasua.com  # For callback URLs
 ```
 
@@ -271,6 +275,42 @@ The module uses signature-based authentication as per MyPVit's requirements:
 1. **Request Signing**: Each request is signed with a SHA256 hash
 2. **Timestamp**: Requests include a timestamp for security
 3. **Headers**: Authentication headers are automatically added
+
+### MyPVIT Request Format
+
+The system automatically converts your request to the MyPVIT API format:
+
+```json
+{
+  "agent": "AGENT-1",
+  "amount": 200,
+  "product": "PRODUIT-1",
+  "reference": "REF123456",
+  "service": "RESTFUL",
+  "callback_url_code": "FJXSU",
+  "customer_account_number": "066820866",
+  "merchant_operation_account_code": "ACC_68A722C33473B",
+  "transaction_type": "PAYMENT",
+  "owner_charge": "CUSTOMER",
+  "operator_owner_charge": "MERCHANT",
+  "free_info": "Info libre"
+}
+```
+
+**Field Descriptions:**
+
+- `agent`: Agent identifier (optional)
+- `amount`: Transaction amount (> 150 XAF)
+- `product`: Product name (optional)
+- `reference`: Unique transaction reference (max 15 characters)
+- `service`: Service type (always "RESTFUL")
+- `callback_url_code`: Callback URL code (configurable)
+- `customer_account_number`: Customer phone number (max 20 characters)
+- `merchant_operation_account_code`: Merchant operation account (configurable)
+- `transaction_type`: Transaction type (always "PAYMENT")
+- `owner_charge`: Entity paying PVit fees ("MERCHANT" or "CUSTOMER")
+- `operator_owner_charge`: Entity paying operator fees (optional)
+- `free_info`: Free information (optional)
 
 ### Callback Verification
 

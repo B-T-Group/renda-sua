@@ -23,6 +23,8 @@ export interface InitiatePaymentDto {
   returnUrl?: string;
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
+  agent?: string;
+  product?: string;
 }
 
 export interface PaymentCallbackDto {
@@ -404,7 +406,7 @@ export class MobilePaymentsController {
    * Payment callback endpoint for MyPVIT
    */
   @Public()
-  @Post('callback/pvit')
+  @Post('callback/mypvit')
   async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
     try {
       // Validate required fields

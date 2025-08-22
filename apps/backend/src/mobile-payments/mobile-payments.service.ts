@@ -15,6 +15,8 @@ export interface MobilePaymentRequest {
   returnUrl?: string;
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
+  agent?: string;
+  product?: string;
 }
 
 export interface MobilePaymentResponse {
@@ -447,14 +449,19 @@ export class MobilePaymentsService {
     switch (provider) {
       case 'mypvit':
         return {
+          agent: request.agent,
           amount: request.amount,
-          currency: request.currency,
+          product: request.product || 'Rendasua Payment',
           reference: request.reference,
-          description: request.description,
-          customerPhone: request.customerPhone,
-          customerEmail: request.customerEmail,
-          callbackUrl: request.callbackUrl,
-          returnUrl: request.returnUrl,
+          service: 'RESTFUL',
+          callback_url_code: this.myPVitService.getCallbackUrlCode(),
+          customer_account_number: request.customerPhone || '',
+          merchant_operation_account_code:
+            this.myPVitService.getMerchantOperationAccountCode(),
+          transaction_type: 'PAYMENT',
+          owner_charge: 'CUSTOMER',
+          operator_owner_charge: 'CUSTOMER',
+          free_info: request.description,
         } as MyPVitPaymentRequest;
       default:
         throw new Error(`Unsupported provider: ${provider}`);

@@ -12,17 +12,23 @@ export interface MyPVitConfig {
   merchantSlug: string;
   secretKey: string;
   environment: 'test' | 'production';
+  callbackUrlCode: string;
+  merchantOperationAccountCode: string;
 }
 
 export interface MyPVitPaymentRequest {
+  agent?: string;
   amount: number;
-  currency: string;
+  product?: string;
   reference: string;
-  description: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  callbackUrl?: string;
-  returnUrl?: string;
+  service: string;
+  callback_url_code: string;
+  customer_account_number: string;
+  merchant_operation_account_code: string;
+  transaction_type: string;
+  owner_charge: string;
+  operator_owner_charge?: string;
+  free_info?: string;
 }
 
 export interface MyPVitPaymentResponse {
@@ -62,6 +68,12 @@ export class MyPVitService {
         (this.configService.get<string>('MYPVIT_ENVIRONMENT') as
           | 'test'
           | 'production') || 'test',
+      callbackUrlCode:
+        this.configService.get<string>('MYPVIT_CALLBACK_URL_CODE') || 'FJXSU',
+      merchantOperationAccountCode:
+        this.configService.get<string>(
+          'MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE'
+        ) || 'ACC_68A722C33473B',
     };
 
     // Initialize AWS Secrets Manager client
@@ -179,14 +191,19 @@ export class MyPVitService {
       );
 
       const payload = {
+        agent: paymentRequest.agent,
         amount: paymentRequest.amount,
-        currency: paymentRequest.currency,
+        product: paymentRequest.product,
         reference: paymentRequest.reference,
-        description: paymentRequest.description,
-        customer_phone: paymentRequest.customerPhone,
-        customer_email: paymentRequest.customerEmail,
-        callback_url: paymentRequest.callbackUrl,
-        return_url: paymentRequest.returnUrl,
+        service: paymentRequest.service,
+        callback_url_code: paymentRequest.callback_url_code,
+        customer_account_number: paymentRequest.customer_account_number,
+        merchant_operation_account_code:
+          paymentRequest.merchant_operation_account_code,
+        transaction_type: paymentRequest.transaction_type,
+        owner_charge: paymentRequest.owner_charge,
+        operator_owner_charge: paymentRequest.operator_owner_charge,
+        free_info: paymentRequest.free_info,
       };
 
       // Use the REST endpoint for payment initiation
@@ -450,5 +467,19 @@ export class MyPVitService {
       this.logger.error('MyPVit connection test failed:', error);
       return false;
     }
+  }
+
+  /**
+   * Get callback URL code
+   */
+  getCallbackUrlCode(): string {
+    return this.config.callbackUrlCode;
+  }
+
+  /**
+   * Get merchant operation account code
+   */
+  getMerchantOperationAccountCode(): string {
+    return this.config.merchantOperationAccountCode;
   }
 }
