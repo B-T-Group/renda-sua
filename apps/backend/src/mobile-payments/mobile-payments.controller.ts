@@ -150,6 +150,28 @@ export class MobilePaymentsController {
         }
       }
 
+      // Validate Airtel and MOOV providers only work with XAF currency
+      if (
+        (paymentRequest.provider === 'airtel' ||
+          paymentRequest.provider === 'moov') &&
+        paymentRequest.currency !== 'XAF'
+      ) {
+        throw new HttpException(
+          {
+            success: false,
+            message:
+              'Airtel Money and MOOV Money are only supported for XAF currency',
+            error: 'UNSUPPORTED_CURRENCY',
+            data: {
+              provider: paymentRequest.provider,
+              currency: paymentRequest.currency,
+              supportedCurrency: 'XAF',
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
         paymentRequest.callbackUrl ||

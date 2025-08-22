@@ -12,6 +12,7 @@ export interface MobilePaymentRequest {
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
+  transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
 }
 
 export interface MobilePaymentResponse {

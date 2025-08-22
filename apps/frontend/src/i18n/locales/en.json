@@ -537,7 +537,12 @@
     "withheldBalance": "Withheld Balance",
     "createdAt": "Created At",
     "viewTransactions": "View Transactions",
-    "creditAccount": "Credit Account",
+    "creditAccount": "Top Up",
+    "withdraw": "Withdraw",
+    "paymentMethod": "Payment Method",
+    "phoneNumber": "Phone Number",
+    "phoneNumberPlaceholder": "Enter phone number",
+    "phoneNumberHint": "Enter phone number without country code (e.g., 062 04 04 04)",
     "transactionHistory": "Transaction History",
     "recentTransactions": "Recent Transactions",
     "noTransactions": "No transactions found",
@@ -581,7 +586,14 @@
       "transactionNotFound": "Transaction not found",
       "callbackProcessed": "Callback processed successfully",
       "callbackFailed": "Failed to process callback"
-    }
+    },
+    "withdrawRequest": "Withdrawal Request",
+    "withdrawRequestSent": "Withdrawal request successfully sent.",
+    "withdrawFailed": "Withdrawal request failed. Please try again.",
+    "insufficientFunds": "Insufficient funds in account",
+    "phoneNumberRequired": "Phone number is required",
+    "amountRequired": "Amount is required",
+    "amountPlaceholder": "Enter amount to withdraw"
   },
   "auth": {
     "profile": "Profile",

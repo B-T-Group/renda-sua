@@ -3,6 +3,7 @@ import {
   Add as AddIcon,
   History as HistoryIcon,
   Refresh as RefreshIcon,
+  Remove as RemoveIcon,
   TrendingDown as TrendingDownIcon,
   TrendingUp as TrendingUpIcon,
   Visibility as VisibilityIcon,
@@ -45,6 +46,7 @@ import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
+import WithdrawModal from '../business/WithdrawModal';
 
 interface AccountManagerProps {
   entityType: EntityType;
@@ -109,9 +111,14 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     // Dialog state
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
-    // Top-up modal state
+    // State for top-up modal
     const [topUpModalOpen, setTopUpModalOpen] = useState(false);
     const [selectedAccountForTopUp, setSelectedAccountForTopUp] =
+      useState<Account | null>(null);
+
+    // State for withdraw modal
+    const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+    const [selectedAccountForWithdraw, setSelectedAccountForWithdraw] =
       useState<Account | null>(null);
 
     // MTN MoMo top-up hook
@@ -194,6 +201,73 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
         return success;
       } catch (error) {
         console.error('Top-up error:', error);
+        return false;
+      }
+    };
+
+    // Handle withdraw account
+    const handleWithdraw = (account: Account) => {
+      setSelectedAccountForWithdraw(account);
+      setWithdrawModalOpen(true);
+    };
+
+    // Handle withdraw confirmation
+    const handleWithdrawConfirm = async (
+      phoneNumber: string,
+      amount: string,
+      paymentMethod: 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card'
+    ): Promise<boolean> => {
+      if (!selectedAccountForWithdraw) return false;
+
+      try {
+        let success = false;
+
+        if (paymentMethod === 'mtn-momo') {
+          // For MTN MoMo, we'll use the mobile payments API with GIVE_CHANGE type
+          const response = await initiatePayment({
+            amount: parseFloat(amount),
+            currency: selectedAccountForWithdraw.currency,
+            description: 'Account Withdrawal',
+            customerPhone: phoneNumber,
+            accountId: selectedAccountForWithdraw.id,
+            provider: 'mypvit',
+            paymentMethod: 'mobile_money',
+            transactionType: 'GIVE_CHANGE',
+          });
+
+          success = response.success;
+        } else if (
+          paymentMethod === 'airtel-money' ||
+          paymentMethod === 'moov-money'
+        ) {
+          // Use the unified mobile payments API for Airtel Money and MOOV
+          const provider = paymentMethod === 'airtel-money' ? 'airtel' : 'moov';
+
+          const response = await initiatePayment({
+            amount: parseFloat(amount),
+            currency: selectedAccountForWithdraw.currency,
+            description: 'Account Withdrawal',
+            customerPhone: phoneNumber,
+            accountId: selectedAccountForWithdraw.id,
+            provider,
+            paymentMethod: 'mobile_money',
+            transactionType: 'GIVE_CHANGE',
+          });
+
+          success = response.success;
+        } else if (paymentMethod === 'credit-card') {
+          // Credit card not supported yet
+          return false;
+        }
+
+        if (success) {
+          // Refresh accounts after successful withdrawal
+          await fetchAccounts();
+        }
+
+        return success;
+      } catch (error) {
+        console.error('Withdrawal error:', error);
         return false;
       }
     };
@@ -534,6 +608,37 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
                             >
                               {t('accounts.creditAccount')}
                             </Button>
+                            {account.available_balance > 0 && (
+                              <Button
+                                onClick={() => handleWithdraw(account)}
+                                disabled={loading}
+                                variant="contained"
+                                size="small"
+                                startIcon={<RemoveIcon />}
+                                sx={{
+                                  background:
+                                    'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
+                                  color: 'white',
+                                  fontWeight: 600,
+                                  textTransform: 'none',
+                                  boxShadow:
+                                    '0 3px 5px 2px rgba(255, 87, 34, .3)',
+                                  '&:hover': {
+                                    background:
+                                      'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
+                                    boxShadow:
+                                      '0 4px 8px 2px rgba(255, 87, 34, .4)',
+                                  },
+                                  '&:disabled': {
+                                    background:
+                                      'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
+                                    boxShadow: 'none',
+                                  },
+                                }}
+                              >
+                                {t('accounts.withdraw')}
+                              </Button>
+                            )}
                           </Box>
                         )}
                       </Box>
@@ -754,6 +859,22 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             currency={selectedAccountForTopUp.currency}
             loading={topUpLoading || airtelLoading || mobilePaymentsLoading}
             onConfirm={handleTopUpConfirm}
+          />
+        )}
+
+        {/* Withdraw Modal */}
+        {selectedAccountForWithdraw && (
+          <WithdrawModal
+            open={withdrawModalOpen}
+            onClose={() => {
+              setWithdrawModalOpen(false);
+              setSelectedAccountForWithdraw(null);
+            }}
+            userPhoneNumber={userProfile?.phone_number || ''}
+            currency={selectedAccountForWithdraw.currency}
+            availableBalance={selectedAccountForWithdraw.available_balance}
+            loading={mobilePaymentsLoading}
+            onConfirm={handleWithdrawConfirm}
           />
         )}
       </>

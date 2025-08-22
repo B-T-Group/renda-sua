@@ -432,7 +432,12 @@
     "withheldBalance": "Solde retenu",
     "createdAt": "Créé le",
     "viewTransactions": "Voir les transactions",
-    "creditAccount": "Créditer le compte",
+    "creditAccount": "Recharger",
+    "withdraw": "Retirer",
+    "paymentMethod": "Méthode de Paiement",
+    "phoneNumber": "Numéro de Téléphone",
+    "phoneNumberPlaceholder": "Entrez le numéro de téléphone",
+    "phoneNumberHint": "Entrez le numéro de téléphone sans l'indicatif du pays (ex: 062 04 04 04)",
     "transactionHistory": "Historique des transactions",
     "recentTransactions": "Transactions récentes",
     "noTransactions": "Aucune transaction trouvée",
@@ -476,7 +481,14 @@
       "transactionNotFound": "Transaction non trouvée",
       "callbackProcessed": "Rappel traité avec succès",
       "callbackFailed": "Échec du traitement du rappel"
-    }
+    },
+    "withdrawRequest": "Demande de Retrait",
+    "withdrawRequestSent": "Demande de retrait envoyée avec succès.",
+    "withdrawFailed": "La demande de retrait a échoué. Veuillez réessayer.",
+    "insufficientFunds": "Fonds insuffisants dans le compte",
+    "phoneNumberRequired": "Le numéro de téléphone est requis",
+    "amountRequired": "Le montant est requis",
+    "amountPlaceholder": "Entrez le montant à retirer"
   },
   "auth": {
     "profile": "Profil",
