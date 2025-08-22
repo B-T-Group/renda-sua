@@ -296,7 +296,9 @@ const OrderCard: React.FC<{
         >
           <Box>
             <Typography variant="h6" component="h3" gutterBottom>
-              {t('orderCard.orderNumber', { orderNumber: order.order_number })}
+              {t('orders.orderCard.orderNumber', {
+                orderNumber: order.order_number,
+              })}
             </Typography>
             <Chip
               icon={getStatusIcon(order.current_status)}

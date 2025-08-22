@@ -68,10 +68,14 @@
     "items": "Articles",
     "fetchingItems": "Récupération des articles...",
     "duration": "Durée",
+    "distance": "Distance",
     "noOrders": "Aucune Commande",
     "noOrdersDescription": "Vous n'avez pas encore de commandes."
   },
   "business": {
+    "common": {
+      "orderNumber": "Commande #{{number}}"
+    },
     "dashboard": {
       "title": "Tableau de bord",
       "welcome": "Bon retour, {{name}} ! Voici votre tableau de bord entreprise.",
@@ -342,6 +346,15 @@
     "size": "Taille",
     "table": {
       "items": "Articles"
+    },
+    "orderCard": {
+      "orderNumber": "Commande #{{orderNumber}}",
+      "businessDistance": "Distance de l'Entreprise",
+      "delivery": "Livraison",
+      "deliveryDistance": "Distance de Livraison",
+      "items": "Articles",
+      "pickup": "Récupération",
+      "moreItems": "plus d'articles"
     }
   },
   "orderActions": {
@@ -633,16 +646,5 @@
   "orderHistory": {
     "title": "Historique des Commandes",
     "noHistory": "Aucun historique de commande disponible."
-  },
-  "orders": {
-    "orderCard": {
-      "orderNumber": "Commande #{{orderNumber}}",
-      "businessDistance": "Distance de l'Entreprise",
-      "delivery": "Livraison",
-      "deliveryDistance": "Distance de Livraison",
-      "items": "Articles",
-      "pickup": "Récupération",
-      "moreItems": "plus d'articles"
-    }
   }
 }

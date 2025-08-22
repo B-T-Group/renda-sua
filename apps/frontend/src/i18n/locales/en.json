@@ -72,10 +72,14 @@
     "items": "Items",
     "fetchingItems": "Fetching items...",
     "duration": "Duration",
+    "distance": "Distance",
     "noOrders": "No Orders",
     "noOrdersDescription": "You don't have any orders yet."
   },
   "business": {
+    "common": {
+      "orderNumber": "Order #{{number}}"
+    },
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back, {{name}}! This is your business dashboard.",
@@ -449,6 +453,15 @@
     "size": "Size",
     "table": {
       "items": "Items"
+    },
+    "orderCard": {
+      "orderNumber": "Order #{{orderNumber}}",
+      "businessDistance": "Business Distance",
+      "delivery": "Delivery",
+      "deliveryDistance": "Delivery Distance",
+      "items": "Items",
+      "pickup": "Pickup",
+      "moreItems": "more items"
     }
   },
   "orderActions": {
@@ -695,16 +708,5 @@
   "orderHistory": {
     "title": "Order History",
     "noHistory": "No order history available."
-  },
-  "orders": {
-    "orderCard": {
-      "orderNumber": "Order #{{orderNumber}}",
-      "businessDistance": "Business Distance",
-      "delivery": "Delivery",
-      "deliveryDistance": "Delivery Distance",
-      "items": "Items",
-      "pickup": "Pickup",
-      "moreItems": "more items"
-    }
   }
 }

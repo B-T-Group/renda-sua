@@ -873,8 +873,8 @@ const ClientOrders: React.FC = () => {
                           )}
                           {distanceInfo && (
                             <Typography variant="body2" color="text.secondary">
-                              {t('Distance')}: {distanceInfo.distance},{' '}
-                              {t('Duration')}: {distanceInfo.duration}
+                              {t('common.distance')}: {distanceInfo.distance},{' '}
+                              {t('common.duration')}: {distanceInfo.duration}
                             </Typography>
                           )}
                         </CardContent>
