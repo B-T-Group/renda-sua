@@ -119,10 +119,10 @@ export class MobilePaymentsController {
           process.env.API_BASE_URL || 'http://localhost:3000'
         }/mobile-payments/callback/pvit`;
 
-      // Generate a unique reference for the transaction
-      const reference = `PAY_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      // Generate a unique reference for the transaction (same format as MyPVIT service)
+      const timestamp = Date.now().toString().slice(-8);
+      const random = Math.random().toString(36).substr(2, 4);
+      const reference = `P${timestamp}${random}`;
 
       // Create transaction record in database
       const transaction = await this.databaseService.createTransaction({
@@ -143,7 +143,7 @@ export class MobilePaymentsController {
       const paymentResponse = await this.mobilePaymentsService.initiatePayment({
         ...paymentRequest,
         callbackUrl,
-      });
+      }, reference);
 
       // Update transaction with provider response
       if (paymentResponse.success && paymentResponse.transactionId) {

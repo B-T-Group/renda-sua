@@ -167,13 +167,16 @@ export class MyPVitService {
    * Initialize a payment transaction using REST API
    */
   async initiatePayment(
-    paymentRequest: MyPVitPaymentRequest
+    paymentRequest: MyPVitPaymentRequest,
+    reference?: string
   ): Promise<MyPVitPaymentResponse> {
     try {
-      // Generate a unique reference (max 15 characters)
-      const timestamp = Date.now().toString().slice(-8);
-      const random = Math.random().toString(36).substr(2, 4);
-      const reference = `P${timestamp}${random}`;
+      // Generate a unique reference (max 15 characters) if not provided
+      if (!reference) {
+        const timestamp = Date.now().toString().slice(-8);
+        const random = Math.random().toString(36).substr(2, 4);
+        reference = `P${timestamp}${random}`;
+      }
 
       this.logger.log(
         `Initiating payment for account: ${paymentRequest.customer_account_number}`

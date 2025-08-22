@@ -170,7 +170,8 @@ export class MobilePaymentsService {
    * Initiate a mobile payment
    */
   async initiatePayment(
-    paymentRequest: MobilePaymentRequest
+    paymentRequest: MobilePaymentRequest,
+    reference?: string
   ): Promise<MobilePaymentResponse> {
     try {
       // Validate phone number if provided
@@ -226,7 +227,8 @@ export class MobilePaymentsService {
         case 'airtel':
         case 'moov': {
           const mypvitResponse = await this.myPVitService.initiatePayment(
-            providerRequest as MyPVitPaymentRequest
+            providerRequest as MyPVitPaymentRequest,
+            reference
           );
 
           response = {
