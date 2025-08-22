@@ -7,10 +7,7 @@ import {
   Param,
   Post,
   Query,
-  Req,
-  Res,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
@@ -37,6 +34,19 @@ export interface PaymentCallbackDto {
   message?: string;
   signature?: string;
   timestamp?: string;
+}
+
+export interface MyPVitCallbackDto {
+  transactionId: string;
+  merchantReferenceId: string;
+  status: 'SUCCESS' | 'FAILED';
+  amount: number;
+  customerID: string;
+  fees: number;
+  chargeOwner: string;
+  transactionOperation: string;
+  operator: string;
+  code: number;
 }
 
 @Controller('mobile-payments')
@@ -100,6 +110,13 @@ export class MobilePaymentsController {
   @Post('initiate')
   async initiatePayment(@Body() paymentRequest: InitiatePaymentDto) {
     try {
+      // Set default callback URL for MyPVIT if not provided
+      const callbackUrl =
+        paymentRequest.callbackUrl ||
+        `${
+          process.env.API_BASE_URL || 'http://localhost:3000'
+        }/mobile-payments/callback/pvit`;
+
       // Create transaction record in database
       const transaction = await this.databaseService.createTransaction({
         reference: paymentRequest.reference,
@@ -110,14 +127,15 @@ export class MobilePaymentsController {
         payment_method: paymentRequest.paymentMethod || 'mobile_money',
         customer_phone: paymentRequest.customerPhone,
         customer_email: paymentRequest.customerEmail,
-        callback_url: paymentRequest.callbackUrl,
+        callback_url: callbackUrl,
         return_url: paymentRequest.returnUrl,
       });
 
       // Initiate payment with provider
-      const paymentResponse = await this.mobilePaymentsService.initiatePayment(
-        paymentRequest
-      );
+      const paymentResponse = await this.mobilePaymentsService.initiatePayment({
+        ...paymentRequest,
+        callbackUrl,
+      });
 
       // Update transaction with provider response
       if (paymentResponse.success && paymentResponse.transactionId) {
@@ -383,36 +401,89 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Payment callback endpoint
+   * Payment callback endpoint for MyPVIT
+   */
+  @Public()
+  @Post('callback/pvit')
+  async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
+    try {
+      // Validate required fields
+      if (
+        !callbackData.transactionId ||
+        !callbackData.merchantReferenceId ||
+        !callbackData.status
+      ) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing required callback data',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Log the callback
+      await this.databaseService.logCallback(
+        callbackData.transactionId,
+        callbackData
+      );
+
+      // Find transaction by merchant reference ID
+      const transaction = await this.databaseService.getTransactionByReference(
+        callbackData.merchantReferenceId
+      );
+
+      if (transaction) {
+        // Map MyPVIT status to our status format
+        const status = callbackData.status === 'SUCCESS' ? 'success' : 'failed';
+
+        await this.databaseService.updateTransaction(transaction.id, {
+          status,
+          transaction_id: callbackData.transactionId,
+          error_message:
+            callbackData.status === 'FAILED' ? 'Payment failed' : undefined,
+        });
+
+        console.log(
+          `Updated transaction ${transaction.id} with status: ${status}`
+        );
+      } else {
+        console.warn(
+          `Transaction not found for reference: ${callbackData.merchantReferenceId}`
+        );
+      }
+
+      // Return success response
+      return {
+        success: true,
+        message: 'Callback processed successfully',
+        transactionId: callbackData.transactionId,
+        merchantReferenceId: callbackData.merchantReferenceId,
+        status: callbackData.status,
+      };
+    } catch (error: any) {
+      console.error('MyPVIT callback processing error:', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to process callback',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Generic payment callback endpoint (for backward compatibility)
    */
   @Public()
   @Post('callback/:provider')
   async paymentCallback(
     @Param('provider') provider: string,
-    @Body() callbackData: PaymentCallbackDto,
-    @Req() req: Request,
-    @Res() res: Response
+    @Body() callbackData: PaymentCallbackDto
   ) {
     try {
-      // Extract signature and timestamp from headers
-      const signature = req.headers['x-signature'] as string;
-      const timestamp = req.headers['x-timestamp'] as string;
-
-      // Verify callback signature
-      const isValid = await this.mobilePaymentsService.verifyCallback(
-        callbackData,
-        signature,
-        timestamp,
-        provider
-      );
-
-      if (!isValid) {
-        return res.status(HttpStatus.UNAUTHORIZED).json({
-          success: false,
-          message: 'Invalid callback signature',
-        });
-      }
-
       // Log the callback
       if (callbackData.transaction_id) {
         await this.databaseService.logCallback(
@@ -431,7 +502,7 @@ export class MobilePaymentsController {
           await this.databaseService.updateTransaction(transaction.id, {
             status: callbackData.status as
               | 'pending'
-              | 'completed'
+              | 'success'
               | 'failed'
               | 'cancelled',
             error_message: callbackData.message,
@@ -440,16 +511,19 @@ export class MobilePaymentsController {
       }
 
       // Return success response
-      return res.status(HttpStatus.OK).json({
+      return {
         success: true,
         message: 'Callback processed successfully',
-      });
+      };
     } catch (error: any) {
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        message: 'Failed to process callback',
-        error: error.message,
-      });
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to process callback',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

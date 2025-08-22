@@ -228,7 +228,7 @@ export class MobilePaymentsDatabaseService {
       `;
 
       const variables = { reference };
-      const response = await this.hasuraService.request(query, variables);
+      const response = await this.hasuraService.executeQuery(query, variables);
       return response.mobile_payment_transactions[0] || null;
     } catch (error) {
       this.logger.error(
@@ -306,7 +306,7 @@ export class MobilePaymentsDatabaseService {
         }
       `;
 
-      const response = await this.hasuraService.request(query);
+      const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
       this.logger.error('Failed to get mobile payment transactions:', error);
@@ -365,7 +365,7 @@ export class MobilePaymentsDatabaseService {
         }
       `;
 
-      const response = await this.hasuraService.request(query);
+      const response = await this.hasuraService.executeQuery(query);
       const aggregate =
         response.mobile_payment_transactions_aggregate.aggregate;
       const nodes = response.mobile_payment_transactions_aggregate.nodes;
@@ -409,6 +409,30 @@ export class MobilePaymentsDatabaseService {
    */
   async logCallback(transactionId: string, callbackData: any): Promise<void> {
     try {
+      // First, find the transaction by reference or transaction_id
+      let transaction = null;
+
+      // Try to find by reference if it's a MyPVIT callback
+      if (callbackData.merchantReferenceId) {
+        transaction = await this.getTransactionByReference(
+          callbackData.merchantReferenceId
+        );
+      }
+
+      // If not found by reference, try to find by transaction_id
+      if (!transaction && callbackData.transaction_id) {
+        transaction = await this.getTransactionById(
+          callbackData.transaction_id
+        );
+      }
+
+      if (!transaction) {
+        this.logger.warn(
+          `Transaction not found for callback logging: ${transactionId}`
+        );
+        return;
+      }
+
       const mutation = `
         mutation LogPaymentCallback($transactionId: uuid!, $callbackData: jsonb!) {
           insert_payment_callbacks_one(object: {
@@ -422,13 +446,13 @@ export class MobilePaymentsDatabaseService {
       `;
 
       const variables = {
-        transactionId,
+        transactionId: transaction.id, // Use our database UUID
         callbackData,
       };
 
-      await this.hasuraService.request(mutation, variables);
+      await this.hasuraService.executeMutation(mutation, variables);
       this.logger.log(
-        `Payment callback logged for transaction: ${transactionId}`
+        `Payment callback logged for transaction: ${transaction.id}`
       );
     } catch (error) {
       this.logger.error('Failed to log payment callback:', error);

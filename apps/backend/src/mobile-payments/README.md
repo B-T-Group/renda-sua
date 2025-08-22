@@ -58,7 +58,7 @@ POST /mobile-payments/initiate
   "description": "Payment for order #123",
   "customerPhone": "+241123456789",
   "customerEmail": "customer@example.com",
-  "callbackUrl": "https://api.rendasua.com/mobile-payments/callback/mypvit",
+  "callbackUrl": "https://api.rendasua.com/mobile-payments/callback/pvit",
   "returnUrl": "https://rendasua.com/payment/success",
   "provider": "mypvit",
   "paymentMethod": "mobile_money"
@@ -173,7 +173,47 @@ GET /mobile-payments/statistics?provider=mypvit&startDate=2024-01-01&endDate=202
 
 ### Callback Handling
 
-#### Payment Callback
+#### MyPVIT Payment Callback
+
+```http
+POST /mobile-payments/callback/pvit
+```
+
+**Request Body:**
+
+```json
+{
+  "transactionId": "PAY240420250001",
+  "merchantReferenceId": "REF123456",
+  "status": "SUCCESS",
+  "amount": 200.0,
+  "customerID": "066820866",
+  "fees": 5.0,
+  "chargeOwner": "CUSTOMER",
+  "transactionOperation": "PAYMENT",
+  "operator": "MOOV_MONEY",
+  "code": 200
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Callback processed successfully",
+  "transactionId": "PAY240420250001",
+  "merchantReferenceId": "REF123456",
+  "status": "SUCCESS"
+}
+```
+
+**Status Values:**
+
+- `SUCCESS`: Payment was successful
+- `FAILED`: Payment failed
+
+#### Generic Payment Callback (Backward Compatibility)
 
 ```http
 POST /mobile-payments/callback/{provider}
@@ -215,6 +255,7 @@ MYPVIT_BASE_URL=https://api.mypvit.pro
 MYPVIT_MERCHANT_SLUG=MR_1755783875
 MYPVIT_SECRET_KEY=CTCNJRBWZIDALEGT
 MYPVIT_ENVIRONMENT=test  # or production
+API_BASE_URL=https://api.rendasua.com  # For callback URLs
 ```
 
 **Test Environment Credentials:**
@@ -267,129 +308,75 @@ CREATE TABLE mobile_payment_transactions (
 ```sql
 CREATE TABLE payment_callbacks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  transaction_id UUID REFERENCES mobile_payment_transactions(id),
+  transaction_id UUID NOT NULL REFERENCES mobile_payment_transactions(id) ON DELETE CASCADE,
   callback_data JSONB NOT NULL,
-  received_at TIMESTAMP DEFAULT NOW()
+  received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  processed BOOLEAN DEFAULT FALSE,
+  processed_at TIMESTAMP WITH TIME ZONE,
+  error_message TEXT
 );
 ```
 
 ## Usage Examples
 
-### Basic Payment Flow
+### Initiating a Payment
 
 ```typescript
-// 1. Initiate payment
-const paymentResponse = await mobilePaymentsService.initiatePayment({
-  amount: 1000,
+const paymentRequest = {
+  amount: 5000,
   currency: 'XAF',
   reference: 'ORDER-123',
   description: 'Payment for order #123',
   customerPhone: '+241123456789',
   provider: 'mypvit',
   paymentMethod: 'mobile_money',
-});
+};
 
-// 2. Redirect user to payment URL
-if (paymentResponse.success) {
-  window.location.href = paymentResponse.paymentUrl;
-}
-
-// 3. Check status (polling or callback)
-const status = await mobilePaymentsService.checkTransactionStatus(paymentResponse.transactionId);
+const response = await mobilePaymentsService.initiatePayment(paymentRequest);
 ```
 
-### Provider Selection
+### Handling Callbacks
+
+The system automatically handles MyPVIT callbacks at `/mobile-payments/callback/pvit` and updates transaction status accordingly.
+
+### Checking Transaction Status
 
 ```typescript
-// Get available providers
-const providers = await mobilePaymentsService.getAvailableProviders();
-
-// Select best provider based on requirements
-const bestProvider = providers.find((p) => p.isAvailable && p.supportedMethods.includes('mobile_money') && p.supportedCurrencies.includes('XAF'));
+const status = await mobilePaymentsService.checkTransactionStatus('PAY240420250001');
+console.log(`Transaction status: ${status.status}`);
 ```
 
 ## Error Handling
 
 The module provides comprehensive error handling:
 
-- **Provider Errors**: Network issues, API errors
 - **Validation Errors**: Invalid request data
-- **Authentication Errors**: Invalid signatures
-- **Database Errors**: Transaction failures
+- **Provider Errors**: Payment provider API errors
+- **Network Errors**: Connection issues
+- **Database Errors**: Transaction storage issues
 
 All errors are logged and returned with appropriate HTTP status codes.
 
-## Security Features
+## Security Considerations
 
-1. **Signature Verification**: All callbacks are verified
-2. **Request Signing**: Outgoing requests are signed
-3. **Timestamp Validation**: Prevents replay attacks
-4. **Error Logging**: Comprehensive error tracking
-5. **Input Validation**: Request data validation
+1. **Signature Verification**: All callbacks are verified using cryptographic signatures
+2. **Secret Management**: Sensitive data is stored in AWS Secrets Manager
+3. **Input Validation**: All inputs are validated before processing
+4. **Error Logging**: Errors are logged without exposing sensitive information
 
 ## Monitoring and Logging
 
-- **Transaction Logging**: All transactions are logged
-- **Callback Logging**: Payment callbacks are recorded
-- **Error Logging**: Detailed error information
-- **Health Monitoring**: Provider availability checks
-- **Statistics**: Transaction analytics
+The module provides comprehensive logging:
+
+- **Payment Initiation**: Logs all payment requests
+- **Callback Processing**: Logs all callback data
+- **Error Tracking**: Detailed error logging
+- **Performance Metrics**: Transaction processing times
 
 ## Future Enhancements
 
-### Planned Providers
-
-- **MTN Mobile Money**: MTN MoMo integration
-- **Orange Money**: Orange Money integration
-- **Bank Transfers**: Direct bank transfer support
-
-### Additional Features
-
-- **Webhook Support**: Real-time payment notifications
+- **Additional Providers**: Support for more payment providers
+- **Webhook Management**: Dynamic webhook URL management
 - **Retry Logic**: Automatic retry for failed transactions
-- **Rate Limiting**: API rate limiting
-- **Caching**: Response caching for performance
-- **Analytics**: Advanced payment analytics
-
-## Development
-
-### Adding a New Provider
-
-1. Create a new provider service in `providers/`
-2. Implement the provider interface
-3. Register the provider in `MobilePaymentsService`
-4. Add provider-specific configuration
-5. Update tests and documentation
-
-### Testing
-
-```bash
-# Run unit tests
-npm run test mobile-payments
-
-# Run integration tests
-npm run test:e2e mobile-payments
-```
-
-### Environment Setup
-
-```bash
-# Development
-cp .env.example .env.development
-
-# Production
-cp .env.example .env.production
-```
-
-## Support
-
-For MyPVit integration support:
-
-- 📧 contact@mypvit.pro
-- 📞 (+241) 74 72 13 98
-- 🌐 [mypvit.pro](https://mypvit.pro)
-
-For module support:
-
-- 📧 support@rendasua.com
-- 📖 [Documentation](https://docs.rendasua.com)
+- **Analytics Dashboard**: Real-time transaction analytics
+- **Multi-Currency Support**: Enhanced currency handling

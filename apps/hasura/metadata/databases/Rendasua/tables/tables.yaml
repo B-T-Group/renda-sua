@@ -28,3 +28,5 @@
 - '!include public_users.yaml'
 - '!include public_vehicle_types.yaml'
 - '!include public_entity_types.yaml'
+- '!include public_mobile_payment_transactions.yaml'
+- '!include public_payment_callbacks.yaml'

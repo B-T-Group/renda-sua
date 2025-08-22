@@ -1,0 +1,9 @@
+table:
+  name: mobile_payment_transactions
+  schema: public
+array_relationships: []
+insert_permissions: []
+select_permissions: []
+update_permissions: []
+delete_permissions: []
+object_relationships: []
