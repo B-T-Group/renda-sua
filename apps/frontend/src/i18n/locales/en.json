@@ -558,7 +558,7 @@
     },
     "paymentMessages": {
       "airtelMoneyInfo": "Top up your account using Airtel Money",
-      "airtelMoneySuccess": "Account topped up successfully with Airtel Money",
+      "airtelMoneySuccess": "Topup request successfully sent.",
       "moovMoneyInfo": "Top up your account using MOOV Money",
       "moovMoneySuccess": "Account topped up successfully with MOOV Money",
       "mtnMomoInfo": "Top up your account using MTN Mobile Money",

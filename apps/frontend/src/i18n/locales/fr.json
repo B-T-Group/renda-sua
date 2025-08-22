@@ -453,7 +453,7 @@
     },
     "paymentMessages": {
       "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
-      "airtelMoneySuccess": "Compte rechargé avec succès via Airtel Money",
+      "airtelMoneySuccess": "Demande de recharge envoyée avec succès.",
       "moovMoneyInfo": "Rechargez votre compte en utilisant MOOV Money",
       "moovMoneySuccess": "Compte rechargé avec succès via MOOV Money",
       "mtnMomoInfo": "Rechargez votre compte en utilisant MTN Mobile Money",
