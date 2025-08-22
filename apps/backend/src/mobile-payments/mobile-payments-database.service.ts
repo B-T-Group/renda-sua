@@ -217,6 +217,7 @@ export class MobilePaymentsDatabaseService {
             payment_method
             status
             transaction_id
+            account_id
             payment_url
             customer_phone
             customer_email

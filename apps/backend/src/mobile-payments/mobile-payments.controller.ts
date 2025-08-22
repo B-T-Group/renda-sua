@@ -140,10 +140,13 @@ export class MobilePaymentsController {
       });
 
       // Initiate payment with provider
-      const paymentResponse = await this.mobilePaymentsService.initiatePayment({
-        ...paymentRequest,
-        callbackUrl,
-      }, reference);
+      const paymentResponse = await this.mobilePaymentsService.initiatePayment(
+        {
+          ...paymentRequest,
+          callbackUrl,
+        },
+        reference
+      );
 
       // Update transaction with provider response
       if (paymentResponse.success && paymentResponse.transactionId) {
