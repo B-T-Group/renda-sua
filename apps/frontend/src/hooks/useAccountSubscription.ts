@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 
 // GraphQL subscription for account updates
 const ACCOUNT_SUBSCRIPTION = gql`
-  subscription OnAccountUpdate($userId: uuid!) {
-    accounts(where: { user_id: { _eq: $userId } }) {
+  subscription OnAccountUpdate($accountId: uuid!) {
+    accounts_by_pk(id: $accountId) {
       id
       user_id
       currency
@@ -14,6 +14,14 @@ const ACCOUNT_SUBSCRIPTION = gql`
       is_active
       created_at
       updated_at
+      account_transactions {
+        id
+        account_id
+        transaction_type
+        amount
+        memo
+        created_at
+      }
     }
   }
 `;
@@ -28,20 +36,28 @@ interface Account {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  account_transactions: Array<{
+    id: string;
+    account_id: string;
+    transaction_type: string;
+    amount: number;
+    memo: string;
+    created_at: string;
+  }>;
 }
 
 interface AccountSubscriptionData {
-  accounts: Account[];
+  accounts_by_pk: Account;
 }
 
 interface UseAccountSubscriptionProps {
-  userId: string;
-  onAccountUpdate?: (accounts: Account[]) => void;
+  accountId: string;
+  onAccountUpdate?: (account: Account) => void;
   enabled?: boolean;
 }
 
 export const useAccountSubscription = ({
-  userId,
+  accountId,
   onAccountUpdate,
   enabled = true,
 }: UseAccountSubscriptionProps) => {
@@ -53,20 +69,20 @@ export const useAccountSubscription = ({
     onUpdateRef.current = onAccountUpdate;
   }, [onAccountUpdate]);
 
-  // Reset error state when userId or enabled changes
+  // Reset error state when accountId or enabled changes
   useEffect(() => {
     setHasError(false);
-  }, [userId, enabled]);
+  }, [accountId, enabled]);
 
   // Try to use subscription, but handle errors gracefully
   const { data, loading, error } = useSubscription<AccountSubscriptionData>(
     ACCOUNT_SUBSCRIPTION,
     {
-      variables: { userId },
-      skip: !enabled || !userId,
+      variables: { accountId },
+      skip: !enabled || !accountId,
       onData: ({ data }) => {
-        if (data?.data?.accounts && onUpdateRef.current) {
-          onUpdateRef.current(data.data.accounts);
+        if (data?.data?.accounts_by_pk && onUpdateRef.current) {
+          onUpdateRef.current(data.data.accounts_by_pk);
         }
       },
       onError: (error) => {
@@ -85,7 +101,7 @@ export const useAccountSubscription = ({
   }, [error]);
 
   return {
-    accounts: data?.accounts || [],
+    account: data?.accounts_by_pk || null,
     loading,
     error: hasError ? error : null,
     subscriptionFailed: hasError,

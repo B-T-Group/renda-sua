@@ -52,7 +52,7 @@ const AccountInformation: React.FC<AccountInformationProps> = ({
             }}
           >
             <UserAccount
-              account={account}
+              accountId={account.id}
               compactView={compactView}
               showTransactions={showTransactions}
               onRefresh={onRefresh}

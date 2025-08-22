@@ -2,6 +2,7 @@
   "common": {
     "back": "Retour",
     "cancel": "Annuler",
+    "close": "Fermer",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "loading": "Chargement...",
@@ -65,7 +66,8 @@
     "language": "Langue",
     "orders": "Commandes",
     "items": "Articles",
-    "fetchingItems": "Récupération des articles..."
+    "fetchingItems": "Récupération des articles...",
+    "duration": "Durée"
   },
   "business": {
     "dashboard": {
@@ -411,6 +413,7 @@
     "summary": "Résumé du compte",
     "totalBalance": "Solde total",
     "available": "Disponible",
+    "withheld": "Retenu",
     "noAccounts": "Aucun compte trouvé",
     "subscriptionError": "Mises à jour en temps réel temporairement indisponibles",
     "subscriptionFailed": "Échec de connexion aux mises à jour en temps réel",
@@ -437,7 +440,7 @@
     "paymentMethod": "Méthode de Paiement",
     "phoneNumber": "Numéro de Téléphone",
     "phoneNumberPlaceholder": "Entrez le numéro de téléphone",
-    "phoneNumberHint": "Entrez le numéro de téléphone sans l'indicatif du pays (ex: 062 04 04 04)",
+    "phoneNumberHint": "Entrez le numéro de téléphone sans l'indicatif du pays (ex: 062040404)",
     "transactionHistory": "Historique des transactions",
     "recentTransactions": "Transactions récentes",
     "noTransactions": "Aucune transaction trouvée",
@@ -488,7 +491,14 @@
     "insufficientFunds": "Fonds insuffisants dans le compte",
     "phoneNumberRequired": "Le numéro de téléphone est requis",
     "amountRequired": "Le montant est requis",
-    "amountPlaceholder": "Entrez le montant à retirer"
+    "amountPlaceholder": "Entrez le montant à retirer",
+    "retirer": "Retirer",
+    "demandeDeRetrait": "Demande de Retrait",
+    "demandeDeRetraitEnvoyee": "Demande de retrait envoyée avec succès",
+    "echecDeRetrait": "Échec du retrait",
+    "fondsInsuffisants": "Fonds insuffisants",
+    "topUpSuccess": "Demande de recharge envoyée avec succès ! Votre compte sera mis à jour sous peu.",
+    "withdrawSuccess": "Demande de retrait envoyée avec succès ! Votre compte sera mis à jour sous peu."
   },
   "auth": {
     "profile": "Profil",
@@ -613,5 +623,9 @@
     "terms": "Conditions de Service",
     "allRightsReserved": "Tous droits réservés.",
     "designedBy": "Conçu par"
+  },
+  "orderHistory": {
+    "title": "Historique des Commandes",
+    "noHistory": "Aucun historique de commande disponible."
   }
 }

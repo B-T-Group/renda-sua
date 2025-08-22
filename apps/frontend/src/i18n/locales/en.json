@@ -2,6 +2,7 @@
   "common": {
     "back": "Back",
     "cancel": "Cancel",
+    "close": "Close",
     "save": "Save",
     "saving": "Saving...",
     "loading": "Loading...",
@@ -67,7 +68,8 @@
     "language": "Language",
     "orders": "Orders",
     "items": "Items",
-    "fetchingItems": "Fetching items..."
+    "fetchingItems": "Fetching items...",
+    "duration": "Duration"
   },
   "business": {
     "dashboard": {
@@ -516,6 +518,7 @@
     "summary": "Account Summary",
     "totalBalance": "Total Balance",
     "available": "Available",
+    "withheld": "Withheld",
     "noAccounts": "No accounts found",
     "subscriptionError": "Real-time updates temporarily unavailable",
     "subscriptionFailed": "Real-time updates failed to connect",
@@ -539,10 +542,16 @@
     "viewTransactions": "View Transactions",
     "creditAccount": "Top Up",
     "withdraw": "Withdraw",
+    "withdrawRequest": "Withdrawal Request",
+    "withdrawRequestSent": "Withdrawal request sent successfully",
+    "withdrawFailed": "Withdrawal failed",
+    "insufficientFunds": "Insufficient funds",
+    "topUpSuccess": "Top-up request sent successfully! Your account will be updated shortly.",
+    "withdrawSuccess": "Withdrawal request sent successfully! Your account will be updated shortly.",
     "paymentMethod": "Payment Method",
     "phoneNumber": "Phone Number",
     "phoneNumberPlaceholder": "Enter phone number",
-    "phoneNumberHint": "Enter phone number without country code (e.g., 062 04 04 04)",
+    "phoneNumberHint": "Enter phone number without country code (e.g., 062040404)",
     "transactionHistory": "Transaction History",
     "recentTransactions": "Recent Transactions",
     "noTransactions": "No transactions found",
@@ -719,5 +728,9 @@
     "terms": "Terms of Service",
     "allRightsReserved": "All rights reserved.",
     "designedBy": "Designed by"
+  },
+  "orderHistory": {
+    "title": "Order History",
+    "noHistory": "No order history available."
   }
 }

@@ -112,7 +112,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
   // Get phone number hint based on payment method
   const getPhoneNumberHint = () => {
     if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
-      return 'Enter phone number without country code (e.g., 062 04 04 04)';
+      return 'Enter phone number without country code (e.g., 062040404)';
     }
     return 'Enter phone number for payment';
   };
