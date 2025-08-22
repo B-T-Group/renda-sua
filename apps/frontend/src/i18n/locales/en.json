@@ -34,6 +34,8 @@
     "searchItems": "Search items...",
     "priceRange": "Price Range",
     "errorLoadingData": "Error loading data",
+    "welcomeBack": "Welcome back",
+    "phone": "Phone",
     "orderStatus": {
       "pending": "Pending",
       "confirmed": "Confirmed",
@@ -69,7 +71,9 @@
     "orders": "Orders",
     "items": "Items",
     "fetchingItems": "Fetching items...",
-    "duration": "Duration"
+    "duration": "Duration",
+    "noOrders": "No Orders",
+    "noOrdersDescription": "You don't have any orders yet."
   },
   "business": {
     "dashboard": {
@@ -448,23 +452,31 @@
     }
   },
   "orderActions": {
+    "claimOrder": "Claim",
     "markAsDelivered": "Mark as Delivered",
     "markAsFailed": "Mark as Failed",
     "markAsInTransit": "Mark as In Transit",
     "markAsOutForDelivery": "Mark as Out for Delivery",
-    "pickUpOrder": "Pick Up Order"
+    "pickUpOrder": "Pick Up Order",
+    "dropOrder": "Drop Order",
+    "viewHistory": "History"
   },
   "orderCard": {
+    "orderNumber": "Order #{{orderNumber}}",
     "businessDistance": "Business Distance",
     "delivery": "Delivery",
     "deliveryDistance": "Delivery Distance",
     "items": "Items",
-    "pickup": "Pickup"
+    "pickup": "Pickup",
+    "moreItems": "more items"
   },
   "agent": {
     "dashboard": {
       "title": "Agent Dashboard",
       "openOrders": "Open Orders"
+    },
+    "orders": {
+      "insufficientFunds": "Insufficient funds to claim this order. Please top up your account."
     }
   },
   "messages": {
@@ -518,94 +530,29 @@
   },
   "accounts": {
     "title": "Accounts",
-    "summary": "Account Summary",
-    "totalBalance": "Total Balance",
-    "available": "Available",
-    "withheld": "Withheld",
-    "noAccounts": "No accounts found",
-    "subscriptionError": "Real-time updates temporarily unavailable",
-    "subscriptionFailed": "Real-time updates failed to connect",
-    "subscriptionConnecting": "Connecting to real-time updates...",
-    "subscriptionConnected": "Real-time updates connected",
-    "realTimeUpdates": "Real-Time Account Updates",
-    "subscriptionDescription": "Your account balances and transactions are updated in real-time. When you make a payment or receive funds, the changes will appear automatically without refreshing the page.",
-    "subscriptionFeatures": "Real-Time Features",
-    "subscriptionFeature1": "Automatic balance updates when payments are processed",
-    "subscriptionFeature2": "Instant transaction history updates",
-    "subscriptionFeature3": "Real-time account status changes",
-    "subscriptionFeature4": "Live connection status indicator",
-    "myAccounts": "My Accounts",
-    "pleaseLogin": "Please log in to view your accounts",
-    "account": "Account",
-    "active": "Active",
-    "inactive": "Inactive",
-    "availableBalance": "Available Balance",
-    "withheldBalance": "Withheld Balance",
+    "accountNumber": "Account Number",
+    "balance": "Balance",
+    "currency": "Currency",
+    "status": "Status",
     "createdAt": "Created At",
-    "viewTransactions": "View Transactions",
-    "creditAccount": "Top Up",
+    "updatedAt": "Updated At",
+    "topUp": "Top Up",
     "withdraw": "Withdraw",
-    "withdrawRequest": "Withdrawal Request",
-    "withdrawRequestSent": "Withdrawal request sent successfully",
-    "withdrawFailed": "Withdrawal failed",
+    "withdrawRequest": "Withdraw Request",
+    "withdrawRequestSent": "Withdrawal request sent successfully!",
+    "withdrawFailed": "Withdrawal failed. Please try again.",
     "insufficientFunds": "Insufficient funds",
-    "topUpSuccess": "Top-up request sent successfully! Your account will be updated shortly.",
-    "withdrawSuccess": "Withdrawal request sent successfully! Your account will be updated shortly.",
+    "phoneNumberRequired": "Phone number is required",
+    "amountRequired": "Amount is required",
+    "amountPlaceholder": "Enter amount",
     "paymentMethod": "Payment Method",
     "phoneNumber": "Phone Number",
     "phoneNumberPlaceholder": "Enter phone number",
-    "phoneNumberHint": "Enter phone number without country code (e.g., 062040404)",
-    "transactionHistory": "Transaction History",
-    "recentTransactions": "Recent Transactions",
-    "noTransactions": "No transactions found",
-    "date": "Date",
-    "type": "Type",
-    "description": "Description",
-    "amount": "Amount",
-    "balance": "Balance",
-    "noDescription": "No description",
-    "balanceNotAvailable": "Balance not available",
-    "loadMore": "Load More",
-    "paymentMethods": {
-      "title": "Payment Methods",
-      "airtelMoney": "Airtel Money",
-      "moovMoney": "MOOV Money",
-      "mtnMomo": "MTN Mobile Money",
-      "creditCardComingSoon": "Credit Card (Coming Soon)"
-    },
-    "paymentMessages": {
-      "airtelMoneyInfo": "Top up your account using Airtel Money",
-      "airtelMoneySuccess": "Topup request successfully sent.",
-      "moovMoneyInfo": "Top up your account using MOOV Money",
-      "moovMoneySuccess": "Account topped up successfully with MOOV Money",
-      "mtnMomoInfo": "Top up your account using MTN Mobile Money",
-      "mtnMomoSuccess": "Account topped up successfully with MTN Mobile Money",
-      "creditCardNotSupported": "Credit card payments are not supported yet"
-    },
-    "payment": {
-      "accountTopUp": "Account Top Up",
-      "agentName": "Rendasua",
-      "productName": "Account",
-      "processing": "Processing...",
-      "sendPaymentRequest": "Send Payment Request",
-      "notAvailable": "Not Available",
-      "cancel": "Cancel",
-      "close": "Close",
-      "phoneNumber": "Phone Number",
-      "amount": "Amount",
-      "paymentInitiated": "Payment initiated successfully",
-      "paymentFailed": "Payment initiation failed",
-      "transactionNotFound": "Transaction not found",
-      "callbackProcessed": "Callback processed successfully",
-      "callbackFailed": "Failed to process callback"
-    },
-    "withdrawRequest": "Withdrawal Request",
-    "withdrawRequestSent": "Withdrawal request successfully sent.",
-    "withdrawFailed": "Withdrawal request failed. Please try again.",
-    "insufficientFunds": "Insufficient funds in account",
-    "phoneNumberRequired": "Phone number is required",
-    "amountRequired": "Amount is required",
-    "amountPlaceholder": "Enter amount to withdraw"
+    "phoneNumberHint": "Example: 062040404",
+    "topUpSuccess": "Top-up request sent successfully! Your account will be updated shortly.",
+    "withdrawSuccess": "Withdrawal request sent successfully! Your account will be updated shortly.",
+    "withheld": "Withheld",
+    "accountNotFound": "Account not found"
   },
   "auth": {
     "profile": "Profile",

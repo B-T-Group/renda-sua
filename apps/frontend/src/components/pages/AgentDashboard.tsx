@@ -105,6 +105,7 @@ const OrderCard: React.FC<{
   showActions?: boolean;
   agentAddress?: any;
   agentVerified?: boolean;
+  agentAccounts?: any[];
 }> = ({
   order,
   onPickUp,
@@ -114,10 +115,32 @@ const OrderCard: React.FC<{
   showActions = true,
   agentAddress,
   agentVerified = false,
+  agentAccounts = [],
 }) => {
   const { t } = useTranslation();
   const [updating, setUpdating] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+
+  // Check if order is assigned to current agent
+  const isOrderAssignedToAgent = order.current_status === 'assigned_to_agent';
+
+  // Check if agent has sufficient funds for claiming
+  const hasSufficientFunds = () => {
+    if (order.current_status !== 'ready_for_pickup') return true;
+
+    // Find agent's account with matching currency
+    const agentAccount = agentAccounts.find(
+      (account) => account.currency === order.currency
+    );
+
+    if (!agentAccount) return false;
+
+    // Calculate required hold amount (80% of order total)
+    const holdPercentage = 80; // This should match backend configuration
+    const requiredHoldAmount = (order.total_amount * holdPercentage) / 100;
+
+    return agentAccount.available_balance >= requiredHoldAmount;
+  };
 
   // Distance Matrix integration
   const formatAddress = (address: any) => {
@@ -191,6 +214,7 @@ const OrderCard: React.FC<{
             action: handleClaim,
             color: 'primary' as const,
             icon: <CheckCircle />,
+            disabled: !hasSufficientFunds(),
           });
         }
         break;
@@ -534,15 +558,30 @@ const OrderCard: React.FC<{
             </Box>
           )}
 
+        {/* Show insufficient funds message */}
+        {order.current_status === 'ready_for_pickup' &&
+          !hasSufficientFunds() && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="warning" variant="outlined">
+                {t(
+                  'agent.orders.insufficientFunds',
+                  'Insufficient funds to claim this order. Please top up your account.'
+                )}
+              </Alert>
+            </Box>
+          )}
+
         {/* Messages Section */}
-        <UserMessagesComponent
-          entityType="order"
-          entityId={order.id}
-          title={t('messages.orderMessages', 'Order Messages')}
-          defaultExpanded={false}
-          maxVisibleMessages={3}
-          compact={true}
-        />
+        {isOrderAssignedToAgent && (
+          <UserMessagesComponent
+            entityType="order"
+            entityId={order.id}
+            title={t('messages.orderMessages', 'Order Messages')}
+            defaultExpanded={false}
+            maxVisibleMessages={3}
+            compact={true}
+          />
+        )}
       </CardContent>
 
       {showActions && (
@@ -558,7 +597,7 @@ const OrderCard: React.FC<{
                 }
                 color={action.color}
                 onClick={action.action}
-                disabled={updating}
+                disabled={updating || action.disabled}
                 startIcon={action.icon}
                 sx={{
                   ml:
@@ -570,16 +609,18 @@ const OrderCard: React.FC<{
                 {updating ? <CircularProgress size={20} /> : action.label}
               </Button>
             ))}
-            <Button
-              variant="outlined"
-              color="info"
-              onClick={handleViewHistory}
-              disabled={updating}
-              startIcon={<History />}
-              sx={{ ml: 1 }}
-            >
-              {t('orderActions.viewHistory', 'History')}
-            </Button>
+            {isOrderAssignedToAgent && (
+              <Button
+                variant="outlined"
+                color="info"
+                onClick={handleViewHistory}
+                disabled={updating}
+                startIcon={<History />}
+                sx={{ ml: 1 }}
+              >
+                {t('orderActions.viewHistory', 'History')}
+              </Button>
+            )}
           </Box>
           <Typography variant="caption" color="text.secondary">
             {t('common.created')}:{' '}
@@ -869,6 +910,7 @@ const AgentDashboard: React.FC = () => {
                     : undefined
                 }
                 agentVerified={profile?.agent?.is_verified || false}
+                agentAccounts={accounts}
               />
             ))}
           </Box>
@@ -900,6 +942,7 @@ const AgentDashboard: React.FC = () => {
                     : undefined
                 }
                 agentVerified={profile?.agent?.is_verified || false}
+                agentAccounts={accounts}
               />
             ))}
           </Box>
@@ -933,6 +976,7 @@ const AgentDashboard: React.FC = () => {
                     : undefined
                 }
                 agentVerified={profile?.agent?.is_verified || false}
+                agentAccounts={accounts}
               />
             ))}
           </Box>
@@ -996,6 +1040,7 @@ const AgentDashboard: React.FC = () => {
                       : undefined
                   }
                   agentVerified={profile?.agent?.is_verified || false}
+                  agentAccounts={accounts}
                 />
               ))}
             </Box>
@@ -1060,6 +1105,7 @@ const AgentDashboard: React.FC = () => {
                       : undefined
                   }
                   agentVerified={profile?.agent?.is_verified || false}
+                  agentAccounts={accounts}
                 />
               ))}
             </Box>

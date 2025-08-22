@@ -67,7 +67,9 @@
     "orders": "Commandes",
     "items": "Articles",
     "fetchingItems": "Récupération des articles...",
-    "duration": "Durée"
+    "duration": "Durée",
+    "noOrders": "Aucune Commande",
+    "noOrdersDescription": "Vous n'avez pas encore de commandes."
   },
   "business": {
     "dashboard": {
@@ -360,6 +362,9 @@
     "dashboard": {
       "title": "Tableau de Bord Agent",
       "openOrders": "Commandes Ouvertes"
+    },
+    "orders": {
+      "insufficientFunds": "Fonds insuffisants pour réclamer cette commande. Veuillez recharger votre compte."
     }
   },
   "messages": {
@@ -501,7 +506,8 @@
     "echecDeRetrait": "Échec du retrait",
     "fondsInsuffisants": "Fonds insuffisants",
     "topUpSuccess": "Demande de recharge envoyée avec succès ! Votre compte sera mis à jour sous peu.",
-    "withdrawSuccess": "Demande de retrait envoyée avec succès ! Votre compte sera mis à jour sous peu."
+    "withdrawSuccess": "Demande de retrait envoyée avec succès ! Votre compte sera mis à jour sous peu.",
+    "accountNotFound": "Compte introuvable"
   },
   "auth": {
     "profile": "Profil",
