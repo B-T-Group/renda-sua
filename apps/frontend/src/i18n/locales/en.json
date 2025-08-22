@@ -539,15 +539,35 @@
     "paymentMethods": {
       "title": "Payment Methods",
       "airtelMoney": "Airtel Money",
+      "moovMoney": "MOOV Money",
       "mtnMomo": "MTN Mobile Money",
       "creditCardComingSoon": "Credit Card (Coming Soon)"
     },
     "paymentMessages": {
       "airtelMoneyInfo": "Top up your account using Airtel Money",
       "airtelMoneySuccess": "Account topped up successfully with Airtel Money",
+      "moovMoneyInfo": "Top up your account using MOOV Money",
+      "moovMoneySuccess": "Account topped up successfully with MOOV Money",
       "mtnMomoInfo": "Top up your account using MTN Mobile Money",
       "mtnMomoSuccess": "Account topped up successfully with MTN Mobile Money",
       "creditCardNotSupported": "Credit card payments are not supported yet"
+    },
+    "payment": {
+      "accountTopUp": "Account Top Up",
+      "agentName": "Rendasua",
+      "productName": "Account",
+      "processing": "Processing...",
+      "sendPaymentRequest": "Send Payment Request",
+      "notAvailable": "Not Available",
+      "cancel": "Cancel",
+      "close": "Close",
+      "phoneNumber": "Phone Number",
+      "amount": "Amount",
+      "paymentInitiated": "Payment initiated successfully",
+      "paymentFailed": "Payment initiation failed",
+      "transactionNotFound": "Transaction not found",
+      "callbackProcessed": "Callback processed successfully",
+      "callbackFailed": "Failed to process callback"
     }
   },
   "auth": {
@@ -573,7 +593,17 @@
     "deleteConfirmTitle": "Delete Address",
     "deleteConfirmMessage": "Are you sure you want to delete this address?",
     "maxAddressesReached": "Maximum {{max}} addresses allowed",
-    "primary": "Primary"
+    "primary": "Primary",
+    "types": {
+      "home": "Home",
+      "work": "Work",
+      "other": "Other"
+    },
+    "getCurrentLocation": "Get Current Location",
+    "locationPermissionDenied": "Location permission denied. Please enable location access in your browser settings.",
+    "locationUnavailable": "Unable to get your current location. Please enter your address manually.",
+    "locationLoading": "Getting your current location...",
+    "locationSuccess": "Location obtained successfully"
   },
   "support": {
     "title": "Support & Help Center",

@@ -15,7 +15,6 @@ import { MobilePaymentsService } from './mobile-payments.service';
 export interface InitiatePaymentDto {
   amount: number;
   currency: string;
-  reference: string;
   description: string;
   customerPhone?: string;
   customerEmail?: string;
@@ -25,6 +24,7 @@ export interface InitiatePaymentDto {
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   agent?: string;
   product?: string;
+  accountId?: string; // Account ID for top-up operations
 }
 
 export interface PaymentCallbackDto {
@@ -119,9 +119,14 @@ export class MobilePaymentsController {
           process.env.API_BASE_URL || 'http://localhost:3000'
         }/mobile-payments/callback/pvit`;
 
+      // Generate a unique reference for the transaction
+      const reference = `PAY_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       // Create transaction record in database
       const transaction = await this.databaseService.createTransaction({
-        reference: paymentRequest.reference,
+        reference: reference,
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         description: paymentRequest.description,

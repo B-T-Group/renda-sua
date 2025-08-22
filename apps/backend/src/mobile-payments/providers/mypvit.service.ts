@@ -20,7 +20,6 @@ export interface MyPVitPaymentRequest {
   agent?: string;
   amount: number;
   product?: string;
-  reference: string;
   service: string;
   callback_url_code: string;
   customer_account_number: string;
@@ -186,15 +185,20 @@ export class MyPVitService {
     paymentRequest: MyPVitPaymentRequest
   ): Promise<MyPVitPaymentResponse> {
     try {
+      // Generate a unique reference using UUID
+      const reference = `PAY_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       this.logger.log(
-        `Initiating payment for reference: ${paymentRequest.reference}`
+        `Initiating payment for account: ${paymentRequest.customer_account_number}`
       );
 
       const payload = {
         agent: paymentRequest.agent,
         amount: paymentRequest.amount,
         product: paymentRequest.product,
-        reference: paymentRequest.reference,
+        reference: reference,
         service: paymentRequest.service,
         callback_url_code: paymentRequest.callback_url_code,
         customer_account_number: paymentRequest.customer_account_number,

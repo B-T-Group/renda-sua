@@ -20,7 +20,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PhoneInput from '../common/PhoneInput';
 
-type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'credit-card';
+type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
 interface TopUpModalProps {
   open: boolean;
@@ -187,6 +187,8 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                   t('accounts.paymentMessages.mtnMomoInfo')}
                 {paymentMethod === 'airtel-money' &&
                   t('accounts.paymentMessages.airtelMoneyInfo')}
+                {paymentMethod === 'moov-money' &&
+                  t('accounts.paymentMessages.moovMoneyInfo')}
                 {paymentMethod === 'credit-card' &&
                   t('accounts.paymentMessages.creditCardNotSupported')}
               </Typography>
@@ -213,6 +215,9 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                   </MenuItem>
                   <MenuItem value="airtel-money">
                     {t('accounts.paymentMethods.airtelMoney')}
+                  </MenuItem>
+                  <MenuItem value="moov-money">
+                    {t('accounts.paymentMethods.moovMoney')}
                   </MenuItem>
                   <MenuItem value="credit-card" disabled>
                     {t('accounts.paymentMethods.creditCardComingSoon')}

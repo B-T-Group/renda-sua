@@ -7,7 +7,6 @@ import {
 export interface MobilePaymentRequest {
   amount: number;
   currency: string;
-  reference: string;
   description: string;
   customerPhone?: string;
   customerEmail?: string;
@@ -17,6 +16,7 @@ export interface MobilePaymentRequest {
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   agent?: string;
   product?: string;
+  accountId?: string; // Account ID for top-up operations
 }
 
 export interface MobilePaymentResponse {
@@ -93,7 +93,9 @@ export class MobilePaymentsService {
   ): Promise<MobilePaymentResponse> {
     try {
       this.logger.log(
-        `Initiating mobile payment for reference: ${paymentRequest.reference}`
+        `Initiating mobile payment for account: ${
+          paymentRequest.accountId || 'unknown'
+        }`
       );
 
       // Determine the best provider based on request
@@ -452,10 +454,10 @@ export class MobilePaymentsService {
           agent: request.agent,
           amount: request.amount,
           product: request.product || 'Rendasua Payment',
-          reference: request.reference,
           service: 'RESTFUL',
           callback_url_code: this.myPVitService.getCallbackUrlCode(),
-          customer_account_number: request.customerPhone || '',
+          customer_account_number:
+            request.accountId || request.customerPhone || '',
           merchant_operation_account_code:
             this.myPVitService.getMerchantOperationAccountCode(),
           transaction_type: 'PAYMENT',
@@ -493,7 +495,7 @@ export class MobilePaymentsService {
   ): Promise<void> {
     // TODO: Implement logging to database
     this.logger.log(
-      `Payment initiated: ${request.reference} -> ${
+      `Payment initiated: ${request.accountId || 'unknown'} -> ${
         response.success ? 'SUCCESS' : 'FAILED'
       }`
     );

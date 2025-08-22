@@ -434,15 +434,35 @@
     "paymentMethods": {
       "title": "Méthodes de Paiement",
       "airtelMoney": "Airtel Money",
+      "moovMoney": "MOOV Money",
       "mtnMomo": "MTN Mobile Money",
       "creditCardComingSoon": "Carte de Crédit (Bientôt Disponible)"
     },
     "paymentMessages": {
       "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
       "airtelMoneySuccess": "Compte rechargé avec succès via Airtel Money",
+      "moovMoneyInfo": "Rechargez votre compte en utilisant MOOV Money",
+      "moovMoneySuccess": "Compte rechargé avec succès via MOOV Money",
       "mtnMomoInfo": "Rechargez votre compte en utilisant MTN Mobile Money",
       "mtnMomoSuccess": "Compte rechargé avec succès via MTN Mobile Money",
       "creditCardNotSupported": "Les paiements par carte de crédit ne sont pas encore pris en charge"
+    },
+    "payment": {
+      "accountTopUp": "Recharge de Compte",
+      "agentName": "Rendasua",
+      "productName": "Compte",
+      "processing": "Traitement...",
+      "sendPaymentRequest": "Envoyer la Demande de Paiement",
+      "notAvailable": "Non Disponible",
+      "cancel": "Annuler",
+      "close": "Fermer",
+      "phoneNumber": "Numéro de Téléphone",
+      "amount": "Montant",
+      "paymentInitiated": "Paiement initié avec succès",
+      "paymentFailed": "Échec de l'initiation du paiement",
+      "transactionNotFound": "Transaction non trouvée",
+      "callbackProcessed": "Rappel traité avec succès",
+      "callbackFailed": "Échec du traitement du rappel"
     }
   },
   "auth": {
@@ -467,7 +487,17 @@
     "deleteConfirmTitle": "Supprimer l'Adresse",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ?",
     "maxAddressesReached": "Maximum {{max}} adresses autorisées",
-    "primary": "Principal"
+    "primary": "Principal",
+    "types": {
+      "home": "Domicile",
+      "work": "Travail",
+      "other": "Autre"
+    },
+    "getCurrentLocation": "Obtenir l'Emplacement Actuel",
+    "locationPermissionDenied": "Permission de localisation refusée. Veuillez activer l'accès à la localisation dans les paramètres de votre navigateur.",
+    "locationUnavailable": "Impossible d'obtenir votre emplacement actuel. Veuillez saisir votre adresse manuellement.",
+    "locationLoading": "Obtention de votre emplacement actuel...",
+    "locationSuccess": "Emplacement obtenu avec succès"
   },
   "support": {
     "title": "Centre d'Aide et de Support",

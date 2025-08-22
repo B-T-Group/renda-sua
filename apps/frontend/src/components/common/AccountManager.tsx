@@ -38,6 +38,7 @@ import {
   useAccountManager,
 } from '../../hooks/useAccountManager';
 import { useAirtelMoney } from '../../hooks/useAirtelMoney';
+import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
@@ -113,6 +114,10 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     // Airtel Money hook
     const { requestPayment, loading: airtelLoading } = useAirtelMoney();
 
+    // Mobile payments hook for Airtel Money and MOOV
+    const { initiatePayment, loading: mobilePaymentsLoading } =
+      useMobilePayments();
+
     // Get user profile for phone number
     const { userProfile } = useProfile();
 
@@ -139,7 +144,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     const handleTopUpConfirm = async (
       phoneNumber: string,
       amount: string,
-      paymentMethod: 'mtn-momo' | 'airtel-money' | 'credit-card'
+      paymentMethod: 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card'
     ): Promise<boolean> => {
       if (!selectedAccountForTopUp) return false;
 
@@ -152,26 +157,26 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             amount,
             currency: selectedAccountForTopUp.currency,
           });
-        } else if (paymentMethod === 'airtel-money') {
-          const response = await requestPayment({
-            reference: `topup_${Date.now()}_${Math.random()
-              .toString(36)
-              .substr(2, 9)}`,
-            subscriber: {
-              country: 'UG',
-              currency: selectedAccountForTopUp.currency,
-              msisdn: phoneNumber.replace(/\D/g, ''), // Remove non-digits
-            },
-            transaction: {
-              amount,
-              country: 'UG',
-              currency: selectedAccountForTopUp.currency,
-              id: `topup_${Date.now()}_${Math.random()
-                .toString(36)
-                .substr(2, 9)}`,
-            },
+        } else if (
+          paymentMethod === 'airtel-money' ||
+          paymentMethod === 'moov-money'
+        ) {
+          // Use the unified mobile payments API for Airtel Money and MOOV
+          const provider = paymentMethod === 'airtel-money' ? 'airtel' : 'moov';
+
+          const response = await initiatePayment({
+            amount: parseFloat(amount),
+            currency: selectedAccountForTopUp.currency,
+            description: 'Account Top Up',
+            customerPhone: phoneNumber,
+            product: 'Account',
+            agent: 'Rendasua',
+            accountId: selectedAccountForTopUp.id, // Use accountId for customer_account_number
+            provider,
+            paymentMethod: 'mobile_money',
           });
-          success = response.status;
+
+          success = response.success;
         } else if (paymentMethod === 'credit-card') {
           // Credit card not supported yet
           return false;
@@ -703,7 +708,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
             }}
             userPhoneNumber={userProfile?.phone_number || ''}
             currency={selectedAccountForTopUp.currency}
-            loading={topUpLoading || airtelLoading}
+            loading={topUpLoading || airtelLoading || mobilePaymentsLoading}
             onConfirm={handleTopUpConfirm}
           />
         )}

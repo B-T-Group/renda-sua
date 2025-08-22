@@ -17,9 +17,9 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
-import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
+
 import { useProfile } from '../../hooks/useProfile';
-import TopUpModal from '../business/TopUpModal';
+
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
@@ -27,8 +27,6 @@ import { SimpleDocumentUpload } from '../common/SimpleDocumentUpload';
 
 const Profile: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState(false);
-  const [topUpModalOpen, setTopUpModalOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
 
   // Form states
   const [profileForm, setProfileForm] = useState({
@@ -47,8 +45,6 @@ const Profile: React.FC = () => {
     handleProfileUpdate,
     clearMessages,
   } = useProfile();
-
-  const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
 
   // Get addresses from UserProfileContext
   const { profile: userProfileWithAddresses } = useUserProfileContext();
@@ -294,25 +290,6 @@ const Profile: React.FC = () => {
             emptyStateMessage="No accounts found. Accounts are automatically created when you make your first transaction."
           />
         </Box>
-      )}
-
-      {/* Top Up Modal */}
-      {selectedAccount && (
-        <TopUpModal
-          open={topUpModalOpen}
-          onClose={() => setTopUpModalOpen(false)}
-          userPhoneNumber={userProfile?.phone_number || ''}
-          currency={selectedAccount.currency}
-          loading={topUpLoading}
-          onConfirm={async (phone: string, amount: string) => {
-            const ok = await requestTopUp({
-              phoneNumber: phone,
-              amount,
-              currency: selectedAccount.currency,
-            });
-            return ok;
-          }}
-        />
       )}
     </Box>
   );
