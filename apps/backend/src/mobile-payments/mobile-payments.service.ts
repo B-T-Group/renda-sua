@@ -1,45 +1,93 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as libphonenumber from 'google-libphonenumber';
 import {
   MyPVitPaymentRequest,
   MyPVitService,
 } from './providers/mypvit.service';
 
 /**
- * Remove country code from phone number
+ * Remove country code from phone number using Google's libphonenumber
  * @param phoneNumber - Phone number with or without country code
+ * @param defaultRegion - Default region code (e.g., 'GA' for Gabon)
  * @returns Phone number without country code
  *
  * Examples:
  * removeCountryCode('+241123456789') -> '123456789'
  * removeCountryCode('+33123456789') -> '123456789'
- * removeCountryCode('123456789') -> '123456789'
+ * removeCountryCode('123456789', 'GA') -> '123456789'
  * removeCountryCode('') -> ''
  */
-function removeCountryCode(phoneNumber: string): string {
+function removeCountryCode(
+  phoneNumber: string,
+  defaultRegion: string = 'GA'
+): string {
   if (!phoneNumber) return '';
 
-  // Remove common country codes
-  const countryCodes = [
-    '+241',
-    '+33',
-    '+1',
-    '+44',
-    '+49',
-    '+86',
-    '+91',
-    '+81',
-    '+7',
-    '+55',
-  ];
+  try {
+    // Get an instance of PhoneNumberUtil
+    const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
 
-  for (const code of countryCodes) {
-    if (phoneNumber.startsWith(code)) {
-      return phoneNumber.substring(code.length);
-    }
+    // Parse the phone number
+    const parsedNumber = phoneUtil.parse(phoneNumber, defaultRegion);
+
+    // Get the national number (without country code)
+    const nationalNumber = parsedNumber.getNationalNumber();
+
+    // Return the national number as string
+    return nationalNumber ? nationalNumber.toString() : phoneNumber;
+  } catch (error) {
+    // If parsing fails, return the original number
+    // This handles cases where the number format is not recognized
+    return phoneNumber;
+  }
+}
+
+/**
+ * Validate phone number using Google's libphonenumber
+ * @param phoneNumber - Phone number to validate
+ * @param defaultRegion - Default region code (e.g., 'GA' for Gabon)
+ * @returns Object with validation results
+ */
+function validatePhoneNumber(
+  phoneNumber: string,
+  defaultRegion: string = 'GA'
+): {
+  isValid: boolean;
+  isPossible: boolean;
+  countryCode: string;
+  nationalNumber: string;
+  regionCode: string;
+} {
+  if (!phoneNumber) {
+    return {
+      isValid: false,
+      isPossible: false,
+      countryCode: '',
+      nationalNumber: '',
+      regionCode: '',
+    };
   }
 
-  // If no country code found, return as is
-  return phoneNumber;
+  try {
+    const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
+    const parsedNumber = phoneUtil.parse(phoneNumber, defaultRegion);
+
+    return {
+      isValid: phoneUtil.isValidNumber(parsedNumber),
+      isPossible: phoneUtil.isPossibleNumber(parsedNumber),
+      countryCode: parsedNumber.getCountryCode()?.toString() || '',
+      nationalNumber: parsedNumber.getNationalNumber()?.toString() || '',
+      regionCode: phoneUtil.getRegionCodeForNumber(parsedNumber) || '',
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      isPossible: false,
+      countryCode: '',
+      nationalNumber: '',
+      regionCode: '',
+    };
+  }
 }
 
 export interface MobilePaymentRequest {
@@ -128,6 +176,27 @@ export class MobilePaymentsService {
     paymentRequest: MobilePaymentRequest
   ): Promise<MobilePaymentResponse> {
     try {
+      // Validate phone number if provided
+      if (paymentRequest.customerPhone) {
+        const phoneValidation = validatePhoneNumber(
+          paymentRequest.customerPhone
+        );
+        if (!phoneValidation.isValid) {
+          this.logger.warn(
+            `Invalid phone number provided: ${paymentRequest.customerPhone}`
+          );
+          return {
+            success: false,
+            message: 'Invalid phone number format',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+
+        this.logger.log(
+          `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}`
+        );
+      }
+
       this.logger.log(
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
