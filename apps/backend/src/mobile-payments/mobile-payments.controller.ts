@@ -499,7 +499,7 @@ export class MobilePaymentsController {
       });
 
       // Validate webhook data
-      if (!webhookData.operation_account_code || !webhookData.secret_key) {
+      if (!webhookData.secret_key) {
         throw new Error(
           'Missing required webhook data: operation_account_code or secret_key'
         );
