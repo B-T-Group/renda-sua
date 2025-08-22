@@ -48,7 +48,23 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mtn-momo');
+
+  // Set default payment method based on currency
+  const getDefaultPaymentMethod = (): PaymentMethod => {
+    if (currency === 'XAF') {
+      return 'airtel-money';
+    }
+    return 'mtn-momo';
+  };
+
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    getDefaultPaymentMethod()
+  );
+
+  // Update default payment method when currency changes
+  useEffect(() => {
+    setPaymentMethod(getDefaultPaymentMethod());
+  }, [currency]);
 
   // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
@@ -66,6 +82,40 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
       setAmount('');
     }
   }, [open]);
+
+  // Get available payment methods based on currency
+  const getAvailablePaymentMethods = () => {
+    if (currency === 'XAF') {
+      return [
+        {
+          value: 'airtel-money',
+          label: t('accounts.paymentMethods.airtelMoney'),
+        },
+        { value: 'moov-money', label: t('accounts.paymentMethods.moovMoney') },
+        {
+          value: 'credit-card',
+          label: t('accounts.paymentMethods.creditCardComingSoon'),
+          disabled: true,
+        },
+      ];
+    }
+    return [
+      { value: 'mtn-momo', label: t('accounts.paymentMethods.mtnMomo') },
+      {
+        value: 'airtel-money',
+        label: t('accounts.paymentMethods.airtelMoney'),
+      },
+      { value: 'moov-money', label: t('accounts.paymentMethods.moovMoney') },
+    ];
+  };
+
+  // Get phone number hint based on payment method
+  const getPhoneNumberHint = () => {
+    if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
+      return 'Enter phone number without country code (e.g., 062 04 04 04)';
+    }
+    return 'Enter phone number for payment';
+  };
 
   const handleConfirm = async () => {
     if (!phoneNumber.trim()) {
@@ -96,7 +146,9 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
         setSuccess(
           paymentMethod === 'mtn-momo'
             ? t('accounts.paymentMessages.mtnMomoSuccess')
-            : t('accounts.paymentMessages.airtelMoneySuccess')
+            : paymentMethod === 'airtel-money'
+            ? t('accounts.paymentMessages.airtelMoneySuccess')
+            : t('accounts.paymentMessages.moovMoneySuccess')
         );
         setShowResult(true);
         setAmount('');
@@ -125,6 +177,8 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
     setSuccess('');
     setShowResult(false);
   };
+
+  const availablePaymentMethods = getAvailablePaymentMethods();
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -209,18 +263,15 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                     setPaymentMethod(e.target.value as PaymentMethod)
                   }
                 >
-                  <MenuItem value="mtn-momo">
-                    {t('accounts.paymentMethods.mtnMomo')}
-                  </MenuItem>
-                  <MenuItem value="airtel-money">
-                    {t('accounts.paymentMethods.airtelMoney')}
-                  </MenuItem>
-                  <MenuItem value="moov-money">
-                    {t('accounts.paymentMethods.moovMoney')}
-                  </MenuItem>
-                  <MenuItem value="credit-card" disabled>
-                    {t('accounts.paymentMethods.creditCardComingSoon')}
-                  </MenuItem>
+                  {availablePaymentMethods.map((method) => (
+                    <MenuItem
+                      key={method.value}
+                      value={method.value}
+                      disabled={method.disabled}
+                    >
+                      {method.label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
 
@@ -229,10 +280,12 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                 label="Phone Number"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="Enter phone number for payment"
+                placeholder={getPhoneNumberHint()}
                 required
                 error={!!error && !phoneNumber.trim()}
-                helperText={error && !phoneNumber.trim() ? error : ''}
+                helperText={
+                  error && !phoneNumber.trim() ? error : getPhoneNumberHint()
+                }
                 disabled={paymentMethod === 'credit-card'}
               />
 
