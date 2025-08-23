@@ -17,6 +17,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
@@ -225,6 +226,7 @@ const BusinessItemsPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Table state
   const [searchText, setSearchText] = useState('');
@@ -317,6 +319,7 @@ const BusinessItemsPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
 
+    setDeleteLoading(true);
     try {
       // TODO: Implement item deletion
       enqueueSnackbar(t('business.items.itemDeleted'), {
@@ -328,6 +331,8 @@ const BusinessItemsPage: React.FC = () => {
       enqueueSnackbar(t('business.items.deleteError'), {
         variant: 'error',
       });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1052,15 +1057,24 @@ const BusinessItemsPage: React.FC = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowDeleteConfirm(false)}>
+          <Button
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={deleteLoading}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             onClick={handleConfirmDelete}
             color="error"
             variant="contained"
+            disabled={deleteLoading}
+            startIcon={
+              deleteLoading ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : undefined
+            }
           >
-            {t('common.delete')}
+            {deleteLoading ? t('common.loading') : t('common.delete')}
           </Button>
         </DialogActions>
       </Dialog>

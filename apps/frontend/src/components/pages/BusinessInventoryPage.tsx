@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
@@ -58,6 +59,7 @@ const BusinessInventoryPage: React.FC = () => {
   const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState<any>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const {
     inventory,
@@ -95,6 +97,7 @@ const BusinessInventoryPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!inventoryToDelete) return;
 
+    setDeleteLoading(true);
     try {
       await deleteInventoryItem(inventoryToDelete.id);
       enqueueSnackbar(t('business.inventory.itemDeleted'), {
@@ -106,6 +109,8 @@ const BusinessInventoryPage: React.FC = () => {
       enqueueSnackbar(t('business.inventory.deleteError'), {
         variant: 'error',
       });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -325,15 +330,24 @@ const BusinessInventoryPage: React.FC = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowDeleteConfirm(false)}>
+          <Button
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={deleteLoading}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             onClick={handleConfirmDelete}
             color="error"
             variant="contained"
+            disabled={deleteLoading}
+            startIcon={
+              deleteLoading ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : undefined
+            }
           >
-            {t('common.delete')}
+            {deleteLoading ? t('common.loading') : t('common.delete')}
           </Button>
         </DialogActions>
       </Dialog>

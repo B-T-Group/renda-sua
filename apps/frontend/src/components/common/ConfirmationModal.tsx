@@ -1,5 +1,6 @@
 import {
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -68,8 +69,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           variant="contained"
           disabled={loading}
           autoFocus
+          startIcon={
+            loading ? <CircularProgress size={16} color="inherit" /> : undefined
+          }
         >
-          {confirmText || t('common.yes')}
+          {loading ? t('common.loading') : confirmText || t('common.yes')}
         </Button>
       </DialogActions>
     </Dialog>

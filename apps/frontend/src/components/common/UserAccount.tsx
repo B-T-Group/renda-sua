@@ -1,5 +1,6 @@
 import {
   Add as AddIcon,
+  History as HistoryIcon,
   Remove as RemoveIcon,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
@@ -10,19 +11,64 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountById } from '../../hooks/useAccountInfo';
 import { useAirtelMoney } from '../../hooks/useAirtelMoney';
+import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
+
+// GraphQL query for fetching account transactions
+const GET_ACCOUNT_TRANSACTIONS = `
+  query GetAccountTransactions($accountId: uuid!, $limit: Int = 10) {
+    account_transactions(
+      where: { account_id: { _eq: $accountId } }
+      order_by: { created_at: desc }
+      limit: $limit
+    ) {
+      id
+      account_id
+      transaction_type
+      amount
+      memo
+      reference_id
+      created_at
+      account {
+        currency
+      }
+    }
+  }
+`;
+
+export interface AccountTransaction {
+  id: string;
+  account_id: string;
+  transaction_type: string;
+  amount: number;
+  memo?: string;
+  reference_id?: string;
+  created_at: string;
+  account: {
+    currency: string;
+  };
+}
 
 interface UserAccountProps {
   accountId: string;
@@ -41,13 +87,17 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const { userProfile } = useProfile();
 
   // Use the new hook to fetch account data
-  const { account, loading, error, subscriptionFailed, refetch } =
+  const { account, loading, error, subscriptionFailed } =
     useAccountById(accountId);
 
   // Modal states
   const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+
+  // Transaction state
+  const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   // Confirmation message states
   const [showTopUpSuccess, setShowTopUpSuccess] = useState(false);
@@ -58,6 +108,11 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const { initiatePayment, loading: mobilePaymentsLoading } =
     useMobilePayments();
   const { loading: airtelLoading } = useAirtelMoney();
+
+  // GraphQL hook for transactions
+  const { execute: executeTransactionsQuery } = useGraphQLRequest(
+    GET_ACCOUNT_TRANSACTIONS
+  );
 
   // If account is still loading or not found, show loading state
   if (loading || !account) {
@@ -107,8 +162,27 @@ const UserAccount: React.FC<UserAccountProps> = ({
     return new Date(dateString).toLocaleDateString();
   };
 
+  const fetchAccountTransactions = async (limit: number = 10) => {
+    setTransactionsLoading(true);
+
+    try {
+      const result = await executeTransactionsQuery({
+        accountId: accountId,
+        limit,
+      });
+
+      const transactionData = result.account_transactions || [];
+      setTransactions(transactionData);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
   const handleViewTransactions = () => {
     setTransactionDialogOpen(true);
+    fetchAccountTransactions();
   };
 
   const handleTopUp = () => {
@@ -384,8 +458,132 @@ const UserAccount: React.FC<UserAccountProps> = ({
         </Alert>
       </Snackbar>
 
-      {/* Transaction History Dialog - Placeholder for now */}
-      {/* This would need to be implemented with a proper transaction dialog component */}
+      {/* Transaction History Dialog */}
+      <Dialog
+        open={transactionDialogOpen}
+        onClose={() => setTransactionDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <HistoryIcon />
+            {t('accounts.transactionHistory')}
+            <Chip
+              label={`${account.currency} ${t('accounts.account')}`}
+              size="small"
+              color="primary"
+            />
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              {t('accounts.balance')}
+            </Typography>
+            <Box display="flex" justifyContent="space-between" gap={2}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  {t('accounts.available')}:
+                </Typography>
+                <Typography variant="h6" color="success.main">
+                  {formatCurrency(account.available_balance, account.currency)}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  {t('accounts.withheld')}:
+                </Typography>
+                <Typography variant="h6" color="warning.main">
+                  {formatCurrency(account.withheld_balance, account.currency)}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  {t('accounts.balance')}:
+                </Typography>
+                <Typography variant="h6" color="primary.main">
+                  {formatCurrency(account.total_balance, account.currency)}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          {transactionsLoading ? (
+            <Typography>{t('common.loading')}...</Typography>
+          ) : transactions.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('accounts.noTransactions')}
+            </Typography>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('accounts.date')}</TableCell>
+                    <TableCell>{t('accounts.type')}</TableCell>
+                    <TableCell>{t('accounts.description')}</TableCell>
+                    <TableCell align="right">{t('accounts.amount')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {transactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {formatDate(transaction.created_at)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={transaction.transaction_type}
+                          size="small"
+                          color={transaction.amount >= 0 ? 'success' : 'error'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {transaction.memo ||
+                            transaction.reference_id ||
+                            t('accounts.noDescription')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography
+                          variant="body2"
+                          color={
+                            transaction.amount >= 0
+                              ? 'success.main'
+                              : 'error.main'
+                          }
+                          fontWeight="medium"
+                        >
+                          {transaction.amount >= 0 ? '+' : ''}
+                          {formatCurrency(
+                            transaction.amount,
+                            transaction.account.currency
+                          )}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Button
+              onClick={() => fetchAccountTransactions(transactions.length + 10)}
+              disabled={transactionsLoading}
+              variant="outlined"
+              size="small"
+            >
+              {t('accounts.loadMore')}
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
