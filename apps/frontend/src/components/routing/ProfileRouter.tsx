@@ -31,13 +31,9 @@ const ProfileRouter: React.FC = () => {
       // Profile is complete, route based on user type
       switch (userType) {
         case 'client':
-          navigate('/dashboard');
-          break;
         case 'agent':
-          navigate('/agent-dashboard');
-          break;
         case 'business':
-          navigate('/business-dashboard');
+          navigate('/dashboard');
           break;
         default:
           // Unknown user type, redirect to complete profile

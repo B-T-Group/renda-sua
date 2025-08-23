@@ -1,0 +1,204 @@
+import {
+  CheckCircle,
+  History as HistoryIcon,
+  AttachMoney as RefundIcon,
+} from '@mui/icons-material';
+import { Box, Button, CircularProgress } from '@mui/material';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
+import type { OrderData } from '../../hooks/useOrderById';
+
+interface BusinessActionsProps {
+  order: OrderData;
+  onActionComplete?: () => void;
+  onShowNotification?: (
+    message: string,
+    severity: 'success' | 'error' | 'warning' | 'info'
+  ) => void;
+  onShowHistory?: () => void;
+}
+
+const BusinessActions: React.FC<BusinessActionsProps> = ({
+  order,
+  onActionComplete,
+  onShowNotification,
+  onShowHistory,
+}) => {
+  const { t } = useTranslation();
+  const { confirmOrder, refundOrder, completeOrder } = useBackendOrders();
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirmOrder = async () => {
+    setLoading(true);
+    try {
+      await confirmOrder(order.id);
+      onShowNotification?.(
+        t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderConfirmError', 'Failed to confirm order'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefundOrder = async () => {
+    setLoading(true);
+    try {
+      await refundOrder(order.id);
+      onShowNotification?.(
+        t('messages.orderRefundSuccess', 'Order refunded successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderRefundError', 'Failed to refund order'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    setLoading(true);
+    try {
+      await completeOrder(order.id);
+      onShowNotification?.(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderCompleteError', 'Failed to complete order'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getAvailableActions = () => {
+    const actions = [];
+
+    switch (order.current_status) {
+      case 'pending':
+        actions.push({
+          label: t('orderActions.confirmOrder', 'Confirm Order'),
+          action: handleConfirmOrder,
+          color: 'success' as const,
+          icon: <CheckCircle />,
+        });
+        break;
+
+      case 'delivered':
+        actions.push({
+          label: t('orderActions.completeOrder', 'Complete Order'),
+          action: handleCompleteOrder,
+          color: 'success' as const,
+          icon: <CheckCircle />,
+        });
+        actions.push({
+          label: t('orderActions.refundOrder', 'Refund Order'),
+          action: handleRefundOrder,
+          color: 'warning' as const,
+          icon: <RefundIcon />,
+        });
+        break;
+
+      case 'failed':
+      case 'cancelled':
+        actions.push({
+          label: t('orderActions.refundOrder', 'Refund Order'),
+          action: handleRefundOrder,
+          color: 'warning' as const,
+          icon: <RefundIcon />,
+        });
+        break;
+
+      default:
+        // For other statuses, businesses can generally refund
+        if (!['complete', 'refunded'].includes(order.current_status)) {
+          actions.push({
+            label: t('orderActions.refundOrder', 'Refund Order'),
+            action: handleRefundOrder,
+            color: 'warning' as const,
+            icon: <RefundIcon />,
+          });
+        }
+        break;
+    }
+
+    // Always show history for businesses
+    actions.push({
+      label: t('orderActions.viewHistory', 'View History'),
+      action: onShowHistory,
+      color: 'info' as const,
+      icon: <HistoryIcon />,
+    });
+
+    return actions;
+  };
+
+  const availableActions = getAvailableActions();
+
+  if (availableActions.length === 0) {
+    return null;
+  }
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 2,
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+      }}
+    >
+      {availableActions.map((action, index) => (
+        <Button
+          key={index}
+          variant="outlined"
+          color={action.color}
+          onClick={action.action}
+          disabled={
+            loading &&
+            [
+              handleConfirmOrder,
+              handleRefundOrder,
+              handleCompleteOrder,
+            ].includes(action.action)
+          }
+          startIcon={
+            loading &&
+            [
+              handleConfirmOrder,
+              handleRefundOrder,
+              handleCompleteOrder,
+            ].includes(action.action) ? (
+              <CircularProgress size={16} />
+            ) : (
+              action.icon
+            )
+          }
+          sx={{ minWidth: 120 }}
+        >
+          {action.label}
+        </Button>
+      ))}
+    </Box>
+  );
+};
+
+export default BusinessActions;

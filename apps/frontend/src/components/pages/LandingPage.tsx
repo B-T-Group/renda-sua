@@ -40,20 +40,7 @@ const LandingPage: React.FC = () => {
   // Redirect authenticated users to their appropriate home page
   useEffect(() => {
     if (isAuthenticated && !loading && isProfileComplete && userType) {
-      switch (userType) {
-        case 'client':
-          navigate('/dashboard');
-          break;
-        case 'agent':
-          navigate('/agent-dashboard');
-          break;
-        case 'business':
-          navigate('/business-dashboard');
-          break;
-        default:
-          // Stay on landing page for unknown user types
-          break;
-      }
+      navigate('/dashboard');
     }
   }, [isAuthenticated, loading, isProfileComplete, userType, navigate]);
 

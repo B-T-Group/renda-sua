@@ -20,22 +20,13 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAccountInfo } from '../../hooks';
-import { useAgentOrders } from '../../hooks/useAgentOrders';
-import { useBusinessOrders } from '../../hooks/useBusinessOrders';
-import { useClientOrders } from '../../hooks/useClientOrders';
+import { useAccountInfo, useOrders, type OrderFilters } from '../../hooks';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
-import SEOHead from '../seo/SEOHead';
 
-interface OrderFilters {
-  search: string;
-  status: string;
-  dateFrom: string;
-  dateTo: string;
-}
+import SEOHead from '../seo/SEOHead';
 
 const OrdersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -53,34 +44,8 @@ const OrdersPage: React.FC = () => {
   });
   const [showCompletedOrders, setShowCompletedOrders] = useState(false);
 
-  // Determine which orders hook to use based on user type
-  const clientOrders = useClientOrders(profile?.client?.id);
-  const businessOrders = useBusinessOrders(profile?.business?.id);
-  const agentOrdersHook = useAgentOrders();
-
-  // Normalize the different hook interfaces
-  const agentOrders = useMemo(
-    () => ({
-      orders: agentOrdersHook.orders,
-      loading: agentOrdersHook.loading,
-      error: agentOrdersHook.error,
-      fetchOrders: (filters?: any) => {
-        // Agent orders don't support filters in the same way
-        agentOrdersHook.refetch();
-        return Promise.resolve();
-      },
-      refreshOrders: agentOrdersHook.refetch,
-    }),
-    [agentOrdersHook]
-  );
-
-  // Select the appropriate orders data based on user type
-  const { orders, loading, error, fetchOrders, refreshOrders } =
-    profile?.business
-      ? businessOrders
-      : profile?.agent
-      ? agentOrders
-      : clientOrders;
+  // Use unified orders hook that handles user type on backend
+  const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
 
   const handleFilterChange = (newFilters: Partial<OrderFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
@@ -190,16 +155,6 @@ const OrdersPage: React.FC = () => {
     }
   };
 
-  const shouldShowAccountInfo = () => {
-    // Show account info for clients and businesses, but not agents
-    return profile?.client || profile?.business;
-  };
-
-  const shouldShowAddressAlert = () => {
-    // Show address alert for clients
-    return profile?.client;
-  };
-
   useEffect(() => {
     fetchOrders({});
   }, [fetchOrders]);
@@ -248,17 +203,15 @@ const OrdersPage: React.FC = () => {
         </Box>
 
         {/* Address Alert - Only for clients */}
-        {shouldShowAddressAlert() && <AddressAlert />}
+        {profile?.client && <AddressAlert />}
 
-        {/* Account Information - For clients and businesses */}
-        {shouldShowAccountInfo() && (
-          <AccountInformation
-            accounts={accounts}
-            onRefresh={refreshOrders}
-            compactView={true}
-            showTransactions={true}
-          />
-        )}
+        {/* Account Information - Always show for all user types */}
+        <AccountInformation
+          accounts={accounts}
+          onRefresh={refreshOrders}
+          compactView={true}
+          showTransactions={true}
+        />
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>

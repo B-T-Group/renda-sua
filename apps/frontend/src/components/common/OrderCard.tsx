@@ -4,7 +4,6 @@ import {
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
-  Avatar,
   Box,
   Button,
   Card,
@@ -91,42 +90,58 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
   const orderImage = getOrderImage();
 
   return (
-    <Card sx={{ display: 'flex', alignItems: 'center', p: 2, mb: 2 }}>
+    <Card sx={{ display: 'flex', mb: 2 }}>
       {/* Order Image */}
-      <Box sx={{ flexShrink: 0, mr: 3 }}>
+      <Box
+        sx={{
+          width: 120,
+          minHeight: 120,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'grey.100',
+          overflow: 'hidden',
+          borderRadius: 0,
+        }}
+      >
         {orderImage ? (
-          <Avatar
+          <img
             src={orderImage}
             alt={t('orders.orderImage', 'Order')}
-            sx={{
-              width: 80,
-              height: 80,
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
             }}
-            variant="rounded"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                parent.innerHTML =
+                  '<div style="font-size: 2rem; color: #999;">📦</div>';
+              }
+            }}
           />
         ) : (
-          <Avatar
+          <Box
             sx={{
-              width: 80,
-              height: 80,
-              borderRadius: 2,
-              bgcolor: 'grey.100',
-              border: '1px solid',
-              borderColor: 'divider',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               color: 'grey.500',
+              fontSize: '2rem',
+              width: '100%',
+              height: '100%',
             }}
-            variant="rounded"
           >
             📦
-          </Avatar>
+          </Box>
         )}
       </Box>
 
       {/* Order Details */}
-      <CardContent sx={{ flex: 1, p: 0, '&:last-child': { pb: 0 } }}>
+      <CardContent sx={{ flex: 1 }}>
         <Box
           display="flex"
           justifyContent="space-between"

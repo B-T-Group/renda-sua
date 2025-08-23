@@ -25,6 +25,12 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
+import AgentActions from '../orders/AgentActions';
+import AgentOrderAlerts from '../orders/AgentOrderAlerts';
+import BusinessActions from '../orders/BusinessActions';
+import BusinessOrderAlerts from '../orders/BusinessOrderAlerts';
+import ClientActions from '../orders/ClientActions';
+import ClientOrderAlerts from '../orders/ClientOrderAlerts';
 import SEOHead from '../seo/SEOHead';
 
 const ManageOrderPage: React.FC = () => {
@@ -278,7 +284,7 @@ const ManageOrderPage: React.FC = () => {
         <Box sx={{ mb: 3 }}>
           <OrderView
             order={order}
-            showFinancialDetails={shouldShowFinancialDetails()}
+            showFinancialDetails={shouldShowFinancialDetails() ?? false}
           />
         </Box>
 
@@ -296,51 +302,75 @@ const ManageOrderPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Order Actions - Moved to bottom */}
-        {availableActions.length > 0 && (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t('orders.availableActions', 'Available Actions')}
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 2,
-                  flexWrap: 'wrap',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                {availableActions.map((action) => (
-                  <Button
-                    key={action.action}
-                    variant="outlined"
-                    color={action.color as any}
-                    onClick={() =>
-                      handleActionClick(
-                        action.action,
-                        action.label,
-                        action.color
-                      )
-                    }
-                    disabled={actionLoading}
-                  >
-                    {action.label}
-                  </Button>
-                ))}
+        {/* Persona-specific alerts */}
+        {profile?.agent && (
+          <AgentOrderAlerts
+            order={order}
+            agentAccounts={[]} // TODO: Add agent accounts if needed
+          />
+        )}
+        {profile?.business && <BusinessOrderAlerts order={order} />}
+        {profile?.client && <ClientOrderAlerts order={order} />}
+
+        {/* Order Actions - Persona-specific components */}
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              {t('orders.availableActions', 'Available Actions')}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Persona-specific actions */}
+              {profile?.agent && (
+                <AgentActions
+                  order={order}
+                  onActionComplete={() => refetch()}
+                  onShowNotification={(message, severity) => {
+                    // Handle notifications (could enhance this later)
+                    console.log(`${severity}: ${message}`);
+                  }}
+                />
+              )}
+              {profile?.business && (
+                <BusinessActions
+                  order={order}
+                  onActionComplete={() => refetch()}
+                  onShowNotification={(message, severity) => {
+                    // Handle notifications (could enhance this later)
+                    console.log(`${severity}: ${message}`);
+                  }}
+                  onShowHistory={() => setHistoryDialogOpen(true)}
+                />
+              )}
+              {profile?.client && (
+                <ClientActions
+                  order={order}
+                  onActionComplete={() => refetch()}
+                  onShowNotification={(message, severity) => {
+                    // Handle notifications (could enhance this later)
+                    console.log(`${severity}: ${message}`);
+                  }}
+                  onShowHistory={() => setHistoryDialogOpen(true)}
+                  onShowMessages={() => {
+                    // TODO: Implement messages functionality
+                  }}
+                />
+              )}
+
+              {/* Always show history button */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   variant="outlined"
                   color="info"
                   startIcon={<HistoryIcon />}
                   onClick={() => setHistoryDialogOpen(true)}
-                  disabled={actionLoading}
+                  disabled={loading}
                 >
                   {t('orders.actions.viewHistory', 'View History')}
                 </Button>
               </Box>
-            </CardContent>
-          </Card>
-        )}
+            </Box>
+          </CardContent>
+        </Card>
       </Container>
 
       {/* Confirmation Modal */}
@@ -379,7 +409,13 @@ const ManageOrderPage: React.FC = () => {
       <OrderHistoryDialog
         open={historyDialogOpen}
         onClose={() => setHistoryDialogOpen(false)}
-        orderHistory={order.order_status_history || []}
+        orderHistory={
+          order.order_status_history?.map((history) => ({
+            ...history,
+            previous_status: history.previous_status || null,
+            notes: history.notes || '',
+          })) || []
+        }
         orderNumber={order.order_number}
       />
     </>
