@@ -10,8 +10,31 @@ interface ClientOrderAlertsProps {
 const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: order.currency || 'USD',
+    }).format(amount);
+  };
+
+  const getOrderTotal = () => {
+    return order.total_amount || 0;
+  };
+
+  const getEstimatedDeliveryTime = () => {
+    if (order.estimated_delivery_time) {
+      return new Date(order.estimated_delivery_time).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    return null;
+  };
+
   const getAlertsForStatus = () => {
     const alerts = [];
+    const orderTotal = getOrderTotal();
+    const estimatedTime = getEstimatedDeliveryTime();
 
     switch (order.current_status) {
       case 'pending':
@@ -19,7 +42,9 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'info' as const,
           message: t(
             'client.orders.pendingNotice',
-            'Your order is pending confirmation from the business. You will be notified once it is confirmed.'
+            `⏳ Your ${formatCurrency(
+              orderTotal
+            )} order is awaiting business confirmation. They typically respond within 10-15 minutes. You'll be notified once confirmed!`
           ),
         });
         break;
@@ -29,7 +54,11 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'success' as const,
           message: t(
             'client.orders.confirmedNotice',
-            'Your order has been confirmed and is being prepared.'
+            `✅ Great news! Your order has been confirmed and preparation has begun. ${
+              estimatedTime
+                ? `Estimated delivery: ${estimatedTime}`
+                : "You'll receive updates as it progresses."
+            }`
           ),
         });
         break;
@@ -39,19 +68,29 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'info' as const,
           message: t(
             'client.orders.preparingNotice',
-            'Your order is being prepared. It will be ready for pickup soon.'
+            "👨‍🍳 Your order is being carefully prepared. Quality takes time - we'll notify you when it's ready for pickup!"
           ),
         });
         break;
 
       case 'ready_for_pickup':
-        alerts.push({
-          severity: 'warning' as const,
-          message: t(
-            'client.orders.readyForPickupNotice',
-            'Your order is ready for pickup and an agent will be assigned soon.'
-          ),
-        });
+        if (order.assigned_agent_id) {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'client.orders.agentAssigned',
+              '🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!'
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'client.orders.readyForPickupNotice',
+              "📦 Your order is ready! We're finding the perfect agent to deliver it to you. This usually takes just a few minutes."
+            ),
+          });
+        }
         break;
 
       case 'assigned_to_agent':
@@ -66,20 +105,20 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
 
       case 'picked_up':
         alerts.push({
-          severity: 'primary' as const,
+          severity: 'success' as const,
           message: t(
             'client.orders.pickedUpNotice',
-            'Your order has been picked up by our agent and is on its way to you.'
+            '🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!'
           ),
         });
         break;
 
       case 'in_transit':
         alerts.push({
-          severity: 'primary' as const,
+          severity: 'warning' as const,
           message: t(
             'client.orders.inTransitNotice',
-            'Your order is in transit. The agent will contact you when nearby.'
+            "🚗 Your order is on its way! The agent will contact you when they're nearby. Please keep your phone handy."
           ),
         });
         break;
@@ -89,7 +128,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'warning' as const,
           message: t(
             'client.orders.outForDeliveryNotice',
-            'Your order is out for delivery. Please be available to receive it.'
+            '🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!'
           ),
         });
         break;
@@ -99,7 +138,9 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'success' as const,
           message: t(
             'client.orders.deliveredNotice',
-            'Your order has been successfully delivered. Thank you for your business!'
+            `🎉 Delivered! Your ${formatCurrency(
+              orderTotal
+            )} order has arrived safely. We hope you love it! Thank you for choosing our service.`
           ),
         });
         break;
@@ -109,7 +150,9 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'error' as const,
           message: t(
             'client.orders.cancelledNotice',
-            'Your order has been cancelled. If you have any questions, please contact support.'
+            `❌ Your order has been cancelled. Any payment of ${formatCurrency(
+              orderTotal
+            )} will be refunded within 3-5 business days. Contact support if you have questions.`
           ),
         });
         break;
@@ -119,7 +162,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'error' as const,
           message: t(
             'client.orders.failedNotice',
-            'There was an issue with your order delivery. Please contact support for assistance.'
+            "🚨 Delivery failed! Don't worry - we're working to resolve this immediately. You may receive a new delivery agent or a full refund. We'll keep you updated!"
           ),
         });
         break;
@@ -129,7 +172,9 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'info' as const,
           message: t(
             'client.orders.refundedNotice',
-            'Your order has been refunded. The refund should appear in your account soon.'
+            `💰 Your ${formatCurrency(
+              orderTotal
+            )} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.`
           ),
         });
         break;
@@ -139,7 +184,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'success' as const,
           message: t(
             'client.orders.completeNotice',
-            'Your order is complete. Thank you for choosing our service!'
+            '✅ Order complete! We hope you enjoyed your purchase. Please consider leaving a review to help other customers!'
           ),
         });
         break;

@@ -22,7 +22,7 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
     // If no account data is provided, we can't determine funds status
     // So we assume funds are sufficient (don't show warning)
     if (!agentAccounts?.length) return true;
-    
+
     const totalBalance = agentAccounts.reduce(
       (sum, account) => sum + (account.available_balance || 0),
       0
@@ -30,100 +30,245 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
     return totalBalance >= (order.total_amount || 0);
   };
 
+  const getDeliveryFee = () => {
+    // Calculate potential earnings from delivery fee
+    return order.delivery_fee || 0;
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: order.currency || 'USD',
+    }).format(amount);
+  };
+
   const getAlertsForStatus = () => {
     const alerts = [];
+    const deliveryFee = getDeliveryFee();
 
     switch (order.current_status) {
-      case 'assigned_to_agent':
+      case 'pending':
         alerts.push({
-          severity: 'warning' as const,
+          severity: 'info' as const,
           message: t(
-            'agent.orders.assignedNotice',
-            'Once you claim this order, you must deliver it within 24 hours or penalties may apply.'
+            'agent.orders.pendingNotice',
+            'This order is waiting for business confirmation. You cannot claim it yet.'
+          ),
+        });
+        break;
+
+      case 'confirmed':
+        alerts.push({
+          severity: 'info' as const,
+          message: t(
+            'agent.orders.confirmedNotice',
+            'Order confirmed by business and is being prepared. It will be available for pickup soon.'
+          ),
+        });
+        break;
+
+      case 'preparing':
+        alerts.push({
+          severity: 'info' as const,
+          message: t(
+            'agent.orders.preparingNotice',
+            'Business is currently preparing this order. It will be ready for pickup shortly.'
           ),
         });
         break;
 
       case 'ready_for_pickup':
-        alerts.push({
-          severity: 'warning' as const,
-          message: t(
-            'agent.orders.readyForPickupNotice',
-            'Please contact the client and confirm delivery arrangements.'
-          ),
-        });
-
-        // Check if order requires verified agent
-        if (order.verified_agent_delivery && !agentVerified) {
+        // Check if already assigned to this agent
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'agent.orders.assignedToYou',
+              `Great! You've claimed this order. Earn ${formatCurrency(
+                deliveryFee
+              )} by completing the delivery. Pick up from the business and deliver to the customer.`
+            ),
+          });
+        } else if (order.assigned_agent_id) {
           alerts.push({
             severity: 'info' as const,
             message: t(
-              'agent.orders.verificationRequired',
-              'This order requires a verified agent. Please contact support to get your account verified.'
+              'agent.orders.assignedToOther',
+              'This order has been claimed by another agent and is no longer available.'
             ),
           });
-        }
-
-        // Check for sufficient funds
-        if (!hasSufficientFunds()) {
-          alerts.push({
-            severity: 'warning' as const,
-            message: t(
-              'agent.orders.insufficientFunds',
-              'Insufficient funds to claim this order. Please top up your account.'
-            ),
-          });
+        } else {
+          // Available for claiming
+          if (order.verified_agent_delivery && !agentVerified) {
+            alerts.push({
+              severity: 'warning' as const,
+              message: t(
+                'agent.orders.verificationRequired',
+                'This order requires a verified agent. Please complete your verification to claim high-value orders.'
+              ),
+            });
+          } else if (!hasSufficientFunds()) {
+            alerts.push({
+              severity: 'error' as const,
+              message: t(
+                'agent.orders.insufficientFunds',
+                `You need more funds to claim this order. Top up your account to earn ${formatCurrency(
+                  deliveryFee
+                )} from this delivery.`
+              ),
+            });
+          } else {
+            alerts.push({
+              severity: 'success' as const,
+              message: t(
+                'agent.orders.canClaim',
+                `🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(
+                  deliveryFee
+                )} for the delivery. You have sufficient funds and meet all requirements.`
+              ),
+            });
+          }
         }
         break;
 
       case 'picked_up':
-        alerts.push({
-          severity: 'info' as const,
-          message: t(
-            'agent.orders.pickedUpNotice',
-            'Order has been picked up. Please proceed to deliver it to the customer.'
-          ),
-        });
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'agent.orders.pickedUpByYou',
+              `You've picked up this order. Deliver it promptly to earn your ${formatCurrency(
+                deliveryFee
+              )} delivery fee. Keep the customer informed of your progress.`
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'info' as const,
+            message: t(
+              'agent.orders.pickedUpByOther',
+              'This order has been picked up by the assigned agent and is on its way to the customer.'
+            ),
+          });
+        }
         break;
 
       case 'in_transit':
-        alerts.push({
-          severity: 'info' as const,
-          message: t(
-            'agent.orders.inTransitNotice',
-            'Order is in transit. Keep the customer updated on your progress.'
-          ),
-        });
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'agent.orders.inTransitByYou',
+              `Order in transit. You're almost there! Complete the delivery to earn ${formatCurrency(
+                deliveryFee
+              )}. Update the customer on your ETA.`
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'info' as const,
+            message: t(
+              'agent.orders.inTransitByOther',
+              'Order is currently being delivered by the assigned agent.'
+            ),
+          });
+        }
         break;
 
       case 'out_for_delivery':
-        alerts.push({
-          severity: 'success' as const,
-          message: t(
-            'agent.orders.outForDeliveryNotice',
-            'Order is out for delivery. Please complete the delivery and mark as delivered.'
-          ),
-        });
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'warning' as const,
+            message: t(
+              'agent.orders.outForDeliveryByYou',
+              `Final step! You're out for delivery. Complete this delivery to earn ${formatCurrency(
+                deliveryFee
+              )}. Make sure to get confirmation from the customer.`
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'info' as const,
+            message: t(
+              'agent.orders.outForDeliveryByOther',
+              'Order is out for delivery and should reach the customer soon.'
+            ),
+          });
+        }
         break;
 
       case 'delivered':
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'agent.orders.deliveredByYou',
+              `🎉 Excellent work! You've successfully delivered this order and earned ${formatCurrency(
+                deliveryFee
+              )}. Payment will be processed shortly.`
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'agent.orders.deliveredByOther',
+              'Order has been successfully delivered to the customer.'
+            ),
+          });
+        }
+        break;
+
+      case 'completed':
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'agent.orders.completedByYou',
+              `✅ Order completed! Your ${formatCurrency(
+                deliveryFee
+              )} delivery payment has been processed. Thank you for your excellent service!`
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'agent.orders.completedByOther',
+              'Order has been completed successfully.'
+            ),
+          });
+        }
+        break;
+
+      case 'cancelled':
         alerts.push({
-          severity: 'success' as const,
+          severity: 'error' as const,
           message: t(
-            'agent.orders.deliveredNotice',
-            'Order has been successfully delivered. Thank you for your service!'
+            'agent.orders.cancelledNotice',
+            'This order has been cancelled and is no longer available for delivery.'
           ),
         });
         break;
 
       case 'failed':
-        alerts.push({
-          severity: 'error' as const,
-          message: t(
-            'agent.orders.failedNotice',
-            'Order delivery failed. Please contact support if you need assistance.'
-          ),
-        });
+        if (order.assigned_agent_id === profile?.agent?.id) {
+          alerts.push({
+            severity: 'error' as const,
+            message: t(
+              'agent.orders.failedByYou',
+              'Delivery failed. Please contact support immediately to resolve this issue and avoid penalties.'
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'error' as const,
+            message: t(
+              'agent.orders.failedByOther',
+              'This delivery failed. A new agent may be assigned to retry the delivery.'
+            ),
+          });
+        }
         break;
 
       default:

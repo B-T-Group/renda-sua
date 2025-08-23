@@ -117,7 +117,7 @@ export const useGraphQLClient = () => {
           return null;
         }
       }
-    }, [isAuthenticated, getAccessTokenSilently, loginWithRedirect]);
+    }, [isAuthenticated]);
 
   return {
     client,

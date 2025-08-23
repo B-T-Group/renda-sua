@@ -10,8 +10,20 @@ interface BusinessOrderAlertsProps {
 const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: order.currency || 'USD',
+    }).format(amount);
+  };
+
+  const getExpectedRevenue = () => {
+    return order.subtotal || 0;
+  };
+
   const getAlertsForStatus = () => {
     const alerts = [];
+    const revenue = getExpectedRevenue();
 
     switch (order.current_status) {
       case 'pending':
@@ -19,39 +31,51 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
           severity: 'warning' as const,
           message: t(
             'business.orders.pendingNotice',
-            'New order received! Please review and confirm this order to proceed with preparation.'
+            `💰 New order worth ${formatCurrency(
+              revenue
+            )}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.`
           ),
         });
         break;
 
       case 'confirmed':
         alerts.push({
-          severity: 'info' as const,
+          severity: 'success' as const,
           message: t(
             'business.orders.confirmedNotice',
-            'Order confirmed. Please prepare the items and mark as ready when complete.'
+            '✅ Order confirmed! Begin preparation immediately. Quality preparation ensures customer satisfaction and positive reviews.'
           ),
         });
         break;
 
       case 'preparing':
         alerts.push({
-          severity: 'primary' as const,
+          severity: 'warning' as const,
           message: t(
             'business.orders.preparingNotice',
-            'Order is being prepared. Mark as ready for pickup when items are complete.'
+            '👨‍🍳 Preparation in progress. Complete carefully and mark as "Ready for Pickup" to notify available agents.'
           ),
         });
         break;
 
       case 'ready_for_pickup':
-        alerts.push({
-          severity: 'success' as const,
-          message: t(
-            'business.orders.readyForPickupNotice',
-            'Order is ready for pickup. An agent will be assigned to collect it soon.'
-          ),
-        });
+        if (order.assigned_agent_id) {
+          alerts.push({
+            severity: 'success' as const,
+            message: t(
+              'business.orders.agentAssigned',
+              '🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.'
+            ),
+          });
+        } else {
+          alerts.push({
+            severity: 'info' as const,
+            message: t(
+              'business.orders.waitingForAgent',
+              '📦 Order ready for pickup! Waiting for an agent to claim this delivery. Keep the order prepared and ready.'
+            ),
+          });
+        }
         break;
 
       case 'assigned_to_agent':
@@ -99,7 +123,9 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
           severity: 'success' as const,
           message: t(
             'business.orders.deliveredNotice',
-            'Order has been delivered successfully! You can now mark it as complete or process a refund if needed.'
+            `🎉 Order delivered successfully! Customer received their ${formatCurrency(
+              revenue
+            )} order. Excellent service provided!`
           ),
         });
         break;
@@ -109,17 +135,21 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
           severity: 'error' as const,
           message: t(
             'business.orders.failedNotice',
-            'Order delivery failed. You may need to process a refund or arrange alternative delivery.'
+            `🚨 Delivery failed! This impacts customer satisfaction and your ${formatCurrency(
+              revenue
+            )} revenue. Contact support immediately to resolve and potentially reassign to another agent.`
           ),
         });
         break;
 
       case 'cancelled':
         alerts.push({
-          severity: 'warning' as const,
+          severity: 'error' as const,
           message: t(
             'business.orders.cancelledNotice',
-            'Order has been cancelled. Consider processing a refund if payment was received.'
+            `❌ Order cancelled. Potential revenue of ${formatCurrency(
+              revenue
+            )} lost. Review cancellation reason and process refund if payment was received.`
           ),
         });
         break;
@@ -164,12 +194,29 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
     }
 
     // Add special instructions alert if present
-    if (order.special_instructions) {
+    if (
+      order.special_instructions &&
+      ['pending', 'confirmed', 'preparing'].includes(order.current_status)
+    ) {
       alerts.push({
         severity: 'info' as const,
         message: t(
           'business.orders.specialInstructionsNotice',
-          'This order has special instructions. Please review them carefully.'
+          `📝 Special instructions: "${order.special_instructions}". Follow these carefully to ensure customer satisfaction.`
+        ),
+      });
+    }
+
+    // Add high-value order alert
+    if (
+      revenue > 100 &&
+      ['pending', 'confirmed', 'preparing'].includes(order.current_status)
+    ) {
+      alerts.push({
+        severity: 'info' as const,
+        message: t(
+          'business.orders.highValueOrder',
+          '💎 High-value order! Extra care recommended. Ensure quality preparation to maintain premium service standards.'
         ),
       });
     }
