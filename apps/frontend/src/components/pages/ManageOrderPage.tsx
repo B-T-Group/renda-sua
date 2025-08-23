@@ -18,10 +18,9 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAccountInfo, useBackendOrders } from '../../hooks';
+import { useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import AccountInformation from '../common/AccountInformation';
 import ConfirmationModal from '../common/ConfirmationModal';
 import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
@@ -39,11 +38,6 @@ const ManageOrderPage: React.FC = () => {
   const navigate = useNavigate();
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
-  const {
-    accounts,
-    loading: accountLoading,
-    error: accountError,
-  } = useAccountInfo();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const {
@@ -123,7 +117,7 @@ const ManageOrderPage: React.FC = () => {
     );
   };
 
-  if (loading || accountLoading) {
+  if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box
@@ -205,26 +199,10 @@ const ManageOrderPage: React.FC = () => {
           </IconButton>
         </Box>
 
-        {/* Account Information */}
-        <AccountInformation
-          accounts={accounts}
-          onRefresh={refetch}
-          compactView={true}
-          showTransactions={false}
-        />
-
         {/* Error Display */}
         {actionError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {actionError}
-          </Alert>
-        )}
-        {accountError && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            Error loading account information:{' '}
-            {typeof accountError === 'string'
-              ? accountError
-              : (accountError as any)?.message}
           </Alert>
         )}
 

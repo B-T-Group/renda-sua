@@ -12,14 +12,12 @@ import {
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  useAccountInfo,
   useBackendOrders,
   useDeliveryFees,
   useInventoryItems,
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
-import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
@@ -35,12 +33,6 @@ const Dashboard: React.FC = () => {
     loading: inventoryLoading,
     error: inventoryError,
   } = useInventoryItems();
-  const {
-    accounts,
-    loading: accountLoading,
-    error: accountError,
-    refetch,
-  } = useAccountInfo();
   const {
     loading: deliveryFeesLoading,
     error: deliveryFeesError,
@@ -197,7 +189,7 @@ const Dashboard: React.FC = () => {
     }).format(amount);
   };
 
-  if (inventoryLoading || accountLoading || deliveryFeesLoading) {
+  if (inventoryLoading || deliveryFeesLoading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box
@@ -212,7 +204,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (inventoryError || accountError || deliveryFeesError) {
+  if (inventoryError || deliveryFeesError) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Alert severity="error">
@@ -247,14 +239,6 @@ const Dashboard: React.FC = () => {
 
       {/* Address Alert */}
       <AddressAlert />
-
-      {/* Account Information */}
-      <AccountInformation
-        accounts={accounts}
-        onRefresh={refetch}
-        compactView={true}
-        showTransactions={true}
-      />
 
       {/* Document Management */}
       <Paper sx={{ p: 3, mb: 3 }}>

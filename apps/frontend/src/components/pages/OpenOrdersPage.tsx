@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useAccountInfo } from '../../hooks';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import AccountInformation from '../common/AccountInformation';
 import OrderCard from '../common/OrderCard';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
 import SEOHead from '../seo/SEOHead';
@@ -160,14 +159,6 @@ const OpenOrdersPage: React.FC = () => {
             {getPageSubtitle()}
           </Typography>
         </Box>
-
-        {/* Account Information - Always show for agents */}
-        <AccountInformation
-          accounts={accounts}
-          onRefresh={refetch}
-          compactView={true}
-          showTransactions={true}
-        />
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>

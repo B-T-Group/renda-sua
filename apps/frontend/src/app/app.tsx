@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import EmailVerificationNotice from '../components/auth/EmailVerificationNotice';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
+import AccountInformation from '../components/common/AccountInformation';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
@@ -35,12 +36,14 @@ import SupportPage from '../components/pages/SupportPage';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
+import { useAccountInfo } from '../hooks';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
-  const { isLoading } = useAuth0();
+  const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
+  const { accounts, loading: accountLoading } = useAccountInfo();
   const location = useLocation();
 
   // Only show loading for auth flow when on /app route
@@ -77,6 +80,27 @@ function App() {
     >
       <Header />
       <EmailVerificationNotice />
+      {/* Global Account Information for authenticated users - Sticky */}
+      {isAuthenticated && !accountLoading && (
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: (theme) => theme.zIndex.appBar - 1,
+            backgroundColor: 'background.default',
+            borderBottom: 1,
+            borderColor: 'divider',
+            boxShadow: 1,
+          }}
+        >
+          <AccountInformation
+            accounts={accounts}
+            onRefresh={() => {}}
+            compactView={true}
+            showTransactions={false}
+          />
+        </Box>
+      )}
       <Box sx={{ flex: 1, py: 4 }}>
         <Container maxWidth="xl">
           <Routes>

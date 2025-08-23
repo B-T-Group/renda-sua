@@ -20,9 +20,8 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAccountInfo, useOrders, type OrderFilters } from '../../hooks';
+import { useOrders, type OrderFilters } from '../../hooks';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import AccountInformation from '../common/AccountInformation';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
 
@@ -31,11 +30,6 @@ import SEOHead from '../seo/SEOHead';
 const OrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfile();
-  const {
-    accounts,
-    loading: accountLoading,
-    error: accountError,
-  } = useAccountInfo();
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
     status: '',
@@ -159,7 +153,7 @@ const OrdersPage: React.FC = () => {
     fetchOrders({});
   }, [fetchOrders]);
 
-  if (loading || accountLoading) {
+  if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box
@@ -174,16 +168,12 @@ const OrdersPage: React.FC = () => {
     );
   }
 
-  if (error || accountError) {
+  if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           Error loading data:{' '}
-          {typeof error === 'string'
-            ? error
-            : (error as any)?.message || typeof accountError === 'string'
-            ? accountError
-            : (accountError as any)?.message}
+          {typeof error === 'string' ? error : (error as any)?.message}
         </Alert>
       </Container>
     );
@@ -204,14 +194,6 @@ const OrdersPage: React.FC = () => {
 
         {/* Address Alert - Only for clients */}
         {profile?.client && <AddressAlert />}
-
-        {/* Account Information - Always show for all user types */}
-        <AccountInformation
-          accounts={accounts}
-          onRefresh={refreshOrders}
-          compactView={true}
-          showTransactions={true}
-        />
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>
