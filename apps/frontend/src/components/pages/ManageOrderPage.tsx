@@ -18,7 +18,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useBackendOrders } from '../../hooks';
+import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -38,6 +38,7 @@ const ManageOrderPage: React.FC = () => {
   const navigate = useNavigate();
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
+  const { accounts } = useAccountInfo();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const {
@@ -232,7 +233,7 @@ const ManageOrderPage: React.FC = () => {
         {profile?.agent && (
           <AgentOrderAlerts
             order={order}
-            agentAccounts={[]} // TODO: Add agent accounts if needed
+            agentAccounts={accounts}
           />
         )}
         {profile?.business && <BusinessOrderAlerts order={order} />}

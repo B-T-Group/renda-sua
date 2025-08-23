@@ -19,7 +19,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
   const agentVerified = profile?.agent?.is_verified || false;
 
   const hasSufficientFunds = () => {
-    if (!agentAccounts?.length) return false;
+    // If no account data is provided, we can't determine funds status
+    // So we assume funds are sufficient (don't show warning)
+    if (!agentAccounts?.length) return true;
+    
     const totalBalance = agentAccounts.reduce(
       (sum, account) => sum + (account.available_balance || 0),
       0
