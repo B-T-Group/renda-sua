@@ -264,7 +264,7 @@ const LandingPage: React.FC = () => {
       <Container maxWidth="lg" sx={{ mb: 8 }}>
         <Grid container spacing={4} justifyContent="center">
           {stats.map((stat, index) => (
-            <Grid item xs={6} md={3} key={index}>
+            <Grid size={{ xs: 6, md: 3 }} key={index}>
               <Box textAlign="center">
                 <Typography
                   variant="h2"
@@ -322,7 +322,7 @@ const LandingPage: React.FC = () => {
         </Box>
         <Grid container spacing={4} justifyContent="center">
           {features.map((feature, index) => (
-            <Grid item xs={12} md={4} key={index}>
+            <Grid size={{ xs: 12, md: 4 }} key={index}>
               <Card
                 sx={{
                   height: '100%',
@@ -430,7 +430,7 @@ const LandingPage: React.FC = () => {
           </Box>
           <Grid container spacing={3}>
             {benefits.map((benefit, index) => (
-              <Grid item xs={12} md={6} key={index}>
+              <Grid size={{ xs: 12, md: 6 }} key={index}>
                 <Box
                   sx={{
                     display: 'flex',
@@ -484,7 +484,7 @@ const LandingPage: React.FC = () => {
         </Box>
         <Grid container spacing={4}>
           {[1, 2, 3].map((item) => (
-            <Grid item xs={12} md={4} key={item}>
+            <Grid size={{ xs: 12, md: 4 }} key={item}>
               <Card sx={{ p: 4, borderRadius: 4, height: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   {[...Array(5)].map((_, i) => (

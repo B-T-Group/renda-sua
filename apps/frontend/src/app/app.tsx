@@ -83,7 +83,7 @@ function App() {
         <AccountInformation
           onRefresh={() => {}}
           compactView={true}
-          showTransactions={false}
+          showTransactions={true}
         />
       )}
       <Box sx={{ flex: 1, py: 4 }}>
