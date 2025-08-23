@@ -247,9 +247,7 @@ export const useAgentOrders = () => {
     setError(null);
 
     try {
-      const response = await apiClient.get<OrdersResponse>(
-        '/agents/active_orders'
-      );
+      const response = await apiClient.get<OrdersResponse>('/orders');
 
       if (response.data.success) {
         const allOrders = response.data.orders;
