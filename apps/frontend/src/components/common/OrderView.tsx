@@ -4,7 +4,6 @@ import {
   LocationOn as LocationIcon,
   Payment as PaymentIcon,
   Person as PersonIcon,
-  Schedule as ScheduleIcon,
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import {
@@ -97,57 +96,134 @@ const OrderView: React.FC<OrderViewProps> = ({
   };
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: '100%', mx: 'auto' }}>
       {/* Order Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        sx={{
+          mb: 4,
+          borderRadius: 3,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent sx={{ p: 4 }}>
           <Box
             display="flex"
             justifyContent="space-between"
-            alignItems="center"
-            mb={2}
+            alignItems="flex-start"
+            mb={3}
+            flexDirection={{ xs: 'column', sm: 'row' }}
+            gap={2}
           >
-            <Typography variant="h4" component="h1">
-              {t('common.orderNumber', { number: order.order_number })}
-            </Typography>
+            <Box>
+              <Typography
+                variant="h4"
+                component="h1"
+                fontWeight="700"
+                sx={{
+                  background: 'linear-gradient(45deg, #1976d2, #42a5f5)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  mb: 1,
+                }}
+              >
+                Order #{order.order_number}
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                {t('orders.createdAt', 'Created')}:{' '}
+                {formatDate(order.created_at)}
+              </Typography>
+            </Box>
             <Chip
-              label={t(`common.orderStatus.${order.current_status}`)}
+              label={t(
+                `common.orderStatus.${order.current_status}`,
+                order.current_status
+              )}
               color={getStatusColor(order.current_status) as any}
-              size="large"
+              size="medium"
+              variant="filled"
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                height: 36,
+                borderRadius: 2,
+                px: 1,
+              }}
             />
           </Box>
 
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                display="flex"
-                alignItems="center"
-                mb={1}
+              <Box
+                sx={{
+                  p: 2,
+                  backgroundColor: 'grey.50',
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'grey.200',
+                }}
               >
-                <ScheduleIcon sx={{ mr: 1, fontSize: 16 }} />
-                {t('orders.createdAt')}: {formatDate(order.created_at)}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                display="flex"
-                alignItems="center"
-                mb={1}
-              >
-                <PaymentIcon sx={{ mr: 1, fontSize: 16 }} />
-                {t('orders.paymentMethod')}: {order.payment_method} (
-                {order.payment_status})
-              </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  display="flex"
+                  alignItems="center"
+                  mb={1}
+                  fontWeight="medium"
+                >
+                  <PaymentIcon
+                    sx={{ mr: 1, fontSize: 18, color: 'primary.main' }}
+                  />
+                  {t('orders.paymentMethod', 'Payment Method')}
+                </Typography>
+                <Typography variant="body1" fontWeight="600" sx={{ ml: 3 }}>
+                  {order.payment_method || 'Not specified'}
+                  <Chip
+                    label={order.payment_status || 'pending'}
+                    size="small"
+                    color={
+                      order.payment_status === 'paid' ? 'success' : 'warning'
+                    }
+                    sx={{ ml: 1, height: 20, fontSize: '0.75rem' }}
+                  />
+                </Typography>
+              </Box>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Box textAlign={{ xs: 'left', md: 'right' }}>
-                <Typography variant="h5" color="primary" fontWeight="bold">
+              <Box
+                sx={{
+                  textAlign: { xs: 'left', md: 'right' },
+                  p: 2,
+                  backgroundColor: 'primary.50',
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'primary.200',
+                }}
+              >
+                <Typography
+                  variant="h4"
+                  color="primary.main"
+                  fontWeight="bold"
+                  sx={{ mb: 1 }}
+                >
                   {formatCurrency(order.total_amount, order.currency)}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {order.order_items.length} {t('orders.table.items')}
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                  fontWeight="medium"
+                >
+                  <ShoppingCartIcon
+                    sx={{ mr: 1, fontSize: 16, verticalAlign: 'middle' }}
+                  />
+                  {order.order_items.length}{' '}
+                  {order.order_items.length === 1
+                    ? t('orders.item', 'item')
+                    : t('orders.items', 'items')}
                 </Typography>
               </Box>
             </Grid>
@@ -155,94 +231,193 @@ const OrderView: React.FC<OrderViewProps> = ({
         </CardContent>
       </Card>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={4}>
         {/* Business Information */}
         <Grid item xs={12} sm={6}>
-          <Card sx={{ height: '100%' }}>
+          <Card
+            sx={{
+              height: '100%',
+              borderRadius: 2,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              border: '1px solid',
+              borderColor: 'divider',
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
             <CardContent
-              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                p: 3,
+              }}
             >
               <Typography
                 variant="h6"
                 gutterBottom
                 display="flex"
                 alignItems="center"
+                sx={{
+                  color: 'primary.main',
+                  fontWeight: 600,
+                  mb: 2,
+                }}
               >
-                <BusinessIcon sx={{ mr: 1 }} />
+                <BusinessIcon sx={{ mr: 1.5, color: 'primary.main' }} />
                 {t('orders.businessInfo', 'Business Information')}
               </Typography>
-              <Typography variant="body1" fontWeight="medium" gutterBottom>
-                {order.business.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('orders.contact', 'Contact')}:{' '}
-                {order.business.user.first_name} {order.business.user.last_name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {order.business.user.email}
-              </Typography>
-              {order.business.user.phone_number && (
-                <Typography variant="body2" color="text.secondary">
-                  {order.business.user.phone_number}
+
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  color="text.primary"
+                  gutterBottom
+                >
+                  {order.business.name}
                 </Typography>
-              )}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  <strong>{t('orders.contact', 'Contact')}:</strong>{' '}
+                  {order.business.user.first_name}{' '}
+                  {order.business.user.last_name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  📧 {order.business.user.email}
+                </Typography>
+                {order.business.user.phone_number && (
+                  <Typography variant="body2" color="text.secondary">
+                    📞 {order.business.user.phone_number}
+                  </Typography>
+                )}
+              </Box>
 
               <Divider sx={{ my: 2 }} />
 
-              <Typography variant="subtitle2" gutterBottom>
-                {t('orders.businessLocation', 'Business Location')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {order.business_location.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {formatAddress(order.business_location.address)}
-              </Typography>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  gutterBottom
+                  display="flex"
+                  alignItems="center"
+                  sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}
+                >
+                  <LocationIcon
+                    sx={{ mr: 1, fontSize: 18, color: 'error.main' }}
+                  />
+                  {t('orders.businessLocation', 'Business Location')}
+                </Typography>
+                <Typography variant="body1" fontWeight="medium" sx={{ mb: 1 }}>
+                  {order.business_location.name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.6 }}
+                >
+                  {formatAddress(order.business_location.address)}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Client Information */}
         <Grid item xs={12} sm={6}>
-          <Card sx={{ height: '100%' }}>
+          <Card
+            sx={{
+              height: '100%',
+              borderRadius: 2,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              border: '1px solid',
+              borderColor: 'divider',
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
             <CardContent
-              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                p: 3,
+              }}
             >
               <Typography
                 variant="h6"
                 gutterBottom
                 display="flex"
                 alignItems="center"
+                sx={{
+                  color: 'secondary.main',
+                  fontWeight: 600,
+                  mb: 2,
+                }}
               >
-                <PersonIcon sx={{ mr: 1 }} />
+                <PersonIcon sx={{ mr: 1.5, color: 'secondary.main' }} />
                 {t('orders.clientInfo', 'Client Information')}
               </Typography>
-              <Typography variant="body1" fontWeight="medium" gutterBottom>
-                {order.client.user.first_name} {order.client.user.last_name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {order.client.user.email}
-              </Typography>
-              {order.client.user.phone_number && (
-                <Typography variant="body2" color="text.secondary">
-                  {order.client.user.phone_number}
+
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  color="text.primary"
+                  gutterBottom
+                >
+                  {order.client.user.first_name} {order.client.user.last_name}
                 </Typography>
-              )}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  📧 {order.client.user.email}
+                </Typography>
+                {order.client.user.phone_number && (
+                  <Typography variant="body2" color="text.secondary">
+                    📞 {order.client.user.phone_number}
+                  </Typography>
+                )}
+              </Box>
 
               <Divider sx={{ my: 2 }} />
 
-              <Typography
-                variant="subtitle2"
-                gutterBottom
-                display="flex"
-                alignItems="center"
-              >
-                <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
-                {t('orders.deliveryAddress', 'Delivery Address')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {formatAddress(order.delivery_address)}
-              </Typography>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  gutterBottom
+                  display="flex"
+                  alignItems="center"
+                  sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}
+                >
+                  <LocationIcon
+                    sx={{ mr: 1, fontSize: 18, color: 'success.main' }}
+                  />
+                  {t('orders.deliveryAddress', 'Delivery Address')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.6 }}
+                >
+                  {formatAddress(order.delivery_address)}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
