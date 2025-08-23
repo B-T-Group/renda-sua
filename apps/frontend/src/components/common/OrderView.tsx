@@ -157,9 +157,11 @@ const OrderView: React.FC<OrderViewProps> = ({
 
       <Grid container spacing={3}>
         {/* Business Information */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} sm={6}>
           <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent
+              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
               <Typography
                 variant="h6"
                 gutterBottom
@@ -173,8 +175,8 @@ const OrderView: React.FC<OrderViewProps> = ({
                 {order.business.name}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('orders.contact', 'Contact')}: {order.business.user.first_name}{' '}
-                {order.business.user.last_name}
+                {t('orders.contact', 'Contact')}:{' '}
+                {order.business.user.first_name} {order.business.user.last_name}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {order.business.user.email}
@@ -201,9 +203,11 @@ const OrderView: React.FC<OrderViewProps> = ({
         </Grid>
 
         {/* Client Information */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} sm={6}>
           <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent
+              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
               <Typography
                 variant="h6"
                 gutterBottom
@@ -247,7 +251,13 @@ const OrderView: React.FC<OrderViewProps> = ({
         {order.assigned_agent && (
           <Grid item xs={12} md={6}>
             <Card sx={{ height: '100%' }}>
-              <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
                 <Typography
                   variant="h6"
                   gutterBottom
@@ -284,9 +294,11 @@ const OrderView: React.FC<OrderViewProps> = ({
         )}
 
         {/* Order Items */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} sm={6}>
           <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent
+              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
               <Typography
                 variant="h6"
                 gutterBottom
@@ -445,40 +457,65 @@ const OrderView: React.FC<OrderViewProps> = ({
         </Grid>
 
         {/* Order Summary */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t('orders.orderSummary')}
+        <Grid item xs={12} sm={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent
+              sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
+              <Typography
+                variant="h6"
+                gutterBottom
+                display="flex"
+                alignItems="center"
+              >
+                <PaymentIcon sx={{ mr: 1 }} />
+                {t('orders.orderSummary', 'Order Summary')}
               </Typography>
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2">{t('orders.subtotal')}</Typography>
-                <Typography variant="body2">
-                  {formatCurrency(order.subtotal, order.currency)}
-                </Typography>
-              </Box>
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2">
-                  {t('orders.deliveryFee')}
-                </Typography>
-                <Typography variant="body2">
-                  {formatCurrency(order.delivery_fee, order.currency)}
-                </Typography>
-              </Box>
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2">{t('orders.tax')}</Typography>
-                <Typography variant="body2">
-                  {formatCurrency(order.tax_amount, order.currency)}
-                </Typography>
-              </Box>
-              <Divider sx={{ my: 1 }} />
-              <Box display="flex" justifyContent="space-between">
-                <Typography variant="h6" fontWeight="bold">
-                  {t('orders.total')}
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" color="primary">
-                  {formatCurrency(order.total_amount, order.currency)}
-                </Typography>
+
+              <Box sx={{ flexGrow: 1 }}>
+                <Box display="flex" justifyContent="space-between" mb={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.subtotal', 'Subtotal')}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatCurrency(order.subtotal, order.currency)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" mb={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.deliveryFee', 'Delivery Fee')}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatCurrency(order.delivery_fee, order.currency)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" mb={2}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.tax', 'Tax')}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatCurrency(order.tax_amount, order.currency)}
+                  </Typography>
+                </Box>
+                <Divider sx={{ my: 2 }} />
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  sx={{
+                    backgroundColor: 'primary.50',
+                    p: 2,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'primary.200',
+                  }}
+                >
+                  <Typography variant="h6" fontWeight="bold">
+                    {t('orders.total', 'Total')}
+                  </Typography>
+                  <Typography variant="h6" fontWeight="bold" color="primary">
+                    {formatCurrency(order.total_amount, order.currency)}
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>

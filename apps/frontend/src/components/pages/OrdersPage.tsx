@@ -1,9 +1,14 @@
-import { Search as SearchIcon } from '@mui/icons-material';
+import {
+  ExpandLess,
+  ExpandMore,
+  Search as SearchIcon,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Container,
   FormControl,
   InputLabel,
@@ -16,6 +21,8 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountInfo } from '../../hooks';
+import { useAgentOrders } from '../../hooks/useAgentOrders';
+import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useClientOrders } from '../../hooks/useClientOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AccountInformation from '../common/AccountInformation';
@@ -30,7 +37,7 @@ interface OrderFilters {
   dateTo: string;
 }
 
-const ClientOrders: React.FC = () => {
+const OrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfile();
   const {
@@ -44,9 +51,36 @@ const ClientOrders: React.FC = () => {
     dateFrom: '',
     dateTo: '',
   });
+  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
 
+  // Determine which orders hook to use based on user type
+  const clientOrders = useClientOrders(profile?.client?.id);
+  const businessOrders = useBusinessOrders(profile?.business?.id);
+  const agentOrdersHook = useAgentOrders();
+
+  // Normalize the different hook interfaces
+  const agentOrders = useMemo(
+    () => ({
+      orders: agentOrdersHook.orders,
+      loading: agentOrdersHook.loading,
+      error: agentOrdersHook.error,
+      fetchOrders: (filters?: any) => {
+        // Agent orders don't support filters in the same way
+        agentOrdersHook.refetch();
+        return Promise.resolve();
+      },
+      refreshOrders: agentOrdersHook.refetch,
+    }),
+    [agentOrdersHook]
+  );
+
+  // Select the appropriate orders data based on user type
   const { orders, loading, error, fetchOrders, refreshOrders } =
-    useClientOrders(profile?.client?.id);
+    profile?.business
+      ? businessOrders
+      : profile?.agent
+      ? agentOrders
+      : clientOrders;
 
   const handleFilterChange = (newFilters: Partial<OrderFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
@@ -97,18 +131,74 @@ const ClientOrders: React.FC = () => {
     return buckets;
   }, [orders]);
 
-  const orderedStatuses = useMemo(() => {
+  // Separate active and completed/cancelled orders
+  const { activeStatuses, completedStatuses } = useMemo(() => {
     const seen = Array.from(
       new Set((orders || []).map((o) => o.current_status || 'unknown'))
     );
-    return seen.sort((a, b) => {
-      const ia = statusOrder.indexOf(a);
-      const ib = statusOrder.indexOf(b);
-      const va = ia === -1 ? 999 : ia;
-      const vb = ib === -1 ? 999 : ib;
-      return va - vb;
-    });
+
+    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
+
+    const active = seen.filter(
+      (status) => !completedStatusTypes.includes(status)
+    );
+    const completed = seen.filter((status) =>
+      completedStatusTypes.includes(status)
+    );
+
+    const sortStatuses = (statuses: string[]) => {
+      return statuses.sort((a, b) => {
+        const ia = statusOrder.indexOf(a);
+        const ib = statusOrder.indexOf(b);
+        const va = ia === -1 ? 999 : ia;
+        const vb = ib === -1 ? 999 : ib;
+        return va - vb;
+      });
+    };
+
+    return {
+      activeStatuses: sortStatuses(active),
+      completedStatuses: sortStatuses(completed),
+    };
   }, [orders, statusOrder]);
+
+  // Count completed orders for the collapsible header
+  const completedOrdersCount = useMemo(() => {
+    return completedStatuses.reduce((count, status) => {
+      return count + (groupedByStatus[status]?.length || 0);
+    }, 0);
+  }, [completedStatuses, groupedByStatus]);
+
+  // Determine page titles and content based on user type
+  const getPageTitle = () => {
+    if (profile?.business) {
+      return t('business.orders.title', 'Business Orders');
+    } else if (profile?.agent) {
+      return t('agent.orders.title', 'Agent Orders');
+    } else {
+      return t('client.orders.title', 'My Orders');
+    }
+  };
+
+  const getPageSubtitle = () => {
+    if (profile?.business) {
+      return t('business.orders.subtitle', 'Manage your business orders');
+    } else if (profile?.agent) {
+      return t('agent.orders.subtitle', 'Manage assigned deliveries');
+    } else {
+      return t('client.orders.subtitle', 'Track your orders and deliveries');
+    }
+  };
+
+  const shouldShowAccountInfo = () => {
+    // Show account info for clients and businesses, but not agents
+    return profile?.client || profile?.business;
+  };
+
+  const shouldShowAddressAlert = () => {
+    // Show address alert for clients
+    return profile?.client;
+  };
 
   useEffect(() => {
     fetchOrders({});
@@ -146,30 +236,29 @@ const ClientOrders: React.FC = () => {
 
   return (
     <>
-      <SEOHead
-        title={t('client.orders.title')}
-        description={t('client.orders.subtitle')}
-      />
+      <SEOHead title={getPageTitle()} description={getPageSubtitle()} />
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            {t('client.orders.title')}
+            {getPageTitle()}
           </Typography>
           <Typography variant="subtitle1" color="text.secondary">
-            {t('client.orders.subtitle')}
+            {getPageSubtitle()}
           </Typography>
         </Box>
 
-        {/* Address Alert */}
-        <AddressAlert />
+        {/* Address Alert - Only for clients */}
+        {shouldShowAddressAlert() && <AddressAlert />}
 
-        {/* Account Information */}
-        <AccountInformation
-          accounts={accounts}
-          onRefresh={refreshOrders}
-          compactView={true}
-          showTransactions={true}
-        />
+        {/* Account Information - For clients and businesses */}
+        {shouldShowAccountInfo() && (
+          <AccountInformation
+            accounts={accounts}
+            onRefresh={refreshOrders}
+            compactView={true}
+            showTransactions={true}
+          />
+        )}
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -182,21 +271,21 @@ const ClientOrders: React.FC = () => {
             }}
           >
             <TextField
-              label={t('business.orders.filters.search')}
+              label={t('orders.filters.search', 'Search orders')}
               value={filters.search}
               onChange={(e) => handleFilterChange({ search: e.target.value })}
               size="small"
               sx={{ minWidth: 200 }}
             />
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>{t('business.orders.filters.status')}</InputLabel>
+              <InputLabel>{t('orders.filters.status', 'Status')}</InputLabel>
               <Select
                 value={filters.status}
                 onChange={(e) => handleFilterChange({ status: e.target.value })}
-                label={t('business.orders.filters.status')}
+                label={t('orders.filters.status', 'Status')}
               >
                 <MenuItem value="">
-                  {t('business.orders.filters.allStatuses')}
+                  {t('orders.filters.allStatuses', 'All Statuses')}
                 </MenuItem>
                 <MenuItem value="pending">
                   {t('common.orderStatus.pending')}
@@ -237,7 +326,7 @@ const ClientOrders: React.FC = () => {
               </Select>
             </FormControl>
             <TextField
-              label={t('business.orders.filters.dateFrom')}
+              label={t('orders.filters.dateFrom', 'From Date')}
               type="date"
               value={filters.dateFrom}
               onChange={(e) => handleFilterChange({ dateFrom: e.target.value })}
@@ -245,7 +334,7 @@ const ClientOrders: React.FC = () => {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label={t('business.orders.filters.dateTo')}
+              label={t('orders.filters.dateTo', 'To Date')}
               type="date"
               value={filters.dateTo}
               onChange={(e) => handleFilterChange({ dateTo: e.target.value })}
@@ -276,12 +365,13 @@ const ClientOrders: React.FC = () => {
         {orders.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="text.secondary">
-              {t('client.orders.noOrdersFound')}
+              {t('orders.noOrdersFound', 'No orders found')}
             </Typography>
           </Paper>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {orderedStatuses.map((statusKey) => (
+            {/* Active Orders */}
+            {activeStatuses.map((statusKey) => (
               <Box key={statusKey} sx={{ width: '100%' }}>
                 <Typography variant="subtitle1" sx={{ mb: 1 }}>
                   {t(`common.orderStatus.${statusKey}`)} (
@@ -294,6 +384,62 @@ const ClientOrders: React.FC = () => {
                 </Box>
               </Box>
             ))}
+
+            {/* Completed/Cancelled Orders - Collapsible */}
+            {completedOrdersCount > 0 && (
+              <Paper sx={{ mt: 2 }}>
+                <Button
+                  fullWidth
+                  onClick={() => setShowCompletedOrders(!showCompletedOrders)}
+                  sx={{
+                    p: 2,
+                    justifyContent: 'space-between',
+                    textTransform: 'none',
+                    backgroundColor: 'transparent',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                    },
+                  }}
+                  endIcon={
+                    showCompletedOrders ? <ExpandLess /> : <ExpandMore />
+                  }
+                >
+                  <Typography variant="subtitle1">
+                    {t(
+                      'orders.completedAndCancelled',
+                      'Completed & Cancelled Orders'
+                    )}{' '}
+                    ({completedOrdersCount})
+                  </Typography>
+                </Button>
+                <Collapse in={showCompletedOrders}>
+                  <Box sx={{ p: 2, pt: 0 }}>
+                    {completedStatuses.map((statusKey) => (
+                      <Box key={statusKey} sx={{ width: '100%', mb: 2 }}>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ mb: 1, color: 'text.secondary' }}
+                        >
+                          {t(`common.orderStatus.${statusKey}`)} (
+                          {groupedByStatus[statusKey]?.length || 0})
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                          }}
+                        >
+                          {(groupedByStatus[statusKey] || []).map((order) => (
+                            <OrderCard key={order.id} order={order} />
+                          ))}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Collapse>
+              </Paper>
+            )}
           </Box>
         )}
       </Container>
@@ -301,4 +447,4 @@ const ClientOrders: React.FC = () => {
   );
 };
 
-export default ClientOrders;
+export default OrdersPage;

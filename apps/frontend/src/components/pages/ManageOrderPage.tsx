@@ -303,7 +303,14 @@ const ManageOrderPage: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 {t('orders.availableActions', 'Available Actions')}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end',
+                }}
+              >
                 {availableActions.map((action) => (
                   <Button
                     key={action.action}

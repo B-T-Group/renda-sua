@@ -343,53 +343,25 @@ const UserAccount: React.FC<UserAccountProps> = ({
                   <VisibilityIcon />
                 </IconButton>
               </Box>
-              <Button
-                onClick={handleTopUp}
-                disabled={loading}
-                variant="contained"
-                size="small"
-                startIcon={<AddIcon />}
-                sx={{
-                  width: '150px',
-                  background:
-                    'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
-                  color: 'white',
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
-                  '&:hover': {
-                    background:
-                      'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
-                    boxShadow: '0 4px 8px 2px rgba(76, 175, 80, .4)',
-                  },
-                  '&:disabled': {
-                    background:
-                      'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
-                    boxShadow: 'none',
-                  },
-                }}
-              >
-                {t('accounts.creditAccount')}
-              </Button>
-              {account.available_balance > 0 && (
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 <Button
-                  onClick={handleWithdraw}
+                  onClick={handleTopUp}
                   disabled={loading}
                   variant="contained"
                   size="small"
-                  startIcon={<RemoveIcon />}
+                  startIcon={<AddIcon />}
                   sx={{
                     width: '150px',
                     background:
-                      'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
+                      'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
                     color: 'white',
                     fontWeight: 600,
                     textTransform: 'none',
-                    boxShadow: '0 3px 5px 2px rgba(255, 87, 34, .3)',
+                    boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
                     '&:hover': {
                       background:
-                        'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
-                      boxShadow: '0 4px 8px 2px rgba(255, 87, 34, .4)',
+                        'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
+                      boxShadow: '0 4px 8px 2px rgba(76, 175, 80, .4)',
                     },
                     '&:disabled': {
                       background:
@@ -398,9 +370,39 @@ const UserAccount: React.FC<UserAccountProps> = ({
                     },
                   }}
                 >
-                  {t('accounts.withdraw')}
+                  {t('accounts.creditAccount')}
                 </Button>
-              )}
+                {account.available_balance > 0 && (
+                  <Button
+                    onClick={handleWithdraw}
+                    disabled={loading}
+                    variant="contained"
+                    size="small"
+                    startIcon={<RemoveIcon />}
+                    sx={{
+                      width: '150px',
+                      background:
+                        'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
+                      color: 'white',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      boxShadow: '0 3px 5px 2px rgba(255, 87, 34, .3)',
+                      '&:hover': {
+                        background:
+                          'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
+                        boxShadow: '0 4px 8px 2px rgba(255, 87, 34, .4)',
+                      },
+                      '&:disabled': {
+                        background:
+                          'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
+                        boxShadow: 'none',
+                      },
+                    }}
+                  >
+                    {t('accounts.withdraw')}
+                  </Button>
+                )}
+              </Box>
             </Box>
           )}
         </CardContent>
