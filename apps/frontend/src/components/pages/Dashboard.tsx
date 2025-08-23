@@ -12,6 +12,7 @@ import {
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  useAccountInfo,
   useBackendOrders,
   useDeliveryFees,
   useInventoryItems,
@@ -33,6 +34,7 @@ const Dashboard: React.FC = () => {
     loading: inventoryLoading,
     error: inventoryError,
   } = useInventoryItems();
+  const { accounts } = useAccountInfo();
   const {
     loading: deliveryFeesLoading,
     error: deliveryFeesError,
