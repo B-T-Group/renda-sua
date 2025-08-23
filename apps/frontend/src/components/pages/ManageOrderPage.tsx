@@ -231,10 +231,7 @@ const ManageOrderPage: React.FC = () => {
 
         {/* Persona-specific alerts */}
         {profile?.agent && (
-          <AgentOrderAlerts
-            order={order}
-            agentAccounts={accounts}
-          />
+          <AgentOrderAlerts order={order} agentAccounts={accounts} />
         )}
         {profile?.business && <BusinessOrderAlerts order={order} />}
         {profile?.client && <ClientOrderAlerts order={order} />}

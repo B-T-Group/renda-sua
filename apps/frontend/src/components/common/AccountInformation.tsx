@@ -1,22 +1,38 @@
 import { AccountBalance } from '@mui/icons-material';
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import React from 'react';
-import { Account } from '../../hooks/useAccountInfo';
+import { useAccountInfo } from '../../hooks/useAccountInfo';
 import UserAccount from './UserAccount';
 
 interface AccountInformationProps {
-  accounts: Account[];
   onRefresh?: (() => Promise<void>) | (() => void);
   compactView?: boolean;
   showTransactions?: boolean;
 }
 
 const AccountInformation: React.FC<AccountInformationProps> = ({
-  accounts,
   onRefresh,
   compactView = true,
   showTransactions = true,
 }) => {
+  const { accounts, loading: accountLoading, refetch } = useAccountInfo();
+
+  // Use internal refetch if no external onRefresh provided
+  const handleRefresh = onRefresh || refetch;
+
+  // Show loading state
+  if (accountLoading) {
+    return (
+      <Paper sx={{ p: 3, mb: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 120 }}>
+        <CircularProgress size={24} />
+        <Typography variant="body2" sx={{ ml: 2 }}>
+          Loading account information...
+        </Typography>
+      </Paper>
+    );
+  }
+
+  // Don't render if no accounts
   if (accounts.length === 0) {
     return null;
   }
@@ -55,7 +71,7 @@ const AccountInformation: React.FC<AccountInformationProps> = ({
               accountId={account.id}
               compactView={compactView}
               showTransactions={showTransactions}
-              onRefresh={onRefresh}
+              onRefresh={handleRefresh}
             />
           </Box>
         ))}

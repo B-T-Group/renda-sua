@@ -2,7 +2,6 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { GraphQLClient } from 'graphql-request';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { environment } from '../config/environment';
-import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 
 export const useGraphQLClient = () => {
   const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } =
@@ -10,17 +9,6 @@ export const useGraphQLClient = () => {
   const [client, setClient] = useState<GraphQLClient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Safely get token refresh context
-  let tokenRefreshContext;
-  try {
-    tokenRefreshContext = useTokenRefresh();
-  } catch (error) {
-    // Token refresh context not available yet, continue without it
-    tokenRefreshContext = null;
-  }
-
-  const { getValidToken, refreshToken } = tokenRefreshContext || {};
 
   // Memoize the base client to prevent recreation
   const baseClient = useMemo(() => {

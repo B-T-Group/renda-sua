@@ -36,14 +36,12 @@ import SupportPage from '../components/pages/SupportPage';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
-import { useAccountInfo } from '../hooks';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
-  const { accounts, loading: accountLoading } = useAccountInfo();
   const location = useLocation();
 
   // Only show loading for auth flow when on /app route
@@ -81,9 +79,8 @@ function App() {
       <Header />
       <EmailVerificationNotice />
       {/* Global Account Information for authenticated users */}
-      {isAuthenticated && !accountLoading && (
+      {isAuthenticated && (
         <AccountInformation
-          accounts={accounts}
           onRefresh={() => {}}
           compactView={true}
           showTransactions={false}
