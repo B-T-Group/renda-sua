@@ -1,9 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Description, Inventory } from '@mui/icons-material';
+import { Inventory } from '@mui/icons-material';
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
   Container,
   Paper,
@@ -241,28 +240,6 @@ const Dashboard: React.FC = () => {
 
       {/* Address Alert */}
       <AddressAlert />
-
-      {/* Document Management */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography
-          variant="h6"
-          gutterBottom
-          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-        >
-          <Description color="primary" />
-          Document Management
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Upload and manage your important documents, contracts, and files.
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Description />}
-          onClick={() => navigate('/documents')}
-        >
-          Manage Documents
-        </Button>
-      </Paper>
 
       {/* Inventory Items */}
       <Paper sx={{ p: 3 }}>

@@ -18,7 +18,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAccountInfo, useBackendOrders } from '../../hooks';
+import { useAccountInfo, useBackendOrders, useDeliveryFees } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -39,6 +39,7 @@ const ManageOrderPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
   const { accounts } = useAccountInfo();
+  const { deliveryFees, getDeliveryFeeForCurrency } = useDeliveryFees();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const {
@@ -215,23 +216,31 @@ const ManageOrderPage: React.FC = () => {
           />
         </Box>
 
-        {/* Messages Section */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <UserMessagesComponent
-              entityType="order"
-              entityId={order.id}
-              title={t('messages.orderMessages', 'Order Messages')}
-              defaultExpanded={true}
-              maxVisibleMessages={10}
-              compact={false}
-            />
-          </CardContent>
-        </Card>
+        {/* Messages Section - Show to all users except agents who are not assigned to this order */}
+        {(!profile?.agent ||
+          order.assigned_agent_id === profile?.agent?.id) && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <UserMessagesComponent
+                entityType="order"
+                entityId={order.id}
+                title={t('messages.orderMessages', 'Order Messages')}
+                defaultExpanded={true}
+                maxVisibleMessages={10}
+                compact={false}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Persona-specific alerts */}
         {profile?.agent && (
-          <AgentOrderAlerts order={order} agentAccounts={accounts} />
+          <AgentOrderAlerts
+            order={order}
+            agentAccounts={accounts}
+            deliveryFees={deliveryFees}
+            getDeliveryFeeByCurrency={getDeliveryFeeForCurrency}
+          />
         )}
         {profile?.business && <BusinessOrderAlerts order={order} />}
         {profile?.client && <ClientOrderAlerts order={order} />}
