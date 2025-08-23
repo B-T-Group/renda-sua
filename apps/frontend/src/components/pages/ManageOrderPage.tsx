@@ -18,9 +18,10 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useBackendOrders } from '../../hooks';
+import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import AccountInformation from '../common/AccountInformation';
 import ConfirmationModal from '../common/ConfirmationModal';
 import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
@@ -38,6 +39,11 @@ const ManageOrderPage: React.FC = () => {
   const navigate = useNavigate();
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
+  const {
+    accounts,
+    loading: accountLoading,
+    error: accountError,
+  } = useAccountInfo();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const {
@@ -66,78 +72,6 @@ const ManageOrderPage: React.FC = () => {
   const handleBack = () => {
     // Navigate back to the smart orders route
     navigate('/orders');
-  };
-
-  const getAvailableActions = () => {
-    if (!order || !profile) return [];
-
-    const actions = [];
-    const status = order.current_status;
-
-    // Business user actions
-    if (profile.business) {
-      // Business owns the order or is admin
-      const isOwner = order.business_id === profile.business.id;
-      const isAdmin = profile.business.is_admin;
-
-      if (isOwner || isAdmin) {
-        switch (status) {
-          case 'pending':
-          case 'confirmed':
-          case 'preparing':
-            actions.push({
-              action: 'cancel',
-              label: t('orders.actions.cancel'),
-              color: 'error',
-            });
-            break;
-          case 'delivered':
-          case 'failed':
-          case 'cancelled':
-            actions.push({
-              action: 'refund',
-              label: t('orders.actions.refund'),
-              color: 'warning',
-            });
-            break;
-        }
-      }
-    }
-
-    // Client user actions
-    if (profile.client && order.client_id === profile.client.id) {
-      switch (status) {
-        case 'pending':
-        case 'confirmed':
-          actions.push({
-            action: 'cancel',
-            label: t('orders.actions.cancel'),
-            color: 'error',
-          });
-          break;
-        case 'delivered':
-          actions.push({
-            action: 'complete',
-            label: t('orders.actions.complete'),
-            color: 'success',
-          });
-          break;
-      }
-    }
-
-    // Agent user actions (if assigned to the order)
-    if (profile.agent && order.assigned_agent_id === profile.agent.id) {
-      // Agent actions are typically handled in specialized agent pages
-      // but can be added here if needed
-    }
-
-    return actions;
-  };
-
-  const handleActionClick = (action: string, label: string, color: string) => {
-    setPendingAction({ action, label, color });
-    setConfirmationOpen(true);
-    setNotes('');
   };
 
   const handleConfirmAction = async () => {
@@ -189,7 +123,7 @@ const ManageOrderPage: React.FC = () => {
     );
   };
 
-  if (loading) {
+  if (loading || accountLoading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box
@@ -238,8 +172,6 @@ const ManageOrderPage: React.FC = () => {
     );
   }
 
-  const availableActions = getAvailableActions();
-
   return (
     <>
       <SEOHead
@@ -273,10 +205,26 @@ const ManageOrderPage: React.FC = () => {
           </IconButton>
         </Box>
 
+        {/* Account Information */}
+        <AccountInformation
+          accounts={accounts}
+          onRefresh={refetch}
+          compactView={true}
+          showTransactions={false}
+        />
+
         {/* Error Display */}
         {actionError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {actionError}
+          </Alert>
+        )}
+        {accountError && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Error loading account information:{' '}
+            {typeof accountError === 'string'
+              ? accountError
+              : (accountError as any)?.message}
           </Alert>
         )}
 

@@ -1,12 +1,12 @@
 import React from 'react';
-import OrdersPage from './OrdersPage';
+import OpenOrdersPage from './OpenOrdersPage';
 
 /**
- * AgentDashboard component that uses the generic OrdersPage
- * with agent-specific functionality automatically enabled
+ * AgentDashboard component that shows available orders for agents to claim
+ * Redirects to the OpenOrdersPage for order discovery workflow
  */
 const AgentDashboard: React.FC = () => {
-  return <OrdersPage />;
+  return <OpenOrdersPage />;
 };
 
 export default AgentDashboard;
