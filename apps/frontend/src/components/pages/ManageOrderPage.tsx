@@ -350,9 +350,6 @@ const ManageOrderPage: React.FC = () => {
                     console.log(`${severity}: ${message}`);
                   }}
                   onShowHistory={() => setHistoryDialogOpen(true)}
-                  onShowMessages={() => {
-                    // TODO: Implement messages functionality
-                  }}
                 />
               )}
 

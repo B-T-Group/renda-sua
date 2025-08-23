@@ -149,10 +149,10 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
         break;
     }
 
-    // Add payment-related alerts
+    // Add payment-related alerts - only show when delivered
     if (
       order.payment_status === 'pending' &&
-      !['cancelled', 'refunded'].includes(order.current_status)
+      order.current_status === 'delivered'
     ) {
       alerts.push({
         severity: 'warning' as const,

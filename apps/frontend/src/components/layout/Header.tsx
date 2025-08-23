@@ -93,6 +93,8 @@ const Header: React.FC = () => {
       );
     } else if (userType === 'agent') {
       baseItems.push(
+        { label: 'Available Orders', path: '/open-orders' },
+        { label: 'My Orders', path: '/orders' },
         { label: 'Documents', path: '/documents' },
         { label: 'Messages', path: '/messages' }
       );

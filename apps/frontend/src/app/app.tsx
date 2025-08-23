@@ -28,6 +28,7 @@ import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
+import OpenOrdersPage from '../components/pages/OpenOrdersPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
 import SupportPage from '../components/pages/SupportPage';
@@ -169,6 +170,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ManageOrderPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Open Orders route - for agents */}
+            <Route
+              path="/open-orders"
+              element={
+                <ProtectedRoute>
+                  <OpenOrdersPage />
                 </ProtectedRoute>
               }
             />

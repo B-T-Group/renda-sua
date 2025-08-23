@@ -26,13 +26,19 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   onShowHistory,
 }) => {
   const { t } = useTranslation();
-  const { confirmOrder, refundOrder, completeOrder } = useBackendOrders();
+  const {
+    confirmOrder,
+    startPreparing,
+    completePreparation,
+    refundOrder,
+    completeOrder,
+  } = useBackendOrders();
   const [loading, setLoading] = useState(false);
 
   const handleConfirmOrder = async () => {
     setLoading(true);
     try {
-      await confirmOrder(order.id);
+      await confirmOrder({ orderId: order.id });
       onShowNotification?.(
         t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
         'success'
@@ -49,10 +55,59 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     }
   };
 
+  const handleStartPreparing = async () => {
+    setLoading(true);
+    try {
+      await startPreparing({ orderId: order.id });
+      onShowNotification?.(
+        t(
+          'messages.orderStartPreparingSuccess',
+          'Order preparation started successfully'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderStartPreparingError', 'Failed to start preparation'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompletePreparation = async () => {
+    setLoading(true);
+    try {
+      await completePreparation({ orderId: order.id });
+      onShowNotification?.(
+        t(
+          'messages.orderCompletePreparationSuccess',
+          'Order preparation completed successfully'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t(
+            'messages.orderCompletePreparationError',
+            'Failed to complete preparation'
+          ),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefundOrder = async () => {
     setLoading(true);
     try {
-      await refundOrder(order.id);
+      await refundOrder({ orderId: order.id });
       onShowNotification?.(
         t('messages.orderRefundSuccess', 'Order refunded successfully'),
         'success'
@@ -72,7 +127,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const handleCompleteOrder = async () => {
     setLoading(true);
     try {
-      await completeOrder(order.id);
+      await completeOrder({ orderId: order.id });
       onShowNotification?.(
         t('messages.orderCompleteSuccess', 'Order completed successfully'),
         'success'
@@ -97,6 +152,24 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         actions.push({
           label: t('orderActions.confirmOrder', 'Confirm Order'),
           action: handleConfirmOrder,
+          color: 'success' as const,
+          icon: <CheckCircle />,
+        });
+        break;
+
+      case 'confirmed':
+        actions.push({
+          label: t('orderActions.startPreparing', 'Start Preparing'),
+          action: handleStartPreparing,
+          color: 'primary' as const,
+          icon: <CheckCircle />,
+        });
+        break;
+
+      case 'preparing':
+        actions.push({
+          label: t('orderActions.completePreparation', 'Complete Preparation'),
+          action: handleCompletePreparation,
           color: 'success' as const,
           icon: <CheckCircle />,
         });
@@ -176,6 +249,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             loading &&
             [
               handleConfirmOrder,
+              handleStartPreparing,
+              handleCompletePreparation,
               handleRefundOrder,
               handleCompleteOrder,
             ].includes(action.action)
@@ -184,6 +259,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             loading &&
             [
               handleConfirmOrder,
+              handleStartPreparing,
+              handleCompletePreparation,
               handleRefundOrder,
               handleCompleteOrder,
             ].includes(action.action) ? (

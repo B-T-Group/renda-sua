@@ -1,8 +1,4 @@
-import {
-  Cancel,
-  History as HistoryIcon,
-  Message as MessageIcon,
-} from '@mui/icons-material';
+import { Cancel, CheckCircle } from '@mui/icons-material';
 import { Box, Button, CircularProgress } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +13,6 @@ interface ClientActionsProps {
     severity: 'success' | 'error' | 'warning' | 'info'
   ) => void;
   onShowHistory?: () => void;
-  onShowMessages?: () => void;
 }
 
 const ClientActions: React.FC<ClientActionsProps> = ({
@@ -25,16 +20,15 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   onActionComplete,
   onShowNotification,
   onShowHistory,
-  onShowMessages,
 }) => {
   const { t } = useTranslation();
-  const { cancelOrder } = useBackendOrders();
+  const { cancelOrder, completeOrder } = useBackendOrders();
   const [loading, setLoading] = useState(false);
 
   const handleCancelOrder = async () => {
     setLoading(true);
     try {
-      await cancelOrder(order.id);
+      await cancelOrder({ orderId: order.id });
       onShowNotification?.(
         t('messages.orderCancelSuccess', 'Order cancelled successfully'),
         'success'
@@ -44,6 +38,26 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       onShowNotification?.(
         error.message ||
           t('messages.orderCancelError', 'Failed to cancel order'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    setLoading(true);
+    try {
+      await completeOrder({ orderId: order.id });
+      onShowNotification?.(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderCompleteError', 'Failed to complete order'),
         'error'
       );
     } finally {
@@ -64,20 +78,15 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       });
     }
 
-    // Always show history and messages for clients
-    actions.push({
-      label: t('orderActions.viewHistory', 'View History'),
-      action: onShowHistory,
-      color: 'info' as const,
-      icon: <HistoryIcon />,
-    });
-
-    actions.push({
-      label: t('orderActions.viewMessages', 'View Messages'),
-      action: onShowMessages,
-      color: 'primary' as const,
-      icon: <MessageIcon />,
-    });
+    // Complete action - only available for delivered orders
+    if (order.current_status === 'delivered') {
+      actions.push({
+        label: t('orderActions.completeOrder', 'Complete Order'),
+        action: handleCompleteOrder,
+        color: 'success' as const,
+        icon: <CheckCircle />,
+      });
+    }
 
     return actions;
   };
@@ -103,9 +112,15 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           variant="outlined"
           color={action.color}
           onClick={action.action}
-          disabled={loading && action.action === handleCancelOrder}
+          disabled={
+            loading &&
+            (action.action === handleCancelOrder ||
+              action.action === handleCompleteOrder)
+          }
           startIcon={
-            loading && action.action === handleCancelOrder ? (
+            loading &&
+            (action.action === handleCancelOrder ||
+              action.action === handleCompleteOrder) ? (
               <CircularProgress size={16} />
             ) : (
               action.icon

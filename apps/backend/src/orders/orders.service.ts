@@ -859,7 +859,11 @@ export class OrdersService {
       // Client can access their own orders
       hasAccess = true;
       accessReason = 'order_client';
-    } else if (user.agent && order.assigned_agent_id === user.agent.id) {
+    } else if (
+      user.agent &&
+      (order.assigned_agent_id === user.agent.id ||
+        order.assigned_agent_id === null)
+    ) {
       // Agent can access orders assigned to them
       hasAccess = true;
       accessReason = 'assigned_agent';
