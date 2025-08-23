@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
     if (destinationAddressIds.length > 0) {
       fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
     }
-  }, [destinationAddressIds.join(',')]);
+  }, [destinationAddressIds]);
 
   // Initialize filtered items when inventory items change
   React.useEffect(() => {
