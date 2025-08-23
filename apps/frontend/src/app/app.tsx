@@ -80,26 +80,14 @@ function App() {
     >
       <Header />
       <EmailVerificationNotice />
-      {/* Global Account Information for authenticated users - Sticky */}
+      {/* Global Account Information for authenticated users */}
       {isAuthenticated && !accountLoading && (
-        <Box
-          sx={{
-            position: 'sticky',
-            top: 0,
-            zIndex: (theme) => theme.zIndex.appBar - 1,
-            backgroundColor: 'background.default',
-            borderBottom: 1,
-            borderColor: 'divider',
-            boxShadow: 1,
-          }}
-        >
-          <AccountInformation
-            accounts={accounts}
-            onRefresh={() => {}}
-            compactView={true}
-            showTransactions={false}
-          />
-        </Box>
+        <AccountInformation
+          accounts={accounts}
+          onRefresh={() => {}}
+          compactView={true}
+          showTransactions={false}
+        />
       )}
       <Box sx={{ flex: 1, py: 4 }}>
         <Container maxWidth="xl">
