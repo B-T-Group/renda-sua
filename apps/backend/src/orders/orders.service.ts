@@ -826,6 +826,265 @@ export class OrdersService {
     return { success: true, orders: result.orders };
   }
 
+  /**
+   * Get a specific order by ID with access control
+   * Accessible by:
+   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Client that made the order (order.client_id)
+   * - Agent assigned to the order (order.assigned_agent_id)
+   */
+  async getOrderById(orderId: string): Promise<any> {
+    const user = await this.hasuraUserService.getUser();
+
+    // First, get the order to check ownership
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Check access permissions
+    let hasAccess = false;
+    let accessReason = '';
+
+    if (user.business) {
+      // Business users can access if they own the order or are admin
+      if (order.business_id === user.business.id) {
+        hasAccess = true;
+        accessReason = 'business_owner';
+      } else if (user.business.is_admin) {
+        hasAccess = true;
+        accessReason = 'admin_business';
+      }
+    } else if (user.client && order.client_id === user.client.id) {
+      // Client can access their own orders
+      hasAccess = true;
+      accessReason = 'order_client';
+    } else if (user.agent && order.assigned_agent_id === user.agent.id) {
+      // Agent can access orders assigned to them
+      hasAccess = true;
+      accessReason = 'assigned_agent';
+    }
+
+    if (!hasAccess) {
+      throw new HttpException(
+        'Unauthorized to access this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Get comprehensive order data with all relationships
+    const query = `
+      query GetOrderById($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          order_number
+          client_id
+          business_id
+          business_location_id
+          assigned_agent_id
+          delivery_address_id
+          subtotal
+          delivery_fee
+          tax_amount
+          total_amount
+          currency
+          current_status
+          estimated_delivery_time
+          actual_delivery_time
+          special_instructions
+          preferred_delivery_time
+          payment_method
+          payment_status
+          verified_agent_delivery
+          created_at
+          updated_at
+          client {
+            id
+            user_id
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          business {
+            id
+            user_id
+            name
+            is_admin
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          business_location {
+            id
+            name
+            location_type
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              latitude
+              longitude
+            }
+          }
+          delivery_address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            latitude
+            longitude
+          }
+          assigned_agent {
+            id
+            user_id
+            is_verified
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          order_items {
+            id
+            business_inventory_id
+            item_id
+            item_name
+            item_description
+            unit_price
+            quantity
+            total_price
+            weight
+            weight_unit
+            dimensions
+            special_instructions
+            item {
+              id
+              sku
+              name
+              description
+              currency
+              model
+              color
+              size
+              size_unit
+              weight
+              weight_unit
+              brand {
+                id
+                name
+                description
+              }
+              item_sub_category {
+                id
+                name
+                description
+                item_category {
+                  id
+                  name
+                  description
+                }
+              }
+              item_images {
+                id
+                image_url
+                alt_text
+                display_order
+              }
+            }
+          }
+          order_status_history {
+            id
+            order_id
+            status
+            previous_status
+            notes
+            changed_by_type
+            changed_by_user_id
+            created_at
+            changed_by_user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              agent {
+                id
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+              business {
+                id
+                name
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+              client {
+                id
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+            }
+          }
+          order_holds {
+            id
+            client_id
+            agent_id
+            client_hold_amount
+            agent_hold_amount
+            delivery_fees
+            currency
+            status
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      orderId,
+    });
+
+    const orderData = result.orders_by_pk;
+    if (!orderData) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    return {
+      ...orderData,
+      access_reason: accessReason,
+    };
+  }
+
   async dropOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent) {

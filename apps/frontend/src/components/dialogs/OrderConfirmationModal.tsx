@@ -32,7 +32,7 @@ const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
 
   const handleViewOrders = () => {
     onClose();
-    navigate('/client-orders');
+    navigate('/orders');
   };
 
   const handleContinueShopping = () => {

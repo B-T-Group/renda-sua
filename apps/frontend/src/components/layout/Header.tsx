@@ -79,7 +79,7 @@ const Header: React.FC = () => {
     // Add role-specific navigation
     if (userType === 'business') {
       baseItems.push(
-        { label: 'Orders', path: '/business/orders' },
+        { label: 'Orders', path: '/orders' },
         { label: 'Items', path: '/business/items' },
         { label: 'Locations', path: '/business/locations' },
         { label: 'Documents', path: '/documents' },
@@ -87,7 +87,7 @@ const Header: React.FC = () => {
       );
     } else if (userType === 'client') {
       baseItems.push(
-        { label: 'Orders', path: '/client-orders' },
+        { label: 'Orders', path: '/orders' },
         { label: 'Documents', path: '/documents' },
         { label: 'Messages', path: '/messages' }
       );

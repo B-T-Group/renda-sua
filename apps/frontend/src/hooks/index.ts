@@ -18,6 +18,8 @@ export { useClients } from './useClients';
 export { useCreateOrder } from './useCreateOrder';
 export { useDeliveryFees } from './useDeliveryFees';
 export { useInventoryItems } from './useInventoryItems';
+export { useOrderById } from './useOrderById';
+export type { OrderData } from './useOrderById';
 
 // Agent hooks
 export { useAgentOrders } from './useAgentOrders';

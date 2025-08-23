@@ -198,6 +198,42 @@ export class OrdersController {
     return this.ordersService.getOpenOrders();
   }
 
+  @Get(':id')
+  async getOrderById(@Param('id') orderId: string) {
+    try {
+      const order = await this.ordersService.getOrderById(orderId);
+      return {
+        success: true,
+        order,
+        message: 'Order retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('Order not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('access')
+      ) {
+        statusCode = HttpStatus.FORBIDDEN;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
+  }
+
   @Post('drop_order')
   async dropOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.dropOrder(request);

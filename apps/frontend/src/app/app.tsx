@@ -16,25 +16,23 @@ import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
-import AgentDashboard from '../components/pages/AgentDashboard';
 import AppRedirect from '../components/pages/AppRedirect';
-import BusinessDashboard from '../components/pages/BusinessDashboard';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
-import BusinessOrdersPage from '../components/pages/BusinessOrdersPage';
-import ClientOrders from '../components/pages/ClientOrders';
 import CompleteProfile from '../components/pages/CompleteProfile';
-import Dashboard from '../components/pages/Dashboard';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import EditItemPage from '../components/pages/EditItemPage';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import LoadingDemo from '../components/pages/LoadingDemo';
+import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
 import SupportPage from '../components/pages/SupportPage';
+import SmartDashboard from '../components/routing/SmartDashboard';
+import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
@@ -97,28 +95,12 @@ function App() {
               }
             />
 
-            {/* Individual dashboard routes */}
+            {/* Smart dashboard route */}
             <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/agent-dashboard"
-              element={
-                <ProtectedRoute>
-                  <AgentDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/business-dashboard"
-              element={
-                <ProtectedRoute>
-                  <BusinessDashboard />
+                  <SmartDashboard />
                 </ProtectedRoute>
               }
             />
@@ -171,12 +153,22 @@ function App() {
             {/* FAQ route */}
             <Route path="/faq" element={<FAQ />} />
 
-            {/* Client Orders route */}
+            {/* Smart orders route */}
             <Route
-              path="/client-orders"
+              path="/orders"
               element={
                 <ProtectedRoute>
-                  <ClientOrders />
+                  <SmartOrders />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Order Management route */}
+            <Route
+              path="/orders/:orderId"
+              element={
+                <ProtectedRoute>
+                  <ManageOrderPage />
                 </ProtectedRoute>
               }
             />
@@ -192,14 +184,6 @@ function App() {
             />
 
             {/* Business routes */}
-            <Route
-              path="/business/orders"
-              element={
-                <ProtectedRoute>
-                  <BusinessOrdersPage />
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/business/locations"
               element={

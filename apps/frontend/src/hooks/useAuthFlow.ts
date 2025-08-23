@@ -42,10 +42,10 @@ export const useAuthFlow = () => {
             navigate('/dashboard'); // Redirect clients to dashboard
             break;
           case 'agent':
-            navigate('/agent-dashboard'); // Redirect agents to their orders list
+            navigate('/dashboard'); // Redirect agents to their dashboard
             break;
           case 'business':
-            navigate('/business-dashboard');
+            navigate('/dashboard');
             break;
           default:
             // Unknown user type, redirect to complete profile

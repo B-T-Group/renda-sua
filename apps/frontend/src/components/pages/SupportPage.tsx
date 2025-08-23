@@ -564,7 +564,7 @@ const SupportPage: React.FC = () => {
                   variant="outlined"
                   size="small"
                   fullWidth
-                  onClick={() => navigate('/client-orders')}
+                  onClick={() => navigate('/orders')}
                 >
                   {t('support.orderhelp.vieworders', 'View My Orders')}
                 </Button>
