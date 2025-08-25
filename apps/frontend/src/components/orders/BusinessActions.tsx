@@ -1,8 +1,4 @@
-import {
-  CheckCircle,
-  History as HistoryIcon,
-  AttachMoney as RefundIcon,
-} from '@mui/icons-material';
+import { CheckCircle, AttachMoney as RefundIcon } from '@mui/icons-material';
 import { Box, Button, CircularProgress } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -212,14 +208,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         }
         break;
     }
-
-    // Always show history for businesses
-    actions.push({
-      label: t('orderActions.viewHistory', 'View History'),
-      action: onShowHistory,
-      color: 'info' as const,
-      icon: <HistoryIcon />,
-    });
 
     return actions;
   };
