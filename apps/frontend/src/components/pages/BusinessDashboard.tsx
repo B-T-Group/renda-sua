@@ -58,7 +58,7 @@ const BusinessDashboard: React.FC = () => {
       icon: <OrdersIcon sx={{ fontSize: 40 }} />,
       count: orders.length,
       color: '#1976d2',
-      path: '/business/orders',
+      path: '/orders',
     },
     {
       title: t('common.items'),

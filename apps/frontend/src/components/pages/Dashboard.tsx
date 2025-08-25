@@ -1,5 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Inventory } from '@mui/icons-material';
+import { Assignment, Inventory } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -9,31 +9,34 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   useAccountInfo,
   useBackendOrders,
   useDeliveryFees,
   useInventoryItems,
+  useOrders,
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
+import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 import OrderDialog from '../dialogs/OrderDialog';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
-  const navigate = useNavigate();
+  const { profile } = useUserProfile();
   const {
     inventoryItems,
     loading: inventoryLoading,
     error: inventoryError,
   } = useInventoryItems();
   const { accounts } = useAccountInfo();
+  const { orders, loading: ordersLoading, error: ordersError } = useOrders();
   const {
     loading: deliveryFeesLoading,
     error: deliveryFeesError,
@@ -51,7 +54,6 @@ const Dashboard: React.FC = () => {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
-  const [lastOrderNumber, setLastOrderNumber] = useState<string>('');
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
 
   // Assume USD as default currency for items since business_inventory doesn't have currency field
@@ -83,8 +85,38 @@ const Dashboard: React.FC = () => {
 
   // Initialize filtered items when inventory items change
   React.useEffect(() => {
-    setFilteredItems(inventoryItems);
+    // TODO: When order history is available, prioritize delivered items
+    // For now, sort items alphabetically by name
+    const sortedItems = [...inventoryItems].sort((a, b) =>
+      (a.item?.name || '').localeCompare(b.item?.name || '')
+    );
+    setFilteredItems(sortedItems);
   }, [inventoryItems]);
+
+  // Filter orders that require action based on user type and status
+  const ordersRequiringAction = React.useMemo(() => {
+    if (!orders || !profile?.user_type_id) return [];
+
+    const userType = profile.user_type_id;
+
+    return orders.filter((order) => {
+      const status = order.current_status;
+
+      switch (userType) {
+        case 'business':
+          return ['pending', 'preparing', 'delivered'].includes(status);
+        case 'client':
+          return ['delivered', 'cancelled'].includes(status);
+        case 'agent':
+          return (
+            (status === 'ready_for_pickup' && !order.assigned_agent_id) ||
+            ['picked_up', 'in_transit'].includes(status)
+          );
+        default:
+          return false;
+      }
+    });
+  }, [orders, profile?.user_type_id]);
 
   // Helper to get distance/duration for an item
   const getItemDistanceInfo = (item: any) => {
@@ -241,6 +273,42 @@ const Dashboard: React.FC = () => {
       {/* Address Alert */}
       <AddressAlert />
 
+      {/* Orders Requiring Action */}
+      {ordersRequiringAction.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+          >
+            <Assignment color="primary" />
+            Orders Requiring Action ({ordersRequiringAction.length})
+          </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+              },
+              gap: 3,
+            }}
+          >
+            {ordersRequiringAction.map((order) => (
+              <OrderActionCard
+                key={order.id}
+                order={order}
+                userType={
+                  profile?.user_type_id as 'client' | 'business' | 'agent'
+                }
+                formatCurrency={formatCurrency}
+              />
+            ))}
+          </Box>
+        </Paper>
+      )}
+
       {/* Inventory Items */}
       <Paper sx={{ p: 3 }}>
         <Typography
@@ -332,7 +400,7 @@ const Dashboard: React.FC = () => {
       <OrderConfirmationModal
         open={confirmationModalOpen}
         onClose={() => setConfirmationModalOpen(false)}
-        orderNumber={lastOrderNumber}
+        orderNumber={selectedItem?.order_number}
       />
     </Container>
   );
