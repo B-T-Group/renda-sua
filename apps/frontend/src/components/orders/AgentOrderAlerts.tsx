@@ -1,12 +1,12 @@
 import { Alert, Box } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Order } from '../../hooks/useAgentOrders';
 import type { DeliveryFee } from '../../hooks/useDeliveryFees';
-import type { OrderData } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface AgentOrderAlertsProps {
-  order: OrderData;
+  order: Order;
   agentAccounts?: any[];
   deliveryFees?: DeliveryFee[];
   getDeliveryFeeByCurrency?: (currency: string) => DeliveryFee | null;

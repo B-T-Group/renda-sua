@@ -15,11 +15,11 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { Order } from '../../hooks/useAgentOrders';
 import type { DeliveryFee } from '../../hooks/useDeliveryFees';
-import type { OrderData } from '../../hooks/useOrderById';
 
 interface AvailableOrderCardProps {
-  order: OrderData;
+  order: Order;
   deliveryFees?: DeliveryFee[];
   getDeliveryFeeByCurrency?: (currency: string) => DeliveryFee | null;
 }
@@ -84,8 +84,8 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
       {/* Order Image */}
       <Box
         sx={{
-          width: 120,
-          minHeight: 120,
+          width: '250px',
+          minHeight: 200,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -94,9 +94,9 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           borderRadius: 0,
         }}
       >
-        {order.items?.[0]?.item?.images?.[0]?.image_url ? (
+        {order.order_items?.[0]?.item?.item_images?.[0]?.image_url ? (
           <img
-            src={order.items[0].item.images[0].image_url}
+            src={order.order_items[0].item.item_images[0].image_url}
             alt={t('orders.orderImage', 'Order')}
             style={{
               width: '100%',
@@ -143,7 +143,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           }}
         >
           <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
-            {t('common.orderNumber', 'Order')} #{order.order_number}
+            Order #{order.order_number}
           </Typography>
           <Chip
             label={t(
@@ -202,7 +202,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
                 {t('orders.deliveryAddress', 'Deliver to')}:
               </Typography>
               <Typography variant="body2">
-                {formatAddress(order.client_address)}
+                {formatAddress(order.delivery_address)}
               </Typography>
             </Box>
           </Box>
@@ -219,7 +219,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         >
           <Box>
             <Typography variant="body2" color="text.secondary">
-              {t('orders.items', 'Items')}: {order.items?.length || 0}
+              {t('orders.items', 'Items')}: {order.order_items?.length || 0}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {t('orders.total', 'Total')}:{' '}
@@ -256,10 +256,10 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           <Button
             variant="contained"
             color="primary"
-            onClick={() => navigate(`/orders/${order.id}/manage`)}
+            onClick={() => navigate(`/orders/${order.id}`)}
             sx={{ fontWeight: 600 }}
           >
-            {t('orders.manageOrder', 'Manage Order')}
+            {t('orders.viewOrderDetails', 'View Order Details')}
           </Button>
         </Box>
       </CardContent>
