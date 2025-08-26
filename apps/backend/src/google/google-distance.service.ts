@@ -51,7 +51,7 @@ export class GoogleDistanceService {
         console.log(
           'Using cached distance matrix result for all destination pairs'
         );
-        cachingreturn cachedResult;
+        return cachedResult;
       }
     }
 
