@@ -76,7 +76,9 @@ export const useUserDetails = (userId: string): UseUserDetailsResult => {
   }, [fetchUserDetails]);
 
   const userName = user
-    ? `${user.first_name} ${user.last_name}`.trim() || user.email
+    ? user.user_type_id === 'business' && user.business?.name
+      ? user.business.name
+      : `${user.first_name} ${user.last_name}`.trim() || user.email
     : '';
 
   return {
