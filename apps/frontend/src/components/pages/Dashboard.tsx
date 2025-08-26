@@ -106,7 +106,7 @@ const Dashboard: React.FC = () => {
         case 'business':
           return ['pending', 'preparing', 'delivered'].includes(status);
         case 'client':
-          return ['delivered', 'cancelled'].includes(status);
+          return ['delivered'].includes(status);
         case 'agent':
           return (
             (status === 'ready_for_pickup' && !order.assigned_agent_id) ||

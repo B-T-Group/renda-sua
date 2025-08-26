@@ -1,10 +1,4 @@
-import {
-  Assignment,
-  CheckCircle,
-  Error,
-  Info,
-  Warning,
-} from '@mui/icons-material';
+import { Assignment, CheckCircle, Info, Warning } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -90,17 +84,7 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
               ),
               action: 'complete_order',
             };
-          case 'cancelled':
-            return {
-              required: true,
-              severity: 'error' as const,
-              icon: <Error />,
-              message: t(
-                'orders.client.actionRequired.cancelled',
-                'Order cancelled - check refund status'
-              ),
-              action: 'check_refund',
-            };
+
           default:
             return { required: false };
         }
