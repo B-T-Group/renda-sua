@@ -42,22 +42,18 @@ const Dashboard: React.FC = () => {
     error: deliveryFeesError,
     getDeliveryFeeForCurrency,
   } = useDeliveryFees();
-  const {
-    createOrder,
-    loading: orderLoading,
-    error: orderError,
-  } = useBackendOrders();
+  const { error: orderError } = useBackendOrders();
 
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
+
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
 
   // Assume USD as default currency for items since business_inventory doesn't have currency field
-  const DEFAULT_ITEM_CURRENCY = 'USD';
+  const DEFAULT_ITEM_CURRENCY = 'XAF';
 
   // Aggregate unique destination address IDs from inventoryItems
   const destinationAddressIds = React.useMemo(() => {
@@ -183,36 +179,11 @@ const Dashboard: React.FC = () => {
     setOrderDialogOpen(true);
     setQuantity(1);
     setSpecialInstructions('');
-    setVerifiedAgentDelivery(false);
   };
 
   const handleTopUpClick = () => {
     // Navigate to profile page for account management
     window.location.href = '/profile';
-  };
-
-  const handleOrderSubmit = async () => {
-    if (!selectedItem || quantity <= 0) return;
-
-    try {
-      // Use the new backend API format with business_inventory_id and single item
-      const orderData = {
-        item: {
-          business_inventory_id: selectedItem.id,
-          quantity: quantity,
-        },
-        special_instructions: specialInstructions,
-        verified_agent_delivery: verifiedAgentDelivery,
-      };
-
-      const result = await createOrder(orderData);
-      // The order number might not be available in the basic OrderResult
-      // We'll show the confirmation without the specific order number
-      setOrderDialogOpen(false);
-      setConfirmationModalOpen(true);
-    } catch (error) {
-      console.error('Error creating order:', error);
-    }
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -387,14 +358,25 @@ const Dashboard: React.FC = () => {
         selectedItem={selectedItem}
         quantity={quantity}
         specialInstructions={specialInstructions}
-        orderLoading={orderLoading}
         formatCurrency={formatCurrency}
         deliveryFee={
-          selectedItem ? getDeliveryFeeForCurrency(DEFAULT_ITEM_CURRENCY) : null
+          selectedItem
+            ? getDeliveryFeeForCurrency(selectedItem.item.currency)
+            : null
         }
         onQuantityChange={setQuantity}
         onSpecialInstructionsChange={setSpecialInstructions}
-        onSubmit={handleOrderSubmit}
+        onOrderSuccess={(order) => {
+          // Handle successful order creation
+          setConfirmationModalOpen(true);
+          // Reset form
+          setQuantity(1);
+          setSpecialInstructions('');
+        }}
+        onOrderError={(error) => {
+          // Handle order error - you might want to show a snackbar or alert
+          console.error('Order creation failed:', error);
+        }}
       />
 
       <OrderConfirmationModal
