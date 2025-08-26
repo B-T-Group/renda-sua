@@ -1,4 +1,5 @@
 import React from 'react';
+import AgentAddressPrompt from '../common/AgentAddressPrompt';
 import OpenOrdersPage from './OpenOrdersPage';
 
 /**
@@ -6,7 +7,12 @@ import OpenOrdersPage from './OpenOrdersPage';
  * Redirects to the OpenOrdersPage for order discovery workflow
  */
 const AgentDashboard: React.FC = () => {
-  return <OpenOrdersPage />;
+  return (
+    <>
+      <AgentAddressPrompt />
+      <OpenOrdersPage />
+    </>
+  );
 };
 
 export default AgentDashboard;

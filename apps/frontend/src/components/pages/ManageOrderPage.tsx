@@ -58,6 +58,10 @@ const ManageOrderPage: React.FC = () => {
   } | null>(null);
   const [notes, setNotes] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [notificationAlert, setNotificationAlert] = useState<{
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  } | null>(null);
 
   useEffect(() => {
     if (orderId) {
@@ -108,6 +112,23 @@ const ManageOrderPage: React.FC = () => {
     setConfirmationOpen(false);
     setPendingAction(null);
     setNotes('');
+  };
+
+  const handleShowNotification = (
+    message: string,
+    severity: 'success' | 'error' | 'warning' | 'info'
+  ) => {
+    setNotificationAlert({ message, severity });
+    // Auto-clear success notifications after 5 seconds
+    if (severity === 'success') {
+      setTimeout(() => {
+        setNotificationAlert(null);
+      }, 5000);
+    }
+  };
+
+  const handleClearNotification = () => {
+    setNotificationAlert(null);
   };
 
   const shouldShowFinancialDetails = () => {
@@ -208,6 +229,17 @@ const ManageOrderPage: React.FC = () => {
           </Alert>
         )}
 
+        {/* Notification Alert */}
+        {notificationAlert && (
+          <Alert
+            severity={notificationAlert.severity}
+            sx={{ mb: 3 }}
+            onClose={handleClearNotification}
+          >
+            {notificationAlert.message}
+          </Alert>
+        )}
+
         {/* Order View */}
         <Box sx={{ mb: 3 }}>
           <OrderView
@@ -257,20 +289,14 @@ const ManageOrderPage: React.FC = () => {
                 <AgentActions
                   order={order}
                   onActionComplete={() => refetch()}
-                  onShowNotification={(message, severity) => {
-                    // Handle notifications (could enhance this later)
-                    console.log(`${severity}: ${message}`);
-                  }}
+                  onShowNotification={handleShowNotification}
                 />
               )}
               {profile?.business && (
                 <BusinessActions
                   order={order}
                   onActionComplete={() => refetch()}
-                  onShowNotification={(message, severity) => {
-                    // Handle notifications (could enhance this later)
-                    console.log(`${severity}: ${message}`);
-                  }}
+                  onShowNotification={handleShowNotification}
                   onShowHistory={() => setHistoryDialogOpen(true)}
                 />
               )}
@@ -278,10 +304,7 @@ const ManageOrderPage: React.FC = () => {
                 <ClientActions
                   order={order}
                   onActionComplete={() => refetch()}
-                  onShowNotification={(message, severity) => {
-                    // Handle notifications (could enhance this later)
-                    console.log(`${severity}: ${message}`);
-                  }}
+                  onShowNotification={handleShowNotification}
                   onShowHistory={() => setHistoryDialogOpen(true)}
                 />
               )}
@@ -319,7 +342,15 @@ const ManageOrderPage: React.FC = () => {
         cancelText={t('common.cancel')}
         onConfirm={handleConfirmAction}
         onCancel={handleCancelAction}
-        confirmColor={pendingAction?.color as any}
+        confirmColor={
+          pendingAction?.color as
+            | 'primary'
+            | 'secondary'
+            | 'error'
+            | 'info'
+            | 'success'
+            | 'warning'
+        }
         loading={actionLoading}
         additionalContent={
           <TextField

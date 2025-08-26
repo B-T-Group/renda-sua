@@ -508,6 +508,16 @@
     },
     "orders": {
       "insufficientFunds": "Insufficient funds to claim this order. Please top up your account."
+    },
+    "addressPrompt": {
+      "title": "Add Your Address",
+      "description": "To start accepting delivery orders, you need to add your address. This helps us match you with nearby orders and calculate delivery routes.",
+      "benefits": "Adding your address will help you:",
+      "benefit1": "Receive orders near your location",
+      "benefit2": "Get accurate delivery route calculations",
+      "benefit3": "Improve your delivery efficiency",
+      "addAddress": "Add Address",
+      "noAddresses": "No addresses found. Add your first address to start accepting orders."
     }
   },
   "messages": {

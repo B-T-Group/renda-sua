@@ -392,6 +392,16 @@
     },
     "orders": {
       "insufficientFunds": "Fonds insuffisants pour réclamer cette commande. Veuillez recharger votre compte."
+    },
+    "addressPrompt": {
+      "title": "Ajouter Votre Adresse",
+      "description": "Pour commencer à accepter les commandes de livraison, vous devez ajouter votre adresse. Cela nous aide à vous associer aux commandes à proximité et à calculer les itinéraires de livraison.",
+      "benefits": "Ajouter votre adresse vous aidera à :",
+      "benefit1": "Recevoir des commandes près de votre emplacement",
+      "benefit2": "Obtenir des calculs d'itinéraire de livraison précis",
+      "benefit3": "Améliorer votre efficacité de livraison",
+      "addAddress": "Ajouter l'Adresse",
+      "noAddresses": "Aucune adresse trouvée. Ajoutez votre première adresse pour commencer à accepter les commandes."
     }
   },
   "messages": {
