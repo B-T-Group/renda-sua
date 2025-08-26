@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
@@ -31,6 +32,7 @@ import { AppService } from './app.service';
       cache: true,
       expandVariables: true,
     }),
+    ScheduleModule.forRoot(),
     WinstonModule.forRootAsync({
       useFactory: () => {
         return createWinstonConfig({

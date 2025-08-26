@@ -3,11 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "auth0": "^4.28.0",
     "@aws-sdk/client-s3": "^3.839.0",
     "@aws-sdk/s3-request-presigner": "^3.839.0",
     "@nestjs/config": "^4.0.2",
+    "@nestjs/schedule": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "auth0": "^4.28.0",
     "axios": "^1.10.0",
     "country-currency-map": "^2.1.7",
     "crypto": "^1.0.1",

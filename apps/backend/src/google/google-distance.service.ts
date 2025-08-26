@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import type { DistanceMatrixResponse } from './distance-matrix.types';
+import { GoogleCacheService } from './google-cache.service';
 
 export interface GeocodingResult {
   formatted_address: string;
@@ -14,14 +15,83 @@ export interface GeocodingResult {
 @Injectable()
 export class GoogleDistanceService {
   private readonly apiKey;
+  private readonly cacheEnabled: boolean;
+  private readonly cacheTTL: number;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly cacheService: GoogleCacheService
+  ) {
     this.apiKey = this.configService.get('GOOGLE_MAPS_API_KEY');
+    this.cacheEnabled = this.configService.get('GOOGLE_CACHE_ENABLED', true);
+    this.cacheTTL = this.configService.get('GOOGLE_CACHE_TTL', 86400); // 1 day
   }
+
   /**
-   * origins and destinations are arrays of formatted address strings (lat,lng or full address)
+   * Get distance matrix with caching based on address IDs
+   */
+  async getDistanceMatrixWithCaching(
+    originAddressId: string,
+    originAddressFormatted: string,
+    destinationAddresses: Array<{
+      id: string;
+      formatted: string;
+    }>
+  ): Promise<DistanceMatrixResponse> {
+    const destinationIds = destinationAddresses.map((dest) => dest.id);
+
+    // Check cache first if enabled
+    if (this.cacheEnabled) {
+      const cachedResult = await this.cacheService.getCachedDistanceMatrix(
+        originAddressId,
+        destinationIds
+      );
+
+      if (cachedResult) {
+        console.log(
+          'Using cached distance matrix result for all destination pairs'
+        );
+        cachingreturn cachedResult;
+      }
+    }
+
+    // Not all destinations are cached, call Google API
+    console.log('Not all destination pairs cached, calling Google API');
+
+    const destinationStrs = destinationAddresses.map((dest) => dest.formatted);
+    const googleResponse = await this.callGoogleDistanceMatrix(
+      [originAddressFormatted],
+      destinationStrs
+    );
+
+    // Cache the results if enabled
+    if (this.cacheEnabled) {
+      await this.cacheService.cacheDistanceMatrixResults(
+        originAddressId,
+        originAddressFormatted,
+        destinationAddresses,
+        googleResponse,
+        this.cacheTTL
+      );
+    }
+
+    return googleResponse;
+  }
+
+  /**
+   * Legacy method for backward compatibility
    */
   async getDistanceMatrix(
+    origins: string[],
+    destinations: string[]
+  ): Promise<DistanceMatrixResponse> {
+    return this.callGoogleDistanceMatrix(origins, destinations);
+  }
+
+  /**
+   * Call Google Distance Matrix API directly
+   */
+  private async callGoogleDistanceMatrix(
     origins: string[],
     destinations: string[]
   ): Promise<DistanceMatrixResponse> {
@@ -47,9 +117,20 @@ export class GoogleDistanceService {
   }
 
   /**
-   * Reverse geocode coordinates to get address information
+   * Reverse geocode with caching
    */
   async reverseGeocode(lat: number, lng: number): Promise<GeocodingResult> {
+    // Check cache first if enabled
+    if (this.cacheEnabled) {
+      const cachedResult = await this.cacheService.getCachedGeocode(lat, lng);
+
+      if (cachedResult) {
+        console.log('Using cached geocoding result');
+        return cachedResult;
+      }
+    }
+
+    // Call Google API
     const url = 'https://maps.googleapis.com/maps/api/geocode/json';
     const params = {
       latlng: `${lat},${lng}`,
@@ -90,13 +171,25 @@ export class GoogleDistanceService {
         'postal_code',
       ]);
 
-      return {
+      const geocodingResult = {
         formatted_address: result.formatted_address,
         city: city || '',
         state: state || '',
         country: country || '',
         postal_code: postalCode || '',
       };
+
+      // Cache the result if enabled
+      if (this.cacheEnabled) {
+        await this.cacheService.cacheGeocode(
+          lat,
+          lng,
+          geocodingResult,
+          this.cacheTTL
+        );
+      }
+
+      return geocodingResult;
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;

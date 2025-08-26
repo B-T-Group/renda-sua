@@ -89,8 +89,15 @@ export interface OrderConfig {
   agentHoldPercentage: number;
 }
 
+export interface GoogleCacheConfig {
+  enabled: boolean;
+  ttl: number; // Time to live in seconds
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
+  GOOGLE_CACHE_ENABLED: boolean;
+  GOOGLE_CACHE_TTL: number;
   app: AppConfig;
   database: DatabaseConfig;
   hasura: HasuraConfig;
@@ -104,6 +111,7 @@ export interface Configuration {
   airtelMoney: AirtelMoneyConfig;
   order: OrderConfig;
   auth0: Auth0Config;
+  googleCache: GoogleCacheConfig;
 }
 
 import {
@@ -143,6 +151,8 @@ export default async (): Promise<Configuration> => {
 
   return {
     GOOGLE_MAPS_API_KEY: secrets.GOOGLE_MAPS_API_KEY,
+    GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
+    GOOGLE_CACHE_TTL: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??
@@ -244,6 +254,10 @@ export default async (): Promise<Configuration> => {
       managementClientSecret:
         process.env.AUTH0_MGMT_CLIENT_SECRET ||
         secrets.AUTH0_MGMT_CLIENT_SECRET,
+    },
+    googleCache: {
+      enabled: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
+      ttl: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
     },
   };
 };

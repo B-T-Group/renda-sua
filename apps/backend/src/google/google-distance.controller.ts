@@ -26,6 +26,7 @@ export class GoogleDistanceController {
   @Post('distance-matrix')
   async getDistanceMatrix(@Body() body: DistanceMatrixRequest) {
     const { destination_address_ids, origin_address_id, origin_address } = body;
+
     if (
       !destination_address_ids ||
       !Array.isArray(destination_address_ids) ||
@@ -36,6 +37,7 @@ export class GoogleDistanceController {
         HttpStatus.BAD_REQUEST
       );
     }
+
     // Fetch destination addresses
     const destinationAddresses = await this.addressesService.getAddressesByIds(
       destination_address_ids
@@ -46,13 +48,15 @@ export class GoogleDistanceController {
         HttpStatus.BAD_REQUEST
       );
     }
+
     // Handle origin address
     let originStr: string;
-    let usedOriginId = origin_address_id;
+    let usedOriginId: string | undefined = origin_address_id;
 
     if (origin_address) {
       // Use the provided pre-formatted address
       originStr = origin_address;
+      usedOriginId = undefined; // No origin ID for pre-formatted addresses
     } else if (origin_address_id) {
       // Fetch origin address by ID
       const origins = await this.addressesService.getAddressesByIds([
@@ -81,14 +85,35 @@ export class GoogleDistanceController {
       usedOriginId = originAddress.id;
       originStr = formatAddressForGoogle(originAddress);
     }
-    const destinationStrs = destination_address_ids
-      .map((x) => destinationAddresses.find((y) => y.id === x))
-      .map(formatAddressForGoogle);
-    // Call Google API
-    const matrix = await this.googleDistanceService.getDistanceMatrix(
-      [originStr],
-      destinationStrs
+
+    // Prepare destination addresses with formatted strings
+    const destinationAddressesWithFormatted = destinationAddresses.map(
+      (addr) => ({
+        id: addr.id,
+        formatted: formatAddressForGoogle(addr),
+      })
     );
+
+    let matrix;
+
+    if (usedOriginId) {
+      // Use caching when we have origin address ID
+      matrix = await this.googleDistanceService.getDistanceMatrixWithCaching(
+        usedOriginId,
+        originStr,
+        destinationAddressesWithFormatted
+      );
+    } else {
+      // Fallback to direct Google API call for pre-formatted addresses
+      const destinationStrs = destinationAddressesWithFormatted.map(
+        (dest) => dest.formatted
+      );
+      matrix = await this.googleDistanceService.getDistanceMatrix(
+        [originStr],
+        destinationStrs
+      );
+    }
+
     // Return with reference IDs
     return {
       origin_id: usedOriginId,
