@@ -13,7 +13,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: order.currency || 'USD',
+      currency: order.order_items[0].item.currency || 'XAF',
     }).format(amount);
   };
 
@@ -110,7 +110,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
 
       case 'out_for_delivery':
         alerts.push({
-          severity: 'primary' as const,
+          severity: 'info' as const,
           message: t(
             'business.orders.outForDeliveryNotice',
             'Order is out for delivery to the customer.'
