@@ -46,24 +46,37 @@
 
 ### Translation Key Organization Rules
 
-1. **Nested Translation Structure**: When a translation key like `orderCard.items` exists but is nested within another object (e.g., `orders.orderCard.items`), always update the translation key to use the nested structure for better organization.
+1. **Translation Default Values**: Always provide a default value as the second parameter when using the `t()` function to ensure the UI displays meaningful text even if the translation key is missing. The default should be a human-readable, contextually appropriate string.
 
-2. **Context-Based Grouping**: Group related translation keys under logical parent objects:
+   ```typescript
+   // Good - with default value
+   t('accounts.totalBalance', 'Total Balance');
+   t('orders.status.pending', 'Pending');
+   t('common.loading', 'Loading...');
+
+   // Bad - no default value
+   t('accounts.totalBalance');
+   t('orders.status.pending');
+   ```
+
+2. **Nested Translation Structure**: When a translation key like `orderCard.items` exists but is nested within another object (e.g., `orders.orderCard.items`), always update the translation key to use the nested structure for better organization.
+
+3. **Context-Based Grouping**: Group related translation keys under logical parent objects:
 
    - Order-related keys under `orders.*`
    - Account-related keys under `accounts.*`
    - Business-related keys under `business.*`
    - Agent-related keys under `agent.*`
 
-3. **Translation Key Discovery**: When encountering a missing translation error, always check if the key exists in a nested structure with similar context before adding it as a standalone key.
+4. **Translation Key Discovery**: When encountering a missing translation error, always check if the key exists in a nested structure with similar context before adding it as a standalone key.
 
-4. **Consistent Naming**: Maintain consistent naming patterns within each translation group:
+5. **Consistent Naming**: Maintain consistent naming patterns within each translation group:
 
    - Use camelCase for key names
    - Use descriptive, context-aware names
    - Group related functionality together
 
-5. **Migration Strategy**: When updating translation key structures:
+6. **Migration Strategy**: When updating translation key structures:
    - Update both English (`en.json`) and French (`fr.json`) files
    - Maintain the same nested structure in both files
    - Update any code references to use the new nested key path

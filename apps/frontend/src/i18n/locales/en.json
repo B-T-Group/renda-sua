@@ -578,7 +578,12 @@
       "mtnMomoInfo": "Top up your account using MTN Mobile Money",
       "mtnMomoSuccess": "Account topped up successfully with MTN Mobile Money",
       "creditCardNotSupported": "Credit card payments are not supported yet"
-    }
+    },
+    "totalBalance": "Total Balance",
+    "transactionHistory": "Transaction History",
+    "noTransactions": "No transactions found",
+    "subscriptionConnected": "Subscription Connected",
+    "summary": "Summary"
   },
   "auth": {
     "profile": "Profile",
@@ -607,7 +612,8 @@
     "types": {
       "home": "Home",
       "work": "Work",
-      "other": "Other"
+      "other": "Other",
+      "warehouse": "Warehouse"
     },
     "getCurrentLocation": "Get Current Location",
     "locationPermissionDenied": "Location permission denied. Please enable location access in your browser settings.",

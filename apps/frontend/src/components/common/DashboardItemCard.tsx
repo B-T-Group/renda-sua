@@ -40,7 +40,7 @@ interface DashboardItemCardProps {
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
-  item,
+  item: inventory,
   canAfford,
   account,
   insufficientFundsMessage,
@@ -73,43 +73,45 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <CardMedia
         component="img"
         height="200"
-        image={getPrimaryImage(item)}
-        alt={item.item.name}
+        image={getPrimaryImage(inventory)}
+        alt={inventory.item.name}
         sx={{ objectFit: 'cover' }}
       />
       <CardContent sx={{ flexGrow: 1 }}>
         <Typography variant="h6" gutterBottom>
-          {item.item.name}
+          {inventory.item.name}
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          {item.item.description}
+          {inventory.item.description}
         </Typography>
 
         <Box sx={{ mb: 2 }}>
           <Typography variant="h5" color="primary" gutterBottom>
-            {formatCurrency(item.selling_price)}
+            {formatCurrency(inventory.selling_price, inventory.item.currency)}
           </Typography>
           <Chip
-            label={`${item.available_quantity} available`}
-            color={item.available_quantity > 0 ? 'success' : 'error'}
+            label={`${inventory.available_quantity} available`}
+            color={inventory.available_quantity > 0 ? 'success' : 'error'}
             size="small"
           />
         </Box>
 
         {/* Fund Status */}
-        {!canAfford && item.available_quantity > 0 && item.is_active && (
-          <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              {insufficientFundsMessage}
-            </Typography>
-            {account && (
-              <Typography variant="caption" color="text.secondary">
-                Current balance:{' '}
-                {formatCurrency(account.available_balance, account.currency)}
+        {!canAfford &&
+          inventory.available_quantity > 0 &&
+          inventory.is_active && (
+            <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                {insufficientFundsMessage}
               </Typography>
-            )}
-          </Alert>
-        )}
+              {account && (
+                <Typography variant="caption" color="text.secondary">
+                  Current balance:{' '}
+                  {formatCurrency(account.available_balance, account.currency)}
+                </Typography>
+              )}
+            </Alert>
+          )}
 
         <Box sx={{ mb: 2 }}>
           <Typography
@@ -118,58 +120,58 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
           >
             <Category fontSize="small" />
-            {item.item.item_sub_category?.item_category?.name} →{' '}
-            {item.item.item_sub_category?.name}
+            {inventory.item.item_sub_category?.item_category?.name} →{' '}
+            {inventory.item.item_sub_category?.name}
           </Typography>
-          {item.item.weight && (
+          {inventory.item.weight && (
             <Typography variant="body2" color="text.secondary">
-              Weight: {item.item.weight} {item.item.weight_unit}
+              Weight: {inventory.item.weight} {inventory.item.weight_unit}
             </Typography>
           )}
-          {item.item.size && (
+          {inventory.item.size && (
             <Typography variant="body2" color="text.secondary">
-              Size: {item.item.size} {item.item.size_unit}
+              Size: {inventory.item.size} {inventory.item.size_unit}
             </Typography>
           )}
         </Box>
 
         {/* Product Details */}
         <Box sx={{ mb: 2 }}>
-          {item.item.brand && (
+          {inventory.item.brand && (
             <Typography
               variant="body1"
               color="primary"
               fontWeight="bold"
               sx={{ mb: 0.5 }}
             >
-              {item.item.brand.name}
+              {inventory.item.brand.name}
             </Typography>
           )}
-          {item.item.model && (
+          {inventory.item.model && (
             <Typography variant="body2" color="text.secondary">
-              Model: {item.item.model}
+              Model: {inventory.item.model}
             </Typography>
           )}
-          {item.item.color && (
+          {inventory.item.color && (
             <Typography variant="body2" color="text.secondary">
-              Color: {item.item.color}
+              Color: {inventory.item.color}
             </Typography>
           )}
-          {item.item.material && (
+          {inventory.item.material && (
             <Typography variant="body2" color="text.secondary">
-              Material: {item.item.material}
+              Material: {inventory.item.material}
             </Typography>
           )}
-          {item.item.sku && (
+          {inventory.item.sku && (
             <Typography variant="body2" color="text.secondary">
-              SKU: {item.item.sku}
+              SKU: {inventory.item.sku}
             </Typography>
           )}
         </Box>
 
         {/* Special Handling Indicators */}
         <Box sx={{ mb: 2 }}>
-          {item.item.is_fragile && (
+          {inventory.item.is_fragile && (
             <Chip
               label="Fragile"
               color="warning"
@@ -177,7 +179,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               sx={{ mr: 0.5, mb: 0.5 }}
             />
           )}
-          {item.item.is_perishable && (
+          {inventory.item.is_perishable && (
             <Chip
               label="Perishable"
               color="error"
@@ -185,7 +187,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               sx={{ mr: 0.5, mb: 0.5 }}
             />
           )}
-          {item.item.requires_special_handling && (
+          {inventory.item.requires_special_handling && (
             <Chip
               label="Special Handling"
               color="info"
@@ -197,14 +199,15 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
         {/* Delivery Information */}
         <Box sx={{ mb: 2 }}>
-          {item.item.min_order_quantity && item.item.min_order_quantity > 1 && (
+          {inventory.item.min_order_quantity &&
+            inventory.item.min_order_quantity > 1 && (
+              <Typography variant="body2" color="text.secondary">
+                Min Order: {inventory.item.min_order_quantity}
+              </Typography>
+            )}
+          {inventory.item.max_order_quantity && (
             <Typography variant="body2" color="text.secondary">
-              Min Order: {item.item.min_order_quantity}
-            </Typography>
-          )}
-          {item.item.max_order_quantity && (
-            <Typography variant="body2" color="text.secondary">
-              Max Order: {item.item.max_order_quantity}
+              Max Order: {inventory.item.max_order_quantity}
             </Typography>
           )}
           {/* Estimated Distance/Time from Distance Matrix */}
@@ -232,17 +235,17 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
           >
             <LocationOn fontSize="small" />
-            {item.business_location.address?.city},{' '}
-            {item.business_location.address?.state}
+            {inventory.business_location.address?.city},{' '}
+            {inventory.business_location.address?.state}
           </Typography>
         </Box>
       </CardContent>
       <CardActions>
-        {item.available_quantity === 0 ? (
+        {inventory.available_quantity === 0 ? (
           <Button variant="outlined" fullWidth disabled>
             Out of Stock
           </Button>
-        ) : !item.is_active ? (
+        ) : !inventory.is_active ? (
           <Button variant="outlined" fullWidth disabled>
             Not Available
           </Button>
@@ -252,7 +255,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             color="primary"
             startIcon={<ShoppingCart />}
             fullWidth
-            onClick={() => onOrderClick(item)}
+            onClick={() => onOrderClick(inventory)}
           >
             {loginButtonText}
           </Button>
@@ -261,7 +264,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             variant="contained"
             startIcon={<ShoppingCart />}
             fullWidth
-            onClick={() => onOrderClick(item)}
+            onClick={() => onOrderClick(inventory)}
           >
             {orderButtonText}
           </Button>
