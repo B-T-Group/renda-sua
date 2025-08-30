@@ -255,7 +255,13 @@ const UserAccount: React.FC<UserAccountProps> = ({
     <>
       <Card variant="outlined">
         <CardContent>
-          <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <Box
+            display="flex"
+            alignItems="flex-start"
+            justifyContent="space-between"
+            gap={1}
+            mb={2}
+          >
             <Box flex={1}>
               <Box display="flex" alignItems="center" gap={1} mb={1}>
                 <Typography variant="h6" color="primary">
@@ -307,6 +313,40 @@ const UserAccount: React.FC<UserAccountProps> = ({
                 )}
               </Typography>
             </Box>
+
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Tooltip title={t('accounts.viewTransactions')}>
+                <IconButton
+                  onClick={handleViewTransactions}
+                  disabled={loading}
+                  size="small"
+                >
+                  <VisibilityIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('accounts.creditAccount')}>
+                <IconButton
+                  onClick={handleTopUp}
+                  disabled={loading}
+                  color="primary"
+                  size="small"
+                >
+                  <AddIcon />
+                </IconButton>
+              </Tooltip>
+              {account.available_balance > 0 && (
+                <Tooltip title={t('accounts.withdraw')}>
+                  <IconButton
+                    onClick={handleWithdraw}
+                    disabled={loading}
+                    color="error"
+                    size="small"
+                  >
+                    <RemoveIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
           </Box>
 
           {showTransactions && (
@@ -319,39 +359,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
                 alignItems: 'flex-end',
               }}
             >
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Tooltip title={t('accounts.viewTransactions')}>
-                  <IconButton
-                    onClick={handleViewTransactions}
-                    disabled={loading}
-                    size="small"
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t('accounts.creditAccount')}>
-                  <IconButton
-                    onClick={handleTopUp}
-                    disabled={loading}
-                    color="primary"
-                    size="small"
-                  >
-                    <AddIcon />
-                  </IconButton>
-                </Tooltip>
-                {account.available_balance > 0 && (
-                  <Tooltip title={t('accounts.withdraw')}>
-                    <IconButton
-                      onClick={handleWithdraw}
-                      disabled={loading}
-                      color="error"
-                      size="small"
-                    >
-                      <RemoveIcon />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Box>
+              {/* Removed action buttons from here */}
             </Box>
           )}
         </CardContent>
