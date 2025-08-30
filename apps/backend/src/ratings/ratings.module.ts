@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { HasuraModule } from '../hasura/hasura.module';
 import { RatingsController } from './ratings.controller';
 import { RatingsService } from './ratings.service';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [HasuraModule],
   controllers: [RatingsController],
   providers: [RatingsService],
   exports: [RatingsService],

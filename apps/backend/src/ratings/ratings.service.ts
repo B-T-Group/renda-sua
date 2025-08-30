@@ -4,18 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GraphQLClient } from 'graphql-request';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CreateRatingDto, RatingType } from './dto/create-rating.dto';
-
-// GraphQL Response Types
-interface GraphQLResponse<T> {
-  [key: string]: T[];
-}
-
-interface GraphQLSingleResponse<T> {
-  [key: string]: T;
-}
 
 // User Profile Types
 interface UserProfile {
@@ -37,11 +27,6 @@ interface OrderData {
   assigned_agent_id?: string;
   current_status: string;
   created_at: string;
-}
-
-// Entity Validation Types
-interface EntityValidation {
-  id: string;
 }
 
 export interface Rating {
@@ -76,19 +61,7 @@ export interface RatingAggregate {
 
 @Injectable()
 export class RatingsService {
-  private readonly graphqlClient: GraphQLClient;
-
-  constructor(private readonly configService: ConfigService) {
-    this.graphqlClient = new GraphQLClient(
-      this.configService.get<string>('HASURA_GRAPHQL_ENDPOINT') || '',
-      {
-        headers: {
-          'x-hasura-admin-secret':
-            this.configService.get<string>('HASURA_ADMIN_SECRET') || '',
-        },
-      }
-    );
-  }
+  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   async createRating(
     createRatingDto: CreateRatingDto,
@@ -176,9 +149,10 @@ export class RatingsService {
     };
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLSingleResponse<Rating>
-      >(mutation, variables);
+      const response = await this.hasuraSystemService.executeMutation(
+        mutation,
+        variables
+      );
       return response.insert_ratings_one;
     } catch (error: any) {
       console.error('Error creating rating:', error);
@@ -210,9 +184,7 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLResponse<RatingAggregate>
-      >(query, {
+      const response = await this.hasuraSystemService.executeQuery(query, {
         entityType,
         entityId,
       });
@@ -254,9 +226,7 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLResponse<Rating>
-      >(query, {
+      const response = await this.hasuraSystemService.executeQuery(query, {
         entityType,
         entityId,
         limit,
@@ -265,6 +235,40 @@ export class RatingsService {
       return response.ratings;
     } catch (error: any) {
       console.error('Error fetching ratings:', error);
+      return [];
+    }
+  }
+
+  async getRatingsForOrder(orderId: string): Promise<Rating[]> {
+    const query = `
+      query GetRatingsForOrder($orderId: uuid!) {
+        ratings(
+          where: {order_id: {_eq: $orderId}}
+          order_by: {created_at: desc}
+        ) {
+          id
+          order_id
+          rating_type
+          rater_user_id
+          rated_entity_type
+          rated_entity_id
+          rating
+          comment
+          is_public
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        orderId,
+      });
+      return response.ratings;
+    } catch (error: any) {
+      console.error('Error fetching order ratings:', error);
       return [];
     }
   }
@@ -285,9 +289,9 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLSingleResponse<OrderData>
-      >(query, { orderId });
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        orderId,
+      });
       return response.orders_by_pk;
     } catch (error: any) {
       console.error('Error fetching order:', error);
@@ -319,9 +323,7 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLResponse<UserProfile>
-      >(query, {
+      const response = await this.hasuraSystemService.executeQuery(query, {
         userIdentifier,
       });
       return response.users[0]; // Return first user with this identifier
@@ -385,9 +387,7 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLResponse<Rating>
-      >(query, {
+      const response = await this.hasuraSystemService.executeQuery(query, {
         orderId,
         ratingType,
         userId,
@@ -441,9 +441,9 @@ export class RatingsService {
     }
 
     try {
-      const response = await this.graphqlClient.request<
-        GraphQLSingleResponse<EntityValidation>
-      >(query, { entityId });
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        entityId,
+      });
       const entityKey = Object.keys(response)[0];
       return !!response[entityKey];
     } catch (error: any) {

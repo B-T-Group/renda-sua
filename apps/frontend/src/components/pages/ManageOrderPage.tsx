@@ -20,8 +20,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAccountInfo, useBackendOrders, useDeliveryFees } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
+import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
+import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
@@ -43,6 +45,8 @@ const ManageOrderPage: React.FC = () => {
   const { deliveryFees, getDeliveryFeeForCurrency } = useDeliveryFees();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
+  const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
+
   const {
     cancelOrder,
     refundOrder,
@@ -250,6 +254,12 @@ const ManageOrderPage: React.FC = () => {
           />
         </Box>
 
+        {/* Order Ratings Display */}
+        <OrderRatingsDisplay
+          ratings={ratings}
+          userType={profile?.user_type_id as 'client' | 'agent' | 'business'}
+        />
+
         {/* Messages Section - Show to all users except agents who are not assigned to this order */}
         {(!profile?.agent ||
           order.assigned_agent_id === profile?.agent?.id) && (
@@ -313,9 +323,10 @@ const ManageOrderPage: React.FC = () => {
 
               {/* Rating and History buttons */}
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                {/* Show rating button for completed orders */}
+                {/* Show rating button only if user can rate and hasn't rated yet */}
                 {order.current_status === 'complete' &&
-                  profile?.user_type_id !== 'business' && (
+                  profile?.user_type_id !== 'business' &&
+                  ratings.length === 0 && (
                     <Button
                       variant="outlined"
                       color="primary"
@@ -404,6 +415,10 @@ const ManageOrderPage: React.FC = () => {
         userType={profile?.user_type_id as 'client' | 'agent' | 'business'}
         orderStatus={order.current_status}
         orderData={order}
+        onRatingSubmitted={() => {
+          // Refresh the ratings data
+          refetchRatings();
+        }}
       />
     </>
   );

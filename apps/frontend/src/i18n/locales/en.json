@@ -767,6 +767,12 @@
       "businessNotAllowed": "Business users cannot rate orders.",
       "submit": "Submit Rating",
       "submitting": "Submitting..."
+    },
+    "orderRatings": "Order Ratings",
+    "types": {
+      "clientToAgent": "Client → Agent",
+      "clientToItem": "Client → Item",
+      "agentToClient": "Agent → Client"
     }
   }
 }

@@ -23,6 +23,7 @@ export interface RatingDialogProps {
   userType: 'client' | 'agent' | 'business';
   orderStatus: string;
   orderData?: any; // Order data to extract entity IDs
+  onRatingSubmitted?: () => void; // Callback to refresh ratings
 }
 
 interface RatingData {
@@ -43,6 +44,7 @@ const RatingDialog: React.FC<RatingDialogProps> = ({
   userType,
   orderStatus,
   orderData,
+  onRatingSubmitted,
 }) => {
   const { t } = useTranslation();
   const apiClient = useApiClient();
@@ -79,6 +81,10 @@ const RatingDialog: React.FC<RatingDialogProps> = ({
         setTimeout(() => {
           onClose();
           setSuccess(false);
+          // Call the callback to refresh ratings
+          if (onRatingSubmitted) {
+            onRatingSubmitted();
+          }
         }, 2000);
       } else {
         setError(response.data.message || 'Failed to submit rating');

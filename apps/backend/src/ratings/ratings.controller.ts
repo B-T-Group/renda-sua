@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Request,
 } from '@nestjs/common';
@@ -20,6 +22,75 @@ import { RatingsService } from './ratings.service';
 @ApiBearerAuth()
 export class RatingsController {
   constructor(private readonly ratingsService: RatingsService) {}
+
+  @Get('order/:orderId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get ratings for a specific order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Ratings retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Ratings retrieved successfully' },
+        ratings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              order_id: { type: 'string', format: 'uuid' },
+              rating_type: {
+                type: 'string',
+                enum: ['client_to_agent', 'client_to_item', 'agent_to_client'],
+              },
+              rater_user_id: { type: 'string', format: 'uuid' },
+              rated_entity_type: {
+                type: 'string',
+                enum: ['agent', 'client', 'item'],
+              },
+              rated_entity_id: { type: 'string', format: 'uuid' },
+              rating: { type: 'number', minimum: 1, maximum: 5 },
+              comment: { type: 'string' },
+              is_public: { type: 'boolean' },
+              is_verified: { type: 'boolean' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
+  async getOrderRatings(@Param('orderId') orderId: string) {
+    try {
+      const ratings = await this.ratingsService.getRatingsForOrder(orderId);
+
+      return {
+        success: true,
+        message: 'Ratings retrieved successfully',
+        ratings,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to retrieve ratings',
+        ratings: [],
+      };
+    }
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
