@@ -13,6 +13,55 @@ export interface PaymentRequestLog {
   payeeNote?: string;
 }
 
+interface InsertPaymentRequestResult {
+  insert_mtn_momo_payment_requests_one: {
+    id: string;
+    transaction_id: string;
+    external_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    created_at: string;
+  };
+}
+
+interface UpdatePaymentRequestResult {
+  update_mtn_momo_payment_requests: {
+    affected_rows: number;
+  };
+}
+
+interface GetUserPaymentRequestsResult {
+  mtn_momo_payment_requests: Array<{
+    id: string;
+    transaction_id: string;
+    external_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    payer_message: string;
+    payee_note: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+interface GetPaymentRequestByTransactionIdResult {
+  mtn_momo_payment_requests: Array<{
+    id: string;
+    user_id: string;
+    transaction_id: string;
+    external_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    payer_message: string;
+    payee_note: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
 @Injectable()
 export class MtnMomoDatabaseService {
   private readonly logger = new Logger(MtnMomoDatabaseService.name);
@@ -68,7 +117,11 @@ export class MtnMomoDatabaseService {
         },
       };
 
-      const result = await this.graphqlClient.request(mutation, variables);
+      const result =
+        await this.graphqlClient.request<InsertPaymentRequestResult>(
+          mutation,
+          variables
+        );
 
       this.logger.log(
         `Payment request logged successfully: ${result.insert_mtn_momo_payment_requests_one.id}`
@@ -105,7 +158,11 @@ export class MtnMomoDatabaseService {
         status,
       };
 
-      const result = await this.graphqlClient.request(mutation, variables);
+      const result =
+        await this.graphqlClient.request<UpdatePaymentRequestResult>(
+          mutation,
+          variables
+        );
 
       this.logger.log(
         `Payment request status updated: ${result.update_mtn_momo_payment_requests.affected_rows} rows affected`
@@ -147,7 +204,11 @@ export class MtnMomoDatabaseService {
         userId,
       };
 
-      const result = await this.graphqlClient.request(query, variables);
+      const result =
+        await this.graphqlClient.request<GetUserPaymentRequestsResult>(
+          query,
+          variables
+        );
 
       return result.mtn_momo_payment_requests;
     } catch (error) {
@@ -188,7 +249,11 @@ export class MtnMomoDatabaseService {
         transactionId,
       };
 
-      const result = await this.graphqlClient.request(query, variables);
+      const result =
+        await this.graphqlClient.request<GetPaymentRequestByTransactionIdResult>(
+          query,
+          variables
+        );
 
       return result.mtn_momo_payment_requests[0] || null;
     } catch (error) {

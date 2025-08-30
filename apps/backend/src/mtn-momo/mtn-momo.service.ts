@@ -268,21 +268,17 @@ export class MtnMomoService {
         payeeNote: request.payeeNote,
       };
 
-      const response = await this.httpClient.post(
-        `/disbursement/v1_0/transfer`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'X-Reference-Id': referenceId,
-            'X-Target-Environment': this.config.targetEnvironment,
-            'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      await this.httpClient.post(`/disbursement/v1_0/transfer`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Reference-Id': referenceId,
+          'X-Target-Environment': this.config.targetEnvironment,
+          'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      this.logger.log(`Disbursement initiated: ${referenceId}`);
+      this.logger.info(`Disbursement initiated: ${referenceId}`);
 
       return {
         status: true,
@@ -363,21 +359,17 @@ export class MtnMomoService {
         payeeNote: request.payeeNote,
       };
 
-      const response = await this.httpClient.post(
-        `/remittance/v1_0/transfer`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'X-Reference-Id': referenceId,
-            'X-Target-Environment': this.config.targetEnvironment,
-            'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      await this.httpClient.post(`/remittance/v1_0/transfer`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Reference-Id': referenceId,
+          'X-Target-Environment': this.config.targetEnvironment,
+          'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      this.logger.log(`Remittance initiated: ${referenceId}`);
+      this.logger.info(`Remittance initiated: ${referenceId}`);
 
       return {
         status: true,
@@ -389,10 +381,11 @@ export class MtnMomoService {
         payeeNote: request.payeeNote,
       };
     } catch (error) {
-      this.logger.error(`Remittance failed: ${error.message}`);
+      this.logger.error(`Remittance failed: ${(error as Error).message}`);
       return {
         status: false,
-        error: error.response?.data?.message || error.message,
+        error:
+          (error as any)?.response?.data?.message || (error as Error).message,
       };
     }
   }
@@ -423,10 +416,11 @@ export class MtnMomoService {
         currency: response.data.currency,
       };
     } catch (error) {
-      this.logger.error(`Balance check failed: ${error.message}`);
+      this.logger.error(`Balance check failed: ${(error as Error).message}`);
       return {
         status: false,
-        error: error.response?.data?.message || error.message,
+        error:
+          (error as any)?.response?.data?.message || (error as Error).message,
       };
     }
   }
@@ -459,10 +453,13 @@ export class MtnMomoService {
         message: response.data.message,
       };
     } catch (error) {
-      this.logger.error(`Account validation failed: ${error.message}`);
+      this.logger.error(
+        `Account validation failed: ${(error as Error).message}`
+      );
       return {
         status: false,
-        error: error.response?.data?.message || error.message,
+        error:
+          (error as any)?.response?.data?.message || (error as Error).message,
       };
     }
   }
@@ -518,9 +515,11 @@ export class MtnMomoService {
       return response.data.access_token;
     } catch (error) {
       this.logger.error(
-        `Token generation failed for ${type}: ${error.message}`
+        `Token generation failed for ${type}: ${(error as Error).message}`
       );
-      throw new Error(`Failed to get ${type} token: ${error.message}`);
+      throw new Error(
+        `Failed to get ${type} token: ${(error as Error).message}`
+      );
     }
   }
 
@@ -568,13 +567,12 @@ export class MtnMomoService {
    */
   async handleCallback(callbackData: any): Promise<void> {
     try {
-      this.logger.log(
+      this.logger.info(
         `Received MTN MoMo callback: ${JSON.stringify(callbackData)}`
       );
 
       // Process the callback data based on the notification type
-      const { notificationType, externalId, financialTransactionId, status } =
-        callbackData;
+      const { financialTransactionId, status } = callbackData;
 
       // Here you would typically:
       // 1. Update your database with the transaction status
@@ -582,11 +580,13 @@ export class MtnMomoService {
       // 3. Update order status if this is a payment for an order
       // 4. Log the transaction for audit purposes
 
-      this.logger.log(
+      this.logger.info(
         `Processed callback for transaction: ${financialTransactionId}, status: ${status}`
       );
     } catch (error) {
-      this.logger.error(`Callback processing failed: ${error.message}`);
+      this.logger.error(
+        `Callback processing failed: ${(error as Error).message}`
+      );
       throw error;
     }
   }

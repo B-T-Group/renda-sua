@@ -8,7 +8,6 @@ import {
   Post,
 } from '@nestjs/common';
 import { Auth0Service } from '../auth/auth0.service';
-import { PermissionService } from '../auth/permission.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -18,8 +17,7 @@ export class UsersController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly auth0Service: Auth0Service,
-    private readonly permissionService: PermissionService
+    private readonly auth0Service: Auth0Service
   ) {}
 
   @Get('me')
