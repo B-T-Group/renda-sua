@@ -1859,6 +1859,111 @@ export class OrdersService {
   }
 
   /**
+   * Calculate delivery fee for a given item based on distance
+   * Uses tiered pricing model with fallback to delivery_fees table
+   */
+  async calculateItemDeliveryFee(itemId: string): Promise<{
+    deliveryFee: number;
+    distance?: number;
+    method: 'distance_based' | 'flat_fee';
+    currency: string;
+  }> {
+    try {
+      // Get user for authorization
+      const user = await this.hasuraUserService.getUser();
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Get item details
+      const item = await this.getItemDetails(itemId);
+      if (!item) {
+        throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Get user's primary address
+      const userAddresses = await this.addressesService.getAddressesByIds([
+        user.addresses?.[0]?.id || '',
+      ]);
+      const userAddress = userAddresses[0];
+      if (!userAddress) {
+        throw new HttpException('User address not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Get business location address
+      const businessAddresses = await this.addressesService.getAddressesByIds([
+        item.business_location.address_id,
+      ]);
+      const businessAddress = businessAddresses[0];
+      if (!businessAddress) {
+        throw new HttpException(
+          'Business address not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Create formatted addresses
+      const userFormattedAddress = this.formatAddress(userAddress);
+      const businessFormattedAddress = this.formatAddress(businessAddress);
+
+      // Try to calculate distance-based fee
+      try {
+        const distanceMatrix =
+          await this.googleDistanceService.getDistanceMatrixWithCaching(
+            userAddress.id,
+            userFormattedAddress,
+            [
+              {
+                id: businessAddress.id,
+                formatted: businessFormattedAddress,
+              },
+            ]
+          );
+
+        if (
+          distanceMatrix.rows?.[0]?.elements?.[0]?.status === 'OK' &&
+          distanceMatrix.rows[0].elements[0].distance
+        ) {
+          const distanceKm =
+            distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
+
+          // Calculate fee using tiered pricing model
+          const deliveryFee = this.calculateTieredDeliveryFee(
+            distanceKm,
+            item.item.currency
+          );
+
+          return {
+            deliveryFee,
+            distance: distanceKm,
+            method: 'distance_based',
+            currency: item.item.currency,
+          };
+        }
+      } catch (distanceError) {
+        console.warn('Failed to calculate distance-based fee:', distanceError);
+      }
+
+      // Fallback to flat fee from delivery_fees table
+      const flatFee = await this.getFlatDeliveryFee(item.item.currency);
+
+      return {
+        deliveryFee: flatFee,
+        method: 'flat_fee',
+        currency: item.item.currency,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        `Failed to calculate delivery fee: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
    * Calculate delivery fee for a given order based on distance
    * Uses tiered pricing model with fallback to delivery_fees table
    */
@@ -2015,6 +2120,37 @@ export class OrdersService {
     ].filter(Boolean);
 
     return parts.join(', ');
+  }
+
+  /**
+   * Get item details by ID
+   */
+  private async getItemDetails(itemId: string): Promise<any> {
+    const query = `
+      query GetItem($itemId: uuid!) {
+        business_inventory_by_pk(id: $itemId) {
+          id
+          available_quantity
+          selling_price
+          item {
+            id
+            name
+            description
+            currency
+            brand {
+              name
+            }
+          }
+          business_location {
+            address_id
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      itemId,
+    });
+    return result.business_inventory_by_pk;
   }
 
   /**

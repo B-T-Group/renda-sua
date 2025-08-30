@@ -246,8 +246,8 @@ export class OrdersController {
     return this.ordersService.claimOrder(request);
   }
 
-  @Get(':id/deliveryFee')
-  @ApiOperation({ summary: 'Get delivery fee for a specific order' })
+  @Get('item/:itemId/deliveryFee')
+  @ApiOperation({ summary: 'Get estimated delivery fee for an item' })
   @ApiResponse({
     status: 200,
     description: 'Delivery fee calculated successfully',
@@ -272,12 +272,12 @@ export class OrdersController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Order not found',
+    description: 'Item not found',
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: false },
-        error: { type: 'string', example: 'Order not found' },
+        error: { type: 'string', example: 'Item not found' },
       },
     },
   })
@@ -288,14 +288,14 @@ export class OrdersController {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: false },
-        error: { type: 'string', example: 'Unauthorized to access this order' },
+        error: { type: 'string', example: 'Unauthorized to access this item' },
       },
     },
   })
-  async getDeliveryFee(@Param('id') orderId: string) {
+  async getItemDeliveryFee(@Param('itemId') itemId: string) {
     try {
-      const deliveryFeeInfo = await this.ordersService.calculateDeliveryFee(
-        orderId
+      const deliveryFeeInfo = await this.ordersService.calculateItemDeliveryFee(
+        itemId
       );
 
       return {
@@ -314,7 +314,7 @@ export class OrdersController {
       const errorMessage = error.message || 'Internal server error';
       let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
 
-      if (errorMessage.includes('Order not found')) {
+      if (errorMessage.includes('Item not found')) {
         statusCode = HttpStatus.NOT_FOUND;
       } else if (
         errorMessage.includes('Unauthorized') ||

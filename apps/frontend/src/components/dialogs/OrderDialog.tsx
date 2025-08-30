@@ -1,5 +1,6 @@
 import { ShoppingCart } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -18,10 +19,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
-import { DeliveryFee } from '../../hooks/useDeliveryFees';
+import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 interface OrderDialogProps {
@@ -30,7 +31,7 @@ interface OrderDialogProps {
   quantity: number;
   specialInstructions: string;
   formatCurrency: (amount: number, currency?: string) => string;
-  deliveryFee: DeliveryFee | null;
+  account?: any; // User's account for the item currency
   onClose: () => void;
   onQuantityChange: (quantity: number) => void;
   onSpecialInstructionsChange: (instructions: string) => void;
@@ -44,7 +45,7 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
   quantity,
   specialInstructions,
   formatCurrency,
-  deliveryFee,
+  account,
   onClose,
   onQuantityChange,
   onSpecialInstructionsChange,
@@ -55,6 +56,35 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
+
+  // Get delivery fee for the selected item
+  const {
+    deliveryFee,
+    loading: deliveryFeeLoading,
+    error: deliveryFeeError,
+  } = useDeliveryFee(selectedItem?.id || null);
+
+  // Check if user can afford the total cost (item + delivery fee)
+  const canAffordTotal = useMemo(() => {
+    if (!selectedItem || !account) return false;
+
+    const itemCost = selectedItem.selling_price * quantity;
+    const deliveryCost = deliveryFee?.deliveryFee || 0;
+    const totalCost = itemCost + deliveryCost;
+
+    return account.available_balance >= totalCost;
+  }, [selectedItem, account, quantity, deliveryFee]);
+
+  // Calculate shortfall if user can't afford
+  const shortfall = useMemo(() => {
+    if (!selectedItem || !account) return 0;
+
+    const itemCost = selectedItem.selling_price * quantity;
+    const deliveryCost = deliveryFee?.deliveryFee || 0;
+    const totalCost = itemCost + deliveryCost;
+
+    return Math.max(0, totalCost - account.available_balance);
+  }, [selectedItem, account, quantity, deliveryFee]);
 
   const handleSubmit = async () => {
     if (!selectedItem || !apiClient) return;
@@ -263,6 +293,28 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
               />
             </Box>
 
+            {/* Insufficient Funds Alert */}
+            {!canAffordTotal && account && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  {t('orders.insufficientFunds', 'Insufficient funds')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('orders.currentBalance', 'Current balance')}:{' '}
+                  {formatCurrency(account.available_balance, account.currency)}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  {t('orders.shortfall', 'You need')}{' '}
+                  {formatCurrency(shortfall, account.currency)}{' '}
+                  {t('orders.more', 'more')}
+                </Typography>
+              </Alert>
+            )}
+
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
                 {t('orders.orderSummary', 'Order Summary')}
@@ -276,7 +328,32 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
               </Typography>
               <Typography variant="body2">
                 {t('orders.deliveryFee', 'Delivery Fee')}:{' '}
-                {formatCurrency(deliveryFee?.fee || 0, deliveryFee?.currency)}
+                {deliveryFeeLoading ? (
+                  <span style={{ fontStyle: 'italic' }}>
+                    {t('common.calculating', 'Calculating...')}
+                  </span>
+                ) : deliveryFeeError ? (
+                  <span style={{ color: 'error.main', fontStyle: 'italic' }}>
+                    {t('common.error', 'Error')}
+                  </span>
+                ) : (
+                  formatCurrency(
+                    deliveryFee?.deliveryFee || 0,
+                    deliveryFee?.currency
+                  )
+                )}
+                {deliveryFee?.method === 'distance_based' &&
+                  deliveryFee?.distance && (
+                    <span
+                      style={{
+                        fontSize: '0.8em',
+                        color: 'text.secondary',
+                        marginLeft: '8px',
+                      }}
+                    >
+                      ({deliveryFee.distance.toFixed(1)} km)
+                    </span>
+                  )}
               </Typography>
               <Typography variant="body2">
                 {t('orders.tax', 'Tax')}: {formatCurrency(0)}
@@ -286,8 +363,8 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
                 {t('orders.total', 'Total')}:{' '}
                 {formatCurrency(
                   selectedItem.selling_price * quantity +
-                    (deliveryFee?.fee || 0),
-                  deliveryFee?.currency || 'USD'
+                    (deliveryFee?.deliveryFee || 0),
+                  deliveryFee?.currency || selectedItem.item.currency
                 )}
               </Typography>
             </Box>
@@ -333,8 +410,9 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
                 {t('orders.accountHoldMessage', 'A hold of')}{' '}
                 <strong style={{ color: '#1976d2' }}>
                   {formatCurrency(
-                    selectedItem.selling_price * quantity,
-                    selectedItem.item.currency
+                    selectedItem.selling_price * quantity +
+                      (deliveryFee?.deliveryFee || 0),
+                    deliveryFee?.currency || selectedItem.item.currency
                   )}
                 </strong>{' '}
                 {t(
@@ -353,13 +431,15 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || !selectedItem || !apiClient}
+          disabled={loading || !selectedItem || !apiClient || !canAffordTotal}
           startIcon={
             loading ? <CircularProgress size={20} /> : <ShoppingCart />
           }
         >
           {loading
             ? t('orders.placingOrder', 'Placing Order...')
+            : !canAffordTotal
+            ? t('orders.insufficientFunds', 'Insufficient Funds')
             : t('orders.placeOrder', 'Place Order')}
         </Button>
       </DialogActions>

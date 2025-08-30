@@ -72,7 +72,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       }}
     >
       {/* Image Section - Left Side */}
-      <Box sx={{ width: '200px', flexShrink: 0 }}>
+      <Box sx={{ width: '300px', flexShrink: 0 }}>
         <CardMedia
           component="img"
           height="200"
@@ -224,13 +224,13 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         </CardContent>
 
         {/* Action Button */}
-        <CardActions sx={{ p: 2, pt: 0 }}>
+        <CardActions sx={{ p: 2, pt: 0, justifyContent: 'flex-end' }}>
           {inventory.available_quantity === 0 ? (
-            <Button variant="outlined" fullWidth disabled>
+            <Button variant="outlined" disabled>
               Out of Stock
             </Button>
           ) : !inventory.is_active ? (
-            <Button variant="outlined" fullWidth disabled>
+            <Button variant="outlined" disabled>
               Not Available
             </Button>
           ) : isPublicView && !canAfford ? (
@@ -238,7 +238,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               variant="contained"
               color="primary"
               startIcon={<ShoppingCart />}
-              fullWidth
               onClick={() => onOrderClick(inventory)}
             >
               {loginButtonText}
@@ -247,7 +246,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             <Button
               variant="contained"
               startIcon={<ShoppingCart />}
-              fullWidth
               onClick={() => onOrderClick(inventory)}
             >
               {orderButtonText}
@@ -257,7 +255,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               variant="outlined"
               color="warning"
               startIcon={<AccountBalanceWallet />}
-              fullWidth
               onClick={onTopUpClick}
             >
               Top Up Account

@@ -8,7 +8,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   useAccountInfo,
   useBackendOrders,
@@ -149,15 +149,16 @@ const Dashboard: React.FC = () => {
   }, [accounts]);
 
   // Memoized function to get account for item currency
-  const getAccountForCurrency = useMemo(() => {
-    return (currency: string) => {
+  const getAccountForCurrency = useCallback(
+    (currency: string) => {
       return accounts.find((account) => account.currency === currency);
-    };
-  }, [accounts]);
+    },
+    [accounts]
+  );
 
   // Memoized function to get insufficient funds message
-  const getInsufficientFundsMessage = useMemo(() => {
-    return (item: any) => {
+  const getInsufficientFundsMessage = useCallback(
+    (item: any) => {
       const itemPrice = item.selling_price;
       const itemCurrency = DEFAULT_ITEM_CURRENCY;
       const account = getAccountForCurrency(itemCurrency);
@@ -167,12 +168,13 @@ const Dashboard: React.FC = () => {
       }
 
       const shortfall = itemPrice - account.available_balance;
-      return `Insufficient funds. You need ${formatCurrency(
-        shortfall,
-        itemCurrency
-      )} more to order this item.`;
-    };
-  }, [accounts, getAccountForCurrency]);
+      return `Insufficient funds. You need ${new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: itemCurrency,
+      }).format(shortfall)} more to order this item.`;
+    },
+    [getAccountForCurrency]
+  );
 
   const handleOrderClick = (item: any) => {
     setSelectedItem(item);
@@ -315,13 +317,7 @@ const Dashboard: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: '1fr',
-                md: 'repeat(2, 1fr)',
-                lg: 'repeat(2, 1fr)',
-                xl: 'repeat(3, 1fr)',
-              },
+              gridTemplateColumns: '1fr',
               gap: 3,
             }}
           >
@@ -360,10 +356,10 @@ const Dashboard: React.FC = () => {
         quantity={quantity}
         specialInstructions={specialInstructions}
         formatCurrency={formatCurrency}
-        deliveryFee={
+        account={
           selectedItem
-            ? getDeliveryFeeForCurrency(selectedItem.item.currency)
-            : null
+            ? getAccountForCurrency(selectedItem.item.currency)
+            : undefined
         }
         onQuantityChange={setQuantity}
         onSpecialInstructionsChange={setSpecialInstructions}
