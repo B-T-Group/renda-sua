@@ -1302,10 +1302,6 @@ export class OrdersService {
       );
     }
 
-    const fees = await this.hasuraSystemService.getDeliveryFee(
-      businessInventory.item.currency
-    );
-
     if (orderData.item.quantity > businessInventory.available_quantity) {
       throw new Error(
         `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderData.item.quantity}`
@@ -1315,6 +1311,12 @@ export class OrdersService {
     const totalAmount =
       businessInventory.selling_price * orderData.item.quantity;
     const currency = businessInventory.item.currency;
+
+    // Calculate delivery fee using the new method
+    const deliveryFeeInfo = await this.calculateItemDeliveryFee(
+      orderData.item.business_inventory_id
+    );
+    const deliveryFee = deliveryFeeInfo.deliveryFee;
 
     // Check user account for the currency
     const account = await this.hasuraSystemService.getAccount(
@@ -1326,10 +1328,10 @@ export class OrdersService {
       throw new Error(`No account found for currency ${currency}`);
     }
 
-    if (account.total_balance < totalAmount + fees) {
+    if (account.total_balance < totalAmount + deliveryFee) {
       throw new Error(
         `Insufficient funds for currency ${currency}. Required: ${
-          totalAmount + fees
+          totalAmount + deliveryFee
         }, Available: ${account.total_balance}`
       );
     }
@@ -1339,7 +1341,7 @@ export class OrdersService {
     const delivery_address_id = address.id;
     const subtotal = totalAmount;
     const tax_amount = 0;
-    const delivery_fee = 0;
+    const delivery_fee = deliveryFee;
     const total_amount = subtotal + tax_amount + delivery_fee;
     const current_status = 'pending';
     const business_id = businessInventory.business_location.business_id;
@@ -1512,7 +1514,7 @@ export class OrdersService {
 
     await this.accountsService.registerTransaction({
       accountId: account.id,
-      amount: fees,
+      amount: deliveryFee,
       transactionType: 'hold',
       memo: `Hold for order ${order.order_number} delivery fee`,
       referenceId: order.id,
@@ -1521,7 +1523,7 @@ export class OrdersService {
 
     await this.updateOrderHold(orderHold.id, {
       client_hold_amount: totalAmount,
-      delivery_fees: fees,
+      delivery_fees: deliveryFee,
     });
 
     return {
@@ -1535,7 +1537,7 @@ export class OrdersService {
    */
   private async getOrCreateOrderHold(
     orderId: string,
-    deliveryFees: number = 0
+    deliveryFees = 0
   ): Promise<any> {
     // First, try to get the existing order hold
     const getOrderHoldQuery = `
