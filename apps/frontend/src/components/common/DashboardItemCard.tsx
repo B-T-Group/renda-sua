@@ -67,219 +67,204 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       sx={{
         height: '100%',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        overflow: 'hidden',
       }}
     >
-      <CardMedia
-        component="img"
-        height="200"
-        image={getPrimaryImage(inventory)}
-        alt={inventory.item.name}
-        sx={{ objectFit: 'cover' }}
-      />
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Typography variant="h6" gutterBottom>
-          {inventory.item.name}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          {inventory.item.description}
-        </Typography>
+      {/* Image Section - Left Side */}
+      <Box sx={{ width: '200px', flexShrink: 0 }}>
+        <CardMedia
+          component="img"
+          height="200"
+          image={getPrimaryImage(inventory)}
+          alt={inventory.item.name}
+          sx={{
+            objectFit: 'cover',
+            width: '100%',
+            height: '100%',
+          }}
+        />
+      </Box>
 
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h5" color="primary" gutterBottom>
-            {formatCurrency(inventory.selling_price, inventory.item.currency)}
-          </Typography>
-          <Chip
-            label={`${inventory.available_quantity} available`}
-            color={inventory.available_quantity > 0 ? 'success' : 'error'}
-            size="small"
-          />
-        </Box>
-
-        {/* Fund Status */}
-        {!canAfford &&
-          inventory.available_quantity > 0 &&
-          inventory.is_active && (
-            <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                {insufficientFundsMessage}
-              </Typography>
-              {account && (
-                <Typography variant="caption" color="text.secondary">
-                  Current balance:{' '}
-                  {formatCurrency(account.available_balance, account.currency)}
+      {/* Content Section - Right Side */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ flexGrow: 1, p: 2 }}>
+          {/* Header with Brand and Availability */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              mb: 1,
+            }}
+          >
+            <Box sx={{ flex: 1 }}>
+              {inventory.item.brand && (
+                <Typography
+                  variant="body2"
+                  color="primary"
+                  fontWeight="bold"
+                  sx={{ mb: 0.5 }}
+                >
+                  {inventory.item.brand.name}
                 </Typography>
               )}
-            </Alert>
-          )}
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ mb: 1, lineHeight: 1.2 }}
+              >
+                {inventory.item.name}
+              </Typography>
+            </Box>
+            <Chip
+              label={`${inventory.available_quantity} available`}
+              color={inventory.available_quantity > 0 ? 'success' : 'error'}
+              size="small"
+              sx={{ ml: 1 }}
+            />
+          </Box>
 
-        <Box sx={{ mb: 2 }}>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-          >
-            <Category fontSize="small" />
-            {inventory.item.item_sub_category?.item_category?.name} →{' '}
-            {inventory.item.item_sub_category?.name}
-          </Typography>
-          {inventory.item.weight && (
-            <Typography variant="body2" color="text.secondary">
-              Weight: {inventory.item.weight} {inventory.item.weight_unit}
+          {/* Price Section */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h5" color="primary" fontWeight="bold">
+              {formatCurrency(inventory.selling_price, inventory.item.currency)}
             </Typography>
-          )}
-          {inventory.item.size && (
-            <Typography variant="body2" color="text.secondary">
-              Size: {inventory.item.size} {inventory.item.size_unit}
-            </Typography>
-          )}
-        </Box>
+          </Box>
 
-        {/* Product Details */}
-        <Box sx={{ mb: 2 }}>
-          {inventory.item.brand && (
+          {/* Key Details Row */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
             <Typography
-              variant="body1"
-              color="primary"
-              fontWeight="bold"
-              sx={{ mb: 0.5 }}
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
             >
-              {inventory.item.brand.name}
+              <Category fontSize="small" />
+              {inventory.item.item_sub_category?.item_category?.name} →{' '}
+              {inventory.item.item_sub_category?.name}
             </Typography>
-          )}
-          {inventory.item.model && (
-            <Typography variant="body2" color="text.secondary">
-              Model: {inventory.item.model}
-            </Typography>
-          )}
-          {inventory.item.color && (
-            <Typography variant="body2" color="text.secondary">
-              Color: {inventory.item.color}
-            </Typography>
-          )}
-          {inventory.item.material && (
-            <Typography variant="body2" color="text.secondary">
-              Material: {inventory.item.material}
-            </Typography>
-          )}
-          {inventory.item.sku && (
-            <Typography variant="body2" color="text.secondary">
-              SKU: {inventory.item.sku}
-            </Typography>
-          )}
-        </Box>
 
-        {/* Special Handling Indicators */}
-        <Box sx={{ mb: 2 }}>
-          {inventory.item.is_fragile && (
-            <Chip
-              label="Fragile"
-              color="warning"
-              size="small"
-              sx={{ mr: 0.5, mb: 0.5 }}
-            />
-          )}
-          {inventory.item.is_perishable && (
-            <Chip
-              label="Perishable"
-              color="error"
-              size="small"
-              sx={{ mr: 0.5, mb: 0.5 }}
-            />
-          )}
-          {inventory.item.requires_special_handling && (
-            <Chip
-              label="Special Handling"
-              color="info"
-              size="small"
-              sx={{ mr: 0.5, mb: 0.5 }}
-            />
-          )}
-        </Box>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+            >
+              <LocationOn fontSize="small" />
+              {inventory.business_location.address?.city},{' '}
+              {inventory.business_location.address?.state}
+            </Typography>
+          </Box>
 
-        {/* Delivery Information */}
-        <Box sx={{ mb: 2 }}>
-          {inventory.item.min_order_quantity &&
-            inventory.item.min_order_quantity > 1 && (
+          {/* Special Handling Chips */}
+          <Box sx={{ mb: 2 }}>
+            {inventory.item.is_fragile && (
+              <Chip
+                label="Fragile"
+                color="warning"
+                size="small"
+                sx={{ mr: 0.5, mb: 0.5 }}
+              />
+            )}
+            {inventory.item.is_perishable && (
+              <Chip
+                label="Perishable"
+                color="error"
+                size="small"
+                sx={{ mr: 0.5, mb: 0.5 }}
+              />
+            )}
+            {inventory.item.requires_special_handling && (
+              <Chip
+                label="Special Handling"
+                color="info"
+                size="small"
+                sx={{ mr: 0.5, mb: 0.5 }}
+              />
+            )}
+          </Box>
+
+          {/* Fund Status Alert */}
+          {!canAfford &&
+            inventory.available_quantity > 0 &&
+            inventory.is_active && (
+              <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  {insufficientFundsMessage}
+                </Typography>
+                {account && (
+                  <Typography variant="caption" color="text.secondary">
+                    Current balance:{' '}
+                    {formatCurrency(
+                      account.available_balance,
+                      account.currency
+                    )}
+                  </Typography>
+                )}
+              </Alert>
+            )}
+
+          {/* Delivery Information */}
+          <Box sx={{ mb: 2 }}>
+            {distanceLoading && (
               <Typography variant="body2" color="text.secondary">
-                Min Order: {inventory.item.min_order_quantity}
+                Calculating distance...
               </Typography>
             )}
-          {inventory.item.max_order_quantity && (
-            <Typography variant="body2" color="text.secondary">
-              Max Order: {inventory.item.max_order_quantity}
-            </Typography>
-          )}
-          {/* Estimated Distance/Time from Distance Matrix */}
-          {distanceLoading && (
-            <Typography variant="body2" color="text.secondary">
-              Calculating distance...
-            </Typography>
-          )}
-          {distanceError && (
-            <Typography variant="body2" color="error">
-              Error: {distanceError}
-            </Typography>
-          )}
-          {estimatedDistance && estimatedDuration && (
-            <Typography variant="body2" color="text.secondary">
-              Distance: {estimatedDistance}, Duration: {estimatedDuration}
-            </Typography>
-          )}
-        </Box>
+            {distanceError && (
+              <Typography variant="body2" color="error">
+                Error: {distanceError}
+              </Typography>
+            )}
+            {estimatedDistance && estimatedDuration && (
+              <Typography variant="body2" color="text.secondary">
+                Distance: {estimatedDistance}, Duration: {estimatedDuration}
+              </Typography>
+            )}
+          </Box>
+        </CardContent>
 
-        <Box sx={{ mb: 2 }}>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-          >
-            <LocationOn fontSize="small" />
-            {inventory.business_location.address?.city},{' '}
-            {inventory.business_location.address?.state}
-          </Typography>
-        </Box>
-      </CardContent>
-      <CardActions>
-        {inventory.available_quantity === 0 ? (
-          <Button variant="outlined" fullWidth disabled>
-            Out of Stock
-          </Button>
-        ) : !inventory.is_active ? (
-          <Button variant="outlined" fullWidth disabled>
-            Not Available
-          </Button>
-        ) : isPublicView && !canAfford ? (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<ShoppingCart />}
-            fullWidth
-            onClick={() => onOrderClick(inventory)}
-          >
-            {loginButtonText}
-          </Button>
-        ) : canAfford ? (
-          <Button
-            variant="contained"
-            startIcon={<ShoppingCart />}
-            fullWidth
-            onClick={() => onOrderClick(inventory)}
-          >
-            {orderButtonText}
-          </Button>
-        ) : (
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={<AccountBalanceWallet />}
-            fullWidth
-            onClick={onTopUpClick}
-          >
-            Top Up Account
-          </Button>
-        )}
-      </CardActions>
+        {/* Action Button */}
+        <CardActions sx={{ p: 2, pt: 0 }}>
+          {inventory.available_quantity === 0 ? (
+            <Button variant="outlined" fullWidth disabled>
+              Out of Stock
+            </Button>
+          ) : !inventory.is_active ? (
+            <Button variant="outlined" fullWidth disabled>
+              Not Available
+            </Button>
+          ) : isPublicView && !canAfford ? (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<ShoppingCart />}
+              fullWidth
+              onClick={() => onOrderClick(inventory)}
+            >
+              {loginButtonText}
+            </Button>
+          ) : canAfford ? (
+            <Button
+              variant="contained"
+              startIcon={<ShoppingCart />}
+              fullWidth
+              onClick={() => onOrderClick(inventory)}
+            >
+              {orderButtonText}
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<AccountBalanceWallet />}
+              fullWidth
+              onClick={onTopUpClick}
+            >
+              Top Up Account
+            </Button>
+          )}
+        </CardActions>
+      </Box>
     </Card>
   );
 };

@@ -1,7 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
+import { AddressesService } from '../addresses/addresses.service';
 import type { Configuration } from '../config/configuration';
+import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
@@ -21,7 +23,9 @@ export class OrdersService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly accountsService: AccountsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly orderStatusService: OrderStatusService
+    private readonly orderStatusService: OrderStatusService,
+    private readonly googleDistanceService: GoogleDistanceService,
+    private readonly addressesService: AddressesService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -1171,11 +1175,15 @@ export class OrdersService {
           currency
           business_id
           client_id
+          client_address_id
           client {
             user_id
           }
           business {
             user_id
+          }
+          business_location {
+            address_id
           }
           assigned_agent_id
           assigned_agent {
@@ -1832,7 +1840,7 @@ export class OrdersService {
     const currency = order.currency;
 
     // 5. Get the business account for the order's currency
-    let businessAccount = await this.hasuraSystemService.getAccount(
+    const businessAccount = await this.hasuraSystemService.getAccount(
       businessUserId,
       currency
     );
@@ -1848,5 +1856,203 @@ export class OrdersService {
     await this.updateOrderHold(orderHold.id, {
       status: 'completed',
     });
+  }
+
+  /**
+   * Calculate delivery fee for a given order based on distance
+   * Uses tiered pricing model with fallback to delivery_fees table
+   */
+  async calculateDeliveryFee(orderId: string): Promise<{
+    deliveryFee: number;
+    distance?: number;
+    method: 'distance_based' | 'flat_fee';
+    currency: string;
+  }> {
+    try {
+      // Get order details
+      const order = await this.getOrderDetails(orderId);
+      if (!order) {
+        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Get user for authorization
+      const user = await this.hasuraUserService.getUser();
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Check if user has access to this order
+      const isClient = order.client_id === user.id;
+      const isBusiness = order.business?.user_id === user.id;
+      const isAgent = order.assigned_agent?.user_id === user.id;
+
+      if (!isClient && !isBusiness && !isAgent) {
+        throw new HttpException(
+          'Unauthorized to access this order',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      // Get client address
+      const clientAddresses = await this.addressesService.getAddressesByIds([
+        order.client_address_id,
+      ]);
+      const clientAddress = clientAddresses[0];
+      if (!clientAddress) {
+        throw new HttpException(
+          'Client address not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Get business location address
+      const businessAddresses = await this.addressesService.getAddressesByIds([
+        order.business_location.address_id,
+      ]);
+      const businessAddress = businessAddresses[0];
+      if (!businessAddress) {
+        throw new HttpException(
+          'Business address not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Create formatted addresses
+      const clientFormattedAddress = this.formatAddress(clientAddress);
+      const businessFormattedAddress = this.formatAddress(businessAddress);
+
+      // Try to calculate distance-based fee
+      try {
+        const distanceMatrix =
+          await this.googleDistanceService.getDistanceMatrixWithCaching(
+            clientAddress.id,
+            clientFormattedAddress,
+            [
+              {
+                id: businessAddress.id,
+                formatted: businessFormattedAddress,
+              },
+            ]
+          );
+
+        if (
+          distanceMatrix.rows?.[0]?.elements?.[0]?.status === 'OK' &&
+          distanceMatrix.rows[0].elements[0].distance
+        ) {
+          const distanceKm =
+            distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
+
+          // Calculate fee using tiered pricing model
+          const deliveryFee = this.calculateTieredDeliveryFee(
+            distanceKm,
+            order.currency
+          );
+
+          return {
+            deliveryFee,
+            distance: distanceKm,
+            method: 'distance_based',
+            currency: order.currency,
+          };
+        }
+      } catch (distanceError) {
+        console.warn('Failed to calculate distance-based fee:', distanceError);
+      }
+
+      // Fallback to flat fee from delivery_fees table
+      const flatFee = await this.getFlatDeliveryFee(order.currency);
+
+      return {
+        deliveryFee: flatFee,
+        method: 'flat_fee',
+        currency: order.currency,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        `Failed to calculate delivery fee: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Calculate delivery fee using tiered pricing model
+   */
+  private calculateTieredDeliveryFee(
+    distanceKm: number,
+    currency: string
+  ): number {
+    // Base configuration for different currencies
+    const config = {
+      XAF: { baseFee: 500, ratePerKm: 300, minFee: 1000 },
+      USD: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
+      CAD: { baseFee: 1.5, ratePerKm: 0.75, minFee: 3 },
+      EUR: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
+    };
+
+    const currencyConfig =
+      config[currency as keyof typeof config] || config.XAF;
+
+    const calculatedFee =
+      currencyConfig.baseFee + distanceKm * currencyConfig.ratePerKm;
+    return Math.max(currencyConfig.minFee, calculatedFee);
+  }
+
+  /**
+   * Format address for Google Distance Matrix API
+   */
+  private formatAddress(address: any): string {
+    const parts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  }
+
+  /**
+   * Get flat delivery fee from delivery_fees table
+   */
+  private async getFlatDeliveryFee(currency: string): Promise<number> {
+    const query = `
+      query GetDeliveryFee($currency: currency_enum!) {
+        delivery_fees(where: { currency: { _eq: $currency } }, limit: 1) {
+          fee
+        }
+      }
+    `;
+
+    try {
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        currency,
+      });
+      const deliveryFee = result.delivery_fees?.[0]?.fee;
+
+      if (!deliveryFee) {
+        // Fallback to default values if no fee found in database
+        const defaultFees = {
+          XAF: 1500,
+          USD: 10,
+          CAD: 10,
+          EUR: 8,
+        };
+        return (
+          defaultFees[currency as keyof typeof defaultFees] || defaultFees.XAF
+        );
+      }
+
+      return deliveryFee;
+    } catch (error) {
+      console.error('Error fetching delivery fee from database:', error);
+      // Return default fee as last resort
+      return 1500; // Default XAF fee
+    }
   }
 }

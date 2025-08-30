@@ -9,6 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
@@ -21,6 +22,7 @@ export interface UpdateOrderStatusRequest {
   status: string;
 }
 
+@ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
   constructor(
@@ -242,5 +244,92 @@ export class OrdersController {
   @Post('claim_order')
   async claimOrder(@Body() request: GetOrderRequest) {
     return this.ordersService.claimOrder(request);
+  }
+
+  @Get(':id/deliveryFee')
+  @ApiOperation({ summary: 'Get delivery fee for a specific order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery fee calculated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        deliveryFee: { type: 'number', example: 1500 },
+        distance: { type: 'number', example: 5.2 },
+        method: {
+          type: 'string',
+          enum: ['distance_based', 'flat_fee'],
+          example: 'distance_based',
+        },
+        currency: { type: 'string', example: 'XAF' },
+        message: {
+          type: 'string',
+          example: 'Delivery fee calculated successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Unauthorized access',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Unauthorized to access this order' },
+      },
+    },
+  })
+  async getDeliveryFee(@Param('id') orderId: string) {
+    try {
+      const deliveryFeeInfo = await this.ordersService.calculateDeliveryFee(
+        orderId
+      );
+
+      return {
+        success: true,
+        deliveryFee: deliveryFeeInfo.deliveryFee,
+        distance: deliveryFeeInfo.distance,
+        method: deliveryFeeInfo.method,
+        currency: deliveryFeeInfo.currency,
+        message: 'Delivery fee calculated successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('Order not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('access')
+      ) {
+        statusCode = HttpStatus.FORBIDDEN;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
   }
 }

@@ -317,9 +317,10 @@ const Dashboard: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)',
-                lg: 'repeat(4, 1fr)',
+                sm: '1fr',
+                md: 'repeat(2, 1fr)',
+                lg: 'repeat(2, 1fr)',
+                xl: 'repeat(3, 1fr)',
               },
               gap: 3,
             }}
