@@ -1175,7 +1175,7 @@ export class OrdersService {
           currency
           business_id
           client_id
-          client_address_id
+          delivery_address_id
           client {
             user_id
           }
@@ -1767,6 +1767,14 @@ export class OrdersService {
       referenceId: order.id,
     });
 
+    await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount: orderHold.delivery_fees,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number} delivery fee`,
+      referenceId: order.id,
+    });
+
     await this.updateOrderHold(orderHold.id, {
       status: status,
     });
@@ -2002,7 +2010,7 @@ export class OrdersService {
 
       // Get client address
       const clientAddresses = await this.addressesService.getAddressesByIds([
-        order.client_address_id,
+        order.delivery_address_id,
       ]);
       const clientAddress = clientAddresses[0];
       if (!clientAddress) {
@@ -2094,7 +2102,7 @@ export class OrdersService {
   ): number {
     // Base configuration for different currencies
     const config = {
-      XAF: { baseFee: 500, ratePerKm: 300, minFee: 1000 },
+      XAF: { baseFee: 300, ratePerKm: 200, minFee: 500 },
       USD: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
       CAD: { baseFee: 1.5, ratePerKm: 0.75, minFee: 3 },
       EUR: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
