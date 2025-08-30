@@ -542,27 +542,68 @@ export class OrdersService {
         'Only business users can refund orders',
         HttpStatus.FORBIDDEN
       );
+
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+
     if (order.business.user_id !== user.id)
       throw new HttpException(
         'Unauthorized to refund this order',
         HttpStatus.FORBIDDEN
       );
 
-    // Check if order can be refunded
-    const refundableStatuses = ['delivered', 'failed', 'cancelled'];
+    // Check if order can be refunded - only delivered or failed orders
+    const refundableStatuses = ['delivered', 'failed'];
     if (!refundableStatuses.includes(order.current_status))
       throw new HttpException(
-        `Cannot refund order in ${order.current_status} status`,
+        `Cannot refund order in ${order.current_status} status. Only delivered or failed orders can be refunded.`,
         HttpStatus.BAD_REQUEST
       );
 
+    // Get order hold details
+    const orderHold = await this.getOrCreateOrderHold(request.orderId);
+    if (!orderHold) {
+      throw new HttpException(
+        'Order hold details not found',
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    // Credit the client with the client_hold_amount
+    if (orderHold.client_hold_amount > 0) {
+      const clientAccount = await this.hasuraSystemService.getAccount(
+        order.client.user_id,
+        order.currency
+      );
+
+      if (!clientAccount) {
+        throw new HttpException(
+          'Client account not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: orderHold.client_hold_amount,
+        transactionType: 'release',
+        memo: `Refund for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+    }
+
+    // Update order status to refunded
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'refunded'
     );
+
+    // Update order hold status to completed
+    await this.updateOrderHold(orderHold.id, {
+      status: 'completed',
+    });
+
     await this.createStatusHistoryEntry(
       request.orderId,
       'refunded',
@@ -571,6 +612,7 @@ export class OrdersService {
       user.id,
       request.notes
     );
+
     return {
       success: true,
       order: updatedOrder,
