@@ -102,10 +102,10 @@ export class RatingsController {
     @Request() req: any
   ) {
     try {
-      const userId = req.user.sub; // Auth0 user ID
+      const userIdentifier = req.user.sub; // Auth0 user ID
       const rating = await this.ratingsService.createRating(
         createRatingDto,
-        userId
+        userIdentifier
       );
 
       return {
@@ -113,7 +113,7 @@ export class RatingsController {
         message: 'Rating created successfully',
         rating,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
         message: error.message || 'Failed to create rating',

@@ -8,6 +8,42 @@ import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
 import { CreateRatingDto, RatingType } from './dto/create-rating.dto';
 
+// GraphQL Response Types
+interface GraphQLResponse<T> {
+  [key: string]: T[];
+}
+
+interface GraphQLSingleResponse<T> {
+  [key: string]: T;
+}
+
+// User Profile Types
+interface UserProfile {
+  id: string;
+  user_type_id: string;
+  first_name: string;
+  last_name: string;
+  client?: { id: string };
+  agent?: { id: string };
+  business?: { id: string };
+}
+
+// Order Types
+interface OrderData {
+  id: string;
+  order_number: string;
+  client_id: string;
+  business_id: string;
+  assigned_agent_id?: string;
+  current_status: string;
+  created_at: string;
+}
+
+// Entity Validation Types
+interface EntityValidation {
+  id: string;
+}
+
 export interface Rating {
   id: string;
   order_id: string;
@@ -56,7 +92,7 @@ export class RatingsService {
 
   async createRating(
     createRatingDto: CreateRatingDto,
-    userId: string
+    userIdentifier: string
   ): Promise<Rating> {
     // Validate that the order exists and is completed
     const order = await this.getOrder(createRatingDto.orderId);
@@ -69,7 +105,7 @@ export class RatingsService {
     }
 
     // Validate that the user is involved in the order
-    const userProfile = await this.getUserProfile(userId);
+    const userProfile = await this.getUserProfile(userIdentifier);
     if (!userProfile) {
       throw new NotFoundException('User profile not found');
     }
@@ -88,7 +124,7 @@ export class RatingsService {
     const existingRating = await this.getExistingRating(
       createRatingDto.orderId,
       createRatingDto.ratingType,
-      userId
+      userProfile.id
     );
     if (existingRating) {
       throw new BadRequestException(
@@ -129,7 +165,7 @@ export class RatingsService {
       rating: {
         order_id: createRatingDto.orderId,
         rating_type: createRatingDto.ratingType,
-        rater_user_id: userId,
+        rater_user_id: userProfile.id,
         rated_entity_type: createRatingDto.ratedEntityType,
         rated_entity_id: createRatingDto.ratedEntityId,
         rating: createRatingDto.rating,
@@ -140,9 +176,11 @@ export class RatingsService {
     };
 
     try {
-      const response = await this.graphqlClient.request(mutation, variables);
+      const response = await this.graphqlClient.request<
+        GraphQLSingleResponse<Rating>
+      >(mutation, variables);
       return response.insert_ratings_one;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating rating:', error);
       throw new BadRequestException('Failed to create rating');
     }
@@ -172,12 +210,14 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request(query, {
+      const response = await this.graphqlClient.request<
+        GraphQLResponse<RatingAggregate>
+      >(query, {
         entityType,
         entityId,
       });
       return response.rating_aggregates[0] || null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching rating aggregate:', error);
       return null;
     }
@@ -214,20 +254,22 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request(query, {
+      const response = await this.graphqlClient.request<
+        GraphQLResponse<Rating>
+      >(query, {
         entityType,
         entityId,
         limit,
         offset,
       });
       return response.ratings;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching ratings:', error);
       return [];
     }
   }
 
-  private async getOrder(orderId: string): Promise<any> {
+  private async getOrder(orderId: string): Promise<OrderData | null> {
     const query = `
       query GetOrder($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
@@ -243,18 +285,22 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request(query, { orderId });
+      const response = await this.graphqlClient.request<
+        GraphQLSingleResponse<OrderData>
+      >(query, { orderId });
       return response.orders_by_pk;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching order:', error);
       return null;
     }
   }
 
-  private async getUserProfile(userId: string): Promise<any> {
+  private async getUserProfile(
+    userIdentifier: string
+  ): Promise<UserProfile | null> {
     const query = `
-      query GetUserProfile($userId: uuid!) {
-        users_by_pk(id: $userId) {
+      query GetUserProfile($userIdentifier: String!) {
+        users(where: {identifier: {_eq: $userIdentifier}}) {
           id
           user_type_id
           first_name
@@ -273,9 +319,13 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request(query, { userId });
-      return response.users_by_pk;
-    } catch (error) {
+      const response = await this.graphqlClient.request<
+        GraphQLResponse<UserProfile>
+      >(query, {
+        userIdentifier,
+      });
+      return response.users[0]; // Return first user with this identifier
+    } catch (error: any) {
       console.error('Error fetching user profile:', error);
       return null;
     }
@@ -335,13 +385,15 @@ export class RatingsService {
     `;
 
     try {
-      const response = await this.graphqlClient.request(query, {
+      const response = await this.graphqlClient.request<
+        GraphQLResponse<Rating>
+      >(query, {
         orderId,
         ratingType,
         userId,
       });
       return response.ratings[0] || null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking existing rating:', error);
       return null;
     }
@@ -389,10 +441,12 @@ export class RatingsService {
     }
 
     try {
-      const response = await this.graphqlClient.request(query, { entityId });
+      const response = await this.graphqlClient.request<
+        GraphQLSingleResponse<EntityValidation>
+      >(query, { entityId });
       const entityKey = Object.keys(response)[0];
       return !!response[entityKey];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error validating rated entity:', error);
       return false;
     }

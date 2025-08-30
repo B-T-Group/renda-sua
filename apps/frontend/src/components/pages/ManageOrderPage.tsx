@@ -25,6 +25,7 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
+import RatingDialog from '../dialogs/RatingDialog';
 import AgentActions from '../orders/AgentActions';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
 import BusinessActions from '../orders/BusinessActions';
@@ -58,6 +59,7 @@ const ManageOrderPage: React.FC = () => {
   } | null>(null);
   const [notes, setNotes] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [notificationAlert, setNotificationAlert] = useState<{
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
@@ -309,8 +311,21 @@ const ManageOrderPage: React.FC = () => {
                 />
               )}
 
-              {/* Always show history button */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              {/* Rating and History buttons */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                {/* Show rating button for completed orders */}
+                {order.current_status === 'complete' &&
+                  profile?.user_type_id !== 'business' && (
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={() => setRatingDialogOpen(true)}
+                      disabled={loading}
+                    >
+                      {t('orders.actions.rateOrder', 'Rate Order')}
+                    </Button>
+                  )}
+
                 <Button
                   variant="outlined"
                   color="info"
@@ -378,6 +393,17 @@ const ManageOrderPage: React.FC = () => {
           })) || []
         }
         orderNumber={order.order_number}
+      />
+
+      {/* Rating Dialog */}
+      <RatingDialog
+        open={ratingDialogOpen}
+        onClose={() => setRatingDialogOpen(false)}
+        orderId={order.id}
+        orderNumber={order.order_number}
+        userType={profile?.user_type_id as 'client' | 'agent' | 'business'}
+        orderStatus={order.current_status}
+        orderData={order}
       />
     </>
   );

@@ -22,21 +22,21 @@ export enum RatedEntityType {
 
 export class CreateRatingDto {
   @IsUUID()
-  orderId: string;
+  orderId!: string;
 
   @IsEnum(RatingType)
-  ratingType: RatingType;
+  ratingType!: RatingType;
 
   @IsEnum(RatedEntityType)
-  ratedEntityType: RatedEntityType;
+  ratedEntityType!: RatedEntityType;
 
   @IsUUID()
-  ratedEntityId: string;
+  ratedEntityId!: string;
 
   @IsInt()
   @Min(1)
   @Max(5)
-  rating: number;
+  rating!: number;
 
   @IsOptional()
   @IsString()

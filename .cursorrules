@@ -139,6 +139,129 @@ t('orders.orderCard.items');
 2. **Service Injection**: Use proper dependency injection patterns
 3. **Error Handling**: Include comprehensive error handling and validation
 4. **Module Organization**: Follow NestJS module structure conventions
+5. **Catch Block Error Types**: Always use `error: any` type annotation in catch blocks to avoid TypeScript strict mode errors when accessing error properties
+
+   ```typescript
+   // Good - with type annotation
+   } catch (error: any) {
+     return {
+       success: false,
+       message: error.message || 'Failed to create rating',
+     };
+   }
+
+   // Bad - without type annotation (causes TypeScript error)
+   } catch (error) {
+     return {
+       success: false,
+       message: error.message || 'Failed to create rating', // Error: 'error' is of type 'unknown'
+     };
+   }
+   ```
+
+6. **Swagger Documentation**: Always use `@nestjs/swagger` decorators when creating backend APIs for comprehensive API documentation
+
+   ```typescript
+   // Good - with Swagger decorators
+   @ApiTags('ratings')
+   @Controller('ratings')
+   @UseGuards(AuthGuard('jwt'))
+   @ApiBearerAuth()
+   export class RatingsController {
+     @Post()
+     @HttpCode(HttpStatus.CREATED)
+     @ApiOperation({ summary: 'Create a new rating' })
+     @ApiResponse({
+       status: 201,
+       description: 'Rating created successfully',
+       schema: {
+         /* response schema */
+       },
+     })
+     @ApiResponse({
+       status: 400,
+       description: 'Bad request - Invalid data',
+       schema: {
+         /* error schema */
+       },
+     })
+     async createRating(@Body() createRatingDto: CreateRatingDto) {
+       // implementation
+     }
+   }
+
+   // Bad - without Swagger decorators
+   @Controller('ratings')
+   export class RatingsController {
+     @Post()
+     async createRating(@Body() createRatingDto: CreateRatingDto) {
+       // implementation - no documentation
+     }
+   }
+   ```
+
+   **Required Swagger Decorators:**
+
+   - `@ApiTags()` - Group related endpoints
+   - `@ApiOperation()` - Describe what the endpoint does
+   - `@ApiResponse()` - Document all possible response codes and schemas
+   - `@ApiBearerAuth()` - For authenticated endpoints
+   - `@ApiBody()` - For complex request bodies
+   - `@ApiParam()` - For path parameters
+     - `@ApiQuery()` - For query parameters
+
+### GraphQL Type Safety Rules
+
+1. **Always Create Types for GraphQL Objects**: Create TypeScript interfaces for all GraphQL query responses and objects
+
+   ```typescript
+   // Good - with proper types
+   interface UserProfile {
+     id: string;
+     user_type_id: string;
+     first_name: string;
+     last_name: string;
+     client?: { id: string };
+     agent?: { id: string };
+     business?: { id: string };
+   }
+
+   interface GraphQLResponse<T> {
+     [key: string]: T[];
+   }
+
+   private async getUserProfile(userIdentifier: string): Promise<UserProfile | null> {
+     const query = `...`;
+     try {
+       const response = await this.graphqlClient.request<GraphQLResponse<UserProfile>>(query, { userIdentifier });
+       return response.users[0];
+     } catch (error: any) {
+       return null;
+     }
+   }
+
+   // Bad - without types (causes TypeScript errors)
+   private async getUserProfile(userIdentifier: string): Promise<any> {
+     const query = `...`;
+     try {
+       const response = await this.graphqlClient.request(query, { userIdentifier });
+       return response.users[0]; // Error: 'response' is of type 'unknown'
+     } catch (error: any) {
+       return null;
+     }
+   }
+   ```
+
+2. **Type Naming Convention**: Use descriptive names ending with the GraphQL object type
+
+   - `UserProfile` for user objects
+   - `OrderData` for order objects
+   - `RatingData` for rating objects
+   - `GraphQLResponse<T>` for generic response wrappers
+
+3. **Required Properties**: Always define all properties that are queried
+4. **Optional Properties**: Use `?` for nullable or optional GraphQL fields
+5. **Nested Objects**: Create separate interfaces for nested objects when they have multiple properties
 
 ### Hasura Rules
 

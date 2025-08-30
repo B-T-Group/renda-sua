@@ -331,7 +331,8 @@
       "refund": "Rembourser",
       "startPreparing": "Commencer la préparation",
       "viewItems": "Voir les articles",
-      "viewHistory": "Voir l'historique"
+      "viewHistory": "Voir l'historique",
+      "rateOrder": "Évaluer la Commande"
     },
     "placeOrder": "Passer la Commande",
     "placingOrder": "Passage de la Commande...",
@@ -676,5 +677,22 @@
   "orderHistory": {
     "title": "Historique des Commandes",
     "noHistory": "Aucun historique de commande disponible."
+  },
+  "rating": {
+    "dialog": {
+      "title": "Évaluez Votre Expérience",
+      "orderNotComplete": "Vous ne pouvez évaluer que les commandes qui ont été complétées.",
+      "success": "Évaluation soumise avec succès !",
+      "rateAgent": "Évaluer l'Agent de Livraison",
+      "rateItem": "Évaluer l'Article",
+      "rateClient": "Évaluer le Client",
+      "comment": "Commentaire (optionnel)",
+      "agentCommentPlaceholder": "Partagez votre expérience avec l'agent de livraison...",
+      "itemCommentPlaceholder": "Partagez vos pensées sur la qualité de l'article...",
+      "clientCommentPlaceholder": "Partagez votre expérience avec le client...",
+      "businessNotAllowed": "Les utilisateurs entreprise ne peuvent pas évaluer les commandes.",
+      "submit": "Soumettre l'Évaluation",
+      "submitting": "Soumission en cours..."
+    }
   }
 }
