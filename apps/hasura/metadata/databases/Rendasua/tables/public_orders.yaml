@@ -45,6 +45,15 @@ array_relationships:
         remote_table:
           name: order_holds
           schema: public
+  - name: ratings
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: ratings
+          schema: public
 insert_permissions:
   - role: client
     permission:

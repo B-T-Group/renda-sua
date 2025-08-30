@@ -1,0 +1,26 @@
+table:
+  name: rating_aggregates
+  schema: public
+array_relationships: []
+object_relationships: []
+select_permissions:
+  - role: authenticated
+    permission:
+      columns:
+        - id
+        - entity_type
+        - entity_id
+        - total_ratings
+        - average_rating
+        - rating_1_count
+        - rating_2_count
+        - rating_3_count
+        - rating_4_count
+        - rating_5_count
+        - last_rating_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+insert_permissions: []
+update_permissions: []
+delete_permissions: []

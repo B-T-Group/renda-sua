@@ -90,6 +90,15 @@ array_relationships:
         remote_table:
           name: user_uploads
           schema: public
+  - name: ratings_given
+    using:
+      manual_configuration:
+        column_mapping:
+          id: rater_user_id
+        insertion_order: null
+        remote_table:
+          name: ratings
+          schema: public
 insert_permissions:
   - role: agent
     permission:

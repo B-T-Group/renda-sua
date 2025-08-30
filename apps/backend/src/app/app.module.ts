@@ -17,6 +17,7 @@ import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module'
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrdersModule } from '../orders/orders.module';
+import { RatingsModule } from '../ratings/ratings.module';
 import { ServicesModule } from '../services/services.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
@@ -56,6 +57,7 @@ import { AppService } from './app.service';
     AccountsModule,
     AddressesModule,
     OrdersModule,
+    RatingsModule,
     AgentsModule,
     AwsModule,
     MtnMomoModule,
