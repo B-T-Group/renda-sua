@@ -22,6 +22,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
@@ -162,7 +163,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
     return new Date(dateString).toLocaleDateString();
   };
 
-  const fetchAccountTransactions = async (limit: number = 10) => {
+  const fetchAccountTransactions = async (limit = 10) => {
     setTransactionsLoading(true);
 
     try {
@@ -292,34 +293,18 @@ const UserAccount: React.FC<UserAccountProps> = ({
               </Box>
               <Typography variant="h4" color="primary" gutterBottom>
                 {formatCurrency(account.total_balance, account.currency)}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box sx={{ mb: 2 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={1}
-            >
-              <Typography variant="body2" color="text.secondary">
-                {t('accounts.available')}:
-              </Typography>
-              <Typography variant="body1" fontWeight="medium">
-                {formatCurrency(account.available_balance, account.currency)}
-              </Typography>
-            </Box>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="body2" color="text.secondary">
-                {t('accounts.withheld')}:
-              </Typography>
-              <Typography variant="body1" fontWeight="medium">
-                {formatCurrency(account.withheld_balance, account.currency)}
+                {account.withheld_balance > 0 && (
+                  <Typography
+                    component="span"
+                    variant="h6"
+                    color="error"
+                    sx={{ ml: 1, fontWeight: 'normal' }}
+                  >
+                    (
+                    {formatCurrency(account.withheld_balance, account.currency)}{' '}
+                    withheld)
+                  </Typography>
+                )}
               </Typography>
             </Box>
           </Box>
@@ -335,72 +320,36 @@ const UserAccount: React.FC<UserAccountProps> = ({
               }}
             >
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <IconButton
-                  onClick={handleViewTransactions}
-                  disabled={loading}
-                  title={t('accounts.viewTransactions')}
-                >
-                  <VisibilityIcon />
-                </IconButton>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Button
-                  onClick={handleTopUp}
-                  disabled={loading}
-                  variant="contained"
-                  size="small"
-                  startIcon={<AddIcon />}
-                  sx={{
-                    width: '150px',
-                    background:
-                      'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
-                    color: 'white',
-                    fontWeight: 600,
-                    textTransform: 'none',
-                    boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
-                    '&:hover': {
-                      background:
-                        'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
-                      boxShadow: '0 4px 8px 2px rgba(76, 175, 80, .4)',
-                    },
-                    '&:disabled': {
-                      background:
-                        'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
-                      boxShadow: 'none',
-                    },
-                  }}
-                >
-                  {t('accounts.creditAccount')}
-                </Button>
-                {account.available_balance > 0 && (
-                  <Button
-                    onClick={handleWithdraw}
+                <Tooltip title={t('accounts.viewTransactions')}>
+                  <IconButton
+                    onClick={handleViewTransactions}
                     disabled={loading}
-                    variant="contained"
                     size="small"
-                    startIcon={<RemoveIcon />}
-                    sx={{
-                      width: '150px',
-                      background:
-                        'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
-                      color: 'white',
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      boxShadow: '0 3px 5px 2px rgba(255, 87, 34, .3)',
-                      '&:hover': {
-                        background:
-                          'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
-                        boxShadow: '0 4px 8px 2px rgba(255, 87, 34, .4)',
-                      },
-                      '&:disabled': {
-                        background:
-                          'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
-                        boxShadow: 'none',
-                      },
-                    }}
                   >
-                    {t('accounts.withdraw')}
-                  </Button>
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('accounts.creditAccount')}>
+                  <IconButton
+                    onClick={handleTopUp}
+                    disabled={loading}
+                    color="primary"
+                    size="small"
+                  >
+                    <AddIcon />
+                  </IconButton>
+                </Tooltip>
+                {account.available_balance > 0 && (
+                  <Tooltip title={t('accounts.withdraw')}>
+                    <IconButton
+                      onClick={handleWithdraw}
+                      disabled={loading}
+                      color="error"
+                      size="small"
+                    >
+                      <RemoveIcon />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Box>
             </Box>
