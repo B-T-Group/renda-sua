@@ -18,7 +18,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAccountInfo, useBackendOrders, useDeliveryFees } from '../../hooks';
+import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -42,7 +42,6 @@ const ManageOrderPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
   const { accounts } = useAccountInfo();
-  const { deliveryFees, getDeliveryFeeForCurrency } = useDeliveryFees();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
@@ -279,12 +278,7 @@ const ManageOrderPage: React.FC = () => {
 
         {/* Persona-specific alerts */}
         {profile?.agent && (
-          <AgentOrderAlerts
-            order={order}
-            agentAccounts={accounts}
-            deliveryFees={deliveryFees}
-            getDeliveryFeeByCurrency={getDeliveryFeeForCurrency}
-          />
+          <AgentOrderAlerts order={order} agentAccounts={accounts} />
         )}
         {profile?.business && <BusinessOrderAlerts order={order} />}
         {profile?.client && <ClientOrderAlerts order={order} />}

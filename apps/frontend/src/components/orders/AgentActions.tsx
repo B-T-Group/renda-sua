@@ -8,6 +8,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface AgentActionsProps {
   order: OrderData;
+  agentAccounts?: any[];
   onActionComplete?: () => void;
   onShowNotification?: (
     message: string,

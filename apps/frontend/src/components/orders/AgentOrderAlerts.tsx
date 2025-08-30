@@ -2,21 +2,16 @@ import { Alert, Box } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Order } from '../../hooks/useAgentOrders';
-import type { DeliveryFee } from '../../hooks/useDeliveryFees';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface AgentOrderAlertsProps {
   order: Order;
   agentAccounts?: any[];
-  deliveryFees?: DeliveryFee[];
-  getDeliveryFeeByCurrency?: (currency: string) => DeliveryFee | null;
 }
 
 const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
   order,
   agentAccounts = [],
-  deliveryFees = [],
-  getDeliveryFeeByCurrency,
 }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfile();
@@ -36,12 +31,13 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
   };
 
   const getDeliveryFee = () => {
-    // Get delivery fee from API based on order currency
-    if (getDeliveryFeeByCurrency && order.currency) {
-      const deliveryFeeData = getDeliveryFeeByCurrency(order.currency);
-      return deliveryFeeData?.fee || 0;
+    // Get delivery fee from order_holds table (new API response)
+    if (order.order_holds && order.order_holds.length > 0) {
+      const orderHold = order.order_holds[0]; // Get the first order hold
+      return orderHold.delivery_fees || 0;
     }
-    // Fallback to order delivery_fee if API data not available
+
+    // Fallback to order delivery_fee if order_holds not available
     return order.delivery_fee || 0;
   };
 

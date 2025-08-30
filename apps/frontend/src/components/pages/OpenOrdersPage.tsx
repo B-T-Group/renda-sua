@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAccountInfo, useDeliveryFees } from '../../hooks';
+import { useAccountInfo } from '../../hooks';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import AvailableOrderCard from '../common/AvailableOrderCard';
@@ -39,7 +39,6 @@ const OpenOrdersPage: React.FC = () => {
     loading: accountLoading,
     error: accountError,
   } = useAccountInfo();
-  const { deliveryFees, getDeliveryFeeForCurrency } = useDeliveryFees();
 
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
 
@@ -225,14 +224,8 @@ const OpenOrdersPage: React.FC = () => {
                       <AgentOrderAlerts
                         order={order}
                         agentAccounts={accounts}
-                        deliveryFees={deliveryFees}
-                        getDeliveryFeeByCurrency={getDeliveryFeeForCurrency}
                       />
-                      <AvailableOrderCard
-                        order={order}
-                        deliveryFees={deliveryFees}
-                        getDeliveryFeeByCurrency={getDeliveryFeeForCurrency}
-                      />
+                      <AvailableOrderCard order={order} />
                     </Box>
                   ))}
                 </Box>

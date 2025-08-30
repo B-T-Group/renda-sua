@@ -93,6 +93,12 @@ export interface Order {
   business_location: BusinessLocation;
   delivery_address: Address;
   order_items: OrderItem[];
+  order_holds?: Array<{
+    id: string;
+    delivery_fees: number;
+    currency: string;
+    status: string;
+  }>;
   order_status_history?: Array<{
     id: string;
     order_id: string;

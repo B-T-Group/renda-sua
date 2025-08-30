@@ -838,6 +838,12 @@ export class OrdersService {
           current_status
           verified_agent_delivery
           created_at
+          order_holds {
+            id
+            delivery_fees
+            currency
+            status
+          }
           order_items {
             id
             item_name
