@@ -454,4 +454,135 @@ export class AdminService {
       : null;
     return { user: updatedUser, business: updatedBusiness };
   }
+
+  async getUserUploads(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }) {
+    const offset = (params.page - 1) * params.limit;
+
+    const query = `
+      query GetUserUploads($userId: uuid!, $limit: Int!, $offset: Int!) {
+        user_uploads(
+          where: { user_id: { _eq: $userId } }
+          order_by: { created_at: desc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          user_id
+          file_name
+          key
+          content_type
+          file_size
+          document_type_id
+          is_approved
+          note
+          created_at
+          updated_at
+          document_type {
+            id
+            name
+            description
+          }
+          user {
+            id
+            identifier
+            email
+            first_name
+            last_name
+          }
+        }
+        user_uploads_aggregate(where: { user_id: { _eq: $userId } }) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId: params.userId,
+      limit: params.limit,
+      offset,
+    });
+
+    const uploads = result.user_uploads || [];
+    const totalCount = result.user_uploads_aggregate?.aggregate?.count || 0;
+    const totalPages = Math.ceil(totalCount / params.limit);
+
+    return {
+      uploads,
+      pagination: {
+        page: params.page,
+        limit: params.limit,
+        total: totalCount,
+        totalPages,
+        hasNext: params.page < totalPages,
+        hasPrev: params.page > 1,
+      },
+    };
+  }
+
+  async getUserMessages(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }) {
+    const offset = (params.page - 1) * params.limit;
+
+    const query = `
+      query GetUserMessages($userId: uuid!, $limit: Int!, $offset: Int!) {
+        user_messages(
+          where: { user_id: { _eq: $userId } }
+          order_by: { created_at: desc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          user_id
+          entity_type
+          entity_id
+          message
+          created_at
+          updated_at
+          user {
+            id
+            identifier
+            email
+            first_name
+            last_name
+          }
+        }
+        user_messages_aggregate(where: { user_id: { _eq: $userId } }) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId: params.userId,
+      limit: params.limit,
+      offset,
+    });
+
+    const messages = result.messages || [];
+    const totalCount = result.messages_aggregate?.aggregate?.count || 0;
+    const totalPages = Math.ceil(totalCount / params.limit);
+
+    return {
+      messages,
+      pagination: {
+        page: params.page,
+        limit: params.limit,
+        total: totalCount,
+        totalPages,
+        hasNext: params.page < totalPages,
+        hasPrev: params.page > 1,
+      },
+    };
+  }
 }

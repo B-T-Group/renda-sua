@@ -294,6 +294,7 @@ const ManageOrderPage: React.FC = () => {
               {profile?.agent && (
                 <AgentActions
                   order={order}
+                  agentAccounts={accounts}
                   onActionComplete={() => refetch()}
                   onShowNotification={handleShowNotification}
                 />

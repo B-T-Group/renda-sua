@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -153,6 +154,50 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch businesses',
+      };
+    }
+  }
+
+  @Get('users/:id/uploads')
+  async getUserUploads(
+    @Param('id') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    try {
+      const result = await this.adminService.getUserUploads({
+        userId,
+        page: Number(page) || 1,
+        limit: Number(limit) || 10,
+      });
+      return { success: true, ...result };
+    } catch (error: any) {
+      console.error('Error fetching user uploads:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch user uploads',
+      };
+    }
+  }
+
+  @Get('users/:id/messages')
+  async getUserMessages(
+    @Param('id') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    try {
+      const result = await this.adminService.getUserMessages({
+        userId,
+        page: Number(page) || 1,
+        limit: Number(limit) || 10,
+      });
+      return { success: true, ...result };
+    } catch (error: any) {
+      console.error('Error fetching user messages:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch user messages',
       };
     }
   }

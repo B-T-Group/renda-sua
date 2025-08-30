@@ -10,10 +10,10 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useAdminUserMessages } from '../../hooks/useAdminUserMessages';
 import { useUserDetails } from '../../hooks/useUserDetails';
-import { useUserMessages } from '../../hooks/useUserMessages';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { UserMessageList } from '../common/UserMessageList';
+import AdminUserMessageList from '../common/AdminUserMessageList';
 
 const AdminUserMessagesPage: React.FC = () => {
   const { userType, userId } = useParams<{
@@ -22,7 +22,14 @@ const AdminUserMessagesPage: React.FC = () => {
   }>();
   const { profile: currentUser } = useUserProfile();
   const { loading: userLoading, userName } = useUserDetails(userId || '');
-  useUserMessages(userId);
+  const {
+    messages,
+    loading: messagesLoading,
+    error: messagesError,
+    pagination,
+    refetch,
+    loadPage,
+  } = useAdminUserMessages(userId || '');
 
   // Check if current user is admin
   const isAdmin =
@@ -76,7 +83,14 @@ const AdminUserMessagesPage: React.FC = () => {
                 <CircularProgress />
               </Box>
             ) : (
-              <UserMessageList />
+              <AdminUserMessageList
+                messages={messages}
+                loading={messagesLoading}
+                error={messagesError}
+                pagination={pagination}
+                onLoadPage={loadPage}
+                onRefresh={refetch}
+              />
             )}
           </CardContent>
         </Card>

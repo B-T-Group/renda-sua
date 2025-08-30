@@ -1,5 +1,5 @@
 import { Cancel, CheckCircle, LocalShipping } from '@mui/icons-material';
-import { Box, Button, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
@@ -18,6 +18,7 @@ interface AgentActionsProps {
 
 const AgentActions: React.FC<AgentActionsProps> = ({
   order,
+  agentAccounts = [],
   onActionComplete,
   onShowNotification,
 }) => {
@@ -25,6 +26,24 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const { profile } = useUserProfile();
   const agentOrders = useAgentOrders();
   const [loading, setLoading] = useState(false);
+
+  // Check if agent has sufficient funds to claim the order
+  const hasSufficientFunds = () => {
+    if (!agentAccounts?.length) return true; // Assume sufficient if no account data
+
+    // Calculate required hold amount (typically a percentage of total order amount)
+    const holdPercentage = 80; // 80% hold percentage - matches backend config
+    const requiredHoldAmount = (order.total_amount * holdPercentage) / 100;
+
+    // Check if agent has sufficient balance in the order's currency
+    const accountForCurrency = agentAccounts.find(
+      (account) => account.currency === order.currency
+    );
+
+    if (!accountForCurrency) return false; // No account for this currency
+
+    return accountForCurrency.available_balance >= requiredHoldAmount;
+  };
 
   const handlePickUp = async () => {
     if (!profile?.id) {
@@ -158,6 +177,13 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           action: handleClaim,
           color: 'primary' as const,
           icon: <CheckCircle />,
+          disabled: !hasSufficientFunds(),
+          tooltip: !hasSufficientFunds()
+            ? t(
+                'agent.orders.insufficientFunds',
+                'Insufficient funds to claim this order. Please top up your account.'
+              )
+            : undefined,
         });
         break;
 
@@ -244,19 +270,29 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         justifyContent: 'flex-end',
       }}
     >
-      {availableActions.map((action, index) => (
-        <Button
-          key={index}
-          variant="outlined"
-          color={action.color}
-          onClick={action.action}
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={16} /> : action.icon}
-          sx={{ minWidth: 120 }}
-        >
-          {action.label}
-        </Button>
-      ))}
+      {availableActions.map((action, index) => {
+        const button = (
+          <Button
+            key={index}
+            variant="outlined"
+            color={action.color}
+            onClick={action.action}
+            disabled={loading || action.disabled}
+            startIcon={loading ? <CircularProgress size={16} /> : action.icon}
+            sx={{ minWidth: 120 }}
+          >
+            {action.label}
+          </Button>
+        );
+
+        return action.tooltip ? (
+          <Tooltip key={index} title={action.tooltip}>
+            <span>{button}</span>
+          </Tooltip>
+        ) : (
+          button
+        );
+      })}
     </Box>
   );
 };

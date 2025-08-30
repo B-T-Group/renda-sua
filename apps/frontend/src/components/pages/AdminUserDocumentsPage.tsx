@@ -10,10 +10,10 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
-import { useDocumentManagement } from '../../hooks/useDocumentManagement';
+import { useAdminUserUploads } from '../../hooks/useAdminUserUploads';
 import { useUserDetails } from '../../hooks/useUserDetails';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { DocumentList } from '../common/DocumentList';
+import AdminUserUploadList from '../common/AdminUserUploadList';
 
 const AdminUserDocumentsPage: React.FC = () => {
   const { userType, userId } = useParams<{
@@ -23,14 +23,13 @@ const AdminUserDocumentsPage: React.FC = () => {
   const { profile: currentUser } = useUserProfile();
   const { loading: userLoading, userName } = useUserDetails(userId || '');
   const {
-    documents,
-    documentTypes,
-    loading: documentsLoading,
-    error: documentsError,
-    deleteDocument,
-    updateDocumentNote,
-    fetchDocuments,
-  } = useDocumentManagement();
+    uploads,
+    loading: uploadsLoading,
+    error: uploadsError,
+    pagination,
+    refetch,
+    loadPage,
+  } = useAdminUserUploads(userId || '');
 
   // Check if current user is admin
   const isAdmin =
@@ -76,7 +75,7 @@ const AdminUserDocumentsPage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Documents List */}
+        {/* Uploads List */}
         <Card>
           <CardContent>
             {userLoading ? (
@@ -84,14 +83,13 @@ const AdminUserDocumentsPage: React.FC = () => {
                 <CircularProgress />
               </Box>
             ) : (
-              <DocumentList
-                documents={documents}
-                documentTypes={documentTypes}
-                loading={documentsLoading}
-                error={documentsError}
-                onDelete={deleteDocument}
-                onUpdateNote={updateDocumentNote}
-                onRefresh={fetchDocuments}
+              <AdminUserUploadList
+                uploads={uploads}
+                loading={uploadsLoading}
+                error={uploadsError}
+                pagination={pagination}
+                onLoadPage={loadPage}
+                onRefresh={refetch}
               />
             )}
           </CardContent>
