@@ -5,9 +5,7 @@ import {
   HttpStatus,
   Post,
   Request,
-  UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,7 +17,6 @@ import { RatingsService } from './ratings.service';
 
 @ApiTags('ratings')
 @Controller('ratings')
-@UseGuards(AuthGuard('jwt'))
 @ApiBearerAuth()
 export class RatingsController {
   constructor(private readonly ratingsService: RatingsService) {}
