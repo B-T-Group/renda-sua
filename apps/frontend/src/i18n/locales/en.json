@@ -177,7 +177,10 @@
       "selectCategoryFirst": "Select a category first",
       "subCategory": "Sub Category",
       "loadingSubCategories": "Loading subcategories...",
-      "noSubCategories": "No subcategories available"
+      "noSubCategories": "No subcategories available",
+      "specialHandling": "Special Handling",
+      "fragile": "Fragile",
+      "perishable": "Perishable"
     },
     "inventory": {
       "title": "Inventory",
@@ -187,7 +190,10 @@
       "status": {
         "in_stock": "In Stock",
         "low_stock": "Low Stock",
-        "out_of_stock": "Out of Stock"
+        "out_of_stock": "Out of Stock",
+        "inStock": "In Stock",
+        "lowStock": "Low Stock",
+        "outOfStock": "Out of Stock"
       },
       "restock": "Restock",
       "updateInventory": "Update Inventory",

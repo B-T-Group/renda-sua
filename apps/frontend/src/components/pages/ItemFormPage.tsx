@@ -10,12 +10,14 @@ import {
   Container,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -23,7 +25,7 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CURRENCIES, SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
+import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import { useBrands } from '../../hooks/useBrands';
 import { useCategories } from '../../hooks/useCategory';
 import { CreateItemData, useItems } from '../../hooks/useItems';
@@ -36,8 +38,6 @@ interface ItemFormData {
   price: number;
   currency: string;
   sku: string;
-  size: number | null;
-  size_unit: string;
   weight: number | null;
   weight_unit: string;
   brand_id: string | null;
@@ -68,8 +68,6 @@ const ItemFormPage: React.FC = () => {
     price: 0,
     currency: 'XAF',
     sku: '',
-    size: null,
-    size_unit: 'cm',
     weight: null,
     weight_unit: 'g',
     brand_id: null,
@@ -88,6 +86,10 @@ const ItemFormPage: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
     null
   );
+
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<
+    number | null
+  >(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +184,7 @@ const ItemFormPage: React.FC = () => {
         ...prev,
         item_sub_category_id: categories[0].item_sub_categories[0].id,
       }));
+      setSelectedSubCategoryId(categories[0].item_sub_categories[0].id);
     }
   }, [categories, formData.item_sub_category_id, isEditMode]);
 
@@ -199,8 +202,6 @@ const ItemFormPage: React.FC = () => {
               price: foundItem.price || 0,
               currency: foundItem.currency || 'XAF',
               sku: foundItem.sku || '',
-              size: foundItem.size || null,
-              size_unit: foundItem.size_unit || 'cm',
               weight: foundItem.weight || null,
               weight_unit: foundItem.weight_unit || 'g',
               brand_id: foundItem.brand_id || null,
@@ -228,24 +229,6 @@ const ItemFormPage: React.FC = () => {
     }
   }, [isEditMode, itemId, profile?.business?.id, fetchSingleItem]);
 
-  // Set selected category when categories are loaded and we have an item_sub_category_id
-  useEffect(() => {
-    if (formData.item_sub_category_id && categories.length > 0) {
-      for (const category of categories) {
-        const subCategory = category.item_sub_categories.find(
-          (sub) => sub.id === formData.item_sub_category_id
-        );
-        if (subCategory) {
-          setSelectedCategoryId(category.id);
-          break;
-        }
-      }
-    } else if (!formData.item_sub_category_id) {
-      // Clear selected category if no subcategory is selected
-      setSelectedCategoryId(null);
-    }
-  }, [formData.item_sub_category_id, categories]);
-
   const handleInputChange = (field: keyof ItemFormData, value: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -269,7 +252,6 @@ const ItemFormPage: React.FC = () => {
         ...formData,
         business_id: profile.business.id,
         // Coerce nullable values to undefined to satisfy API requirements
-        size: formData.size ?? undefined,
         weight: formData.weight ?? undefined,
         brand_id: formData.brand_id ?? undefined,
         max_order_quantity: formData.max_order_quantity ?? undefined,
@@ -450,6 +432,7 @@ const ItemFormPage: React.FC = () => {
                     setSelectedCategoryId(categoryId);
                     // Clear subcategory when category changes
                     handleInputChange('item_sub_category_id', null);
+                    setSelectedSubCategoryId(null);
                   }}
                   label={t('business.items.category', 'Category')}
                 >
@@ -468,13 +451,16 @@ const ItemFormPage: React.FC = () => {
                   {t('business.items.subCategory', 'Sub Category')}
                 </InputLabel>
                 <Select
-                  value={formData.item_sub_category_id || ''}
-                  onChange={(e) =>
+                  value={selectedSubCategoryId || ''}
+                  onChange={(e) => {
                     handleInputChange(
                       'item_sub_category_id',
                       e.target.value as unknown as number
-                    )
-                  }
+                    );
+                    setSelectedSubCategoryId(
+                      e.target.value as unknown as number
+                    );
+                  }}
                   label={t('business.items.subCategory', 'Sub Category')}
                 >
                   {categoriesLoading && (
@@ -572,39 +558,6 @@ const ItemFormPage: React.FC = () => {
                 {t('business.items.specifications')}
               </Typography>
               <Divider sx={{ mb: 2 }} />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={t('business.items.size')}
-                type="number"
-                value={formData.size || ''}
-                onChange={(e) =>
-                  handleInputChange('size', parseFloat(e.target.value) || null)
-                }
-                disabled={loading}
-                inputProps={{ min: 0, step: 0.01 }}
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth disabled={loading}>
-                <InputLabel>{t('business.items.sizeUnit')}</InputLabel>
-                <Select
-                  value={formData.size_unit}
-                  onChange={(e) =>
-                    handleInputChange('size_unit', e.target.value)
-                  }
-                  label={t('business.items.sizeUnit')}
-                >
-                  {SIZE_UNITS.map((unit) => (
-                    <MenuItem key={unit} value={unit}>
-                      {unit.toUpperCase()}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -769,6 +722,67 @@ const ItemFormPage: React.FC = () => {
                   />
                 )}
               />
+            </Grid>
+
+            {/* Special Handling Properties */}
+            <Grid size={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                {t('business.items.specialHandling', 'Special Handling')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid size={12}>
+              <Stack
+                direction="row"
+                spacing={2}
+                sx={{ flexWrap: 'wrap', gap: 2 }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_fragile}
+                      onChange={(e) =>
+                        handleInputChange('is_fragile', e.target.checked)
+                      }
+                      disabled={loading}
+                    />
+                  }
+                  label={t('business.items.fragile', 'Fragile')}
+                />
+
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_perishable}
+                      onChange={(e) =>
+                        handleInputChange('is_perishable', e.target.checked)
+                      }
+                      disabled={loading}
+                    />
+                  }
+                  label={t('business.items.perishable', 'Perishable')}
+                />
+
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.requires_special_handling}
+                      onChange={(e) =>
+                        handleInputChange(
+                          'requires_special_handling',
+                          e.target.checked
+                        )
+                      }
+                      disabled={loading}
+                    />
+                  }
+                  label={t(
+                    'business.items.specialHandling',
+                    'Requires Special Handling'
+                  )}
+                />
+              </Stack>
             </Grid>
 
             {/* Order Settings */}
