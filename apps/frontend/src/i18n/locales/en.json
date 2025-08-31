@@ -182,6 +182,10 @@
       "fragile": "Fragile",
       "perishable": "Perishable"
     },
+    "orders": {
+      "preparingNotice": "👨‍🍳 Preparation in progress. Complete carefully and mark as \"Ready for Pickup\" to notify available agents.",
+      "paymentPendingNotice": "Customer payment is still pending. Order may be cancelled if payment is not received."
+    },
     "inventory": {
       "title": "Inventory",
       "tableView": "TableView",
@@ -363,12 +367,14 @@
       "specialInstructions": "Special Instructions",
       "status": "Status",
       "subtitle": "Manage and track all your customer orders",
+      "orderImage": "Order",
+      "manage": "Manage",
       "filters": {
         "search": "Search orders...",
         "status": "Status",
         "allStatuses": "All Statuses",
-        "dateFrom": "Date From",
-        "dateTo": "Date To",
+        "dateFrom": "From Date",
+        "dateTo": "To Date",
         "address": "Address"
       },
       "actions": {},
@@ -452,6 +458,30 @@
     }
   },
   "orders": {
+    "manage": "Manage",
+    "manageOrder": "Manage Order",
+    "manageOrderDescription": "View and manage order details",
+    "orderImage": "Order",
+    "completedAndCancelled": "Completed & Cancelled Orders",
+    "businessInfo": "Business Information",
+    "contact": "Contact",
+    "businessLocation": "Business Location",
+    "clientInfo": "Client Information",
+    "deliveryAddress": "Delivery Address",
+    "orderItems": "Order Items",
+    "category": "Category",
+    "availableActions": "Available Actions",
+    "confirmAction": "Confirm Action",
+    "createdAt": "Created",
+    "paymentMethod": "Payment Method",
+    "item": "item",
+    "filters": {
+      "search": "Search orders",
+      "status": "Status",
+      "allStatuses": "All Statuses",
+      "dateFrom": "From Date",
+      "dateTo": "To Date"
+    },
     "actions": {
       "cancel": "Cancel",
       "confirm": "Confirm",
@@ -514,7 +544,8 @@
     "markAsOutForDelivery": "Mark as Out for Delivery",
     "pickUpOrder": "Pick Up Order",
     "dropOrder": "Drop Order",
-    "viewHistory": "History"
+    "viewHistory": "History",
+    "completePreparation": "Complete Preparation"
   },
 
   "agent": {
@@ -767,7 +798,9 @@
   },
   "orderHistory": {
     "title": "Order History",
-    "noHistory": "No order history available."
+    "noHistory": "No order history available.",
+    "fromStatus": "From",
+    "changedBy": "Changed by"
   },
   "rating": {
     "dialog": {
