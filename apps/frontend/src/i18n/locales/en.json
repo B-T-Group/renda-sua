@@ -311,7 +311,12 @@
       "existingInventoryLoaded": "Existing inventory data loaded for {{locationName}}",
       "sku": "SKU",
       "category": "Category",
-      "pricing": "Pricing"
+      "pricing": "Pricing",
+      "minOrderQuantity": "Min Order Quantity",
+      "maxOrderQuantity": "Max Order Quantity",
+      "material": "Material",
+      "editItem": "Edit Item",
+      "basicInformation": "Basic Information"
     },
     "locations": {
       "title": "Locations",

@@ -248,28 +248,40 @@ const ItemFormPage: React.FC = () => {
     setError(null);
 
     try {
-      const itemData = {
-        ...formData,
-        business_id: profile.business.id,
-        // Coerce nullable values to undefined to satisfy API requirements
-        weight: formData.weight ?? undefined,
-        brand_id: formData.brand_id ?? undefined,
-        max_order_quantity: formData.max_order_quantity ?? undefined,
-        item_sub_category_id: (formData.item_sub_category_id ??
-          categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
-      };
-
       let result;
       if (isEditMode && itemId) {
+        // For updates, exclude business_id as it's not allowed in items_set_input
+        const updateData = {
+          ...formData,
+          // Coerce nullable values to undefined to satisfy API requirements
+          weight: formData.weight ?? undefined,
+          brand_id: formData.brand_id ?? undefined,
+          max_order_quantity: formData.max_order_quantity ?? undefined,
+          item_sub_category_id: (formData.item_sub_category_id ??
+            categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
+        };
+
         result = await updateItem(
           itemId,
-          itemData as unknown as Partial<CreateItemData>
+          updateData as unknown as Partial<CreateItemData>
         );
         enqueueSnackbar(t('business.items.itemUpdated'), {
           variant: 'success',
         });
       } else {
-        result = await createItem(itemData as unknown as CreateItemData);
+        // For creation, include business_id
+        const createData = {
+          ...formData,
+          business_id: profile.business.id,
+          // Coerce nullable values to undefined to satisfy API requirements
+          weight: formData.weight ?? undefined,
+          brand_id: formData.brand_id ?? undefined,
+          max_order_quantity: formData.max_order_quantity ?? undefined,
+          item_sub_category_id: (formData.item_sub_category_id ??
+            categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
+        };
+
+        result = await createItem(createData as unknown as CreateItemData);
         enqueueSnackbar(t('business.items.itemCreated'), {
           variant: 'success',
         });
