@@ -4,6 +4,7 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Container,
@@ -21,8 +22,8 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { CURRENCIES } from '../../constants/enums';
+import { useNavigate, useParams } from 'react-router-dom';
+import { CURRENCIES, SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
 import { useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
@@ -52,17 +53,20 @@ interface ItemFormData {
   is_active: boolean;
 }
 
-const AddItemPage: React.FC = () => {
+const ItemFormPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { itemId } = useParams<{ itemId: string }>();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfile();
+
+  const isEditMode = !!itemId;
 
   const [formData, setFormData] = useState<ItemFormData>({
     name: '',
     description: '',
     price: 0,
-    currency: 'USD',
+    currency: 'XAF',
     sku: '',
     size: null,
     size_unit: 'cm',
@@ -70,7 +74,7 @@ const AddItemPage: React.FC = () => {
     weight_unit: 'g',
     brand_id: null,
     model: '',
-    color: '',
+    color: '#000000',
     material: '',
     is_fragile: false,
     is_perishable: false,
@@ -85,13 +89,62 @@ const AddItemPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [item, setItem] = useState<any>(null);
+
+  // Default material types for autocomplete
+  const defaultMaterials = [
+    'Cotton',
+    'Polyester',
+    'Wool',
+    'Silk',
+    'Linen',
+    'Denim',
+    'Leather',
+    'Suede',
+    'Canvas',
+    'Nylon',
+    'Acrylic',
+    'Cashmere',
+    'Velvet',
+    'Satin',
+    'Chiffon',
+    'Tweed',
+    'Corduroy',
+    'Fleece',
+    'Mesh',
+    'Spandex',
+    'Bamboo',
+    'Hemp',
+    'Jute',
+    'Rayon',
+    'Viscose',
+    'Metal',
+    'Plastic',
+    'Wood',
+    'Glass',
+    'Ceramic',
+    'Stone',
+    'Marble',
+    'Granite',
+    'Aluminum',
+    'Steel',
+    'Copper',
+    'Brass',
+    'Bronze',
+    'Iron',
+    'Titanium',
+  ];
 
   const {
+    brands,
     itemSubCategories,
+    loading: dataLoading,
     error: dataError,
     fetchBrands,
     fetchItemSubCategories,
+    fetchSingleItem,
     createItem,
+    updateItem,
   } = useItems(profile?.business?.id);
 
   useEffect(() => {
@@ -99,11 +152,12 @@ const AddItemPage: React.FC = () => {
       fetchBrands();
       fetchItemSubCategories();
     }
-  }, [profile?.business?.id]);
+  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
 
-  // Auto-select a default subcategory if none chosen (Option A)
+  // Auto-select a default subcategory if none chosen (for add mode)
   useEffect(() => {
     if (
+      !isEditMode &&
       !formData.item_sub_category_id &&
       itemSubCategories &&
       itemSubCategories.length > 0
@@ -113,7 +167,53 @@ const AddItemPage: React.FC = () => {
         item_sub_category_id: itemSubCategories[0].id,
       }));
     }
-  }, [itemSubCategories, formData.item_sub_category_id]);
+  }, [itemSubCategories, formData.item_sub_category_id, isEditMode]);
+
+  // Fetch item data for edit mode
+  useEffect(() => {
+    if (isEditMode && itemId && profile?.business?.id) {
+      const fetchItem = async () => {
+        try {
+          const foundItem = await fetchSingleItem(itemId);
+          if (foundItem) {
+            setItem(foundItem);
+            setFormData({
+              name: foundItem.name || '',
+              description: foundItem.description || '',
+              price: foundItem.price || 0,
+              currency: foundItem.currency || 'XAF',
+              sku: foundItem.sku || '',
+              size: foundItem.size || null,
+              size_unit: foundItem.size_unit || 'cm',
+              weight: foundItem.weight || null,
+              weight_unit: foundItem.weight_unit || 'g',
+              brand_id: foundItem.brand_id || null,
+              model: foundItem.model || '',
+              color: foundItem.color || '#000000',
+              material: foundItem.material || '',
+              is_fragile: foundItem.is_fragile || false,
+              is_perishable: foundItem.is_perishable || false,
+              requires_special_handling:
+                foundItem.requires_special_handling || false,
+              max_delivery_distance: foundItem.max_delivery_distance || null,
+              estimated_delivery_time:
+                foundItem.estimated_delivery_time || null,
+              min_order_quantity: foundItem.min_order_quantity || 1,
+              max_order_quantity: foundItem.max_order_quantity || null,
+              item_sub_category_id: foundItem.item_sub_category_id || null,
+              is_active:
+                foundItem.is_active !== undefined ? foundItem.is_active : true,
+            });
+          }
+        } catch (err) {
+          setError('Failed to fetch item details');
+          console.error('Error fetching item:', err);
+        }
+      };
+
+      fetchItem();
+    }
+  }, [isEditMode, itemId, profile?.business?.id, fetchSingleItem]);
 
   const handleInputChange = (field: keyof ItemFormData, value: any) => {
     setFormData((prev) => ({
@@ -137,7 +237,7 @@ const AddItemPage: React.FC = () => {
       const itemData = {
         ...formData,
         business_id: profile.business.id,
-        // Coerce nullable values to undefined to satisfy CreateItemData
+        // Coerce nullable values to undefined to satisfy API requirements
         size: formData.size ?? undefined,
         weight: formData.weight ?? undefined,
         brand_id: formData.brand_id ?? undefined,
@@ -148,17 +248,26 @@ const AddItemPage: React.FC = () => {
           itemSubCategories?.[0]?.id) as number,
       };
 
-      const newItem = await createItem(itemData);
-
-      enqueueSnackbar(t('business.items.itemCreated'), {
-        variant: 'success',
-      });
+      let result;
+      if (isEditMode && itemId) {
+        result = await updateItem(itemId, itemData);
+        enqueueSnackbar(t('business.items.itemUpdated'), {
+          variant: 'success',
+        });
+      } else {
+        result = await createItem(itemData);
+        enqueueSnackbar(t('business.items.itemCreated'), {
+          variant: 'success',
+        });
+      }
 
       // Redirect to the item view page
-      navigate(`/business/items/${newItem.id}`);
+      navigate(`/business/items/${result.id}`);
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Failed to create item';
+        err instanceof Error
+          ? err.message
+          : `Failed to ${isEditMode ? 'update' : 'create'} item`;
       setError(errorMessage);
       enqueueSnackbar(errorMessage, {
         variant: 'error',
@@ -180,12 +289,39 @@ const AddItemPage: React.FC = () => {
     );
   }
 
+  if (isEditMode && dataLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="400px"
+        >
+          <Typography>Loading item details...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <SEOHead
-        title={t('business.items.addItem')}
-        description="Add a new item to your business catalog"
-        keywords="add item, create item, business catalog"
+        title={
+          isEditMode
+            ? t('business.items.editItem')
+            : t('business.items.addItem')
+        }
+        description={
+          isEditMode
+            ? 'Edit item details in your business catalog'
+            : 'Add a new item to your business catalog'
+        }
+        keywords={
+          isEditMode
+            ? 'edit item, update item, business catalog'
+            : 'add item, create item, business catalog'
+        }
       />
 
       {/* Header */}
@@ -199,11 +335,15 @@ const AddItemPage: React.FC = () => {
             {t('common.back')}
           </Button>
           <Typography variant="h4" component="h1">
-            {t('business.items.addItem')}
+            {isEditMode
+              ? t('business.items.editItem')
+              : t('business.items.addItem')}
           </Typography>
         </Stack>
         <Typography variant="body1" color="text.secondary">
-          {t('business.items.addItemDescription')}
+          {isEditMode
+            ? t('business.items.editItemDescription')
+            : t('business.items.addItemDescription')}
         </Typography>
       </Box>
 
@@ -321,14 +461,22 @@ const AddItemPage: React.FC = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={t('business.items.sizeUnit')}
-                value={formData.size_unit}
-                onChange={(e) => handleInputChange('size_unit', e.target.value)}
-                disabled={loading}
-                defaultValue="cm"
-              />
+              <FormControl fullWidth disabled={loading}>
+                <InputLabel>{t('business.items.sizeUnit')}</InputLabel>
+                <Select
+                  value={formData.size_unit}
+                  onChange={(e) =>
+                    handleInputChange('size_unit', e.target.value)
+                  }
+                  label={t('business.items.sizeUnit')}
+                >
+                  {SIZE_UNITS.map((unit) => (
+                    <MenuItem key={unit} value={unit}>
+                      {unit.toUpperCase()}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -349,16 +497,22 @@ const AddItemPage: React.FC = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label={t('business.items.weightUnit')}
-                value={formData.weight_unit}
-                onChange={(e) =>
-                  handleInputChange('weight_unit', e.target.value)
-                }
-                disabled={loading}
-                defaultValue="g"
-              />
+              <FormControl fullWidth disabled={loading}>
+                <InputLabel>{t('business.items.weightUnit')}</InputLabel>
+                <Select
+                  value={formData.weight_unit}
+                  onChange={(e) =>
+                    handleInputChange('weight_unit', e.target.value)
+                  }
+                  label={t('business.items.weightUnit')}
+                >
+                  {WEIGHT_UNITS.map((unit) => (
+                    <MenuItem key={unit} value={unit}>
+                      {unit.toUpperCase()}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             <Grid size={12}>
@@ -375,19 +529,38 @@ const AddItemPage: React.FC = () => {
               <TextField
                 fullWidth
                 label={t('business.items.color')}
+                type="color"
                 value={formData.color}
                 onChange={(e) => handleInputChange('color', e.target.value)}
                 disabled={loading}
+                sx={{
+                  '& input[type="color"]': {
+                    height: '56px',
+                    cursor: 'pointer',
+                  },
+                }}
               />
             </Grid>
 
             <Grid size={12}>
-              <TextField
-                fullWidth
-                label={t('business.items.material')}
+              <Autocomplete
+                freeSolo
+                options={defaultMaterials}
                 value={formData.material}
-                onChange={(e) => handleInputChange('material', e.target.value)}
-                disabled={loading}
+                onChange={(_, newValue) =>
+                  handleInputChange('material', newValue || '')
+                }
+                onInputChange={(_, newInputValue) =>
+                  handleInputChange('material', newInputValue)
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label={t('business.items.material')}
+                    disabled={loading}
+                  />
+                )}
               />
             </Grid>
 
@@ -466,6 +639,8 @@ const AddItemPage: React.FC = () => {
                 >
                   {loading
                     ? t('common.saving')
+                    : isEditMode
+                    ? t('business.items.updateItem')
                     : t('business.items.createItem')}
                 </Button>
               </Box>
@@ -477,4 +652,4 @@ const AddItemPage: React.FC = () => {
   );
 };
 
-export default AddItemPage;
+export default ItemFormPage;

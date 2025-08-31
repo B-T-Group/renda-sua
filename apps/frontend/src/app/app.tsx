@@ -11,7 +11,6 @@ import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
-import AddItemPage from '../components/pages/AddItemPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -22,7 +21,8 @@ import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
-import EditItemPage from '../components/pages/EditItemPage';
+import ItemFormPage from '../components/pages/ItemFormPage';
+
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
@@ -221,12 +221,12 @@ function App() {
               }
             />
 
-            {/* Add Item route */}
+            {/* Item Form route - handles both add and edit */}
             <Route
               path="/business/items/add"
               element={
                 <ProtectedRoute>
-                  <AddItemPage />
+                  <ItemFormPage />
                 </ProtectedRoute>
               }
             />
@@ -236,7 +236,7 @@ function App() {
               path="/business/items/edit/:itemId"
               element={
                 <ProtectedRoute>
-                  <EditItemPage />
+                  <ItemFormPage />
                 </ProtectedRoute>
               }
             />
