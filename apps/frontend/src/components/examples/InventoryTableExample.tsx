@@ -29,8 +29,7 @@ export default function InventoryTableExample() {
       weight: 0.5,
       weight_unit: 'kg',
       color: 'Brown',
-      max_delivery_distance: 25,
-      estimated_delivery_time: 2,
+
       created_at: '2024-01-15T10:30:00Z',
       updated_at: '2024-01-15T10:30:00Z',
       business_id: 'business-1',
@@ -70,8 +69,7 @@ export default function InventoryTableExample() {
       weight: 2.5,
       weight_unit: 'kg',
       color: 'White',
-      max_delivery_distance: 15,
-      estimated_delivery_time: 3,
+
       created_at: '2024-01-14T14:20:00Z',
       updated_at: '2024-01-14T14:20:00Z',
       business_id: 'business-1',
@@ -111,8 +109,7 @@ export default function InventoryTableExample() {
       weight: 0.3,
       weight_unit: 'kg',
       color: 'Golden',
-      max_delivery_distance: 10,
-      estimated_delivery_time: 1,
+
       created_at: '2024-01-13T08:45:00Z',
       updated_at: '2024-01-13T08:45:00Z',
       business_id: 'business-1',

@@ -24,7 +24,9 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
-import { useItems } from '../../hooks/useItems';
+import { useBrands } from '../../hooks/useBrands';
+import { useCategories } from '../../hooks/useCategory';
+import { CreateItemData, useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
 
@@ -45,8 +47,6 @@ interface ItemFormData {
   is_fragile: boolean;
   is_perishable: boolean;
   requires_special_handling: boolean;
-  max_delivery_distance: number | null;
-  estimated_delivery_time: number | null;
   min_order_quantity: number;
   max_order_quantity: number | null;
   item_sub_category_id: number | null;
@@ -79,13 +79,15 @@ const ItemFormPage: React.FC = () => {
     is_fragile: false,
     is_perishable: false,
     requires_special_handling: false,
-    max_delivery_distance: null,
-    estimated_delivery_time: null,
     min_order_quantity: 1,
     max_order_quantity: 1,
     item_sub_category_id: null,
     is_active: true,
   });
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    null
+  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,38 +138,52 @@ const ItemFormPage: React.FC = () => {
   ];
 
   const {
-    brands,
-    itemSubCategories,
+    brands: brandsFromItems,
     loading: dataLoading,
     error: dataError,
-    fetchBrands,
-    fetchItemSubCategories,
+    fetchBrands: fetchBrandsFromItems,
     fetchSingleItem,
     createItem,
     updateItem,
   } = useItems(profile?.business?.id);
 
+  const {
+    brands,
+    loading: brandsLoading,
+    error: brandsError,
+    fetchBrands,
+    createBrand,
+  } = useBrands();
+
+  const {
+    categories,
+    loading: categoriesLoading,
+    error: categoriesError,
+    getSubCategoriesByCategory,
+  } = useCategories();
+
   useEffect(() => {
     if (profile?.business?.id) {
-      fetchBrands();
-      fetchItemSubCategories();
+      fetchBrandsFromItems();
     }
-  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
+  }, [profile?.business?.id, fetchBrandsFromItems]);
 
   // Auto-select a default subcategory if none chosen (for add mode)
   useEffect(() => {
     if (
       !isEditMode &&
       !formData.item_sub_category_id &&
-      itemSubCategories &&
-      itemSubCategories.length > 0
+      categories &&
+      categories.length > 0 &&
+      categories[0].item_sub_categories &&
+      categories[0].item_sub_categories.length > 0
     ) {
       setFormData((prev) => ({
         ...prev,
-        item_sub_category_id: itemSubCategories[0].id,
+        item_sub_category_id: categories[0].item_sub_categories[0].id,
       }));
     }
-  }, [itemSubCategories, formData.item_sub_category_id, isEditMode]);
+  }, [categories, formData.item_sub_category_id, isEditMode]);
 
   // Fetch item data for edit mode
   useEffect(() => {
@@ -195,9 +211,6 @@ const ItemFormPage: React.FC = () => {
               is_perishable: foundItem.is_perishable || false,
               requires_special_handling:
                 foundItem.requires_special_handling || false,
-              max_delivery_distance: foundItem.max_delivery_distance || null,
-              estimated_delivery_time:
-                foundItem.estimated_delivery_time || null,
               min_order_quantity: foundItem.min_order_quantity || 1,
               max_order_quantity: foundItem.max_order_quantity || null,
               item_sub_category_id: foundItem.item_sub_category_id || null,
@@ -214,6 +227,24 @@ const ItemFormPage: React.FC = () => {
       fetchItem();
     }
   }, [isEditMode, itemId, profile?.business?.id, fetchSingleItem]);
+
+  // Set selected category when categories are loaded and we have an item_sub_category_id
+  useEffect(() => {
+    if (formData.item_sub_category_id && categories.length > 0) {
+      for (const category of categories) {
+        const subCategory = category.item_sub_categories.find(
+          (sub) => sub.id === formData.item_sub_category_id
+        );
+        if (subCategory) {
+          setSelectedCategoryId(category.id);
+          break;
+        }
+      }
+    } else if (!formData.item_sub_category_id) {
+      // Clear selected category if no subcategory is selected
+      setSelectedCategoryId(null);
+    }
+  }, [formData.item_sub_category_id, categories]);
 
   const handleInputChange = (field: keyof ItemFormData, value: any) => {
     setFormData((prev) => ({
@@ -241,21 +272,22 @@ const ItemFormPage: React.FC = () => {
         size: formData.size ?? undefined,
         weight: formData.weight ?? undefined,
         brand_id: formData.brand_id ?? undefined,
-        max_delivery_distance: formData.max_delivery_distance ?? undefined,
-        estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
         max_order_quantity: formData.max_order_quantity ?? undefined,
         item_sub_category_id: (formData.item_sub_category_id ??
-          itemSubCategories?.[0]?.id) as number,
+          categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
       };
 
       let result;
       if (isEditMode && itemId) {
-        result = await updateItem(itemId, itemData);
+        result = await updateItem(
+          itemId,
+          itemData as unknown as Partial<CreateItemData>
+        );
         enqueueSnackbar(t('business.items.itemUpdated'), {
           variant: 'success',
         });
       } else {
-        result = await createItem(itemData);
+        result = await createItem(itemData as unknown as CreateItemData);
         enqueueSnackbar(t('business.items.itemCreated'), {
           variant: 'success',
         });
@@ -281,10 +313,12 @@ const ItemFormPage: React.FC = () => {
     navigate('/business/items');
   };
 
-  if (dataError) {
+  if (dataError || brandsError || categoriesError) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">{dataError}</Alert>
+        <Alert severity="error">
+          {dataError || brandsError || categoriesError}
+        </Alert>
       </Container>
     );
   }
@@ -394,6 +428,100 @@ const ItemFormPage: React.FC = () => {
                 required
                 disabled={loading}
               />
+            </Grid>
+
+            {/* Category Selection */}
+            <Grid size={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                {t('business.items.category', 'Category')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth disabled={loading || categoriesLoading}>
+                <InputLabel>
+                  {t('business.items.category', 'Category')}
+                </InputLabel>
+                <Select
+                  value={selectedCategoryId || ''}
+                  onChange={(e) => {
+                    const categoryId = e.target.value;
+                    setSelectedCategoryId(categoryId);
+                    // Clear subcategory when category changes
+                    handleInputChange('item_sub_category_id', null);
+                  }}
+                  label={t('business.items.category', 'Category')}
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth disabled={loading || categoriesLoading}>
+                <InputLabel>
+                  {t('business.items.subCategory', 'Sub Category')}
+                </InputLabel>
+                <Select
+                  value={formData.item_sub_category_id || ''}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'item_sub_category_id',
+                      e.target.value as unknown as number
+                    )
+                  }
+                  label={t('business.items.subCategory', 'Sub Category')}
+                >
+                  {categoriesLoading && (
+                    <MenuItem value="" disabled>
+                      {t(
+                        'business.items.loadingSubCategories',
+                        'Loading subcategories...'
+                      )}
+                    </MenuItem>
+                  )}
+                  {!categoriesLoading && !selectedCategoryId && (
+                    <MenuItem value="" disabled>
+                      {t(
+                        'business.items.selectCategoryFirst',
+                        'Select a category first'
+                      )}
+                    </MenuItem>
+                  )}
+                  {!categoriesLoading &&
+                    selectedCategoryId &&
+                    getSubCategoriesByCategory(selectedCategoryId).length ===
+                      0 && (
+                      <MenuItem value="" disabled>
+                        {t(
+                          'business.items.noSubCategories',
+                          'No subcategories available'
+                        )}
+                      </MenuItem>
+                    )}
+                  {!categoriesLoading && selectedCategoryId
+                    ? getSubCategoriesByCategory(selectedCategoryId).map(
+                        (subCategory) => (
+                          <MenuItem key={subCategory.id} value={subCategory.id}>
+                            {subCategory.name}
+                          </MenuItem>
+                        )
+                      )
+                    : !categoriesLoading &&
+                      categories.flatMap((category) =>
+                        category.item_sub_categories.map((subCategory) => (
+                          <MenuItem key={subCategory.id} value={subCategory.id}>
+                            {subCategory.name}
+                          </MenuItem>
+                        ))
+                      )}
+                </Select>
+              </FormControl>
             </Grid>
 
             {/* Pricing */}
@@ -526,6 +654,85 @@ const ItemFormPage: React.FC = () => {
             </Grid>
 
             <Grid size={12}>
+              <Autocomplete
+                freeSolo
+                options={brands}
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') {
+                    return option;
+                  }
+                  return option.name;
+                }}
+                value={
+                  brands.find((brand) => brand.id === formData.brand_id) || null
+                }
+                onChange={async (_, newValue) => {
+                  if (typeof newValue === 'string' && newValue.trim()) {
+                    // User typed a new brand name
+                    try {
+                      const newBrand = await createBrand({
+                        name: newValue.trim(),
+                      });
+                      handleInputChange(
+                        'brand_id',
+                        newBrand.id as unknown as string
+                      );
+                    } catch (err) {
+                      console.error('Failed to create brand:', err);
+                      // Keep the brand_id as null if creation fails
+                      handleInputChange('brand_id', null as unknown as string);
+                    }
+                  } else if (newValue && typeof newValue === 'object') {
+                    // User selected an existing brand
+                    handleInputChange(
+                      'brand_id',
+                      newValue.id as unknown as string
+                    );
+                  } else {
+                    // User cleared the selection
+                    handleInputChange('brand_id', null);
+                  }
+                }}
+                onInputChange={(_, newInputValue) => {
+                  // This handles the case where user types but doesn't select/create
+                  // We don't need to do anything here as the onChange will handle selection/creation
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label={t('business.items.brand')}
+                    disabled={loading || brandsLoading}
+                    helperText={
+                      brandsLoading
+                        ? 'Loading brands...'
+                        : 'Type to search or create a new brand'
+                    }
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props}>
+                    <Box>
+                      <Typography variant="body1">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={brandsLoading}
+                filterOptions={(options, { inputValue }) => {
+                  const filtered = options.filter((option) =>
+                    option.name.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                  return filtered;
+                }}
+              />
+            </Grid>
+
+            <Grid size={12}>
               <TextField
                 fullWidth
                 label={t('business.items.color')}
@@ -587,7 +794,6 @@ const ItemFormPage: React.FC = () => {
                 required
                 disabled={loading}
                 inputProps={{ min: 1 }}
-                defaultValue={1}
               />
             </Grid>
 

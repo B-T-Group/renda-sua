@@ -207,20 +207,6 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
 
             {/* Delivery Information */}
             <Box sx={{ mb: 2 }}>
-              {selectedItem.item.estimated_delivery_time && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('orders.estimatedDelivery', 'Estimated Delivery')}:{' '}
-                  {selectedItem.item.estimated_delivery_time}{' '}
-                  {t('common.minutes', 'minutes')}
-                </Typography>
-              )}
-              {selectedItem.item.max_delivery_distance && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('orders.maxDeliveryDistance', 'Max Delivery Distance')}:{' '}
-                  {selectedItem.item.max_delivery_distance}{' '}
-                  {t('common.km', 'km')}
-                </Typography>
-              )}
               {selectedItem.item.min_order_quantity &&
                 selectedItem.item.min_order_quantity > 1 && (
                   <Typography variant="body2" color="text.secondary">

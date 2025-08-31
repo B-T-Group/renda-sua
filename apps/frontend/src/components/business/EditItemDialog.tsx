@@ -85,8 +85,7 @@ export default function EditItemDialog({
         is_fragile: item.is_fragile,
         is_perishable: item.is_perishable,
         requires_special_handling: item.requires_special_handling,
-        max_delivery_distance: item.max_delivery_distance,
-        estimated_delivery_time: item.estimated_delivery_time,
+
         min_order_quantity: item.min_order_quantity,
         max_order_quantity: item.max_order_quantity,
         is_active: item.is_active,
@@ -135,21 +134,6 @@ export default function EditItemDialog({
       );
     }
 
-    if (formData.max_delivery_distance && formData.max_delivery_distance <= 0) {
-      errors.maxDeliveryDistance = t(
-        'business.inventory.maxDeliveryDistanceInvalid'
-      );
-    }
-
-    if (
-      formData.estimated_delivery_time &&
-      formData.estimated_delivery_time <= 0
-    ) {
-      errors.estimatedDeliveryTime = t(
-        'business.inventory.estimatedDeliveryTimeInvalid'
-      );
-    }
-
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -194,9 +178,9 @@ export default function EditItemDialog({
         model: formData.model ?? undefined,
         color: formData.color ?? undefined,
         material: formData.material ?? undefined,
+        max_order_quantity: formData.max_order_quantity ?? undefined,
         max_delivery_distance: formData.max_delivery_distance ?? undefined,
         estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
-        max_order_quantity: formData.max_order_quantity ?? undefined,
       };
 
       await updateItem(item.id, updateData);
@@ -591,48 +575,6 @@ export default function EditItemDialog({
                   error={!!validationErrors.maxOrderQuantity}
                   helperText={validationErrors.maxOrderQuantity}
                   inputProps={{ min: 1 }}
-                />
-              </Stack>
-            </Box>
-
-            {/* Delivery Properties */}
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                {t('business.inventory.deliveryProperties')}
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label={t('business.inventory.maxDeliveryDistance')}
-                  value={formData.max_delivery_distance || ''}
-                  onChange={(e) =>
-                    handleInputChange(
-                      'max_delivery_distance',
-                      parseFloat(e.target.value) || undefined
-                    )
-                  }
-                  error={!!validationErrors.maxDeliveryDistance}
-                  helperText={validationErrors.maxDeliveryDistance}
-                  inputProps={{ min: 0, step: 0.1 }}
-                />
-
-                <TextField
-                  fullWidth
-                  type="number"
-                  label={t('business.inventory.estimatedDeliveryTime')}
-                  value={formData.estimated_delivery_time || ''}
-                  onChange={(e) =>
-                    handleInputChange(
-                      'estimated_delivery_time',
-                      parseFloat(e.target.value) || undefined
-                    )
-                  }
-                  error={!!validationErrors.estimatedDeliveryTime}
-                  helperText={validationErrors.estimatedDeliveryTime}
-                  inputProps={{ min: 0, step: 0.5 }}
                 />
               </Stack>
             </Box>

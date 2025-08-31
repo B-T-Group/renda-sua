@@ -173,7 +173,11 @@
         "category": "Category",
         "status": "Status"
       },
-      "noItems": "No items"
+      "noItems": "No items",
+      "selectCategoryFirst": "Select a category first",
+      "subCategory": "Sub Category",
+      "loadingSubCategories": "Loading subcategories...",
+      "noSubCategories": "No subcategories available"
     },
     "inventory": {
       "title": "Inventory",
@@ -620,7 +624,9 @@
     "transactionHistory": "Transaction History",
     "noTransactions": "No transactions found",
     "subscriptionConnected": "Subscription Connected",
-    "summary": "Summary"
+    "summary": "Summary",
+    "viewTransactions": "View Transactions",
+    "loadMore": "Load More"
   },
   "auth": {
     "profile": "Profile",

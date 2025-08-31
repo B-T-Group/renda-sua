@@ -58,8 +58,7 @@ const adaptItemToInventoryItem = (item: Item): InventoryItem => {
       is_fragile: item.is_fragile,
       is_perishable: item.is_perishable,
       requires_special_handling: item.requires_special_handling,
-      max_delivery_distance: item.max_delivery_distance || 0,
-      estimated_delivery_time: item.estimated_delivery_time || 0,
+
       min_order_quantity: item.min_order_quantity,
       max_order_quantity: item.max_order_quantity || 0,
       is_active: item.is_active,

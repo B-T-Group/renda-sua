@@ -206,13 +206,6 @@ export default function InventoryDataGrid({
         const item = params.row;
         const properties = [];
 
-        if (item.max_delivery_distance) {
-          properties.push(`${item.max_delivery_distance}km`);
-        }
-        if (item.estimated_delivery_time) {
-          properties.push(`${item.estimated_delivery_time}h`);
-        }
-
         return (
           <Stack spacing={0.5}>
             {properties.length > 0 ? (

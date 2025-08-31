@@ -108,13 +108,6 @@ export default function InventoryTable({
   const getDeliveryProperties = (item: Item) => {
     const properties = [];
 
-    if (item.max_delivery_distance) {
-      properties.push(`${item.max_delivery_distance}km`);
-    }
-    if (item.estimated_delivery_time) {
-      properties.push(`${item.estimated_delivery_time}h`);
-    }
-
     return properties;
   };
 

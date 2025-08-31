@@ -21,20 +21,9 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
     return order.total_amount || 0;
   };
 
-  const getEstimatedDeliveryTime = () => {
-    if (order.estimated_delivery_time) {
-      return new Date(order.estimated_delivery_time).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }
-    return null;
-  };
-
   const getAlertsForStatus = () => {
     const alerts = [];
     const orderTotal = getOrderTotal();
-    const estimatedTime = getEstimatedDeliveryTime();
 
     switch (order.current_status) {
       case 'pending':
@@ -54,11 +43,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           severity: 'success' as const,
           message: t(
             'client.orders.confirmedNotice',
-            `✅ Great news! Your order has been confirmed and preparation has begun. ${
-              estimatedTime
-                ? `Estimated delivery: ${estimatedTime}`
-                : "You'll receive updates as it progresses."
-            }`
+            `✅ Great news! Your order has been confirmed and preparation has begun. You'll receive updates as it progresses.`
           ),
         });
         break;

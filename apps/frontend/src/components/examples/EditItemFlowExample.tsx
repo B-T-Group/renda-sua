@@ -33,8 +33,7 @@ const mockItem = {
   is_fragile: false,
   is_perishable: false,
   requires_special_handling: false,
-  max_delivery_distance: 50,
-  estimated_delivery_time: 2,
+
   min_order_quantity: 1,
   max_order_quantity: 10,
   is_active: true,
@@ -157,20 +156,6 @@ const EditItemFlowExample: React.FC = () => {
                 {mockItem.max_order_quantity && (
                   <Chip
                     label={`Max Order: ${mockItem.max_order_quantity}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
-                {mockItem.max_delivery_distance && (
-                  <Chip
-                    label={`Max Delivery: ${mockItem.max_delivery_distance}km`}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
-                {mockItem.estimated_delivery_time && (
-                  <Chip
-                    label={`Delivery Time: ${mockItem.estimated_delivery_time}h`}
                     size="small"
                     variant="outlined"
                   />
