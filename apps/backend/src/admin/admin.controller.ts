@@ -201,4 +201,18 @@ export class AdminController {
       };
     }
   }
+
+  @Get('users/:id')
+  async getUserDetails(@Param('id') userId: string) {
+    try {
+      const result = await this.adminService.getUserDetails(userId);
+      return { success: true, user: result };
+    } catch (error: any) {
+      console.error('Error fetching user details:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch user details',
+      };
+    }
+  }
 }

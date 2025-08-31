@@ -569,8 +569,8 @@ export class AdminService {
       offset,
     });
 
-    const messages = result.messages || [];
-    const totalCount = result.messages_aggregate?.aggregate?.count || 0;
+    const messages = result.user_messages || [];
+    const totalCount = result.user_messages_aggregate?.aggregate?.count || 0;
     const totalPages = Math.ceil(totalCount / params.limit);
 
     return {
@@ -584,5 +584,73 @@ export class AdminService {
         hasPrev: params.page > 1,
       },
     };
+  }
+
+  async getUserDetails(userId: string) {
+    const query = `
+      query GetUserDetails($userId: uuid!) {
+        users_by_pk(id: $userId) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          created_at
+          updated_at
+          user_type_id
+          user_type {
+            id
+            comment
+          }
+          agent {
+            id
+            user_id
+            vehicle_type_id
+            is_verified
+            created_at
+            updated_at
+            vehicle_type {
+              id
+              comment
+            }
+          }
+          client {
+            id
+            user_id
+            created_at
+            updated_at
+          }
+          business {
+            id
+            user_id
+            name
+            is_admin
+            created_at
+            updated_at
+          }
+          accounts {
+            id
+            currency
+            available_balance
+            withheld_balance
+            total_balance
+            is_active
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+    });
+
+    if (!result.users_by_pk) {
+      throw new Error('User not found');
+    }
+
+    return result.users_by_pk;
   }
 }

@@ -55,11 +55,11 @@ const AdminUserMessagesPage: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <Button
             component={RouterLink}
-            to={`/admin/${userType}s`}
+            to={`/admin/${userType}`}
             startIcon={<ArrowBack />}
             variant="outlined"
           >
-            Back to {userType}s
+            Back to {userType}
           </Button>
           <Box>
             <Typography

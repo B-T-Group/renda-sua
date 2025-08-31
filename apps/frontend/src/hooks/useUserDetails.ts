@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useGraphQLClient } from './useGraphQLClient';
+import { useApiClient } from './useApiClient';
 
 interface UserDetails {
   id: string;
@@ -20,56 +20,36 @@ interface UseUserDetailsResult {
 }
 
 export const useUserDetails = (userId: string): UseUserDetailsResult => {
-  const { client } = useGraphQLClient();
+  const apiClient = useApiClient();
   const [user, setUser] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchUserDetails = useCallback(async () => {
-    if (!client || !userId) return;
+    if (!apiClient || !userId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const query = `
-        query GetUserDetails($userId: uuid!) {
-          users_by_pk(id: $userId) {
-            id
-            first_name
-            last_name
-            email
-            user_type_id
-            client {
-              id
-            }
-            agent {
-              id
-            }
-            business {
-              id
-              name
-              is_admin
-            }
-          }
-        }
-      `;
+      const response = await apiClient.get(`/admin/users/${userId}`);
 
-      const response = await client.request(query, { userId });
-      const userData = response.users_by_pk;
-
-      if (userData) {
-        setUser(userData);
+      if (response.data.success) {
+        setUser(response.data.user);
       } else {
-        setError('User not found');
+        setError(response.data.error || 'User not found');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching user details:', err);
-      setError('Failed to fetch user details');
+      setError(
+        err.response?.data?.error ||
+          err.message ||
+          'Failed to fetch user details'
+      );
     } finally {
       setLoading(false);
     }
-  }, [client, userId]);
+  }, [apiClient, userId]);
 
   useEffect(() => {
     fetchUserDetails();
