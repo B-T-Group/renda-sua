@@ -44,8 +44,8 @@ import { AppService } from './app.service';
           accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
           logLevel: process.env.LOG_LEVEL || 'debug',
-                        enableCloudWatch: false, // Temporarily disabled due to AWS credentials issue
-              enableConsole: true, // Always enable console logging for now
+          enableCloudWatch: false, // Temporarily disabled due to AWS credentials issue
+          enableConsole: true, // Always enable console logging for now
         });
       },
     }),
