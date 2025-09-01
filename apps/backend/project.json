@@ -35,7 +35,7 @@
       "configurations": {
         "development": {
           "buildTarget": "backend:build:development",
-          "watch": true
+          "watch": false
         },
         "production": {
           "buildTarget": "backend:build:production",
