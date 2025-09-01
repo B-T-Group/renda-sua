@@ -2,11 +2,12 @@ name: Deploy Backend to Lightsail Container
 
 on:
   push:
-    branches: [main]
+    branches: [main, prod]
     paths:
       - 'apps/backend/**'
       - 'package.json'
       - 'Dockerfile.backend'
+      - 'Dockerfile.backend.prod'
       - 'nx.json'
       - 'tsconfig.base.json'
       - '.github/workflows/deploy-backend.yml'
@@ -15,7 +16,6 @@ on:
 
 env:
   AWS_REGION: ca-central-1
-  LIGHTSAIL_CONTAINER_SERVICE: rendasua-service
   LIGHTSAIL_CONTAINER_NAME: backend
   ECR_REPOSITORY: groupe-bt-backend
   ECR_REGISTRY: 235680477887.dkr.ecr.ca-central-1.amazonaws.com
@@ -40,6 +40,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Set deployment target
+        id: set-target
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
+            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-prod-service" >> $GITHUB_ENV
+            echo "DEPLOYMENT_ENV=production" >> $GITHUB_ENV
+          else
+            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-service" >> $GITHUB_ENV
+            echo "DEPLOYMENT_ENV=development" >> $GITHUB_ENV
+          fi
+          echo "Deploying to: ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}"
+          echo "Environment: ${{ env.DEPLOYMENT_ENV }}"
 
       - name: Build backend
         run: |
@@ -66,16 +79,24 @@ jobs:
 
       - name: Build and push container to ECR
         run: |
-          # Generate image tag (using git SHA for versioning)
-          IMAGE_TAG=${{ github.sha }}
+          # Generate image tag and Dockerfile based on branch
+          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
+            IMAGE_TAG="production-latest"
+            LATEST_TAG="production-latest"
+            DOCKERFILE="Dockerfile.backend.prod"
+          else
+            IMAGE_TAG="${{ github.sha }}"
+            LATEST_TAG="latest"
+            DOCKERFILE="Dockerfile.backend"
+          fi
 
           # Build the Docker image
-          docker build -f Dockerfile.backend -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
-          docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          docker build -f $DOCKERFILE -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
+          docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$LATEST_TAG
 
           # Push to ECR
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$LATEST_TAG
 
           # Store the image URI for deployment
           echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
@@ -86,12 +107,12 @@ jobs:
             --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
             --containers '{
               "backend": {
-                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}'",
+                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG'",
                 "ports": {
                   "3000": "HTTP"
                 },
                 "environment": {
-                  "NODE_ENV": "development",
+                  "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
                   "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
                   "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
                   "AWS_REGION": "${{ env.AWS_REGION }}"
@@ -185,6 +206,8 @@ jobs:
               body: `🚀 Backend deployed successfully!
               
               **Service URL:** ${{ env.SERVICE_URL }}
-              **Image:** ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+              **Image:** ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+              **Environment:** ${{ env.DEPLOYMENT_ENV }}
+              **Dockerfile:** ${{ env.DOCKERFILE }}
               **Deployment Time:** ${{ github.event.head_commit.timestamp }}`
             })
