@@ -7,10 +7,16 @@ WORKDIR /app
 # Install dependencies for native modules
 RUN apk add --no-cache libc6-compat
 
+# Copy package files first for better caching
+COPY package*.json ./
+COPY nx.json ./
+COPY tsconfig*.json ./
+
+# Install all dependencies (including workspace dependencies)
+RUN npm ci --legacy-peer-deps
+
+# Copy the built backend application
 COPY dist/apps/backend/ ./
-
-RUN npm i --only=production --legacy-peer-deps
-
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
