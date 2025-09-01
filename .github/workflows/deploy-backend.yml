@@ -98,8 +98,9 @@ jobs:
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$LATEST_TAG
 
-          # Store the image URI for deployment
+          # Store the image URI and tag for deployment
           echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Deploy to Lightsail using ECR image
         run: |
@@ -107,7 +108,7 @@ jobs:
             --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
             --containers '{
               "backend": {
-                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG'",
+                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'",
                 "ports": {
                   "3000": "HTTP"
                 },
