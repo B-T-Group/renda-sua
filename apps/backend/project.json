@@ -11,7 +11,9 @@
       "options": {
         "outputPath": "dist/apps/backend",
         "tsConfig": "apps/backend/tsconfig.app.json",
-        "main": "apps/backend/src/main.ts"
+        "main": "apps/backend/src/main.ts",
+        "generateLockfile": false,
+        "generatePackageJson": true
       },
       "configurations": {
         "development": {
@@ -56,7 +58,7 @@
     },
     "docker-build": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build"],
+      "dependsOn": ["copy-deps"],
       "options": {
         "command": "docker build -f apps/backend/Dockerfile . -t rendasua-backend"
       }
@@ -81,7 +83,22 @@
       "options": {
         "tsConfig": "apps/backend/tsconfig.app.json"
       }
+    },
+    "copy-deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cp package.json dist/apps/backend/ && cd dist/apps/backend && npm install --only=production --legacy-peer-deps",
+        "parallel": false
+      },
+      "dependsOn": ["build"]
     }
   },
+  "externalDependencies": [
+    "@nestjs/core",
+    "@nestjs/common",
+    "@nestjs/platform-express",
+    "reflect-metadata",
+    "rxjs"
+  ],
   "tags": []
 }
