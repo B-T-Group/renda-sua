@@ -2,10 +2,14 @@
 const getProductionEnvironment = () => {
   const hasuraUrl =
     process.env.HASURA_GRAPHQL_ENDPOINT ||
-    'https://api.rendasua.com/v1/graphql';
-  const auth0Domain = process.env.REACT_APP_AUTH0_DOMAIN || '';
-  const auth0ClientId = process.env.REACT_APP_AUTH0_CLIENT_ID || '';
-  const auth0Audience = process.env.REACT_APP_AUTH0_AUDIENCE || '';
+    'https://rendasua-prod.hasura.app/v1/graphql';
+  const auth0Domain =
+    process.env.REACT_APP_AUTH0_DOMAIN || 'rendasua-prod.ca.auth0.com';
+  const auth0ClientId =
+    process.env.REACT_APP_AUTH0_CLIENT_ID || 'aIAEhMVPX6ENAdVU2gzZguYJYhlp2xCM';
+  const auth0Audience =
+    process.env.REACT_APP_AUTH0_AUDIENCE ||
+    'https://rendasua-prod.ca.auth0.com/api/v2/';
 
   return {
     hasuraUrl,
@@ -17,7 +21,7 @@ const getProductionEnvironment = () => {
     isDevelopment: false,
     isProduction: true,
     isLocal: false,
-    apiUrl: process.env.REACT_APP_API_URL || 'https://api.rendasua.com',
+    apiUrl: 'https://api.rendasua.com',
     enableDebugLogging: false,
     enableAnalytics: true,
   };
