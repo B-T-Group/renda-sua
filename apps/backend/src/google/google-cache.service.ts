@@ -35,6 +35,40 @@ export class GoogleCacheService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   /**
+   * Check if cache tables exist
+   */
+  private async checkCacheTablesExist(): Promise<{
+    distance: boolean;
+    geocode: boolean;
+  }> {
+    const checkTablesQuery = `
+      query CheckCacheTables {
+        __schema {
+          types {
+            name
+          }
+        }
+      }
+    `;
+
+    try {
+      const schemaResult = await this.hasuraSystemService.executeQuery(
+        checkTablesQuery
+      );
+      const tableNames =
+        schemaResult.__schema?.types?.map((t: any) => t.name) || [];
+
+      return {
+        distance: tableNames.includes('google_distance_cache'),
+        geocode: tableNames.includes('google_geocode_cache'),
+      };
+    } catch (error) {
+      console.error('Error checking cache tables:', error);
+      return { distance: false, geocode: false };
+    }
+  }
+
+  /**
    * Get cached distance matrix results for specific origin-destination pairs
    */
   async getCachedDistanceMatrix(
@@ -298,27 +332,34 @@ export class GoogleCacheService {
    * Clean up expired cache entries
    */
   async cleanupExpiredCache(): Promise<void> {
-    const distanceMutation = `
-      mutation CleanupExpiredDistanceCache {
-        delete_google_distance_cache(where: { expires_at: { _lt: "now()" } }) {
-          affected_rows
-        }
-      }
-    `;
-
-    const geocodeMutation = `
-      mutation CleanupExpiredGeocodeCache {
-        delete_google_geocode_cache(where: { expires_at: { _lt: "now()" } }) {
-          affected_rows
-        }
-      }
-    `;
+    const { distance, geocode } = await this.checkCacheTablesExist();
 
     try {
-      await this.hasuraSystemService.executeMutation(distanceMutation);
-      await this.hasuraSystemService.executeMutation(geocodeMutation);
+      // Only clean up tables that exist
+      if (distance) {
+        const distanceMutation = `
+          mutation CleanupExpiredDistanceCache {
+            delete_google_distance_cache(where: { expires_at: { _lt: "now()" } }) {
+              affected_rows
+            }
+          }
+        `;
+        await this.hasuraSystemService.executeMutation(distanceMutation);
+      }
+
+      if (geocode) {
+        const geocodeMutation = `
+          mutation CleanupExpiredGeocodeCache {
+            delete_google_geocode_cache(where: { expires_at: { _lt: "now()" } }) {
+              affected_rows
+            }
+          }
+        `;
+        await this.hasuraSystemService.executeMutation(geocodeMutation);
+      }
     } catch (error) {
       console.error('Error cleaning up expired cache:', error);
+      // Don't throw error - this is a cleanup operation that shouldn't break the app
     }
   }
 }
