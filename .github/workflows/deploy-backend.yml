@@ -45,7 +45,7 @@ jobs:
         id: set-target
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
-            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-prod-service" >> $GITHUB_ENV
+            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-production-service" >> $GITHUB_ENV
             echo "DEPLOYMENT_ENV=production" >> $GITHUB_ENV
           else
             echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-service" >> $GITHUB_ENV
