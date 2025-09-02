@@ -21,7 +21,7 @@ const getProductionEnvironment = () => {
     isDevelopment: false,
     isProduction: true,
     isLocal: false,
-    apiUrl: 'https://api.rendasua.com',
+    apiUrl: 'https://prod.rendasua.com',
     enableDebugLogging: false,
     enableAnalytics: true,
   };
