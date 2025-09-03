@@ -45,8 +45,11 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
-          OPERATION_ACCOUNT_CODE: 'ACC_68A722C33473B', // Replace with actual operation account code
-          RECEPTION_URL_CODE: 'TRUVU', // Replace with actual reception URL code
+          OPERATION_ACCOUNT_CODE:
+            environment === 'production'
+              ? 'ACC_68B8C1E5663B4'
+              : 'ACC_68A722C33473B',
+          RECEPTION_URL_CODE: environment === 'production' ? 'BQ1TV' : 'TRUVU',
         },
       }
     );
