@@ -100,6 +100,7 @@ export interface MyPVitConfig {
   secretKey: string;
   environment: 'test' | 'production';
   callbackUrlCode: string;
+  secretRefreshUrlCode: string;
   merchantOperationAccountCode: string;
 }
 
@@ -184,18 +185,11 @@ export default async (): Promise<Configuration> => {
     mypvit: {
       baseUrl: process.env.MYPVIT_BASE_URL || 'https://api.mypvit.pro',
       merchantSlug: process.env.MYPVIT_MERCHANT_SLUG || 'MR_1755783875',
-      secretKey:
-        process.env.NODE_ENV === 'production'
-          ? 'CJF0DPOVZU87UUK8'
-          : 'CTCNJRBWZIDALEGT',
-      environment:
-        process.env.NODE_ENV === 'production' ? 'production' : 'test',
-      callbackUrlCode:
-        process.env.MYPVIT_CALLBACK_URL_CODE || 'default-callback-code',
-      merchantOperationAccountCode:
-        process.env.NODE_ENV === 'production'
-          ? 'ACC_001122334455'
-          : 'ACC_68A722C33473B',
+      secretKey: process.env.MYPVIT_SECRET_KEY || 'CTCNJRBWZIDALEGT',
+      environment: (process.env.MYPVIT_ENVIRONMENT as 'test' | 'production') || 'test',
+      callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
+      secretRefreshUrlCode: process.env.MYPVIT_SECRET_REFRESH_URL_CODE || 'TRUVU',
+      merchantOperationAccountCode: process.env.MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE || 'ACC_68A722C33473B',
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),

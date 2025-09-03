@@ -68,6 +68,9 @@ export class MyPVitService {
           | 'production') || 'test',
       callbackUrlCode:
         this.configService.get<string>('MYPVIT_CALLBACK_URL_CODE') || 'FJXSU',
+      secretRefreshUrlCode:
+        this.configService.get<string>('MYPVIT_SECRET_REFRESH_URL_CODE') ||
+        'TRUVU',
       merchantOperationAccountCode:
         this.configService.get<string>(
           'MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE'
