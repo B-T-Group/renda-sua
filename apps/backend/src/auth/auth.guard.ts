@@ -33,7 +33,7 @@ export class AuthGuard implements CanActivate {
     if (!this.jwksClient) {
       const auth0Config = this.configService.get('auth0');
 
-      this.logger.debug('Auth0 config:', { auth0Config });
+      this.logger.log('Auth0 config:', { auth0Config });
 
       if (!auth0Config?.domain) {
         this.logger.error('AUTH0_DOMAIN environment variable is required');
@@ -92,6 +92,7 @@ export class AuthGuard implements CanActivate {
   private async verifyToken(token: string): Promise<any> {
     const auth0Config = this.configService.get('auth0');
     const jwksClient = this.getJwksClient();
+    console.log('auth0Config', auth0Config);
 
     return new Promise((resolve, reject) => {
       jwt.verify(
