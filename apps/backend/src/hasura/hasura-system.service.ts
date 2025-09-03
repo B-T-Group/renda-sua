@@ -11,12 +11,10 @@ export class HasuraSystemService {
   constructor(private readonly configService: ConfigService) {
     console.log('configService', this.configService.get('hasura'));
 
-    this.hasuraUrl =
-      this.configService.get<string>('hasura.endpoint') ||
-      'http://localhost:8080/v1/graphql';
-    this.adminSecret =
-      this.configService.get<string>('hasura.adminSecret') ||
-      'myadminsecretkey';
+    const config = this.configService.get('hasura');
+
+    this.hasuraUrl = config.endpoint || 'http://localhost:8080/v1/graphql';
+    this.adminSecret = config.adminSecret || 'myadminsecretkey';
 
     this.client = new GraphQLClient(this.hasuraUrl, {
       headers: {
