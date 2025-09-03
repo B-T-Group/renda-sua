@@ -5,15 +5,7 @@ import {
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-
-export interface MyPVitConfig {
-  baseUrl: string;
-  merchantSlug: string;
-  secretKey: string;
-  environment: 'test' | 'production';
-  callbackUrlCode: string;
-  merchantOperationAccountCode: string;
-}
+import { MyPVitConfig } from '../../config/configuration';
 
 export interface MyPVitPaymentRequest {
   amount: number;

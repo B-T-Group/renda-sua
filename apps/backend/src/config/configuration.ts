@@ -94,6 +94,15 @@ export interface GoogleCacheConfig {
   ttl: number; // Time to live in seconds
 }
 
+export interface MyPVitConfig {
+  baseUrl: string;
+  merchantSlug: string;
+  secretKey: string;
+  environment: 'test' | 'production';
+  callbackUrlCode: string;
+  merchantOperationAccountCode: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -109,6 +118,7 @@ export interface Configuration {
   externalApi: ExternalApiConfig;
   mtnMomo: MtnMomoConfig;
   airtelMoney: AirtelMoneyConfig;
+  mypvit: MyPVitConfig;
   order: OrderConfig;
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
@@ -170,6 +180,22 @@ export default async (): Promise<Configuration> => {
       remittancePrimaryKey: secrets.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
       remittanceSecondaryKey:
         secrets.AIRTEL_MONEY_REMITTANCE_SECONDARY_KEY ?? '',
+    },
+    mypvit: {
+      baseUrl: process.env.MYPVIT_BASE_URL || 'https://api.mypvit.pro',
+      merchantSlug: process.env.MYPVIT_MERCHANT_SLUG || 'MR_1755783875',
+      secretKey:
+        process.env.NODE_ENV === 'production'
+          ? 'CJF0DPOVZU87UUK8'
+          : 'CTCNJRBWZIDALEGT',
+      environment:
+        process.env.NODE_ENV === 'production' ? 'production' : 'test',
+      callbackUrlCode:
+        process.env.MYPVIT_CALLBACK_URL_CODE || 'default-callback-code',
+      merchantOperationAccountCode:
+        process.env.NODE_ENV === 'production'
+          ? 'ACC_001122334455'
+          : 'ACC_68A722C33473B',
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),

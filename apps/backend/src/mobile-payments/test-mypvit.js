@@ -5,7 +5,33 @@ const crypto = require('crypto');
 const config = {
   baseUrl: 'https://api.mypvit.pro',
   merchantSlug: 'MR_1755783875',
-  secretKey: 'CTCNJRBWZIDALEGT',
+  // Environment-specific secret key
+  secretKey:
+    process.env.NODE_ENV === 'production'
+      ? 'CJF0DPOVZU87UUK8'
+      : 'CTCNJRBWZIDALEGT',
+  // Environment-specific account ID
+  accountId:
+    process.env.NODE_ENV === 'production'
+      ? 'ACC_001122334455'
+      : 'ACC_68A722C33473B',
+  // Environment-specific endpoints
+  paymentEndpoint:
+    process.env.NODE_ENV === 'production'
+      ? 'OLHRVTQPJBQEIHRT'
+      : 'X5T3RIBYQUDFBZSH',
+  kycEndpoint:
+    process.env.NODE_ENV === 'production'
+      ? 'LRMFT2YW3YCCHKEH'
+      : 'W2OZPE4QDSWH3Z5R',
+  balanceEndpoint:
+    process.env.NODE_ENV === 'production'
+      ? 'NQUPMQFT35COWOWW'
+      : 'LIRYOTW7QL3DCDPJ',
+  secretRenewalEndpoint:
+    process.env.NODE_ENV === 'production'
+      ? 'XI1OVAQBUCK8WEJC'
+      : 'RYXA6SLFNRBFFQJX',
 };
 
 // Create HTTP client with interceptors
@@ -29,7 +55,9 @@ async function testConnection() {
     console.log('🔍 Testing MyPVit connection...');
 
     // Test balance check
-    const balanceResponse = await httpClient.get('/LIRYOTW7QL3DCDPJ/balance');
+    const balanceResponse = await httpClient.get(
+      `/${config.balanceEndpoint}/balance`
+    );
     console.log('✅ Balance check successful:', balanceResponse.data);
 
     return true;
@@ -58,7 +86,7 @@ async function testPaymentInitiation() {
     };
 
     const response = await httpClient.post(
-      '/X5T3RIBYQUDFBZSH/rest',
+      `/${config.paymentEndpoint}/rest`,
       paymentData
     );
     console.log('✅ Payment initiation successful:', response.data);
@@ -84,7 +112,10 @@ async function testKYC() {
       customerEmail: 'test@rendasua.com',
     };
 
-    const response = await httpClient.post('/W2OZPE4QDSWH3Z5R/kyc', kycData);
+    const response = await httpClient.post(
+      `/${config.kycEndpoint}/kyc`,
+      kycData
+    );
     console.log('✅ KYC verification successful:', response.data);
 
     return response.data;
@@ -101,7 +132,9 @@ async function testSecretRenewal() {
   try {
     console.log('🔑 Testing secret key renewal...');
 
-    const response = await httpClient.post('/CTCNJRBWZIDALEGT/renew-secret');
+    const response = await httpClient.post(
+      `/${config.secretRenewalEndpoint}/renew-secret`
+    );
     console.log('✅ Secret key renewal successful:', response.data);
 
     return response.data;
