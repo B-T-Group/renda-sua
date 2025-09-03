@@ -10,7 +10,7 @@ RUN apk add --no-cache libc6-compat
 COPY dist/apps/backend/ ./
 
 # Copy environment files
-COPY apps/backend/.env.production ./src/
+COPY apps/backend/.env.production ./
 
 RUN npm i --only=production --legacy-peer-deps
 
