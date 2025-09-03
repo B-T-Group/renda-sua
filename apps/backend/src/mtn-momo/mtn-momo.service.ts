@@ -494,10 +494,6 @@ export class MtnMomoService {
     try {
       const apiKey = this.config.apiKey;
 
-      console.log('apiKey', apiKey);
-      console.log('this.config.apiUserId', this.config.apiUserId);
-      console.log('this.config.subscriptionKey', this.config.subscriptionKey);
-
       const response = await this.httpClient.post(
         `/${type}/token/`,
         {},

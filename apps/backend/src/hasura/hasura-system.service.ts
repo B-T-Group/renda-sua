@@ -9,8 +9,6 @@ export class HasuraSystemService {
   private readonly client: GraphQLClient;
 
   constructor(private readonly configService: ConfigService) {
-    console.log('configService', this.configService.get('hasura'));
-
     const config = this.configService.get('hasura');
 
     this.hasuraUrl = config.endpoint || 'http://localhost:8080/v1/graphql';

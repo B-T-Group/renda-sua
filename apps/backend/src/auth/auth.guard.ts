@@ -92,7 +92,6 @@ export class AuthGuard implements CanActivate {
   private async verifyToken(token: string): Promise<any> {
     const auth0Config = this.configService.get('auth0');
     const jwksClient = this.getJwksClient();
-    console.log('auth0Config', auth0Config);
 
     return new Promise((resolve, reject) => {
       jwt.verify(
