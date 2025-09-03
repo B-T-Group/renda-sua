@@ -56,7 +56,11 @@ jobs:
 
       - name: Build backend
         run: |
-          cp apps/backend/.env.development ./apps/backend/.env  
+          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
+            cp apps/backend/.env.production ./apps/backend/.env
+          else
+            cp apps/backend/.env.development ./apps/backend/.env
+          fi
           sed -i "s/HASURA_GRAPHQL_ADMIN_SECRET=.*/HASURA_GRAPHQL_ADMIN_SECRET=${{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}/" apps/backend/.env
           # Use build script to ensure proper exit
           ./scripts/build-backend.sh
