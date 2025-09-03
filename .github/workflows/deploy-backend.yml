@@ -116,12 +116,13 @@ jobs:
                 "ports": {
                   "3000": "HTTP"
                 },
-                "environment": {
-                  "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
-                  "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
-                  "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-                  "AWS_REGION": "${{ env.AWS_REGION }}"
-                }
+                          "environment": {
+            "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
+            "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
+            "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
+            "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+            "AWS_REGION": "${{ env.AWS_REGION }}"
+          }
               }
             }' \
             --public-endpoint '{

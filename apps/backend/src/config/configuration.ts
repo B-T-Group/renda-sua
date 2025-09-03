@@ -135,23 +135,38 @@ async function getSecrets(): Promise<Record<string, string>> {
     region: process.env.AWS_REGION || 'ca-central-1',
   });
 
+  // More explicit environment detection
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const deploymentEnv = process.env.DEPLOYMENT_ENV || nodeEnv;
+
   const secretName =
-    process.env.NODE_ENV === 'production'
+    deploymentEnv === 'production'
       ? 'production-rendasua-backend-secrets'
       : 'development-rendasua-backend-secrets';
+
+  console.log(
+    `Loading secrets for environment: ${deploymentEnv} (NODE_ENV: ${nodeEnv})`
+  );
+  console.log(`Using secret name: ${secretName}`);
 
   try {
     const command = new GetSecretValueCommand({ SecretId: secretName });
     const data = await client.send(command);
 
     if (data.SecretString) {
-      return JSON.parse(data.SecretString);
+      const secrets = JSON.parse(data.SecretString);
+      console.log(`Successfully loaded secrets from: ${secretName}`);
+      return secrets;
     } else if (data.SecretBinary) {
       const buff = Buffer.from(data.SecretBinary as Uint8Array);
-      return JSON.parse(buff.toString('ascii'));
+      const secrets = JSON.parse(buff.toString('ascii'));
+      console.log(`Successfully loaded binary secrets from: ${secretName}`);
+      return secrets;
     }
+    console.log(`No secret data found in: ${secretName}`);
     return {};
   } catch (err) {
+    console.error(`Failed to load secrets from ${secretName}:`, err);
     // Fallback to empty object if secrets cannot be loaded
     return {};
   }
