@@ -1,0 +1,33 @@
+table:
+  name: google_geocode_cache
+  schema: public
+insert_permissions:
+  - role: anonymous
+    permission:
+      check: {}
+      columns:
+        - id
+        - latitude
+        - longitude
+        - response_data
+        - created_at
+        - expires_at
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - latitude
+        - longitude
+        - response_data
+        - created_at
+        - expires_at
+      filter: {}
+update_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - response_data
+        - expires_at
+      filter: {}
+      check: {}

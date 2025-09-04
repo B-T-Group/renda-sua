@@ -611,7 +611,26 @@ export class HasuraUserService {
       addressResult.client_addresses ||
       addressResult.agent_addresses ||
       addressResult.business_addresses;
-    return addresses?.[0]?.address || null;
+
+    const address = addresses?.[0]?.address;
+    if (!address) {
+      return null;
+    }
+
+    // Create formatted address by combining address fields
+    const addressParts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter((part) => part && part.trim() !== '');
+
+    return {
+      ...address,
+      formatted_address: addressParts.join(', '),
+    };
   }
 
   /**
@@ -696,7 +715,30 @@ export class HasuraUserService {
       addressResult.client_addresses ||
       addressResult.agent_addresses ||
       addressResult.business_addresses;
-    return addresses?.map((item: any) => item.address) || [];
+
+    return (
+      addresses
+        ?.map((item: any) => {
+          const address = item.address;
+          if (!address) return null;
+
+          // Create formatted address by combining address fields
+          const addressParts = [
+            address.address_line_1,
+            address.address_line_2,
+            address.city,
+            address.state,
+            address.postal_code,
+            address.country,
+          ].filter((part) => part && part.trim() !== '');
+
+          return {
+            ...address,
+            formatted_address: addressParts.join(', '),
+          };
+        })
+        .filter(Boolean) || []
+    );
   }
 
   /**

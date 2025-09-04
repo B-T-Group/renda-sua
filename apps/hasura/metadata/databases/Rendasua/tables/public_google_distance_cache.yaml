@@ -1,0 +1,51 @@
+table:
+  name: google_distance_cache
+  schema: public
+insert_permissions:
+  - role: anonymous
+    permission:
+      check: {}
+      columns:
+        - id
+        - origin_address_id
+        - destination_address_id
+        - origin_address_formatted
+        - destination_address_formatted
+        - distance_value
+        - distance_text
+        - duration_value
+        - duration_text
+        - status
+        - created_at
+        - expires_at
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - origin_address_id
+        - destination_address_id
+        - origin_address_formatted
+        - destination_address_formatted
+        - distance_value
+        - distance_text
+        - duration_value
+        - duration_text
+        - status
+        - created_at
+        - expires_at
+      filter: {}
+update_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - origin_address_formatted
+        - destination_address_formatted
+        - distance_value
+        - distance_text
+        - duration_value
+        - duration_text
+        - status
+        - expires_at
+      filter: {}
+      check: {}

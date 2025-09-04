@@ -178,6 +178,8 @@ async function getSecrets(): Promise<Record<string, string>> {
 export default async (): Promise<Configuration> => {
   const secrets = await getSecrets();
 
+  console.log('secrets', secrets);
+
   return {
     GOOGLE_MAPS_API_KEY: secrets.GOOGLE_MAPS_API_KEY,
     GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
@@ -260,9 +262,8 @@ export default async (): Promise<Configuration> => {
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       user: process.env.SMTP_USER || '',
       pass: process.env.SMTP_PASS || '',
-      sendGridApiKey: process.env.SENDGRID_API_KEY || secrets.SENDGRID_API_KEY,
-      sendGridFromEmail:
-        process.env.SENDGRID_FROM_EMAIL || 'noreply@rendasua.com',
+      sendGridApiKey: secrets.SENDGRID_API_KEY,
+      sendGridFromEmail: 'noreply@rendasua.com',
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',

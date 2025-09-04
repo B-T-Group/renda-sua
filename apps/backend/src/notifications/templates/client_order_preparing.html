@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Being Prepared - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #f39c12;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .status-badge {
+        background: #f39c12;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>👨‍🍳 Order Being Prepared!</h1>
+      <p>Your order is in the kitchen</p>
+    </div>
+
+    <div class="content">
+      <h2>Hello {{recipientName}},</h2>
+
+      <p>
+        Great news! {{businessName}} has started preparing your order and it's
+        being made fresh for you.
+      </p>
+
+      <div class="order-details">
+        <h3>Order Update</h3>
+        <p><strong>Order Number:</strong> {{orderNumber}}</p>
+        <p>
+          <strong>Status:</strong>
+          <span class="status-badge">{{orderStatus}}</span>
+        </p>
+        <p><strong>Business:</strong> {{businessName}}</p>
+        {{#estimatedDeliveryTime}}
+        <p><strong>Estimated Delivery:</strong> {{estimatedDeliveryTime}}</p>
+        {{/estimatedDeliveryTime}}
+      </div>
+
+      <p>
+        Your order is now being prepared with care. We'll notify you once it's
+        ready for pickup.
+      </p>
+
+      <p>Thank you for choosing Rendasua!</p>
+
+      <p>Best regards,<br />The Rendasua Team</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. All rights reserved.</p>
+    </div>
+  </body>
+</html>

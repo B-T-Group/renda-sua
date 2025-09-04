@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order In Transit - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #3498db;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .status-badge {
+        background: #3498db;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🚚 Order In Transit!</h1>
+      <p>Keep up the great work</p>
+    </div>
+
+    <div class="content">
+      <h2>Hello {{recipientName}},</h2>
+
+      <p>
+        You have updated the order status to "in transit". The order is now on
+        its way to {{clientName}}.
+      </p>
+
+      <div class="order-details">
+        <h3>Delivery Update</h3>
+        <p><strong>Order Number:</strong> {{orderNumber}}</p>
+        <p>
+          <strong>Status:</strong>
+          <span class="status-badge">{{orderStatus}}</span>
+        </p>
+        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Customer:</strong> {{clientName}}</p>
+        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+      </div>
+
+      <p><strong>Next Steps:</strong></p>
+      <ul>
+        <li>Continue to the delivery address</li>
+        <li>Update status to "out for delivery" when you arrive</li>
+        <li>Complete the delivery and mark as "delivered"</li>
+      </ul>
+
+      <p>Thank you for your excellent service!</p>
+
+      <p>Best regards,<br />The Rendasua Team</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. All rights reserved.</p>
+    </div>
+  </body>
+</html>

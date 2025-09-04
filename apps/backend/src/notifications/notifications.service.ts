@@ -43,41 +43,42 @@ export class NotificationsService {
   private readonly sendGridApiKey: string;
   private readonly fromEmail: string;
 
-  // Email template IDs (these will be set after creating templates in SendGrid)
+  // Email template IDs - SendGrid dynamic templates
   private readonly templateIds: Record<string, string> = {
-    client_order_created: 'd-client-order-created',
-    business_order_created: 'd-business-order-created',
-    client_order_confirmed: 'd-client-order-confirmed',
-    business_order_confirmed: 'd-business-order-confirmed',
-    client_order_preparing: 'd-client-order-preparing',
-    business_order_preparing: 'd-business-order-preparing',
-    client_order_ready_for_pickup: 'd-client-order-ready-for-pickup',
-    business_order_ready_for_pickup: 'd-business-order-ready-for-pickup',
-    agent_order_assigned: 'd-agent-order-assigned',
-    client_order_picked_up: 'd-client-order-picked-up',
-    business_order_picked_up: 'd-business-order-picked-up',
-    agent_order_picked_up: 'd-agent-order-picked-up',
-    client_order_in_transit: 'd-client-order-in-transit',
-    business_order_in_transit: 'd-business-order-in-transit',
-    agent_order_in_transit: 'd-agent-order-in-transit',
-    client_order_out_for_delivery: 'd-client-order-out-for-delivery',
-    business_order_out_for_delivery: 'd-business-order-out-for-delivery',
-    agent_order_out_for_delivery: 'd-agent-order-out-for-delivery',
-    client_order_delivered: 'd-client-order-delivered',
-    business_order_delivered: 'd-business-order-delivered',
-    agent_order_delivered: 'd-agent-order-delivered',
-    client_order_cancelled: 'd-client-order-cancelled',
-    business_order_cancelled: 'd-business-order-cancelled',
-    agent_order_cancelled: 'd-agent-order-cancelled',
-    client_order_failed: 'd-client-order-failed',
-    business_order_failed: 'd-business-order-failed',
-    agent_order_failed: 'd-agent-order-failed',
-    client_order_refunded: 'd-client-order-refunded',
-    business_order_refunded: 'd-business-order-refunded',
+    agent_order_assigned: 'd-e587fec936c24711a5bfebe57ee15d1d',
+    business_order_confirmed: 'd-7a5874cb8d894705be5c5b331e630d19',
+    business_order_created: 'd-e0e5e41f79d8475f9e88dcb5e7afec98',
+    client_order_cancelled: 'd-e3667da3f8054529a3dfc5b5ee4f95f1',
+    client_order_confirmed: 'd-21badee7994540bb8cde3e8ec7ee39c0',
+    client_order_created: 'd-74aa38def9c348cc80d5c589f3ea8cdf',
+    client_order_delivered: 'd-5f96bbb48dd34a40b1fee42b22cf0790',
+    client_order_in_transit: 'd-666a555dd76f40d9bc6402255bfa2c6c',
+    client_order_out_for_delivery: 'd-3e9fe8a1d4e744778bd91008d8c886ea',
+    client_order_preparing: 'd-657b1957f63a48f9aeccee384277a5a9',
+    business_order_preparing: 'd-89feeddf482c4ca9af1fa1a6b09a4eaf',
+    client_order_ready_for_pickup: 'd-6d49820c6df446dea974ee4a93e0df59',
+    business_order_ready_for_pickup: 'd-3c47eb000b184c3ea543401679ee961b',
+    client_order_picked_up: 'd-47b7c243ea92497b8f4b40a0432a280e',
+    business_order_picked_up: 'd-111c515f94cf41a8858c1db93178c5b6',
+    agent_order_picked_up: 'd-324758d410d14a16a33aa095d134dc2f',
+    business_order_in_transit: 'd-43734fc9468a4a96ac08c0742710269b',
+    agent_order_in_transit: 'd-228a67c41b984431b7f86b4c8a040db8',
+    business_order_out_for_delivery: 'd-353cf8d4d7a54f589e9cfad1e8f47717',
+    agent_order_out_for_delivery: 'd-206fbea40a8f4d2b9bb0846f8ca56224',
+    business_order_delivered: 'd-350ff14ca0d74582901a0a89c240584c',
+    agent_order_delivered: 'd-e4e743ed9b004a149d488e3332a76808',
+    business_order_cancelled: 'd-5603e973e3ea4c4380faa1e6a59fd5df',
+    agent_order_cancelled: 'd-8d76f4c918694eadbab9aaf6d7c751b3',
+    client_order_failed: 'd-a09bd4862ed64a5fbed98a85cbf237e0',
+    business_order_failed: 'd-fd95c5d7dc4a4fdc8c91bc28ee2d5395',
+    agent_order_failed: 'd-9005ff04f9a64c6ca3c8601d59502ffd',
+    client_order_refunded: 'd-5600d6a1da2b4b62a1b3f7322acde542',
+    business_order_refunded: 'd-81c4d7b41bc7409c8d9bfe80ed8c7225',
   };
 
   constructor(private readonly configService: ConfigService<Configuration>) {
     const emailConfig = this.configService.get('email');
+    console.log('emailConfig', emailConfig);
     this.sendGridApiKey = emailConfig?.sendGridApiKey || '';
     this.fromEmail = emailConfig?.sendGridFromEmail || 'noreply@rendasua.com';
 
@@ -169,6 +170,18 @@ export class NotificationsService {
       return;
     }
 
+    if (!to) {
+      throw new Error('Recipient email address is required');
+    }
+
+    if (!templateId) {
+      throw new Error('Template ID is required');
+    }
+
+    if (!dynamicTemplateData) {
+      throw new Error('Template data is required');
+    }
+
     const msg = {
       to,
       from: this.fromEmail,
@@ -176,25 +189,39 @@ export class NotificationsService {
       dynamicTemplateData,
     };
 
-    await sgMail.send(msg);
-    this.logger.log(`Email sent to ${to} using template ${templateId}`);
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Email sent to ${to} using template ${templateId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send email to ${to}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
   }
 
   /**
    * Prepare template data for different user types
    */
   private prepareTemplateData(data: NotificationData, userType: string): any {
+    // Validate required data
+    if (!data) {
+      throw new Error('Notification data is undefined');
+    }
+
     const baseData = {
-      orderId: data.orderId,
-      orderNumber: data.orderNumber,
-      orderStatus: data.orderStatus,
-      orderItems: data.orderItems,
-      subtotal: data.subtotal,
-      deliveryFee: data.deliveryFee,
-      taxAmount: data.taxAmount,
-      totalAmount: data.totalAmount,
-      currency: data.currency,
-      deliveryAddress: data.deliveryAddress,
+      orderId: data.orderId || 'Unknown',
+      orderNumber: data.orderNumber || 'Unknown',
+      orderStatus: data.orderStatus || 'Unknown',
+      orderItems: data.orderItems || [],
+      subtotal: data.subtotal || 0,
+      deliveryFee: data.deliveryFee || 0,
+      taxAmount: data.taxAmount || 0,
+      totalAmount: data.totalAmount || 0,
+      currency: data.currency || 'USD',
+      deliveryAddress: data.deliveryAddress || 'Unknown Address',
       estimatedDeliveryTime: data.estimatedDeliveryTime,
       specialInstructions: data.specialInstructions,
       notes: data.notes,
@@ -203,20 +230,41 @@ export class NotificationsService {
 
     switch (userType) {
       case 'client':
+        if (!data.clientName) {
+          throw new Error('Client name is undefined');
+        }
+        if (!data.businessName) {
+          throw new Error('Business name is undefined');
+        }
         return {
           ...baseData,
           recipientName: data.clientName,
           businessName: data.businessName,
-          agentName: data.agentName,
+          agentName: data.agentName || 'Delivery Agent',
         };
       case 'business':
+        if (!data.businessName) {
+          throw new Error('Business name is undefined');
+        }
+        if (!data.clientName) {
+          throw new Error('Client name is undefined');
+        }
         return {
           ...baseData,
           recipientName: data.businessName,
           clientName: data.clientName,
-          agentName: data.agentName,
+          agentName: data.agentName || 'Delivery Agent',
         };
       case 'agent':
+        if (!data.agentName) {
+          throw new Error('Agent name is undefined');
+        }
+        if (!data.clientName) {
+          throw new Error('Client name is undefined');
+        }
+        if (!data.businessName) {
+          throw new Error('Business name is undefined');
+        }
         return {
           ...baseData,
           recipientName: data.agentName,

@@ -1326,6 +1326,16 @@ export class OrdersService {
           business_location_id
           business_location {
             business_id
+            business {
+              id
+              name
+              user {
+                id
+                email
+                first_name
+                last_name
+              }
+            }
           }
           item {
             id
@@ -1583,25 +1593,37 @@ export class OrdersService {
 
     // Send order creation notifications
     try {
+      // Validate required data before creating notification data
+      if (!businessInventory?.business_location?.business?.name) {
+        throw new Error('Business name is undefined');
+      }
+      if (!businessInventory?.business_location?.business?.user?.email) {
+        throw new Error('Business email is undefined');
+      }
+      if (!address?.formatted_address) {
+        throw new Error('Delivery address is undefined');
+      }
+
       const notificationData: NotificationData = {
         orderId: order.id,
         orderNumber: order.order_number,
-        clientName: `${user.first_name} ${user.last_name}`,
+        clientName: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
         clientEmail: user.email,
         businessName: businessInventory.business_location.business.name,
         businessEmail: businessInventory.business_location.business.user.email,
         orderStatus: order.current_status,
-        orderItems: order.order_items.map((item: any) => ({
-          name: item.item_name,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-          totalPrice: item.total_price,
-        })),
-        subtotal: order.subtotal,
-        deliveryFee: order.delivery_fee,
-        taxAmount: order.tax_amount,
+        orderItems:
+          order.order_items?.map((item: any) => ({
+            name: item.item_name || 'Unknown Item',
+            quantity: item.quantity || 0,
+            unitPrice: item.unit_price || 0,
+            totalPrice: item.total_price || 0,
+          })) || [],
+        subtotal: order.subtotal || 0,
+        deliveryFee: order.delivery_fee || 0,
+        taxAmount: order.tax_amount || 0,
         totalAmount: totalAmount,
-        currency: order.currency,
+        currency: order.currency || 'USD',
         deliveryAddress: address.formatted_address,
         estimatedDeliveryTime: order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
