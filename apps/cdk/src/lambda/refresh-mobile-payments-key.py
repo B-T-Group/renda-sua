@@ -26,14 +26,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Get environment variables
         operation_account_code = os.environ.get('OPERATION_ACCOUNT_CODE', 'ACC_68A722C33473B')
         reception_url_code = os.environ.get('RECEPTION_URL_CODE', 'TRUVU')
+        mypvit_secret_key = os.environ.get('MYPVIT_SECRET_KEY_REFRESH_PATH', 'CTCNJRBWZIDALEGT')
 
-        if not operation_account_code or not reception_url_code:
+        if not operation_account_code or not reception_url_code or not mypvit_secret_key:
             raise ValueError(
-                'Missing required environment variables: OPERATION_ACCOUNT_CODE or RECEPTION_URL_CODE'
+                'Missing required environment variables: OPERATION_ACCOUNT_CODE, RECEPTION_URL_CODE, or MYPVIT_SECRET_KEY_REFRESH_PATH'
             )
 
         print(f"Operation Account Code: {operation_account_code}")
         print(f"Reception URL Code: {reception_url_code}")
+        print(f"MyPVit Secret Key: {mypvit_secret_key}")
 
         # Get refresh key password from AWS Secrets Manager
         secrets_manager = boto3.client('secretsmanager')
@@ -72,8 +74,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         })
 
         # Make POST request to MyPVit renew-secret endpoint
+        api_url = f'https://api.mypvit.pro/{mypvit_secret_key}/renew-secret'
+        print(f"Making request to: {api_url}")
+        
         response = requests.post(
-            'https://api.mypvit.pro/CTCNJRBWZIDALEGT/renew-secret',
+            api_url,
             data=form_data,
             headers={
                 'Content-Type': 'application/x-www-form-urlencoded',

@@ -50,6 +50,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
               ? 'ACC_68B8C1E5663B4'
               : 'ACC_68A722C33473B',
           RECEPTION_URL_CODE: environment === 'production' ? 'BQ1TV' : 'TRUVU',
+          MYPVIT_SECRET_KEY_REFRESH_PATH:
+            environment === 'production'
+              ? 'CJF0DPOVZU87UUK8'
+              : 'CTCNJRBWZIDALEGT',
         },
       }
     );
