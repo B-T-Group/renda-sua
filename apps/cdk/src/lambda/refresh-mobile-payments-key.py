@@ -39,7 +39,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Get refresh key password from AWS Secrets Manager
         secrets_manager = boto3.client('secretsmanager')
-        secret_name = 'development-rendasua-backend-secrets'
+        secret_name = f"{os.environ.get('ENVIRONMENT')}-rendasua-backend-secrets"
 
         print(f"Fetching secret from: {secret_name}")
 
