@@ -16,6 +16,7 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
 import { ServicesModule } from '../services/services.module';
@@ -64,6 +65,7 @@ import { AppService } from './app.service';
     MobilePaymentsModule,
     GoogleModule,
     AdminModule,
+    NotificationsModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],

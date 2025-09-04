@@ -37,6 +37,8 @@ export interface EmailConfig {
   port: number;
   user: string;
   pass: string;
+  sendGridApiKey?: string;
+  sendGridFromEmail?: string;
 }
 
 export interface RedisConfig {
@@ -255,6 +257,9 @@ export default async (): Promise<Configuration> => {
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       user: process.env.SMTP_USER || '',
       pass: process.env.SMTP_PASS || '',
+      sendGridApiKey: process.env.SENDGRID_API_KEY || secrets.SENDGRID_API_KEY,
+      sendGridFromEmail:
+        process.env.SENDGRID_FROM_EMAIL || 'noreply@rendasua.com',
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',

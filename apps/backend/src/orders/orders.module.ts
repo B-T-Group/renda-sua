@@ -4,6 +4,7 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { OrderStatusService } from './order-status.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
@@ -15,6 +16,7 @@ import { OrdersService } from './orders.service';
     AccountsModule,
     GoogleModule,
     AddressesModule,
+    NotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderStatusService],

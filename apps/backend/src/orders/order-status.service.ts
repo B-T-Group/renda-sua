@@ -1,12 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  NotificationData,
+  NotificationsService,
+} from '../notifications/notifications.service';
 
 @Injectable()
 export class OrderStatusService {
+  private readonly logger = new Logger(OrderStatusService.name);
+
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   /**
@@ -155,6 +162,23 @@ export class OrderStatusService {
       mutationVariables
     );
 
+    // Send status change notifications
+    try {
+      const orderDetails = await this.getOrderDetailsForNotification(orderId);
+
+      if (orderDetails) {
+        await this.notificationsService.sendOrderStatusChangeNotifications(
+          orderDetails,
+          order.current_status
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send status change notifications: ${error.message}`
+      );
+      // Don't fail the status update if notifications fail
+    }
+
     return updateResult.update_orders_by_pk;
   }
 
@@ -191,5 +215,94 @@ export class OrderStatusService {
     };
 
     return transitions[currentStatus] || [];
+  }
+
+  /**
+   * Get order details for notification purposes
+   */
+  private async getOrderDetailsForNotification(
+    orderId: string
+  ): Promise<NotificationData | null> {
+    // Fetch order with all related data for notifications
+    const query = `
+      query GetOrderForNotification($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          order_number
+          current_status
+          subtotal
+          delivery_fee
+          tax_amount
+          total_amount
+          currency
+          estimated_delivery_time
+          special_instructions
+          client {
+            user {
+              first_name
+              last_name
+              email
+            }
+          }
+          business {
+            name
+            user {
+              email
+            }
+          }
+          assigned_agent {
+            user {
+              first_name
+              last_name
+              email
+            }
+          }
+          delivery_address {
+            formatted_address
+          }
+          order_items {
+            item_name
+            quantity
+            unit_price
+            total_price
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      orderId,
+    });
+    const order = result.orders_by_pk;
+
+    if (!order) return null;
+
+    return {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      clientName: `${order.client.user.first_name} ${order.client.user.last_name}`,
+      clientEmail: order.client.user.email,
+      businessName: order.business.name,
+      businessEmail: order.business.user.email,
+      agentName: order.assigned_agent
+        ? `${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`
+        : undefined,
+      agentEmail: order.assigned_agent?.user.email,
+      orderStatus: order.current_status,
+      orderItems: order.order_items.map((item) => ({
+        name: item.item_name,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        totalPrice: item.total_price,
+      })),
+      subtotal: order.subtotal,
+      deliveryFee: order.delivery_fee,
+      taxAmount: order.tax_amount,
+      totalAmount: order.total_amount,
+      currency: order.currency,
+      deliveryAddress: order.delivery_address.formatted_address,
+      estimatedDeliveryTime: order.estimated_delivery_time,
+      specialInstructions: order.special_instructions,
+    };
   }
 }

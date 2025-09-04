@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Confirmation - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .item-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+      }
+      .total-row {
+        font-weight: bold;
+        font-size: 1.1em;
+        padding: 15px 0;
+        border-top: 2px solid #2c3e50;
+      }
+      .status-badge {
+        background: #f39c12;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🛒 Order Confirmed!</h1>
+      <p>Thank you for choosing Rendasua</p>
+    </div>
+
+    <div class="content">
+      <h2>Hello {{recipientName}},</h2>
+
+      <p>
+        Great news! Your order has been successfully placed and is being
+        processed.
+      </p>
+
+      <div class="order-details">
+        <h3>Order Details</h3>
+        <p><strong>Order Number:</strong> {{orderNumber}}</p>
+        <p>
+          <strong>Status:</strong>
+          <span class="status-badge">{{orderStatus}}</span>
+        </p>
+        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+        {{#estimatedDeliveryTime}}
+        <p><strong>Estimated Delivery:</strong> {{estimatedDeliveryTime}}</p>
+        {{/estimatedDeliveryTime}} {{#specialInstructions}}
+        <p><strong>Special Instructions:</strong> {{specialInstructions}}</p>
+        {{/specialInstructions}}
+      </div>
+
+      <div class="order-details">
+        <h3>Order Items</h3>
+        {{#orderItems}}
+        <div class="item-row">
+          <span>{{name}} (Qty: {{quantity}})</span>
+          <span>{{currency}} {{totalPrice}}</span>
+        </div>
+        {{/orderItems}}
+
+        <div class="item-row">
+          <span>Subtotal</span>
+          <span>{{currency}} {{subtotal}}</span>
+        </div>
+        <div class="item-row">
+          <span>Delivery Fee</span>
+          <span>{{currency}} {{deliveryFee}}</span>
+        </div>
+        <div class="item-row">
+          <span>Tax</span>
+          <span>{{currency}} {{taxAmount}}</span>
+        </div>
+        <div class="total-row">
+          <span>Total</span>
+          <span>{{currency}} {{totalAmount}}</span>
+        </div>
+      </div>
+
+      <p>
+        We'll keep you updated on your order status. You can track your order in
+        the Rendasua app.
+      </p>
+
+      <p>If you have any questions, please don't hesitate to contact us.</p>
+
+      <p>Best regards,<br />The Rendasua Team</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. All rights reserved.</p>
+      <p>This is an automated message. Please do not reply to this email.</p>
+    </div>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
@@ -6,6 +6,10 @@ import type { Configuration } from '../config/configuration';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  NotificationData,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
@@ -18,6 +22,8 @@ export interface GetOrderRequest {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
@@ -25,7 +31,8 @@ export class OrdersService {
     private readonly configService: ConfigService<Configuration>,
     private readonly orderStatusService: OrderStatusService,
     private readonly googleDistanceService: GoogleDistanceService,
-    private readonly addressesService: AddressesService
+    private readonly addressesService: AddressesService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -1573,6 +1580,42 @@ export class OrdersService {
       client_hold_amount: totalAmount,
       delivery_fees: deliveryFee,
     });
+
+    // Send order creation notifications
+    try {
+      const notificationData: NotificationData = {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        clientName: `${user.first_name} ${user.last_name}`,
+        clientEmail: user.email,
+        businessName: businessInventory.business_location.business.name,
+        businessEmail: businessInventory.business_location.business.user.email,
+        orderStatus: order.current_status,
+        orderItems: order.order_items.map((item) => ({
+          name: item.item_name,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          totalPrice: item.total_price,
+        })),
+        subtotal: order.subtotal,
+        deliveryFee: order.delivery_fee,
+        taxAmount: order.tax_amount,
+        totalAmount: totalAmount,
+        currency: order.currency,
+        deliveryAddress: deliveryAddress.formatted_address,
+        estimatedDeliveryTime: order.estimated_delivery_time,
+        specialInstructions: order.special_instructions,
+      };
+
+      await this.notificationsService.sendOrderCreatedNotifications(
+        notificationData
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send order creation notifications: ${error.message}`
+      );
+      // Don't fail the order creation if notifications fail
+    }
 
     return {
       ...order,
