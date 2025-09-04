@@ -75,6 +75,9 @@ export class MyPVitService {
         this.configService.get<string>(
           'MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE'
         ) || 'ACC_68A722C33473B',
+      paymentEndpointCode:
+        this.configService.get<string>('MYPVIT_PAYMENT_ENDPOINT_CODE') ||
+        'X5T3RIBYQUDFBZSH',
     };
 
     // Initialize AWS Secrets Manager client
@@ -192,7 +195,7 @@ export class MyPVitService {
 
       // Use the REST endpoint for payment initiation
       const response = await this.httpClient.post(
-        '/X5T3RIBYQUDFBZSH/rest',
+        `/${this.config.paymentEndpointCode}/rest`,
         payload
       );
 

@@ -104,6 +104,7 @@ export interface MyPVitConfig {
   callbackUrlCode: string;
   secretRefreshUrlCode: string;
   merchantOperationAccountCode: string;
+  paymentEndpointCode: string;
 }
 
 export interface Configuration {
@@ -211,6 +212,8 @@ export default async (): Promise<Configuration> => {
       merchantOperationAccountCode:
         process.env.MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE ||
         'ACC_68A722C33473B',
+      paymentEndpointCode:
+        process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),
