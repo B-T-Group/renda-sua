@@ -60,7 +60,7 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
         Exciting news! Your delivery agent has arrived at your location and is
@@ -74,11 +74,11 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Business:</strong> {{{businessName}}}</p>
         {{#agentName}}
         <p><strong>Delivery Agent:</strong> {{agentName}}</p>
         {{/agentName}}
-        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+        <p><strong>Delivery Address:</strong> {{{deliveryAddress}}}</p>
       </div>
 
       <div class="delivery-alert">

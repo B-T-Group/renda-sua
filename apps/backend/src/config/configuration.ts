@@ -178,8 +178,6 @@ async function getSecrets(): Promise<Record<string, string>> {
 export default async (): Promise<Configuration> => {
   const secrets = await getSecrets();
 
-  console.log('secrets', secrets);
-
   return {
     GOOGLE_MAPS_API_KEY: secrets.GOOGLE_MAPS_API_KEY,
     GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true

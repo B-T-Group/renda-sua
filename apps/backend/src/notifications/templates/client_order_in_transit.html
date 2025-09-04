@@ -60,7 +60,7 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
         Great news! Your order has been picked up and is now on its way to you.
@@ -73,11 +73,11 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Business:</strong> {{{businessName}}}</p>
         {{#agentName}}
         <p><strong>Delivery Agent:</strong> {{agentName}}</p>
         {{/agentName}}
-        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+        <p><strong>Delivery Address:</strong> {{{deliveryAddress}}}</p>
       </div>
 
       <div class="tracking-info">

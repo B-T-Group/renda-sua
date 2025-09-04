@@ -53,10 +53,10 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
-        The order from {{clientName}} has been successfully picked up by our
+        The order from {{{clientName}}} has been successfully picked up by our
         delivery agent and is now on its way to the customer.
       </p>
 
@@ -67,11 +67,11 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Customer:</strong> {{clientName}}</p>
+        <p><strong>Customer:</strong> {{{clientName}}}</p>
         {{#agentName}}
         <p><strong>Delivery Agent:</strong> {{agentName}}</p>
         {{/agentName}}
-        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+        <p><strong>Delivery Address:</strong> {{{deliveryAddress}}}</p>
       </div>
 
       <p>

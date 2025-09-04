@@ -152,10 +152,11 @@ export class NotificationsService {
       const recipients = this.getRecipientsForStatus(data.orderStatus, data);
 
       for (const recipient of recipients) {
-        if (this.templateIds[templateKey]) {
+        const recipientTemplate = `${recipient.type}_${templateKey}`;
+        if (this.templateIds[recipientTemplate]) {
           await this.sendEmail({
             to: recipient.email,
-            templateId: this.templateIds[templateKey],
+            templateId: this.templateIds[recipientTemplate],
             dynamicTemplateData: this.prepareTemplateData(data, recipient.type),
           });
         }
@@ -227,6 +228,33 @@ export class NotificationsService {
   }
 
   /**
+   * Escape special characters for Handlebars templates
+   */
+  private escapeHandlebarsContent(content: any): any {
+    if (typeof content === 'string') {
+      // Escape HTML entities and special characters
+      return content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+    }
+    if (Array.isArray(content)) {
+      return content.map((item) => this.escapeHandlebarsContent(item));
+    }
+    if (content && typeof content === 'object') {
+      const escaped: any = {};
+      for (const [key, value] of Object.entries(content)) {
+        escaped[key] = this.escapeHandlebarsContent(value);
+      }
+      return escaped;
+    }
+    return content;
+  }
+
+  /**
    * Prepare template data for different user types
    */
   private prepareTemplateData(data: NotificationData, userType: string): any {
@@ -260,12 +288,12 @@ export class NotificationsService {
         if (!data.businessName) {
           throw new Error('Business name is undefined');
         }
-        return {
+        return this.escapeHandlebarsContent({
           ...baseData,
           recipientName: data.clientName,
           businessName: data.businessName,
           agentName: data.agentName || 'Delivery Agent',
-        };
+        });
       case 'business':
         if (!data.businessName) {
           throw new Error('Business name is undefined');
@@ -273,12 +301,12 @@ export class NotificationsService {
         if (!data.clientName) {
           throw new Error('Client name is undefined');
         }
-        return {
+        return this.escapeHandlebarsContent({
           ...baseData,
           recipientName: data.businessName,
           clientName: data.clientName,
           agentName: data.agentName || 'Delivery Agent',
-        };
+        });
       case 'agent':
         if (!data.agentName) {
           throw new Error('Agent name is undefined');
@@ -289,14 +317,14 @@ export class NotificationsService {
         if (!data.businessName) {
           throw new Error('Business name is undefined');
         }
-        return {
+        return this.escapeHandlebarsContent({
           ...baseData,
           recipientName: data.agentName,
           clientName: data.clientName,
           businessName: data.businessName,
-        };
+        });
       default:
-        return baseData;
+        return this.escapeHandlebarsContent(baseData);
     }
   }
 

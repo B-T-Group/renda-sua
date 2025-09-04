@@ -53,11 +53,11 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
         You have updated the order status to "in transit". The order is now on
-        its way to {{clientName}}.
+        its way to {{{clientName}}}.
       </p>
 
       <div class="order-details">
@@ -67,9 +67,9 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Business:</strong> {{businessName}}</p>
-        <p><strong>Customer:</strong> {{clientName}}</p>
-        <p><strong>Delivery Address:</strong> {{deliveryAddress}}</p>
+        <p><strong>Business:</strong> {{{businessName}}}</p>
+        <p><strong>Customer:</strong> {{{clientName}}}</p>
+        <p><strong>Delivery Address:</strong> {{{deliveryAddress}}}</p>
       </div>
 
       <p><strong>Next Steps:</strong></p>

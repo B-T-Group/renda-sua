@@ -60,10 +60,10 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
-        We're writing to inform you that your order from {{businessName}} has
+        We're writing to inform you that your order from {{{businessName}}} has
         failed and could not be completed.
       </p>
 
@@ -74,9 +74,9 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Business:</strong> {{{businessName}}}</p>
         {{#notes}}
-        <p><strong>Reason:</strong> {{notes}}</p>
+        <p><strong>Reason:</strong> {{{notes}}}</p>
         {{/notes}}
       </div>
 

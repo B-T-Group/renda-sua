@@ -53,10 +53,10 @@
     </div>
 
     <div class="content">
-      <h2>Hello {{recipientName}},</h2>
+      <h2>Hello {{{recipientName}}},</h2>
 
       <p>
-        Great news! Your order has been confirmed by {{businessName}} and is now
+        Great news! Your order has been confirmed by {{{businessName}}} and is now
         being prepared.
       </p>
 
@@ -67,9 +67,9 @@
           <strong>Status:</strong>
           <span class="status-badge">{{orderStatus}}</span>
         </p>
-        <p><strong>Business:</strong> {{businessName}}</p>
+        <p><strong>Business:</strong> {{{businessName}}}</p>
         {{#estimatedDeliveryTime}}
-        <p><strong>Estimated Delivery:</strong> {{estimatedDeliveryTime}}</p>
+        <p><strong>Estimated Delivery:</strong> {{{estimatedDeliveryTime}}}</p>
         {{/estimatedDeliveryTime}}
       </div>
 
