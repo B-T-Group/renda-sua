@@ -1591,7 +1591,7 @@ export class OrdersService {
         businessName: businessInventory.business_location.business.name,
         businessEmail: businessInventory.business_location.business.user.email,
         orderStatus: order.current_status,
-        orderItems: order.order_items.map((item) => ({
+        orderItems: order.order_items.map((item: any) => ({
           name: item.item_name,
           quantity: item.quantity,
           unitPrice: item.unit_price,
@@ -1602,7 +1602,7 @@ export class OrdersService {
         taxAmount: order.tax_amount,
         totalAmount: totalAmount,
         currency: order.currency,
-        deliveryAddress: deliveryAddress.formatted_address,
+        deliveryAddress: address.formatted_address,
         estimatedDeliveryTime: order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
       };
@@ -1612,7 +1612,9 @@ export class OrdersService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send order creation notifications: ${error.message}`
+        `Failed to send order creation notifications: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
       // Don't fail the order creation if notifications fail
     }

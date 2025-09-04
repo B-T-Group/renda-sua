@@ -174,7 +174,9 @@ export class OrderStatusService {
       }
     } catch (error) {
       this.logger.error(
-        `Failed to send status change notifications: ${error.message}`
+        `Failed to send status change notifications: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
       // Don't fail the status update if notifications fail
     }
@@ -289,7 +291,7 @@ export class OrderStatusService {
         : undefined,
       agentEmail: order.assigned_agent?.user.email,
       orderStatus: order.current_status,
-      orderItems: order.order_items.map((item) => ({
+      orderItems: order.order_items.map((item: any) => ({
         name: item.item_name,
         quantity: item.quantity,
         unitPrice: item.unit_price,

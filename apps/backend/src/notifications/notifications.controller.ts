@@ -1,10 +1,8 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
-import {
-  NotificationData,
-  NotificationsService,
-} from './notifications.service';
+import type { NotificationData } from './notifications.service';
+import { NotificationsService } from './notifications.service';
 
 @ApiTags('Notifications')
 @Controller('notifications')

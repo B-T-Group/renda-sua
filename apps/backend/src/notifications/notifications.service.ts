@@ -44,7 +44,7 @@ export class NotificationsService {
   private readonly fromEmail: string;
 
   // Email template IDs (these will be set after creating templates in SendGrid)
-  private readonly templateIds = {
+  private readonly templateIds: Record<string, string> = {
     client_order_created: 'd-client-order-created',
     business_order_created: 'd-business-order-created',
     client_order_confirmed: 'd-client-order-confirmed',
@@ -110,7 +110,9 @@ export class NotificationsService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send order creation notifications: ${error.message}`
+        `Failed to send order creation notifications: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
       throw error;
     }
@@ -142,7 +144,9 @@ export class NotificationsService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send order status change notifications: ${error.message}`
+        `Failed to send order status change notifications: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
       throw error;
     }
@@ -228,7 +232,7 @@ export class NotificationsService {
    * Get template key for order status
    */
   private getTemplateKey(status: string): string {
-    const statusMap = {
+    const statusMap: Record<string, string> = {
       confirmed: 'order_confirmed',
       preparing: 'order_preparing',
       ready_for_pickup: 'order_ready_for_pickup',
