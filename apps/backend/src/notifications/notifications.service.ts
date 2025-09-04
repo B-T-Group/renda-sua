@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as sgMail from '@sendgrid/mail';
+import { MailService } from '@sendgrid/mail';
 import { Configuration } from '../config/configuration';
 
 export interface EmailTemplate {
@@ -40,8 +40,9 @@ export interface NotificationData {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly sendGridApiKey: string;
-  private readonly fromEmail: string;
+  private sendGridApiKey: string;
+  private fromEmail: string;
+  private sendGridClient!: MailService;
 
   // Email template IDs - SendGrid dynamic templates
   private readonly templateIds: Record<string, string> = {
@@ -77,13 +78,33 @@ export class NotificationsService {
   };
 
   constructor(private readonly configService: ConfigService<Configuration>) {
+    // Initialize with empty values - will be set when first used
+    this.sendGridApiKey = '';
+    this.fromEmail = 'noreply@rendasua.com';
+  }
+
+  private initializeSendGrid(): void {
+    if (this.sendGridClient) {
+      return; // Already initialized
+    }
+
     const emailConfig = this.configService.get('email');
     console.log('emailConfig', emailConfig);
     this.sendGridApiKey = emailConfig?.sendGridApiKey || '';
     this.fromEmail = emailConfig?.sendGridFromEmail || 'noreply@rendasua.com';
 
     if (this.sendGridApiKey) {
-      sgMail.setApiKey(this.sendGridApiKey);
+      try {
+        this.sendGridClient = new MailService();
+        this.sendGridClient.setApiKey(this.sendGridApiKey);
+        this.logger.log('SendGrid API key initialized successfully');
+      } catch (error) {
+        this.logger.error('Failed to initialize SendGrid API key:', error);
+      }
+    } else {
+      this.logger.warn(
+        'SendGrid API key not available - email notifications will be disabled'
+      );
     }
   }
 
@@ -165,8 +186,11 @@ export class NotificationsService {
     templateId: string;
     dynamicTemplateData: any;
   }): Promise<void> {
-    if (!this.sendGridApiKey) {
-      this.logger.warn('SendGrid API key not configured, skipping email send');
+    // Initialize SendGrid if not already done
+    this.initializeSendGrid();
+
+    if (!this.sendGridClient) {
+      this.logger.warn('SendGrid client not configured, skipping email send');
       return;
     }
 
@@ -190,7 +214,7 @@ export class NotificationsService {
     };
 
     try {
-      await sgMail.send(msg);
+      await this.sendGridClient.send(msg);
       this.logger.log(`Email sent to ${to} using template ${templateId}`);
     } catch (error) {
       this.logger.error(

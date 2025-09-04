@@ -260,7 +260,12 @@ export class OrderStatusService {
             }
           }
           delivery_address {
-            formatted_address
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
           }
           order_items {
             item_name
@@ -302,9 +307,29 @@ export class OrderStatusService {
       taxAmount: order.tax_amount,
       totalAmount: order.total_amount,
       currency: order.currency,
-      deliveryAddress: order.delivery_address.formatted_address,
+      deliveryAddress: this.formatAddress(order.delivery_address),
       estimatedDeliveryTime: order.estimated_delivery_time,
       specialInstructions: order.special_instructions,
     };
+  }
+
+  /**
+   * Format address fields into a single formatted address string
+   */
+  private formatAddress(address: any): string {
+    if (!address) {
+      return '';
+    }
+
+    const addressParts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter((part) => part && part.trim() !== '');
+
+    return addressParts.join(', ');
   }
 }
