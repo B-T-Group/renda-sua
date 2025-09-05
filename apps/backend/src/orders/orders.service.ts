@@ -423,6 +423,20 @@ export class OrdersService {
       user.id,
       request.notes
     );
+
+    // Update inventory quantities - decrement both reserved and total quantities
+    try {
+      const orderItems = order.order_items || [];
+      await this.updateInventoryOnCompletion(orderItems);
+    } catch (error) {
+      this.logger.error(
+        `Failed to update inventory after order completion: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Don't fail the completion if inventory update fails
+    }
+
     return {
       success: true,
       order: updatedOrder,
@@ -534,6 +548,19 @@ export class OrdersService {
       user.id,
       request.notes
     );
+
+    // Update reserved quantities - decrement since order is cancelled
+    try {
+      const orderItems = order.order_items || [];
+      await this.updateReservedQuantities(orderItems, 'decrement');
+    } catch (error) {
+      this.logger.error(
+        `Failed to update reserved quantities after order cancellation: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Don't fail the cancellation if reserved quantity update fails
+    }
 
     return {
       success: true,
@@ -1329,6 +1356,7 @@ export class OrdersService {
             business {
               id
               name
+              is_verified
               user {
                 id
                 email
@@ -1543,6 +1571,9 @@ export class OrdersService {
 
     const order = orderResult.insert_orders_one;
 
+    // Update reserved quantities for inventory items
+    await this.updateReservedQuantities(orderItemsData, 'increment');
+
     // Create order status history after order is created
     const createStatusHistoryMutation = `
       mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
@@ -1611,6 +1642,8 @@ export class OrdersService {
         clientEmail: user.email,
         businessName: businessInventory.business_location.business.name,
         businessEmail: businessInventory.business_location.business.user.email,
+        businessVerified:
+          businessInventory.business_location.business.is_verified,
         orderStatus: order.current_status,
         orderItems:
           order.order_items?.map((item: any) => ({
@@ -2314,6 +2347,117 @@ export class OrdersService {
       console.error('Error fetching delivery fee from database:', error);
       // Return default fee as last resort
       return 1500; // Default XAF fee
+    }
+  }
+
+  /**
+   * Update reserved quantities for business inventory items
+   */
+  private async updateReservedQuantities(
+    orderItems: any[],
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    try {
+      for (const item of orderItems) {
+        const businessInventoryId = item.business_inventory_id;
+        const quantity = item.quantity;
+
+        if (!businessInventoryId || !quantity) {
+          this.logger.warn(
+            `Skipping reserved quantity update for item with missing data: ${JSON.stringify(
+              item
+            )}`
+          );
+          continue;
+        }
+
+        const updateMutation = `
+          mutation UpdateReservedQuantity($id: uuid!, $quantity: Int!) {
+            update_business_inventory_by_pk(
+              pk_columns: { id: $id }
+              _inc: { reserved_quantity: $quantity }
+            ) {
+              id
+              reserved_quantity
+              quantity
+            }
+          }
+        `;
+
+        const quantityToUpdate =
+          operation === 'increment' ? quantity : -quantity;
+
+        await this.hasuraSystemService.executeQuery(updateMutation, {
+          id: businessInventoryId,
+          quantity: quantityToUpdate,
+        });
+
+        this.logger.log(
+          `Updated reserved quantity for inventory ${businessInventoryId}: ${operation} ${quantity}`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to update reserved quantities: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update inventory quantities when an order is completed
+   * Decrements both reserved_quantity and total quantity
+   */
+  private async updateInventoryOnCompletion(orderItems: any[]): Promise<void> {
+    try {
+      for (const item of orderItems) {
+        const businessInventoryId = item.business_inventory_id;
+        const quantity = item.quantity;
+
+        if (!businessInventoryId || !quantity) {
+          this.logger.warn(
+            `Skipping inventory update for item with missing data: ${JSON.stringify(
+              item
+            )}`
+          );
+          continue;
+        }
+
+        const updateMutation = `
+          mutation UpdateInventoryOnCompletion($id: uuid!, $quantity: Int!) {
+            update_business_inventory_by_pk(
+              pk_columns: { id: $id }
+              _inc: { 
+                reserved_quantity: $reservedQuantity
+                quantity: $quantity
+              }
+            ) {
+              id
+              reserved_quantity
+              quantity
+            }
+          }
+        `;
+
+        await this.hasuraSystemService.executeQuery(updateMutation, {
+          id: businessInventoryId,
+          reservedQuantity: -quantity, // Decrement reserved quantity
+          quantity: -quantity, // Decrement total quantity
+        });
+
+        this.logger.log(
+          `Updated inventory on completion for ${businessInventoryId}: decremented reserved_quantity and quantity by ${quantity}`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to update inventory on completion: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
     }
   }
 }

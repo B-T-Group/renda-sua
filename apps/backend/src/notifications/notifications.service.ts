@@ -17,6 +17,7 @@ export interface NotificationData {
   clientEmail: string;
   businessName: string;
   businessEmail: string;
+  businessVerified?: boolean;
   agentName?: string;
   agentEmail?: string;
   orderStatus: string;
@@ -277,6 +278,7 @@ export class NotificationsService {
       estimatedDeliveryTime: data.estimatedDeliveryTime,
       specialInstructions: data.specialInstructions,
       notes: data.notes,
+      businessVerified: data.businessVerified || false,
       currentYear: new Date().getFullYear(),
     };
 

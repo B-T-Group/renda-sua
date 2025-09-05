@@ -5,6 +5,7 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   Container,
   Divider,
   Drawer,
@@ -39,7 +40,6 @@ const Header: React.FC = () => {
   const theme = useTheme();
   const location = useLocation();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // State for mobile drawer and user menu
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -98,6 +98,9 @@ const Header: React.FC = () => {
         { label: 'Messages', path: '/messages' }
       );
     }
+
+    // Always add Support link for authenticated users
+    baseItems.push({ label: 'Support', path: '/support' });
 
     return baseItems;
   };
@@ -214,7 +217,7 @@ const Header: React.FC = () => {
                   minWidth: 40,
                 }}
               >
-                {item.icon}
+                {/* Icon placeholder - can be customized per item if needed */}
               </ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -222,6 +225,55 @@ const Header: React.FC = () => {
         ))}
 
         <Divider sx={{ my: 2 }} />
+
+        {/* User Info Section for Mobile */}
+        {isAuthenticated && (
+          <>
+            <ListItem sx={{ px: 2, py: 1 }}>
+              <Box sx={{ width: '100%' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    {getUserDisplayName()}
+                  </Typography>
+                  {userType === 'business' && profile?.business && (
+                    <Chip
+                      label={
+                        profile.business.is_verified
+                          ? 'Verified'
+                          : 'Not Verified'
+                      }
+                      size="small"
+                      color={profile.business.is_verified ? 'success' : 'error'}
+                      variant="outlined"
+                      sx={{
+                        fontSize: '0.7rem',
+                        height: 20,
+                        '& .MuiChip-label': {
+                          px: 1,
+                        },
+                      }}
+                    />
+                  )}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {userType === 'business'
+                    ? 'Business Account'
+                    : userType === 'client'
+                    ? 'Client Account'
+                    : 'User Account'}
+                </Typography>
+              </Box>
+            </ListItem>
+            <Divider sx={{ my: 1 }} />
+          </>
+        )}
 
         <ListItem>
           <LanguageSwitcher />
@@ -360,9 +412,39 @@ const Header: React.FC = () => {
                         borderColor: 'divider',
                       }}
                     >
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        {getUserDisplayName()}
-                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {getUserDisplayName()}
+                        </Typography>
+                        {userType === 'business' && profile?.business && (
+                          <Chip
+                            label={
+                              profile.business.is_verified
+                                ? 'Verified'
+                                : 'Not Verified'
+                            }
+                            size="small"
+                            color={
+                              profile.business.is_verified ? 'success' : 'error'
+                            }
+                            variant="outlined"
+                            sx={{
+                              fontSize: '0.7rem',
+                              height: 20,
+                              '& .MuiChip-label': {
+                                px: 1,
+                              },
+                            }}
+                          />
+                        )}
+                      </Box>
                       <Typography variant="caption" color="text.secondary">
                         {userType === 'business'
                           ? 'Business Account'

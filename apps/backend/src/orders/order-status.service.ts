@@ -248,6 +248,7 @@ export class OrderStatusService {
           }
           business {
             name
+            is_verified
             user {
               email
             }
@@ -291,6 +292,7 @@ export class OrderStatusService {
       clientEmail: order.client.user.email,
       businessName: order.business.name,
       businessEmail: order.business.user.email,
+      businessVerified: order.business.is_verified,
       agentName: order.assigned_agent
         ? `${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`
         : undefined,
