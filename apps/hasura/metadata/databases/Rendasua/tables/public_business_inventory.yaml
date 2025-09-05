@@ -2,7 +2,7 @@ table:
   name: business_inventory
   schema: public
 computed_fields:
-  - name: available_quantity_computed
+  - name: available_quantity
     definition:
       function:
         name: compute_available_quantity
@@ -38,7 +38,6 @@ insert_permissions:
         - business_location_id
         - item_id
         - quantity
-        - available_quantity
         - reserved_quantity
         - reorder_point
         - reorder_quantity
@@ -106,7 +105,6 @@ update_permissions:
     permission:
       columns:
         - quantity
-        - available_quantity
         - reserved_quantity
         - reorder_point
         - reorder_quantity
