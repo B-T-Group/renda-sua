@@ -1,6 +1,14 @@
 table:
   name: business_inventory
   schema: public
+computed_fields:
+  - name: computed_available_quantity
+    definition:
+      function:
+        name: compute_available_quantity
+        schema: public
+      table_argument: business_inventory_row
+    comment: Computed field that returns quantity minus reserved_quantity
 object_relationships:
   - name: business_location
     using:
