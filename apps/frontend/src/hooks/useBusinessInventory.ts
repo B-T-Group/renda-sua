@@ -78,6 +78,16 @@ export interface AddInventoryItemData {
   is_active: boolean;
 }
 
+export interface UpdateInventoryItemData {
+  quantity: number;
+  reserved_quantity: number;
+  reorder_point: number;
+  reorder_quantity: number;
+  unit_cost: number;
+  selling_price: number;
+  is_active: boolean;
+}
+
 const GET_BUSINESS_INVENTORY = `
   query GetBusinessInventory($businessId: uuid!) {
     business_inventory(
@@ -407,7 +417,7 @@ export const useBusinessInventory = (businessId?: string) => {
   );
 
   const updateInventoryItem = useCallback(
-    async (itemId: string, updates: Partial<AddInventoryItemData>) => {
+    async (itemId: string, updates: Partial<UpdateInventoryItemData>) => {
       try {
         await executeUpdateMutation({ itemId, updates });
 

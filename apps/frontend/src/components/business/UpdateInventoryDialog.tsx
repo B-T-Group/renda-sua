@@ -157,27 +157,35 @@ export default function UpdateInventoryDialog({
     }
 
     try {
-      const inventoryData = {
-        item_id: item.id,
-        business_location_id: formData.business_location_id,
-        quantity: formData.quantity,
-        reserved_quantity: formData.reserved_quantity,
-        selling_price: formData.selling_price,
-        unit_cost: formData.unit_cost,
-        reorder_point: formData.reorder_point,
-        reorder_quantity: formData.reorder_quantity,
-        is_active: true,
-      };
-
       // Determine if we're updating existing inventory or adding new
       const inventoryToUpdate = selectedInventory || currentInventoryRecord;
 
       if (inventoryToUpdate?.id) {
-        // Update existing inventory
-        await updateInventoryItem(inventoryToUpdate.id, inventoryData);
+        // Update existing inventory - only pass updatable fields
+        const updateData = {
+          quantity: formData.quantity,
+          reserved_quantity: formData.reserved_quantity,
+          selling_price: formData.selling_price,
+          unit_cost: formData.unit_cost,
+          reorder_point: formData.reorder_point,
+          reorder_quantity: formData.reorder_quantity,
+          is_active: true,
+        };
+        await updateInventoryItem(inventoryToUpdate.id, updateData);
       } else {
-        // Add new inventory
-        await addInventoryItem(inventoryData);
+        // Add new inventory - include all required fields
+        const addData = {
+          item_id: item.id,
+          business_location_id: formData.business_location_id,
+          quantity: formData.quantity,
+          reserved_quantity: formData.reserved_quantity,
+          selling_price: formData.selling_price,
+          unit_cost: formData.unit_cost,
+          reorder_point: formData.reorder_point,
+          reorder_quantity: formData.reorder_quantity,
+          is_active: true,
+        };
+        await addInventoryItem(addData);
       }
 
       enqueueSnackbar(
