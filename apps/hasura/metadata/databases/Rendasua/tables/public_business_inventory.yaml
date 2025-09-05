@@ -1,13 +1,6 @@
 table:
   name: business_inventory
   schema: public
-computed_fields:
-  - name: available_quantity
-    definition:
-      function:
-        name: compute_available_quantity
-        schema: public
-      table_argument: business_inventory_row
 object_relationships:
   - name: business_location
     using:
@@ -51,14 +44,11 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - available_quantity
         - selling_price
         - is_active
         - created_at
         - updated_at
       filter:
-        available_quantity:
-          _gt: 0
         is_active:
           _eq: true
   - role: business
@@ -68,7 +58,6 @@ select_permissions:
         - business_location_id
         - item_id
         - quantity
-        - available_quantity
         - reserved_quantity
         - reorder_point
         - reorder_quantity
@@ -90,14 +79,11 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - available_quantity
         - selling_price
         - is_active
         - created_at
         - updated_at
       filter:
-        available_quantity:
-          _gt: 0
         is_active:
           _eq: true
 update_permissions:
