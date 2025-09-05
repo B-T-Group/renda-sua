@@ -67,7 +67,6 @@ interface CSVItemWithInventory {
   // Inventory fields
   business_location_name: string;
   quantity: number;
-  available_quantity: number;
   reserved_quantity: number;
   reorder_point: number;
   reorder_quantity: number;
@@ -222,7 +221,6 @@ export default function CSVUploadDialog({
               'max_order_quantity',
               'item_sub_category_id',
               'quantity',
-              'available_quantity',
               'reserved_quantity',
               'reorder_point',
               'reorder_quantity',
@@ -420,7 +418,6 @@ export default function CSVUploadDialog({
           business_location_id: location.id,
           item_id: itemId,
           quantity: row.quantity,
-          available_quantity: row.available_quantity,
           reserved_quantity: row.reserved_quantity,
           reorder_point: row.reorder_point,
           reorder_quantity: row.reorder_quantity,
@@ -516,7 +513,6 @@ export default function CSVUploadDialog({
       'brand_id',
       'business_location_name',
       'quantity',
-      'available_quantity',
       'reserved_quantity',
       'reorder_point',
       'reorder_quantity',

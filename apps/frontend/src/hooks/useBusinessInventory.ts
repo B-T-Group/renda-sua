@@ -6,7 +6,7 @@ export interface BusinessInventoryItem {
   business_location_id: string;
   item_id: string;
   quantity: number;
-  available_quantity: number;
+  available_quantity: number; // This is now a computed field
   reserved_quantity: number;
   reorder_point: number;
   reorder_quantity: number;
@@ -70,7 +70,6 @@ export interface AddInventoryItemData {
   business_location_id: string;
   item_id: string;
   quantity: number;
-  available_quantity: number;
   reserved_quantity: number;
   reorder_point: number;
   reorder_quantity: number;
@@ -310,8 +309,7 @@ export const useBusinessInventory = (businessId?: string) => {
       update_business_inventory_by_pk(
         pk_columns: { id: $itemId }
         _inc: { 
-          quantity: $quantity,
-          available_quantity: $quantity
+          quantity: $quantity
         }
         _set: { 
           last_restocked_at: "now()",

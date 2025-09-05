@@ -156,7 +156,6 @@ export default function AddItemDialog({
       item_id: itemId,
       business_location_id: firstLocationId,
       quantity: 0,
-      available_quantity: 0,
       reserved_quantity: 0,
       reorder_point: 0,
       reorder_quantity: 0,
@@ -211,7 +210,6 @@ export default function AddItemDialog({
         item_id: newItem.id,
         business_location_id: firstLocationId,
         quantity: 0,
-        available_quantity: 0,
         reserved_quantity: 0,
         reorder_point: 0,
         reorder_quantity: 0,
@@ -394,19 +392,6 @@ export default function AddItemDialog({
                       setInventoryData({
                         ...inventoryData,
                         quantity: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label={t('business.inventory.availableQuantity')}
-                    value={inventoryData.available_quantity || ''}
-                    onChange={(e) =>
-                      setInventoryData({
-                        ...inventoryData,
-                        available_quantity: parseInt(e.target.value) || 0,
                       })
                     }
                   />

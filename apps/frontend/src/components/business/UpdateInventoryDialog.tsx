@@ -50,7 +50,6 @@ export default function UpdateInventoryDialog({
   const [formData, setFormData] = useState({
     business_location_id: '',
     quantity: 0,
-    available_quantity: 0,
     reserved_quantity: 0,
     selling_price: 0,
     unit_cost: 0,
@@ -69,7 +68,6 @@ export default function UpdateInventoryDialog({
         setFormData({
           business_location_id: selectedInventory.business_location_id || '',
           quantity: selectedInventory.quantity || 0,
-          available_quantity: selectedInventory.available_quantity || 0,
           reserved_quantity: selectedInventory.reserved_quantity || 0,
           selling_price: selectedInventory.selling_price || item.price || 0,
           unit_cost: selectedInventory.unit_cost || item.price || 0,
@@ -81,7 +79,6 @@ export default function UpdateInventoryDialog({
         setFormData({
           business_location_id: '',
           quantity: 0,
-          available_quantity: 0,
           reserved_quantity: 0,
           selling_price: item.price || 0,
           unit_cost: item.price || 0,
@@ -106,7 +103,6 @@ export default function UpdateInventoryDialog({
       setFormData({
         business_location_id: inventory.business_location_id || '',
         quantity: inventory.quantity || 0,
-        available_quantity: inventory.available_quantity || 0,
         reserved_quantity: inventory.reserved_quantity || 0,
         selling_price: inventory.selling_price || item?.price || 0,
         unit_cost: inventory.unit_cost || item?.price || 0,
@@ -119,7 +115,6 @@ export default function UpdateInventoryDialog({
       setFormData((prev) => ({
         ...prev,
         quantity: 0,
-        available_quantity: 0,
         reserved_quantity: 0,
         selling_price: item?.price || 0,
         unit_cost: item?.price || 0,
@@ -166,7 +161,6 @@ export default function UpdateInventoryDialog({
         item_id: item.id,
         business_location_id: formData.business_location_id,
         quantity: formData.quantity,
-        available_quantity: formData.available_quantity,
         reserved_quantity: formData.reserved_quantity,
         selling_price: formData.selling_price,
         unit_cost: formData.unit_cost,
@@ -215,7 +209,6 @@ export default function UpdateInventoryDialog({
     setFormData({
       business_location_id: '',
       quantity: 0,
-      available_quantity: 0,
       reserved_quantity: 0,
       selling_price: 0,
       unit_cost: 0,
@@ -322,32 +315,16 @@ export default function UpdateInventoryDialog({
             {t('business.inventory.quantities')}
           </Typography>
 
-          <Stack direction="row" spacing={2}>
-            <TextField
-              fullWidth
-              type="number"
-              label={t('business.inventory.totalQuantity')}
-              value={formData.quantity}
-              onChange={(e) =>
-                handleInputChange('quantity', parseInt(e.target.value) || 0)
-              }
-              inputProps={{ min: 0 }}
-            />
-
-            <TextField
-              fullWidth
-              type="number"
-              label={t('business.inventory.availableQuantity')}
-              value={formData.available_quantity}
-              onChange={(e) =>
-                handleInputChange(
-                  'available_quantity',
-                  parseInt(e.target.value) || 0
-                )
-              }
-              inputProps={{ min: 0 }}
-            />
-          </Stack>
+          <TextField
+            fullWidth
+            type="number"
+            label={t('business.inventory.totalQuantity')}
+            value={formData.quantity}
+            onChange={(e) =>
+              handleInputChange('quantity', parseInt(e.target.value) || 0)
+            }
+            inputProps={{ min: 0 }}
+          />
 
           <Stack direction="row" spacing={2}>
             <TextField
