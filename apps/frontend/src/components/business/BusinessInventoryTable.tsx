@@ -80,9 +80,9 @@ export default function BusinessInventoryTable({
   };
 
   const getStockStatus = (item: BusinessInventoryItem) => {
-    if (item.available_quantity <= 0) {
+    if (item.computed_available_quantity <= 0) {
       return { status: 'out_of_stock', color: 'error' as const };
-    } else if (item.available_quantity <= item.reorder_point) {
+    } else if (item.computed_available_quantity <= item.reorder_point) {
       return { status: 'low_stock', color: 'warning' as const };
     } else {
       return { status: 'in_stock', color: 'success' as const };
@@ -194,7 +194,7 @@ export default function BusinessInventoryTable({
                   sx={{
                     '&:last-child td, &:last-child th': { border: 0 },
                     backgroundColor:
-                      item.available_quantity <= item.reorder_point
+                      item.computed_available_quantity <= item.reorder_point
                         ? '#fff3e0'
                         : 'inherit',
                   }}
@@ -238,12 +238,12 @@ export default function BusinessInventoryTable({
                       variant="body2"
                       fontWeight="bold"
                       color={
-                        item.available_quantity <= item.reorder_point
+                        item.computed_available_quantity <= item.reorder_point
                           ? 'warning.main'
                           : 'inherit'
                       }
                     >
-                      {item.available_quantity}
+                      {item.computed_available_quantity}
                     </Typography>
                   </TableCell>
                   <TableCell>

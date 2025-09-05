@@ -1347,7 +1347,7 @@ export class OrdersService {
       query GetBusinessInventory($businessInventoryId: uuid!) {
         business_inventory_by_pk(id: $businessInventoryId) {
           id
-          available_quantity
+          computed_available_quantity
           selling_price
           is_active
           business_location_id
@@ -1395,9 +1395,11 @@ export class OrdersService {
       );
     }
 
-    if (orderData.item.quantity > businessInventory.available_quantity) {
+    if (
+      orderData.item.quantity > businessInventory.computed_available_quantity
+    ) {
       throw new Error(
-        `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.available_quantity}, Requested: ${orderData.item.quantity}`
+        `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${orderData.item.quantity}`
       );
     }
 
@@ -2288,7 +2290,7 @@ export class OrdersService {
       query GetItem($itemId: uuid!) {
         business_inventory_by_pk(id: $itemId) {
           id
-          available_quantity
+          computed_available_quantity
           selling_price
           item {
             id

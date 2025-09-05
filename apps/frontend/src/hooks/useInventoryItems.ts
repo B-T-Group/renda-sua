@@ -14,7 +14,7 @@ const GET_INVENTORY_ITEMS = `
       id
       business_location_id
       item_id
-      available_quantity
+      computed_available_quantity
       selling_price
       is_active
       created_at
@@ -94,7 +94,7 @@ export interface InventoryItem {
   id: string;
   business_location_id: string;
   item_id: string;
-  available_quantity: number;
+  computed_available_quantity: number;
   selling_price: number;
   is_active: boolean;
   created_at: string;

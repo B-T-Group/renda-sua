@@ -118,8 +118,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Typography>
             </Box>
             <Chip
-              label={`${inventory.available_quantity} available`}
-              color={inventory.available_quantity > 0 ? 'success' : 'error'}
+              label={`${inventory.computed_available_quantity} available`}
+              color={
+                inventory.computed_available_quantity > 0 ? 'success' : 'error'
+              }
               size="small"
               sx={{ ml: 1 }}
             />
@@ -185,7 +187,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
           {/* Fund Status Alert */}
           {!canAfford &&
-            inventory.available_quantity > 0 &&
+            inventory.computed_available_quantity > 0 &&
             inventory.is_active && (
               <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
@@ -225,7 +227,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
         {/* Action Button */}
         <CardActions sx={{ p: 2, pt: 0, justifyContent: 'flex-end' }}>
-          {inventory.available_quantity === 0 ? (
+          {inventory.computed_available_quantity === 0 ? (
             <Button variant="outlined" disabled>
               Out of Stock
             </Button>

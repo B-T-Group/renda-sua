@@ -241,7 +241,12 @@ const OrderDialog: React.FC<OrderDialogProps> = ({
                 disabled={loading}
               >
                 {Array.from(
-                  { length: Math.min(selectedItem.available_quantity, 10) },
+                  {
+                    length: Math.min(
+                      selectedItem.computed_available_quantity,
+                      10
+                    ),
+                  },
                   (_, i) => i + 1
                 ).map((num) => (
                   <MenuItem key={num} value={num}>
