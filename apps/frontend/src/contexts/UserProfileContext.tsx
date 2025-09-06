@@ -28,6 +28,7 @@ export interface UserProfile {
   email: string;
   first_name: string;
   last_name: string;
+  phone_number?: string;
   user_type_id: string;
   client?: {
     id: string;

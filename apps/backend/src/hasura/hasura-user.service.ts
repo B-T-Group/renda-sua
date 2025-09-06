@@ -181,15 +181,17 @@ export class HasuraUserService {
     email: string;
     first_name: string;
     last_name: string;
+    phone_number?: string;
     user_type_id: string;
   }): Promise<UserRecord> {
     const mutation = `
-      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: user_types_enum!) {
+      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $phone_number: String, $user_type_id: user_types_enum!) {
         insert_users_one(object: {
           identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id
         }) {
           id
@@ -212,6 +214,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
     });
 
@@ -225,6 +228,7 @@ export class HasuraUserService {
     email: string;
     first_name: string;
     last_name: string;
+    phone_number?: string;
     user_type_id: string;
   }): Promise<UserWithClientRecord> {
     const mutation = `
@@ -233,6 +237,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
@@ -240,6 +245,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           client: {
             data: {}
@@ -271,6 +277,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
     });
 
@@ -308,6 +315,7 @@ export class HasuraUserService {
       email: string;
       first_name: string;
       last_name: string;
+      phone_number?: string;
       user_type_id: string;
     },
     agentData: { vehicle_type_id: string }
@@ -318,6 +326,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!,
         $vehicle_type_id: vehicle_types_enum!
       ) {
@@ -326,6 +335,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           agent: {
             data: {
@@ -361,6 +371,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
       vehicle_type_id: agentData.vehicle_type_id,
     });
@@ -401,6 +412,7 @@ export class HasuraUserService {
       email: string;
       first_name: string;
       last_name: string;
+      phone_number?: string;
       user_type_id: string;
     },
     businessData: { name: string }
@@ -411,6 +423,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!,
         $business_name: String!
       ) {
@@ -419,6 +432,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           business: {
             data: {
@@ -455,6 +469,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
       business_name: businessData.name,
     });

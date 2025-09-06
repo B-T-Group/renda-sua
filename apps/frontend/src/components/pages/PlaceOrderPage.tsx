@@ -20,18 +20,19 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useInventoryItems } from '../../hooks/useInventoryItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
+import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 const PlaceOrderPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const apiClient = useApiClient();
-  const { profile } = useUserProfile();
+  const { profile, refetch: refetchProfile } = useUserProfileContext();
 
   // State
   const [loading, setLoading] = useState(false);
@@ -39,6 +40,19 @@ const PlaceOrderPage: React.FC = () => {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+
+  // Address Dialog State
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [addressFormData, setAddressFormData] = useState<AddressFormData>({
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: '',
+    address_type: 'home',
+    is_primary: false,
+  });
 
   // Get inventory items
   const { inventoryItems, loading: inventoryLoading } = useInventoryItems();
@@ -54,7 +68,11 @@ const PlaceOrderPage: React.FC = () => {
   } = useDeliveryFee(selectedItem?.id || null);
 
   // Get client addresses
-  const { addresses, loading: addressesLoading } = useAddressManager({
+  const {
+    addresses,
+    loading: addressesLoading,
+    addAddress,
+  } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
   });
@@ -104,7 +122,7 @@ const PlaceOrderPage: React.FC = () => {
           orderNumber: response.data.order?.order_number,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating order:', error);
       // You might want to show an error message here
     } finally {
@@ -114,6 +132,56 @@ const PlaceOrderPage: React.FC = () => {
 
   const handleBack = () => {
     navigate(-1);
+  };
+
+  // Address Dialog Handlers
+  const handleOpenAddressDialog = () => {
+    setAddressDialogOpen(true);
+  };
+
+  const handleCloseAddressDialog = () => {
+    setAddressDialogOpen(false);
+    // Reset form data
+    setAddressFormData({
+      address_line_1: '',
+      address_line_2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      country: '',
+      address_type: 'home',
+      is_primary: false,
+    });
+  };
+
+  const handleAddressChange = (address: AddressFormData) => {
+    setAddressFormData(address);
+  };
+
+  const handleSaveAddress = async () => {
+    try {
+      // Ensure required fields are set
+      const addressData = {
+        ...addressFormData,
+        address_type: addressFormData.address_type || 'home',
+        is_primary: addressFormData.is_primary || false,
+      };
+
+      // Add the address using the address manager
+      await addAddress(addressData);
+
+      // Close the dialog
+      handleCloseAddressDialog();
+
+      // Refresh the user profile to get updated addresses
+      await refetchProfile();
+
+      // The addresses will be automatically updated through the useAddressManager hook
+      // If this was the first address, it will be automatically selected by the useEffect
+    } catch (error) {
+      console.error('Error saving address:', error);
+      // You might want to show an error message here
+    }
   };
 
   if (inventoryLoading) {
@@ -294,7 +362,7 @@ const PlaceOrderPage: React.FC = () => {
                     variant="outlined"
                     size="small"
                     sx={{ mt: 1 }}
-                    onClick={() => navigate('/profile')}
+                    onClick={handleOpenAddressDialog}
                   >
                     {t('orders.addAddress', 'Add Address')}
                   </Button>
@@ -352,8 +420,28 @@ const PlaceOrderPage: React.FC = () => {
                 {t('orders.paymentDetails', 'Payment Details')}
               </Typography>
 
-              {/* Phone Number Display */}
-              {profile?.phone_number && (
+              {/* Phone Number Validation */}
+              {!profile?.phone_number ? (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {t('orders.phoneNumberRequired', 'Phone Number Required')}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {t(
+                      'orders.phoneNumberRequiredMessage',
+                      'A phone number is required to place an order. Please add your mobile money phone number to your profile.'
+                    )}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={{ mt: 1 }}
+                    onClick={() => navigate('/profile')}
+                  >
+                    {t('orders.addPhoneNumber', 'Add Phone Number')}
+                  </Button>
+                </Alert>
+              ) : (
                 <Alert severity="info" sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ mb: 1 }}>
                     {t(
@@ -373,7 +461,7 @@ const PlaceOrderPage: React.FC = () => {
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     {t(
                       'orders.paymentRequestNote',
-                      'Once you accept the payment request, your order will be placed automatically.'
+                      'Once you accept the payment request, your order will be sent to the merchant.'
                     )}
                   </Typography>
                 </Alert>
@@ -424,6 +512,53 @@ const PlaceOrderPage: React.FC = () => {
                 </Box>
               </Box>
 
+              {/* Order Requirements Summary */}
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  {t('orders.orderRequirements', 'Order Requirements')}
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {profile?.phone_number ? (
+                      <Box sx={{ color: 'success.main' }}>✓</Box>
+                    ) : (
+                      <Box sx={{ color: 'error.main' }}>✗</Box>
+                    )}
+                    <Typography variant="body2">
+                      {t(
+                        'orders.phoneNumberRequirement',
+                        'Phone number for payment'
+                      )}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {selectedAddressId && addresses.length > 0 ? (
+                      <Box sx={{ color: 'success.main' }}>✓</Box>
+                    ) : (
+                      <Box sx={{ color: 'error.main' }}>✗</Box>
+                    )}
+                    <Typography variant="body2">
+                      {t(
+                        'orders.deliveryAddressRequirement',
+                        'Delivery address selected'
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+                {(!profile?.phone_number ||
+                  !selectedAddressId ||
+                  addresses.length === 0) && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    <Typography variant="body2">
+                      {t(
+                        'orders.completeRequirements',
+                        'Please complete all requirements above before placing your order.'
+                      )}
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+
               {/* Place Order Button */}
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
                 <Button
@@ -431,7 +566,10 @@ const PlaceOrderPage: React.FC = () => {
                   variant="contained"
                   size="large"
                   disabled={
-                    loading || !selectedAddressId || addresses.length === 0
+                    loading ||
+                    !selectedAddressId ||
+                    addresses.length === 0 ||
+                    !profile?.phone_number
                   }
                   startIcon={
                     loading ? <CircularProgress size={20} /> : <ShoppingCart />
@@ -446,6 +584,20 @@ const PlaceOrderPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Address Dialog */}
+      <AddressDialog
+        open={addressDialogOpen}
+        title={t('orders.addDeliveryAddress', 'Add Delivery Address')}
+        addressData={addressFormData}
+        loading={loading}
+        showAddressType={true}
+        showIsPrimary={true}
+        showCoordinates={false}
+        onClose={handleCloseAddressDialog}
+        onSave={handleSaveAddress}
+        onAddressChange={handleAddressChange}
+      />
     </Box>
   );
 };
