@@ -1,4 +1,4 @@
-import { ArrowBack, ShoppingCart } from '@mui/icons-material';
+import { ArrowBack, LocationOn, ShoppingCart } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -358,14 +358,6 @@ const PlaceOrderPage: React.FC = () => {
                       'No delivery addresses found. Please add an address to your profile.'
                     )}
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{ mt: 1 }}
-                    onClick={handleOpenAddressDialog}
-                  >
-                    {t('orders.addAddress', 'Add Address')}
-                  </Button>
                 </Alert>
               ) : (
                 <FormControl fullWidth>
@@ -407,6 +399,22 @@ const PlaceOrderPage: React.FC = () => {
                     })}
                   </Select>
                 </FormControl>
+              )}
+
+              {/* Add Another Address Button - Always visible when not loading */}
+              {!addressesLoading && (
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleOpenAddressDialog}
+                    startIcon={<LocationOn />}
+                  >
+                    {addresses.length === 0
+                      ? t('orders.addAddress', 'Add Address')
+                      : t('orders.addAnotherAddress', 'Add Another Address')}
+                  </Button>
+                </Box>
               )}
             </CardContent>
           </Card>
