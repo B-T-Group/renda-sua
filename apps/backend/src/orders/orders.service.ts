@@ -1299,23 +1299,71 @@ export class OrdersService {
           id
           order_number
           current_status
+          subtotal
+          delivery_fee
+          tax_amount
           total_amount
           currency
+          estimated_delivery_time
+          special_instructions
+          notes
           business_id
           client_id
           delivery_address_id
           client {
             user_id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
           }
           business {
             user_id
+            name
+            is_verified
+            user {
+              id
+              email
+            }
           }
           business_location {
+            id
             address_id
+            address {
+              id
+              formatted_address
+            }
+          }
+          delivery_address {
+            id
+            formatted_address
           }
           assigned_agent_id
           assigned_agent {
             user_id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
+          }
+          order_items {
+            id
+            item_name
+            quantity
+            unit_price
+            total_price
+            business_inventory_id
+            business_inventory {
+              id
+              item {
+                id
+                name
+              }
+            }
           }
         }
       }
