@@ -26,7 +26,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
-import { useInventoryItems } from '../../hooks/useInventoryItems';
+import { useInventoryItem } from '../../hooks/useInventoryItem';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 const PlaceOrderPage: React.FC = () => {
@@ -56,11 +56,9 @@ const PlaceOrderPage: React.FC = () => {
     is_primary: false,
   });
 
-  // Get inventory items
-  const { inventoryItems, loading: inventoryLoading } = useInventoryItems();
-
-  // Find the selected item
-  const selectedItem = inventoryItems.find((item) => item.id === id);
+  // Get inventory item
+  const { inventoryItem: selectedItem, loading: inventoryLoading } =
+    useInventoryItem(id || null);
 
   // Get delivery fee for the selected item
   const {
