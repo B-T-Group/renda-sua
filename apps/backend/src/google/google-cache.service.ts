@@ -210,7 +210,7 @@ export class GoogleCacheService {
         insert_google_distance_cache(
           objects: $entries,
           on_conflict: {
-            constraint: google_distance_cache_origin_address_id_destination_address_id_key,
+            constraint: google_distance_cache_origin_address_id_destination_address_key,
             update_columns: [
               origin_address_formatted,
               destination_address_formatted,
