@@ -193,6 +193,7 @@ const Profile: React.FC = () => {
                     }))
                   }
                   label="Phone Number"
+                  helperText="This phone number should be your mobile money phone number and will be used for payments associated with your account."
                   margin="normal"
                 />
                 <Box mt={2}>
