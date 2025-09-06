@@ -81,8 +81,6 @@ async function testPaymentInitiation() {
       description: 'Test payment from Rendasua',
       customer_phone: '+241123456789',
       customer_email: 'test@rendasua.com',
-      callback_url: 'https://api.rendasua.com/mobile-payments/callback/mypvit',
-      return_url: 'https://rendasua.com/payment/success',
     };
 
     const response = await httpClient.post(
@@ -178,7 +176,10 @@ async function runTests() {
 
   if (paymentResult && paymentResult.success) {
     console.log('\n📋 Next Steps:');
-    console.log('1. Check the payment URL:', paymentResult.payment_url);
+    console.log(
+      '1. Check the payment transaction ID:',
+      paymentResult.transaction_id
+    );
     console.log('2. Test the payment flow in the MyPVit test environment');
     console.log('3. Verify callback handling');
   }

@@ -194,8 +194,6 @@ export class MobilePaymentsController {
         payment_method: paymentRequest.paymentMethod || 'mobile_money',
         customer_phone: paymentRequest.customerPhone,
         customer_email: paymentRequest.customerEmail,
-        callback_url: callbackUrl,
-        return_url: paymentRequest.returnUrl,
         account_id: paymentRequest.accountId,
         transaction_type: paymentRequest.transactionType || 'PAYMENT',
       });
@@ -213,7 +211,6 @@ export class MobilePaymentsController {
       if (paymentResponse.success && paymentResponse.transactionId) {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
-          payment_url: paymentResponse.paymentUrl,
         });
 
         // For GIVE_CHANGE transactions, withdraw from account only after successful payment initiation
