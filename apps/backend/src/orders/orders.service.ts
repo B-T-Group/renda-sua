@@ -1537,13 +1537,15 @@ export class OrdersService {
         `Updated order ${orderId} status to ${newStatus} and payment status to ${paymentStatus}`
       );
 
+      const order = await this.getOrderDetails(orderId);
+
       // Create status history entry for the status change
       await this.createStatusHistoryEntry(
         orderId,
         newStatus,
         `Order status updated to ${newStatus} after payment confirmation`,
         'system',
-        'system'
+        order.client?.user?.id
       );
     } catch (error) {
       this.logger.error(
