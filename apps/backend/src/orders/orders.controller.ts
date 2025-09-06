@@ -33,7 +33,18 @@ export class OrdersController {
   @Post()
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
-      const order = await this.ordersService.createOrder(orderData);
+      // Validate required fields
+      if (!orderData.delivery_address_id) {
+        throw new HttpException(
+          'Delivery address ID is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const order = await this.ordersService.createOrder(
+        orderData,
+        orderData.delivery_address_id
+      );
 
       return {
         success: true,
@@ -198,6 +209,50 @@ export class OrdersController {
   @Get('open')
   async getOpenOrders() {
     return this.ordersService.getOpenOrders();
+  }
+
+  @Get('number/:orderNumber')
+  @ApiOperation({ summary: 'Get order details by order number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        order: { type: 'object' },
+        message: { type: 'string', example: 'Order retrieved successfully' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
+  async getOrderByNumber(@Param('orderNumber') orderNumber: string) {
+    try {
+      const order = await this.ordersService.getOrderByNumber(orderNumber);
+      return {
+        success: true,
+        order,
+        message: 'Order retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to retrieve order',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get(':id')

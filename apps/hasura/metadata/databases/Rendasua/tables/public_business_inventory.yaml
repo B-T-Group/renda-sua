@@ -1,14 +1,6 @@
 table:
   name: business_inventory
   schema: public
-computed_fields:
-  - name: computed_available_quantity
-    definition:
-      function:
-        name: compute_available_quantity
-        schema: public
-      table_argument: business_inventory_row
-    comment: Computed field that returns quantity minus reserved_quantity
 object_relationships:
   - name: business_location
     using:
@@ -26,6 +18,14 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+computed_fields:
+  - name: computed_available_quantity
+    definition:
+      function:
+        name: compute_available_quantity
+        schema: public
+      table_argument: business_inventory_row
+    comment: Computed field that returns quantity minus reserved_quantity
 insert_permissions:
   - role: business
     permission:
@@ -57,6 +57,8 @@ select_permissions:
         - created_at
         - updated_at
       filter:
+        computed_available_quantity:
+          _gt: 0
         is_active:
           _eq: true
   - role: business
@@ -75,6 +77,8 @@ select_permissions:
         - last_restocked_at
         - created_at
         - updated_at
+      computed_fields:
+        - computed_available_quantity
       filter:
         business_location:
           business:
@@ -84,14 +88,19 @@ select_permissions:
   - role: client
     permission:
       columns:
-        - id
         - business_location_id
-        - item_id
-        - selling_price
-        - is_active
         - created_at
+        - id
+        - is_active
+        - item_id
+        - quantity
+        - selling_price
         - updated_at
+      computed_fields:
+        - computed_available_quantity
       filter:
+        computed_available_quantity:
+          _gt: 0
         is_active:
           _eq: true
 update_permissions:

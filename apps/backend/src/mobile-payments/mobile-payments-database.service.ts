@@ -11,15 +11,13 @@ export interface MobilePaymentTransaction {
   payment_method: string;
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
-  payment_url?: string;
   customer_phone?: string;
   customer_email?: string;
-  callback_url?: string;
-  return_url?: string;
   error_message?: string;
   error_code?: string;
   account_id?: string;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
+  payment_entity?: 'order' | 'account';
   created_at: string;
   updated_at: string;
 }
@@ -33,16 +31,14 @@ export interface CreateTransactionData {
   payment_method: string;
   customer_phone?: string;
   customer_email?: string;
-  callback_url?: string;
-  return_url?: string;
   account_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
+  payment_entity?: 'order' | 'account';
 }
 
 export interface UpdateTransactionData {
   status?: 'pending' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
-  payment_url?: string;
   error_message?: string;
   error_code?: string;
 }
@@ -72,15 +68,13 @@ export class MobilePaymentsDatabaseService {
             payment_method
             status
             transaction_id
-            payment_url
             customer_phone
             customer_email
-            callback_url
-            return_url
             error_message
             error_code
             account_id
             transaction_type
+            payment_entity
             created_at
             updated_at
           }
@@ -128,11 +122,11 @@ export class MobilePaymentsDatabaseService {
             payment_method
             status
             transaction_id
-            payment_url
+            account_id
+            transaction_type
+            payment_entity
             customer_phone
             customer_email
-            callback_url
-            return_url
             error_message
             error_code
             created_at
@@ -181,11 +175,9 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
-            payment_url
+            payment_entity
             customer_phone
             customer_email
-            callback_url
-            return_url
             error_message
             error_code
             created_at
@@ -224,11 +216,9 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
-            payment_url
+            payment_entity
             customer_phone
             customer_email
-            callback_url
-            return_url
             error_message
             error_code
             created_at
@@ -305,11 +295,9 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
-            payment_url
+            payment_entity
             customer_phone
             customer_email
-            callback_url
-            return_url
             error_message
             error_code
             created_at

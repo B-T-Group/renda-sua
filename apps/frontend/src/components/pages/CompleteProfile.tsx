@@ -30,11 +30,13 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
+import PhoneInput from '../common/PhoneInput';
 
 interface ProfileData {
   first_name: string;
   last_name: string;
   email: string;
+  phone_number: string;
   user_type_id: string;
   profile: {
     vehicle_type_id?: string;
@@ -88,6 +90,7 @@ const CompleteProfile: React.FC = () => {
     first_name: user?.given_name || '',
     last_name: user?.family_name || '',
     email: user?.email || '',
+    phone_number: '',
     user_type_id: '',
     profile: {},
   });
@@ -273,6 +276,19 @@ const CompleteProfile: React.FC = () => {
               required
             />
 
+            <PhoneInput
+              value={profileData.phone_number}
+              onChange={(value) =>
+                setProfileData({
+                  ...profileData,
+                  phone_number: value || '',
+                })
+              }
+              label="Phone Number"
+              helperText="This phone number should be your mobile money phone number and will be used for payments associated with your account."
+              required
+            />
+
             {profileData.user_type_id === 'agent' && (
               <FormControl fullWidth required>
                 <InputLabel>Vehicle Type</InputLabel>
@@ -315,6 +331,10 @@ const CompleteProfile: React.FC = () => {
               <Typography variant="body2" gutterBottom>
                 <strong>Name:</strong> {profileData.first_name}{' '}
                 {profileData.last_name}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Phone Number:</strong>{' '}
+                {profileData.phone_number || 'Not provided'}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Persona:</strong> {selectedPersona?.title}

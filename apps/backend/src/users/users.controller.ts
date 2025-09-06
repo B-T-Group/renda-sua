@@ -190,6 +190,7 @@ export class UsersController {
             email: profileData.email,
             first_name: profileData.firstName,
             last_name: profileData.lastName,
+            phone_number: profileData.phone,
             user_type_id: userTypeId,
           });
           return {
@@ -205,6 +206,7 @@ export class UsersController {
               email: profileData.email,
               first_name: profileData.firstName,
               last_name: profileData.lastName,
+              phone_number: profileData.phone,
               user_type_id: userTypeId,
             },
             {
@@ -227,6 +229,7 @@ export class UsersController {
               email: profileData.email,
               first_name: profileData.firstName,
               last_name: profileData.lastName,
+              phone_number: profileData.phone,
               user_type_id: userTypeId,
             },
             {
@@ -282,6 +285,7 @@ export class UsersController {
       first_name: string;
       last_name: string;
       email: string;
+      phone_number?: string;
       user_type_id: string;
       profile: {
         vehicle_type_id?: string;
@@ -300,6 +304,7 @@ export class UsersController {
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
+            phone_number: userData.phone_number,
             user_type_id: userData.user_type_id,
           });
           return {
@@ -318,6 +323,7 @@ export class UsersController {
               email: userData.email,
               first_name: userData.first_name,
               last_name: userData.last_name,
+              phone_number: userData.phone_number,
               user_type_id: userData.user_type_id,
             },
             {
@@ -340,6 +346,7 @@ export class UsersController {
               email: userData.email,
               first_name: userData.first_name,
               last_name: userData.last_name,
+              phone_number: userData.phone_number,
               user_type_id: userData.user_type_id,
             },
             {
@@ -353,12 +360,13 @@ export class UsersController {
             identifier: identifier,
           };
 
-        default:
+        default: {
           // For any other user type, just create the user without related records
           const user = await this.hasuraUserService.createUser({
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
+            phone_number: userData.phone_number,
             user_type_id: userData.user_type_id,
           });
           return {
@@ -366,6 +374,7 @@ export class UsersController {
             user,
             identifier: identifier,
           };
+        }
       }
     } catch (error: any) {
       throw new HttpException(

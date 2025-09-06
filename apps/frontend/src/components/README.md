@@ -269,7 +269,7 @@ if (loading) {
 
 ### Dialog Components (`src/components/dialogs/`)
 
-- **`OrderDialog`** - Order placement dialog
+- **`OrderDialog`** - Simplified order placement component that navigates to PlaceOrderPage
 - **`AddressDialog`** - Address form dialog with country/state/city dropdowns
 
 ### Business Components (`src/components/business/`)
@@ -278,6 +278,10 @@ if (loading) {
 - **`InventoryCards`** - Inventory grid view with filters
 - **`ItemsCards`** - Items grid view with filters
 - **`BusinessInventoryTable`** - Inventory table view
+
+### Page Components (`src/components/pages/`)
+
+- **`PlaceOrderPage`** - Dedicated order placement page with address selection and payment details
 
 ## 🏗️ Component Creation Template
 

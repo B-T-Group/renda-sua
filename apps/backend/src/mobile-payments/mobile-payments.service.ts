@@ -93,6 +93,7 @@ export interface MobilePaymentRequest {
   description: string;
   customerPhone?: string;
   customerEmail?: string;
+  ownerCharge?: 'MERCHANT' | 'CUSTOMER';
   callbackUrl?: string;
   returnUrl?: string;
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
@@ -578,7 +579,7 @@ export class MobilePaymentsService {
           merchant_operation_account_code:
             this.myPVitService.getMerchantOperationAccountCode(),
           transaction_type: request.transactionType || 'PAYMENT',
-          owner_charge: 'CUSTOMER',
+          owner_charge: request.ownerCharge || 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
       default:

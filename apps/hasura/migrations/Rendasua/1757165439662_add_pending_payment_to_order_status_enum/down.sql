@@ -1,0 +1,7 @@
+-- Note: PostgreSQL does not support removing enum values directly
+-- This migration cannot be automatically reverted
+-- To remove 'pending_payment' from order_status enum, you would need to:
+-- 1. Create a new enum without 'pending_payment'
+-- 2. Update all columns to use the new enum
+-- 3. Drop the old enum
+-- 4. Rename the new enum to the original name

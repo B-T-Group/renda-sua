@@ -36,6 +36,15 @@ array_relationships:
         remote_table:
           name: accounts
           schema: public
+  - name: airtel_money_payments
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: airtel_money_payments
+          schema: public
   - name: item_images
     using:
       manual_configuration:
@@ -44,6 +53,15 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: item_images
+          schema: public
+  - name: mtn_momo_payment_requests
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: mtn_momo_payment_requests
           schema: public
   - name: order_status_history
     using:
@@ -54,23 +72,14 @@ array_relationships:
         remote_table:
           name: order_status_history
           schema: public
-  - name: airtel_money_payments
+  - name: ratings_given
     using:
       manual_configuration:
         column_mapping:
-          id: user_id
+          id: rater_user_id
         insertion_order: null
         remote_table:
-          name: airtel_money_payments
-          schema: public
-  - name: mtn_momo_payment_requests
-    using:
-      manual_configuration:
-        column_mapping:
-          id: user_id
-        insertion_order: null
-        remote_table:
-          name: mtn_momo_payment_requests
+          name: ratings
           schema: public
   - name: user_messages
     using:
@@ -89,15 +98,6 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: user_uploads
-          schema: public
-  - name: ratings_given
-    using:
-      manual_configuration:
-        column_mapping:
-          id: rater_user_id
-        insertion_order: null
-        remote_table:
-          name: ratings
           schema: public
 insert_permissions:
   - role: agent

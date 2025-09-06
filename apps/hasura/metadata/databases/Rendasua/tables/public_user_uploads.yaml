@@ -5,20 +5,21 @@ object_relationships:
   - name: document_type
     using:
       manual_configuration:
+        column_mapping:
+          document_type_id: id
+        insertion_order: null
         remote_table:
           name: document_types
           schema: public
-        column_mapping:
-          document_type_id: id
   - name: user
     using:
       manual_configuration:
+        column_mapping:
+          user_id: id
+        insertion_order: null
         remote_table:
           name: users
           schema: public
-        column_mapping:
-          user_id: id
-array_relationships: []
 insert_permissions:
   - role: agent
     permission:

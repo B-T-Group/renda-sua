@@ -178,7 +178,7 @@ const DELETE_ADDRESS = `
 export const useAddressManager = (config: AddressManagerConfig) => {
   const { entityType, entityId, autoFetch = true, onAccountCreated } = config;
 
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addresses, setAddresses] = useState<{ address: Address }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -230,8 +230,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
       const addressKey = `${entityType}_addresses`;
       const addressData = result[addressKey] || [];
 
-      const extractedAddresses = addressData.map((item: any) => item.address);
-      setAddresses(extractedAddresses);
+      setAddresses(addressData);
     } catch (err) {
       console.error('Error fetching addresses:', err);
       setError(

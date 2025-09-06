@@ -13,6 +13,7 @@ import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
@@ -52,6 +53,7 @@ import { AppService } from './app.service';
     }),
     AuthModule,
     HasuraModule,
+    InventoryItemsModule,
     ServicesModule,
     UploadsModule,
     UsersModule,

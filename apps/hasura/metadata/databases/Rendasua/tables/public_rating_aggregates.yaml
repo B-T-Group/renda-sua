@@ -1,8 +1,6 @@
 table:
   name: rating_aggregates
   schema: public
-array_relationships: []
-object_relationships: []
 select_permissions:
   - role: authenticated
     permission:
@@ -21,6 +19,3 @@ select_permissions:
         - updated_at
       filter: {}
       allow_aggregations: true
-insert_permissions: []
-update_permissions: []
-delete_permissions: []

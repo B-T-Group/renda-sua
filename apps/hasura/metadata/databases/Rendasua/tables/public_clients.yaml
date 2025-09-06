@@ -15,15 +15,6 @@ array_relationships:
         remote_table:
           name: client_addresses
           schema: public
-  - name: orders
-    using:
-      manual_configuration:
-        column_mapping:
-          id: client_id
-        insertion_order: null
-        remote_table:
-          name: orders
-          schema: public
   - name: order_holds
     using:
       manual_configuration:
@@ -32,6 +23,15 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: order_holds
+          schema: public
+  - name: orders
+    using:
+      manual_configuration:
+        column_mapping:
+          id: client_id
+        insertion_order: null
+        remote_table:
+          name: orders
           schema: public
   - name: ratings_received
     using:
@@ -42,9 +42,6 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
-        where:
-          rated_entity_type:
-            _eq: client
 insert_permissions:
   - role: agent
     permission:

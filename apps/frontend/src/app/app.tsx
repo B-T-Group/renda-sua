@@ -22,6 +22,7 @@ import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
@@ -30,6 +31,8 @@ import LoadingDemo from '../components/pages/LoadingDemo';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import OpenOrdersPage from '../components/pages/OpenOrdersPage';
+import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
+import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
 import SupportPage from '../components/pages/SupportPage';
@@ -42,6 +45,7 @@ function App() {
   const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
+  const { userType } = useUserProfileContext();
   const location = useLocation();
 
   // Only show loading for auth flow when on /app route
@@ -78,8 +82,8 @@ function App() {
     >
       <Header />
       <EmailVerificationNotice />
-      {/* Global Account Information for authenticated users */}
-      {isAuthenticated && (
+      {/* Global Account Information for authenticated users (excluding clients) */}
+      {isAuthenticated && userType !== 'client' && (
         <AccountInformation
           onRefresh={() => {}}
           compactView={true}
@@ -94,6 +98,26 @@ function App() {
             {/* Public routes */}
             <Route path="/items" element={<PublicItemsPage />} />
             <Route path="/support" element={<SupportPage />} />
+
+            {/* Place Order route */}
+            <Route
+              path="/items/:id/place_order"
+              element={
+                <ProtectedRoute>
+                  <PlaceOrderPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Order Confirmation route */}
+            <Route
+              path="/orders/confirmation"
+              element={
+                <ProtectedRoute>
+                  <OrderConfirmationPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* App route - redirects to appropriate dashboard based on auth flow */}
             <Route

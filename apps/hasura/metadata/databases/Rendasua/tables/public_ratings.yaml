@@ -1,7 +1,6 @@
 table:
   name: ratings
   schema: public
-array_relationships: []
 object_relationships:
   - name: order_details
     using:
@@ -9,6 +8,22 @@ object_relationships:
   - name: rater_user_details
     using:
       foreign_key_constraint_on: rater_user_id
+insert_permissions:
+  - role: authenticated
+    permission:
+      check:
+        rater_user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - order_id
+        - rating_type
+        - rater_user_id
+        - rated_entity_type
+        - rated_entity_id
+        - rating
+        - comment
+        - is_public
+        - is_verified
 select_permissions:
   - role: authenticated
     permission:
@@ -32,22 +47,6 @@ select_permissions:
           - rater_user_id:
               _eq: X-Hasura-User-Id
       allow_aggregations: true
-insert_permissions:
-  - role: authenticated
-    permission:
-      check:
-        rater_user_id:
-          _eq: X-Hasura-User-Id
-      columns:
-        - order_id
-        - rating_type
-        - rater_user_id
-        - rated_entity_type
-        - rated_entity_id
-        - rating
-        - comment
-        - is_public
-        - is_verified
 update_permissions:
   - role: authenticated
     permission:
@@ -57,4 +56,4 @@ update_permissions:
       filter:
         rater_user_id:
           _eq: X-Hasura-User-Id
-delete_permissions: []
+      check: null

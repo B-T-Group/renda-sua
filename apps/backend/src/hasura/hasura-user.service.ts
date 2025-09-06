@@ -86,6 +86,7 @@ export interface CreateOrderRequest {
   item: OrderItem;
   special_instructions?: string;
   verified_agent_delivery?: boolean;
+  delivery_address_id: string;
 }
 
 export interface Item {
@@ -181,15 +182,17 @@ export class HasuraUserService {
     email: string;
     first_name: string;
     last_name: string;
+    phone_number?: string;
     user_type_id: string;
   }): Promise<UserRecord> {
     const mutation = `
-      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: user_types_enum!) {
+      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $phone_number: String, $user_type_id: user_types_enum!) {
         insert_users_one(object: {
           identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id
         }) {
           id
@@ -212,6 +215,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
     });
 
@@ -225,6 +229,7 @@ export class HasuraUserService {
     email: string;
     first_name: string;
     last_name: string;
+    phone_number?: string;
     user_type_id: string;
   }): Promise<UserWithClientRecord> {
     const mutation = `
@@ -233,6 +238,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
@@ -240,6 +246,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           client: {
             data: {}
@@ -271,6 +278,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
     });
 
@@ -308,6 +316,7 @@ export class HasuraUserService {
       email: string;
       first_name: string;
       last_name: string;
+      phone_number?: string;
       user_type_id: string;
     },
     agentData: { vehicle_type_id: string }
@@ -318,6 +327,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!,
         $vehicle_type_id: vehicle_types_enum!
       ) {
@@ -326,6 +336,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           agent: {
             data: {
@@ -361,6 +372,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
       vehicle_type_id: agentData.vehicle_type_id,
     });
@@ -401,6 +413,7 @@ export class HasuraUserService {
       email: string;
       first_name: string;
       last_name: string;
+      phone_number?: string;
       user_type_id: string;
     },
     businessData: { name: string }
@@ -411,6 +424,7 @@ export class HasuraUserService {
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
+        $phone_number: String,
         $user_type_id: user_types_enum!,
         $business_name: String!
       ) {
@@ -419,6 +433,7 @@ export class HasuraUserService {
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
+          phone_number: $phone_number,
           user_type_id: $user_type_id,
           business: {
             data: {
@@ -455,6 +470,7 @@ export class HasuraUserService {
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
+      phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
       business_name: businessData.name,
     });
@@ -904,5 +920,56 @@ export class HasuraUserService {
       userId,
     });
     return agentResult.agents[0];
+  }
+
+  /**
+   * Get an address by ID
+   */
+  async getUserAddressById(addressId: string): Promise<any> {
+    if (!addressId) {
+      throw new Error('Address ID is required');
+    }
+
+    const query = `
+      query GetAddressById($addressId: uuid!) {
+        addresses_by_pk(id: $addressId) {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          is_primary
+          address_type
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.executeQuery(query, {
+      addressId,
+    });
+
+    const address = result.addresses_by_pk;
+    if (!address) {
+      return null;
+    }
+
+    // Create formatted address by combining address fields
+    const addressParts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter((part) => part && part.trim() !== '');
+
+    return {
+      ...address,
+      formatted_address: addressParts.join(', '),
+    };
   }
 }
