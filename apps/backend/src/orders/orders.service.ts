@@ -518,10 +518,15 @@ export class OrdersService {
     // Business can cancel orders in more statuses than clients
     let cancellableStatuses: string[];
     if (isBusinessOwner) {
-      cancellableStatuses = ['pending', 'confirmed', 'preparing'];
+      cancellableStatuses = [
+        'pending_payment',
+        'pending',
+        'confirmed',
+        'preparing',
+      ];
     } else {
-      // Clients can only cancel pending or confirmed orders
-      cancellableStatuses = ['pending', 'confirmed'];
+      // Clients can cancel pending_payment, pending, or confirmed orders
+      cancellableStatuses = ['pending_payment', 'pending', 'confirmed'];
     }
 
     if (!cancellableStatuses.includes(order.current_status))
@@ -531,7 +536,10 @@ export class OrdersService {
       );
 
     // If order was assigned to agent, release the agent hold
-    await this.releaseOrderHold(order, 'cancelled');
+    // Skip releasing holds for pending_payment orders since no holds have been placed yet
+    if (order.current_status !== 'pending_payment') {
+      await this.releaseOrderHold(order, 'cancelled');
+    }
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,

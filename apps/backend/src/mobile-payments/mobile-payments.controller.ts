@@ -4,7 +4,6 @@ import {
   Get,
   HttpException,
   HttpStatus,
-  Logger,
   Param,
   Post,
   Query,
@@ -59,8 +58,7 @@ export class MobilePaymentsController {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
-    private readonly ordersService: OrdersService,
-    private readonly logger: Logger
+    private readonly ordersService: OrdersService
   ) {}
 
   /**
