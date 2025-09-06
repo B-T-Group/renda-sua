@@ -77,6 +77,8 @@ select_permissions:
         - last_restocked_at
         - created_at
         - updated_at
+      computed_fields:
+        - computed_available_quantity
       filter:
         business_location:
           business:
