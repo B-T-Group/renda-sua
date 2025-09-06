@@ -86,6 +86,7 @@ export interface CreateOrderRequest {
   item: OrderItem;
   special_instructions?: string;
   verified_agent_delivery?: boolean;
+  client_delivery_address_id: string;
 }
 
 export interface Item {
@@ -919,5 +920,52 @@ export class HasuraUserService {
       userId,
     });
     return agentResult.agents[0];
+  }
+
+  /**
+   * Get an address by ID
+   */
+  async getUserAddressById(addressId: string): Promise<any> {
+    const query = `
+      query GetAddressById($addressId: uuid!) {
+        addresses_by_pk(id: $addressId) {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          is_primary
+          address_type
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.executeQuery(query, {
+      addressId,
+    });
+
+    const address = result.addresses_by_pk;
+    if (!address) {
+      return null;
+    }
+
+    // Create formatted address by combining address fields
+    const addressParts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter((part) => part && part.trim() !== '');
+
+    return {
+      ...address,
+      formatted_address: addressParts.join(', '),
+    };
   }
 }

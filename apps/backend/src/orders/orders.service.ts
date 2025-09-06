@@ -6,10 +6,8 @@ import type { Configuration } from '../config/configuration';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import {
-  NotificationData,
-  NotificationsService,
-} from '../notifications/notifications.service';
+import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
+import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
@@ -32,7 +30,8 @@ export class OrdersService {
     private readonly orderStatusService: OrderStatusService,
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly addressesService: AddressesService,
-    private readonly notificationsService: NotificationsService
+    private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -1323,9 +1322,47 @@ export class OrdersService {
   }
 
   /**
+   * Get payment provider based on phone number
+   */
+  private getProvider(
+    phoneNumber: string
+  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' {
+    if (!phoneNumber) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Phone number is required for payment',
+          error: 'PHONE_NUMBER_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (phoneNumber.startsWith('+241')) {
+      return 'airtel';
+    }
+
+    throw new HttpException(
+      {
+        success: false,
+        message: 'Phone number not yet supported for mobile payments',
+        error: 'UNSUPPORTED_PHONE_NUMBER',
+        data: {
+          phoneNumber,
+          supportedPrefixes: ['+241 (Airtel)'],
+        },
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
-  async createOrder(orderData: any): Promise<any> {
+  async createOrder(
+    orderData: any,
+    client_delivery_address_id: string
+  ): Promise<any> {
     // Get the current user
     const user = await this.hasuraUserService.getUser();
 
@@ -1333,13 +1370,13 @@ export class OrdersService {
       throw new Error('Client not found');
     }
 
-    const address = await this.hasuraUserService.getUserAddress(
-      user.id,
-      user.user_type_id
+    // Get the specified delivery address
+    const address = await this.hasuraUserService.getUserAddressById(
+      client_delivery_address_id
     );
 
     if (!address) {
-      throw new Error('Address not found');
+      throw new Error('Delivery address not found');
     }
 
     // Get the business inventory item
@@ -1403,42 +1440,151 @@ export class OrdersService {
       );
     }
 
-    const totalAmount =
-      businessInventory.selling_price * orderData.item.quantity;
     const currency = businessInventory.item.currency;
 
     // Calculate delivery fee using the new method
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
       orderData.item.business_inventory_id
     );
-    const deliveryFee = deliveryFeeInfo.deliveryFee;
 
-    // Check user account for the currency
+    // Ensure user has an account for the currency (creates one if it doesn't exist)
     const account = await this.hasuraSystemService.getAccount(
       user.id,
       currency
     );
 
-    if (!account) {
-      throw new Error(`No account found for currency ${currency}`);
-    }
+    const orderNumber = this.createOrderNumber();
 
-    if (account.total_balance < totalAmount + deliveryFee) {
-      throw new Error(
-        `Insufficient funds for currency ${currency}. Required: ${
-          totalAmount + deliveryFee
-        }, Available: ${account.total_balance}`
+    // Calculate order amounts
+    const totalAmount =
+      businessInventory.selling_price * orderData.item.quantity;
+    const deliveryFee = deliveryFeeInfo.deliveryFee;
+    const total_amount = totalAmount + deliveryFee;
+
+    // Get payment provider based on phone number
+    const provider = this.getProvider(user.phone_number || '');
+
+    // Create transaction record before initiating payment
+    let paymentTransaction = null;
+    let transaction = null;
+    try {
+      // Create transaction record in database
+      transaction = await this.mobilePaymentsDatabaseService.createTransaction({
+        reference: orderNumber,
+        amount: total_amount,
+        currency: currency,
+        description: `Payment for order ${orderNumber}`,
+        provider: provider,
+        payment_method: 'mobile_money',
+        customer_phone: user.phone_number,
+        customer_email: user.email,
+        account_id: account.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'order' as const,
+      });
+
+      const paymentRequest = {
+        amount: total_amount,
+        currency: currency,
+        description: `Payment for order ${orderNumber}`,
+        customerPhone: user.phone_number,
+        provider: provider,
+        owner_charge: 'MERCHANT',
+        transactionType: 'PAYMENT' as const,
+        payment_entity: 'order' as const,
+      };
+
+      paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+        paymentRequest,
+        orderNumber
+      );
+
+      if (!paymentTransaction.success) {
+        // Update transaction status to failed
+        await this.mobilePaymentsDatabaseService.updateTransaction(
+          transaction.id,
+          {
+            status: 'failed',
+            error_message: paymentTransaction.message,
+            error_code: paymentTransaction.errorCode,
+          }
+        );
+
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Failed to initiate payment',
+            error: 'PAYMENT_INITIATION_FAILED',
+            data: {
+              orderNumber,
+              error: paymentTransaction.message,
+              errorCode: paymentTransaction.errorCode,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Update transaction with provider response
+      if (paymentTransaction.success && paymentTransaction.transactionId) {
+        await this.mobilePaymentsDatabaseService.updateTransaction(
+          transaction.id,
+          {
+            transaction_id: paymentTransaction.transactionId,
+          }
+        );
+      }
+
+      this.logger.log(
+        `Payment initiated successfully for order ${orderNumber}, transaction ID: ${paymentTransaction.transactionId}`
+      );
+    } catch (paymentError) {
+      this.logger.error(
+        `Failed to initiate payment for order ${orderNumber}:`,
+        paymentError
+      );
+
+      // Update transaction status to failed if transaction was created
+      if (transaction) {
+        try {
+          await this.mobilePaymentsDatabaseService.updateTransaction(
+            transaction.id,
+            {
+              status: 'failed',
+              error_message: 'Payment initiation error',
+              error_code: 'PAYMENT_INITIATION_ERROR',
+            }
+          );
+        } catch (updateError) {
+          this.logger.error(
+            'Failed to update transaction status:',
+            updateError
+          );
+        }
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to initiate payment for order',
+          error: 'PAYMENT_INITIATION_ERROR',
+          data: {
+            orderNumber,
+            error:
+              paymentError instanceof Error
+                ? paymentError.message
+                : String(paymentError),
+          },
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
 
-    const orderNumber = this.createOrderNumber();
     const business_location_id = businessInventory.business_location_id;
     const delivery_address_id = address.id;
     const subtotal = totalAmount;
     const tax_amount = 0;
-    const delivery_fee = deliveryFee;
-    const total_amount = subtotal + tax_amount + delivery_fee;
-    const current_status = 'pending';
+    const current_status = 'pending_payment';
     const business_id = businessInventory.business_location.business_id;
     const payment_method = 'online';
     const payment_status = 'pending';
@@ -1557,7 +1703,7 @@ export class OrdersService {
         currency: currency,
         subTotal: subtotal,
         taxAmount: tax_amount,
-        deliveryFee: delivery_fee,
+        deliveryFee: deliveryFee,
         totalAmount: total_amount,
         currentStatus: current_status,
         paymentMethod: payment_method,
@@ -1595,13 +1741,16 @@ export class OrdersService {
       createStatusHistoryMutation,
       {
         orderId: order.id,
-        status: 'pending',
-        notes: 'Order created',
+        status: 'pending_payment',
+        notes: 'Order created, awaiting payment',
         changedByType: 'client',
         changedByUserId: user.id,
       }
     );
 
+    /* TODO: The hold transactions should be removed and replaced with the hold transactions in the callback/mypvit webhook
+    /* In the webhook, we'll find the order via the reference in the mobile_payment_transactions where the payment_entity is 'order'
+    
     await this.accountsService.registerTransaction({
       accountId: account.id,
       amount: totalAmount,
@@ -1624,6 +1773,7 @@ export class OrdersService {
       delivery_fees: deliveryFee,
     });
 
+    /* TODO: The notification functionality has been temporarily disabled
     // Send order creation notifications
     try {
       // Validate required data before creating notification data
@@ -1667,6 +1817,7 @@ export class OrdersService {
       await this.notificationsService.sendOrderCreatedNotifications(
         notificationData
       );
+    
     } catch (error) {
       this.logger.error(
         `Failed to send order creation notifications: ${
@@ -1674,11 +1825,23 @@ export class OrdersService {
         }`
       );
       // Don't fail the order creation if notifications fail
+
     }
+    */
 
     return {
       ...order,
-      total_amount: totalAmount,
+      total_amount: total_amount,
+      payment_transaction: {
+        success: paymentTransaction.success,
+        transaction_id: paymentTransaction.transactionId,
+        message: paymentTransaction.message,
+      },
+      database_transaction: {
+        id: transaction.id,
+        reference: transaction.reference,
+        status: transaction.status,
+      },
     };
   }
 

@@ -17,6 +17,7 @@ export interface MobilePaymentTransaction {
   error_code?: string;
   account_id?: string;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
+  payment_entity?: 'order' | 'account';
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +33,7 @@ export interface CreateTransactionData {
   customer_email?: string;
   account_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
+  payment_entity?: 'order' | 'account';
 }
 
 export interface UpdateTransactionData {
@@ -72,6 +74,7 @@ export class MobilePaymentsDatabaseService {
             error_code
             account_id
             transaction_type
+            payment_entity
             created_at
             updated_at
           }
@@ -119,6 +122,9 @@ export class MobilePaymentsDatabaseService {
             payment_method
             status
             transaction_id
+            account_id
+            transaction_type
+            payment_entity
             customer_phone
             customer_email
             error_message
@@ -169,6 +175,7 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
+            payment_entity
             customer_phone
             customer_email
             error_message
@@ -209,6 +216,7 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
+            payment_entity
             customer_phone
             customer_email
             error_message
@@ -287,6 +295,7 @@ export class MobilePaymentsDatabaseService {
             transaction_id
             account_id
             transaction_type
+            payment_entity
             customer_phone
             customer_email
             error_message

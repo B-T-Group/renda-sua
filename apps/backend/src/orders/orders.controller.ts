@@ -33,7 +33,10 @@ export class OrdersController {
   @Post()
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
-      const order = await this.ordersService.createOrder(orderData);
+      const order = await this.ordersService.createOrder(
+        orderData,
+        orderData.client_delivery_address_id
+      );
 
       return {
         success: true,

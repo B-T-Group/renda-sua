@@ -5,8 +5,10 @@ import {
   Button,
   Card,
   CardContent,
+  CardMedia,
   Chip,
   CircularProgress,
+  Divider,
   FormControl,
   FormControlLabel,
   Grid,
@@ -221,119 +223,421 @@ const PlaceOrderPage: React.FC = () => {
       </Box>
 
       <Grid container spacing={3}>
-        {/* Order Details Section */}
-        <Grid size={{ xs: 12, md: 6 }}>
+        {/* Order Details Section - Full Width */}
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 {t('orders.orderDetails', 'Order Details')}
               </Typography>
 
-              {/* Item Information */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="h5" gutterBottom>
-                  {selectedItem.item.name}
-                </Typography>
+              <Grid container spacing={3}>
+                {/* Item Image and Basic Info */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  {/* Item Image */}
+                  {selectedItem.item.item_images &&
+                    selectedItem.item.item_images.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <CardMedia
+                          component="img"
+                          height="200"
+                          image={selectedItem.item.item_images[0].image_url}
+                          alt={
+                            selectedItem.item.item_images[0].alt_text ||
+                            selectedItem.item.name
+                          }
+                          sx={{
+                            borderRadius: 1,
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </Box>
+                    )}
 
-                {selectedItem.item.brand && (
-                  <Typography
-                    variant="body2"
-                    color="primary"
-                    fontWeight="bold"
-                    sx={{ mb: 1 }}
-                  >
-                    {selectedItem.item.brand.name}
-                  </Typography>
-                )}
+                  {/* Basic Item Information */}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h5" gutterBottom>
+                      {selectedItem.item.name}
+                    </Typography>
 
-                <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
-                  {formatCurrency(
-                    selectedItem.selling_price,
-                    selectedItem.item.currency
-                  )}
-                </Typography>
+                    {selectedItem.item.brand && (
+                      <Typography
+                        variant="body2"
+                        color="primary"
+                        fontWeight="bold"
+                        sx={{ mb: 1 }}
+                      >
+                        {selectedItem.item.brand.name}
+                      </Typography>
+                    )}
 
-                {/* Special Handling Chips */}
-                <Box sx={{ mb: 2 }}>
-                  {selectedItem.item.is_fragile && (
-                    <Chip
-                      label="Fragile"
-                      color="warning"
-                      size="small"
-                      sx={{ mr: 0.5, mb: 0.5 }}
-                    />
-                  )}
-                  {selectedItem.item.is_perishable && (
-                    <Chip
-                      label="Perishable"
-                      color="error"
-                      size="small"
-                      sx={{ mr: 0.5, mb: 0.5 }}
-                    />
-                  )}
-                  {selectedItem.item.requires_special_handling && (
-                    <Chip
-                      label="Special Handling"
-                      color="info"
-                      size="small"
-                      sx={{ mr: 0.5, mb: 0.5 }}
-                    />
-                  )}
-                </Box>
-              </Box>
+                    <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                      {formatCurrency(
+                        selectedItem.selling_price,
+                        selectedItem.item.currency
+                      )}
+                    </Typography>
 
-              {/* Quantity Selection */}
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>{t('orders.quantity', 'Quantity')}</InputLabel>
-                <Select
-                  value={quantity}
-                  label={t('orders.quantity', 'Quantity')}
-                  onChange={(e) => setQuantity(e.target.value as number)}
-                  disabled={loading}
-                >
-                  {Array.from(
-                    {
-                      length: Math.min(
-                        selectedItem.computed_available_quantity,
-                        10
-                      ),
-                    },
-                    (_, i) => i + 1
-                  ).map((num) => (
-                    <MenuItem key={num} value={num}>
-                      {num}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                    {/* Special Handling Chips */}
+                    <Box sx={{ mb: 2 }}>
+                      {selectedItem.item.is_fragile && (
+                        <Chip
+                          label="Fragile"
+                          color="warning"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                      {selectedItem.item.is_perishable && (
+                        <Chip
+                          label="Perishable"
+                          color="error"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                      {selectedItem.item.requires_special_handling && (
+                        <Chip
+                          label="Special Handling"
+                          color="info"
+                          size="small"
+                          sx={{ mr: 0.5, mb: 0.5 }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                </Grid>
 
-              {/* Special Instructions */}
-              <TextField
-                fullWidth
-                label={t('orders.specialInstructions', 'Special Instructions')}
-                multiline
-                rows={3}
-                value={specialInstructions}
-                onChange={(e) => setSpecialInstructions(e.target.value)}
-                disabled={loading}
-                sx={{ mb: 2 }}
-              />
+                {/* Item Details and Pickup Address */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  {/* Detailed Item Information */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle1"
+                      gutterBottom
+                      fontWeight="bold"
+                    >
+                      {t('orders.itemDetails', 'Item Details')}
+                    </Typography>
 
-              {/* Verified Agent Delivery */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    color="primary"
-                    checked={verifiedAgentDelivery}
-                    onChange={(e) => setVerifiedAgentDelivery(e.target.checked)}
+                    {selectedItem.item.description && (
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        {selectedItem.item.description}
+                      </Typography>
+                    )}
+
+                    <Box
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
+                    >
+                      {selectedItem.item.sku && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            SKU:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.sku}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.model && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Model:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.model}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.color && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Color:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.color}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.material && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Material:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.material}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.weight && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Weight:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.weight}{' '}
+                            {selectedItem.item.weight_unit}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.size && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Size:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.size}{' '}
+                            {selectedItem.item.size_unit}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {selectedItem.item.item_sub_category && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            Category:
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {selectedItem.item.item_sub_category.item_category
+                              ?.name || 'Unknown'}{' '}
+                            - {selectedItem.item.item_sub_category.name}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          Available:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {selectedItem.computed_available_quantity} units
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Grid>
+
+                {/* Pickup Address */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle1"
+                      gutterBottom
+                      fontWeight="bold"
+                    >
+                      {t('orders.pickupAddress', 'Pickup Address')}
+                    </Typography>
+
+                    {selectedItem.business_location ? (
+                      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ mb: 1, fontWeight: 'medium' }}
+                        >
+                          {selectedItem.business_location.name}
+                        </Typography>
+
+                        {selectedItem.business_location.address ? (
+                          <>
+                            <Typography variant="body2" sx={{ mb: 0.5 }}>
+                              <strong>
+                                {
+                                  selectedItem.business_location.address
+                                    .address_line_1
+                                }
+                              </strong>
+                              {selectedItem.business_location.address
+                                .address_line_2 && (
+                                <span>
+                                  ,{' '}
+                                  {
+                                    selectedItem.business_location.address
+                                      .address_line_2
+                                  }
+                                </span>
+                              )}
+                            </Typography>
+
+                            <Typography variant="body2" sx={{ mb: 0.5 }}>
+                              {selectedItem.business_location.address.city},{' '}
+                              {selectedItem.business_location.address.state}{' '}
+                              {
+                                selectedItem.business_location.address
+                                  .postal_code
+                              }
+                            </Typography>
+
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              {selectedItem.business_location.address.country}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Address information not available
+                          </Typography>
+                        )}
+
+                        <Box
+                          sx={{ display: 'flex', gap: 1, alignItems: 'center' }}
+                        >
+                          <Chip
+                            label={selectedItem.business_location.location_type}
+                            size="small"
+                            variant="outlined"
+                          />
+                          {selectedItem.business_location.is_primary && (
+                            <Chip
+                              label="Primary Location"
+                              size="small"
+                              color="primary"
+                            />
+                          )}
+                        </Box>
+
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Business:{' '}
+                            {selectedItem.business_location.business.name}
+                          </Typography>
+                          {selectedItem.business_location.business
+                            .is_verified && (
+                            <Chip
+                              label="Verified"
+                              size="small"
+                              color="success"
+                              sx={{ ml: 1 }}
+                            />
+                          )}
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Business location information not available
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Order Configuration */}
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  {/* Quantity Selection */}
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>{t('orders.quantity', 'Quantity')}</InputLabel>
+                    <Select
+                      value={quantity}
+                      label={t('orders.quantity', 'Quantity')}
+                      onChange={(e) => setQuantity(e.target.value as number)}
+                      disabled={loading}
+                    >
+                      {Array.from(
+                        {
+                          length: Math.min(
+                            selectedItem.computed_available_quantity,
+                            10
+                          ),
+                        },
+                        (_, i) => i + 1
+                      ).map((num) => (
+                        <MenuItem key={num} value={num}>
+                          {num}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 9 }}>
+                  {/* Special Instructions */}
+                  <TextField
+                    fullWidth
+                    label={t(
+                      'orders.specialInstructions',
+                      'Special Instructions'
+                    )}
+                    multiline
+                    rows={3}
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
                     disabled={loading}
+                    sx={{ mb: 2 }}
                   />
-                }
-                label={t(
-                  'orders.requireVerifiedAgent',
-                  'Require verified agent for delivery'
-                )}
-              />
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  {/* Verified Agent Delivery */}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        color="primary"
+                        checked={verifiedAgentDelivery}
+                        onChange={(e) =>
+                          setVerifiedAgentDelivery(e.target.checked)
+                        }
+                        disabled={loading}
+                      />
+                    }
+                    label={t(
+                      'orders.requireVerifiedAgent',
+                      'Require verified agent for delivery'
+                    )}
+                  />
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
