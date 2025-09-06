@@ -1318,18 +1318,18 @@ export class OrdersService {
               email
             }
           }
-          business {
-            user_id
-            name
-            is_verified
-            user {
-              id
-              email
-            }
-          }
           business_location {
             id
             address_id
+            business {
+              id
+              name
+              is_verified
+              user {
+                id
+                email
+              }
+            }
             address {
               id
               address_line_1
