@@ -1306,7 +1306,6 @@ export class OrdersService {
           currency
           estimated_delivery_time
           special_instructions
-          notes
           business_id
           client_id
           delivery_address_id
