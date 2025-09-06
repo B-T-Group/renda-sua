@@ -1544,8 +1544,8 @@ export class OrdersService {
         orderId,
         newStatus,
         `Order status updated to ${newStatus} after payment confirmation`,
-        'system',
-        order.client?.user?.id
+        'client',
+        order.client.user_id
       );
     } catch (error) {
       this.logger.error(
