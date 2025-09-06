@@ -6,7 +6,7 @@ export interface BusinessInventoryItem {
   business_location_id: string;
   item_id: string;
   quantity: number;
-  available_quantity: number; // This is now a computed field
+  computed_available_quantity: number; // This is now a computed field
   reserved_quantity: number;
   reorder_point: number;
   reorder_quantity: number;
@@ -98,7 +98,7 @@ const GET_BUSINESS_INVENTORY = `
       business_location_id
       item_id
       quantity
-      available_quantity
+      computed_available_quantity
       reserved_quantity
       reorder_point
       reorder_quantity
@@ -259,7 +259,7 @@ export const useBusinessInventory = (businessId?: string) => {
         business_location_id
         item_id
         quantity
-        available_quantity
+        computed_available_quantity
         reserved_quantity
         reorder_point
         reorder_quantity
@@ -285,7 +285,7 @@ export const useBusinessInventory = (businessId?: string) => {
       ) {
         id
         quantity
-        available_quantity
+        computed_available_quantity
         reserved_quantity
         reorder_point
         reorder_quantity
@@ -328,7 +328,7 @@ export const useBusinessInventory = (businessId?: string) => {
       ) {
         id
         quantity
-        available_quantity
+        computed_available_quantity
         last_restocked_at
         updated_at
       }

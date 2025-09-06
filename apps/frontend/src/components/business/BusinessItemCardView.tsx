@@ -60,7 +60,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   const itemInventory = item.business_inventories?.[0];
   const stockStatus = itemInventory
     ? getStockStatus(
-        itemInventory.available_quantity,
+        itemInventory.computed_available_quantity,
         itemInventory.reorder_point
       )
     : null;
@@ -162,7 +162,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
                   {t('business.inventory.available')}:
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
-                  {itemInventory.available_quantity}
+                  {itemInventory.computed_available_quantity}
                 </Typography>
               </Box>
               <Box display="flex" justifyContent="space-between">

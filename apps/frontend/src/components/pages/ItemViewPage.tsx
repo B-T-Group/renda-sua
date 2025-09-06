@@ -471,7 +471,7 @@ export default function ItemViewPage() {
                             {t('business.inventory.availableQuantity')}
                           </Typography>
                           <Typography variant="h5" color="primary">
-                            {inventory.available_quantity}
+                            {inventory.computed_available_quantity}
                           </Typography>
                         </Box>
                         <Box>

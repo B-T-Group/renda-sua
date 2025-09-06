@@ -34,7 +34,7 @@ const adaptItemToInventoryItem = (item: Item): InventoryItem => {
     id: `public-${item.id}`, // Use a different ID format for public items
     business_location_id: '',
     item_id: item.id,
-    available_quantity: 1, // Default to 1 for public view
+    computed_available_quantity: 1, // Default to 1 for public view
     selling_price: item.price,
     is_active: item.is_active,
     created_at: item.created_at,

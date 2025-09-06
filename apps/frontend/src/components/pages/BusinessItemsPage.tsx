@@ -388,7 +388,7 @@ const BusinessItemsPage: React.FC = () => {
       'brand_id',
       'business_location_name',
       'quantity',
-      'available_quantity',
+      'computed_available_quantity',
       'reserved_quantity',
       'reorder_point',
       'reorder_quantity',
@@ -429,7 +429,7 @@ const BusinessItemsPage: React.FC = () => {
         item.brand_id || '',
         '', // business_location_name - will be empty for items without inventory
         '', // quantity
-        '', // available_quantity
+        '', // computed_available_quantity
         '', // reserved_quantity
         '', // reorder_point
         '', // reorder_quantity
@@ -537,7 +537,7 @@ const BusinessItemsPage: React.FC = () => {
       width: 120,
       type: 'number',
       valueGetter: (value, row) =>
-        row.business_inventories?.[0]?.available_quantity || 0,
+        row.business_inventories?.[0]?.computed_available_quantity || 0,
     },
     {
       field: 'stock_status',
@@ -555,7 +555,7 @@ const BusinessItemsPage: React.FC = () => {
           );
         }
         const stockStatus = getStockStatus(
-          inventory.available_quantity,
+          inventory.computed_available_quantity,
           inventory.reorder_point
         );
         return (

@@ -2,12 +2,13 @@ table:
   name: business_inventory
   schema: public
 computed_fields:
-  - name: available_quantity
+  - name: computed_available_quantity
     definition:
       function:
         name: compute_available_quantity
         schema: public
       table_argument: business_inventory_row
+    comment: Computed field that returns quantity minus reserved_quantity
 object_relationships:
   - name: business_location
     using:
@@ -51,13 +52,12 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - available_quantity
         - selling_price
         - is_active
         - created_at
         - updated_at
       filter:
-        available_quantity:
+        computed_available_quantity:
           _gt: 0
         is_active:
           _eq: true
@@ -68,7 +68,6 @@ select_permissions:
         - business_location_id
         - item_id
         - quantity
-        - available_quantity
         - reserved_quantity
         - reorder_point
         - reorder_quantity
@@ -90,13 +89,12 @@ select_permissions:
         - id
         - business_location_id
         - item_id
-        - available_quantity
         - selling_price
         - is_active
         - created_at
         - updated_at
       filter:
-        available_quantity:
+        computed_available_quantity:
           _gt: 0
         is_active:
           _eq: true

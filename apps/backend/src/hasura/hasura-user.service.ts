@@ -93,7 +93,7 @@ export interface Item {
   name: string;
   price: number;
   currency: string;
-  available_quantity: number;
+  computed_available_quantity: number;
 }
 
 export interface Account {
@@ -775,18 +775,21 @@ export class HasuraUserService {
 
     // Get user type-specific data
     switch (user.user_type_id) {
-      case 'client':
+      case 'client': {
         const client = await this.getUserClient(user.id);
         user.client = client;
         break;
-      case 'agent':
+      }
+      case 'agent': {
         const agent = await this.getUserAgent(user.id);
         user.agent = agent;
         break;
-      case 'business':
+      }
+      case 'business': {
         const business = await this.getUserBusiness(user.id);
         user.business = business;
         break;
+      }
       default:
         throw new Error('Invalid user type');
     }

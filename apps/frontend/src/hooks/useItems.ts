@@ -54,7 +54,7 @@ export interface Item {
     item_id: string;
     business_location_id: string;
     quantity: number;
-    available_quantity: number;
+    computed_available_quantity: number;
     reserved_quantity: number;
     selling_price: number;
     unit_cost: number;
@@ -170,7 +170,7 @@ const GET_ITEMS = `
         item_id
         business_location_id
         quantity
-        available_quantity
+        computed_available_quantity
         reserved_quantity
         selling_price
         unit_cost
@@ -273,7 +273,7 @@ const GET_SINGLE_ITEM = `
         id
         business_location_id
         quantity
-        available_quantity
+        computed_available_quantity
         reserved_quantity
         reorder_point
         reorder_quantity

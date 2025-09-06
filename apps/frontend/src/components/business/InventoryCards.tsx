@@ -69,9 +69,9 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
   };
 
   const getStockStatus = (item: BusinessInventoryItem) => {
-    if (item.available_quantity <= 0) {
+    if (item.computed_available_quantity <= 0) {
       return { status: 'out_of_stock', color: 'error' as const };
-    } else if (item.available_quantity <= item.reorder_point) {
+    } else if (item.computed_available_quantity <= item.reorder_point) {
       return { status: 'low_stock', color: 'warning' as const };
     } else {
       return { status: 'in_stock', color: 'success' as const };
@@ -255,7 +255,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                   flexDirection: 'column',
                   overflow: 'hidden',
                   backgroundColor:
-                    item.available_quantity <= item.reorder_point
+                    item.computed_available_quantity <= item.reorder_point
                       ? '#fff3e0'
                       : 'inherit',
                 }}
@@ -346,12 +346,12 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                     <Typography
                       variant="body2"
                       color={
-                        item.available_quantity <= item.reorder_point
+                        item.computed_available_quantity <= item.reorder_point
                           ? 'warning.main'
                           : 'text.secondary'
                       }
                       fontWeight={
-                        item.available_quantity <= item.reorder_point
+                        item.computed_available_quantity <= item.reorder_point
                           ? 'bold'
                           : 'normal'
                       }
@@ -361,7 +361,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
                       <strong>
                         {t('business.inventory.availableQuantity')}:
                       </strong>{' '}
-                      {item.available_quantity}
+                      {item.computed_available_quantity}
                     </Typography>
 
                     <Typography
@@ -493,9 +493,9 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
 
                   {/* Stock Level Badge */}
                   <Badge
-                    badgeContent={item.available_quantity}
+                    badgeContent={item.computed_available_quantity}
                     color={
-                      item.available_quantity <= item.reorder_point
+                      item.computed_available_quantity <= item.reorder_point
                         ? 'warning'
                         : 'primary'
                     }
