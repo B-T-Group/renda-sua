@@ -48,9 +48,6 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
-        where:
-          rated_entity_type:
-            _eq: item
 insert_permissions:
   - role: business
     permission:

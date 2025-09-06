@@ -1,17 +1,13 @@
 table:
   name: payment_callbacks
   schema: public
-array_relationships: []
-insert_permissions: []
-select_permissions: []
-update_permissions: []
-delete_permissions: []
 object_relationships:
   - name: mobile_payment_transaction
     using:
       manual_configuration:
         column_mapping:
           transaction_id: id
+        insertion_order: null
         remote_table:
           name: mobile_payment_transactions
           schema: public

@@ -12,8 +12,6 @@ array_relationships:
         remote_table:
           name: user_messages
           schema: public
-object_relationships: []
-insert_permissions: []
 select_permissions:
   - role: agent
     permission:
@@ -39,5 +37,3 @@ select_permissions:
         - id
         - comment
       filter: {}
-update_permissions: []
-delete_permissions: []

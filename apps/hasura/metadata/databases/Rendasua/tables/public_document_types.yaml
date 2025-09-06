@@ -1,7 +1,6 @@
 table:
   name: document_types
   schema: public
-object_relationships: []
 array_relationships:
   - name: user_uploads
     using:
