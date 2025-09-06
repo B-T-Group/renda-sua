@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useAccountInfo,
   useBackendOrders,
@@ -25,11 +26,11 @@ import ItemsFilter from '../common/ItemsFilter';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
-import OrderDialog from '../dialogs/OrderDialog';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
   const { profile } = useUserProfile();
+  const navigate = useNavigate();
   const {
     inventoryItems,
     loading: inventoryLoading,
@@ -43,11 +44,6 @@ const Dashboard: React.FC = () => {
     getDeliveryFeeForCurrency,
   } = useDeliveryFees();
   const { error: orderError } = useBackendOrders();
-
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-  const [specialInstructions, setSpecialInstructions] = useState('');
 
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
@@ -177,10 +173,7 @@ const Dashboard: React.FC = () => {
   );
 
   const handleOrderClick = (item: any) => {
-    setSelectedItem(item);
-    setOrderDialogOpen(true);
-    setQuantity(1);
-    setSpecialInstructions('');
+    navigate(`/items/${item.id}/place_order`);
   };
 
   const handleTopUpClick = () => {
@@ -348,38 +341,10 @@ const Dashboard: React.FC = () => {
         )}
       </Paper>
 
-      {/* Order Dialog */}
-      <OrderDialog
-        open={orderDialogOpen}
-        onClose={() => setOrderDialogOpen(false)}
-        selectedItem={selectedItem}
-        quantity={quantity}
-        specialInstructions={specialInstructions}
-        formatCurrency={formatCurrency}
-        account={
-          selectedItem
-            ? getAccountForCurrency(selectedItem.item.currency)
-            : undefined
-        }
-        onQuantityChange={setQuantity}
-        onSpecialInstructionsChange={setSpecialInstructions}
-        onOrderSuccess={(order) => {
-          // Handle successful order creation
-          setConfirmationModalOpen(true);
-          // Reset form
-          setQuantity(1);
-          setSpecialInstructions('');
-        }}
-        onOrderError={(error) => {
-          // Handle order error - you might want to show a snackbar or alert
-          console.error('Order creation failed:', error);
-        }}
-      />
-
       <OrderConfirmationModal
         open={confirmationModalOpen}
         onClose={() => setConfirmationModalOpen(false)}
-        orderNumber={selectedItem?.order_number}
+        orderNumber={undefined}
       />
     </Container>
   );

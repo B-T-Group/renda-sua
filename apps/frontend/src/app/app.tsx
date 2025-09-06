@@ -30,6 +30,7 @@ import LoadingDemo from '../components/pages/LoadingDemo';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import OpenOrdersPage from '../components/pages/OpenOrdersPage';
+import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
 import SupportPage from '../components/pages/SupportPage';
@@ -94,6 +95,16 @@ function App() {
             {/* Public routes */}
             <Route path="/items" element={<PublicItemsPage />} />
             <Route path="/support" element={<SupportPage />} />
+
+            {/* Place Order route */}
+            <Route
+              path="/items/:id/place_order"
+              element={
+                <ProtectedRoute>
+                  <PlaceOrderPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* App route - redirects to appropriate dashboard based on auth flow */}
             <Route

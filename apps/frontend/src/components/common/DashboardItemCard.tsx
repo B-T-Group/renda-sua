@@ -1,12 +1,5 @@
+import { Category, LocationOn, ShoppingCart } from '@mui/icons-material';
 import {
-  AccountBalanceWallet,
-  Category,
-  LocationOn,
-  ShoppingCart,
-  Warning,
-} from '@mui/icons-material';
-import {
-  Alert,
   Box,
   Button,
   Card,
@@ -18,17 +11,12 @@ import {
 } from '@mui/material';
 import React from 'react';
 import NoImage from '../../assets/no-image.svg';
-import { Account } from '../../hooks/useAccountInfo';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 interface DashboardItemCardProps {
   item: InventoryItem;
-  canAfford: boolean;
-  account?: Account;
-  insufficientFundsMessage?: string;
   formatCurrency: (amount: number, currency?: string) => string;
   onOrderClick: (item: InventoryItem) => void;
-  onTopUpClick: () => void;
   estimatedDistance?: string | null;
   estimatedDuration?: string | null;
   distanceLoading?: boolean;
@@ -41,12 +29,8 @@ interface DashboardItemCardProps {
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   item: inventory,
-  canAfford,
-  account,
-  insufficientFundsMessage,
   formatCurrency,
   onOrderClick,
-  onTopUpClick,
   estimatedDistance,
   estimatedDuration,
   distanceLoading,
@@ -185,26 +169,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             )}
           </Box>
 
-          {/* Fund Status Alert */}
-          {!canAfford &&
-            inventory.computed_available_quantity > 0 &&
-            inventory.is_active && (
-              <Alert severity="warning" sx={{ mb: 2 }} icon={<Warning />}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  {insufficientFundsMessage}
-                </Typography>
-                {account && (
-                  <Typography variant="caption" color="text.secondary">
-                    Current balance:{' '}
-                    {formatCurrency(
-                      account.available_balance,
-                      account.currency
-                    )}
-                  </Typography>
-                )}
-              </Alert>
-            )}
-
           {/* Delivery Information */}
           <Box sx={{ mb: 2 }}>
             {distanceLoading && (
@@ -235,7 +199,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             <Button variant="outlined" disabled>
               Not Available
             </Button>
-          ) : isPublicView && !canAfford ? (
+          ) : isPublicView ? (
             <Button
               variant="contained"
               color="primary"
@@ -244,22 +208,13 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {loginButtonText}
             </Button>
-          ) : canAfford ? (
+          ) : (
             <Button
               variant="contained"
               startIcon={<ShoppingCart />}
               onClick={() => onOrderClick(inventory)}
             >
               {orderButtonText}
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<AccountBalanceWallet />}
-              onClick={onTopUpClick}
-            >
-              Top Up Account
             </Button>
           )}
         </CardActions>
