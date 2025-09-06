@@ -401,6 +401,61 @@ const PlaceOrderPage: React.FC = () => {
                 </FormControl>
               )}
 
+              {/* Selected Address Display */}
+              {selectedAddressId && addresses.length > 0 && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {t('orders.selectedAddress', 'Selected Delivery Address')}
+                  </Typography>
+                  {(() => {
+                    const selectedAddressWrapper = addresses.find(
+                      (addr) => addr.address.id === selectedAddressId
+                    );
+                    if (selectedAddressWrapper) {
+                      const address = selectedAddressWrapper.address;
+                      return (
+                        <Box>
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            <strong>{address.address_line_1}</strong>
+                            {address.address_line_2 && (
+                              <span>, {address.address_line_2}</span>
+                            )}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            {address.city}, {address.state}{' '}
+                            {address.postal_code}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            {address.country}
+                          </Typography>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              gap: 1,
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Chip
+                              label={address.address_type}
+                              size="small"
+                              variant="outlined"
+                            />
+                            {address.is_primary && (
+                              <Chip
+                                label="Primary"
+                                size="small"
+                                color="primary"
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                      );
+                    }
+                    return null;
+                  })()}
+                </Box>
+              )}
+
               {/* Add Another Address Button - Always visible when not loading */}
               {!addressesLoading && (
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>

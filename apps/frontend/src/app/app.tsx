@@ -22,6 +22,7 @@ import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
@@ -43,6 +44,7 @@ function App() {
   const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
+  const { userType } = useUserProfileContext();
   const location = useLocation();
 
   // Only show loading for auth flow when on /app route
@@ -79,8 +81,8 @@ function App() {
     >
       <Header />
       <EmailVerificationNotice />
-      {/* Global Account Information for authenticated users */}
-      {isAuthenticated && (
+      {/* Global Account Information for authenticated users (excluding clients) */}
+      {isAuthenticated && userType !== 'client' && (
         <AccountInformation
           onRefresh={() => {}}
           compactView={true}
