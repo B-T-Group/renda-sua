@@ -1332,12 +1332,22 @@ export class OrdersService {
             address_id
             address {
               id
-              formatted_address
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
             }
           }
           delivery_address {
             id
-            formatted_address
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
           }
           assigned_agent_id
           assigned_agent {
@@ -1436,7 +1446,7 @@ export class OrdersService {
         if (!order.business_location?.business?.user?.email) {
           throw new Error('Business email is undefined');
         }
-        if (!order.delivery_address?.formatted_address) {
+        if (!order.delivery_address) {
           throw new Error('Delivery address is undefined');
         }
 
@@ -1463,7 +1473,7 @@ export class OrdersService {
           taxAmount: order.tax_amount || 0,
           totalAmount: order.total_amount || 0,
           currency: order.currency || 'USD',
-          deliveryAddress: order.delivery_address?.formatted_address,
+          deliveryAddress: this.formatAddress(order.delivery_address),
           estimatedDeliveryTime: order.estimated_delivery_time,
           specialInstructions: order.special_instructions,
         };
