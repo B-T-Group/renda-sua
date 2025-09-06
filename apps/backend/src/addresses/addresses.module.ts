@@ -1,10 +1,10 @@
-import { Module } from '@nestjs/common';
-import { HasuraModule } from '../hasura/hasura.module';
+import { Global, Module } from '@nestjs/common';
 import { AddressesController } from './addresses.controller';
 import { AddressesService } from './addresses.service';
 
+@Global()
 @Module({
-  imports: [HasuraModule],
+  imports: [],
   controllers: [AddressesController],
   providers: [AddressesService],
   exports: [AddressesService],
