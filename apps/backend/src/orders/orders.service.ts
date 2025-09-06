@@ -1370,6 +1370,14 @@ export class OrdersService {
       throw new Error('Client not found');
     }
 
+    // Validate delivery address ID
+    if (!client_delivery_address_id) {
+      throw new HttpException(
+        'Delivery address ID is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Get the specified delivery address
     const address = await this.hasuraUserService.getUserAddressById(
       client_delivery_address_id
@@ -1486,10 +1494,10 @@ export class OrdersService {
       const paymentRequest = {
         amount: total_amount,
         currency: currency,
-        description: `Payment for order ${orderNumber}`,
+        description: `Order ${orderNumber}`,
         customerPhone: user.phone_number,
         provider: provider,
-        owner_charge: 'MERCHANT',
+        ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
         payment_entity: 'order' as const,
       };

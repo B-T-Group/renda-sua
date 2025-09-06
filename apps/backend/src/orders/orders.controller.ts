@@ -33,9 +33,17 @@ export class OrdersController {
   @Post()
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
+      // Validate required fields
+      if (!orderData.delivery_address_id) {
+        throw new HttpException(
+          'Delivery address ID is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       const order = await this.ordersService.createOrder(
         orderData,
-        orderData.client_delivery_address_id
+        orderData.delivery_address_id
       );
 
       return {

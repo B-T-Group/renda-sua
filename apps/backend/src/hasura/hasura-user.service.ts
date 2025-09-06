@@ -86,7 +86,7 @@ export interface CreateOrderRequest {
   item: OrderItem;
   special_instructions?: string;
   verified_agent_delivery?: boolean;
-  client_delivery_address_id: string;
+  delivery_address_id: string;
 }
 
 export interface Item {
@@ -926,6 +926,10 @@ export class HasuraUserService {
    * Get an address by ID
    */
   async getUserAddressById(addressId: string): Promise<any> {
+    if (!addressId) {
+      throw new Error('Address ID is required');
+    }
+
     const query = `
       query GetAddressById($addressId: uuid!) {
         addresses_by_pk(id: $addressId) {
