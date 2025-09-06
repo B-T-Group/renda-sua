@@ -4,12 +4,14 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Post,
   Query,
 } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
+import { OrdersService } from '../orders/orders.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -56,7 +58,9 @@ export class MobilePaymentsController {
   constructor(
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly databaseService: MobilePaymentsDatabaseService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly ordersService: OrdersService,
+    private readonly logger: Logger
   ) {}
 
   /**
@@ -605,6 +609,11 @@ export class MobilePaymentsController {
                 `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
               );
               console.log('New balance:', creditResult.newBalance);
+
+              if (transaction.payment_entity === 'order') {
+                // Process order payment using the refactored method
+                await this.ordersService.processOrderPayment(transaction);
+              }
             } else {
               console.error(
                 `Failed to credit account ${transaction.account_id}: ${creditResult.error}`

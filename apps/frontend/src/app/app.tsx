@@ -31,6 +31,7 @@ import LoadingDemo from '../components/pages/LoadingDemo';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import OpenOrdersPage from '../components/pages/OpenOrdersPage';
+import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import PublicItemsPage from '../components/pages/PublicItemsPage';
@@ -104,6 +105,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PlaceOrderPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Order Confirmation route */}
+            <Route
+              path="/orders/confirmation"
+              element={
+                <ProtectedRoute>
+                  <OrderConfirmationPage />
                 </ProtectedRoute>
               }
             />

@@ -115,11 +115,10 @@ const PlaceOrderPage: React.FC = () => {
         throw new Error(response.data.message || 'Failed to create order');
       }
 
-      // Navigate to success page or dashboard
-      navigate('/dashboard', {
+      // Navigate to order confirmation page
+      navigate('/orders/confirmation', {
         state: {
-          orderSuccess: true,
-          orderNumber: response.data.order?.order_number,
+          order: response.data.order,
         },
       });
     } catch (error: unknown) {

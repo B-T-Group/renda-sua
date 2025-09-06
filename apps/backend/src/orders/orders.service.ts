@@ -8,6 +8,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import {
+  NotificationData,
+  NotificationsService,
+} from '../notifications/notifications.service';
 import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
@@ -31,7 +35,8 @@ export class OrdersService {
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly addressesService: AddressesService,
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService
+    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -1279,6 +1284,212 @@ export class OrdersService {
     return result.orders_by_pk;
   }
 
+  private async getOrderDetailsByNumber(orderNumber: string): Promise<any> {
+    const query = `
+      query GetOrderByNumber($orderNumber: String!) {
+        orders(where: { order_number: { _eq: $orderNumber } }, limit: 1) {
+          id
+          order_number
+          current_status
+          total_amount
+          currency
+          business_id
+          client_id
+          delivery_address_id
+          client {
+            user_id
+          }
+          business {
+            user_id
+          }
+          business_location {
+            address_id
+          }
+          assigned_agent_id
+          assigned_agent {
+            user_id
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      orderNumber,
+    });
+    return result.orders[0] || null;
+  }
+
+  /**
+   * Get order details by order number (public method for controllers)
+   */
+  async getOrderByNumber(orderNumber: string): Promise<any> {
+    if (!orderNumber) {
+      throw new HttpException(
+        'Order number is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const order = await this.getOrderDetailsByNumber(orderNumber);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    return order;
+  }
+
+  /**
+   * Process order payment - handles hold transactions and notifications
+   */
+  async processOrderPayment(transaction: any): Promise<void> {
+    try {
+      // Get order details by order number (reference)
+      const order = await this.getOrderByNumber(transaction.reference);
+
+      // Register hold transactions for order amount and delivery fee
+      await this.accountsService.registerTransaction({
+        accountId: transaction.account_id,
+        amount: order.subtotal,
+        transactionType: 'hold',
+        memo: `Hold for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+
+      await this.accountsService.registerTransaction({
+        accountId: transaction.account_id,
+        amount: order.delivery_fee,
+        transactionType: 'hold',
+        memo: `Hold for order ${order.order_number} delivery fee`,
+        referenceId: order.id,
+      });
+
+      // Create or update order hold
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+      await this.updateOrderHold(orderHold.id, {
+        client_hold_amount: order.subtotal,
+        delivery_fees: order.delivery_fee,
+      });
+
+      // Update order status from pending_payment to pending and payment_status to paid
+      await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
+
+      // Send order creation notifications
+      try {
+        // Validate required data before creating notification data
+        if (!order.business_location?.business?.name) {
+          throw new Error('Business name is undefined');
+        }
+        if (!order.business_location?.business?.user?.email) {
+          throw new Error('Business email is undefined');
+        }
+        if (!order.delivery_address?.formatted_address) {
+          throw new Error('Delivery address is undefined');
+        }
+
+        const notificationData: NotificationData = {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          clientName: `${order.client?.user?.first_name || ''} ${
+            order.client?.user?.last_name || ''
+          }`.trim(),
+          clientEmail: order.client?.user?.email,
+          businessName: order.business_location.business.name,
+          businessEmail: order.business_location.business.user.email,
+          businessVerified: order.business_location.business.is_verified,
+          orderStatus: order.current_status,
+          orderItems:
+            order.order_items?.map((item: any) => ({
+              name: item.item_name || 'Unknown Item',
+              quantity: item.quantity || 0,
+              unitPrice: item.unit_price || 0,
+              totalPrice: item.total_price || 0,
+            })) || [],
+          subtotal: order.subtotal || 0,
+          deliveryFee: order.delivery_fee || 0,
+          taxAmount: order.tax_amount || 0,
+          totalAmount: order.total_amount || 0,
+          currency: order.currency || 'USD',
+          deliveryAddress: order.delivery_address?.formatted_address,
+          estimatedDeliveryTime: order.estimated_delivery_time,
+          specialInstructions: order.special_instructions,
+        };
+
+        await this.notificationsService.sendOrderCreatedNotifications(
+          notificationData
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order creation notifications: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        // Don't fail the order processing if notifications fail
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to process order payment: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update order status and payment status
+   */
+  private async updateOrderStatusAndPaymentStatus(
+    orderId: string,
+    newStatus: string,
+    paymentStatus: string
+  ): Promise<void> {
+    const mutation = `
+      mutation UpdateOrderStatusAndPaymentStatus($orderId: uuid!, $newStatus: order_status!, $paymentStatus: String!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { 
+            current_status: $newStatus,
+            payment_status: $paymentStatus,
+            updated_at: "now()"
+          }
+        ) {
+          id
+          order_number
+          current_status
+          payment_status
+          updated_at
+        }
+      }
+    `;
+
+    try {
+      await this.hasuraSystemService.executeMutation(mutation, {
+        orderId,
+        newStatus,
+        paymentStatus,
+      });
+
+      this.logger.log(
+        `Updated order ${orderId} status to ${newStatus} and payment status to ${paymentStatus}`
+      );
+
+      // Create status history entry for the status change
+      await this.createStatusHistoryEntry(
+        orderId,
+        newStatus,
+        `Order status updated to ${newStatus} after payment confirmation`,
+        'system',
+        'system'
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to update order status and payment status for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
   private async getOrderWithItems(orderId: string): Promise<any> {
     const query = `
       query GetOrderWithItems($orderId: uuid!) {
@@ -1756,87 +1967,6 @@ export class OrdersService {
       }
     );
 
-    /* TODO: The hold transactions should be removed and replaced with the hold transactions in the callback/mypvit webhook
-    /* In the webhook, we'll find the order via the reference in the mobile_payment_transactions where the payment_entity is 'order'
-    
-    await this.accountsService.registerTransaction({
-      accountId: account.id,
-      amount: totalAmount,
-      transactionType: 'hold',
-      memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
-    });
-
-    await this.accountsService.registerTransaction({
-      accountId: account.id,
-      amount: deliveryFee,
-      transactionType: 'hold',
-      memo: `Hold for order ${order.order_number} delivery fee`,
-      referenceId: order.id,
-    });
-    const orderHold = await this.getOrCreateOrderHold(order.id);
-
-    await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: totalAmount,
-      delivery_fees: deliveryFee,
-    });
-
-    /* TODO: The notification functionality has been temporarily disabled
-    // Send order creation notifications
-    try {
-      // Validate required data before creating notification data
-      if (!businessInventory?.business_location?.business?.name) {
-        throw new Error('Business name is undefined');
-      }
-      if (!businessInventory?.business_location?.business?.user?.email) {
-        throw new Error('Business email is undefined');
-      }
-      if (!address?.formatted_address) {
-        throw new Error('Delivery address is undefined');
-      }
-
-      const notificationData: NotificationData = {
-        orderId: order.id,
-        orderNumber: order.order_number,
-        clientName: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
-        clientEmail: user.email,
-        businessName: businessInventory.business_location.business.name,
-        businessEmail: businessInventory.business_location.business.user.email,
-        businessVerified:
-          businessInventory.business_location.business.is_verified,
-        orderStatus: order.current_status,
-        orderItems:
-          order.order_items?.map((item: any) => ({
-            name: item.item_name || 'Unknown Item',
-            quantity: item.quantity || 0,
-            unitPrice: item.unit_price || 0,
-            totalPrice: item.total_price || 0,
-          })) || [],
-        subtotal: order.subtotal || 0,
-        deliveryFee: order.delivery_fee || 0,
-        taxAmount: order.tax_amount || 0,
-        totalAmount: totalAmount,
-        currency: order.currency || 'USD',
-        deliveryAddress: address.formatted_address,
-        estimatedDeliveryTime: order.estimated_delivery_time,
-        specialInstructions: order.special_instructions,
-      };
-
-      await this.notificationsService.sendOrderCreatedNotifications(
-        notificationData
-      );
-    
-    } catch (error) {
-      this.logger.error(
-        `Failed to send order creation notifications: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      // Don't fail the order creation if notifications fail
-
-    }
-    */
-
     return {
       ...order,
       total_amount: total_amount,
@@ -1856,10 +1986,7 @@ export class OrdersService {
   /**
    * Get or create an order hold for the given order ID
    */
-  private async getOrCreateOrderHold(
-    orderId: string,
-    deliveryFees = 0
-  ): Promise<any> {
+  async getOrCreateOrderHold(orderId: string, deliveryFees = 0): Promise<any> {
     // First, try to get the existing order hold
     const getOrderHoldQuery = `
       query GetOrderHold($orderId: uuid!) {
@@ -1949,7 +2076,7 @@ export class OrdersService {
   /**
    * Update an order hold with the specified fields
    */
-  private async updateOrderHold(
+  async updateOrderHold(
     orderHoldId: string,
     updates: {
       status?: string;
