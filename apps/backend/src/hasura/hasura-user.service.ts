@@ -130,18 +130,27 @@ export class HasuraUserService {
     this._authToken = this.extractAuthToken();
     this.identifier = this.extractSubClaim();
 
+    // Build headers based on whether we have a token or not
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this._authToken) {
+      headers.Authorization = `Bearer ${this._authToken}`;
+    } else {
+      // Default to anonymous role when no token is present
+      headers['X-Hasura-Role'] = 'anonymous';
+    }
+
     this.client = new GraphQLClient(this.hasuraUrl, {
-      headers: {
-        Authorization: `Bearer ${this.authToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
   }
 
   /**
    * Get auth token lazily (only when needed)
    */
-  private get authToken(): string {
+  private get authToken(): string | null {
     if (!this._authToken) {
       this._authToken = this.extractAuthToken();
       this.identifier = this.extractSubClaim();
@@ -153,11 +162,19 @@ export class HasuraUserService {
    * Creates a GraphQL client with user's auth token
    */
   createGraphQLClient(): any {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.authToken) {
+      headers.Authorization = `Bearer ${this.authToken}`;
+    } else {
+      // Default to anonymous role when no token is present
+      headers['X-Hasura-Role'] = 'anonymous';
+    }
+
     return new GraphQLClient(this.hasuraUrl, {
-      headers: {
-        Authorization: `Bearer ${this.authToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
   }
 
@@ -507,10 +524,10 @@ export class HasuraUserService {
   /**
    * Extract auth token from request headers
    */
-  private extractAuthToken(): string {
+  private extractAuthToken(): string | null {
     const authHeader = this.request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new Error('Invalid or missing authorization header');
+      return null; // Return null instead of throwing error
     }
     return authHeader.substring(7); // Remove 'Bearer ' prefix
   }
@@ -519,14 +536,18 @@ export class HasuraUserService {
    * Extract sub claim from JWT token
    */
   private extractSubClaim(): string {
+    if (!this._authToken) {
+      return 'anonymous'; // Return anonymous identifier when no token
+    }
+
     try {
       // This is a simplified JWT decode - in production, you should use a proper JWT library
-      const token = this.authToken;
+      const token = this._authToken;
       const payload = JSON.parse(
         Buffer.from(token.split('.')[1], 'base64').toString()
       );
       return payload.sub || payload.user_id || payload.id;
-    } catch (error) {
+    } catch {
       throw new Error('Invalid JWT token or missing sub claim');
     }
   }

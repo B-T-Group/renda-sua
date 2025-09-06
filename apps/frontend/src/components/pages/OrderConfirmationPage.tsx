@@ -97,24 +97,48 @@ const OrderConfirmationPage: React.FC = () => {
       </Box>
 
       {/* Payment Confirmation Alert */}
-      <Card sx={{ mb: 4, bgcolor: 'info.light', color: 'info.contrastText' }}>
+      <Card
+        sx={{
+          mb: 4,
+          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          color: 'white',
+          boxShadow: '0 4px 20px rgba(25, 118, 210, 0.3)',
+          border: '1px solid #1565c0',
+        }}
+      >
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Phone sx={{ mr: 1 }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            <Phone sx={{ mr: 1, color: 'white' }} />
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 'bold', color: 'white' }}
+            >
               {t(
                 'orders.paymentConfirmationRequired',
                 'Payment Confirmation Required'
               )}
             </Typography>
           </Box>
-          <Typography variant="body1" sx={{ mb: 2 }}>
+          <Typography
+            variant="body1"
+            sx={{ mb: 2, color: 'white', lineHeight: 1.6 }}
+          >
             {t(
               'orders.paymentConfirmationMessage',
               'A payment request has been sent to your mobile phone. Please confirm the payment to complete your order.'
             )}
           </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 'medium',
+              color: 'rgba(255, 255, 255, 0.9)',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+            }}
+          >
             {t(
               'orders.paymentConfirmationDeadline',
               'Your order will be transmitted to the merchant within 24 hours once payment is confirmed.'
