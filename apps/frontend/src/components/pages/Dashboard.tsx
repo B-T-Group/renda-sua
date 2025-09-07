@@ -214,7 +214,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
       {/* Error Alert */}
       {orderError && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -223,14 +223,35 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 0 }}>
+      <Box sx={{ mb: { xs: 3, sm: 4 } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            mb: 2,
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'flex-start', sm: 'center' },
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            gutterBottom
+            sx={{
+              mb: 0,
+              fontSize: { xs: '1.75rem', sm: '2.125rem' },
+            }}
+          >
             Client Dashboard
           </Typography>
           {user?.email_verified && <StatusBadge type="verified" />}
         </Box>
-        <Typography variant="body1" color="text.secondary">
+        <Typography
+          variant="body1"
+          color="text.secondary"
+          sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+        >
           Welcome back, {user?.name}! Browse available items and manage your
           orders.
         </Typography>
@@ -241,11 +262,16 @@ const Dashboard: React.FC = () => {
 
       {/* Orders Requiring Action */}
       {ordersRequiringAction.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
           <Typography
             variant="h6"
             gutterBottom
-            sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              fontSize: { xs: '1.1rem', sm: '1.25rem' },
+            }}
           >
             <Assignment color="primary" />
             Orders Requiring Action ({ordersRequiringAction.length})
@@ -258,7 +284,7 @@ const Dashboard: React.FC = () => {
                 sm: 'repeat(2, 1fr)',
                 md: 'repeat(3, 1fr)',
               },
-              gap: 3,
+              gap: { xs: 2, sm: 3 },
             }}
           >
             {ordersRequiringAction.map((order) => (
@@ -276,11 +302,16 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Inventory Items */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Typography
           variant="h6"
           gutterBottom
-          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            fontSize: { xs: '1.1rem', sm: '1.25rem' },
+          }}
         >
           <Inventory color="primary" />
           Available Items
@@ -301,8 +332,13 @@ const Dashboard: React.FC = () => {
             justifyContent="center"
             alignItems="center"
             minHeight="200px"
+            sx={{ p: { xs: 2, sm: 0 } }}
           >
-            <Typography variant="body1" color="text.secondary">
+            <Typography
+              variant="body1"
+              color="text.secondary"
+              sx={{ textAlign: 'center' }}
+            >
               No items available at the moment.
             </Typography>
           </Box>
@@ -314,8 +350,9 @@ const Dashboard: React.FC = () => {
                 xs: '1fr',
                 sm: 'repeat(2, 1fr)',
                 md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
               },
-              gap: 3,
+              gap: { xs: 2, sm: 3 },
             }}
           >
             {(filteredItems.length > 0 ? filteredItems : inventoryItems).map(

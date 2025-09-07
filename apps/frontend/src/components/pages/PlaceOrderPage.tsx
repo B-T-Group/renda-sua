@@ -208,36 +208,68 @@ const PlaceOrderPage: React.FC = () => {
     selectedItem.selling_price * quantity + (deliveryFee?.deliveryFee || 0);
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+    <Box
+      sx={{
+        p: { xs: 2, sm: 3 },
+        maxWidth: 1200,
+        mx: 'auto',
+        minHeight: '100vh',
+      }}
+    >
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Button onClick={handleBack} startIcon={<ArrowBack />}>
+      <Box
+        sx={{
+          mb: { xs: 2, sm: 3 },
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' },
+        }}
+      >
+        <Button
+          onClick={handleBack}
+          startIcon={<ArrowBack />}
+          size="small"
+          sx={{ alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+        >
           {t('common.goBack', 'Go Back')}
         </Button>
-        <Typography variant="h4" component="h1">
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{
+            fontSize: { xs: '1.75rem', sm: '2.125rem' },
+            textAlign: { xs: 'left', sm: 'center' },
+          }}
+        >
           {t('orders.placeOrder', 'Place Order')}
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {/* Order Details Section - Full Width */}
         <Grid size={{ xs: 12 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+              >
                 {t('orders.orderDetails', 'Order Details')}
               </Typography>
 
-              <Grid container spacing={3}>
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
                 {/* Item Image and Basic Info */}
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   {/* Item Image */}
                   {selectedItem.item.item_images &&
                     selectedItem.item.item_images.length > 0 && (
                       <Box sx={{ mb: 2 }}>
                         <CardMedia
                           component="img"
-                          height="200"
+                          height={{ xs: 150, sm: 200 }}
                           image={selectedItem.item.item_images[0].image_url}
                           alt={
                             selectedItem.item.item_images[0].alt_text ||
@@ -246,6 +278,7 @@ const PlaceOrderPage: React.FC = () => {
                           sx={{
                             borderRadius: 1,
                             objectFit: 'cover',
+                            width: '100%',
                           }}
                         />
                       </Box>
@@ -253,7 +286,14 @@ const PlaceOrderPage: React.FC = () => {
 
                   {/* Basic Item Information */}
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="h5" gutterBottom>
+                    <Typography
+                      variant="h5"
+                      gutterBottom
+                      sx={{
+                        fontSize: { xs: '1.25rem', sm: '1.5rem' },
+                        lineHeight: 1.2,
+                      }}
+                    >
                       {selectedItem.item.name}
                     </Typography>
 
@@ -268,7 +308,14 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                     )}
 
-                    <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                    <Typography
+                      variant="h6"
+                      color="primary"
+                      sx={{
+                        mb: 2,
+                        fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                      }}
+                    >
                       {formatCurrency(
                         selectedItem.selling_price,
                         selectedItem.item.currency
@@ -306,13 +353,14 @@ const PlaceOrderPage: React.FC = () => {
                 </Grid>
 
                 {/* Item Details and Pickup Address */}
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   {/* Detailed Item Information */}
                   <Box sx={{ mb: 3 }}>
                     <Typography
                       variant="subtitle1"
                       gutterBottom
                       fontWeight="bold"
+                      sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}
                     >
                       {t('orders.itemDetails', 'Item Details')}
                     </Typography>
@@ -460,12 +508,13 @@ const PlaceOrderPage: React.FC = () => {
                 </Grid>
 
                 {/* Pickup Address */}
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 12, md: 4 }}>
                   <Box sx={{ mb: 3 }}>
                     <Typography
                       variant="subtitle1"
                       gutterBottom
                       fontWeight="bold"
+                      sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}
                     >
                       {t('orders.pickupAddress', 'Pickup Address')}
                     </Typography>
@@ -570,10 +619,10 @@ const PlaceOrderPage: React.FC = () => {
               <Divider sx={{ my: 3 }} />
 
               {/* Order Configuration */}
-              <Grid container spacing={2}>
+              <Grid container spacing={{ xs: 2, sm: 2 }}>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   {/* Quantity Selection */}
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth sx={{ mb: 2 }} size="small">
                     <InputLabel>{t('orders.quantity', 'Quantity')}</InputLabel>
                     <Select
                       value={quantity}
@@ -607,11 +656,12 @@ const PlaceOrderPage: React.FC = () => {
                       'Special Instructions'
                     )}
                     multiline
-                    rows={3}
+                    rows={{ xs: 2, sm: 3 }}
                     value={specialInstructions}
                     onChange={(e) => setSpecialInstructions(e.target.value)}
                     disabled={loading}
                     sx={{ mb: 2 }}
+                    size="small"
                   />
                 </Grid>
 
@@ -641,9 +691,13 @@ const PlaceOrderPage: React.FC = () => {
 
         {/* Delivery Address Section */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+              >
                 {t('orders.deliveryAddress', 'Delivery Address')}
               </Typography>
 
@@ -778,9 +832,13 @@ const PlaceOrderPage: React.FC = () => {
 
         {/* Payment Details Section */}
         <Grid size={{ xs: 12 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+              >
                 {t('orders.paymentDetails', 'Payment Details')}
               </Typography>
 
@@ -924,11 +982,19 @@ const PlaceOrderPage: React.FC = () => {
               </Box>
 
               {/* Place Order Button */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  mt: 3,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  px: { xs: 1, sm: 0 },
+                }}
+              >
                 <Button
                   onClick={handleSubmit}
                   variant="contained"
                   size="large"
+                  fullWidth={{ xs: true, sm: false }}
                   disabled={
                     loading ||
                     !selectedAddressId ||
@@ -938,6 +1004,10 @@ const PlaceOrderPage: React.FC = () => {
                   startIcon={
                     loading ? <CircularProgress size={20} /> : <ShoppingCart />
                   }
+                  sx={{
+                    maxWidth: { xs: '100%', sm: '300px' },
+                    py: { xs: 1.5, sm: 1 },
+                  }}
                 >
                   {loading
                     ? t('orders.placingOrder', 'Placing Order...')

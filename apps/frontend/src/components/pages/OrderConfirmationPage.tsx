@@ -78,20 +78,32 @@ const OrderConfirmationPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
       {/* Success Header */}
-      <Box sx={{ textAlign: 'center', mb: 4 }}>
+      <Box sx={{ textAlign: 'center', mb: { xs: 3, sm: 4 } }}>
         <CheckCircle
           sx={{
-            fontSize: 80,
+            fontSize: { xs: 60, sm: 80 },
             color: 'success.main',
             mb: 2,
           }}
         />
-        <Typography variant="h4" gutterBottom color="success.main">
+        <Typography
+          variant="h4"
+          gutterBottom
+          color="success.main"
+          sx={{
+            fontSize: { xs: '1.75rem', sm: '2.125rem' },
+            lineHeight: 1.2,
+          }}
+        >
           {t('orders.orderPlacedSuccessfully', 'Order Placed Successfully!')}
         </Typography>
-        <Typography variant="h6" color="text.secondary">
+        <Typography
+          variant="h6"
+          color="text.secondary"
+          sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+        >
           {t('orders.orderNumber', 'Order Number')}: {order.order_number}
         </Typography>
       </Box>
@@ -99,19 +111,37 @@ const OrderConfirmationPage: React.FC = () => {
       {/* Payment Confirmation Alert */}
       <Card
         sx={{
-          mb: 4,
+          mb: { xs: 3, sm: 4 },
           background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
           color: 'white',
           boxShadow: '0 4px 20px rgba(25, 118, 210, 0.3)',
           border: '1px solid #1565c0',
         }}
       >
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Phone sx={{ mr: 1, color: 'white' }} />
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mb: 2,
+              flexDirection: { xs: 'column', sm: 'row' },
+              textAlign: { xs: 'center', sm: 'left' },
+            }}
+          >
+            <Phone
+              sx={{
+                mr: { xs: 0, sm: 1 },
+                mb: { xs: 1, sm: 0 },
+                color: 'white',
+              }}
+            />
             <Typography
               variant="h6"
-              sx={{ fontWeight: 'bold', color: 'white' }}
+              sx={{
+                fontWeight: 'bold',
+                color: 'white',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              }}
             >
               {t(
                 'orders.paymentConfirmationRequired',
@@ -148,16 +178,36 @@ const OrderConfirmationPage: React.FC = () => {
       </Card>
 
       {/* Order Details */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-            <Receipt sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+      <Card sx={{ mb: { xs: 3, sm: 4 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mb: 3,
+              flexDirection: { xs: 'column', sm: 'row' },
+              textAlign: { xs: 'center', sm: 'left' },
+            }}
+          >
+            <Receipt
+              sx={{
+                mr: { xs: 0, sm: 1 },
+                mb: { xs: 1, sm: 0 },
+                color: 'primary.main',
+              }}
+            />
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 'bold',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              }}
+            >
               {t('orders.orderDetails', 'Order Details')}
             </Typography>
           </Box>
 
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">
@@ -220,16 +270,36 @@ const OrderConfirmationPage: React.FC = () => {
       </Card>
 
       {/* Payment Transaction Details */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-            <Phone sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+      <Card sx={{ mb: { xs: 3, sm: 4 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mb: 3,
+              flexDirection: { xs: 'column', sm: 'row' },
+              textAlign: { xs: 'center', sm: 'left' },
+            }}
+          >
+            <Phone
+              sx={{
+                mr: { xs: 0, sm: 1 },
+                mb: { xs: 1, sm: 0 },
+                color: 'primary.main',
+              }}
+            />
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 'bold',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              }}
+            >
               {t('orders.paymentDetails', 'Payment Details')}
             </Typography>
           </Box>
 
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">
@@ -359,8 +429,22 @@ const OrderConfirmationPage: React.FC = () => {
       </Card>
 
       {/* Action Buttons */}
-      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-        <Button variant="outlined" onClick={handleViewOrders} size="large">
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          justifyContent: 'center',
+          flexDirection: { xs: 'column', sm: 'row' },
+          px: { xs: 1, sm: 0 },
+        }}
+      >
+        <Button
+          variant="outlined"
+          onClick={handleViewOrders}
+          size="large"
+          fullWidth={{ xs: true, sm: false }}
+          sx={{ maxWidth: { xs: '100%', sm: '200px' } }}
+        >
           {t('orders.viewMyOrders', 'View My Orders')}
         </Button>
         <Button
@@ -368,6 +452,8 @@ const OrderConfirmationPage: React.FC = () => {
           onClick={handleGoToDashboard}
           startIcon={<Home />}
           size="large"
+          fullWidth={{ xs: true, sm: false }}
+          sx={{ maxWidth: { xs: '100%', sm: '200px' } }}
         >
           {t('common.goToDashboard', 'Go to Dashboard')}
         </Button>
