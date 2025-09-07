@@ -20,6 +20,7 @@ export interface OrderStatusChangeRequest {
 }
 export interface GetOrderRequest {
   orderId: string;
+  phone_number?: string;
 }
 
 @Injectable()
@@ -229,6 +230,156 @@ export class OrdersService {
       holdAmount,
       message: 'Order assigned successfully',
     };
+  }
+
+  async claimOrderWithTopup(request: GetOrderRequest) {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent)
+      throw new HttpException(
+        'Only agent users can claim orders',
+        HttpStatus.FORBIDDEN
+      );
+
+    const order = await this.getOrderWithItems(request.orderId);
+    if (!order)
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (order.current_status !== 'ready_for_pickup')
+      throw new HttpException(
+        `Cannot claim order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+
+    // Check if order requires verified agent and if agent is verified
+    if (order.verified_agent_delivery && !user.agent.is_verified) {
+      throw new HttpException(
+        'This order requires a verified agent. Please contact support to get your account verified.',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Get hold percentage and calculate required amount
+    const holdPercentage = this.configService.get('order').agentHoldPercentage;
+    const holdAmount = (order.total_amount * holdPercentage) / 100;
+
+    // Get or create agent account
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      order.currency
+    );
+
+    // Get payment provider based on phone number (use provided phone_number or fallback to user's phone_number)
+    const phoneNumber = request.phone_number || user.phone_number || '';
+    const provider = this.getProvider(phoneNumber);
+
+    // Create transaction record before initiating payment
+    let paymentTransaction = null;
+    let transaction = null;
+    try {
+      // Create transaction record in database
+      transaction = await this.mobilePaymentsDatabaseService.createTransaction({
+        reference: order.order_number,
+        amount: holdAmount,
+        currency: order.currency,
+        description: `Claim order ${order.order_number}`,
+        provider: provider,
+        payment_method: 'mobile_money',
+        customer_phone: phoneNumber,
+        customer_email: user.email,
+        account_id: agentAccount.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'claim_order' as const,
+      });
+
+      const paymentRequest = {
+        amount: holdAmount,
+        currency: order.currency,
+        description: `Claim order ${order.order_number}`,
+        customerPhone: phoneNumber,
+        provider: provider,
+        ownerCharge: 'CUSTOMER' as const,
+        transactionType: 'PAYMENT' as const,
+        payment_entity: 'claim_order' as const,
+      };
+
+      paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+        paymentRequest,
+        order.order_number
+      );
+
+      if (!paymentTransaction.success) {
+        // Update transaction status to failed
+        await this.mobilePaymentsDatabaseService.updateTransaction(
+          transaction.id,
+          {
+            status: 'failed',
+            error_message: paymentTransaction.message,
+            error_code: paymentTransaction.errorCode,
+          }
+        );
+
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Failed to initiate payment',
+            error: 'PAYMENT_INITIATION_FAILED',
+            data: {
+              orderNumber: order.order_number,
+              error: paymentTransaction.message,
+              errorCode: paymentTransaction.errorCode,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Update transaction with provider response
+      if (paymentTransaction.success && paymentTransaction.transactionId) {
+        await this.mobilePaymentsDatabaseService.updateTransaction(
+          transaction.id,
+          {
+            transaction_id: paymentTransaction.transactionId,
+          }
+        );
+      }
+
+      this.logger.log(
+        `Payment initiated successfully for claim order ${order.order_number}, transaction ID: ${paymentTransaction.transactionId}`
+      );
+
+      return {
+        success: true,
+        paymentTransaction: {
+          transactionId: paymentTransaction.transactionId,
+          success: paymentTransaction.success,
+        },
+        holdAmount,
+        message: 'Order claimed with topup payment initiated successfully',
+      };
+    } catch (error: any) {
+      // If it's already an HttpException, re-throw it
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      // Log the error and throw a generic error
+      this.logger.error(
+        `Failed to claim order with topup: ${error.message}`,
+        error.stack
+      );
+
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to claim order with topup',
+          error: 'CLAIM_ORDER_TOPUP_FAILED',
+          data: {
+            orderId: request.orderId,
+            error: error.message,
+          },
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async pickUpOrder(request: OrderStatusChangeRequest) {
@@ -1500,6 +1651,68 @@ export class OrdersService {
   }
 
   /**
+   * Process claim order payment - credits agent account with hold amount
+   */
+  async processClaimOrderPayment(transaction: any): Promise<void> {
+    try {
+      // Get order details by order number (reference)
+      const order = await this.getOrderByNumber(transaction.reference);
+
+      const account = await this.hasuraSystemService.getAccountById(
+        transaction.account_id
+      );
+
+      if (!account) {
+        throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
+      }
+
+      const user = await this.hasuraSystemService.getUserById(account.user_id);
+
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+
+      await this.updateOrderHold(orderHold.id, {
+        agent_hold_amount: transaction.amount,
+        agent_id: user.agent.id,
+      });
+
+      // Register hold transaction
+      await this.accountsService.registerTransaction({
+        accountId: account.id,
+        amount: transaction.amount,
+        transactionType: 'hold',
+        memo: `Hold for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+
+      // Assign order to agent
+      await this.assignOrderToAgent(
+        order.id,
+        user.agent.id,
+        'assigned_to_agent'
+      );
+
+      await this.createStatusHistoryEntry(
+        order.id,
+        'assigned_to_agent',
+        `Order assigned to agent ${user.first_name} ${user.last_name} with topup payment`,
+        'agent',
+        user.id
+      );
+
+      this.logger.log(
+        `Successfully processed claim order payment for order ${order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to process claim order payment: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Handle order payment failure - cancel order and update reserved quantities
    */
   async onOrderPaymentFailed(orderId: string): Promise<void> {
@@ -1823,7 +2036,7 @@ export class OrdersService {
         customer_email: user.email,
         account_id: account.id,
         transaction_type: 'PAYMENT',
-        payment_entity: 'order' as const,
+        payment_entity: 'claim_order' as const,
       });
 
       const paymentRequest = {
@@ -1834,7 +2047,7 @@ export class OrdersService {
         provider: provider,
         ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
-        payment_entity: 'order' as const,
+        payment_entity: 'claim_order' as const,
       };
 
       paymentTransaction = await this.mobilePaymentsService.initiatePayment(

@@ -1,0 +1,3 @@
+-- Note: PostgreSQL does not support removing enum values directly
+-- This migration cannot be easily reversed without recreating the enum
+-- If rollback is needed, a new migration would be required to recreate the enum without 'claim_order'

@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
@@ -186,7 +186,7 @@ export class OrdersController {
       if (filters) {
         try {
           parsedFilters = JSON.parse(filters);
-        } catch (e) {
+        } catch {
           throw new HttpException(
             'Invalid filters JSON',
             HttpStatus.BAD_REQUEST
@@ -299,6 +299,88 @@ export class OrdersController {
   @Post('claim_order')
   async claimOrder(@Body() request: GetOrderRequest) {
     return this.ordersService.claimOrder(request);
+  }
+
+  @Post('claim_order_with_topup')
+  @ApiOperation({ 
+    summary: 'Claim order with topup payment',
+    description: 'Claims an order by initiating a mobile payment for the required hold amount. Optionally accepts a phone_number parameter to override the user\'s default phone number for payment.'
+  })
+  @ApiBody({
+    description: 'Request body for claiming order with topup payment',
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: {
+          type: 'string',
+          description: 'The ID of the order to claim',
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        },
+        phone_number: {
+          type: 'string',
+          description: 'Optional phone number to use for payment. If not provided, uses the user\'s default phone number.',
+          example: '+241123456789'
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order claimed with topup payment initiated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        order: { type: 'object' },
+        paymentTransaction: { type: 'object' },
+        holdAmount: { type: 'number' },
+        message: {
+          type: 'string',
+          example: 'Order claimed with topup payment initiated successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid data or payment initiation failed',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: { type: 'string', example: 'Failed to initiate payment' },
+        error: { type: 'string', example: 'PAYMENT_INITIATION_FAILED' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions or balance',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: {
+          type: 'string',
+          example: 'Only agent users can claim orders',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
+  async claimOrderWithTopup(@Body() request: GetOrderRequest) {
+    return this.ordersService.claimOrderWithTopup(request);
   }
 
   @Get('item/:itemId/deliveryFee')

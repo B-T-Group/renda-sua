@@ -17,7 +17,7 @@ export interface MobilePaymentTransaction {
   error_code?: string;
   account_id?: string;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
-  payment_entity?: 'order' | 'account';
+  payment_entity?: 'order' | 'account' | 'claim_order';
   created_at: string;
   updated_at: string;
 }
@@ -33,7 +33,7 @@ export interface CreateTransactionData {
   customer_email?: string;
   account_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
-  payment_entity?: 'order' | 'account';
+  payment_entity?: 'order' | 'account' | 'claim_order';
 }
 
 export interface UpdateTransactionData {

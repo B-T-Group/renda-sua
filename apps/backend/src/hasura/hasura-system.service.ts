@@ -109,6 +109,18 @@ export class HasuraSystemService {
              id
              email
              name
+             agent {
+              id
+             }
+             client {
+              id
+             }
+             business {
+              id
+             }
+             user_type_id
+             created_at
+             updated_at
            }
          }
        `;
@@ -197,6 +209,33 @@ export class HasuraSystemService {
       account = await this.createUserAccount(userId, currency);
     }
     return account;
+  }
+
+  /**
+   * Get account by ID
+   */
+  async getAccountById(accountId: string): Promise<any> {
+    const query = `
+      query GetAccountById($accountId: uuid!) {
+        accounts_by_pk(id: $accountId) {
+          id
+          user_id
+          currency
+          available_balance
+          withheld_balance
+          total_balance
+          is_active
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.executeQuery(query, {
+      accountId,
+    });
+
+    return result.accounts_by_pk;
   }
 
   /**
