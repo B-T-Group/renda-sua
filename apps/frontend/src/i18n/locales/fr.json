@@ -158,6 +158,11 @@
         "angle": "Angle"
       }
     },
+    "orders": {
+      "preparingNotice": "👨‍🍳 Préparation en cours. Terminez soigneusement et marquez comme \"Prêt pour le retrait\" pour notifier les agents disponibles.",
+      "paymentPendingNotice": "Le paiement du client est toujours en attente. La commande peut être annulée si le paiement n'est pas reçu.",
+      "paymentPendingCancellable": "Le paiement du client est en attente depuis plus d'1 heure. Vous pouvez maintenant annuler cette commande pour libérer l'inventaire."
+    },
     "inventory": {
       "title": "Inventaire",
       "stockStatus": "Statut du stock",

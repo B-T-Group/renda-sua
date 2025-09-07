@@ -1,13 +1,22 @@
-import { Alert, Box } from '@mui/material';
+import { Alert, Box, Button } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import {
+  canCancelDueToPendingPayment,
+  formatTimeRemaining,
+  getTimeRemainingForCancellation,
+} from '../../utils/orderUtils';
 
 interface BusinessOrderAlertsProps {
   order: OrderData;
+  onCancelOrder?: (orderId: string) => void;
 }
 
-const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
+const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
+  order,
+  onCancelOrder,
+}) => {
   const { t } = useTranslation();
 
   const formatCurrency = (amount: number) => {
@@ -22,7 +31,11 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
   };
 
   const getAlertsForStatus = () => {
-    const alerts = [];
+    const alerts: Array<{
+      severity: 'error' | 'warning' | 'info' | 'success';
+      message: string;
+      action?: React.ReactNode;
+    }> = [];
     const revenue = getExpectedRevenue();
 
     switch (order.current_status) {
@@ -184,13 +197,39 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
       order.payment_status === 'pending' &&
       !['cancelled', 'refunded'].includes(order.current_status)
     ) {
-      alerts.push({
-        severity: 'warning' as const,
-        message: t(
-          'business.orders.paymentPendingNotice',
-          'Customer payment is still pending. Order may be cancelled if payment is not received.'
-        ),
-      });
+      const canCancel = canCancelDueToPendingPayment(order);
+      const timeRemaining = getTimeRemainingForCancellation(order);
+
+      if (canCancel) {
+        alerts.push({
+          severity: 'error' as const,
+          message: t(
+            'business.orders.paymentPendingCancellable',
+            'Customer payment has been pending for over 1 hour. You can now cancel this order to free up inventory.'
+          ),
+          action: onCancelOrder ? (
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              onClick={() => onCancelOrder(order.id)}
+              sx={{ ml: 2 }}
+            >
+              {t('orders.actions.cancel', 'Cancel Order')}
+            </Button>
+          ) : undefined,
+        });
+      } else {
+        alerts.push({
+          severity: 'warning' as const,
+          message: t(
+            'business.orders.paymentPendingNotice',
+            `Customer payment is still pending. ${formatTimeRemaining(
+              timeRemaining
+            )} before you can cancel this order.`
+          ),
+        });
+      }
     }
 
     // Add special instructions alert if present
@@ -237,6 +276,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({ order }) => {
           key={index}
           severity={alert.severity}
           variant="outlined"
+          action={alert.action}
           sx={{ mb: index < alerts.length - 1 ? 1 : 0 }}
         >
           {alert.message}

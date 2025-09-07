@@ -185,7 +185,8 @@
     },
     "orders": {
       "preparingNotice": "👨‍🍳 Preparation in progress. Complete carefully and mark as \"Ready for Pickup\" to notify available agents.",
-      "paymentPendingNotice": "Customer payment is still pending. Order may be cancelled if payment is not received."
+      "paymentPendingNotice": "Customer payment is still pending. Order may be cancelled if payment is not received.",
+      "paymentPendingCancellable": "Customer payment has been pending for over 1 hour. You can now cancel this order to free up inventory."
     },
     "inventory": {
       "title": "Inventory",

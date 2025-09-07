@@ -178,27 +178,37 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           color: 'success' as const,
           icon: <CheckCircle />,
         });
-        actions.push({
-          label: t('orderActions.refundOrder', 'Refund Order'),
-          action: handleRefundOrder,
-          color: 'warning' as const,
-          icon: <RefundIcon />,
-        });
+        // Only show refund option if payment is not pending
+        if (order.payment_status !== 'pending') {
+          actions.push({
+            label: t('orderActions.refundOrder', 'Refund Order'),
+            action: handleRefundOrder,
+            color: 'warning' as const,
+            icon: <RefundIcon />,
+          });
+        }
         break;
 
       case 'failed':
       case 'cancelled':
-        actions.push({
-          label: t('orderActions.refundOrder', 'Refund Order'),
-          action: handleRefundOrder,
-          color: 'warning' as const,
-          icon: <RefundIcon />,
-        });
+        // Only show refund option if payment is not pending
+        if (order.payment_status !== 'pending') {
+          actions.push({
+            label: t('orderActions.refundOrder', 'Refund Order'),
+            action: handleRefundOrder,
+            color: 'warning' as const,
+            icon: <RefundIcon />,
+          });
+        }
         break;
 
       default:
         // For other statuses, businesses can generally refund
-        if (!['complete', 'refunded'].includes(order.current_status)) {
+        // But not if payment is still pending
+        if (
+          !['complete', 'refunded'].includes(order.current_status) &&
+          order.payment_status !== 'pending'
+        ) {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),
             action: handleRefundOrder,
