@@ -55,7 +55,7 @@ const DistanceMatrixExample: React.FC = () => {
         return;
       }
 
-      let payload: any = {
+      const payload: any = {
         destination_address_ids: destinationIdsArray,
       };
 

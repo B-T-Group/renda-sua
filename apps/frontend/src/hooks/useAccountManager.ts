@@ -128,7 +128,7 @@ export const useAccountManager = (config: AccountManagerConfig) => {
 
   // Fetch transactions for a specific account
   const fetchAccountTransactions = useCallback(
-    async (accountId: string, limit: number = 10) => {
+    async (accountId: string, limit = 10) => {
       setTransactionsLoading(true);
       setError(null);
 

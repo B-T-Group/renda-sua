@@ -79,7 +79,7 @@ export const useDocumentManagement = () => {
       setError(null);
 
       try {
-        let whereClause: {
+        const whereClause: {
           document_type_id?: { _eq: number };
           is_approved?: { _eq: boolean };
           _or?: Array<{

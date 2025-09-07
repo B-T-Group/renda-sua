@@ -192,8 +192,9 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
         break;
     }
 
-    // Add payment-related alerts
+    // Add payment-related alerts - only for orders in pending_payment status
     if (
+      order.current_status === 'pending_payment' &&
       order.payment_status === 'pending' &&
       !['cancelled', 'refunded'].includes(order.current_status)
     ) {
