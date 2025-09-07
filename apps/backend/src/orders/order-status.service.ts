@@ -194,10 +194,10 @@ export class OrderStatusService {
     isClient: boolean
   ): string[] {
     const transitions: { [key: string]: string[] } = {
-      pending_payment: isClient 
-        ? ['pending', 'cancelled'] 
-        : isBusinessOwner 
-        ? ['cancelled'] 
+      pending_payment: isClient
+        ? ['pending', 'cancelled']
+        : isBusinessOwner
+        ? ['cancelled']
         : [],
       pending: isBusinessOwner
         ? ['confirmed', 'cancelled']
