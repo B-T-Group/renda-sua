@@ -191,11 +191,23 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
           {!showResult && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Payment Method - Locked to Airtel Money */}
-              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mb: 1 }}>
-                <Typography variant="subtitle2" color="primary" gutterBottom>
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                  borderRadius: 1,
+                  mb: 1,
+                }}
+              >
+                <Typography variant="subtitle2" color="inherit" gutterBottom>
                   Payment Method
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  color="inherit"
+                  sx={{ opacity: 0.9 }}
+                >
                   {t('accounts.paymentMethods.airtelMoney')} (Only supported
                   method)
                 </Typography>
