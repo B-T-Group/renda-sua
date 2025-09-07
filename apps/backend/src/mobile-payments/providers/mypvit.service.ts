@@ -199,8 +199,6 @@ export class MyPVitService {
         payload
       );
 
-      console.log('response.data', response.data);
-
       // Check if the response indicates success based on status_code
       if (response.data.status_code === '200') {
         return {

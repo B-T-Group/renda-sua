@@ -1,94 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ImageType } from '../types/image';
-import { useGraphQLRequest } from './useGraphQLRequest';
-
-const GET_INVENTORY_ITEMS = `
-  query GetInventoryItems {
-    business_inventory(
-      where: {
-        business_location: {
-          business: { is_verified: { _eq: true } }
-        }
-      }
-    ) {
-      id
-      business_location_id
-      item_id
-      computed_available_quantity
-      selling_price
-      is_active
-      created_at
-      updated_at
-      item {
-        id
-        name
-        description
-        price
-        currency
-        weight
-        weight_unit
-        size
-        size_unit
-        item_sub_category_id
-        sku
-        brand {
-          id
-          name
-        }
-        model
-        color
-        material
-        is_fragile
-        is_perishable
-        requires_special_handling
-        max_delivery_distance
-        estimated_delivery_time
-        min_order_quantity
-        max_order_quantity
-        is_active
-        created_at
-        updated_at
-        item_sub_category {
-          id
-          name
-          item_category {
-            id
-            name
-          }
-        }
-        item_images {
-          id
-          image_url
-          image_type
-          alt_text
-          caption
-          display_order
-        }
-      }
-      business_location {
-        id
-        business_id
-        name
-        location_type
-        is_primary
-        business {
-          id
-          name
-          is_verified
-        }
-        address {
-          id
-          address_line_1
-          address_line_2
-          city
-          state
-          postal_code
-          country
-        }
-      }
-    }
-  }
-`;
+import { useApiClient } from './useApiClient';
 
 export interface InventoryItem {
   id: string;
@@ -168,29 +80,101 @@ export interface InventoryItem {
   };
 }
 
-export const useInventoryItems = () => {
-  const { data, loading, error, execute, refetch } = useGraphQLRequest<{
-    business_inventory: InventoryItem[];
-  }>(GET_INVENTORY_ITEMS);
+export interface GetInventoryItemsQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+  brand?: string;
+  min_price?: number;
+  max_price?: number;
+  currency?: string;
+  is_active?: boolean;
+}
 
-  const hasExecuted = useRef(false);
+export interface PaginatedInventoryItems {
+  items: InventoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface ApiResponse {
+  success: boolean;
+  data: PaginatedInventoryItems;
+  message: string;
+}
+
+export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<{
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  } | null>(null);
+
+  const apiClient = useApiClient();
+
+  const fetchInventoryItems = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get<ApiResponse>('/inventory-items', {
+        params: {
+          page: query.page || 1,
+          limit: query.limit || 20,
+          is_active: query.is_active !== undefined ? query.is_active : true,
+          ...(query.search && { search: query.search }),
+          ...(query.category && { category: query.category }),
+          ...(query.brand && { brand: query.brand }),
+          ...(query.min_price && { min_price: query.min_price }),
+          ...(query.max_price && { max_price: query.max_price }),
+          ...(query.currency && { currency: query.currency }),
+        },
+      });
+
+      if (response.data.success) {
+        setInventoryItems(response.data.data.items);
+        setPagination({
+          total: response.data.data.total,
+          page: response.data.data.page,
+          limit: response.data.data.limit,
+          totalPages: response.data.data.totalPages,
+        });
+      } else {
+        setError(response.data.message || 'Failed to fetch inventory items');
+      }
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ||
+        (err as { message?: string })?.message ||
+        'Failed to fetch inventory items';
+      setError(errorMessage);
+      console.error('Error fetching inventory items:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient, query]);
 
   useEffect(() => {
-    if (!hasExecuted.current) {
-      hasExecuted.current = true;
-      // Use setTimeout to ensure this runs after the component has mounted
-      setTimeout(() => {
-        execute();
-      }, 0);
-    }
-  }, []); // Empty dependency array
+    fetchInventoryItems();
+  }, [fetchInventoryItems]);
 
-  const inventoryItems: InventoryItem[] = data?.business_inventory || [];
+  const refetch = useCallback(() => {
+    fetchInventoryItems();
+  }, [fetchInventoryItems]);
 
   return {
     inventoryItems,
     loading,
     error,
-    refetch: () => refetch(),
+    pagination,
+    refetch,
   };
 };

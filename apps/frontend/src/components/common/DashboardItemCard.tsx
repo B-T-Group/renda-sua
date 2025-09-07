@@ -1,4 +1,16 @@
-import { Category, LocationOn, ShoppingCart } from '@mui/icons-material';
+import {
+  Build,
+  Business,
+  Category,
+  LocalShipping,
+  LocationOn,
+  Palette,
+  Scale,
+  Schedule,
+  ShoppingCart,
+  Straighten,
+  Verified,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -7,6 +19,8 @@ import {
   CardContent,
   CardMedia,
   Chip,
+  Divider,
+  Grid,
   Typography,
 } from '@mui/material';
 import React from 'react';
@@ -49,7 +63,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   return (
     <Card
       sx={{
-        height: '100%',
+        minHeight: '400px',
         display: 'flex',
         flexDirection: 'row',
         overflow: 'hidden',
@@ -59,7 +73,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       <Box sx={{ width: '300px', flexShrink: 0 }}>
         <CardMedia
           component="img"
-          height="200"
+          height="400"
           image={getPrimaryImage(inventory)}
           alt={inventory.item.name}
           sx={{
@@ -79,7 +93,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              mb: 1,
+              mb: 2,
             }}
           >
             <Box sx={{ flex: 1 }}>
@@ -118,58 +132,290 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             </Typography>
           </Box>
 
-          {/* Key Details Row */}
-          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-            >
-              <Category fontSize="small" />
-              {inventory.item.item_sub_category?.item_category?.name} →{' '}
-              {inventory.item.item_sub_category?.name}
+          {/* Business Information */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Business fontSize="small" color="primary" />
+              <Typography variant="body2" fontWeight="medium">
+                {inventory.business_location.business.name}
+              </Typography>
+              {inventory.business_location.business.is_verified && (
+                <Verified fontSize="small" color="success" />
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {inventory.business_location.name}
             </Typography>
+          </Box>
 
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-            >
-              <LocationOn fontSize="small" />
-              {inventory.business_location.address?.city},{' '}
-              {inventory.business_location.address?.state}
+          {/* Pickup Address */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <LocationOn fontSize="small" color="primary" />
+              <Typography variant="body2" fontWeight="medium">
+                Pickup Address
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 3 }}>
+              {inventory.business_location.address.address_line_1}
+              {inventory.business_location.address.address_line_2 &&
+                `, ${inventory.business_location.address.address_line_2}`}
+              <br />
+              {inventory.business_location.address.city},{' '}
+              {inventory.business_location.address.state}{' '}
+              {inventory.business_location.address.postal_code}
+              <br />
+              {inventory.business_location.address.country}
             </Typography>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Item Details Grid */}
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {/* Category */}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}
+              >
+                <Category fontSize="small" color="primary" />
+                <Typography variant="body2" fontWeight="medium">
+                  Category
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 3 }}>
+                {inventory.item.item_sub_category?.item_category?.name} →{' '}
+                {inventory.item.item_sub_category?.name}
+              </Typography>
+            </Grid>
+
+            {/* SKU */}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}
+              >
+                <Build fontSize="small" color="primary" />
+                <Typography variant="body2" fontWeight="medium">
+                  SKU
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 3 }}>
+                {inventory.item.sku || 'N/A'}
+              </Typography>
+            </Grid>
+
+            {/* Weight */}
+            {inventory.item.weight && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Scale fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight="medium">
+                    Weight
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ ml: 3 }}
+                >
+                  {inventory.item.weight} {inventory.item.weight_unit}
+                </Typography>
+              </Grid>
+            )}
+
+            {/* Size */}
+            {inventory.item.size && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Straighten fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight="medium">
+                    Size
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ ml: 3 }}
+                >
+                  {inventory.item.size} {inventory.item.size_unit}
+                </Typography>
+              </Grid>
+            )}
+
+            {/* Model */}
+            {inventory.item.model && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Build fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight="medium">
+                    Model
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ ml: 3 }}
+                >
+                  {inventory.item.model}
+                </Typography>
+              </Grid>
+            )}
+
+            {/* Color */}
+            {inventory.item.color && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Palette fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight="medium">
+                    Color
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ ml: 3 }}
+                >
+                  {inventory.item.color}
+                </Typography>
+              </Grid>
+            )}
+
+            {/* Material */}
+            {inventory.item.material && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Build fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight="medium">
+                    Material
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ ml: 3 }}
+                >
+                  {inventory.item.material}
+                </Typography>
+              </Grid>
+            )}
+          </Grid>
+
+          {/* Order Limits */}
+          {(inventory.item.min_order_quantity > 1 ||
+            inventory.item.max_order_quantity) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+                Order Limits
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                {inventory.item.min_order_quantity > 1 && (
+                  <Chip
+                    label={`Min: ${inventory.item.min_order_quantity}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+                {inventory.item.max_order_quantity && (
+                  <Chip
+                    label={`Max: ${inventory.item.max_order_quantity}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* Delivery Information */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <LocalShipping fontSize="small" color="primary" />
+              <Typography variant="body2" fontWeight="medium">
+                Delivery Info
+              </Typography>
+            </Box>
+            <Box sx={{ ml: 3 }}>
+              {inventory.item.max_delivery_distance && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 0.5 }}
+                >
+                  Max Distance: {inventory.item.max_delivery_distance} km
+                </Typography>
+              )}
+              {inventory.item.estimated_delivery_time && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Schedule fontSize="small" />
+                  <Typography variant="body2" color="text.secondary">
+                    Est. Delivery: {inventory.item.estimated_delivery_time}{' '}
+                    minutes
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </Box>
 
           {/* Special Handling Chips */}
           <Box sx={{ mb: 2 }}>
-            {inventory.item.is_fragile && (
-              <Chip
-                label="Fragile"
-                color="warning"
-                size="small"
-                sx={{ mr: 0.5, mb: 0.5 }}
-              />
+            {(inventory.item.is_fragile ||
+              inventory.item.is_perishable ||
+              inventory.item.requires_special_handling) && (
+              <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+                Special Handling
+              </Typography>
             )}
-            {inventory.item.is_perishable && (
-              <Chip
-                label="Perishable"
-                color="error"
-                size="small"
-                sx={{ mr: 0.5, mb: 0.5 }}
-              />
-            )}
-            {inventory.item.requires_special_handling && (
-              <Chip
-                label="Special Handling"
-                color="info"
-                size="small"
-                sx={{ mr: 0.5, mb: 0.5 }}
-              />
-            )}
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              {inventory.item.is_fragile && (
+                <Chip label="Fragile" color="warning" size="small" />
+              )}
+              {inventory.item.is_perishable && (
+                <Chip label="Perishable" color="error" size="small" />
+              )}
+              {inventory.item.requires_special_handling && (
+                <Chip label="Special Handling" color="info" size="small" />
+              )}
+            </Box>
           </Box>
 
-          {/* Delivery Information */}
+          {/* Distance Information */}
           <Box sx={{ mb: 2 }}>
             {distanceLoading && (
               <Typography variant="body2" color="text.secondary">

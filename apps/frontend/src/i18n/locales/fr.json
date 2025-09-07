@@ -36,6 +36,7 @@
     "errorLoadingData": "Erreur lors du chargement des données",
     "orderStatus": {
       "pending": "En attente",
+      "pending_payment": "Paiement en attente",
       "confirmed": "Confirmé",
       "preparing": "En préparation",
       "ready_for_pickup": "Prêt pour le ramassage",

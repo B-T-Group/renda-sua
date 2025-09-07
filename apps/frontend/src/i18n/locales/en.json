@@ -38,6 +38,7 @@
     "phone": "Phone",
     "orderStatus": {
       "pending": "Pending",
+      "pending_payment": "Pending Payment",
       "confirmed": "Confirmed",
       "preparing": "Preparing",
       "ready_for_pickup": "Ready for Pickup",
