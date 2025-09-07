@@ -310,7 +310,11 @@ const Dashboard: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: '1fr',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+              },
               gap: 3,
             }}
           >
