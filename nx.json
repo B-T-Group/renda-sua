@@ -10,7 +10,12 @@
       "!{projectRoot}/tsconfig.spec.json",
       "!{projectRoot}/jest.config.[jt]s",
       "!{projectRoot}/src/test-setup.[jt]s",
-      "!{projectRoot}/test-setup.[jt]s"
+      "!{projectRoot}/test-setup.[jt]s",
+      "!{projectRoot}/node_modules/**/*",
+      "!{projectRoot}/dist/**/*",
+      "!{projectRoot}/build/**/*",
+      "!{projectRoot}/coverage/**/*",
+      "!{projectRoot}/.nx/**/*"
     ],
     "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
   },
@@ -67,6 +72,29 @@
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    },
+    "lint": {
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.eslintrc.json",
+        "{workspaceRoot}/.eslintignore"
+      ]
+    },
+    "typecheck": {
+      "inputs": ["production", "^production"]
+    }
+  },
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "cacheableOperations": ["build", "lint", "test", "typecheck"],
+        "parallel": 3
+      }
     }
   },
   "generators": {

@@ -1299,23 +1299,80 @@ export class OrdersService {
           id
           order_number
           current_status
+          subtotal
+          delivery_fee
+          tax_amount
           total_amount
           currency
+          estimated_delivery_time
+          special_instructions
           business_id
           client_id
           delivery_address_id
           client {
             user_id
-          }
-          business {
-            user_id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
           }
           business_location {
+            id
             address_id
+            business {
+              id
+              name
+              is_verified
+              user {
+                id
+                email
+              }
+            }
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
+          }
+          delivery_address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
           }
           assigned_agent_id
           assigned_agent {
             user_id
+            user {
+              id
+              first_name
+              last_name
+              email
+            }
+          }
+          order_items {
+            id
+            item_name
+            quantity
+            unit_price
+            total_price
+            business_inventory_id
+            business_inventory {
+              id
+              item {
+                id
+                name
+              }
+            }
           }
         }
       }
@@ -1389,7 +1446,7 @@ export class OrdersService {
         if (!order.business_location?.business?.user?.email) {
           throw new Error('Business email is undefined');
         }
-        if (!order.delivery_address?.formatted_address) {
+        if (!order.delivery_address) {
           throw new Error('Delivery address is undefined');
         }
 
@@ -1416,7 +1473,7 @@ export class OrdersService {
           taxAmount: order.tax_amount || 0,
           totalAmount: order.total_amount || 0,
           currency: order.currency || 'USD',
-          deliveryAddress: order.delivery_address?.formatted_address,
+          deliveryAddress: this.formatAddress(order.delivery_address),
           estimatedDeliveryTime: order.estimated_delivery_time,
           specialInstructions: order.special_instructions,
         };
@@ -1435,6 +1492,63 @@ export class OrdersService {
     } catch (error) {
       this.logger.error(
         `Failed to process order payment: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Handle order payment failure - cancel order and update reserved quantities
+   */
+  async onOrderPaymentFailed(orderId: string): Promise<void> {
+    try {
+      // Get order details
+      const order = await this.getOrderDetails(orderId);
+
+      if (!order) {
+        throw new Error(`Order with ID ${orderId} not found`);
+      }
+
+      // Update order status to cancelled
+      await this.orderStatusService.updateOrderStatus(orderId, 'cancelled');
+
+      // Get user ID from the order (client user)
+      const userId = order.client?.user?.id;
+      if (!userId) {
+        throw new Error('Client user ID not found in order');
+      }
+
+      // Create status history entry for payment failure
+      await this.createStatusHistoryEntry(
+        orderId,
+        'cancelled',
+        'Order cancelled due to payment failure',
+        'client',
+        userId,
+        'Payment failed - order automatically cancelled'
+      );
+
+      // Update reserved quantities - decrement since order is cancelled
+      try {
+        const orderItems = order.order_items || [];
+        await this.updateReservedQuantities(orderItems, 'decrement');
+      } catch (error) {
+        this.logger.error(
+          `Failed to update reserved quantities after payment failure: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        // Don't fail the cancellation if reserved quantity update fails
+      }
+
+      this.logger.log(
+        `Order ${order.order_number} cancelled due to payment failure`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to handle order payment failure for order ${orderId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -1480,13 +1594,15 @@ export class OrdersService {
         `Updated order ${orderId} status to ${newStatus} and payment status to ${paymentStatus}`
       );
 
+      const order = await this.getOrderDetails(orderId);
+
       // Create status history entry for the status change
       await this.createStatusHistoryEntry(
         orderId,
         newStatus,
         `Order status updated to ${newStatus} after payment confirmation`,
-        'system',
-        'system'
+        'client',
+        order.client.user_id
       );
     } catch (error) {
       this.logger.error(
@@ -2679,11 +2795,40 @@ export class OrdersService {
           continue;
         }
 
+        // First, get the current reserved quantity
+        const getCurrentQuantityQuery = `
+          query GetCurrentReservedQuantity($id: uuid!) {
+            business_inventory_by_pk(id: $id) {
+              id
+              reserved_quantity
+              quantity
+            }
+          }
+        `;
+
+        const currentData = await this.hasuraSystemService.executeQuery(
+          getCurrentQuantityQuery,
+          { id: businessInventoryId }
+        );
+
+        const currentReservedQuantity =
+          currentData.business_inventory_by_pk?.reserved_quantity || 0;
+
+        // Calculate new reserved quantity
+        const newReservedQuantity =
+          operation === 'increment'
+            ? currentReservedQuantity + quantity
+            : currentReservedQuantity - quantity;
+
+        // Ensure reserved quantity doesn't go below 0
+        const finalReservedQuantity = Math.max(0, newReservedQuantity);
+
+        // Update with the new reserved quantity
         const updateMutation = `
-          mutation UpdateReservedQuantity($id: uuid!, $quantity: Int!) {
+          mutation UpdateReservedQuantity($id: uuid!, $reservedQuantity: Int!) {
             update_business_inventory_by_pk(
               pk_columns: { id: $id }
-              _inc: { reserved_quantity: $quantity }
+              _set: { reserved_quantity: $reservedQuantity }
             ) {
               id
               reserved_quantity
@@ -2692,16 +2837,13 @@ export class OrdersService {
           }
         `;
 
-        const quantityToUpdate =
-          operation === 'increment' ? quantity : -quantity;
-
         await this.hasuraSystemService.executeQuery(updateMutation, {
           id: businessInventoryId,
-          quantity: quantityToUpdate,
+          reservedQuantity: finalReservedQuantity,
         });
 
         this.logger.log(
-          `Updated reserved quantity for inventory ${businessInventoryId}: ${operation} ${quantity}`
+          `Updated reserved quantity for inventory ${businessInventoryId}: ${currentReservedQuantity} -> ${finalReservedQuantity} (${operation} ${quantity})`
         );
       }
     } catch (error) {

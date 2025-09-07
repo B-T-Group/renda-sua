@@ -94,7 +94,7 @@ export function useDistanceMatrix(cacheDuration: number = CACHE_DURATION) {
   const fetchDistanceMatrix = useCallback(
     async (
       payload: DistanceMatrixPayload,
-      forceRefresh: boolean = false
+      forceRefresh = false
     ): Promise<DistanceMatrixResponse> => {
       setLoading(true);
       setError(null);

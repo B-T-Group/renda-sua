@@ -194,12 +194,15 @@ const BusinessOrdersPage: React.FC = () => {
         });
         break;
       case 'delivered':
-        actions.push({
-          label: t('orders.actions.refund'),
-          status: 'refunded',
-          color: 'warning' as const,
-          icon: CancelIcon,
-        });
+        // Only show refund option if payment is not pending
+        if (order.payment_status !== 'pending') {
+          actions.push({
+            label: t('orders.actions.refund'),
+            status: 'refunded',
+            color: 'warning' as const,
+            icon: CancelIcon,
+          });
+        }
         break;
     }
 

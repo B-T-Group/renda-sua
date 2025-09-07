@@ -53,17 +53,15 @@ export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({ chil
   );
 };
 
-export const useTokenRefresh = (): TokenRefreshContextType => {
+export const useTokenRefresh = (): TokenRefreshContextType | null => {
   const context = useContext(TokenRefreshContext);
   
-  if (!context) {
-    throw new Error('useTokenRefresh must be used within a TokenRefreshProvider');
-  }
-  
+  // Return null instead of throwing error to allow graceful fallback
   return context;
 };
 
 export default TokenRefreshContext;
+
 
 
 

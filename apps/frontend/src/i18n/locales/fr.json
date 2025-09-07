@@ -36,6 +36,7 @@
     "errorLoadingData": "Erreur lors du chargement des données",
     "orderStatus": {
       "pending": "En attente",
+      "pending_payment": "Paiement en attente",
       "confirmed": "Confirmé",
       "preparing": "En préparation",
       "ready_for_pickup": "Prêt pour le ramassage",
@@ -156,6 +157,11 @@
         "gallery": "Galerie",
         "angle": "Angle"
       }
+    },
+    "orders": {
+      "preparingNotice": "👨‍🍳 Préparation en cours. Terminez soigneusement et marquez comme \"Prêt pour le retrait\" pour notifier les agents disponibles.",
+      "paymentPendingNotice": "Le paiement du client est toujours en attente. La commande peut être annulée si le paiement n'est pas reçu.",
+      "paymentPendingCancellable": "Le paiement du client est en attente depuis plus d'1 heure. Vous pouvez maintenant annuler cette commande pour libérer l'inventaire."
     },
     "inventory": {
       "title": "Inventaire",
@@ -345,6 +351,11 @@
     "quantity": "Quantité",
     "specialInstructions": "Instructions Spéciales",
     "requireVerifiedAgent": "Exiger un agent vérifié pour la livraison",
+    "clientPickupComingSoon": "Retrait Client - Bientôt Disponible !",
+    "clientPickupDescription": "Économisez sur les frais de livraison en récupérant votre commande directement à l'emplacement de l'entreprise. Cette option pratique sera bientôt disponible !",
+    "noDeliveryFee": "Aucun Frais de Livraison",
+    "fasterPickup": "Retrait Plus Rapide",
+    "directFromBusiness": "Directement de l'Entreprise",
     "orderSummary": "Résumé de la Commande",
     "subtotal": "Sous-total",
     "deliveryFee": "Frais de Livraison",
@@ -576,7 +587,8 @@
     "types": {
       "home": "Domicile",
       "work": "Travail",
-      "other": "Autre"
+      "other": "Autre",
+      "undefined": "Autre"
     },
     "getCurrentLocation": "Obtenir l'Emplacement Actuel",
     "locationPermissionDenied": "Permission de localisation refusée. Veuillez activer l'accès à la localisation dans les paramètres de votre navigateur.",

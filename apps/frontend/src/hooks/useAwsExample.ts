@@ -86,7 +86,7 @@ export const useGenericUploadExample = () => {
   const uploadFile = async (
     file: File,
     bucketName: string,
-    prefix: string = 'uploads'
+    prefix = 'uploads'
   ) => {
     const request: GeneratePresignedUrlRequest = {
       bucketName,

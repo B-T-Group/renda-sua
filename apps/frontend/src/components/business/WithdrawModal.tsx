@@ -8,16 +8,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
@@ -51,22 +48,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
 
-  // Set default payment method based on currency
-  const getDefaultPaymentMethod = (): PaymentMethod => {
-    if (currency === 'XAF') {
-      return 'airtel-money';
-    }
-    return 'mtn-momo';
-  };
-
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    getDefaultPaymentMethod()
-  );
-
-  // Update default payment method when currency changes
-  useEffect(() => {
-    setPaymentMethod(getDefaultPaymentMethod());
-  }, [currency]);
+  // Lock payment method to Airtel Money only
+  const [paymentMethod] = useState<PaymentMethod>('airtel-money');
 
   // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
@@ -85,41 +68,10 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   }, [open]);
 
-  // Get available payment methods based on currency
-  const getAvailablePaymentMethods = () => {
-    if (currency === 'XAF') {
-      return [
-        {
-          value: 'airtel-money',
-          label: t('accounts.paymentMethods.airtelMoney'),
-        },
-        { value: 'moov-money', label: t('accounts.paymentMethods.moovMoney') },
-        {
-          value: 'credit-card',
-          label: t('accounts.paymentMethods.creditCardComingSoon'),
-          disabled: true,
-        },
-      ];
-    }
-    return [
-      { value: 'mtn-momo', label: t('accounts.paymentMethods.mtnMomo') },
-      {
-        value: 'airtel-money',
-        label: t('accounts.paymentMethods.airtelMoney'),
-      },
-      { value: 'moov-money', label: t('accounts.paymentMethods.moovMoney') },
-    ];
-  };
-
-  // Get phone number hint based on payment method
+  // Get phone number hint for Airtel Money
   const getPhoneNumberHint = () => {
-    if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
-      return t('accounts.phoneNumberHint');
-    }
-    return '';
+    return t('accounts.phoneNumberHint');
   };
-
-  const availablePaymentMethods = getAvailablePaymentMethods();
 
   const handleConfirm = async () => {
     if (!phoneNumber.trim()) {
@@ -207,39 +159,34 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </Typography>
             </Box>
 
-            {/* Payment Method Selection */}
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>{t('accounts.paymentMethod')}</InputLabel>
-              <Select
-                value={paymentMethod}
-                onChange={(e) =>
-                  setPaymentMethod(e.target.value as PaymentMethod)
-                }
-                label={t('accounts.paymentMethod')}
-                disabled={loading}
-              >
-                {availablePaymentMethods.map((method) => (
-                  <MenuItem
-                    key={method.value}
-                    value={method.value}
-                    disabled={method.disabled}
-                  >
-                    {method.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {/* Payment Method - Locked to Airtel Money */}
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                borderRadius: 1,
+                mb: 3,
+              }}
+            >
+              <Typography variant="subtitle2" color="inherit" gutterBottom>
+                {t('accounts.paymentMethod')}
+              </Typography>
+              <Typography variant="body2" color="inherit" sx={{ opacity: 0.9 }}>
+                {t('accounts.paymentMethods.airtelMoney')} (Only supported
+                method)
+              </Typography>
+            </Box>
 
             {/* Phone Number Input */}
-            <TextField
-              fullWidth
-              label={t('accounts.phoneNumber')}
+            <PhoneInput
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={(value) => setPhoneNumber(value || '')}
+              label={t('accounts.phoneNumber')}
               placeholder={t('accounts.phoneNumberPlaceholder')}
               helperText={getPhoneNumberHint()}
-              sx={{ mb: 3 }}
               disabled={loading}
+              defaultCountry="CM"
             />
 
             {/* Amount Input */}

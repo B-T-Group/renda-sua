@@ -79,6 +79,15 @@ const ManageOrderPage: React.FC = () => {
     navigate('/orders');
   };
 
+  const handleCancelOrder = (orderId: string) => {
+    setPendingAction({
+      action: 'cancel',
+      label: t('orders.actions.cancel', 'Cancel Order'),
+      color: 'error',
+    });
+    setConfirmationOpen(true);
+  };
+
   const handleConfirmAction = async () => {
     if (!pendingAction || !orderId) return;
 
@@ -280,7 +289,12 @@ const ManageOrderPage: React.FC = () => {
         {profile?.agent && (
           <AgentOrderAlerts order={order as any} agentAccounts={accounts} />
         )}
-        {profile?.business && <BusinessOrderAlerts order={order as any} />}
+        {profile?.business && (
+          <BusinessOrderAlerts
+            order={order as any}
+            onCancelOrder={handleCancelOrder}
+          />
+        )}
         {profile?.client && <ClientOrderAlerts order={order as any} />}
 
         {/* Order Actions - Persona-specific components */}

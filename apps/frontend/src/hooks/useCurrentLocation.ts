@@ -89,7 +89,7 @@ export const useCurrentLocation = (
   );
 
   const getCurrentLocation = useCallback(
-    async (forceRefresh: boolean = false): Promise<Location> => {
+    async (forceRefresh = false): Promise<Location> => {
       console.log('getCurrentLocation called', { forceRefresh });
       setLoading(true);
       setError(null);

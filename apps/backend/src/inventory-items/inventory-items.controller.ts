@@ -15,6 +15,19 @@ import type {
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
 
+// Interface for query parameters as they come from HTTP requests (all strings)
+interface GetInventoryItemsQueryParams {
+  page?: string;
+  limit?: string;
+  search?: string;
+  category?: string;
+  brand?: string;
+  min_price?: string;
+  max_price?: string;
+  currency?: string;
+  is_active?: string;
+}
+
 @ApiTags('Inventory Items')
 @Controller('inventory-items')
 export class InventoryItemsController {
@@ -100,13 +113,33 @@ export class InventoryItemsController {
     type: Boolean,
     description: 'Filter by active status (default: true)',
   })
-  async getInventoryItems(@Query() query: GetInventoryItemsQuery): Promise<{
+  async getInventoryItems(
+    @Query() query: GetInventoryItemsQueryParams
+  ): Promise<{
     success: boolean;
     data: PaginatedInventoryItems;
     message: string;
   }> {
     try {
-      const data = await this.inventoryItemsService.getInventoryItems(query);
+      // Convert string query parameters to proper types
+      const processedQuery: GetInventoryItemsQuery = {
+        page: query.page ? Number(query.page) : undefined,
+        limit: query.limit ? Number(query.limit) : undefined,
+        search: query.search,
+        category: query.category,
+        brand: query.brand,
+        min_price: query.min_price ? Number(query.min_price) : undefined,
+        max_price: query.max_price ? Number(query.max_price) : undefined,
+        currency: query.currency,
+        is_active:
+          query.is_active !== undefined
+            ? query.is_active === 'true'
+            : undefined,
+      };
+
+      const data = await this.inventoryItemsService.getInventoryItems(
+        processedQuery
+      );
 
       return {
         success: true,

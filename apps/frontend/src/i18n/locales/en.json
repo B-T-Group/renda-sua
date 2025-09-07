@@ -38,6 +38,7 @@
     "phone": "Phone",
     "orderStatus": {
       "pending": "Pending",
+      "pending_payment": "Pending Payment",
       "confirmed": "Confirmed",
       "preparing": "Preparing",
       "ready_for_pickup": "Ready for Pickup",
@@ -184,7 +185,8 @@
     },
     "orders": {
       "preparingNotice": "👨‍🍳 Preparation in progress. Complete carefully and mark as \"Ready for Pickup\" to notify available agents.",
-      "paymentPendingNotice": "Customer payment is still pending. Order may be cancelled if payment is not received."
+      "paymentPendingNotice": "Customer payment is still pending. Order may be cancelled if payment is not received.",
+      "paymentPendingCancellable": "Customer payment has been pending for over 1 hour. You can now cancel this order to free up inventory."
     },
     "inventory": {
       "title": "Inventory",
@@ -505,6 +507,11 @@
     "quantity": "Quantity",
     "specialInstructions": "Special Instructions",
     "requireVerifiedAgent": "Require verified agent for delivery",
+    "clientPickupComingSoon": "Client Pickup - Coming Soon!",
+    "clientPickupDescription": "Save on delivery fees by picking up your order directly from the business location. This convenient option will be available soon!",
+    "noDeliveryFee": "No Delivery Fee",
+    "fasterPickup": "Faster Pickup",
+    "directFromBusiness": "Direct from Business",
     "orderSummary": "Order Summary",
     "subtotal": "Subtotal",
     "deliveryFee": "Delivery Fee",
@@ -664,6 +671,7 @@
     },
     "totalBalance": "Total Balance",
     "transactionHistory": "Transaction History",
+    "recentTransactions": "Recent Transactions",
     "noTransactions": "No transactions found",
     "subscriptionConnected": "Subscription Connected",
     "summary": "Summary",
@@ -698,7 +706,8 @@
       "home": "Home",
       "work": "Work",
       "other": "Other",
-      "warehouse": "Warehouse"
+      "warehouse": "Warehouse",
+      "undefined": "Other"
     },
     "getCurrentLocation": "Get Current Location",
     "locationPermissionDenied": "Location permission denied. Please enable location access in your browser settings.",

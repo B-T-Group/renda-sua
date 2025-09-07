@@ -630,6 +630,16 @@ export class MobilePaymentsController {
         );
       }
 
+      if (
+        callbackData.status === 'FAILED' &&
+        transaction?.payment_entity === 'order'
+      ) {
+        const order = await this.ordersService.getOrderByNumber(
+          transaction.reference
+        );
+        await this.ordersService.onOrderPaymentFailed(order.id);
+      }
+
       // Return success response
       return {
         responseCode: callbackData.code,

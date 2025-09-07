@@ -69,7 +69,7 @@ export const useUserMessages = (specificUserId?: string) => {
       setError(null);
 
       try {
-        let whereClause: any = {};
+        const whereClause: any = {};
 
         if (filters) {
           if (filters.entity_type) {
