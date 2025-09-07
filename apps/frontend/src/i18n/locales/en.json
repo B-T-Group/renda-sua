@@ -671,6 +671,7 @@
     },
     "totalBalance": "Total Balance",
     "transactionHistory": "Transaction History",
+    "recentTransactions": "Recent Transactions",
     "noTransactions": "No transactions found",
     "subscriptionConnected": "Subscription Connected",
     "summary": "Summary",
@@ -705,7 +706,8 @@
       "home": "Home",
       "work": "Work",
       "other": "Other",
-      "warehouse": "Warehouse"
+      "warehouse": "Warehouse",
+      "undefined": "Other"
     },
     "getCurrentLocation": "Get Current Location",
     "locationPermissionDenied": "Location permission denied. Please enable location access in your browser settings.",

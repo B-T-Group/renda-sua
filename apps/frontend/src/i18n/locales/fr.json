@@ -587,7 +587,8 @@
     "types": {
       "home": "Domicile",
       "work": "Travail",
-      "other": "Autre"
+      "other": "Autre",
+      "undefined": "Autre"
     },
     "getCurrentLocation": "Obtenir l'Emplacement Actuel",
     "locationPermissionDenied": "Permission de localisation refusée. Veuillez activer l'accès à la localisation dans les paramètres de votre navigateur.",

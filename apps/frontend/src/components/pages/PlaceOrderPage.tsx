@@ -28,7 +28,6 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
-import ComingSoon from '../common/ComingSoon';
 
 const PlaceOrderPage: React.FC = () => {
   const { t } = useTranslation();
@@ -775,25 +774,6 @@ const PlaceOrderPage: React.FC = () => {
               )}
             </CardContent>
           </Card>
-        </Grid>
-
-        {/* Client Pickup Coming Soon Section */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <ComingSoon
-            title={t('orders.clientPickupComingSoon', 'Client Pickup - Coming Soon!')}
-            description={t(
-              'orders.clientPickupDescription',
-              'Save on delivery fees by picking up your order directly from the business location. This convenient option will be available soon!'
-            )}
-            features={[
-              t('orders.noDeliveryFee', 'No Delivery Fee'),
-              t('orders.fasterPickup', 'Faster Pickup'),
-              t('orders.directFromBusiness', 'Direct from Business'),
-            ]}
-            variant="card"
-            severity="info"
-            sx={{ height: '100%' }}
-          />
         </Grid>
 
         {/* Payment Details Section */}
