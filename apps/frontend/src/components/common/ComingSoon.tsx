@@ -1,16 +1,5 @@
-import {
-  AccessTime as AccessTimeIcon,
-  Construction as ConstructionIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material';
-import {
-  Alert,
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Typography,
-} from '@mui/material';
+import { Construction as ConstructionIcon } from '@mui/icons-material';
+import { Alert, Box, Card, CardContent, Chip, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,7 +30,7 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
     <Alert
       severity={severity}
       icon={defaultIcon}
-      variant="outlined"
+      variant="filled"
       sx={{
         mb: 2,
         '& .MuiAlert-message': {
@@ -51,10 +40,20 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
       }}
     >
       <Box>
-        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+        <Typography
+          variant="subtitle2"
+          fontWeight="bold"
+          gutterBottom
+          color="inherit"
+        >
           {title}
         </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
+        <Typography
+          variant="body2"
+          color="inherit"
+          paragraph
+          sx={{ opacity: 0.9 }}
+        >
           {description}
         </Typography>
         {features.length > 0 && (
@@ -65,7 +64,16 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
                 label={feature}
                 size="small"
                 variant="outlined"
-                sx={{ mr: 1, mb: 0.5 }}
+                sx={{
+                  mr: 1,
+                  mb: 0.5,
+                  color: 'inherit',
+                  borderColor: 'inherit',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  '& .MuiChip-label': {
+                    color: 'inherit',
+                  },
+                }}
               />
             ))}
           </Box>
@@ -86,18 +94,27 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
             ? 'warning.main'
             : 'success.main'
         }`,
-        backgroundColor: `${severity}.light`,
+        backgroundColor: `${severity}.main`,
+        color: `${severity}.contrastText`,
         ...sx,
       }}
     >
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          {defaultIcon}
-          <Typography variant="h6" sx={{ ml: 1, fontWeight: 'bold' }}>
+          <Box sx={{ color: 'inherit' }}>{defaultIcon}</Box>
+          <Typography
+            variant="h6"
+            sx={{ ml: 1, fontWeight: 'bold', color: 'inherit' }}
+          >
             {title}
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary" paragraph>
+        <Typography
+          variant="body2"
+          color="inherit"
+          paragraph
+          sx={{ opacity: 0.9 }}
+        >
           {description}
         </Typography>
         {features.length > 0 && (
@@ -108,7 +125,15 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
                 label={feature}
                 size="small"
                 variant="outlined"
-                sx={{ mr: 1, mb: 0.5 }}
+                sx={{
+                  mr: 1,
+                  mb: 0.5,
+                  color: 'inherit',
+                  borderColor: 'inherit',
+                  '& .MuiChip-label': {
+                    color: 'inherit',
+                  },
+                }}
               />
             ))}
           </Box>
