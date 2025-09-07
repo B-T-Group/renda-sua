@@ -160,7 +160,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, query]);
+  }, []);
 
   useEffect(() => {
     fetchInventoryItems();

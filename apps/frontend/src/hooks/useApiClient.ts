@@ -121,6 +121,7 @@ export const useApiClient = (): AxiosInstance => {
     showLoading,
     hideLoading,
     handleTokenRefresh,
+    loginWithRedirect,
     getValidToken,
   ]);
 
