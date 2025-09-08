@@ -6,29 +6,13 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface AgentOrderAlertsProps {
   order: Order;
-  agentAccounts?: any[];
 }
 
-const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
-  order,
-  agentAccounts = [],
-}) => {
+const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfile();
 
   const agentVerified = profile?.agent?.is_verified || false;
-
-  const hasSufficientFunds = () => {
-    // If no account data is provided, we can't determine funds status
-    // So we assume funds are sufficient (don't show warning)
-    if (!agentAccounts?.length) return true;
-
-    const totalBalance = agentAccounts.reduce(
-      (sum, account) => sum + (account.available_balance || 0),
-      0
-    );
-    return totalBalance >= (order.total_amount || 0);
-  };
 
   const getDeliveryFee = () => {
     // Get delivery fee from order_holds table (new API response)
@@ -113,16 +97,6 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
                 'This order requires a verified agent. Please complete your verification to claim high-value orders.'
               ),
             });
-          } else if (!hasSufficientFunds()) {
-            alerts.push({
-              severity: 'error' as const,
-              message: t(
-                'agent.orders.insufficientFunds',
-                `You need more funds to claim this order. Top up your account to earn ${formatCurrency(
-                  deliveryFee
-                )} from this delivery.`
-              ),
-            });
           } else {
             alerts.push({
               severity: 'success' as const,
@@ -130,7 +104,7 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({
                 'agent.orders.canClaim',
                 `🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(
                   deliveryFee
-                )} for the delivery. You have sufficient funds and meet all requirements.`
+                )} for the delivery.`
               ),
             });
           }

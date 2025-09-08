@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
   order: OrderData;
@@ -26,6 +27,9 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const { profile } = useUserProfile();
   const agentOrders = useAgentOrders();
   const [loading, setLoading] = useState(false);
+  const [showClaimDialog, setShowClaimDialog] = useState(false);
+  const [claimSuccess, setClaimSuccess] = useState(false);
+  const [claimError, setClaimError] = useState<string | undefined>();
 
   // Check if agent has sufficient funds to claim the order
   const hasSufficientFunds = () => {
@@ -85,25 +89,61 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
+    // Check if agent has sufficient funds
+    if (hasSufficientFunds()) {
+      // Use regular claim order API
+      setLoading(true);
+      try {
+        const result = await agentOrders.getOrderForPickup(order.id);
+        onShowNotification?.(
+          t(
+            'messages.orderAssignedSuccess',
+            `Order ${result.order.order_number} claimed successfully`
+          ),
+          'success'
+        );
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t('messages.orderClaimError', 'Failed to claim order'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Show dialog for claim with topup
+      setShowClaimDialog(true);
+    }
+  };
+
+  const handleClaimWithTopup = async (phoneNumber?: string) => {
     setLoading(true);
+    setClaimError(undefined);
+    setClaimSuccess(false);
+
     try {
-      const result = await agentOrders.getOrderForPickup(order.id);
-      onShowNotification?.(
-        t(
-          'messages.orderAssignedSuccess',
-          `Order ${result.order.order_number} claimed successfully`
-        ),
-        'success'
-      );
+      await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
+      setClaimSuccess(true);
       onActionComplete?.();
     } catch (error: any) {
-      onShowNotification?.(
-        error.message || t('messages.orderClaimError', 'Failed to claim order'),
-        'error'
+      setClaimError(
+        error.message ||
+          t(
+            'messages.orderClaimWithTopupError',
+            'Failed to claim order with topup'
+          )
       );
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCloseClaimDialog = () => {
+    setShowClaimDialog(false);
+    setClaimSuccess(false);
+    setClaimError(undefined);
   };
 
   const handleDrop = async () => {
@@ -177,13 +217,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           action: handleClaim,
           color: 'primary' as const,
           icon: <CheckCircle />,
-          disabled: !hasSufficientFunds(),
-          tooltip: !hasSufficientFunds()
-            ? t(
-                'agent.orders.insufficientFunds',
-                'Insufficient funds to claim this order. Please top up your account.'
-              )
-            : undefined,
+          disabled: false, // Always enabled - will show dialog if insufficient funds
         });
         break;
 
@@ -262,38 +296,51 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        gap: 2,
-        flexWrap: 'wrap',
-        justifyContent: 'flex-end',
-      }}
-    >
-      {availableActions.map((action, index) => {
-        const button = (
-          <Button
-            key={index}
-            variant="outlined"
-            color={action.color}
-            onClick={action.action}
-            disabled={loading || action.disabled}
-            startIcon={loading ? <CircularProgress size={16} /> : action.icon}
-            sx={{ minWidth: 120 }}
-          >
-            {action.label}
-          </Button>
-        );
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+      >
+        {availableActions.map((action, index) => {
+          const button = (
+            <Button
+              key={index}
+              variant="outlined"
+              color={action.color}
+              onClick={action.action}
+              disabled={loading || action.disabled}
+              startIcon={loading ? <CircularProgress size={16} /> : action.icon}
+              sx={{ minWidth: 120 }}
+            >
+              {action.label}
+            </Button>
+          );
 
-        return action.tooltip ? (
-          <Tooltip key={index} title={action.tooltip}>
-            <span>{button}</span>
-          </Tooltip>
-        ) : (
-          button
-        );
-      })}
-    </Box>
+          return action.tooltip ? (
+            <Tooltip key={index} title={action.tooltip}>
+              <span>{button}</span>
+            </Tooltip>
+          ) : (
+            button
+          );
+        })}
+      </Box>
+
+      <ClaimOrderDialog
+        open={showClaimDialog}
+        onClose={handleCloseClaimDialog}
+        onConfirm={handleClaimWithTopup}
+        order={order}
+        userPhoneNumber={undefined}
+        loading={loading}
+        success={claimSuccess}
+        error={claimError}
+      />
+    </>
   );
 };
 

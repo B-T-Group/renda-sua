@@ -611,6 +611,9 @@ export class MobilePaymentsController {
               if (transaction.payment_entity === 'order') {
                 // Process order payment using the refactored method
                 await this.ordersService.processOrderPayment(transaction);
+              } else if (transaction.payment_entity === 'claim_order') {
+                // Process claim order payment
+                await this.ordersService.processClaimOrderPayment(transaction);
               }
             } else {
               console.error(
@@ -638,6 +641,15 @@ export class MobilePaymentsController {
           transaction.reference
         );
         await this.ordersService.onOrderPaymentFailed(order.id);
+      } else if (
+        callbackData.status === 'FAILED' &&
+        transaction?.payment_entity === 'claim_order'
+      ) {
+        // For claim order payment failures, we don't need to cancel the order
+        // since the order wasn't claimed yet - just log the failure
+        console.log(
+          `Claim order payment failed for order ${transaction.reference}`
+        );
       }
 
       // Return success response

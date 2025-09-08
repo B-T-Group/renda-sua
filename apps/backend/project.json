@@ -13,7 +13,12 @@
         "tsConfig": "apps/backend/tsconfig.app.json",
         "main": "apps/backend/src/main.ts",
         "generateLockfile": false,
-        "generatePackageJson": true
+        "generatePackageJson": true,
+        "assets": [
+          "apps/backend/src/**/*.json",
+          "apps/backend/src/**/*.yaml",
+          "apps/backend/src/**/*.yml"
+        ]
       },
       "configurations": {
         "development": {

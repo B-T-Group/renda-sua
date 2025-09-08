@@ -16,9 +16,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAccountInfo } from '../../hooks';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
@@ -33,12 +31,6 @@ interface OrderFilters {
 
 const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-  const { profile } = useUserProfile();
-  const {
-    accounts,
-    loading: accountLoading,
-    error: accountError,
-  } = useAccountInfo();
 
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
 
@@ -118,7 +110,7 @@ const OpenOrdersPage: React.FC = () => {
     );
   };
 
-  if (loading || accountLoading) {
+  if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box
@@ -133,16 +125,12 @@ const OpenOrdersPage: React.FC = () => {
     );
   }
 
-  if (error || accountError) {
+  if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           Error loading data:{' '}
-          {typeof error === 'string'
-            ? error
-            : (error as any)?.message || typeof accountError === 'string'
-            ? accountError
-            : (accountError as any)?.message}
+          {typeof error === 'string' ? error : (error as any)?.message}
         </Alert>
       </Container>
     );
@@ -221,10 +209,7 @@ const OpenOrdersPage: React.FC = () => {
                   {availableOrders.map((order) => (
                     <Box key={order.id}>
                       {/* Agent-specific alerts for available orders */}
-                      <AgentOrderAlerts
-                        order={order}
-                        agentAccounts={accounts}
-                      />
+                      <AgentOrderAlerts order={order} />
                       <AvailableOrderCard order={order} />
                     </Box>
                   ))}
