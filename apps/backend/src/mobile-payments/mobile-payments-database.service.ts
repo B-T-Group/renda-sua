@@ -18,6 +18,7 @@ export interface MobilePaymentTransaction {
   account_id?: string;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
   payment_entity?: 'order' | 'account' | 'claim_order';
+  entity_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ export interface CreateTransactionData {
   account_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
   payment_entity?: 'order' | 'account' | 'claim_order';
+  entity_id?: string;
 }
 
 export interface UpdateTransactionData {
@@ -77,6 +79,7 @@ export class MobilePaymentsDatabaseService {
             payment_entity
             created_at
             updated_at
+            entity_id
           }
         }
       `;
@@ -223,6 +226,7 @@ export class MobilePaymentsDatabaseService {
             error_code
             created_at
             updated_at
+            entity_id
           }
         }
       `;

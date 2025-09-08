@@ -560,8 +560,24 @@
       "title": "Agent Dashboard",
       "openOrders": "Open Orders"
     },
-    "orders": {
-      "insufficientFunds": "Insufficient funds to claim this order. Please top up your account."
+    "orders": {},
+    "claimOrder": {
+      "title": "Claim Order with Payment",
+      "info": "A payment request will be sent to your phone number. Once you accept the payment request, the order will be automatically claimed by you.",
+      "successMessage": "Payment request sent successfully! Please check your phone and accept the payment request to claim the order.",
+      "orderDetails": "Order Details",
+      "orderNumber": "Order #{{orderNumber}}",
+      "totalAmount": "Total Amount: {{amount}}",
+      "paymentDetails": "Payment Details",
+      "holdAmount": "Hold Amount ({{percentage}}%)",
+      "serviceCharge": "Service Charge ({{percentage}}%)",
+      "totalCharge": "Total Charge",
+      "phoneNumber": "Phone Number",
+      "enterPhoneNumber": "Enter phone number",
+      "noPhoneNumber": "No phone number on file",
+      "deliveryEarnings": "You will earn {{deliveryFee}} in delivery fees from this order.",
+      "processing": "Processing...",
+      "confirmClaim": "Confirm & Claim Order"
     },
     "addressPrompt": {
       "title": "Add Your Address",
@@ -580,6 +596,8 @@
     "orderDropError": "Failed to drop order",
     "orderPickupError": "Failed to pick up order",
     "orderStatusUpdateError": "Failed to update order status",
+    "orderClaimWithTopupSuccess": "Payment request sent for order {{orderNumber}}. Please accept the payment to claim the order.",
+    "orderClaimWithTopupError": "Failed to claim order with topup",
     "title": "Messages",
     "orderMessages": "Order Messages",
     "noMessages": "No messages yet",
@@ -590,6 +608,9 @@
     "viewAll": "View All Messages",
     "allMessages": "All Messages",
     "error": "Failed to load messages"
+  },
+  "validation": {
+    "phoneRequired": "Phone number is required"
   },
   "faq": {
     "title": "Frequently Asked Questions",

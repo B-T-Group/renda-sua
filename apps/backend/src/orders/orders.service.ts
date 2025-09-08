@@ -240,6 +240,10 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
 
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.random().toString(36).substr(2, 4);
+    const reference = `C${timestamp}${random}`;
+
     const order = await this.getOrderWithItems(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -277,7 +281,7 @@ export class OrdersService {
     try {
       // Create transaction record in database
       transaction = await this.mobilePaymentsDatabaseService.createTransaction({
-        reference: order.order_number,
+        reference: reference,
         amount: holdAmount,
         currency: order.currency,
         description: `Claim order ${order.order_number}`,
@@ -288,12 +292,13 @@ export class OrdersService {
         account_id: agentAccount.id,
         transaction_type: 'PAYMENT',
         payment_entity: 'claim_order' as const,
+        entity_id: order.order_number,
       });
 
       const paymentRequest = {
         amount: holdAmount,
         currency: order.currency,
-        description: `Claim order ${order.order_number}`,
+        description: `claim ${order.order_number}`,
         customerPhone: phoneNumber,
         provider: provider,
         ownerCharge: 'CUSTOMER' as const,
@@ -303,7 +308,7 @@ export class OrdersService {
 
       paymentTransaction = await this.mobilePaymentsService.initiatePayment(
         paymentRequest,
-        order.order_number
+        reference
       );
 
       if (!paymentTransaction.success) {
@@ -1656,7 +1661,7 @@ export class OrdersService {
   async processClaimOrderPayment(transaction: any): Promise<void> {
     try {
       // Get order details by order number (reference)
-      const order = await this.getOrderByNumber(transaction.reference);
+      const order = await this.getOrderByNumber(transaction.entity_id);
 
       const account = await this.hasuraSystemService.getAccountById(
         transaction.account_id
@@ -2029,7 +2034,7 @@ export class OrdersService {
         reference: orderNumber,
         amount: total_amount,
         currency: currency,
-        description: `Payment for order ${orderNumber}`,
+        description: `order ${orderNumber}`,
         provider: provider,
         payment_method: 'mobile_money',
         customer_phone: user.phone_number,
@@ -2037,6 +2042,7 @@ export class OrdersService {
         account_id: account.id,
         transaction_type: 'PAYMENT',
         payment_entity: 'claim_order' as const,
+        entity_id: orderNumber,
       });
 
       const paymentRequest = {

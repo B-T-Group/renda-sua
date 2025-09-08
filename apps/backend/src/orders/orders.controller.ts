@@ -302,9 +302,10 @@ export class OrdersController {
   }
 
   @Post('claim_order_with_topup')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Claim order with topup payment',
-    description: 'Claims an order by initiating a mobile payment for the required hold amount. Optionally accepts a phone_number parameter to override the user\'s default phone number for payment.'
+    description:
+      "Claims an order by initiating a mobile payment for the required hold amount. Optionally accepts a phone_number parameter to override the user's default phone number for payment.",
   })
   @ApiBody({
     description: 'Request body for claiming order with topup payment',
@@ -315,15 +316,16 @@ export class OrdersController {
         orderId: {
           type: 'string',
           description: 'The ID of the order to claim',
-          example: '123e4567-e89b-12d3-a456-426614174000'
+          example: '123e4567-e89b-12d3-a456-426614174000',
         },
         phone_number: {
           type: 'string',
-          description: 'Optional phone number to use for payment. If not provided, uses the user\'s default phone number.',
-          example: '+241123456789'
-        }
-      }
-    }
+          description:
+            "Optional phone number to use for payment. If not provided, uses the user's default phone number.",
+          example: '+241123456789',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,

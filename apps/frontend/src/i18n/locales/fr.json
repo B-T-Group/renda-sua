@@ -402,9 +402,7 @@
       "title": "Tableau de Bord Agent",
       "openOrders": "Commandes Ouvertes"
     },
-    "orders": {
-      "insufficientFunds": "Fonds insuffisants pour réclamer cette commande. Veuillez recharger votre compte."
-    },
+    "orders": {},
     "addressPrompt": {
       "title": "Ajouter Votre Adresse",
       "description": "Pour commencer à accepter les commandes de livraison, vous devez ajouter votre adresse. Cela nous aide à vous associer aux commandes à proximité et à calculer les itinéraires de livraison.",

@@ -390,6 +390,28 @@ export const useAgentOrders = () => {
     [apiClient, fetchAllOrders]
   );
 
+  const claimOrderWithTopup = useCallback(
+    async (orderId: string, phoneNumber?: string) => {
+      if (!apiClient) throw new Error('API client not available');
+      const payload: { orderId: string; phone_number?: string } = { orderId };
+      if (phoneNumber) {
+        payload.phone_number = phoneNumber;
+      }
+      const response = await apiClient.post(
+        '/orders/claim_order_with_topup',
+        payload
+      );
+      if (response.data.success) {
+        await fetchAllOrders(); // Refresh orders after claiming
+        return response.data;
+      }
+      throw new Error(
+        response.data.error || 'Failed to claim order with topup'
+      );
+    },
+    [apiClient, fetchAllOrders]
+  );
+
   const { fetchDistanceMatrix } = useDistanceMatrix();
 
   useEffect(() => {
@@ -484,6 +506,7 @@ export const useAgentOrders = () => {
     pickUpOrder,
     updateOrderStatusAction,
     getOrderForPickup,
+    claimOrderWithTopup,
     dropOrder,
   };
 };
