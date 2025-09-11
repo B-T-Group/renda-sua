@@ -1,110 +1,110 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useGraphQLClient } from './useGraphQLClient';
+import { useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 
 export interface Brand {
   id: string;
   name: string;
-  description?: string;
+  description: string;
   created_at: string;
   updated_at: string;
+  items_aggregate?: {
+    aggregate: {
+      count: number;
+    };
+  };
 }
 
-interface UseBrandsResult {
-  brands: Brand[];
-  loading: boolean;
-  error: string | null;
-  fetchBrands: () => Promise<void>;
-  createBrand: (brandData: {
-    name: string;
-    description?: string;
-  }) => Promise<Brand>;
+export interface CreateBrandDto {
+  name: string;
+  description: string;
 }
 
-export const useBrands = (): UseBrandsResult => {
-  const { client } = useGraphQLClient();
+export interface UpdateBrandDto {
+  name?: string;
+  description?: string;
+}
+
+export interface BrandsResponse {
+  success: boolean;
+  data: Brand[];
+  message: string;
+}
+
+export interface BrandResponse {
+  success: boolean;
+  data: Brand;
+  message: string;
+}
+
+export const useBrands = (search?: string) => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const apiClient = useApiClient();
 
-  const fetchBrands = useCallback(async () => {
-    if (!client) return;
-
+  const fetchBrands = async (searchTerm?: string) => {
     setLoading(true);
     setError(null);
-
     try {
-      const query = `
-        query GetBrands {
-          brands(order_by: { name: asc }) {
-            id
-            name
-            description
-            created_at
-            updated_at
-          }
-        }
-      `;
+      const params: any = {};
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
 
-      const response = await client.request(query);
-      const brandsData = response.brands || [];
+      const response = await apiClient.get<BrandsResponse>('/brands', {
+        params,
+      });
 
-      setBrands(brandsData);
-    } catch (err) {
-      console.error('Error fetching brands:', err);
-      setError('Failed to fetch brands');
+      if (response.data.success) {
+        setBrands(response.data.data);
+      } else {
+        setError(response.data.message || 'Failed to fetch brands');
+      }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || err.message || 'Failed to fetch brands'
+      );
     } finally {
       setLoading(false);
     }
-  }, [client]);
-
-  const createBrand = useCallback(
-    async (brandData: {
-      name: string;
-      description?: string;
-    }): Promise<Brand> => {
-      if (!client) {
-        throw new Error('GraphQL client not available');
-      }
-
-      try {
-        const mutation = `
-           mutation CreateBrand($name: String!, $description: String) {
-             insert_brands_one(object: {
-               name: $name,
-               description: $description
-             }) {
-               id
-               name
-               description
-               created_at
-               updated_at
-             }
-           }
-         `;
-
-        const response = await client.request(mutation, brandData);
-        const newBrand = response.insert_brands_one;
-
-        if (newBrand) {
-          // Add the new brand to the local state
-          setBrands((prev) =>
-            [...prev, newBrand].sort((a, b) => a.name.localeCompare(b.name))
-          );
-          return newBrand;
-        } else {
-          throw new Error('Failed to create brand');
-        }
-      } catch (err) {
-        console.error('Error creating brand:', err);
-        throw err;
-      }
-    },
-    [client]
-  );
+  };
 
   useEffect(() => {
-    fetchBrands();
-  }, [fetchBrands]);
+    fetchBrands(search);
+  }, [search]);
+
+  const createBrand = async (
+    brandData: CreateBrandDto
+  ): Promise<BrandResponse> => {
+    const response = await apiClient.post<BrandResponse>('/brands', brandData);
+    return response.data;
+  };
+
+  const updateBrand = async (
+    id: string,
+    brandData: UpdateBrandDto
+  ): Promise<BrandResponse> => {
+    const response = await apiClient.put<BrandResponse>(
+      `/brands/${id}`,
+      brandData
+    );
+    return response.data;
+  };
+
+  const deleteBrand = async (
+    id: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await apiClient.delete<{
+      success: boolean;
+      message: string;
+    }>(`/brands/${id}`);
+    return response.data;
+  };
+
+  const getBrandById = async (id: string): Promise<BrandResponse> => {
+    const response = await apiClient.get<BrandResponse>(`/brands/${id}`);
+    return response.data;
+  };
 
   return {
     brands,
@@ -112,5 +112,8 @@ export const useBrands = (): UseBrandsResult => {
     error,
     fetchBrands,
     createBrand,
+    updateBrand,
+    deleteBrand,
+    getBrandById,
   };
 };

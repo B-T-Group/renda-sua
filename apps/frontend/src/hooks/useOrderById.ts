@@ -112,8 +112,6 @@ export interface OrderData {
       currency: string;
       model?: string;
       color?: string;
-      size?: string;
-      size_unit?: string;
       weight?: number;
       weight_unit?: string;
       brand?: {

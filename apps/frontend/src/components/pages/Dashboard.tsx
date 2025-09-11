@@ -8,10 +8,9 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  useAccountInfo,
   useBackendOrders,
   useDeliveryFees,
   useInventoryItems,
@@ -36,20 +35,13 @@ const Dashboard: React.FC = () => {
     loading: inventoryLoading,
     error: inventoryError,
   } = useInventoryItems();
-  const { accounts } = useAccountInfo();
-  const { orders, loading: ordersLoading, error: ordersError } = useOrders();
-  const {
-    loading: deliveryFeesLoading,
-    error: deliveryFeesError,
-    getDeliveryFeeForCurrency,
-  } = useDeliveryFees();
+  const { orders } = useOrders();
+  const { loading: deliveryFeesLoading, error: deliveryFeesError } =
+    useDeliveryFees();
   const { error: orderError } = useBackendOrders();
 
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
-
-  // Assume USD as default currency for items since business_inventory doesn't have currency field
-  const DEFAULT_ITEM_CURRENCY = 'XAF';
 
   // Aggregate unique destination address IDs from inventoryItems
   const destinationAddressIds = React.useMemo(() => {
@@ -125,53 +117,6 @@ const Dashboard: React.FC = () => {
     };
   };
 
-  // Memoized function to check if user can afford an item
-  const canAffordItem = useMemo(() => {
-    return (item: any) => {
-      const itemPrice = item.selling_price;
-      const itemCurrency = DEFAULT_ITEM_CURRENCY;
-
-      // Find account with matching currency
-      const matchingAccount = accounts.find(
-        (account) => account.currency === itemCurrency
-      );
-
-      if (!matchingAccount) {
-        return false; // No account with matching currency
-      }
-
-      return matchingAccount.available_balance >= itemPrice;
-    };
-  }, [accounts]);
-
-  // Memoized function to get account for item currency
-  const getAccountForCurrency = useCallback(
-    (currency: string) => {
-      return accounts.find((account) => account.currency === currency);
-    },
-    [accounts]
-  );
-
-  // Memoized function to get insufficient funds message
-  const getInsufficientFundsMessage = useCallback(
-    (item: any) => {
-      const itemPrice = item.selling_price;
-      const itemCurrency = DEFAULT_ITEM_CURRENCY;
-      const account = getAccountForCurrency(itemCurrency);
-
-      if (!account) {
-        return `No ${itemCurrency} account found. Please add a ${itemCurrency} account to your profile.`;
-      }
-
-      const shortfall = itemPrice - account.available_balance;
-      return `Insufficient funds. You need ${new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: itemCurrency,
-      }).format(shortfall)} more to order this item.`;
-    },
-    [getAccountForCurrency]
-  );
-
   const handleOrderClick = (item: any) => {
     navigate(`/items/${item.id}/place_order`);
   };
@@ -227,7 +172,6 @@ const Dashboard: React.FC = () => {
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
             gap: 2,
             mb: 2,
             flexDirection: { xs: 'column', sm: 'row' },
@@ -252,8 +196,10 @@ const Dashboard: React.FC = () => {
           color="text.secondary"
           sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
         >
-          Welcome back, {user?.name}! Browse available items and manage your
-          orders.
+          Welcome back,{' '}
+          {`${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+            user?.email}
+          ! Browse available items and manage your orders.
         </Typography>
       </Box>
 
@@ -357,19 +303,13 @@ const Dashboard: React.FC = () => {
           >
             {(filteredItems.length > 0 ? filteredItems : inventoryItems).map(
               (item) => {
-                const canAfford = canAffordItem(item);
-                const account = getAccountForCurrency(DEFAULT_ITEM_CURRENCY);
                 const distanceInfo = getItemDistanceInfo(item);
                 return (
                   <DashboardItemCard
                     key={item.id}
                     item={item}
-                    canAfford={canAfford}
-                    account={account}
-                    insufficientFundsMessage={getInsufficientFundsMessage(item)}
                     formatCurrency={formatCurrency}
                     onOrderClick={handleOrderClick}
-                    onTopUpClick={handleTopUpClick}
                     estimatedDistance={distanceInfo?.distance}
                     estimatedDuration={distanceInfo?.duration}
                     distanceLoading={distanceLoading}

@@ -19,8 +19,6 @@ export interface InventoryItem {
     currency: string;
     weight: number;
     weight_unit: string;
-    size: number;
-    size_unit: string;
     item_sub_category_id: number;
     sku: string;
     brand: {
@@ -29,7 +27,6 @@ export interface InventoryItem {
     };
     model: string;
     color: string;
-    material: string;
     is_fragile: boolean;
     is_perishable: boolean;
     requires_special_handling: boolean;

@@ -22,7 +22,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CURRENCIES, SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
+import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import {
   AddInventoryItemData,
   useBusinessInventory,
@@ -330,12 +330,6 @@ export default function AddItemDialog({
                     <b>Color:</b> {selectedItem.color || '-'}
                   </Box>
                   <Box>
-                    <b>Material:</b> {selectedItem.material || '-'}
-                  </Box>
-                  <Box>
-                    <b>Size:</b> {selectedItem.size} {selectedItem.size_unit}
-                  </Box>
-                  <Box>
                     <b>Weight:</b> {selectedItem.weight}{' '}
                     {selectedItem.weight_unit}
                   </Box>
@@ -543,41 +537,6 @@ export default function AddItemDialog({
                   {CURRENCIES.map((currency) => (
                     <MenuItem key={currency} value={currency}>
                       {currency}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label={t('business.inventory.size')}
-                value={newItemData.size || ''}
-                onChange={(e) =>
-                  setNewItemData({
-                    ...newItemData,
-                    size: parseFloat(e.target.value) || undefined,
-                  })
-                }
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>{t('business.inventory.sizeUnit')}</InputLabel>
-                <Select
-                  value={newItemData.size_unit || ''}
-                  onChange={(e) =>
-                    setNewItemData({
-                      ...newItemData,
-                      size_unit: e.target.value,
-                    })
-                  }
-                  label={t('business.inventory.sizeUnit')}
-                >
-                  {SIZE_UNITS.map((unit) => (
-                    <MenuItem key={unit} value={unit}>
-                      {unit}
                     </MenuItem>
                   ))}
                 </Select>

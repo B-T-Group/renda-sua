@@ -104,25 +104,26 @@ export class HasuraSystemService {
    */
   async getUserById(userId: string) {
     const query = `
-         query ($userId: uuid!) {
-           users_by_pk(id: $userId) {
-             id
-             email
-             name
-             agent {
-              id
-             }
-             client {
-              id
-             }
-             business {
-              id
-             }
-             user_type_id
-             created_at
-             updated_at
-           }
-         }
+      query ($userId: uuid!) {
+        users_by_pk(id: $userId) {
+          id
+          email
+          first_name
+          last_name
+          agent {
+           id
+          }
+          client {
+           id
+          }
+          business {
+           id
+          }
+          user_type_id
+          created_at
+          updated_at
+        }
+      }
        `;
     const result = await this.executeQuery(query, { userId });
     return result.users_by_pk;

@@ -76,9 +76,6 @@ export default function InventoryTable({
   const getPhysicalProperties = (item: Item) => {
     const properties = [];
 
-    if (item.size) {
-      properties.push(`${item.size}${item.size_unit || ''}`);
-    }
     if (item.weight) {
       properties.push(`${item.weight}${item.weight_unit || ''}`);
     }

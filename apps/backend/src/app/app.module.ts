@@ -9,6 +9,8 @@ import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
+import { BrandsModule } from '../brands/brands.module';
+import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
 import { GoogleModule } from '../google/google.module';
@@ -21,6 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
 import { ServicesModule } from '../services/services.module';
+import { SubcategoriesModule } from '../subcategories/subcategories.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
 import { AppController } from './app.controller';
@@ -68,6 +71,9 @@ import { AppService } from './app.service';
     GoogleModule,
     AdminModule,
     NotificationsModule,
+    BrandsModule,
+    CategoriesModule,
+    SubcategoriesModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],

@@ -19,8 +19,6 @@ const GET_PUBLIC_ITEMS = `
       name
       description
       item_sub_category_id
-      size
-      size_unit
       weight
       weight_unit
       price
@@ -29,7 +27,6 @@ const GET_PUBLIC_ITEMS = `
       brand_id
       model
       color
-      material
       is_fragile
       is_perishable
       requires_special_handling

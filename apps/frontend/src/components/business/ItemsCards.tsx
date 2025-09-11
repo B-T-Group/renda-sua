@@ -391,15 +391,6 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                         {item.weight_unit}
                       </Typography>
                     )}
-                    {item.size && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        noWrap
-                      >
-                        {t('business.items.size')}: {item.size} {item.size_unit}
-                      </Typography>
-                    )}
                     {item.color && (
                       <Typography
                         variant="caption"
@@ -407,15 +398,6 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                         noWrap
                       >
                         {t('business.items.color')}: {item.color}
-                      </Typography>
-                    )}
-                    {item.material && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        noWrap
-                      >
-                        {t('business.items.material')}: {item.material}
                       </Typography>
                     )}
                   </Stack>

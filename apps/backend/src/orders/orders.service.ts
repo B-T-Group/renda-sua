@@ -922,8 +922,6 @@ export class OrdersService {
               currency
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {
@@ -1052,8 +1050,6 @@ export class OrdersService {
             item {
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {
@@ -1243,8 +1239,6 @@ export class OrdersService {
               currency
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {
@@ -2041,7 +2035,7 @@ export class OrdersService {
         customer_email: user.email,
         account_id: account.id,
         transaction_type: 'PAYMENT',
-        payment_entity: 'claim_order' as const,
+        payment_entity: 'order' as const,
         entity_id: orderNumber,
       });
 
@@ -2053,7 +2047,7 @@ export class OrdersService {
         provider: provider,
         ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
-        payment_entity: 'claim_order' as const,
+        payment_entity: 'order' as const,
       };
 
       paymentTransaction = await this.mobilePaymentsService.initiatePayment(
