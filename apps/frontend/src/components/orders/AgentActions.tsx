@@ -33,7 +33,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 
   // Check if agent has sufficient funds to claim the order
   const hasSufficientFunds = () => {
-    if (!agentAccounts?.length) return true; // Assume sufficient if no account data
+    if (!agentAccounts?.length) return false; // Assume sufficient if no account data
 
     // Calculate required hold amount (typically a percentage of total order amount)
     const holdPercentage = 80; // 80% hold percentage - matches backend config
