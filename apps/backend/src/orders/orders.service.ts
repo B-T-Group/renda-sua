@@ -2448,9 +2448,16 @@ export class OrdersService {
         orderHoldId,
         _set: {
           status: updates.status ?? undefined,
-          client_hold_amount: updates.client_hold_amount ?? undefined,
-          agent_hold_amount: updates.agent_hold_amount ?? undefined,
-          delivery_fees: updates.delivery_fees ?? undefined,
+          client_hold_amount:
+            updates.client_hold_amount != null
+              ? updates.client_hold_amount
+              : undefined,
+          agent_hold_amount:
+            updates.agent_hold_amount != null
+              ? updates.agent_hold_amount
+              : undefined,
+          delivery_fees:
+            updates.delivery_fees != null ? updates.delivery_fees : undefined,
           agent_id: updates.agent_id ?? undefined,
         },
       }
