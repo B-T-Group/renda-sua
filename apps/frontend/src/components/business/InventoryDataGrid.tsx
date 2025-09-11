@@ -105,9 +105,6 @@ export default function InventoryDataGrid({
         const item = params.row;
         const properties = [];
 
-        if (item.size) {
-          properties.push(`${item.size}${item.size_unit || ''}`);
-        }
         if (item.weight) {
           properties.push(`${item.weight}${item.weight_unit || ''}`);
         }

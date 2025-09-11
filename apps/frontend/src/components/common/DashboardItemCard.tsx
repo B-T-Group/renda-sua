@@ -5,7 +5,6 @@ import {
   Palette,
   Scale,
   ShoppingCart,
-  Straighten,
   Verified,
 } from '@mui/icons-material';
 import {
@@ -200,21 +199,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Box>
             )}
 
-            {/* Size */}
-            {inventory.item.size && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Straighten fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.size}
-                  {inventory.item.size_unit}
-                </Typography>
-              </Box>
-            )}
-
             {/* Model */}
             {inventory.item.model && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -239,20 +223,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   sx={{ fontSize: '0.7rem' }}
                 >
                   {inventory.item.color}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Material */}
-            {inventory.item.material && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Build fontSize="small" color="primary" />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.7rem' }}
-                >
-                  {inventory.item.material}
                 </Typography>
               </Box>
             )}

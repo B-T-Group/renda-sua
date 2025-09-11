@@ -564,17 +564,6 @@ const OrderView: React.FC<OrderViewProps> = ({
                               </Typography>
                             </Grid>
                           )}
-                          {item.item.size && (
-                            <Grid item>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {t('orders.size')}: {item.item.size}{' '}
-                                {item.item.size_unit}
-                              </Typography>
-                            </Grid>
-                          )}
                         </Grid>
 
                         <Typography

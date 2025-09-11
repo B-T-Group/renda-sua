@@ -922,8 +922,6 @@ export class OrdersService {
               currency
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {
@@ -1052,8 +1050,6 @@ export class OrdersService {
             item {
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {
@@ -1243,8 +1239,6 @@ export class OrdersService {
               currency
               model
               color
-              size
-              size_unit
               weight
               weight_unit
               brand {

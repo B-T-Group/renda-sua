@@ -422,22 +422,6 @@ const PlaceOrderPage: React.FC = () => {
                         </Box>
                       )}
 
-                      {selectedItem.item.material && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Material:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.material}
-                          </Typography>
-                        </Box>
-                      )}
-
                       {selectedItem.item.weight && (
                         <Box
                           sx={{
@@ -451,23 +435,6 @@ const PlaceOrderPage: React.FC = () => {
                           <Typography variant="body2" fontWeight="medium">
                             {selectedItem.item.weight}{' '}
                             {selectedItem.item.weight_unit}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {selectedItem.item.size && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Size:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.size}{' '}
-                            {selectedItem.item.size_unit}
                           </Typography>
                         </Box>
                       )}

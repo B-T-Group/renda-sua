@@ -353,24 +353,13 @@ export default function ItemViewPage() {
                   </Box>
                 )}
 
-                {item.material && (
+                {item.weight && (
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary">
-                      {t('business.items.material')}
-                    </Typography>
-                    <Typography variant="body1">{item.material}</Typography>
-                  </Box>
-                )}
-
-                {(item.size || item.weight) && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      {t('business.items.dimensions')}
+                      {t('business.items.weight')}
                     </Typography>
                     <Typography variant="body1">
-                      {item.size && `${item.size} ${item.size_unit}`}
-                      {item.size && item.weight && ' • '}
-                      {item.weight && `${item.weight} ${item.weight_unit}`}
+                      {`${item.weight} ${item.weight_unit}`}
                     </Typography>
                   </Box>
                 )}
