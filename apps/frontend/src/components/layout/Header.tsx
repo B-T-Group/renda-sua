@@ -111,7 +111,7 @@ const Header: React.FC = () => {
       const lastName = user.last_name || '';
       return (firstName + lastName)
         .split('')
-        .filter((char) => char !== ' ')
+        .filter((char: string) => char !== ' ')
         .slice(0, 2)
         .join('')
         .toUpperCase();
