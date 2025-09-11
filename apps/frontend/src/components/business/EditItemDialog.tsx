@@ -21,7 +21,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SIZE_UNITS, WEIGHT_UNITS } from '../../constants/enums';
+import { WEIGHT_UNITS } from '../../constants/enums';
 import { Item, useItems } from '../../hooks/useItems';
 import ImageUploadDialog from './ImageUploadDialog';
 
@@ -166,15 +166,12 @@ export default function EditItemDialog({
       // Convert null values to undefined for optional fields
       const updateData = {
         ...formData,
-        size: formData.size ?? undefined,
-        size_unit: formData.size_unit ?? undefined,
         weight: formData.weight ?? undefined,
         weight_unit: formData.weight_unit ?? undefined,
         sku: formData.sku ?? undefined,
         brand_id: formData.brand_id ?? undefined,
         model: formData.model ?? undefined,
         color: formData.color ?? undefined,
-        material: formData.material ?? undefined,
         max_order_quantity: formData.max_order_quantity ?? undefined,
         max_delivery_distance: formData.max_delivery_distance ?? undefined,
         estimated_delivery_time: formData.estimated_delivery_time ?? undefined,
@@ -366,39 +363,6 @@ export default function EditItemDialog({
                 <TextField
                   fullWidth
                   type="number"
-                  label={t('business.inventory.size')}
-                  value={formData.size || ''}
-                  onChange={(e) =>
-                    handleInputChange(
-                      'size',
-                      parseFloat(e.target.value) || undefined
-                    )
-                  }
-                  inputProps={{ min: 0, step: 0.01 }}
-                />
-
-                <FormControl fullWidth>
-                  <InputLabel>{t('business.inventory.sizeUnit')}</InputLabel>
-                  <Select
-                    value={formData.size_unit || ''}
-                    onChange={(e) =>
-                      handleInputChange('size_unit', e.target.value)
-                    }
-                    label={t('business.inventory.sizeUnit')}
-                  >
-                    {SIZE_UNITS.map((unit) => (
-                      <MenuItem key={unit} value={unit}>
-                        {unit}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Stack>
-
-              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                <TextField
-                  fullWidth
-                  type="number"
                   label={t('business.inventory.weight')}
                   value={formData.weight || ''}
                   onChange={(e) =>
@@ -443,14 +407,6 @@ export default function EditItemDialog({
                   onChange={(e) => handleInputChange('model', e.target.value)}
                 />
               </Stack>
-
-              <TextField
-                fullWidth
-                label={t('business.inventory.material')}
-                value={formData.material || ''}
-                onChange={(e) => handleInputChange('material', e.target.value)}
-                sx={{ mt: 2 }}
-              />
 
               {/* Brand */}
               <FormControl fullWidth sx={{ mt: 2 }}>

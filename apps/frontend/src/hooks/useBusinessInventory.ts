@@ -38,8 +38,6 @@ export interface BusinessInventoryItem {
     currency: string;
     weight: number | null;
     weight_unit: string | null;
-    size: string | null;
-    size_unit: string | null;
     sku: string | null;
     brand: {
       id: string;
@@ -48,7 +46,6 @@ export interface BusinessInventoryItem {
     } | null;
     model: string | null;
     color: string | null;
-    material: string | null;
     is_fragile: boolean;
     is_perishable: boolean;
     requires_special_handling: boolean;

@@ -8,8 +8,6 @@ export interface Item {
   name: string;
   description: string;
   item_sub_category_id: number;
-  size: number | null;
-  size_unit: string | null;
   weight: number | null;
   weight_unit: string | null;
   price: number;
@@ -18,7 +16,6 @@ export interface Item {
   brand_id: string | null;
   model: string | null;
   color: string | null;
-  material: string | null;
   is_fragile: boolean;
   is_perishable: boolean;
   requires_special_handling: boolean;
@@ -85,8 +82,6 @@ export interface CreateItemData {
   name: string;
   description: string;
   item_sub_category_id: number;
-  size?: number;
-  size_unit?: string;
   weight?: number;
   weight_unit?: string;
   price: number;
@@ -95,7 +90,6 @@ export interface CreateItemData {
   brand_id?: string;
   model?: string;
   color?: string;
-  material?: string;
   is_fragile?: boolean;
   is_perishable?: boolean;
   requires_special_handling?: boolean;
@@ -122,8 +116,6 @@ const GET_ITEMS = `
       name
       description
       item_sub_category_id
-      size
-      size_unit
       weight
       weight_unit
       price
@@ -132,7 +124,6 @@ const GET_ITEMS = `
       brand_id
       model
       color
-      material
       is_fragile
       is_perishable
       requires_special_handling
@@ -226,8 +217,6 @@ const GET_SINGLE_ITEM = `
       name
       description
       item_sub_category_id
-      size
-      size_unit
       weight
       weight_unit
       price
@@ -236,7 +225,6 @@ const GET_SINGLE_ITEM = `
       brand_id
       model
       color
-      material
       is_fragile
       is_perishable
       requires_special_handling

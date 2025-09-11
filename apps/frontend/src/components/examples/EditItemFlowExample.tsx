@@ -19,8 +19,6 @@ const mockItem = {
   name: 'Sample Product',
   description: 'This is a sample product for demonstration purposes.',
   item_sub_category_id: 1,
-  size: 10,
-  size_unit: 'cm',
   weight: 500,
   weight_unit: 'g',
   price: 29.99,
@@ -29,7 +27,6 @@ const mockItem = {
   brand_id: '1',
   model: 'Model X',
   color: 'Black',
-  material: 'Plastic',
   is_fragile: false,
   is_perishable: false,
   requires_special_handling: false,
@@ -122,13 +119,6 @@ const EditItemFlowExample: React.FC = () => {
 
             <Box>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                {mockItem.size && (
-                  <Chip
-                    label={`Size: ${mockItem.size} ${mockItem.size_unit}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
                 {mockItem.weight && (
                   <Chip
                     label={`Weight: ${mockItem.weight} ${mockItem.weight_unit}`}

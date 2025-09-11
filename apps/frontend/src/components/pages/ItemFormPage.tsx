@@ -43,7 +43,6 @@ interface ItemFormData {
   brand_id: string | null;
   model: string;
   color: string;
-  material: string;
   is_fragile: boolean;
   is_perishable: boolean;
   requires_special_handling: boolean;
@@ -73,7 +72,6 @@ const ItemFormPage: React.FC = () => {
     brand_id: null,
     model: '',
     color: '#000000',
-    material: '',
     is_fragile: false,
     is_perishable: false,
     requires_special_handling: false,
@@ -207,7 +205,6 @@ const ItemFormPage: React.FC = () => {
               brand_id: foundItem.brand_id || null,
               model: foundItem.model || '',
               color: foundItem.color || '#000000',
-              material: foundItem.material || '',
               is_fragile: foundItem.is_fragile || false,
               is_perishable: foundItem.is_perishable || false,
               requires_special_handling:

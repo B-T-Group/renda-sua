@@ -48,12 +48,9 @@ interface CSVItemWithInventory {
   price: number;
   currency: string;
   sku?: string;
-  size?: number;
-  size_unit?: string;
   weight?: number;
   weight_unit?: string;
   color?: string;
-  material?: string;
   model?: string;
   is_fragile?: boolean;
   is_perishable?: boolean;
@@ -100,12 +97,9 @@ interface CreateItemData {
   currency: string;
   business_id: string;
   sku?: string;
-  size?: number;
-  size_unit?: string;
   weight?: number;
   weight_unit?: string;
   color?: string;
-  material?: string;
   model?: string;
   is_fragile?: boolean;
   is_perishable?: boolean;
@@ -123,12 +117,9 @@ interface UpdateItemData {
   price?: number;
   currency?: string;
   sku?: string;
-  size?: number;
-  size_unit?: string;
   weight?: number;
   weight_unit?: string;
   color?: string;
-  material?: string;
   model?: string;
   is_fragile?: boolean;
   is_perishable?: boolean;
@@ -335,12 +326,9 @@ export default function CSVUploadDialog({
             ...(row.sku === existingItem.sku || !existingItem.sku
               ? { sku: row.sku }
               : {}),
-            size: row.size,
-            size_unit: row.size_unit,
             weight: row.weight,
             weight_unit: row.weight_unit,
             color: row.color,
-            material: row.material,
             model: row.model,
             is_fragile: row.is_fragile,
             is_perishable: row.is_perishable,
@@ -377,12 +365,9 @@ export default function CSVUploadDialog({
             currency: row.currency,
             business_id: row.business_id,
             sku: row.sku,
-            size: row.size,
-            size_unit: row.size_unit,
             weight: row.weight,
             weight_unit: row.weight_unit,
             color: row.color,
-            material: row.material,
             model: row.model,
             is_fragile: row.is_fragile,
             is_perishable: row.is_perishable,
