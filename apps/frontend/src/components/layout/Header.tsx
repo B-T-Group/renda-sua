@@ -106,13 +106,15 @@ const Header: React.FC = () => {
   };
 
   const getUserInitials = () => {
-    if (user?.name) {
-      return user.name
-        .split(' ')
-        .map((n) => n[0])
+    if (user?.first_name || user?.last_name) {
+      const firstName = user.first_name || '';
+      const lastName = user.last_name || '';
+      return (firstName + lastName)
+        .split('')
+        .filter((char) => char !== ' ')
+        .slice(0, 2)
         .join('')
-        .toUpperCase()
-        .slice(0, 2);
+        .toUpperCase();
     }
     return user?.email?.[0]?.toUpperCase() || 'U';
   };
@@ -124,7 +126,11 @@ const Header: React.FC = () => {
     if (profile?.first_name && profile?.last_name) {
       return `${profile.first_name} ${profile.last_name}`;
     }
-    return user?.name || user?.email || 'User';
+    return (
+      `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+      user?.email ||
+      'User'
+    );
   };
 
   const NavigationButton = ({ item }: { item: any }) => (

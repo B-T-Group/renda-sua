@@ -252,8 +252,10 @@ const Dashboard: React.FC = () => {
           color="text.secondary"
           sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
         >
-          Welcome back, {user?.name}! Browse available items and manage your
-          orders.
+          Welcome back,{' '}
+          {`${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+            user?.email}
+          ! Browse available items and manage your orders.
         </Typography>
       </Box>
 

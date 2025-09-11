@@ -1,22 +1,26 @@
-import React from "react";
-import { useAuth0 } from "@auth0/auth0-react";
-import { 
-  Card, 
-  CardContent, 
-  Typography, 
-  Avatar, 
-  Box, 
+import { useAuth0 } from '@auth0/auth0-react';
+import { Email, VerifiedUser } from '@mui/icons-material';
+import {
+  Avatar,
+  Box,
+  Card,
+  CardContent,
   Chip,
-  Divider 
-} from "@mui/material";
-import { Person, Email, VerifiedUser } from "@mui/icons-material";
+  Divider,
+  Typography,
+} from '@mui/material';
 
 const UserProfile = () => {
   const { user, isAuthenticated, isLoading } = useAuth0();
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="200px"
+      >
         <Typography variant="body1" color="text.secondary">
           Loading user profile...
         </Typography>
@@ -25,17 +29,24 @@ const UserProfile = () => {
   }
 
   return (
-    isAuthenticated && user && (
+    isAuthenticated &&
+    user && (
       <Card sx={{ maxWidth: 400, mx: 'auto', mt: 4 }}>
         <CardContent>
-          <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
+          <Box
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            gap={2}
+          >
             <Avatar
               src={user.picture}
-              alt={user.name}
+              alt={`${user.first_name || ''} ${user.last_name || ''}`.trim()}
               sx={{ width: 80, height: 80, mb: 2 }}
             />
             <Typography variant="h5" component="h2" gutterBottom>
-              {user.name}
+              {`${user.first_name || ''} ${user.last_name || ''}`.trim() ||
+                user.email}
             </Typography>
             <Chip
               icon={<VerifiedUser />}
@@ -65,4 +76,4 @@ const UserProfile = () => {
   );
 };
 
-export default UserProfile; 
+export default UserProfile;
