@@ -2,6 +2,8 @@ import {
   Person as AgentIcon,
   TrendingUp as AnalyticsIcon,
   Business as BizIcon,
+  Label as BrandIcon,
+  Category as CategoryIcon,
   Description as DocumentsIcon,
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
@@ -51,7 +53,7 @@ const BusinessDashboard: React.FC = () => {
     businessId: profile?.business?.id,
   });
 
-  const dashboardCards = [
+  const businessCards = [
     {
       title: t('common.orders'),
       description: t('business.dashboard.ordersDescription'),
@@ -92,6 +94,9 @@ const BusinessDashboard: React.FC = () => {
       color: '#d32f2f',
       path: '/business/analytics',
     },
+  ];
+
+  const adminCards = [
     {
       title: 'Manage Agents',
       description: 'View and update agents',
@@ -116,7 +121,89 @@ const BusinessDashboard: React.FC = () => {
       color: '#6d4c41',
       path: '/admin/businesses',
     },
+    {
+      title: 'Manage Brands',
+      description: 'Manage product brands and manufacturers',
+      icon: <BrandIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#9c27b0',
+      path: '/content-management/brands',
+    },
+    {
+      title: 'Manage Categories',
+      description: 'Manage product categories and subcategories',
+      icon: <CategoryIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#ff9800',
+      path: '/content-management/categories',
+    },
   ];
+
+  const renderCards = (cards: typeof businessCards) => {
+    return cards.map((card, index) => (
+      <Card
+        key={index}
+        sx={{
+          width: {
+            xs: '100%',
+            sm: 'calc(50% - 12px)',
+            md: 'calc(33.333% - 16px)',
+          },
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'transform 0.2s ease-in-out',
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: 4,
+          },
+        }}
+      >
+        <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              mb: 2,
+              color: card.color,
+            }}
+          >
+            {card.icon}
+          </Box>
+          <Typography variant="h6" component="h2" gutterBottom>
+            {card.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {card.description}
+          </Typography>
+          {card.count !== null && (
+            <Typography
+              variant="h4"
+              component="div"
+              color="primary"
+              sx={{ mb: 1 }}
+            >
+              {card.count}
+            </Typography>
+          )}
+        </CardContent>
+        <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => navigate(card.path)}
+            sx={{
+              backgroundColor: card.color,
+              '&:hover': {
+                backgroundColor: card.color,
+                opacity: 0.9,
+              },
+            }}
+          >
+            {t('common.manage')}
+          </Button>
+        </CardActions>
+      </Card>
+    ));
+  };
 
   if (!profile?.business) {
     return (
@@ -174,70 +261,32 @@ const BusinessDashboard: React.FC = () => {
         ></Box>
       </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 6 }}>
-        {dashboardCards.map((card, index) => (
-          <Card
-            key={index}
-            sx={{
-              width: {
-                xs: '100%',
-                sm: 'calc(50% - 12px)',
-                md: 'calc(33.333% - 16px)',
-              },
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'transform 0.2s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: 4,
-              },
-            }}
-          >
-            <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mb: 2,
-                  color: card.color,
-                }}
-              >
-                {card.icon}
-              </Box>
-              <Typography variant="h6" component="h2" gutterBottom>
-                {card.title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {card.description}
-              </Typography>
-              {card.count !== null && (
-                <Typography
-                  variant="h4"
-                  component="div"
-                  color="primary"
-                  sx={{ mb: 1 }}
-                >
-                  {card.count}
-                </Typography>
-              )}
-            </CardContent>
-            <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
-              <Button
-                variant="contained"
-                onClick={() => navigate(card.path)}
-                sx={{
-                  backgroundColor: card.color,
-                  '&:hover': {
-                    backgroundColor: card.color,
-                    opacity: 0.9,
-                  },
-                }}
-              >
-                {t('common.manage')}
-              </Button>
-            </CardActions>
-          </Card>
-        ))}
+      {/* Business Management Section */}
+      <Box sx={{ mb: 6 }}>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
+        >
+          Business Management
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {renderCards(businessCards)}
+        </Box>
+      </Box>
+
+      {/* Admin Management Section */}
+      <Box sx={{ mb: 6 }}>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
+        >
+          Admin Management
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {renderCards(adminCards)}
+        </Box>
       </Box>
 
       {/* Quick Stats Section */}

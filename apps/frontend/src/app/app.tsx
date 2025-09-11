@@ -17,8 +17,10 @@ import AdminManageClients from '../components/pages/AdminManageClients';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import AppRedirect from '../components/pages/AppRedirect';
+import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
+import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
@@ -159,6 +161,24 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminManageBusinesses />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Content Management routes */}
+            <Route
+              path="/content-management/brands"
+              element={
+                <ProtectedRoute>
+                  <BrandsManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/content-management/categories"
+              element={
+                <ProtectedRoute>
+                  <CategoriesManagementPage />
                 </ProtectedRoute>
               }
             />
