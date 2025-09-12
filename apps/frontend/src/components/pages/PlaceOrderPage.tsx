@@ -27,6 +27,7 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 const PlaceOrderPage: React.FC = () => {
@@ -42,6 +43,8 @@ const PlaceOrderPage: React.FC = () => {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [useDifferentPhone, setUseDifferentPhone] = useState(false);
+  const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
 
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -97,6 +100,11 @@ const PlaceOrderPage: React.FC = () => {
   const handleSubmit = async () => {
     if (!selectedItem || !apiClient || !selectedAddressId) return;
 
+    // Validate phone number if override is enabled
+    if (useDifferentPhone && !overridePhoneNumber.trim()) {
+      return; // Don't submit if override is enabled but no phone number provided
+    }
+
     setLoading(true);
     try {
       const orderData = {
@@ -107,6 +115,7 @@ const PlaceOrderPage: React.FC = () => {
         verified_agent_delivery: verifiedAgentDelivery,
         special_instructions: specialInstructions.trim() || undefined,
         delivery_address_id: selectedAddressId,
+        phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
       };
 
       const response = await apiClient.post('/orders', orderData);
@@ -809,7 +818,7 @@ const PlaceOrderPage: React.FC = () => {
                 {t('orders.paymentDetails', 'Payment Details')}
               </Typography>
 
-              {/* Phone Number Validation */}
+              {/* Phone Number Section */}
               {!profile?.phone_number ? (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ mb: 1 }}>
@@ -831,29 +840,80 @@ const PlaceOrderPage: React.FC = () => {
                   </Button>
                 </Alert>
               ) : (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {t(
-                      'orders.paymentRequestInfo',
-                      'Payment Request Information'
+                <Box sx={{ mb: 2 }}>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {t(
+                        'orders.paymentRequestInfo',
+                        'Payment Request Information'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {t(
+                        'orders.paymentRequestMessage',
+                        'A payment request will be sent to your phone number:'
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight="bold"
+                      color="primary"
+                    >
+                      {useDifferentPhone
+                        ? overridePhoneNumber
+                        : profile.phone_number}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {t(
+                        'orders.paymentRequestNote',
+                        'Once you accept the payment request, your order will be sent to the merchant.'
+                      )}
+                    </Typography>
+                  </Alert>
+
+                  {/* Phone Number Override */}
+                  <Box sx={{ mb: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={useDifferentPhone}
+                          onChange={(e) =>
+                            setUseDifferentPhone(e.target.checked)
+                          }
+                        />
+                      }
+                      label={t(
+                        'orders.useDifferentPhone',
+                        'Use a different phone number for this order'
+                      )}
+                    />
+
+                    {useDifferentPhone && (
+                      <Box sx={{ mt: 2 }}>
+                        <PhoneInput
+                          value={overridePhoneNumber}
+                          onChange={setOverridePhoneNumber}
+                          label={t(
+                            'orders.overridePhoneNumber',
+                            'Phone Number for Payment'
+                          )}
+                          defaultCountry="GA"
+                          fullWidth
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mt: 1, display: 'block' }}
+                        >
+                          {t(
+                            'orders.overridePhoneNote',
+                            'Enter the phone number where you want to receive the payment request'
+                          )}
+                        </Typography>
+                      </Box>
                     )}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {t(
-                      'orders.paymentRequestMessage',
-                      'A payment request will be sent to your phone number:'
-                    )}
-                  </Typography>
-                  <Typography variant="body2" fontWeight="bold" color="primary">
-                    {profile.phone_number}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    {t(
-                      'orders.paymentRequestNote',
-                      'Once you accept the payment request, your order will be sent to the merchant.'
-                    )}
-                  </Typography>
-                </Alert>
+                  </Box>
+                </Box>
               )}
 
               {/* Order Summary */}
@@ -936,7 +996,8 @@ const PlaceOrderPage: React.FC = () => {
                 </Box>
                 {(!profile?.phone_number ||
                   !selectedAddressId ||
-                  addresses.length === 0) && (
+                  addresses.length === 0 ||
+                  (useDifferentPhone && !overridePhoneNumber.trim())) && (
                   <Alert severity="info" sx={{ mt: 2 }}>
                     <Typography variant="body2">
                       {t(
@@ -966,7 +1027,8 @@ const PlaceOrderPage: React.FC = () => {
                     loading ||
                     !selectedAddressId ||
                     addresses.length === 0 ||
-                    !profile?.phone_number
+                    !profile?.phone_number ||
+                    (useDifferentPhone && !overridePhoneNumber.trim())
                   }
                   startIcon={
                     loading ? <CircularProgress size={20} /> : <ShoppingCart />
