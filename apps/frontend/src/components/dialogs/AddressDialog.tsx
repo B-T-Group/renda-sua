@@ -515,6 +515,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             value={addressData.postal_code}
             onChange={(e) => handleInputChange('postal_code', e.target.value)}
             required
+            helperText="Enter 00000 if postal codes are not supported in your area"
           />
 
           {/* Address Type (optional) */}

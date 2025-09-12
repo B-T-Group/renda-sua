@@ -269,16 +269,18 @@ const BusinessItemsPage: React.FC = () => {
     refreshBusinessLocations,
   ]);
 
-  // Refresh locations when window regains focus or becomes visible (useful when returning from locations page)
+  // Refresh data when window regains focus or becomes visible (useful when returning from other pages)
   useEffect(() => {
     const handleFocus = () => {
       if (profile?.business?.id) {
+        fetchItems(false);
         refreshBusinessLocations();
       }
     };
 
     const handleVisibilityChange = () => {
       if (!document.hidden && profile?.business?.id) {
+        fetchItems(false);
         refreshBusinessLocations();
       }
     };
@@ -290,7 +292,7 @@ const BusinessItemsPage: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [profile?.business?.id, refreshBusinessLocations]);
+  }, [profile?.business?.id, fetchItems, refreshBusinessLocations]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

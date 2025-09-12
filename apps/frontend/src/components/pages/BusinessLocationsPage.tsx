@@ -46,7 +46,15 @@ const BusinessLocationsPage: React.FC = () => {
     addLocation,
     updateLocation,
     deleteLocation,
+    fetchLocations,
   } = useBusinessLocations(profile?.business?.id);
+
+  // Fetch locations when component mounts or business ID changes
+  useEffect(() => {
+    if (profile?.business?.id) {
+      fetchLocations();
+    }
+  }, [profile?.business?.id, fetchLocations]);
 
   // Debug logging
   useEffect(() => {
