@@ -230,7 +230,6 @@ const PlaceOrderPage: React.FC = () => {
         sx={{
           mb: { xs: 2, sm: 3 },
           display: 'flex',
-          alignItems: 'center',
           gap: 2,
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' },
@@ -278,7 +277,7 @@ const PlaceOrderPage: React.FC = () => {
                       <Box sx={{ mb: 2 }}>
                         <CardMedia
                           component="img"
-                          height={{ xs: 150, sm: 200 }}
+                          height={200}
                           image={selectedItem.item.item_images[0].image_url}
                           alt={
                             selectedItem.item.item_images[0].alt_text ||
@@ -288,6 +287,7 @@ const PlaceOrderPage: React.FC = () => {
                             borderRadius: 1,
                             objectFit: 'cover',
                             width: '100%',
+                            height: { xs: 150, sm: 200 },
                           }}
                         />
                       </Box>
@@ -632,7 +632,7 @@ const PlaceOrderPage: React.FC = () => {
                       'Special Instructions'
                     )}
                     multiline
-                    rows={{ xs: 2, sm: 3 }}
+                    rows={3}
                     value={specialInstructions}
                     onChange={(e) => setSpecialInstructions(e.target.value)}
                     disabled={loading}
@@ -892,7 +892,9 @@ const PlaceOrderPage: React.FC = () => {
                       <Box sx={{ mt: 2 }}>
                         <PhoneInput
                           value={overridePhoneNumber}
-                          onChange={setOverridePhoneNumber}
+                          onChange={(value) =>
+                            setOverridePhoneNumber(value || '')
+                          }
                           label={t(
                             'orders.overridePhoneNumber',
                             'Phone Number for Payment'
@@ -1022,7 +1024,7 @@ const PlaceOrderPage: React.FC = () => {
                   onClick={handleSubmit}
                   variant="contained"
                   size="large"
-                  fullWidth={{ xs: true, sm: false }}
+                  fullWidth
                   disabled={
                     loading ||
                     !selectedAddressId ||
