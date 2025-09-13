@@ -334,8 +334,7 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
                 {accounts.map((account) => (
                   <UserAccount
                     key={account.id}
-                    account={account}
-                    loading={loading}
+                    accountId={account.id}
                     compactView={compactView}
                     showTransactions={showTransactions}
                     onRefresh={fetchAccounts}
