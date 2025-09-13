@@ -88,7 +88,7 @@ function App() {
       {isAuthenticated && userType !== 'client' && (
         <AccountInformation
           onRefresh={() => {}}
-          compactView={true}
+          compactView={false}
           showTransactions={true}
         />
       )}

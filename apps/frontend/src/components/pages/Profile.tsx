@@ -288,6 +288,7 @@ const Profile: React.FC = () => {
             showTransactions={true}
             showTotalSummary={true}
             maxTransactions={10}
+            compactView={false}
             emptyStateMessage="No accounts found. Accounts are automatically created when you make your first transaction."
           />
         </Box>

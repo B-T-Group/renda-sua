@@ -70,7 +70,7 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
       >
         {t(
           'agent.addressPrompt.description',
-          'To start accepting delivery orders, you need to add your address. This helps us match you with nearby orders and calculate delivery routes.'
+          'To see and accept open delivery orders, you need to add your primary address. The system will only show you orders in your vicinity (same country and state) to ensure efficient deliveries.'
         )}
       </Typography>
 
@@ -82,26 +82,32 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
         <Typography variant="body2">
           {t(
             'agent.addressPrompt.benefits',
-            'Adding your address will help you:'
+            'Adding your primary address will:'
           )}
         </Typography>
         <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2, textAlign: 'left' }}>
           <li>
             {t(
               'agent.addressPrompt.benefit1',
-              'Receive orders near your location'
+              'Show you only orders in your area (same country and state)'
             )}
           </li>
           <li>
             {t(
               'agent.addressPrompt.benefit2',
-              'Get accurate delivery route calculations'
+              'Enable you to see and accept open delivery orders'
             )}
           </li>
           <li>
             {t(
               'agent.addressPrompt.benefit3',
-              'Improve your delivery efficiency'
+              'Reduce travel time and improve delivery efficiency'
+            )}
+          </li>
+          <li>
+            {t(
+              'agent.addressPrompt.benefit4',
+              'Help calculate accurate delivery routes and fees'
             )}
           </li>
         </Box>
@@ -141,7 +147,7 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
           allowDelete={true}
           emptyStateMessage={t(
             'agent.addressPrompt.noAddresses',
-            'No addresses found. Add your first address to start accepting orders.'
+            'No addresses found. Add your primary address to see orders in your vicinity.'
           )}
           onAccountCreated={handleAddressAdded}
         />
