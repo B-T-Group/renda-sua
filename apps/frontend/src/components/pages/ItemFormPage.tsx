@@ -93,50 +93,6 @@ const ItemFormPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [item, setItem] = useState<any>(null);
 
-  // Default material types for autocomplete
-  const defaultMaterials = [
-    'Cotton',
-    'Polyester',
-    'Wool',
-    'Silk',
-    'Linen',
-    'Denim',
-    'Leather',
-    'Suede',
-    'Canvas',
-    'Nylon',
-    'Acrylic',
-    'Cashmere',
-    'Velvet',
-    'Satin',
-    'Chiffon',
-    'Tweed',
-    'Corduroy',
-    'Fleece',
-    'Mesh',
-    'Spandex',
-    'Bamboo',
-    'Hemp',
-    'Jute',
-    'Rayon',
-    'Viscose',
-    'Metal',
-    'Plastic',
-    'Wood',
-    'Glass',
-    'Ceramic',
-    'Stone',
-    'Marble',
-    'Granite',
-    'Aluminum',
-    'Steel',
-    'Copper',
-    'Brass',
-    'Bronze',
-    'Iron',
-    'Titanium',
-  ];
-
   const {
     brands: brandsFromItems,
     loading: dataLoading,
@@ -709,28 +665,6 @@ const ItemFormPage: React.FC = () => {
                     cursor: 'pointer',
                   },
                 }}
-              />
-            </Grid>
-
-            <Grid size={12}>
-              <Autocomplete
-                freeSolo
-                options={defaultMaterials}
-                value={formData.material}
-                onChange={(_, newValue) =>
-                  handleInputChange('material', newValue || '')
-                }
-                onInputChange={(_, newInputValue) =>
-                  handleInputChange('material', newInputValue)
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    label={t('business.items.material')}
-                    disabled={loading}
-                  />
-                )}
               />
             </Grid>
 
