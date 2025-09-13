@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
 import { Configuration } from '../config/configuration';
+import { HasuraSystemService } from './hasura-system.service';
 
 export interface AddressRecord {
   id: string;
@@ -123,7 +124,8 @@ export class HasuraUserService {
   private readonly client: GraphQLClient;
   constructor(
     @Inject(REQUEST) private readonly request: any,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly hasuraSystemService: HasuraSystemService
   ) {
     const hasuraConfig = this.configService.get('hasura');
     this.hasuraUrl =
@@ -672,114 +674,6 @@ export class HasuraUserService {
   }
 
   /**
-   * Get all user addresses by user ID and user type
-   */
-  async getAllUserAddresses(userId: string, userType: string): Promise<any[]> {
-    let query: string;
-
-    switch (userType) {
-      case 'client':
-        query = `
-          query GetAllClientAddresses($userId: uuid!) {
-            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                created_at
-                updated_at
-              }
-            }
-          }
-        `;
-        break;
-      case 'agent':
-        query = `
-          query GetAllAgentAddresses($userId: uuid!) {
-            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                created_at
-                updated_at
-              }
-            }
-          }
-        `;
-        break;
-      case 'business':
-        query = `
-          query GetAllBusinessAddresses($userId: uuid!) {
-            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                created_at
-                updated_at
-              }
-            }
-          }
-        `;
-        break;
-      default:
-        throw new Error('Invalid user type');
-    }
-
-    const addressResult = await this.executeQuery(query, {
-      userId,
-    });
-
-    const addresses =
-      addressResult.client_addresses ||
-      addressResult.agent_addresses ||
-      addressResult.business_addresses;
-
-    return (
-      addresses
-        ?.map((item: any) => {
-          const address = item.address;
-          if (!address) return null;
-
-          // Create formatted address by combining address fields
-          const addressParts = [
-            address.address_line_1,
-            address.address_line_2,
-            address.city,
-            address.state,
-            address.postal_code,
-            address.country,
-          ].filter((part) => part && part.trim() !== '');
-
-          return {
-            ...address,
-            formatted_address: addressParts.join(', '),
-          };
-        })
-        .filter(Boolean) || []
-    );
-  }
-
-  /**
    * Get the current user by identifier
    */
   async getUser(): Promise<UserRecord> {
@@ -814,17 +708,19 @@ export class HasuraUserService {
     // Get user type-specific data
     switch (user.user_type_id) {
       case 'client': {
-        const client = await this.getUserClient(user.id);
+        const client = await this.hasuraSystemService.getUserClient(user.id);
         user.client = client;
         break;
       }
       case 'agent': {
-        const agent = await this.getUserAgent(user.id);
+        const agent = await this.hasuraSystemService.getUserAgent(user.id);
         user.agent = agent;
         break;
       }
       case 'business': {
-        const business = await this.getUserBusiness(user.id);
+        const business = await this.hasuraSystemService.getUserBusiness(
+          user.id
+        );
         user.business = business;
         break;
       }
@@ -833,115 +729,13 @@ export class HasuraUserService {
     }
 
     // Get user addresses
-    const addresses = await this.getAllUserAddresses(
+    const addresses = await this.hasuraSystemService.getAllUserAddresses(
       user.id,
       user.user_type_id
     );
     user.addresses = addresses;
 
     return user;
-  }
-
-  private async getUserClient(userId: string): Promise<ClientRecord> {
-    const getUserClientQuery = `
-      query GetUserClient($userId: uuid!) {
-        clients(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          client_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          created_at
-          updated_at
-        }
-      }
-    `;
-
-    const clientResult = await this.executeQuery(getUserClientQuery, {
-      userId,
-    });
-
-    return clientResult.clients[0];
-  }
-
-  private async getUserBusiness(userId: string): Promise<BusinessRecord> {
-    const getUserBusinessQuery = `
-      query GetUserBusiness($userId: uuid!) {
-        businesses(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          business_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          name
-          is_admin
-          is_verified
-          created_at
-          updated_at
-        }
-      }
-    `;
-
-    const businessResult = await this.executeQuery(getUserBusinessQuery, {
-      userId,
-    });
-    return businessResult.businesses[0];
-  }
-
-  private async getUserAgent(userId: string): Promise<AgentRecord> {
-    const getUserAgentQuery = `
-      query GetUserAgent($userId: uuid!) {
-        agents(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          vehicle_type_id
-          is_verified
-          agent_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          created_at
-          updated_at
-        }
-      }
-    `;
-
-    const agentResult = await this.executeQuery(getUserAgentQuery, {
-      userId,
-    });
-    return agentResult.agents[0];
   }
 
   /**

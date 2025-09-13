@@ -2,6 +2,56 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
 
+// Import interfaces from hasura-user.service
+export interface AddressRecord {
+  id: string;
+  address_line_1: string;
+  address_line_2?: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_primary: boolean;
+  address_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientRecord {
+  id: string;
+  user_id: string;
+  client_addresses?: {
+    address: AddressRecord;
+  }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentRecord {
+  id: string;
+  user_id: string;
+  vehicle_type_id: string;
+  is_verified: boolean;
+  agent_addresses?: {
+    address: AddressRecord;
+  }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessRecord {
+  id: string;
+  user_id: string;
+  name: string;
+  is_admin: boolean;
+  is_verified: boolean;
+  business_addresses?: {
+    address: AddressRecord;
+  }[];
+  created_at: string;
+  updated_at: string;
+}
+
 @Injectable()
 export class HasuraSystemService {
   private readonly hasuraUrl: string;
@@ -304,5 +354,224 @@ export class HasuraSystemService {
       );
       return 0;
     }
+  }
+
+  /**
+   * Get user client by user ID
+   */
+  async getUserClient(userId: string): Promise<ClientRecord> {
+    const getUserClientQuery = `
+      query GetUserClient($userId: uuid!) {
+        clients(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          client_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const clientResult = await this.executeQuery(getUserClientQuery, {
+      userId,
+    });
+
+    return clientResult.clients[0];
+  }
+
+  /**
+   * Get user business by user ID
+   */
+  async getUserBusiness(userId: string): Promise<BusinessRecord> {
+    const getUserBusinessQuery = `
+      query GetUserBusiness($userId: uuid!) {
+        businesses(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          business_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
+          name
+          is_admin
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const businessResult = await this.executeQuery(getUserBusinessQuery, {
+      userId,
+    });
+    return businessResult.businesses[0];
+  }
+
+  /**
+   * Get user agent by user ID
+   */
+  async getUserAgent(userId: string): Promise<AgentRecord> {
+    const getUserAgentQuery = `
+      query GetUserAgent($userId: uuid!) {
+        agents(where: {user_id: {_eq: $userId}}) {
+          id
+          user_id
+          vehicle_type_id
+          is_verified
+          agent_addresses {
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              is_primary
+              address_type
+              created_at
+            }
+          }
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const agentResult = await this.executeQuery(getUserAgentQuery, {
+      userId,
+    });
+    return agentResult.agents[0];
+  }
+
+  /**
+   * Get all user addresses by user ID and user type
+   */
+  async getAllUserAddresses(userId: string, userType: string): Promise<any[]> {
+    let query: string;
+
+    switch (userType) {
+      case 'client':
+        query = `
+          query GetAllClientAddresses($userId: uuid!) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'agent':
+        query = `
+          query GetAllAgentAddresses($userId: uuid!) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'business':
+        query = `
+          query GetAllBusinessAddresses($userId: uuid!) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      default:
+        throw new Error('Invalid user type');
+    }
+
+    const addressResult = await this.executeQuery(query, {
+      userId,
+    });
+
+    const addresses =
+      addressResult.client_addresses ||
+      addressResult.agent_addresses ||
+      addressResult.business_addresses;
+
+    return (
+      addresses
+        ?.map((item: any) => {
+          const address = item.address;
+          if (!address) return null;
+
+          // Create formatted address by combining address fields
+          const addressParts = [
+            address.address_line_1,
+            address.address_line_2,
+            address.city,
+            address.state,
+            address.postal_code,
+            address.country,
+          ].filter((part) => part && part.trim() !== '');
+
+          return {
+            ...address,
+            formatted_address: addressParts.join(', '),
+          };
+        })
+        .filter(Boolean) || []
+    );
   }
 }
