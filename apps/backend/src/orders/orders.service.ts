@@ -999,6 +999,24 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+
+    // Get agent's address information
+    const agentAddresses = await this.hasuraSystemService.getAllUserAddresses(
+      user.id,
+      'agent'
+    );
+
+    if (!agentAddresses || agentAddresses.length === 0) {
+      // Return empty result if agent has no addresses
+      return { success: true, orders: [] };
+    }
+
+    // Get the primary address or first address
+    const agentAddress =
+      agentAddresses.find((addr) => addr.is_primary) || agentAddresses[0];
+    const agentCountry = agentAddress.country;
+    const agentState = agentAddress.state;
+
     // Query for orders in ready_for_pickup and assigned_agent_id is null
     const query = `
       query OpenOrders {
@@ -1024,6 +1042,7 @@ export class OrdersService {
               address_line_1
               city
               state
+              country
               postal_code
             }
           }
@@ -1032,6 +1051,7 @@ export class OrdersService {
             address_line_1
             city
             state
+            country
             postal_code
           }
           total_amount
@@ -1073,8 +1093,24 @@ export class OrdersService {
         }
       }
     `;
+
     const result = await this.hasuraSystemService.executeQuery(query);
-    return { success: true, orders: result.orders };
+
+    // Filter orders based on agent's location matching business location
+    const filteredOrders = result.orders.filter((order: any) => {
+      const businessLocation = order.business_location;
+      if (!businessLocation || !businessLocation.address) {
+        return false;
+      }
+
+      const businessCountry = businessLocation.address.country;
+      const businessState = businessLocation.address.state;
+
+      // Check if country and state match
+      return businessCountry === agentCountry && businessState === agentState;
+    });
+
+    return { success: true, orders: filteredOrders };
   }
 
   /**
