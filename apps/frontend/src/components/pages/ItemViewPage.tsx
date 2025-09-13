@@ -20,12 +20,11 @@ import {
   Tab,
   Tabs,
   Typography,
-  useTheme,
 } from '@mui/material';
-import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import NoImage from '../../assets/no-image.svg';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
@@ -59,8 +58,6 @@ function TabPanel(props: TabPanelProps) {
 
 export default function ItemViewPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
-  const { enqueueSnackbar } = useSnackbar();
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { profile } = useUserProfile();
@@ -75,11 +72,9 @@ export default function ItemViewPage() {
   const [selectedInventory, setSelectedInventory] = useState<any>(null);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
 
-  const { fetchItems, fetchSingleItem, updateItem, items } = useItems(
-    profile?.business?.id
-  );
-  const { businessLocations, fetchBusinessLocations } = useBusinessInventory();
-  const { fetchItemImages, uploadItemImage, deleteItemImage } = useItemImages();
+  const { fetchSingleItem } = useItems(profile?.business?.id);
+  const { fetchBusinessLocations } = useBusinessInventory();
+  const { fetchItemImages } = useItemImages();
   const [itemImages, setItemImages] = useState<any[]>([]);
 
   useEffect(() => {
@@ -253,7 +248,7 @@ export default function ItemViewPage() {
             <CardMedia
               component="img"
               height="400"
-              image={mainImage?.image_url || '/src/assets/no-image.svg'}
+              image={mainImage?.image_url || NoImage}
               alt={item.name}
               sx={{ objectFit: 'cover' }}
             />
