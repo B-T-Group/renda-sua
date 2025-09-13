@@ -25,7 +25,13 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  AddBusinessLocationData,
+  BusinessLocation,
+  UpdateBusinessLocationData,
+  useBusinessLocations,
+} from '../../hooks/useBusinessLocations';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import LocationModal from '../business/LocationModal';
 import SEOHead from '../seo/SEOHead';
@@ -34,10 +40,13 @@ const BusinessLocationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfile();
+  const { refetch: refetchProfile } = useUserProfileContext();
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<any>(null);
+  const [editingLocation, setEditingLocation] =
+    useState<BusinessLocation | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [locationToDelete, setLocationToDelete] = useState<any>(null);
+  const [locationToDelete, setLocationToDelete] =
+    useState<BusinessLocation | null>(null);
 
   const {
     locations,
@@ -47,7 +56,7 @@ const BusinessLocationsPage: React.FC = () => {
     updateLocation,
     deleteLocation,
     fetchLocations,
-  } = useBusinessLocations(profile?.business?.id);
+  } = useBusinessLocations(profile?.business?.id, undefined, refetchProfile);
 
   // Fetch locations when component mounts or business ID changes
   useEffect(() => {
@@ -70,12 +79,12 @@ const BusinessLocationsPage: React.FC = () => {
     setShowLocationModal(true);
   };
 
-  const handleEditLocation = (location: any) => {
+  const handleEditLocation = (location: BusinessLocation) => {
     setEditingLocation(location);
     setShowLocationModal(true);
   };
 
-  const handleDeleteLocation = (location: any) => {
+  const handleDeleteLocation = (location: BusinessLocation) => {
     setLocationToDelete(location);
     setShowDeleteConfirm(true);
   };
@@ -90,36 +99,35 @@ const BusinessLocationsPage: React.FC = () => {
       });
       setShowDeleteConfirm(false);
       setLocationToDelete(null);
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('Error deleting location:', error);
       enqueueSnackbar(t('business.locations.deleteError'), {
         variant: 'error',
       });
     }
   };
 
-  const handleSaveLocation = async (data: any) => {
-    console.log('BusinessLocationsPage: handleSaveLocation called');
-    console.log('BusinessLocationsPage: editingLocation:', editingLocation);
-    console.log('BusinessLocationsPage: data:', data);
-
+  const handleSaveLocation = async (
+    data: AddBusinessLocationData | UpdateBusinessLocationData
+  ) => {
     try {
       if (editingLocation) {
-        console.log(
-          'BusinessLocationsPage: Updating location with ID:',
-          editingLocation.id
+        await updateLocation(
+          editingLocation.id,
+          data as UpdateBusinessLocationData
         );
-        await updateLocation(editingLocation.id, data);
         enqueueSnackbar(t('business.locations.locationUpdated'), {
           variant: 'success',
         });
       } else {
         console.log('BusinessLocationsPage: Adding new location');
-        await addLocation(data);
+        await addLocation(data as AddBusinessLocationData);
         enqueueSnackbar(t('business.locations.locationAdded'), {
           variant: 'success',
         });
       }
       setShowLocationModal(false);
+      fetchLocations();
       setEditingLocation(null);
     } catch (error) {
       console.error('BusinessLocationsPage: Error saving location:', error);
@@ -127,7 +135,7 @@ const BusinessLocationsPage: React.FC = () => {
     }
   };
 
-  const formatAddress = (address: any) => {
+  const formatAddress = (address: BusinessLocation['address']) => {
     if (!address) return '';
     return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
   };
@@ -186,7 +194,7 @@ const BusinessLocationsPage: React.FC = () => {
         ) : (
           <Grid container spacing={2}>
             {locations.map((location) => (
-              <Grid item xs={12} sm={6} md={4} key={location.id}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
                 <Card>
                   <CardContent>
                     <Box
@@ -221,12 +229,18 @@ const BusinessLocationsPage: React.FC = () => {
                       </Typography>
                       {location.phone && (
                         <Typography variant="body2" color="text.secondary">
-                          📞 {location.phone}
+                          <span role="img" aria-label="Phone">
+                            📞
+                          </span>{' '}
+                          {location.phone}
                         </Typography>
                       )}
                       {location.email && (
                         <Typography variant="body2" color="text.secondary">
-                          ✉️ {location.email}
+                          <span role="img" aria-label="Email">
+                            ✉️
+                          </span>{' '}
+                          {location.email}
                         </Typography>
                       )}
                     </Box>

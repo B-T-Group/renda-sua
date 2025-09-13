@@ -202,7 +202,11 @@ const ADD_BUSINESS_LOCATION_NESTED = `
   }
 `;
 
-export const useBusinessLocations = (businessId?: string, userId?: string) => {
+export const useBusinessLocations = (
+  businessId?: string,
+  userId?: string,
+  onAddressCreated?: () => void
+) => {
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,25 +238,20 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
       return;
     }
 
-    console.log(
-      'useBusinessLocations: Fetching locations for businessId:',
-      businessId
-    );
     setLoading(true);
     setError(null);
     try {
-      console.log('Fetching business locations...');
       const result = await executeQuery({ businessId });
-      console.log('Business locations result:', result);
       if (result?.business_locations) {
-        console.log('Found business locations:', result.business_locations);
         setLocations(result.business_locations);
       } else {
-        console.log('No business locations found in result');
         setLocations([]);
       }
     } catch (err) {
-      console.error('Error fetching business locations:', err);
+      console.error(
+        'useBusinessLocations: Error fetching business locations:',
+        err
+      );
       setError(
         err instanceof Error
           ? err.message
@@ -298,6 +297,12 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
         if (result.data?.insert_business_locations_one) {
           // Optionally, you can refetch or update state here
           await fetchLocations();
+
+          // Notify that a new address was created (for nested address creation)
+          if (onAddressCreated) {
+            onAddressCreated();
+          }
+
           return result.data.insert_business_locations_one;
         }
       } catch (err) {
@@ -309,7 +314,7 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
         setLoading(false);
       }
     },
-    [executeAddNestedMutation, businessId, fetchLocations]
+    [executeAddNestedMutation, businessId, fetchLocations, onAddressCreated]
   );
 
   const updateLocation = useCallback(
@@ -317,21 +322,14 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
       id: string,
       data: UpdateBusinessLocationData & { address?: any }
     ) => {
-      console.log('useBusinessLocations: updateLocation called');
-      console.log('useBusinessLocations: id:', id);
-      console.log('useBusinessLocations: data:', data);
-
       setLoading(true);
       setError(null);
       try {
         // Extract address data if present
         const { address, ...locationData } = data;
-        console.log('useBusinessLocations: locationData:', locationData);
-        console.log('useBusinessLocations: address:', address);
 
         // Update location data
         const result = await executeUpdateMutation({ id, data: locationData });
-        console.log('useBusinessLocations: update result:', result);
 
         // If address data is provided, update the address as well
         if (
@@ -340,10 +338,6 @@ export const useBusinessLocations = (businessId?: string, userId?: string) => {
         ) {
           const addressId =
             result.data.update_business_locations_by_pk.address.id;
-          console.log(
-            'useBusinessLocations: updating address with ID:',
-            addressId
-          );
           await executeUpdateAddressMutation({ id: addressId, data: address });
 
           // Refetch locations to get updated data

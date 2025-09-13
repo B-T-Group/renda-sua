@@ -21,18 +21,25 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
-import { useBusinessInventory } from '../../hooks/useBusinessInventory';
+import {
+  BusinessInventoryItem,
+  useBusinessInventory,
+} from '../../hooks/useBusinessInventory';
 import { useItemImages } from '../../hooks/useItemImages';
-import { useItems } from '../../hooks/useItems';
+import { Item, useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { ItemImage } from '../../types/image';
 import EditItemDialog from '../business/EditItemDialog';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import SEOHead from '../seo/SEOHead';
+
+// Type for business_inventories from Item interface
+type ItemBusinessInventory = NonNullable<Item['business_inventories']>[0];
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -62,37 +69,24 @@ export default function ItemViewPage() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
 
-  const [item, setItem] = useState<any>(null);
+  const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
-  const [selectedInventory, setSelectedInventory] = useState<any>(null);
+  const [selectedInventory, setSelectedInventory] = useState<
+    BusinessInventoryItem | ItemBusinessInventory | null
+  >(null);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
 
   const { fetchSingleItem } = useItems(profile?.business?.id);
   const { fetchBusinessLocations } = useBusinessInventory();
   const { fetchItemImages } = useItemImages();
-  const [itemImages, setItemImages] = useState<any[]>([]);
+  const [itemImages, setItemImages] = useState<ItemImage[]>([]);
 
-  useEffect(() => {
-    if (itemId) {
-      fetchItemDetails();
-      fetchItemImages(itemId)
-        .then(setItemImages)
-        .catch(() => {});
-    }
-  }, [itemId]);
-
-  useEffect(() => {
-    if (profile?.business?.id) {
-      fetchBusinessLocations();
-    }
-  }, [profile?.business?.id, fetchBusinessLocations]);
-
-  const fetchItemDetails = async () => {
+  const fetchItemDetails = useCallback(async () => {
     if (!itemId) return;
 
     setLoading(true);
@@ -113,15 +107,38 @@ export default function ItemViewPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [itemId, fetchSingleItem, t]);
+
+  useEffect(() => {
+    if (itemId) {
+      fetchItemDetails();
+      fetchItemImages(itemId)
+        .then(setItemImages)
+        .catch((error) => {
+          console.error('Error fetching item images:', error);
+        });
+    }
+  }, [itemId, fetchItemDetails, fetchItemImages]);
+
+  useEffect(() => {
+    if (profile?.business?.id) {
+      fetchBusinessLocations();
+    }
+  }, [profile?.business?.id, fetchBusinessLocations]);
 
   const handleEditItem = () => {
     setShowEditDialog(true);
   };
 
-  const handleUpdateInventory = (inventory?: any) => {
+  const handleUpdateInventory = (
+    inventory?: BusinessInventoryItem | ItemBusinessInventory
+  ) => {
     setSelectedInventory(inventory || null);
     setShowUpdateInventoryDialog(true);
+  };
+
+  const handleUpdateInventoryClick = () => {
+    handleUpdateInventory();
   };
 
   const handleManageImages = () => {
@@ -180,10 +197,12 @@ export default function ItemViewPage() {
   }
 
   const mainImage = item.item_images?.find(
-    (img: any) => img.image_type === 'main'
+    (img: ItemImage) => img.image_type === 'main'
   );
   const galleryImages =
-    item.item_images?.filter((img: any) => img.image_type === 'gallery') || [];
+    item.item_images?.filter(
+      (img: ItemImage) => img.image_type === 'gallery'
+    ) || [];
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -226,7 +245,7 @@ export default function ItemViewPage() {
           <Button
             variant="outlined"
             startIcon={<InventoryIcon />}
-            onClick={handleUpdateInventory}
+            onClick={handleUpdateInventoryClick}
           >
             {t('business.inventory.updateInventory')}
           </Button>
@@ -258,7 +277,7 @@ export default function ItemViewPage() {
                   {t('business.items.galleryImages')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {galleryImages.slice(0, 4).map((image: any) => (
+                  {galleryImages.slice(0, 4).map((image: ItemImage) => (
                     <Avatar
                       key={image.id}
                       src={image.image_url}
@@ -439,7 +458,7 @@ export default function ItemViewPage() {
 
           {item.business_inventories && item.business_inventories.length > 0 ? (
             <Grid container spacing={2}>
-              {item.business_inventories.map((inventory: any) => (
+              {item.business_inventories.map((inventory) => (
                 <Grid size={{ xs: 12, md: 6 }} key={inventory.id}>
                   <Card>
                     <CardContent>
@@ -539,7 +558,7 @@ export default function ItemViewPage() {
 
           {itemImages && itemImages.length > 0 ? (
             <Grid container spacing={2}>
-              {itemImages.map((image: any) => (
+              {itemImages.map((image: ItemImage) => (
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={image.id}>
                   <Card>
                     <CardMedia
