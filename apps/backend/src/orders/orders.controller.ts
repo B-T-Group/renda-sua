@@ -337,6 +337,11 @@ export class OrdersController {
         order: { type: 'object' },
         paymentTransaction: { type: 'object' },
         holdAmount: { type: 'number' },
+        phoneNumber: {
+          type: 'string',
+          description: 'Phone number used for payment',
+          example: '+241123456789',
+        },
         message: {
           type: 'string',
           example: 'Order claimed with topup payment initiated successfully',

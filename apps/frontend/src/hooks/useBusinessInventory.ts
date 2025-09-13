@@ -127,8 +127,6 @@ const GET_BUSINESS_INVENTORY = `
         currency
         weight
         weight_unit
-        size
-        size_unit
         sku
         brand {
           id
@@ -137,7 +135,6 @@ const GET_BUSINESS_INVENTORY = `
         }
         model
         color
-        material
         is_fragile
         is_perishable
         requires_special_handling
@@ -173,8 +170,6 @@ const GET_AVAILABLE_ITEMS = `
       currency
       weight
       weight_unit
-      size
-      size_unit
       sku
       brand {
         id
@@ -183,7 +178,6 @@ const GET_AVAILABLE_ITEMS = `
       }
       model
       color
-      material
       is_fragile
       is_perishable
       requires_special_handling

@@ -314,8 +314,6 @@ export const useItems = (businessId?: string) => {
         name
         description
         item_sub_category_id
-        size
-        size_unit
         weight
         weight_unit
         price
@@ -324,7 +322,6 @@ export const useItems = (businessId?: string) => {
         brand_id
         model
         color
-        material
         is_fragile
         is_perishable
         requires_special_handling
@@ -380,8 +377,6 @@ export const useItems = (businessId?: string) => {
         name
         description
         item_sub_category_id
-        size
-        size_unit
         weight
         weight_unit
         price
@@ -390,7 +385,6 @@ export const useItems = (businessId?: string) => {
         brand_id
         model
         color
-        material
         is_fragile
         is_perishable
         requires_special_handling

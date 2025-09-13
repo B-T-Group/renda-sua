@@ -358,6 +358,7 @@ export class OrdersService {
           success: paymentTransaction.success,
         },
         holdAmount,
+        phoneNumber,
         message: 'Order claimed with topup payment initiated successfully',
       };
     } catch (error: any) {
@@ -2016,8 +2017,9 @@ export class OrdersService {
     const deliveryFee = deliveryFeeInfo.deliveryFee;
     const total_amount = totalAmount + deliveryFee;
 
-    // Get payment provider based on phone number
-    const provider = this.getProvider(user.phone_number || '');
+    // Get payment provider based on phone number (use request phone_number if provided, otherwise user's phone_number)
+    const phoneNumber = orderData.phone_number || user.phone_number || '';
+    const provider = this.getProvider(phoneNumber);
 
     // Create transaction record before initiating payment
     let paymentTransaction = null;
@@ -2031,7 +2033,7 @@ export class OrdersService {
         description: `order ${orderNumber}`,
         provider: provider,
         payment_method: 'mobile_money',
-        customer_phone: user.phone_number,
+        customer_phone: phoneNumber,
         customer_email: user.email,
         account_id: account.id,
         transaction_type: 'PAYMENT',

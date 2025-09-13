@@ -634,6 +634,7 @@ const ItemFormPage: React.FC = () => {
                     try {
                       const newBrand = await createBrand({
                         name: newValue.trim(),
+                        description: '',
                       });
                       handleInputChange(
                         'brand_id',

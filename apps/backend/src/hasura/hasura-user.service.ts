@@ -87,6 +87,7 @@ export interface CreateOrderRequest {
   special_instructions?: string;
   verified_agent_delivery?: boolean;
   delivery_address_id: string;
+  phone_number?: string;
 }
 
 export interface Item {
