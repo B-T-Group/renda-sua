@@ -104,13 +104,31 @@ const Footer: React.FC = () => {
                   {t('footer.company')}
                 </Typography>
                 <Stack spacing={0.5}>
-                  <Typography variant="body2" color="grey.400">
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/about"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
                     {t('footer.about')}
                   </Typography>
-                  <Typography variant="body2" color="grey.400">
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/privacy"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
                     {t('footer.privacy')}
                   </Typography>
-                  <Typography variant="body2" color="grey.400">
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/terms"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
                     {t('footer.terms')}
                   </Typography>
                 </Stack>

@@ -11,6 +11,7 @@ import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
+import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -24,6 +25,8 @@ import CategoriesManagementPage from '../components/pages/CategoriesManagementPa
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
+import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
+import TermsOfServicePage from '../components/pages/TermsOfServicePage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
@@ -100,6 +103,9 @@ function App() {
             {/* Public routes */}
             <Route path="/items" element={<PublicItemsPage />} />
             <Route path="/support" element={<SupportPage />} />
+            <Route path="/about" element={<AboutUsPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsOfServicePage />} />
 
             {/* Place Order route */}
             <Route
