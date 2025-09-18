@@ -111,6 +111,7 @@
       "csvUpload": "Téléchargement CSV",
       "items": "Articles",
       "skuHelper": "Code article unique - identifiant unique pour l'article",
+      "skuAlreadyExists": "Ce code article existe déjà. Veuillez en choisir un autre.",
       "currency": "Devise",
       "size": "Taille",
       "sizeUnit": "Unité de taille",

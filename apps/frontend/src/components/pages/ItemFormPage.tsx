@@ -22,15 +22,25 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import { useBrands } from '../../hooks/useBrands';
 import { useCategories } from '../../hooks/useCategory';
-import { CreateItemData, useItems } from '../../hooks/useItems';
+import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
+import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
+
+const GET_ALL_SKUS = `
+  query GetAllSkus {
+    items {
+      id
+      sku
+    }
+  }
+`;
 
 interface ItemFormData {
   name: string;
@@ -91,10 +101,17 @@ const ItemFormPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [item, setItem] = useState<any>(null);
+  const [item, setItem] = useState<Item | null>(null);
+
+  // SKU validation state
+  const [existingSkus, setExistingSkus] = useState<Set<string>>(new Set());
+  const [skuError, setSkuError] = useState<string | null>(null);
+  const [skusLoading, setSkusLoading] = useState(false);
+
+  // GraphQL request for fetching all SKUs
+  const { execute: executeSkusQuery } = useGraphQLRequest(GET_ALL_SKUS);
 
   const {
-    brands: brandsFromItems,
     loading: dataLoading,
     error: dataError,
     fetchBrands: fetchBrandsFromItems,
@@ -107,7 +124,6 @@ const ItemFormPage: React.FC = () => {
     brands,
     loading: brandsLoading,
     error: brandsError,
-    fetchBrands,
     createBrand,
   } = useBrands();
 
@@ -182,11 +198,72 @@ const ItemFormPage: React.FC = () => {
     }
   }, [isEditMode, itemId, profile?.business?.id, fetchSingleItem]);
 
-  const handleInputChange = (field: keyof ItemFormData, value: any) => {
+  // Fetch all existing SKUs
+  const fetchExistingSkus = useCallback(async () => {
+    setSkusLoading(true);
+    try {
+      const result = await executeSkusQuery();
+      const skus =
+        result.items
+          ?.map((item: { sku: string | null }) => item.sku)
+          .filter(
+            (sku: string | null): sku is string =>
+              sku !== null && sku.trim() !== ''
+          ) || [];
+
+      setExistingSkus(new Set(skus));
+    } catch (err) {
+      console.error('Error fetching existing SKUs:', err);
+    } finally {
+      setSkusLoading(false);
+    }
+  }, [executeSkusQuery]);
+
+  // Fetch existing SKUs on component mount
+  useEffect(() => {
+    fetchExistingSkus();
+  }, [fetchExistingSkus]);
+
+  const handleInputChange = (
+    field: keyof ItemFormData,
+    value: string | number | boolean | null
+  ) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+
+    // Validate SKU when it changes
+    if (field === 'sku' && typeof value === 'string') {
+      validateSku(value);
+    }
+  };
+
+  // Validate SKU uniqueness
+  const validateSku = (sku: string) => {
+    if (!sku || sku.trim() === '') {
+      setSkuError(null);
+      return true;
+    }
+
+    const trimmedSku = sku.trim();
+
+    // In edit mode, allow the current item's SKU
+    if (isEditMode && item && item.sku === trimmedSku) {
+      setSkuError(null);
+      return true;
+    }
+
+    // Check if SKU already exists
+    if (existingSkus.has(trimmedSku)) {
+      setSkuError(
+        t('business.items.skuAlreadyExists', 'This SKU already exists')
+      );
+      return false;
+    }
+
+    setSkuError(null);
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,6 +271,12 @@ const ItemFormPage: React.FC = () => {
 
     if (!profile?.business?.id) {
       setError('Business profile not found');
+      return;
+    }
+
+    // Validate SKU before submission
+    if (!validateSku(formData.sku)) {
+      setError('Please fix the SKU error before submitting');
       return;
     }
 
@@ -357,8 +440,9 @@ const ItemFormPage: React.FC = () => {
                 label={t('business.items.sku')}
                 value={formData.sku}
                 onChange={(e) => handleInputChange('sku', e.target.value)}
-                disabled={loading}
-                helperText={t('business.items.skuHelper')}
+                disabled={loading || skusLoading}
+                error={!!skuError}
+                helperText={skuError || t('business.items.skuHelper')}
               />
             </Grid>
 
@@ -594,7 +678,7 @@ const ItemFormPage: React.FC = () => {
                       });
                       handleInputChange(
                         'brand_id',
-                        newBrand.id as unknown as string
+                        newBrand.data.id as unknown as string
                       );
                     } catch (err) {
                       console.error('Failed to create brand:', err);
@@ -796,9 +880,11 @@ const ItemFormPage: React.FC = () => {
                   startIcon={<SaveIcon />}
                   disabled={
                     loading ||
+                    skusLoading ||
                     !formData.name ||
                     !formData.description ||
-                    formData.price <= 0
+                    formData.price <= 0 ||
+                    !!skuError
                   }
                 >
                   {loading

@@ -121,6 +121,7 @@
       "csvUpload": "CSV Upload",
       "items": "Items",
       "skuHelper": "Stock Keeping Unit - unique identifier for the item",
+      "skuAlreadyExists": "This SKU already exists. Please choose a different one.",
       "price": "Price",
       "currency": "Currency",
       "size": "Size",
