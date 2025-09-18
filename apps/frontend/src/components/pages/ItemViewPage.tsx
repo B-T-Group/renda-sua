@@ -214,6 +214,41 @@ export default function ItemViewPage() {
         }`}
       />
 
+      {/* Inventory Warning */}
+      {(!item.business_inventories ||
+        item.business_inventories.length === 0) && (
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 3,
+            backgroundColor: '#fff8e1',
+            borderColor: '#ffcc02',
+            borderWidth: 2,
+            '& .MuiAlert-icon': {
+              color: '#f57c00',
+            },
+            '& .MuiAlert-message': {
+              backgroundColor: '#fffbf0',
+              borderRadius: 1,
+              p: 1,
+            },
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 0.5 }}>
+            {t(
+              'business.inventory.itemNotVisible',
+              'Item Not Visible to Customers'
+            )}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'business.inventory.itemNotVisibleMessage',
+              'This item will not be visible to customers until it is added to at least one business location inventory.'
+            )}
+          </Typography>
+        </Alert>
+      )}
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
@@ -247,7 +282,7 @@ export default function ItemViewPage() {
             startIcon={<InventoryIcon />}
             onClick={handleUpdateInventoryClick}
           >
-            {t('business.inventory.updateInventory')}
+            {t('business.inventory.manageInventory', 'Manage Inventory')}
           </Button>
           <Button
             variant="outlined"
