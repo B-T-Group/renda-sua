@@ -648,7 +648,13 @@ export default function ItemViewPage() {
 
       <ImageUploadDialog
         open={showImageUploadDialog}
-        onClose={() => setShowImageUploadDialog(false)}
+        onClose={(refresh) => {
+          setShowImageUploadDialog(false);
+          if (refresh) {
+            // Refresh item images when dialog closes with refresh flag
+            fetchItemDetails();
+          }
+        }}
         itemId={itemId || ''}
         itemName={item?.name || ''}
       />

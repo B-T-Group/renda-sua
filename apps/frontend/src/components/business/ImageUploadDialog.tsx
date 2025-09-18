@@ -30,7 +30,7 @@ import { useProfile } from '../../hooks/useProfile';
 
 interface ImageUploadDialogProps {
   open: boolean;
-  onClose: () => void;
+  onClose: (refresh?: boolean) => void;
   itemId: string;
   itemName: string;
 }
@@ -60,10 +60,12 @@ export default function ImageUploadDialog({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [altTexts, setAltTexts] = useState<Record<string, string>>({});
   const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [imagesModified, setImagesModified] = useState(false);
 
   useEffect(() => {
     if (open && itemId) {
       loadImages();
+      setImagesModified(false); // Reset modified flag when dialog opens
     }
   }, [open, itemId]);
 
@@ -154,6 +156,12 @@ export default function ImageUploadDialog({
       enqueueSnackbar(t('business.inventory.imagesUploadedSuccessfully'), {
         variant: 'success',
       });
+
+      // Mark that images were modified
+      setImagesModified(true);
+
+      // Close dialog and indicate that refresh is needed
+      onClose(true);
     } catch (error) {
       console.error('Failed to upload images:', error);
       enqueueSnackbar(t('business.inventory.failedToUploadImages'), {
@@ -169,6 +177,9 @@ export default function ImageUploadDialog({
       enqueueSnackbar(t('business.inventory.imageDeletedSuccessfully'), {
         variant: 'success',
       });
+
+      // Mark that images were modified
+      setImagesModified(true);
     } catch (error) {
       console.error('Failed to delete image:', error);
       enqueueSnackbar(t('business.inventory.failedToDeleteImage'), {
@@ -180,7 +191,12 @@ export default function ImageUploadDialog({
   const canUploadMore = images.length + selectedFiles.length < MAX_IMAGES;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={() => onClose(imagesModified)}
+      maxWidth="md"
+      fullWidth
+    >
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6" component="div">
@@ -189,7 +205,7 @@ export default function ImageUploadDialog({
           <IconButton
             edge="end"
             color="inherit"
-            onClick={onClose}
+            onClick={() => onClose(imagesModified)}
             aria-label={t('common.close')}
           >
             <CloseIcon />
@@ -463,7 +479,7 @@ export default function ImageUploadDialog({
       </DialogContent>
       <DialogActions sx={{ p: 3, gap: 2, backgroundColor: 'grey.50' }}>
         <Button
-          onClick={onClose}
+          onClick={() => onClose(imagesModified)}
           variant="outlined"
           sx={{
             borderRadius: 2,
