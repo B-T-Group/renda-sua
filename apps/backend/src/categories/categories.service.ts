@@ -70,6 +70,29 @@ export class CategoriesService {
   }
 
   async createCategory(createCategoryDto: CreateCategoryDto) {
+    // First check if a category with this name already exists
+    const checkQuery = `
+      query CheckCategoryExists($name: String!) {
+        item_categories(where: { name: { _eq: $name } }) {
+          id
+          name
+        }
+      }
+    `;
+
+    const checkResult = await this.hasuraSystemService.executeQuery(
+      checkQuery,
+      {
+        name: createCategoryDto.name,
+      }
+    );
+
+    if (checkResult.item_categories && checkResult.item_categories.length > 0) {
+      throw new Error(
+        `Category with name "${createCategoryDto.name}" already exists`
+      );
+    }
+
     const mutation = `
       mutation CreateCategory($name: String!, $description: String!) {
         insert_item_categories_one(object: {
@@ -85,18 +108,63 @@ export class CategoriesService {
       }
     `;
 
-    const result = await this.hasuraSystemService.executeMutation(mutation, {
-      name: createCategoryDto.name,
-      description: createCategoryDto.description,
-    });
+    try {
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
+        name: createCategoryDto.name,
+        description: createCategoryDto.description,
+      });
 
-    this.logger.log(
-      `Category created: ${result.insert_item_categories_one.name}`
-    );
-    return result.insert_item_categories_one;
+      this.logger.log(
+        `Category created: ${result.insert_item_categories_one.name}`
+      );
+      return result.insert_item_categories_one;
+    } catch (error: any) {
+      // Handle constraint violation errors
+      if (
+        error.message &&
+        error.message.includes('duplicate key value violates unique constraint')
+      ) {
+        throw new Error(
+          `Category with name "${createCategoryDto.name}" already exists`
+        );
+      }
+      throw error;
+    }
   }
 
   async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto) {
+    // If updating the name, check if another category with that name already exists
+    if (updateCategoryDto.name !== undefined) {
+      const checkQuery = `
+        query CheckCategoryExists($name: String!, $excludeId: Int!) {
+          item_categories(where: { 
+            name: { _eq: $name },
+            id: { _neq: $excludeId }
+          }) {
+            id
+            name
+          }
+        }
+      `;
+
+      const checkResult = await this.hasuraSystemService.executeQuery(
+        checkQuery,
+        {
+          name: updateCategoryDto.name,
+          excludeId: parseInt(id, 10),
+        }
+      );
+
+      if (
+        checkResult.item_categories &&
+        checkResult.item_categories.length > 0
+      ) {
+        throw new Error(
+          `Category with name "${updateCategoryDto.name}" already exists`
+        );
+      }
+    }
+
     const mutation = `
       mutation UpdateCategory($id: Int!, $name: String, $description: String) {
         update_item_categories_by_pk(
@@ -124,17 +192,30 @@ export class CategoriesService {
       updateData.description = updateCategoryDto.description;
     }
 
-    const result = await this.hasuraSystemService.executeMutation(mutation, {
-      id: parseInt(id, 10),
-      ...updateData,
-    });
+    try {
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
+        id: parseInt(id, 10),
+        ...updateData,
+      });
 
-    if (result.update_item_categories_by_pk) {
-      this.logger.log(
-        `Category updated: ${result.update_item_categories_by_pk.name}`
-      );
+      if (result.update_item_categories_by_pk) {
+        this.logger.log(
+          `Category updated: ${result.update_item_categories_by_pk.name}`
+        );
+      }
+      return result.update_item_categories_by_pk;
+    } catch (error: any) {
+      // Handle constraint violation errors
+      if (
+        error.message &&
+        error.message.includes('duplicate key value violates unique constraint')
+      ) {
+        throw new Error(
+          `Category with name "${updateCategoryDto.name}" already exists`
+        );
+      }
+      throw error;
     }
-    return result.update_item_categories_by_pk;
   }
 
   async deleteCategory(id: string) {

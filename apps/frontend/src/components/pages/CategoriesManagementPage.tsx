@@ -114,6 +114,7 @@ const CategoriesManagementPage: React.FC = () => {
     categories,
     loading: categoriesLoading,
     error: categoriesError,
+    fetchCategories,
     createCategory,
     updateCategory,
     deleteCategory,
@@ -122,6 +123,7 @@ const CategoriesManagementPage: React.FC = () => {
     subcategories,
     loading: subcategoriesLoading,
     error: subcategoriesError,
+    fetchSubcategories,
     createSubcategory,
     updateSubcategory,
     deleteSubcategory,
@@ -146,6 +148,8 @@ const CategoriesManagementPage: React.FC = () => {
         setSuccess('Category created successfully');
         setIsCreateCategoryDialogOpen(false);
         setCategoryFormData({ name: '', description: '' });
+        // Refresh the categories list
+        await fetchCategories(searchTerm);
       } else {
         setError(response.message || 'Failed to create category');
       }
@@ -179,6 +183,8 @@ const CategoriesManagementPage: React.FC = () => {
         setIsEditCategoryDialogOpen(false);
         setSelectedCategory(null);
         setCategoryFormData({ name: '', description: '' });
+        // Refresh the categories list
+        await fetchCategories(searchTerm);
       } else {
         setError(response.message || 'Failed to update category');
       }
@@ -200,6 +206,8 @@ const CategoriesManagementPage: React.FC = () => {
         setSuccess('Category deleted successfully');
         setIsDeleteCategoryDialogOpen(false);
         setSelectedCategory(null);
+        // Refresh the categories list
+        await fetchCategories(searchTerm);
       } else {
         setError(response.message || 'Failed to delete category');
       }
@@ -238,6 +246,8 @@ const CategoriesManagementPage: React.FC = () => {
           description: '',
           item_category_id: 0,
         });
+        // Refresh the subcategories list
+        await fetchSubcategories(subcategorySearchTerm, selectedCategoryId);
       } else {
         setError(response.message || 'Failed to create subcategory');
       }
@@ -280,6 +290,8 @@ const CategoriesManagementPage: React.FC = () => {
           description: '',
           item_category_id: 0,
         });
+        // Refresh the subcategories list
+        await fetchSubcategories(subcategorySearchTerm, selectedCategoryId);
       } else {
         setError(response.message || 'Failed to update subcategory');
       }
@@ -303,6 +315,8 @@ const CategoriesManagementPage: React.FC = () => {
         setSuccess('Subcategory deleted successfully');
         setIsDeleteSubcategoryDialogOpen(false);
         setSelectedSubcategory(null);
+        // Refresh the subcategories list
+        await fetchSubcategories(subcategorySearchTerm, selectedCategoryId);
       } else {
         setError(response.message || 'Failed to delete subcategory');
       }
@@ -451,6 +465,7 @@ const CategoriesManagementPage: React.FC = () => {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell>ID</TableCell>
                     <TableCell>Name</TableCell>
                     <TableCell>Description</TableCell>
                     <TableCell>Subcategories Count</TableCell>
@@ -461,6 +476,11 @@ const CategoriesManagementPage: React.FC = () => {
                 <TableBody>
                   {categories.map((category) => (
                     <TableRow key={category.id}>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {category.id}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         <Typography variant="subtitle2" fontWeight="medium">
                           {category.name}
@@ -570,6 +590,7 @@ const CategoriesManagementPage: React.FC = () => {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell>ID</TableCell>
                     <TableCell>Name</TableCell>
                     <TableCell>Description</TableCell>
                     <TableCell>Category</TableCell>
@@ -581,6 +602,11 @@ const CategoriesManagementPage: React.FC = () => {
                 <TableBody>
                   {subcategories.map((subcategory) => (
                     <TableRow key={subcategory.id}>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {subcategory.id}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         <Typography variant="subtitle2" fontWeight="medium">
                           {subcategory.name}
