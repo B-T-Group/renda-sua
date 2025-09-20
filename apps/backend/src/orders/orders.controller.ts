@@ -9,7 +9,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
