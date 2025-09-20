@@ -1,4 +1,5 @@
 import {
+  Add as AddIcon,
   ArrowBack as ArrowBackIcon,
   AutoAwesome as AutoAwesomeIcon,
   Save as SaveIcon,
@@ -8,6 +9,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Chip,
   Container,
   Divider,
   FormControl,
@@ -136,6 +138,7 @@ const ItemFormPage: React.FC = () => {
   const [existingSkus, setExistingSkus] = useState<Set<string>>(new Set());
   const [skuError, setSkuError] = useState<string | null>(null);
   const [skusLoading, setSkusLoading] = useState(false);
+  const [feeApplied, setFeeApplied] = useState(false);
 
   // GraphQL request for fetching all SKUs
   const { execute: executeSkusQuery } = useGraphQLRequest(GET_ALL_SKUS);
@@ -377,6 +380,19 @@ const ItemFormPage: React.FC = () => {
   const handleBackToItem = () => {
     if (itemId) {
       navigate(`/business/items/${itemId}`);
+    }
+  };
+
+  const handleApplyFee = () => {
+    if (formData.price > 0) {
+      const fee = formData.price * 0.035; // 3.5% fee
+      const newPrice = formData.price + fee;
+      handleInputChange('price', newPrice);
+      setFeeApplied(true);
+      enqueueSnackbar(
+        t('business.items.feeApplied', '3.5% payment platform fee applied'),
+        { variant: 'success' }
+      );
     }
   };
 
@@ -882,13 +898,68 @@ const ItemFormPage: React.FC = () => {
                 label={t('business.items.price')}
                 type="number"
                 value={formData.price}
-                onChange={(e) =>
-                  handleInputChange('price', parseFloat(e.target.value) || 0)
-                }
+                onChange={(e) => {
+                  handleInputChange('price', parseFloat(e.target.value) || 0);
+                  // Reset fee applied state when price changes
+                  if (feeApplied) {
+                    setFeeApplied(false);
+                  }
+                }}
                 required
                 disabled={loading}
                 inputProps={{ min: 0, step: 0.01 }}
               />
+
+              {/* Payment Platform Fee Section - Only for new items */}
+              {!isEditMode && formData.price > 0 && !feeApplied && (
+                <Box sx={{ mt: 2 }}>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      {t(
+                        'business.items.paymentFeeInfo',
+                        'Mobile payment platforms charge a 3.5% fee on each transaction. You can add this fee to your price to cover the cost.'
+                      )}
+                    </Typography>
+                  </Alert>
+
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={handleApplyFee}
+                      disabled={loading}
+                    >
+                      {t(
+                        'business.items.addPaymentFee',
+                        'Add 3.5% Payment Fee'
+                      )}
+                    </Button>
+                    <Chip
+                      label={`+${(formData.price * 0.035).toFixed(2)} ${
+                        formData.currency
+                      }`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Show applied fee message */}
+              {!isEditMode && feeApplied && (
+                <Box sx={{ mt: 2 }}>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      {t(
+                        'business.items.feeAppliedSuccess',
+                        'Payment platform fee has been added to the price. The total amount includes the 3.5% fee.'
+                      )}
+                    </Typography>
+                  </Alert>
+                </Box>
+              )}
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
