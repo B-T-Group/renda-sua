@@ -6,6 +6,7 @@ import {
   Inventory as InventoryIcon,
   LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
+  Search as SearchIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material';
@@ -55,9 +56,9 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems } from '../../hooks/useItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AddItemDialog from '../business/AddItemDialog';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import CSVUploadDialog from '../business/CSVUploadDialog';
@@ -215,7 +216,11 @@ const BusinessItemsPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfile();
+  const {
+    profile,
+    loading: profileLoading,
+    error: profileError,
+  } = useUserProfileContext();
   const [tabValue, setTabValue] = useState(0);
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [showEditItemDialog, setShowEditItemDialog] = useState(false);
@@ -664,6 +669,41 @@ const BusinessItemsPage: React.FC = () => {
     new Set(items?.map((item) => item.brand?.name).filter(Boolean) || [])
   );
 
+  if (profileLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '400px',
+            gap: 2,
+          }}
+        >
+          <CircularProgress size={60} />
+          <Typography variant="h6" color="text.secondary">
+            {t('common.loading')}
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Alert severity="error">
+          <Typography variant="h6" gutterBottom>
+            {t('common.errorLoadingData')}
+          </Typography>
+          <Typography variant="body2">{profileError}</Typography>
+        </Alert>
+      </Container>
+    );
+  }
+
   if (!profile?.business) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -738,28 +778,26 @@ const BusinessItemsPage: React.FC = () => {
                     {t('business.locations.refresh')}
                   </Button>
                 </Tooltip>
-                <Tooltip title={t('business.inventory.noLocationsError')}>
-                  <span>
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        if (businessLocations.length === 0) {
-                          enqueueSnackbar(
-                            t('business.inventory.noLocationsError'),
-                            { variant: 'error' }
-                          );
-                          return;
-                        }
-                        // Navigate to add item page
-                        navigate('/business/items/add');
-                      }}
-                      disabled={businessLocations.length === 0}
-                    >
-                      {t('business.items.addItem')}
-                    </Button>
-                  </span>
-                </Tooltip>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (businessLocations.length === 0) {
+                        enqueueSnackbar(
+                          t('business.inventory.noLocationsError'),
+                          { variant: 'error' }
+                        );
+                        return;
+                      }
+                      // Navigate to add item page
+                      navigate('/business/items/add');
+                    }}
+                    disabled={businessLocations.length === 0}
+                  >
+                    {t('business.items.addItem')}
+                  </Button>
+                </span>
                 {businessLocations.length === 0 && (
                   <Button
                     variant="outlined"
@@ -773,15 +811,107 @@ const BusinessItemsPage: React.FC = () => {
               </Stack>
             </Box>
 
+            {/* Filters */}
+            <Box sx={{ mb: 3 }}>
+              <Stack
+                direction="row"
+                spacing={2}
+                alignItems="center"
+                flexWrap="wrap"
+              >
+                <TextField
+                  placeholder={t('business.items.filters.search')}
+                  variant="outlined"
+                  size="small"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  sx={{ minWidth: 200 }}
+                  InputProps={{
+                    startAdornment: (
+                      <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    ),
+                  }}
+                />
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>{t('business.items.filters.status')}</InputLabel>
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    label={t('business.items.filters.status')}
+                  >
+                    <MenuItem value="all">
+                      {t('business.items.filters.allStatuses')}
+                    </MenuItem>
+                    <MenuItem value="active">
+                      {t('business.items.active')}
+                    </MenuItem>
+                    <MenuItem value="inactive">
+                      {t('business.items.inactive')}
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>{t('business.items.category')}</InputLabel>
+                  <Select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    label={t('business.items.category')}
+                  >
+                    <MenuItem value="all">{t('common.allCategories')}</MenuItem>
+                    {categories.map((category) => (
+                      <MenuItem key={category} value={category}>
+                        {category}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>{t('business.items.brand')}</InputLabel>
+                  <Select
+                    value={brandFilter}
+                    onChange={(e) => setBrandFilter(e.target.value)}
+                    label={t('business.items.brand')}
+                  >
+                    <MenuItem value="all">{t('common.allBrands')}</MenuItem>
+                    {brandsInItems.map((brand) => (
+                      <MenuItem key={brand} value={brand}>
+                        {brand}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setSearchText('');
+                    setStatusFilter('all');
+                    setCategoryFilter('all');
+                    setBrandFilter('all');
+                  }}
+                >
+                  {t('common.clearFilters')}
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.showing')} {filteredItems.length} {t('common.of')}{' '}
+                  {items?.length || 0} {t('business.items.items')}
+                </Typography>
+              </Stack>
+            </Box>
+
             {itemsLoading ? (
               <ItemsCardsSkeleton />
             ) : itemsError ? (
               <Alert severity="error">{itemsError}</Alert>
-            ) : !items || items.length === 0 ? (
+            ) : !filteredItems || filteredItems.length === 0 ? (
               <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
             ) : (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <Box
                     key={item.id}
                     sx={{
@@ -846,29 +976,27 @@ const BusinessItemsPage: React.FC = () => {
                     {t('business.locations.refresh')}
                   </Button>
                 </Tooltip>
-                <Tooltip title={t('business.inventory.noLocationsError')}>
-                  <span>
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        if (businessLocations.length === 0) {
-                          enqueueSnackbar(
-                            t('business.inventory.noLocationsError'),
-                            { variant: 'error' }
-                          );
-                          return;
-                        }
-                        // Refresh business locations before opening dialog
-                        refreshBusinessLocations();
-                        setShowAddItemDialog(true);
-                      }}
-                      disabled={businessLocations.length === 0}
-                    >
-                      {t('business.items.addItem')}
-                    </Button>
-                  </span>
-                </Tooltip>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (businessLocations.length === 0) {
+                        enqueueSnackbar(
+                          t('business.inventory.noLocationsError'),
+                          { variant: 'error' }
+                        );
+                        return;
+                      }
+                      // Refresh business locations before opening dialog
+                      refreshBusinessLocations();
+                      setShowAddItemDialog(true);
+                    }}
+                    disabled={businessLocations.length === 0}
+                  >
+                    {t('business.items.addItem')}
+                  </Button>
+                </span>
               </Stack>
             </Box>
 

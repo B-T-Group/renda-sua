@@ -85,7 +85,22 @@
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
       "itemsDescription": "Gérez votre catalogue de produits, ajoutez de nouveaux articles et mettez à jour les informations produit.",
       "locationsDescription": "Gérez vos emplacements commerciaux, adresses et paramètres opérationnels.",
-      "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance."
+      "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance.",
+      "documents": "Documents",
+      "documentsDescription": "Gérez vos documents et fichiers d'entreprise",
+      "accountSummary": "Résumé du Compte",
+      "businessManagement": "Gestion d'Entreprise",
+      "adminManagement": "Gestion Administrateur",
+      "manageAgents": "Gérer les Agents",
+      "manageAgentsDescription": "Voir et mettre à jour les agents",
+      "manageClients": "Gérer les Clients",
+      "manageClientsDescription": "Voir et mettre à jour les clients",
+      "manageBusinesses": "Gérer les Entreprises",
+      "manageBusinessesDescription": "Voir et mettre à jour les entreprises",
+      "manageBrands": "Gérer les Marques",
+      "manageBrandsDescription": "Gérer les marques de produits et fabricants",
+      "manageCategories": "Gérer les Catégories",
+      "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits"
     },
     "items": {
       "title": "Articles",
@@ -128,6 +143,7 @@
       "minOrderQuantity": "Quantité minimale de commande",
       "maxOrderQuantity": "Quantité maximale de commande",
       "maxOrderQuantityHelper": "Laisser vide pour aucune limite",
+      "generateDescriptionHelper": "Cliquez sur \"Générer\" pour créer une description alimentée par l'IA basée sur les détails de votre produit",
       "createItem": "Créer l'article",
       "updateItem": "Mettre à jour l'article",
       "confirmDelete": "Confirmer la suppression",
@@ -157,6 +173,13 @@
         "detail": "Détail",
         "gallery": "Galerie",
         "angle": "Angle"
+      },
+      "filters": {
+        "allStatuses": "Tous les Statuts",
+        "brand": "Marque",
+        "category": "Catégorie",
+        "status": "Statut",
+        "search": "Rechercher des articles..."
       }
     },
     "orders": {

@@ -95,7 +95,22 @@
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
       "itemsDescription": "Manage your product catalog, add new items, and update product information.",
       "locationsDescription": "Manage your business locations, addresses, and operational settings.",
-      "analyticsDescription": "View business analytics, sales reports, and performance metrics."
+      "analyticsDescription": "View business analytics, sales reports, and performance metrics.",
+      "documents": "Documents",
+      "documentsDescription": "Manage your business documents and files",
+      "accountSummary": "Account Summary",
+      "businessManagement": "Business Management",
+      "adminManagement": "Admin Management",
+      "manageAgents": "Manage Agents",
+      "manageAgentsDescription": "View and update agents",
+      "manageClients": "Manage Clients",
+      "manageClientsDescription": "View and update clients",
+      "manageBusinesses": "Manage Businesses",
+      "manageBusinessesDescription": "View and update businesses",
+      "manageBrands": "Manage Brands",
+      "manageBrandsDescription": "Manage product brands and manufacturers",
+      "manageCategories": "Manage Categories",
+      "manageCategoriesDescription": "Manage product categories and subcategories"
     },
     "items": {
       "title": "Items",
@@ -139,6 +154,7 @@
       "minOrderQuantity": "Min Order Quantity",
       "maxOrderQuantity": "Max Order Quantity",
       "maxOrderQuantityHelper": "Leave empty for no limit",
+      "generateDescriptionHelper": "Click \"Generate\" to create an AI-powered description based on your product details",
       "createItem": "Create Item",
       "updateItem": "Update Item",
       "confirmDelete": "Confirm Delete",
@@ -173,7 +189,8 @@
         "allStatuses": "All Statuses",
         "brand": "Brand",
         "category": "Category",
-        "status": "Status"
+        "status": "Status",
+        "search": "Search items..."
       },
       "noItems": "No items",
       "selectCategoryFirst": "Select a category first",

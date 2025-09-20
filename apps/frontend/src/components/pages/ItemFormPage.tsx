@@ -1,5 +1,6 @@
 import {
   ArrowBack as ArrowBackIcon,
+  AutoAwesome as AutoAwesomeIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
 import {
@@ -26,6 +27,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
+import { useAi } from '../../hooks/useAi';
 import { useBrands } from '../../hooks/useBrands';
 import { useCategories } from '../../hooks/useCategory';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
@@ -68,6 +70,7 @@ const ItemFormPage: React.FC = () => {
   const { itemId } = useParams<{ itemId: string }>();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfile();
+  const { generateDescription, loading: aiLoading } = useAi();
 
   const isEditMode = !!itemId;
 
@@ -343,6 +346,47 @@ const ItemFormPage: React.FC = () => {
     navigate('/business/items');
   };
 
+  const handleGenerateDescription = async () => {
+    try {
+      // Get category and subcategory names
+      const category = categories.find((cat) => cat.id === selectedCategoryId);
+      const subCategory = category?.item_sub_categories.find(
+        (sub) => sub.id === selectedSubCategoryId
+      );
+
+      // Get brand name
+      const brand = brands.find((b) => b.id === formData.brand_id);
+
+      const request = {
+        name: formData.name,
+        sku: formData.sku || undefined,
+        category: category?.name || undefined,
+        subCategory: subCategory?.name || undefined,
+        price: formData.price || undefined,
+        currency: formData.currency || undefined,
+        weight: formData.weight || undefined,
+        weightUnit: formData.weight_unit || undefined,
+        brand: brand?.name || undefined,
+        language: 'en' as const, // You can make this configurable later
+      };
+
+      const result = await generateDescription(request);
+
+      if (result.success) {
+        handleInputChange('description', result.description);
+        enqueueSnackbar('Description generated successfully!', {
+          variant: 'success',
+        });
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to generate description';
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+      });
+    }
+  };
+
   if (dataError || brandsError || categoriesError) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -443,21 +487,6 @@ const ItemFormPage: React.FC = () => {
                 disabled={loading || skusLoading}
                 error={!!skuError}
                 helperText={skuError || t('business.items.skuHelper')}
-              />
-            </Grid>
-
-            <Grid size={12}>
-              <TextField
-                fullWidth
-                label={t('business.items.description')}
-                value={formData.description}
-                onChange={(e) =>
-                  handleInputChange('description', e.target.value)
-                }
-                multiline
-                rows={3}
-                required
-                disabled={loading}
               />
             </Grid>
 
@@ -855,6 +884,55 @@ const ItemFormPage: React.FC = () => {
                 inputProps={{ min: 1 }}
                 helperText={t('business.items.maxOrderQuantityHelper')}
               />
+            </Grid>
+
+            {/* Description Section */}
+            <Grid size={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                {t('business.items.description', 'Description')}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid size={12}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <TextField
+                  fullWidth
+                  label={t('business.items.description')}
+                  value={formData.description}
+                  onChange={(e) =>
+                    handleInputChange('description', e.target.value)
+                  }
+                  multiline
+                  rows={3}
+                  required
+                  disabled={loading}
+                  sx={{ flex: 1 }}
+                />
+                <Button
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={handleGenerateDescription}
+                  disabled={loading || aiLoading || !formData.name}
+                  sx={{
+                    minWidth: '140px',
+                    height: '56px',
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  {aiLoading ? 'Generating...' : 'Generate'}
+                </Button>
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: 'block' }}
+              >
+                {t(
+                  'business.items.generateDescriptionHelper',
+                  'Click "Generate" to create an AI-powered description based on your product details'
+                )}
+              </Typography>
             </Grid>
 
             {/* Error Display */}

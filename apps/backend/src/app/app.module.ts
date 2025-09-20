@@ -7,6 +7,7 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
+import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { BrandsModule } from '../brands/brands.module';
@@ -74,6 +75,7 @@ import { AppService } from './app.service';
     BrandsModule,
     CategoriesModule,
     SubcategoriesModule,
+    AiModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],

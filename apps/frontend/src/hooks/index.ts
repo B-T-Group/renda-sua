@@ -39,6 +39,13 @@ export { useClientOrders } from './useClientOrders';
 // API client
 export { useApiClient } from './useApiClient';
 
+// AI hooks
+export { useAi } from './useAi';
+export type {
+  GenerateDescriptionRequest,
+  GenerateDescriptionResponse,
+} from './useAi';
+
 // Payment hooks
 export { useAirtelMoney } from './useAirtelMoney';
 export { useMtnMomoTopUp } from './useMtnMomoTopUp';

@@ -96,6 +96,10 @@ export interface GoogleCacheConfig {
   ttl: number; // Time to live in seconds
 }
 
+export interface OpenAIConfig {
+  apiKey: string;
+}
+
 export interface MyPVitConfig {
   baseUrl: string;
   merchantSlug: string;
@@ -126,6 +130,7 @@ export interface Configuration {
   order: OrderConfig;
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
+  openai: OpenAIConfig;
 }
 
 import {
@@ -304,6 +309,9 @@ export default async (): Promise<Configuration> => {
     googleCache: {
       enabled: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
       ttl: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
+    },
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY || secrets.OPENAI_API_KEY || '',
     },
   };
 };

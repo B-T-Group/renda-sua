@@ -79,8 +79,8 @@ const BusinessDashboard: React.FC = () => {
       path: '/business/locations',
     },
     {
-      title: 'Documents',
-      description: 'Manage your business documents and files',
+      title: t('business.dashboard.documents'),
+      description: t('business.dashboard.documentsDescription'),
       icon: <DocumentsIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#795548',
@@ -98,40 +98,40 @@ const BusinessDashboard: React.FC = () => {
 
   const adminCards = [
     {
-      title: 'Manage Agents',
-      description: 'View and update agents',
+      title: t('business.dashboard.manageAgents'),
+      description: t('business.dashboard.manageAgentsDescription'),
       icon: <AgentIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#2e7d32',
       path: '/admin/agents',
     },
     {
-      title: 'Manage Clients',
-      description: 'View and update clients',
+      title: t('business.dashboard.manageClients'),
+      description: t('business.dashboard.manageClientsDescription'),
       icon: <UsersIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#0288d1',
       path: '/admin/clients',
     },
     {
-      title: 'Manage Businesses',
-      description: 'View and update businesses',
+      title: t('business.dashboard.manageBusinesses'),
+      description: t('business.dashboard.manageBusinessesDescription'),
       icon: <BizIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#6d4c41',
       path: '/admin/businesses',
     },
     {
-      title: 'Manage Brands',
-      description: 'Manage product brands and manufacturers',
+      title: t('business.dashboard.manageBrands'),
+      description: t('business.dashboard.manageBrandsDescription'),
       icon: <BrandIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#9c27b0',
       path: '/content-management/brands',
     },
     {
-      title: 'Manage Categories',
-      description: 'Manage product categories and subcategories',
+      title: t('business.dashboard.manageCategories'),
+      description: t('business.dashboard.manageCategoriesDescription'),
       icon: <CategoryIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#ff9800',
@@ -249,7 +249,7 @@ const BusinessDashboard: React.FC = () => {
           gutterBottom
           sx={{ mb: 3, textAlign: 'center' }}
         >
-          Account Summary
+          {t('business.dashboard.accountSummary')}
         </Typography>
         <Box
           sx={{
@@ -268,7 +268,7 @@ const BusinessDashboard: React.FC = () => {
           gutterBottom
           sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
         >
-          Business Management
+          {t('business.dashboard.businessManagement')}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           {renderCards(businessCards)}
@@ -282,7 +282,7 @@ const BusinessDashboard: React.FC = () => {
           gutterBottom
           sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
         >
-          Admin Management
+          {t('business.dashboard.adminManagement')}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           {renderCards(adminCards)}
