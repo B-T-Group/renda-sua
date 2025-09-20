@@ -4,11 +4,13 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { ConfigurationsController } from './configurations.controller';
+import { ConfigurationsService } from './configurations.service';
 
 @Module({
   imports: [AuthModule, HasuraModule],
-  controllers: [AdminController],
-  providers: [AdminMessageService, AdminService],
-  exports: [AdminMessageService, AdminService],
+  controllers: [AdminController, ConfigurationsController],
+  providers: [AdminMessageService, AdminService, ConfigurationsService],
+  exports: [AdminMessageService, AdminService, ConfigurationsService],
 })
 export class AdminModule {}

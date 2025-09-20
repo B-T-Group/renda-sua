@@ -1,0 +1,188 @@
+# Hasura Table Tracking Rules
+
+## Description
+
+Rules for ensuring that all newly created database tables are properly tracked in Hasura metadata.
+
+## Rules
+
+### Always Track New Tables
+
+1. **After Creating Database Tables**:
+
+   - Always add the table to `apps/hasura/metadata/databases/Rendasua/tables/tables.yaml`
+   - Create the corresponding table metadata file in `apps/hasura/metadata/databases/Rendasua/tables/public_<table_name>.yaml`
+   - Run `hasura metadata reload --admin-secret myadminsecretkey` to apply changes
+   - Verify the table is tracked by checking the Hasura console
+
+2. **Table Metadata File Format**:
+
+   ```yaml
+   table:
+     schema: public
+     name: <table_name>
+   object_relationships: []
+   array_relationships: []
+   select_permissions:
+     - role: user
+       permission:
+         columns: '*'
+         filter: {}
+         allow_aggregations: true
+   ```
+
+   **Note**: The `admin` role cannot have permissions defined in Hasura. Use roles like `user`, `agent`, `business`, `client`, or no permissions for admin-only tables.
+
+3. **Required Steps When Creating New Tables**:
+
+   ```bash
+   # 1. Create the table via migration
+   cd apps/hasura
+   hasura migrate create "create_<table_name>_table" --from-server
+
+   # 2. Apply the migration
+   hasura migrate apply --database-name "Rendasua" --admin-secret myadminsecretkey
+
+   # 3. Add to tables.yaml (alphabetically)
+   # Add "!include public_<table_name>.yaml" to apps/hasura/metadata/databases/Rendasua/tables/tables.yaml
+
+   # 4. Create table metadata file
+   # Create apps/hasura/metadata/databases/Rendasua/tables/public_<table_name>.yaml
+
+   # 5. Reload metadata
+   hasura metadata reload --admin-secret myadminsecretkey
+
+   # 6. Apply metadata
+   hasura metadata apply --admin-secret myadminsecretkey
+   ```
+
+4. **Verification Checklist**:
+   - [ ] Table exists in database
+   - [ ] Table is listed in `tables.yaml`
+   - [ ] Table metadata file exists
+   - [ ] Metadata reload completed successfully
+   - [ ] Table visible in Hasura console
+   - [ ] GraphQL queries work for the table
+
+### Common Table Types and Their Metadata
+
+1. **Basic Tables** (most common):
+
+   ```yaml
+   table:
+     schema: public
+     name: <table_name>
+   object_relationships: []
+   array_relationships: []
+   select_permissions:
+     - role: admin
+       permission:
+         columns: '*'
+         filter: {}
+         allow_aggregations: true
+   ```
+
+2. **Tables with Foreign Keys**:
+
+   - Add `object_relationships` for foreign key references
+   - Add `array_relationships` for reverse relationships
+   - Example:
+
+   ```yaml
+   object_relationships:
+     - name: user
+       using:
+         foreign_key_constraint_on: user_id
+   array_relationships:
+     - name: orders
+       using:
+         foreign_key_constraint_on: user_id
+   ```
+
+3. **Tables with Special Permissions**:
+   - Add appropriate `insert_permissions`, `update_permissions`, `delete_permissions`
+   - Consider role-based access control
+
+### Error Handling
+
+1. **If Table Tracking Fails**:
+
+   ```bash
+   # Check table exists
+   hasura console --admin-secret myadminsecretkey --no-browser
+
+   # Force reload metadata
+   hasura metadata reload --admin-secret myadminsecretkey --force
+
+   # Check metadata consistency
+   hasura metadata diff --admin-secret myadminsecretkey
+   ```
+
+2. **Common Issues**:
+   - Table not in `tables.yaml`: Add the include statement
+   - Missing metadata file: Create the YAML file
+   - Permission errors: Check admin secret and database connection
+   - Syntax errors: Validate YAML syntax
+
+### Examples
+
+#### Example: Tracking a New User Preferences Table
+
+1. **Migration Applied**: ✅ Table `user_preferences` created
+2. **Add to tables.yaml**:
+   ```yaml
+   - '!include public_user_preferences.yaml'
+   ```
+3. **Create metadata file** (`public_user_preferences.yaml`):
+   ```yaml
+   table:
+     schema: public
+     name: user_preferences
+   object_relationships:
+     - name: user
+       using:
+         foreign_key_constraint_on: user_id
+   array_relationships: []
+   select_permissions:
+     - role: admin
+       permission:
+         columns: '*'
+         filter: {}
+         allow_aggregations: true
+   insert_permissions:
+     - role: admin
+       permission:
+         columns: '*'
+         check: {}
+   update_permissions:
+     - role: admin
+       permission:
+         columns: '*'
+         filter: {}
+   delete_permissions:
+     - role: admin
+       permission:
+         filter: {}
+   ```
+4. **Reload metadata**: ✅ Complete
+
+### Integration with Development Workflow
+
+1. **When Creating Migrations**:
+
+   - Always plan the Hasura metadata update
+   - Include table tracking in the migration checklist
+   - Test GraphQL queries after tracking
+
+2. **When Reviewing PRs**:
+
+   - Verify new tables are tracked
+   - Check metadata files are properly formatted
+   - Ensure permissions are appropriate
+
+3. **Documentation Updates**:
+   - Update API documentation with new table endpoints
+   - Add table relationships to GraphQL schema docs
+   - Include new tables in database schema documentation
+
+This rule ensures that no database table is left untracked, maintaining consistency between the database schema and Hasura GraphQL API.

@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
+import { ConfigurationsService } from '../admin/configurations.service';
 import type { Configuration } from '../config/configuration';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -37,7 +38,8 @@ export class OrdersService {
     private readonly addressesService: AddressesService,
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -2768,9 +2770,9 @@ export class OrdersService {
             distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
 
           // Calculate fee using tiered pricing model
-          const deliveryFee = this.calculateTieredDeliveryFee(
+          const deliveryFee = await this.calculateTieredDeliveryFee(
             distanceKm,
-            item.item.currency
+            'GA' // Default to GA, should be determined from address or order context
           );
 
           return {
@@ -2888,9 +2890,9 @@ export class OrdersService {
             distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
 
           // Calculate fee using tiered pricing model
-          const deliveryFee = this.calculateTieredDeliveryFee(
+          const deliveryFee = await this.calculateTieredDeliveryFee(
             distanceKm,
-            order.currency
+            'GA' // Default to GA, should be determined from address or order context
           );
 
           return {
@@ -2924,26 +2926,92 @@ export class OrdersService {
   }
 
   /**
-   * Calculate delivery fee using tiered pricing model
+   * Extract country code from address or order context
    */
-  private calculateTieredDeliveryFee(
+  private extractCountryCode(address?: any, order?: any): string {
+    // Try to get country from address first
+    if (address?.country) {
+      // Convert full country name to ISO 3166-1 alpha-2 code
+      const countryMap: { [key: string]: string } = {
+        Cameroon: 'CM',
+        Gabon: 'GA',
+        Canada: 'CA',
+        'United States': 'US',
+        USA: 'US',
+        // Add more mappings as needed
+      };
+
+      const countryCode = countryMap[address.country] || address.country;
+      if (countryCode.length === 2) {
+        return countryCode.toUpperCase();
+      }
+    }
+
+    // Try to get country from order context
+    if (order?.delivery_address?.country) {
+      return this.extractCountryCode(order.delivery_address);
+    }
+
+    // Default to GA (Gabon)
+    return 'GA';
+  }
+
+  /**
+   * Calculate delivery fee using tiered pricing model based on application configurations
+   */
+  private async calculateTieredDeliveryFee(
     distanceKm: number,
-    currency: string
-  ): number {
-    // Base configuration for different currencies
-    const config = {
-      XAF: { baseFee: 300, ratePerKm: 200, minFee: 500 },
-      USD: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
-      CAD: { baseFee: 1.5, ratePerKm: 0.75, minFee: 3 },
-      EUR: { baseFee: 1, ratePerKm: 0.5, minFee: 2 },
-    };
+    countryCode = 'GA'
+  ): Promise<number> {
+    try {
+      // Get delivery fee configurations from application_configurations table
+      const [baseDeliveryFee, deliveryFeeRatePerKm, deliveryFeeMin] =
+        await Promise.all([
+          this.configurationsService.getConfigurationByKey(
+            'base_delivery_fee',
+            countryCode
+          ),
+          this.configurationsService.getConfigurationByKey(
+            'delivery_fee_rate_per_km',
+            countryCode
+          ),
+          this.configurationsService.getConfigurationByKey(
+            'delivery_fee_min',
+            countryCode
+          ),
+        ]);
 
-    const currencyConfig =
-      config[currency as keyof typeof config] || config.XAF;
+      // Use fallback values if configurations are not found
+      const baseFee = baseDeliveryFee?.number_value || 300; // Default to GA values
+      const ratePerKm = deliveryFeeRatePerKm?.number_value || 200;
+      const minFee = deliveryFeeMin?.number_value || 500;
 
-    const calculatedFee =
-      currencyConfig.baseFee + distanceKm * currencyConfig.ratePerKm;
-    return Math.max(currencyConfig.minFee, calculatedFee);
+      this.logger.log(
+        `Calculating delivery fee for country ${countryCode}: base=${baseFee}, rate=${ratePerKm}/km, min=${minFee}, distance=${distanceKm}km`
+      );
+
+      const calculatedFee = baseFee + distanceKm * ratePerKm;
+      const finalFee = Math.max(minFee, calculatedFee);
+
+      this.logger.log(
+        `Delivery fee calculated: ${calculatedFee} -> ${finalFee} (min fee applied: ${
+          finalFee === minFee
+        })`
+      );
+
+      return finalFee;
+    } catch (error) {
+      this.logger.error(
+        `Failed to calculate tiered delivery fee for country ${countryCode}:`,
+        error
+      );
+
+      // Fallback to hardcoded GA values if configuration lookup fails
+      const fallbackConfig = { baseFee: 300, ratePerKm: 200, minFee: 500 };
+      const calculatedFee =
+        fallbackConfig.baseFee + distanceKm * fallbackConfig.ratePerKm;
+      return Math.max(fallbackConfig.minFee, calculatedFee);
+    }
   }
 
   /**

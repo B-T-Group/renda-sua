@@ -4,6 +4,7 @@
 - "!include public_agent_addresses.yaml"
 - "!include public_agents.yaml"
 - "!include public_airtel_money_payments.yaml"
+- "!include public_application_configurations.yaml"
 - "!include public_brands.yaml"
 - "!include public_business_addresses.yaml"
 - "!include public_business_inventory.yaml"
