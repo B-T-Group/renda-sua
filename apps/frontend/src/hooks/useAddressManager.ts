@@ -230,10 +230,8 @@ export const useAddressManager = (config: AddressManagerConfig) => {
       const addressKey = `${entityType}_addresses`;
       const addressData = result[addressKey] || [];
 
-      // Extract the nested address objects from the junction table
-      const addresses = addressData
-        .map((item: any) => item.address)
-        .filter(Boolean);
+      // Keep the structure consistent with the state type
+      const addresses = addressData.filter((item: any) => item.address);
 
       setAddresses(addresses);
     } catch (err) {
