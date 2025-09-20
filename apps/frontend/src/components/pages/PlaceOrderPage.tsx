@@ -68,7 +68,7 @@ const PlaceOrderPage: React.FC = () => {
     deliveryFee,
     loading: deliveryFeeLoading,
     error: deliveryFeeError,
-  } = useDeliveryFee(selectedItem?.id || null);
+  } = useDeliveryFee(selectedItem?.id || null, selectedAddressId);
 
   // Get client addresses
   const {
@@ -707,17 +707,24 @@ const PlaceOrderPage: React.FC = () => {
                       return (
                         <MenuItem key={address.id} value={address.id}>
                           <Box>
-                            <Typography variant="body2">
-                              {addressText}
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                              }}
+                            >
+                              <Typography variant="body2">
+                                {addressText}
+                              </Typography>
                               {address.is_primary && (
                                 <Chip
                                   label="Primary"
                                   size="small"
                                   color="primary"
-                                  sx={{ ml: 1 }}
                                 />
                               )}
-                            </Typography>
+                            </Box>
                             <Typography
                               variant="caption"
                               color="text.secondary"

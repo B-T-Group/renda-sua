@@ -392,6 +392,13 @@ export class OrdersController {
 
   @Get('item/:itemId/deliveryFee')
   @ApiOperation({ summary: 'Get estimated delivery fee for an item' })
+  @ApiQuery({
+    name: 'addressId',
+    required: false,
+    type: String,
+    description:
+      'Address ID to calculate delivery fee to (uses primary address if not provided)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Delivery fee calculated successfully',
@@ -436,10 +443,14 @@ export class OrdersController {
       },
     },
   })
-  async getItemDeliveryFee(@Param('itemId') itemId: string) {
+  async getItemDeliveryFee(
+    @Param('itemId') itemId: string,
+    @Query('addressId') addressId?: string
+  ) {
     try {
       const deliveryFeeInfo = await this.ordersService.calculateItemDeliveryFee(
-        itemId
+        itemId,
+        addressId
       );
 
       return {

@@ -10,7 +10,10 @@ export interface DeliveryFeeResponse {
   message: string;
 }
 
-export const useDeliveryFee = (itemId: string | null) => {
+export const useDeliveryFee = (
+  itemId: string | null,
+  addressId?: string | null
+) => {
   const [deliveryFee, setDeliveryFee] = useState<DeliveryFeeResponse | null>(
     null
   );
@@ -30,9 +33,10 @@ export const useDeliveryFee = (itemId: string | null) => {
       setError(null);
 
       try {
-        const response = await apiClient.get(
-          `/orders/item/${itemId}/deliveryFee`
-        );
+        const url = addressId
+          ? `/orders/item/${itemId}/deliveryFee?addressId=${addressId}`
+          : `/orders/item/${itemId}/deliveryFee`;
+        const response = await apiClient.get(url);
 
         if (response.data.success) {
           setDeliveryFee(response.data);
@@ -52,7 +56,7 @@ export const useDeliveryFee = (itemId: string | null) => {
     };
 
     fetchDeliveryFee();
-  }, [itemId, apiClient]);
+  }, [itemId, addressId, apiClient]);
 
   return {
     deliveryFee,

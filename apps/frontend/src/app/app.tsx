@@ -91,7 +91,7 @@ function App() {
       {/* Global Account Information for authenticated users (excluding clients) */}
       {isAuthenticated && userType !== 'client' && (
         <AccountInformation
-          onRefresh={() => {}}
+          onRefresh={undefined}
           compactView={false}
           showTransactions={true}
         />

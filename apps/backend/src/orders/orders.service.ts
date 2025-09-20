@@ -2038,7 +2038,8 @@ export class OrdersService {
 
     // Calculate delivery fee using the new method
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
-      orderData.item.business_inventory_id
+      orderData.item.business_inventory_id,
+      orderData.delivery_address?.id
     );
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
@@ -2704,7 +2705,10 @@ export class OrdersService {
    * Calculate delivery fee for a given item based on distance
    * Uses tiered pricing model with fallback to delivery_fees table
    */
-  async calculateItemDeliveryFee(itemId: string): Promise<{
+  async calculateItemDeliveryFee(
+    itemId: string,
+    addressId?: string
+  ): Promise<{
     deliveryFee: number;
     distance?: number;
     method: 'distance_based' | 'flat_fee';
@@ -2723,9 +2727,10 @@ export class OrdersService {
         throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
       }
 
-      // Get user's primary address
+      // Get user's address (use provided addressId or fallback to primary address)
+      const targetAddressId = addressId || user.addresses?.[0]?.id || '';
       const userAddresses = await this.addressesService.getAddressesByIds([
-        user.addresses?.[0]?.id || '',
+        targetAddressId,
       ]);
       const userAddress = userAddresses[0];
       if (!userAddress) {
