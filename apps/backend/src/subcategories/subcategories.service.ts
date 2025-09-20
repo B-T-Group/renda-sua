@@ -11,7 +11,11 @@ export class SubcategoriesService {
 
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
-  async getAllSubcategories(search?: string, category_id?: string) {
+  async getAllSubcategories(
+    search?: string,
+    category_id?: string,
+    status?: string
+  ) {
     const query = `
       query GetAllSubcategories($where: item_sub_categories_bool_exp) {
         item_sub_categories(
@@ -22,6 +26,7 @@ export class SubcategoriesService {
           name
           description
           item_category_id
+          status
           created_at
           updated_at
           item_category {
@@ -39,7 +44,7 @@ export class SubcategoriesService {
 
     let whereClause: any = {};
 
-    if (search || category_id) {
+    if (search || category_id || status) {
       whereClause = {
         _and: [],
       };
@@ -56,6 +61,12 @@ export class SubcategoriesService {
       if (category_id) {
         whereClause._and.push({
           item_category_id: { _eq: parseInt(category_id, 10) },
+        });
+      }
+
+      if (status) {
+        whereClause._and.push({
+          status: { _eq: status },
         });
       }
     }
@@ -75,6 +86,7 @@ export class SubcategoriesService {
           name
           description
           item_category_id
+          status
           created_at
           updated_at
           item_category {
@@ -121,16 +133,18 @@ export class SubcategoriesService {
     }
 
     const mutation = `
-      mutation CreateSubcategory($name: String!, $description: String!, $item_category_id: Int!) {
+      mutation CreateSubcategory($name: String!, $description: String!, $item_category_id: Int!, $status: String!) {
         insert_item_sub_categories_one(object: {
           name: $name,
           description: $description,
-          item_category_id: $item_category_id
+          item_category_id: $item_category_id,
+          status: $status
         }) {
           id
           name
           description
           item_category_id
+          status
           created_at
           updated_at
           item_category {
@@ -145,6 +159,7 @@ export class SubcategoriesService {
       name: createSubcategoryDto.name,
       description: createSubcategoryDto.description,
       item_category_id: createSubcategoryDto.item_category_id,
+      status: createSubcategoryDto.status || 'draft',
     });
 
     this.logger.log(

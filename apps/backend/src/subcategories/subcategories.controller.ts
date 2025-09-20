@@ -31,12 +31,14 @@ export interface CreateSubcategoryDto {
   name: string;
   description: string;
   item_category_id: number;
+  status?: 'draft' | 'active';
 }
 
 export interface UpdateSubcategoryDto {
   name?: string;
   description?: string;
   item_category_id?: number;
+  status?: 'draft' | 'active';
 }
 
 @ApiTags('subcategories')
@@ -54,12 +56,14 @@ export class SubcategoriesController {
   })
   async getAllSubcategories(
     @Query('search') search?: string,
-    @Query('category_id') category_id?: string
+    @Query('category_id') category_id?: string,
+    @Query('status') status?: string
   ) {
     try {
       const subcategories = await this.subcategoriesService.getAllSubcategories(
         search,
-        category_id
+        category_id,
+        status
       );
       return {
         success: true,

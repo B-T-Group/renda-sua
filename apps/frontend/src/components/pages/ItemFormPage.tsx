@@ -29,11 +29,37 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import { useAi } from '../../hooks/useAi';
 import { useBrands } from '../../hooks/useBrands';
-import { useCategories } from '../../hooks/useCategory';
+import {
+  ItemCategory,
+  ItemSubCategory,
+  useCategories,
+} from '../../hooks/useCategory';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
+
+// Extended types for create options
+interface CreateCategoryOption {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  isCreateOption: true;
+  createValue: string;
+}
+
+interface CreateSubCategoryOption {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  isCreateOption: true;
+  createValue: string;
+}
+
+type CategoryOption = ItemCategory | CreateCategoryOption;
+type SubCategoryOption = ItemSubCategory | CreateSubCategoryOption;
 
 const GET_ALL_SKUS = `
   query GetAllSkus {
@@ -135,6 +161,8 @@ const ItemFormPage: React.FC = () => {
     loading: categoriesLoading,
     error: categoriesError,
     getSubCategoriesByCategory,
+    createCategory,
+    createSubcategory,
   } = useCategories();
 
   useEffect(() => {
@@ -499,93 +527,324 @@ const ItemFormPage: React.FC = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth disabled={loading || categoriesLoading}>
-                <InputLabel>
-                  {t('business.items.category', 'Category')}
-                </InputLabel>
-                <Select
-                  value={selectedCategoryId || ''}
-                  onChange={(e) => {
-                    const categoryId = e.target.value;
-                    setSelectedCategoryId(categoryId);
-                    // Clear subcategory when category changes
+              <Autocomplete
+                freeSolo
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
+                options={categories as CategoryOption[]}
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') {
+                    return option;
+                  }
+                  return option.name;
+                }}
+                value={
+                  categories.find(
+                    (category) => category.id === selectedCategoryId
+                  ) || null
+                }
+                onChange={async (_, newValue) => {
+                  if (typeof newValue === 'string' && newValue.trim()) {
+                    // User typed a new category name
+                    try {
+                      const newCategory = await createCategory(newValue.trim());
+                      setSelectedCategoryId(newCategory.id);
+                      // Clear subcategory when category changes
+                      handleInputChange('item_sub_category_id', null);
+                      setSelectedSubCategoryId(null);
+                    } catch (err) {
+                      console.error('Failed to create category:', err);
+                      enqueueSnackbar('Failed to create category', {
+                        variant: 'error',
+                      });
+                    }
+                  } else if (newValue && typeof newValue === 'object') {
+                    // Check if it's a "create new" option
+                    if (
+                      'isCreateOption' in newValue &&
+                      newValue.isCreateOption
+                    ) {
+                      try {
+                        const newCategory = await createCategory(
+                          newValue.createValue
+                        );
+                        setSelectedCategoryId(newCategory.id);
+                        // Clear subcategory when category changes
+                        handleInputChange('item_sub_category_id', null);
+                        setSelectedSubCategoryId(null);
+                      } catch (err) {
+                        console.error('Failed to create category:', err);
+                        enqueueSnackbar('Failed to create category', {
+                          variant: 'error',
+                        });
+                      }
+                    } else {
+                      // User selected an existing category
+                      setSelectedCategoryId((newValue as ItemCategory).id);
+                      // Clear subcategory when category changes
+                      handleInputChange('item_sub_category_id', null);
+                      setSelectedSubCategoryId(null);
+                    }
+                  } else {
+                    // User cleared the selection
+                    setSelectedCategoryId(null);
                     handleInputChange('item_sub_category_id', null);
                     setSelectedSubCategoryId(null);
-                  }}
-                  label={t('business.items.category', 'Category')}
-                >
-                  {categories.map((category) => (
-                    <MenuItem key={category.id} value={category.id}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label={t('business.items.category', 'Category')}
+                    disabled={loading || categoriesLoading}
+                    helperText={
+                      categoriesLoading
+                        ? 'Loading categories...'
+                        : 'Type to search or create a new category'
+                    }
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props}>
+                    <Box>
+                      {'isCreateOption' in option && option.isCreateOption ? (
+                        <>
+                          <Typography variant="body1" color="primary">
+                            {option.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.description}
+                          </Typography>
+                        </>
+                      ) : (
+                        <>
+                          <Typography variant="body1">{option.name}</Typography>
+                          {option.description && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {option.description}
+                            </Typography>
+                          )}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ ml: 1 }}
+                          >
+                            ({option.status})
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={categoriesLoading}
+                filterOptions={(options, { inputValue }) => {
+                  const filtered = options.filter((option) =>
+                    option.name.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+
+                  // Add "Create new" option if input doesn't match existing options
+                  const inputValueTrimmed = inputValue.trim();
+                  const isExisting = options.some(
+                    (option) =>
+                      option.name.toLowerCase() ===
+                      inputValueTrimmed.toLowerCase()
+                  );
+
+                  if (inputValueTrimmed && !isExisting) {
+                    return [
+                      ...filtered,
+                      {
+                        id: 'create-new',
+                        name: `Add "${inputValueTrimmed}"`,
+                        description: 'Create a new category',
+                        status: 'draft',
+                        isCreateOption: true as const,
+                        createValue: inputValueTrimmed,
+                      } as CreateCategoryOption,
+                    ];
+                  }
+
+                  return filtered;
+                }}
+              />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth disabled={loading || categoriesLoading}>
-                <InputLabel>
-                  {t('business.items.subCategory', 'Sub Category')}
-                </InputLabel>
-                <Select
-                  value={selectedSubCategoryId || ''}
-                  onChange={(e) => {
-                    handleInputChange(
-                      'item_sub_category_id',
-                      e.target.value as unknown as number
-                    );
-                    setSelectedSubCategoryId(
-                      e.target.value as unknown as number
-                    );
-                  }}
-                  label={t('business.items.subCategory', 'Sub Category')}
-                >
-                  {categoriesLoading && (
-                    <MenuItem value="" disabled>
-                      {t(
-                        'business.items.loadingSubCategories',
-                        'Loading subcategories...'
+              <Autocomplete
+                freeSolo
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
+                options={
+                  selectedCategoryId
+                    ? (getSubCategoriesByCategory(
+                        selectedCategoryId
+                      ) as SubCategoryOption[])
+                    : []
+                }
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') {
+                    return option;
+                  }
+                  return option.name;
+                }}
+                value={
+                  selectedCategoryId
+                    ? getSubCategoriesByCategory(selectedCategoryId).find(
+                        (sub) => sub.id === selectedSubCategoryId
+                      ) || null
+                    : null
+                }
+                onChange={async (_, newValue) => {
+                  if (
+                    typeof newValue === 'string' &&
+                    newValue.trim() &&
+                    selectedCategoryId
+                  ) {
+                    // User typed a new subcategory name
+                    try {
+                      const newSubcategory = await createSubcategory(
+                        newValue.trim(),
+                        selectedCategoryId
+                      );
+                      setSelectedSubCategoryId(newSubcategory.id);
+                      handleInputChange(
+                        'item_sub_category_id',
+                        newSubcategory.id
+                      );
+                    } catch (err) {
+                      console.error('Failed to create subcategory:', err);
+                      enqueueSnackbar('Failed to create subcategory', {
+                        variant: 'error',
+                      });
+                    }
+                  } else if (newValue && typeof newValue === 'object') {
+                    // Check if it's a "create new" option
+                    if (
+                      'isCreateOption' in newValue &&
+                      newValue.isCreateOption
+                    ) {
+                      try {
+                        const newSubcategory = await createSubcategory(
+                          newValue.createValue,
+                          selectedCategoryId as number
+                        );
+                        setSelectedSubCategoryId(newSubcategory.id);
+                        handleInputChange(
+                          'item_sub_category_id',
+                          newSubcategory.id
+                        );
+                      } catch (err) {
+                        console.error('Failed to create subcategory:', err);
+                        enqueueSnackbar('Failed to create subcategory', {
+                          variant: 'error',
+                        });
+                      }
+                    } else {
+                      // User selected an existing subcategory
+                      setSelectedSubCategoryId(
+                        (newValue as ItemSubCategory).id
+                      );
+                      handleInputChange(
+                        'item_sub_category_id',
+                        (newValue as ItemSubCategory).id
+                      );
+                    }
+                  } else {
+                    // User cleared the selection
+                    setSelectedSubCategoryId(null);
+                    handleInputChange('item_sub_category_id', null);
+                  }
+                }}
+                disabled={!selectedCategoryId || loading || categoriesLoading}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label={t('business.items.subCategory', 'Sub Category')}
+                    disabled={
+                      !selectedCategoryId || loading || categoriesLoading
+                    }
+                    helperText={
+                      !selectedCategoryId
+                        ? 'Select a category first'
+                        : categoriesLoading
+                        ? 'Loading subcategories...'
+                        : 'Type to search or create a new subcategory'
+                    }
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props}>
+                    <Box>
+                      {'isCreateOption' in option && option.isCreateOption ? (
+                        <>
+                          <Typography variant="body1" color="primary">
+                            {option.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.description}
+                          </Typography>
+                        </>
+                      ) : (
+                        <>
+                          <Typography variant="body1">{option.name}</Typography>
+                          {option.description && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {option.description}
+                            </Typography>
+                          )}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ ml: 1 }}
+                          >
+                            ({option.status})
+                          </Typography>
+                        </>
                       )}
-                    </MenuItem>
-                  )}
-                  {!categoriesLoading && !selectedCategoryId && (
-                    <MenuItem value="" disabled>
-                      {t(
-                        'business.items.selectCategoryFirst',
-                        'Select a category first'
-                      )}
-                    </MenuItem>
-                  )}
-                  {!categoriesLoading &&
-                    selectedCategoryId &&
-                    getSubCategoriesByCategory(selectedCategoryId).length ===
-                      0 && (
-                      <MenuItem value="" disabled>
-                        {t(
-                          'business.items.noSubCategories',
-                          'No subcategories available'
-                        )}
-                      </MenuItem>
-                    )}
-                  {!categoriesLoading && selectedCategoryId
-                    ? getSubCategoriesByCategory(selectedCategoryId).map(
-                        (subCategory) => (
-                          <MenuItem key={subCategory.id} value={subCategory.id}>
-                            {subCategory.name}
-                          </MenuItem>
-                        )
-                      )
-                    : !categoriesLoading &&
-                      categories.flatMap((category) =>
-                        category.item_sub_categories.map((subCategory) => (
-                          <MenuItem key={subCategory.id} value={subCategory.id}>
-                            {subCategory.name}
-                          </MenuItem>
-                        ))
-                      )}
-                </Select>
-              </FormControl>
+                    </Box>
+                  </li>
+                )}
+                loading={categoriesLoading}
+                filterOptions={(options, { inputValue }) => {
+                  const filtered = options.filter((option) =>
+                    option.name.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+
+                  // Add "Create new" option if input doesn't match existing options
+                  const inputValueTrimmed = inputValue.trim();
+                  const isExisting = options.some(
+                    (option) =>
+                      option.name.toLowerCase() ===
+                      inputValueTrimmed.toLowerCase()
+                  );
+
+                  if (inputValueTrimmed && !isExisting && selectedCategoryId) {
+                    return [
+                      ...filtered,
+                      {
+                        id: 'create-new-subcategory',
+                        name: `Add "${inputValueTrimmed}"`,
+                        description: 'Create a new subcategory',
+                        status: 'draft',
+                        isCreateOption: true as const,
+                        createValue: inputValueTrimmed,
+                      } as CreateSubCategoryOption,
+                    ];
+                  }
+
+                  return filtered;
+                }}
+              />
             </Grid>
 
             {/* Pricing */}

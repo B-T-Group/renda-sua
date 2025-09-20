@@ -30,11 +30,13 @@ interface RequestWithUser extends Request {
 export interface CreateCategoryDto {
   name: string;
   description: string;
+  status?: 'draft' | 'active';
 }
 
 export interface UpdateCategoryDto {
   name?: string;
   description?: string;
+  status?: 'draft' | 'active';
 }
 
 @ApiTags('categories')
@@ -50,9 +52,15 @@ export class CategoriesController {
     status: 200,
     description: 'List of categories retrieved successfully',
   })
-  async getAllCategories(@Query('search') search?: string) {
+  async getAllCategories(
+    @Query('search') search?: string,
+    @Query('status') status?: string
+  ) {
     try {
-      const categories = await this.categoriesService.getAllCategories(search);
+      const categories = await this.categoriesService.getAllCategories(
+        search,
+        status
+      );
       return {
         success: true,
         data: categories,

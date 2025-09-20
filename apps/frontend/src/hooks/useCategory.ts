@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 import { useGraphQLClient } from './useGraphQLClient';
 
 export interface ItemCategory {
   id: number;
   name: string;
   description: string;
+  status: 'draft' | 'active';
   created_at: string;
   updated_at: string;
   item_sub_categories: ItemSubCategory[];
@@ -15,6 +17,7 @@ export interface ItemSubCategory {
   name: string;
   description: string;
   item_category_id: number;
+  status: 'draft' | 'active';
   created_at: string;
   updated_at: string;
 }
@@ -25,10 +28,17 @@ interface UseCategoriesResult {
   error: string | null;
   fetchCategories: () => Promise<void>;
   getSubCategoriesByCategory: (categoryId: number) => ItemSubCategory[];
+  createCategory: (name: string, description?: string) => Promise<ItemCategory>;
+  createSubcategory: (
+    name: string,
+    categoryId: number,
+    description?: string
+  ) => Promise<ItemSubCategory>;
 }
 
 export const useCategories = (): UseCategoriesResult => {
   const { client } = useGraphQLClient();
+  const apiClient = useApiClient();
   const [categories, setCategories] = useState<ItemCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +56,7 @@ export const useCategories = (): UseCategoriesResult => {
             id
             name
             description
+            status
             created_at
             updated_at
             item_sub_categories(order_by: { name: asc }) {
@@ -53,6 +64,7 @@ export const useCategories = (): UseCategoriesResult => {
               name
               description
               item_category_id
+              status
               created_at
               updated_at
             }
@@ -80,6 +92,84 @@ export const useCategories = (): UseCategoriesResult => {
     [categories]
   );
 
+  const createCategory = useCallback(
+    async (name: string, description: string = ''): Promise<ItemCategory> => {
+      try {
+        const response = await apiClient.post('/categories', {
+          name,
+          description,
+          status: 'draft',
+        });
+
+        if (response.data.success) {
+          const newCategory = response.data.data;
+          // Add the new category to the local state
+          setCategories((prev) => [
+            ...prev,
+            { ...newCategory, item_sub_categories: [] },
+          ]);
+          return newCategory;
+        } else {
+          throw new Error(response.data.message || 'Failed to create category');
+        }
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to create category';
+        throw new Error(errorMessage);
+      }
+    },
+    [apiClient]
+  );
+
+  const createSubcategory = useCallback(
+    async (
+      name: string,
+      categoryId: number,
+      description: string = ''
+    ): Promise<ItemSubCategory> => {
+      try {
+        const response = await apiClient.post('/subcategories', {
+          name,
+          description,
+          item_category_id: categoryId,
+          status: 'draft',
+        });
+
+        if (response.data.success) {
+          const newSubcategory = response.data.data;
+          // Add the new subcategory to the local state
+          setCategories((prev) =>
+            prev.map((category) =>
+              category.id === categoryId
+                ? {
+                    ...category,
+                    item_sub_categories: [
+                      ...category.item_sub_categories,
+                      newSubcategory,
+                    ],
+                  }
+                : category
+            )
+          );
+          return newSubcategory;
+        } else {
+          throw new Error(
+            response.data.message || 'Failed to create subcategory'
+          );
+        }
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to create subcategory';
+        throw new Error(errorMessage);
+      }
+    },
+    [apiClient]
+  );
+
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
@@ -90,5 +180,7 @@ export const useCategories = (): UseCategoriesResult => {
     error,
     fetchCategories,
     getSubCategoriesByCategory,
+    createCategory,
+    createSubcategory,
   };
 };

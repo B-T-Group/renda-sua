@@ -8,7 +8,7 @@ export class CategoriesService {
 
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
-  async getAllCategories(search?: string) {
+  async getAllCategories(search?: string, status?: string) {
     const query = `
       query GetAllCategories($where: item_categories_bool_exp) {
         item_categories(
@@ -18,6 +18,7 @@ export class CategoriesService {
           id
           name
           description
+          status
           created_at
           updated_at
           item_sub_categories_aggregate {
@@ -29,17 +30,31 @@ export class CategoriesService {
       }
     `;
 
-    const whereClause = search
-      ? {
+    let whereClause: any = {};
+
+    if (search || status) {
+      whereClause = {
+        _and: [],
+      };
+
+      if (search) {
+        whereClause._and.push({
           _or: [
             { name: { _ilike: `%${search}%` } },
             { description: { _ilike: `%${search}%` } },
           ],
-        }
-      : {};
+        });
+      }
+
+      if (status) {
+        whereClause._and.push({
+          status: { _eq: status },
+        });
+      }
+    }
 
     const result = await this.hasuraSystemService.executeQuery(query, {
-      where: whereClause,
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
     });
 
     return result.item_categories || [];
@@ -52,6 +67,7 @@ export class CategoriesService {
           id
           name
           description
+          status
           created_at
           updated_at
           item_sub_categories_aggregate {
@@ -94,14 +110,16 @@ export class CategoriesService {
     }
 
     const mutation = `
-      mutation CreateCategory($name: String!, $description: String!) {
+      mutation CreateCategory($name: String!, $description: String!, $status: String!) {
         insert_item_categories_one(object: {
           name: $name,
-          description: $description
+          description: $description,
+          status: $status
         }) {
           id
           name
           description
+          status
           created_at
           updated_at
         }
@@ -112,10 +130,11 @@ export class CategoriesService {
       const result = await this.hasuraSystemService.executeMutation(mutation, {
         name: createCategoryDto.name,
         description: createCategoryDto.description,
+        status: createCategoryDto.status || 'draft',
       });
 
       this.logger.log(
-        `Category created: ${result.insert_item_categories_one.name}`
+        `Category created: ${result.insert_item_categories_one.name} with status: ${result.insert_item_categories_one.status}`
       );
       return result.insert_item_categories_one;
     } catch (error: any) {
