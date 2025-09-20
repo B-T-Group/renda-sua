@@ -157,7 +157,7 @@ export class AiService {
   private buildPrompt(dto: GenerateDescriptionDto): string {
     const language = dto.language === 'fr' ? 'French' : 'English';
 
-    let prompt = `Generate a compelling product description in ${language} for the following product:\n\n`;
+    let prompt = `Generate a compelling e-commerce 2 lines product description in ${language} for the following product:\n\n`;
     prompt += `Product Name: ${dto.name}\n`;
 
     if (dto.sku) {
