@@ -370,8 +370,14 @@ const ItemFormPage: React.FC = () => {
     }
   };
 
-  const handleBack = () => {
+  const handleBackToItems = () => {
     navigate('/business/items');
+  };
+
+  const handleBackToItem = () => {
+    if (itemId) {
+      navigate(`/business/items/${itemId}`);
+    }
   };
 
   const handleGenerateDescription = async () => {
@@ -463,13 +469,28 @@ const ItemFormPage: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={handleBack}
-            variant="outlined"
-          >
-            {t('common.back')}
-          </Button>
+          {isEditMode ? (
+            <>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={handleBackToItem}
+                variant="outlined"
+              >
+                {t('business.items.backToItem')}
+              </Button>
+              <Button onClick={handleBackToItems} variant="text" sx={{ ml: 1 }}>
+                {t('business.items.backToItemsList')}
+              </Button>
+            </>
+          ) : (
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBackToItems}
+              variant="outlined"
+            >
+              {t('common.back')}
+            </Button>
+          )}
           <Typography variant="h4" component="h1">
             {isEditMode
               ? t('business.items.editItem')
@@ -1206,7 +1227,7 @@ const ItemFormPage: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                 <Button
                   variant="outlined"
-                  onClick={handleBack}
+                  onClick={isEditMode ? handleBackToItem : handleBackToItems}
                   disabled={loading}
                 >
                   {t('common.cancel')}

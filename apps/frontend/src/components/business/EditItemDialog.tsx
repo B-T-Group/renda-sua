@@ -1,3 +1,9 @@
+/**
+ * @deprecated This dialog component is deprecated.
+ * Use the dedicated edit page at /business/items/edit/${itemId} instead.
+ * This component is kept for backward compatibility with example components only.
+ */
+
 import {
   Alert,
   Box,

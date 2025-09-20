@@ -62,7 +62,6 @@ import { useItems } from '../../hooks/useItems';
 import AddItemDialog from '../business/AddItemDialog';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import CSVUploadDialog from '../business/CSVUploadDialog';
-import EditItemDialog from '../business/EditItemDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -223,12 +222,10 @@ const BusinessItemsPage: React.FC = () => {
   } = useUserProfileContext();
   const [tabValue, setTabValue] = useState(0);
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [showEditItemDialog, setShowEditItemDialog] = useState(false);
   const [showCSVUploadDialog, setShowCSVUploadDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
   const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -311,11 +308,6 @@ const BusinessItemsPage: React.FC = () => {
   const handleViewItem = (item: any) => {
     // Navigate to the view page
     navigate(`/business/items/${item.id}`);
-  };
-
-  const handleCloseEditItemDialog = () => {
-    setShowEditItemDialog(false);
-    setEditingItem(null);
   };
 
   const handleDeleteItem = (item: any) => {
@@ -1135,13 +1127,6 @@ const BusinessItemsPage: React.FC = () => {
         brands={brands}
         itemSubCategories={itemSubCategories}
         loading={itemsLoading}
-      />
-
-      <EditItemDialog
-        open={showEditItemDialog}
-        onClose={handleCloseEditItemDialog}
-        item={editingItem}
-        businessId={profile.business.id}
       />
 
       <UpdateInventoryDialog

@@ -33,7 +33,6 @@ import { useItemImages } from '../../hooks/useItemImages';
 import { Item, useItems } from '../../hooks/useItems';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { ItemImage } from '../../types/image';
-import EditItemDialog from '../business/EditItemDialog';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import SEOHead from '../seo/SEOHead';
@@ -73,7 +72,6 @@ export default function ItemViewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [selectedInventory, setSelectedInventory] = useState<
@@ -127,7 +125,9 @@ export default function ItemViewPage() {
   }, [profile?.business?.id, fetchBusinessLocations]);
 
   const handleEditItem = () => {
-    setShowEditDialog(true);
+    if (item?.id) {
+      navigate(`/business/items/edit/${item.id}`);
+    }
   };
 
   const handleUpdateInventory = (
@@ -277,20 +277,6 @@ export default function ItemViewPage() {
           >
             {t('business.inventory.editItemButton')}
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<InventoryIcon />}
-            onClick={handleUpdateInventoryClick}
-          >
-            {t('business.inventory.manageInventory', 'Manage Inventory')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<PhotoCameraIcon />}
-            onClick={handleManageImages}
-          >
-            {t('business.inventory.manageImages')}
-          </Button>
         </Stack>
       </Box>
 
@@ -334,6 +320,18 @@ export default function ItemViewPage() {
                 </Box>
               </Box>
             )}
+
+            {/* Manage Images Button */}
+            <Box sx={{ p: 2, pt: 0, mt: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<PhotoCameraIcon />}
+                onClick={handleManageImages}
+                fullWidth
+              >
+                {t('business.inventory.manageImages')}
+              </Button>
+            </Box>
           </Card>
         </Grid>
 
@@ -464,6 +462,21 @@ export default function ItemViewPage() {
                   </Typography>
                 </Box>
               </Stack>
+
+              {/* Add To New Location Button */}
+              <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<InventoryIcon />}
+                  onClick={handleUpdateInventoryClick}
+                  fullWidth
+                >
+                  {t(
+                    'business.inventory.addToNewLocation',
+                    'Add To New Location'
+                  )}
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -629,13 +642,6 @@ export default function ItemViewPage() {
       </Paper>
 
       {/* Dialogs */}
-      <EditItemDialog
-        open={showEditDialog}
-        onClose={() => setShowEditDialog(false)}
-        item={item}
-        businessId={profile?.business?.id}
-      />
-
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
