@@ -8,6 +8,7 @@ import {
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
+  Settings as SettingsIcon,
   Group as UsersIcon,
 } from '@mui/icons-material';
 import {
@@ -136,6 +137,14 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#ff9800',
       path: '/content-management/categories',
+    },
+    {
+      title: t('business.dashboard.manageConfigurations'),
+      description: t('business.dashboard.manageConfigurationsDescription'),
+      icon: <SettingsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#607d8b',
+      path: '/admin/configurations',
     },
   ];
 
@@ -276,18 +285,20 @@ const BusinessDashboard: React.FC = () => {
       </Box>
 
       {/* Admin Management Section */}
-      <Box sx={{ mb: 6 }}>
-        <Typography
-          variant="h5"
-          gutterBottom
-          sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
-        >
-          {t('business.dashboard.adminManagement')}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {renderCards(adminCards)}
+      {profile.business.is_admin && (
+        <Box sx={{ mb: 6 }}>
+          <Typography
+            variant="h5"
+            gutterBottom
+            sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
+          >
+            {t('business.dashboard.adminManagement')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {renderCards(adminCards)}
+          </Box>
         </Box>
-      </Box>
+      )}
 
       {/* Quick Stats Section */}
       <Box sx={{ mt: 6 }}>

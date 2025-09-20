@@ -46,6 +46,14 @@ export type {
   GenerateDescriptionResponse,
 } from './useAi';
 
+// Application configurations hook
+export { useApplicationConfigurations } from './useApplicationConfigurations';
+export type {
+  ApplicationConfiguration,
+  UpdateConfigurationRequest,
+  UseApplicationConfigurationsResult,
+} from './useApplicationConfigurations';
+
 // Payment hooks
 export { useAirtelMoney } from './useAirtelMoney';
 export { useMtnMomoTopUp } from './useMtnMomoTopUp';

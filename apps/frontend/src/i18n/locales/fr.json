@@ -100,7 +100,9 @@
       "manageBrands": "Gérer les Marques",
       "manageBrandsDescription": "Gérer les marques de produits et fabricants",
       "manageCategories": "Gérer les Catégories",
-      "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits"
+      "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits",
+      "manageConfigurations": "Gérer les Configurations",
+      "manageConfigurationsDescription": "Gérer les configurations et paramètres de l'application"
     },
     "items": {
       "title": "Articles",
@@ -838,6 +840,83 @@
       "businessNotAllowed": "Les utilisateurs entreprise ne peuvent pas évaluer les commandes.",
       "submit": "Soumettre l'Évaluation",
       "submitting": "Soumission en cours..."
+    }
+  },
+  "admin": {
+    "configurations": {
+      "title": "Configurations de l'Application",
+      "pageTitle": "Gestion des Configurations",
+      "pageDescription": "Gérer les configurations et paramètres de l'application",
+      "pageKeywords": "admin, configuration, paramètres, gestion",
+      "noBusinessProfile": "Profil entreprise non trouvé",
+      "unauthorized": "Vous n'êtes pas autorisé à accéder à cette page",
+      "noConfigurations": "Aucune configuration trouvée",
+      "editTitle": "Modifier la Configuration",
+      "deleteTitle": "Supprimer la Configuration",
+      "deleteMessage": "Êtes-vous sûr de vouloir supprimer cette configuration ? Cette action ne peut pas être annulée.",
+      "configKey": "Clé de Configuration",
+      "configKeyHelp": "La clé de configuration ne peut pas être modifiée",
+      "configName": "Nom de Configuration",
+      "description": "Description",
+      "dataType": "Type de Données",
+      "stringValue": "Valeur String",
+      "numberValue": "Valeur Numérique",
+      "booleanValue": "Valeur Booléenne",
+      "jsonValue": "Valeur JSON",
+      "arrayValue": "Valeur Array",
+      "dateValue": "Valeur Date",
+      "countryCode": "Code Pays",
+      "countryCodePlaceholder": "Laisser vide pour une configuration globale",
+      "countryCodeHelp": "Code pays ISO 3166-1 alpha-2 (ex: CM, US)",
+      "status": "Statut",
+      "tags": "Étiquettes",
+      "tagsHelp": "Étiquettes séparées par des virgules pour la catégorisation",
+      "currentTags": "Étiquettes Actuelles",
+      "validationRules": "Règles de Validation",
+      "minValue": "Valeur Min",
+      "maxValue": "Valeur Max",
+      "allowedValues": "Valeurs Autorisées",
+      "allowedValuesHelp": "Valeurs autorisées séparées par des virgules pour la validation de type énumération",
+      "jsonHelp": "Entrez du JSON valide",
+      "arrayHelp": "Valeurs séparées par des virgules",
+      "global": "Global",
+      "filterCountryCode": "Code Pays",
+      "filterStatus": "Statut",
+      "filterTags": "Étiquettes",
+      "table": {
+        "key": "Clé",
+        "name": "Nom",
+        "type": "Type",
+        "value": "Valeur",
+        "country": "Pays",
+        "status": "Statut",
+        "tags": "Étiquettes",
+        "version": "Version"
+      },
+      "statuses": {
+        "active": "Actif",
+        "inactive": "Inactif",
+        "deprecated": "Déprécié"
+      },
+      "dataTypes": {
+        "string": "String",
+        "number": "Nombre",
+        "boolean": "Booléen",
+        "json": "JSON",
+        "array": "Array",
+        "date": "Date",
+        "currency": "Devise"
+      },
+      "errors": {
+        "nameRequired": "Le nom de configuration est requis",
+        "dataTypeRequired": "Le type de données est requis",
+        "stringValueRequired": "La valeur string est requise",
+        "numberValueRequired": "La valeur numérique est requise",
+        "booleanValueRequired": "La valeur booléenne est requise",
+        "jsonValueRequired": "La valeur JSON est requise",
+        "arrayValueRequired": "La valeur array est requise",
+        "dateValueRequired": "La valeur date est requise"
+      }
     }
   }
 }

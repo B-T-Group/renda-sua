@@ -2892,7 +2892,7 @@ export class OrdersService {
           // Calculate fee using tiered pricing model
           const deliveryFee = await this.calculateTieredDeliveryFee(
             distanceKm,
-            'GA' // Default to GA, should be determined from address or order context
+            this.extractCountryCode(clientAddress, order) ?? 'GA'
           );
 
           return {
@@ -2928,7 +2928,7 @@ export class OrdersService {
   /**
    * Extract country code from address or order context
    */
-  private extractCountryCode(address?: any, order?: any): string {
+  extractCountryCode(address?: any, order?: any): string {
     // Try to get country from address first
     if (address?.country) {
       // Convert full country name to ISO 3166-1 alpha-2 code

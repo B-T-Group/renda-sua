@@ -110,7 +110,9 @@
       "manageBrands": "Manage Brands",
       "manageBrandsDescription": "Manage product brands and manufacturers",
       "manageCategories": "Manage Categories",
-      "manageCategoriesDescription": "Manage product categories and subcategories"
+      "manageCategoriesDescription": "Manage product categories and subcategories",
+      "manageConfigurations": "Manage Configurations",
+      "manageConfigurationsDescription": "Manage application configurations and settings"
     },
     "items": {
       "title": "Items",
@@ -982,6 +984,83 @@
       "clientToAgent": "Client → Agent",
       "clientToItem": "Client → Item",
       "agentToClient": "Agent → Client"
+    }
+  },
+  "admin": {
+    "configurations": {
+      "title": "Application Configurations",
+      "pageTitle": "Configuration Management",
+      "pageDescription": "Manage application configurations and settings",
+      "pageKeywords": "admin, configuration, settings, management",
+      "noBusinessProfile": "Business profile not found",
+      "unauthorized": "You are not authorized to access this page",
+      "noConfigurations": "No configurations found",
+      "editTitle": "Edit Configuration",
+      "deleteTitle": "Delete Configuration",
+      "deleteMessage": "Are you sure you want to delete this configuration? This action cannot be undone.",
+      "configKey": "Configuration Key",
+      "configKeyHelp": "Configuration key cannot be changed",
+      "configName": "Configuration Name",
+      "description": "Description",
+      "dataType": "Data Type",
+      "stringValue": "String Value",
+      "numberValue": "Number Value",
+      "booleanValue": "Boolean Value",
+      "jsonValue": "JSON Value",
+      "arrayValue": "Array Value",
+      "dateValue": "Date Value",
+      "countryCode": "Country Code",
+      "countryCodePlaceholder": "Leave empty for global configuration",
+      "countryCodeHelp": "ISO 3166-1 alpha-2 country code (e.g., CM, US)",
+      "status": "Status",
+      "tags": "Tags",
+      "tagsHelp": "Comma-separated tags for categorization",
+      "currentTags": "Current Tags",
+      "validationRules": "Validation Rules",
+      "minValue": "Min Value",
+      "maxValue": "Max Value",
+      "allowedValues": "Allowed Values",
+      "allowedValuesHelp": "Comma-separated allowed values for enum-like validation",
+      "jsonHelp": "Enter valid JSON",
+      "arrayHelp": "Comma-separated values",
+      "global": "Global",
+      "filterCountryCode": "Country Code",
+      "filterStatus": "Status",
+      "filterTags": "Tags",
+      "table": {
+        "key": "Key",
+        "name": "Name",
+        "type": "Type",
+        "value": "Value",
+        "country": "Country",
+        "status": "Status",
+        "tags": "Tags",
+        "version": "Version"
+      },
+      "statuses": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "deprecated": "Deprecated"
+      },
+      "dataTypes": {
+        "string": "String",
+        "number": "Number",
+        "boolean": "Boolean",
+        "json": "JSON",
+        "array": "Array",
+        "date": "Date",
+        "currency": "Currency"
+      },
+      "errors": {
+        "nameRequired": "Configuration name is required",
+        "dataTypeRequired": "Data type is required",
+        "stringValueRequired": "String value is required",
+        "numberValueRequired": "Number value is required",
+        "booleanValueRequired": "Boolean value is required",
+        "jsonValueRequired": "JSON value is required",
+        "arrayValueRequired": "Array value is required",
+        "dateValueRequired": "Date value is required"
+      }
     }
   }
 }

@@ -12,6 +12,7 @@ import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
 import AboutUsPage from '../components/pages/AboutUsPage';
+import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -167,6 +168,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminManageBusinesses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/configurations"
+              element={
+                <ProtectedRoute>
+                  <AdminConfigurationPage />
                 </ProtectedRoute>
               }
             />
