@@ -135,6 +135,33 @@ const BusinessLocationsPage: React.FC = () => {
     }
   };
 
+  const handleToggleLocationStatus = async (location: BusinessLocation) => {
+    try {
+      await updateLocation(location.id, {
+        is_active: !location.is_active,
+      });
+
+      const statusMessage = location.is_active
+        ? t('business.locations.locationDeactivated')
+        : t('business.locations.locationActivated');
+
+      enqueueSnackbar(statusMessage, {
+        variant: 'success',
+      });
+
+      // Refresh the locations list
+      fetchLocations();
+    } catch (error) {
+      console.error(
+        'BusinessLocationsPage: Error toggling location status:',
+        error
+      );
+      enqueueSnackbar(t('business.locations.statusUpdateError'), {
+        variant: 'error',
+      });
+    }
+  };
+
   const formatAddress = (address: BusinessLocation['address']) => {
     if (!address) return '';
     return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
@@ -192,115 +219,263 @@ const BusinessLocationsPage: React.FC = () => {
             {t('business.locations.noLocations')}
           </Alert>
         ) : (
-          <Grid container spacing={2}>
-            {locations.map((location) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                <Card>
-                  <CardContent>
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                      mb={2}
-                    >
-                      <Typography variant="h6" component="div">
-                        {location.name}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteLocation(location)}
-                        disabled={location.is_primary}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
+          <Box>
+            {/* Active Locations */}
+            {locations.filter((location) => location.is_active).length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography
+                  variant="h6"
+                  gutterBottom
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                  <Chip
+                    label={t('business.locations.active')}
+                    color="success"
+                    size="small"
+                    sx={{ mr: 2 }}
+                  />
+                  {t('business.locations.activeLocations')}
+                </Typography>
+                <Grid container spacing={2}>
+                  {locations
+                    .filter((location) => location.is_active)
+                    .map((location) => (
+                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
+                        <Card>
+                          <CardContent>
+                            <Box
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                              mb={2}
+                            >
+                              <Typography variant="h6" component="div">
+                                {location.name}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteLocation(location)}
+                                disabled={location.is_primary}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
 
-                    <Box mb={2}>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        display="flex"
-                        alignItems="center"
-                        mb={1}
-                      >
-                        <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {formatAddress(location.address)}
-                      </Typography>
-                      {location.phone && (
-                        <Typography variant="body2" color="text.secondary">
-                          <span role="img" aria-label="Phone">
-                            📞
-                          </span>{' '}
-                          {location.phone}
-                        </Typography>
-                      )}
-                      {location.email && (
-                        <Typography variant="body2" color="text.secondary">
-                          <span role="img" aria-label="Email">
-                            ✉️
-                          </span>{' '}
-                          {location.email}
-                        </Typography>
-                      )}
-                    </Box>
+                            <Box mb={2}>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                display="flex"
+                                alignItems="center"
+                                mb={1}
+                              >
+                                <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
+                                {formatAddress(location.address)}
+                              </Typography>
+                              {location.phone && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  <span role="img" aria-label="Phone">
+                                    📞
+                                  </span>{' '}
+                                  {location.phone}
+                                </Typography>
+                              )}
+                              {location.email && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  <span role="img" aria-label="Email">
+                                    ✉️
+                                  </span>{' '}
+                                  {location.email}
+                                </Typography>
+                              )}
+                            </Box>
 
-                    <Box>
-                      {location.is_primary && (
-                        <Chip
-                          label={t('business.locations.primary')}
-                          color="primary"
-                          size="small"
-                          sx={{ mb: 1 }}
-                        />
-                      )}
-                    </Box>
+                            <Box>
+                              {location.is_primary && (
+                                <Chip
+                                  label={t('business.locations.primary')}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ mb: 1 }}
+                                />
+                              )}
+                            </Box>
 
-                    <Box sx={{ mt: 2 }}>
-                      <Chip
-                        label={t(
-                          `business.locations.${location.location_type}`
-                        )}
-                        color="secondary"
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <Chip
-                        label={
-                          location.is_active
-                            ? t('business.locations.active')
-                            : t('business.locations.inactive')
-                        }
-                        color={location.is_active ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </Box>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      startIcon={<EditIcon />}
-                      onClick={() => handleEditLocation(location)}
-                    >
-                      {t('business.locations.editLocation')}
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        updateLocation(location.id, {
-                          is_active: !location.is_active,
-                        })
-                      }
-                    >
-                      {location.is_active
-                        ? t('business.locations.deactivate')
-                        : t('business.locations.activate')}
-                    </Button>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                            <Box sx={{ mt: 2 }}>
+                              <Chip
+                                label={t(
+                                  `business.locations.${location.location_type}`
+                                )}
+                                color="secondary"
+                                size="small"
+                                sx={{ mr: 1 }}
+                              />
+                              <Chip
+                                label={t('business.locations.active')}
+                                color="success"
+                                size="small"
+                              />
+                            </Box>
+                          </CardContent>
+                          <CardActions>
+                            <Button
+                              size="small"
+                              startIcon={<EditIcon />}
+                              onClick={() => handleEditLocation(location)}
+                            >
+                              {t('business.locations.editLocation')}
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                handleToggleLocationStatus(location)
+                              }
+                            >
+                              {t('business.locations.deactivate')}
+                            </Button>
+                          </CardActions>
+                        </Card>
+                      </Grid>
+                    ))}
+                </Grid>
+              </Box>
+            )}
+
+            {/* Inactive Locations */}
+            {locations.filter((location) => !location.is_active).length > 0 && (
+              <Box>
+                <Typography
+                  variant="h6"
+                  gutterBottom
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                  <Chip
+                    label={t('business.locations.inactive')}
+                    color="default"
+                    size="small"
+                    sx={{ mr: 2 }}
+                  />
+                  {t('business.locations.inactiveLocations')}
+                </Typography>
+                <Grid container spacing={2}>
+                  {locations
+                    .filter((location) => !location.is_active)
+                    .map((location) => (
+                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
+                        <Card sx={{ opacity: 0.7 }}>
+                          <CardContent>
+                            <Box
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                              mb={2}
+                            >
+                              <Typography variant="h6" component="div">
+                                {location.name}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteLocation(location)}
+                                disabled={location.is_primary}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
+
+                            <Box mb={2}>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                display="flex"
+                                alignItems="center"
+                                mb={1}
+                              >
+                                <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
+                                {formatAddress(location.address)}
+                              </Typography>
+                              {location.phone && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  <span role="img" aria-label="Phone">
+                                    📞
+                                  </span>{' '}
+                                  {location.phone}
+                                </Typography>
+                              )}
+                              {location.email && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  <span role="img" aria-label="Email">
+                                    ✉️
+                                  </span>{' '}
+                                  {location.email}
+                                </Typography>
+                              )}
+                            </Box>
+
+                            <Box>
+                              {location.is_primary && (
+                                <Chip
+                                  label={t('business.locations.primary')}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ mb: 1 }}
+                                />
+                              )}
+                            </Box>
+
+                            <Box sx={{ mt: 2 }}>
+                              <Chip
+                                label={t(
+                                  `business.locations.${location.location_type}`
+                                )}
+                                color="secondary"
+                                size="small"
+                                sx={{ mr: 1 }}
+                              />
+                              <Chip
+                                label={t('business.locations.inactive')}
+                                color="default"
+                                size="small"
+                              />
+                            </Box>
+                          </CardContent>
+                          <CardActions>
+                            <Button
+                              size="small"
+                              startIcon={<EditIcon />}
+                              onClick={() => handleEditLocation(location)}
+                            >
+                              {t('business.locations.editLocation')}
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                handleToggleLocationStatus(location)
+                              }
+                            >
+                              {t('business.locations.activate')}
+                            </Button>
+                          </CardActions>
+                        </Card>
+                      </Grid>
+                    ))}
+                </Grid>
+              </Box>
+            )}
+          </Box>
         )}
       </Box>
 
