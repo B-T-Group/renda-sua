@@ -9,9 +9,11 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -68,6 +70,9 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   onAddressChange,
 }) => {
   const { t } = useTranslation();
+  const [hasPostalCode, setHasPostalCode] = useState<boolean>(
+    (addressData.postal_code ?? '').trim() !== ''
+  );
 
   // Location data
   const [countries, setCountries] = useState<any[]>([]);
@@ -433,6 +438,24 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             mt: 1,
           }}
         >
+          {/* Ask if user has a postal code */}
+          <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hasPostalCode}
+                  onChange={(e) => {
+                    const value = e.target.checked;
+                    setHasPostalCode(value);
+                    if (!value) {
+                      onAddressChange({ ...addressData, postal_code: '' });
+                    }
+                  }}
+                />
+              }
+              label="Do you have a postal code?"
+            />
+          </Box>
           {/* Address Line 1 */}
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
             <TextField
@@ -509,14 +532,15 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           </FormControl>
 
           {/* Postal Code */}
-          <TextField
-            fullWidth
-            label="Postal Code"
-            value={addressData.postal_code}
-            onChange={(e) => handleInputChange('postal_code', e.target.value)}
-            required
-            helperText="Enter 00000 if postal codes are not supported in your area"
-          />
+          {hasPostalCode ? (
+            <TextField
+              fullWidth
+              label="Postal Code"
+              value={addressData.postal_code}
+              onChange={(e) => handleInputChange('postal_code', e.target.value)}
+              required
+            />
+          ) : null}
 
           {/* Address Type (optional) */}
           {showAddressType && (

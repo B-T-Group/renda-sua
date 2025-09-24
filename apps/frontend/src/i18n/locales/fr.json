@@ -4,6 +4,7 @@
     "cancel": "Annuler",
     "close": "Fermer",
     "save": "Enregistrer",
+    "update": "Mettre à jour",
     "saving": "Enregistrement...",
     "loading": "Chargement...",
     "search": "Rechercher",
@@ -695,6 +696,11 @@
       "title": "Articles d'Entreprise - Gérez votre Catalogue de Produits",
       "description": "Gérez votre catalogue de produits d'entreprise, ajoutez de nouveaux articles, mettez à jour les prix et organisez l'inventaire dans tous les emplacements",
       "keywords": "articles d'entreprise, catalogue de produits, gestion d'inventaire, gestion d'articles, produits d'entreprise"
+    },
+    "business-locations": {
+      "title": "Emplacements d'Entreprise - Gérez vos Sites",
+      "description": "Gérez les emplacements de votre entreprise, ajoutez de nouveaux sites, configurez les adresses et organisez vos opérations multi-sites",
+      "keywords": "emplacements d'entreprise, gestion de sites, adresses d'entreprise, opérations multi-sites, configuration d'emplacements"
     },
     "public-items": {
       "title": "Parcourir les Articles - Découvrez les Produits Locaux",

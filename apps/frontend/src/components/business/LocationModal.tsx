@@ -63,7 +63,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     address_line_2: '',
     city: '',
     state: '',
-    postal_code: '',
+    postal_code: '00000',
     country: '',
   });
 
@@ -106,7 +106,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         address_line_2: '',
         city: '',
         state: '',
-        postal_code: '',
+        postal_code: '00000',
         country: '',
       });
     }
