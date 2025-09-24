@@ -39,6 +39,7 @@ const PlaceOrderPage: React.FC = () => {
 
   // State
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
@@ -102,10 +103,17 @@ const PlaceOrderPage: React.FC = () => {
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
-      return; // Don't submit if override is enabled but no phone number provided
+      setError(
+        t(
+          'orders.phoneNumberRequired',
+          'Phone number is required when using a different phone number'
+        )
+      );
+      return;
     }
 
     setLoading(true);
+    setError(null); // Clear any previous errors
     try {
       const orderData = {
         item: {
@@ -121,7 +129,10 @@ const PlaceOrderPage: React.FC = () => {
       const response = await apiClient.post('/orders', orderData);
 
       if (!response.data.success) {
-        throw new Error(response.data.message || 'Failed to create order');
+        throw new Error(
+          response.data.message ||
+            t('orders.createOrderFailed', 'Failed to create order')
+        );
       }
 
       // Navigate to order confirmation page
@@ -132,7 +143,20 @@ const PlaceOrderPage: React.FC = () => {
       });
     } catch (error: unknown) {
       console.error('Error creating order:', error);
-      // You might want to show an error message here
+
+      // Set user-friendly error message
+      let errorMessage = t(
+        'orders.createOrderError',
+        'An error occurred while creating your order. Please try again.'
+      );
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1017,6 +1041,13 @@ const PlaceOrderPage: React.FC = () => {
                   </Alert>
                 )}
               </Box>
+
+              {/* Error Message */}
+              {error && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  <Typography variant="body2">{error}</Typography>
+                </Alert>
+              )}
 
               {/* Place Order Button */}
               <Box
