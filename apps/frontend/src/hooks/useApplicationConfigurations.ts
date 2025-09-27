@@ -50,7 +50,7 @@ export interface UpdateConfigurationRequest {
   boolean_value?: boolean;
   json_value?: object;
   array_value?: string[];
-  date_value?: string;
+  date_value?: string | null;
   country_code?: string | null;
   status?: 'active' | 'inactive' | 'deprecated';
   version?: number;

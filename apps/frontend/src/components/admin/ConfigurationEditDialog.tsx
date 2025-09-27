@@ -50,7 +50,7 @@ export const ConfigurationEditDialog: React.FC<
         boolean_value: configuration.boolean_value,
         json_value: configuration.json_value,
         array_value: configuration.array_value || [],
-        date_value: configuration.date_value || '',
+        date_value: configuration.date_value || null,
         country_code: configuration.country_code || '',
         status: configuration.status,
         tags: configuration.tags || [],
@@ -173,17 +173,24 @@ export const ConfigurationEditDialog: React.FC<
         boolean_value: formData.boolean_value,
         json_value: formData.json_value,
         array_value: formData.array_value,
-        date_value: formData.date_value,
+        date_value:
+          formData.date_value && formData.date_value.trim() !== ''
+            ? formData.date_value
+            : null,
         tags: formData.tags,
         min_value: formData.min_value,
         max_value: formData.max_value,
         allowed_values: formData.allowed_values,
       };
 
-      // Remove undefined values
-      Object.keys(editableData).forEach(
-        (key) => editableData[key] === undefined && delete editableData[key]
-      );
+      // Remove undefined values and convert empty strings to null for date_value
+      Object.keys(editableData).forEach((key) => {
+        if (editableData[key] === undefined) {
+          delete editableData[key];
+        } else if (key === 'date_value' && editableData[key] === '') {
+          editableData[key] = null;
+        }
+      });
 
       await onSave(configuration.id, editableData);
       onClose();
