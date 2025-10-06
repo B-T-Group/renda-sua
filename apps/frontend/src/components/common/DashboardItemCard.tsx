@@ -18,7 +18,6 @@ import {
   Typography,
 } from '@mui/material';
 import React from 'react';
-import NoImage from '../../assets/no-image.svg';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 interface DashboardItemCardProps {
@@ -51,8 +50,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     if (item.item.item_images && item.item.item_images.length > 0) {
       return item.item.item_images[0].image_url;
     }
-    return NoImage;
+    return null;
   };
+
+  const primaryImage = getPrimaryImage(inventory);
 
   return (
     <Card
@@ -61,21 +62,80 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        border: '1px solid',
+        borderColor: 'divider',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
+          borderColor: 'primary.main',
+        },
       }}
     >
       {/* Image Section - Top */}
-      <Box sx={{ width: '100%', height: '200px', flexShrink: 0 }}>
-        <CardMedia
-          component="img"
-          height="200"
-          image={getPrimaryImage(inventory)}
-          alt={inventory.item.name}
+      <Box
+        sx={{
+          width: '100%',
+          height: '240px',
+          flexShrink: 0,
+          overflow: 'hidden',
+          position: 'relative',
+          bgcolor: 'grey.300',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {primaryImage ? (
+          <CardMedia
+            component="img"
+            height="240"
+            image={primaryImage}
+            alt={inventory.item.name}
+            sx={{
+              objectFit: 'cover',
+              width: '100%',
+              height: '100%',
+              transition: 'transform 0.3s ease',
+              '.MuiCard-root:hover &': {
+                transform: 'scale(1.05)',
+              },
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              bgcolor: 'grey.300',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              No Image
+            </Typography>
+          </Box>
+        )}
+        {/* Price badge overlay */}
+        <Box
           sx={{
-            objectFit: 'cover',
-            width: '100%',
-            height: '100%',
+            position: 'absolute',
+            bottom: 12,
+            left: 12,
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(8px)',
+            px: 2,
+            py: 1,
+            borderRadius: 2,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
           }}
-        />
+        >
+          <Typography variant="h6" color="primary" fontWeight="bold">
+            {formatCurrency(inventory.selling_price, inventory.item.currency)}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Content Section - Bottom */}
@@ -95,28 +155,22 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             )}
             <Typography
               variant="h6"
-              sx={{ mb: 0.5, lineHeight: 1.2, fontSize: '1rem' }}
+              sx={{
+                mb: 0.5,
+                lineHeight: 1.2,
+                fontSize: '1rem',
+                fontWeight: 600,
+              }}
             >
               {inventory.item.name}
             </Typography>
             <Box
               sx={{
                 display: 'flex',
-                justifyContent: 'space-between',
+                justifyContent: 'flex-end',
                 alignItems: 'center',
               }}
             >
-              <Typography
-                variant="h6"
-                color="primary"
-                fontWeight="bold"
-                sx={{ fontSize: '1.1rem' }}
-              >
-                {formatCurrency(
-                  inventory.selling_price,
-                  inventory.item.currency
-                )}
-              </Typography>
               <Chip
                 label={`${inventory.computed_available_quantity} available`}
                 color={
