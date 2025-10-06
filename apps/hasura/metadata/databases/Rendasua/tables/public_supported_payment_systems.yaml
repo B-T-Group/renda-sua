@@ -1,0 +1,54 @@
+table:
+  name: supported_payment_systems
+  schema: public
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
