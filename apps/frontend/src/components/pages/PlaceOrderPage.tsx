@@ -1,4 +1,14 @@
-import { ArrowBack, LocationOn, ShoppingCart } from '@mui/icons-material';
+import {
+  Add,
+  ArrowBack,
+  CheckCircle,
+  LocalShipping,
+  LocationOn,
+  Phone,
+  Security,
+  ShoppingCart,
+  Verified,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -8,16 +18,22 @@ import {
   CardMedia,
   Chip,
   CircularProgress,
+  Container,
   Divider,
   FormControl,
   FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
+  Paper,
   Select,
+  Skeleton,
+  Stack,
   Switch,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,12 +46,209 @@ import { useInventoryItem } from '../../hooks/useInventoryItem';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
+// Loading Skeleton Component
+const OrderPageSkeleton: React.FC = () => {
+  return (
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Skeleton variant="text" width={200} height={40} sx={{ mb: 3 }} />
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <Skeleton
+            variant="rectangular"
+            height={400}
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+          <Skeleton
+            variant="rectangular"
+            height={300}
+            sx={{ borderRadius: 2 }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Skeleton
+            variant="rectangular"
+            height={500}
+            sx={{ borderRadius: 2 }}
+          />
+        </Grid>
+      </Grid>
+    </Container>
+  );
+};
+
+// Order Summary Component
+interface OrderSummaryProps {
+  selectedItem: {
+    selling_price: number;
+    item: {
+      name: string;
+      currency: string;
+      item_images?: Array<{ image_url: string }>;
+    };
+  };
+  quantity: number;
+  deliveryFee: number | null;
+  deliveryFeeLoading: boolean;
+  deliveryFeeError: string | null;
+  formatCurrency: (amount: number, currency?: string) => string;
+  onSubmit: () => void;
+  loading: boolean;
+  disabled: boolean;
+  isMobile: boolean;
+}
+
+const OrderSummary: React.FC<OrderSummaryProps> = ({
+  selectedItem,
+  quantity,
+  deliveryFee,
+  deliveryFeeLoading,
+  deliveryFeeError,
+  formatCurrency,
+  onSubmit,
+  loading,
+  disabled,
+  isMobile,
+}) => {
+  const { t } = useTranslation();
+  const subtotal = selectedItem.selling_price * quantity;
+  const total = subtotal + (deliveryFee || 0);
+
+  return (
+    <Paper
+      elevation={isMobile ? 0 : 2}
+      sx={{
+        p: 3,
+        position: isMobile ? 'fixed' : 'sticky',
+        top: isMobile ? 'auto' : 100,
+        bottom: isMobile ? 0 : 'auto',
+        left: isMobile ? 0 : 'auto',
+        right: isMobile ? 0 : 'auto',
+        zIndex: isMobile ? 1000 : 'auto',
+        bgcolor: 'background.paper',
+        borderRadius: isMobile ? 0 : 2,
+        borderTop: isMobile ? 1 : 0,
+        borderColor: 'divider',
+        boxShadow: isMobile ? '0 -4px 12px rgba(0,0,0,0.1)' : 2,
+      }}
+    >
+      <Typography variant="h6" gutterBottom fontWeight="bold">
+        {t('orders.orderSummary', 'Order Summary')}
+      </Typography>
+
+      <Divider sx={{ my: 2 }} />
+
+      {/* Item Summary */}
+      <Stack spacing={2}>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {selectedItem.item.item_images?.[0] && (
+            <Box
+              component="img"
+              src={selectedItem.item.item_images[0].image_url}
+              alt={selectedItem.item.name}
+              sx={{
+                width: 60,
+                height: 60,
+                borderRadius: 1,
+                objectFit: 'cover',
+              }}
+            />
+          )}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" fontWeight="medium" noWrap>
+              {selectedItem.item.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.quantity', 'Quantity')}: {quantity}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Price Breakdown */}
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('orders.subtotal', 'Subtotal')}
+            </Typography>
+            <Typography variant="body2" fontWeight="medium">
+              {formatCurrency(subtotal, selectedItem.item.currency)}
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('orders.deliveryFee', 'Delivery Fee')}
+            </Typography>
+            <Typography variant="body2" fontWeight="medium">
+              {deliveryFeeLoading ? (
+                <CircularProgress size={14} />
+              ) : deliveryFeeError ? (
+                <span style={{ color: 'error.main' }}>
+                  {t('common.error', 'Error')}
+                </span>
+              ) : (
+                formatCurrency(deliveryFee || 0, selectedItem.item.currency)
+              )}
+            </Typography>
+          </Box>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" fontWeight="bold">
+              {t('orders.total', 'Total')}
+            </Typography>
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              {formatCurrency(total, selectedItem.item.currency)}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Trust Indicators */}
+        <Stack direction="row" spacing={1} sx={{ py: 2 }}>
+          <Security fontSize="small" color="action" />
+          <Typography variant="caption" color="text.secondary">
+            {t('orders.securePayment', 'Secure Payment')}
+          </Typography>
+        </Stack>
+
+        {/* CTA Button */}
+        <Button
+          onClick={onSubmit}
+          variant="contained"
+          size="large"
+          fullWidth
+          disabled={disabled || loading}
+          startIcon={
+            loading ? <CircularProgress size={20} /> : <ShoppingCart />
+          }
+          sx={{
+            py: 1.5,
+            fontSize: '1rem',
+            fontWeight: 600,
+            textTransform: 'none',
+            boxShadow: 3,
+            '&:hover': {
+              boxShadow: 6,
+            },
+          }}
+        >
+          {loading
+            ? t('orders.placingOrder', 'Placing Order...')
+            : t('orders.confirmOrder', 'Confirm Order')}
+        </Button>
+      </Stack>
+    </Paper>
+  );
+};
+
 const PlaceOrderPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const apiClient = useApiClient();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // State
   const [loading, setLoading] = useState(false);
@@ -216,877 +429,757 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
+  // Show loading skeleton
   if (inventoryLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <OrderPageSkeleton />;
   }
 
+  // Show not found message
   if (!selectedItem) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h5" gutterBottom>
-          {t('orders.itemNotFound', 'Item not found')}
-        </Typography>
-        <Button onClick={handleBack} startIcon={<ArrowBack />}>
-          {t('common.goBack', 'Go Back')}
-        </Button>
-      </Box>
+      <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
+        <Paper sx={{ p: 6 }}>
+          <Typography variant="h4" gutterBottom color="text.secondary">
+            {t('orders.itemNotFound', 'Item not found')}
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            {t(
+              'orders.itemNotFoundMessage',
+              'The item you are looking for is no longer available.'
+            )}
+          </Typography>
+          <Button
+            onClick={handleBack}
+            variant="contained"
+            startIcon={<ArrowBack />}
+            size="large"
+          >
+            {t('common.goBack', 'Go Back')}
+          </Button>
+        </Paper>
+      </Container>
     );
   }
 
-  const totalCost =
-    selectedItem.selling_price * quantity + (deliveryFee?.deliveryFee || 0);
+  // Calculate if order can be placed
+  const canPlaceOrder =
+    !loading &&
+    selectedAddressId &&
+    addresses.length > 0 &&
+    profile?.phone_number &&
+    (!useDifferentPhone || overridePhoneNumber.trim());
 
   return (
-    <Box
-      sx={{
-        p: { xs: 2, sm: 3 },
-        maxWidth: 1200,
-        mx: 'auto',
-        minHeight: '100vh',
-      }}
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          mb: { xs: 2, sm: 3 },
-          display: 'flex',
-          gap: 2,
-          flexDirection: { xs: 'column', sm: 'row' },
-          alignItems: { xs: 'flex-start', sm: 'center' },
-        }}
-      >
-        <Button
-          onClick={handleBack}
-          startIcon={<ArrowBack />}
-          size="small"
-          sx={{ alignSelf: { xs: 'flex-start', sm: 'auto' } }}
-        >
-          {t('common.goBack', 'Go Back')}
-        </Button>
-        <Typography
-          variant="h4"
-          component="h1"
-          sx={{
-            fontSize: { xs: '1.75rem', sm: '2.125rem' },
-            textAlign: { xs: 'left', sm: 'center' },
-          }}
-        >
-          {t('orders.placeOrder', 'Place Order')}
-        </Typography>
-      </Box>
+    <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: isMobile ? 20 : 4 }}>
+      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+        {/* Header with Progress */}
+        <Box sx={{ mb: 4 }}>
+          <Button
+            onClick={handleBack}
+            startIcon={<ArrowBack />}
+            size="small"
+            sx={{ mb: 2 }}
+          >
+            {t('common.goBack', 'Go Back')}
+          </Button>
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight="bold"
+            gutterBottom
+            sx={{ fontSize: { xs: '1.75rem', md: '2.5rem' } }}
+          >
+            {t('orders.completeYourOrder', 'Complete Your Order')}
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            {t(
+              'orders.reviewDetails',
+              'Review your order details and confirm your delivery information'
+            )}
+          </Typography>
+        </Box>
 
-      <Grid container spacing={{ xs: 2, sm: 3 }}>
-        {/* Order Details Section - Full Width */}
-        <Grid size={{ xs: 12 }}>
-          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-              >
-                {t('orders.orderDetails', 'Order Details')}
-              </Typography>
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
-              <Grid container spacing={{ xs: 2, sm: 3 }}>
-                {/* Item Image and Basic Info */}
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  {/* Item Image */}
-                  {selectedItem.item.item_images &&
-                    selectedItem.item.item_images.length > 0 && (
-                      <Box sx={{ mb: 2 }}>
+        {/* Main Content Grid */}
+        <Grid container spacing={3}>
+          {/* Left Column - Order Details */}
+          <Grid size={{ xs: 12, lg: 8 }}>
+            <Stack spacing={3}>
+              {/* Product Card */}
+              <Card>
+                <CardContent sx={{ p: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: 3,
+                    }}
+                  >
+                    <ShoppingCart color="primary" />
+                    <Typography variant="h6" fontWeight="bold">
+                      {t('orders.productDetails', 'Product Details')}
+                    </Typography>
+                  </Box>
+
+                  <Grid container spacing={3}>
+                    <Grid size={{ xs: 12, md: 5 }}>
+                      {selectedItem.item.item_images?.[0] ? (
                         <CardMedia
                           component="img"
-                          height={200}
                           image={selectedItem.item.item_images[0].image_url}
-                          alt={
-                            selectedItem.item.item_images[0].alt_text ||
-                            selectedItem.item.name
-                          }
+                          alt={selectedItem.item.name}
                           sx={{
-                            borderRadius: 1,
-                            objectFit: 'cover',
+                            borderRadius: 2,
                             width: '100%',
-                            height: { xs: 150, sm: 200 },
+                            height: { xs: 200, md: 250 },
+                            objectFit: 'cover',
                           }}
                         />
-                      </Box>
-                    )}
+                      ) : (
+                        <Box
+                          sx={{
+                            borderRadius: 2,
+                            width: '100%',
+                            height: { xs: 200, md: 250 },
+                            bgcolor: 'grey.200',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Typography color="text.secondary">
+                            {t('common.noImage', 'No Image')}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Grid>
 
-                  {/* Basic Item Information */}
-                  <Box sx={{ mb: 2 }}>
-                    <Typography
-                      variant="h5"
-                      gutterBottom
-                      sx={{
-                        fontSize: { xs: '1.25rem', sm: '1.5rem' },
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {selectedItem.item.name}
-                    </Typography>
-
-                    {selectedItem.item.brand && (
-                      <Typography
-                        variant="body2"
-                        color="primary"
-                        fontWeight="bold"
-                        sx={{ mb: 1 }}
-                      >
-                        {selectedItem.item.brand.name}
+                    <Grid size={{ xs: 12, md: 7 }}>
+                      <Typography variant="h5" fontWeight="bold" gutterBottom>
+                        {selectedItem.item.name}
                       </Typography>
-                    )}
 
-                    <Typography
-                      variant="h6"
-                      color="primary"
-                      sx={{
-                        mb: 2,
-                        fontSize: { xs: '1.1rem', sm: '1.25rem' },
-                      }}
-                    >
-                      {formatCurrency(
-                        selectedItem.selling_price,
-                        selectedItem.item.currency
-                      )}
-                    </Typography>
-
-                    {/* Special Handling Chips */}
-                    <Box sx={{ mb: 2 }}>
-                      {selectedItem.item.is_fragile && (
-                        <Chip
-                          label="Fragile"
-                          color="warning"
-                          size="small"
-                          sx={{ mr: 0.5, mb: 0.5 }}
-                        />
-                      )}
-                      {selectedItem.item.is_perishable && (
-                        <Chip
-                          label="Perishable"
-                          color="error"
-                          size="small"
-                          sx={{ mr: 0.5, mb: 0.5 }}
-                        />
-                      )}
-                      {selectedItem.item.requires_special_handling && (
-                        <Chip
-                          label="Special Handling"
-                          color="info"
-                          size="small"
-                          sx={{ mr: 0.5, mb: 0.5 }}
-                        />
-                      )}
-                    </Box>
-                  </Box>
-                </Grid>
-
-                {/* Item Details and Pickup Address */}
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  {/* Detailed Item Information */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle1"
-                      gutterBottom
-                      fontWeight="bold"
-                      sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}
-                    >
-                      {t('orders.itemDetails', 'Item Details')}
-                    </Typography>
-
-                    {selectedItem.item.description && (
-                      <Typography variant="body2" sx={{ mb: 2 }}>
-                        {selectedItem.item.description}
-                      </Typography>
-                    )}
-
-                    <Box
-                      sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
-                    >
-                      {selectedItem.item.sku && (
+                      {selectedItem.item.brand && (
                         <Box
                           sx={{
                             display: 'flex',
-                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 1,
+                            mb: 2,
                           }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            SKU:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.sku}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {selectedItem.item.model && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Model:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.model}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {selectedItem.item.color && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Color:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.color}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {selectedItem.item.weight && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Weight:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.weight}{' '}
-                            {selectedItem.item.weight_unit}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {selectedItem.item.item_sub_category && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <Typography variant="body2" color="text.secondary">
-                            Category:
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {selectedItem.item.item_sub_category.item_category
-                              ?.name || 'Unknown'}{' '}
-                            - {selectedItem.item.item_sub_category.name}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          Available:
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {selectedItem.computed_available_quantity} units
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Grid>
-
-                {/* Pickup Address */}
-                <Grid size={{ xs: 12, sm: 12, md: 4 }}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle1"
-                      gutterBottom
-                      fontWeight="bold"
-                      sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}
-                    >
-                      {t('orders.pickupAddress', 'Pickup Address')}
-                    </Typography>
-
-                    {selectedItem.business_location ? (
-                      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{ mb: 1, fontWeight: 'medium' }}
-                        >
-                          {selectedItem.business_location.name}
-                        </Typography>
-
-                        {selectedItem.business_location.address ? (
-                          <>
-                            <Typography variant="body2" sx={{ mb: 0.5 }}>
-                              <strong>
-                                {
-                                  selectedItem.business_location.address
-                                    .address_line_1
-                                }
-                              </strong>
-                              {selectedItem.business_location.address
-                                .address_line_2 && (
-                                <span>
-                                  ,{' '}
-                                  {
-                                    selectedItem.business_location.address
-                                      .address_line_2
-                                  }
-                                </span>
-                              )}
-                            </Typography>
-
-                            <Typography variant="body2" sx={{ mb: 0.5 }}>
-                              {selectedItem.business_location.address.city},{' '}
-                              {selectedItem.business_location.address.state}{' '}
-                              {
-                                selectedItem.business_location.address
-                                  .postal_code
-                              }
-                            </Typography>
-
-                            <Typography variant="body2" sx={{ mb: 1 }}>
-                              {selectedItem.business_location.address.country}
-                            </Typography>
-                          </>
-                        ) : (
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mb: 1 }}
-                          >
-                            Address information not available
-                          </Typography>
-                        )}
-
-                        <Box
-                          sx={{ display: 'flex', gap: 1, alignItems: 'center' }}
                         >
                           <Chip
-                            label={selectedItem.business_location.location_type}
+                            label={selectedItem.item.brand.name}
                             size="small"
+                            color="primary"
                             variant="outlined"
                           />
-                          {selectedItem.business_location.is_primary && (
-                            <Chip
-                              label="Primary Location"
-                              size="small"
-                              color="primary"
-                            />
-                          )}
                         </Box>
+                      )}
 
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Business:{' '}
-                            {selectedItem.business_location.business.name}
-                          </Typography>
-                          {selectedItem.business_location.business
-                            .is_verified && (
-                            <Chip
-                              label="Verified"
-                              size="small"
-                              color="success"
-                              sx={{ ml: 1 }}
-                            />
-                          )}
-                        </Box>
-                      </Box>
-                    ) : (
-                      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Business location information not available
+                      {selectedItem.item.description && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 2 }}
+                        >
+                          {selectedItem.item.description}
                         </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Grid>
-              </Grid>
+                      )}
 
-              <Divider sx={{ my: 3 }} />
+                      {/* Special Handling Tags */}
+                      {(selectedItem.item.is_fragile ||
+                        selectedItem.item.is_perishable ||
+                        selectedItem.item.requires_special_handling) && (
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          sx={{ mb: 2, flexWrap: 'wrap' }}
+                        >
+                          {selectedItem.item.is_fragile && (
+                            <Chip
+                              label="Fragile"
+                              color="warning"
+                              size="small"
+                            />
+                          )}
+                          {selectedItem.item.is_perishable && (
+                            <Chip
+                              label="Perishable"
+                              color="error"
+                              size="small"
+                            />
+                          )}
+                          {selectedItem.item.requires_special_handling && (
+                            <Chip
+                              label="Special Handling"
+                              color="info"
+                              size="small"
+                            />
+                          )}
+                        </Stack>
+                      )}
 
-              {/* Order Configuration */}
-              <Grid container spacing={{ xs: 2, sm: 2 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  {/* Quantity Selection */}
-                  <FormControl fullWidth sx={{ mb: 2 }} size="small">
-                    <InputLabel>{t('orders.quantity', 'Quantity')}</InputLabel>
-                    <Select
-                      value={quantity}
-                      label={t('orders.quantity', 'Quantity')}
-                      onChange={(e) => setQuantity(e.target.value as number)}
-                      disabled={loading}
-                    >
-                      {Array.from(
-                        {
-                          length: Math.min(
-                            selectedItem.computed_available_quantity,
-                            10
-                          ),
-                        },
-                        (_, i) => i + 1
-                      ).map((num) => (
-                        <MenuItem key={num} value={num}>
-                          {num}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid size={{ xs: 12, sm: 6, md: 9 }}>
-                  {/* Special Instructions */}
-                  <TextField
-                    fullWidth
-                    label={t(
-                      'orders.specialInstructions',
-                      'Special Instructions'
-                    )}
-                    multiline
-                    rows={3}
-                    value={specialInstructions}
-                    onChange={(e) => setSpecialInstructions(e.target.value)}
-                    disabled={loading}
-                    sx={{ mb: 2 }}
-                    size="small"
-                  />
-                </Grid>
-
-                <Grid size={{ xs: 12 }}>
-                  {/* Verified Agent Delivery */}
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        color="primary"
-                        checked={verifiedAgentDelivery}
-                        onChange={(e) =>
-                          setVerifiedAgentDelivery(e.target.checked)
-                        }
-                        disabled={loading}
-                      />
-                    }
-                    label={t(
-                      'orders.requireVerifiedAgent',
-                      'Require verified agent for delivery'
-                    )}
-                  />
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Delivery Address Section */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-              >
-                {t('orders.deliveryAddress', 'Delivery Address')}
-              </Typography>
-
-              {addressesLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : addresses.length === 0 ? (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  <Typography variant="body2">
-                    {t(
-                      'orders.noAddresses',
-                      'No delivery addresses found. Please add an address to your profile.'
-                    )}
-                  </Typography>
-                </Alert>
-              ) : (
-                <FormControl fullWidth>
-                  <InputLabel>
-                    {t('orders.selectAddress', 'Select Delivery Address')}
-                  </InputLabel>
-                  <Select
-                    value={selectedAddressId}
-                    label={t('orders.selectAddress', 'Select Delivery Address')}
-                    onChange={(e) => setSelectedAddressId(e.target.value)}
-                    disabled={loading}
-                  >
-                    {addresses.map((addressWrapper) => {
-                      const address = addressWrapper.address;
-                      const addressText = `${address.address_line_1}, ${address.city}, ${address.state}`;
-                      return (
-                        <MenuItem key={address.id} value={address.id}>
-                          <Box>
+                      {/* Product Specifications */}
+                      <Paper
+                        variant="outlined"
+                        sx={{ p: 2, bgcolor: 'grey.50' }}
+                      >
+                        <Stack spacing={1}>
+                          {selectedItem.item.sku && (
                             <Box
                               sx={{
                                 display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
+                                justifyContent: 'space-between',
                               }}
                             >
-                              <Typography variant="body2">
-                                {addressText}
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                SKU
                               </Typography>
-                              {address.is_primary && (
-                                <Chip
-                                  label="Primary"
-                                  size="small"
-                                  color="primary"
-                                />
-                              )}
+                              <Typography variant="caption" fontWeight="medium">
+                                {selectedItem.item.sku}
+                              </Typography>
                             </Box>
+                          )}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                            }}
+                          >
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              {address.address_type}
+                              {t('orders.availability', 'Availability')}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              fontWeight="medium"
+                              color="success.main"
+                            >
+                              {selectedItem.computed_available_quantity}{' '}
+                              {t('common.inStock', 'in stock')}
                             </Typography>
                           </Box>
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </FormControl>
-              )}
-
-              {/* Selected Address Display */}
-              {selectedAddressId && addresses.length > 0 && (
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    {t('orders.selectedAddress', 'Selected Delivery Address')}
-                  </Typography>
-                  {(() => {
-                    const selectedAddressWrapper = addresses.find(
-                      (addr) => addr.address.id === selectedAddressId
-                    );
-                    if (selectedAddressWrapper) {
-                      const address = selectedAddressWrapper.address;
-                      return (
-                        <Box>
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            <strong>{address.address_line_1}</strong>
-                            {address.address_line_2 && (
-                              <span>, {address.address_line_2}</span>
-                            )}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {address.city}, {address.state}{' '}
-                            {address.postal_code}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            {address.country}
-                          </Typography>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              gap: 1,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Chip
-                              label={address.address_type}
-                              size="small"
-                              variant="outlined"
-                            />
-                            {address.is_primary && (
-                              <Chip
-                                label="Primary"
-                                size="small"
-                                color="primary"
-                              />
-                            )}
-                          </Box>
-                        </Box>
-                      );
-                    }
-                    return null;
-                  })()}
-                </Box>
-              )}
-
-              {/* Add Another Address Button - Always visible when not loading */}
-              {!addressesLoading && (
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={handleOpenAddressDialog}
-                    startIcon={<LocationOn />}
-                  >
-                    {addresses.length === 0
-                      ? t('orders.addAddress', 'Add Address')
-                      : t('orders.addAnotherAddress', 'Add Another Address')}
-                  </Button>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Payment Details Section */}
-        <Grid size={{ xs: 12 }}>
-          <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-              >
-                {t('orders.paymentDetails', 'Payment Details')}
-              </Typography>
-
-              {/* Phone Number Section */}
-              {!profile?.phone_number ? (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {t('orders.phoneNumberRequired', 'Phone Number Required')}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {t(
-                      'orders.phoneNumberRequiredMessage',
-                      'A phone number is required to place an order. Please add your mobile money phone number to your profile.'
-                    )}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{ mt: 1 }}
-                    onClick={() => navigate('/profile')}
-                  >
-                    {t('orders.addPhoneNumber', 'Add Phone Number')}
-                  </Button>
-                </Alert>
-              ) : (
-                <Box sx={{ mb: 2 }}>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      {t(
-                        'orders.paymentRequestInfo',
-                        'Payment Request Information'
-                      )}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      {t(
-                        'orders.paymentRequestMessage',
-                        'A payment request will be sent to your phone number:'
-                      )}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      fontWeight="bold"
-                      color="primary"
-                    >
-                      {useDifferentPhone
-                        ? overridePhoneNumber
-                        : profile.phone_number}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      {t(
-                        'orders.paymentRequestNote',
-                        'Once you accept the payment request, your order will be sent to the merchant.'
-                      )}
-                    </Typography>
-                  </Alert>
-
-                  {/* Phone Number Override */}
-                  <Box sx={{ mb: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={useDifferentPhone}
-                          onChange={(e) =>
-                            setUseDifferentPhone(e.target.checked)
-                          }
-                        />
-                      }
-                      label={t(
-                        'orders.useDifferentPhone',
-                        'Use a different phone number for this order'
-                      )}
-                    />
-
-                    {useDifferentPhone && (
-                      <Box sx={{ mt: 2 }}>
-                        <PhoneInput
-                          value={overridePhoneNumber}
-                          onChange={(value) =>
-                            setOverridePhoneNumber(value || '')
-                          }
-                          label={t(
-                            'orders.overridePhoneNumber',
-                            'Phone Number for Payment'
+                          {selectedItem.item.weight && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {t('common.weight', 'Weight')}
+                              </Typography>
+                              <Typography variant="caption" fontWeight="medium">
+                                {selectedItem.item.weight}{' '}
+                                {selectedItem.item.weight_unit}
+                              </Typography>
+                            </Box>
                           )}
-                          defaultCountry="GA"
-                          fullWidth
-                        />
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Order Configuration */}
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight="bold"
+                    gutterBottom
+                  >
+                    {t('orders.orderConfiguration', 'Order Configuration')}
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormControl fullWidth>
+                        <InputLabel>
+                          {t('orders.quantity', 'Quantity')}
+                        </InputLabel>
+                        <Select
+                          value={quantity}
+                          label={t('orders.quantity', 'Quantity')}
+                          onChange={(e) =>
+                            setQuantity(e.target.value as number)
+                          }
+                          disabled={loading}
+                        >
+                          {Array.from(
+                            {
+                              length: Math.min(
+                                selectedItem.computed_available_quantity,
+                                10
+                              ),
+                            },
+                            (_, i) => i + 1
+                          ).map((num) => (
+                            <MenuItem key={num} value={num}>
+                              {num} {num === 1 ? 'unit' : 'units'}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        fullWidth
+                        label={t(
+                          'orders.specialInstructions',
+                          'Special Instructions'
+                        )}
+                        placeholder={t(
+                          'orders.specialInstructionsPlaceholder',
+                          'Add any special instructions for this order (optional)'
+                        )}
+                        multiline
+                        rows={3}
+                        value={specialInstructions}
+                        onChange={(e) => setSpecialInstructions(e.target.value)}
+                        disabled={loading}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={verifiedAgentDelivery}
+                            onChange={(e) =>
+                              setVerifiedAgentDelivery(e.target.checked)
+                            }
+                            disabled={loading}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {t(
+                                'orders.requireVerifiedAgent',
+                                'Verified Agent Only'
+                              )}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {t(
+                                'orders.verifiedAgentDescription',
+                                'Only verified agents can deliver this order'
+                              )}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Pickup Location Card */}
+              {selectedItem.business_location && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mb: 3,
+                      }}
+                    >
+                      <LocalShipping color="primary" />
+                      <Typography variant="h6" fontWeight="bold">
+                        {t('orders.pickupLocation', 'Pickup Location')}
+                      </Typography>
+                    </Box>
+
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 2,
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {selectedItem.business_location.name}
+                        </Typography>
+                        {selectedItem.business_location.business
+                          .is_verified && (
+                          <Chip
+                            icon={<Verified />}
+                            label={t('common.verified', 'Verified')}
+                            size="small"
+                            color="success"
+                          />
+                        )}
+                      </Box>
+
+                      {selectedItem.business_location.address && (
+                        <Stack spacing={0.5}>
+                          <Typography variant="body2">
+                            {
+                              selectedItem.business_location.address
+                                .address_line_1
+                            }
+                            {selectedItem.business_location.address
+                              .address_line_2 &&
+                              `, ${selectedItem.business_location.address.address_line_2}`}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {selectedItem.business_location.address.city},{' '}
+                            {selectedItem.business_location.address.state}{' '}
+                            {selectedItem.business_location.address.postal_code}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {selectedItem.business_location.business.name}
+                          </Typography>
+                        </Stack>
+                      )}
+                    </Paper>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Delivery Address Card */}
+              <Card>
+                <CardContent sx={{ p: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: 3,
+                    }}
+                  >
+                    <LocationOn color="primary" />
+                    <Typography variant="h6" fontWeight="bold">
+                      {t('orders.deliveryAddress', 'Delivery Address')}
+                    </Typography>
+                  </Box>
+
+                  {addressesLoading ? (
+                    <Box
+                      sx={{ display: 'flex', justifyContent: 'center', py: 3 }}
+                    >
+                      <CircularProgress />
+                    </Box>
+                  ) : addresses.length === 0 ? (
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}
+                    >
+                      <LocationOn
+                        sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
+                      />
+                      <Typography variant="subtitle1" gutterBottom>
+                        {t('orders.noAddresses', 'No delivery address found')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                      >
+                        {t(
+                          'orders.noAddressesMessage',
+                          'Please add a delivery address to continue with your order'
+                        )}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={handleOpenAddressDialog}
+                        startIcon={<Add />}
+                      >
+                        {t('orders.addAddress', 'Add Delivery Address')}
+                      </Button>
+                    </Paper>
+                  ) : (
+                    <>
+                      <FormControl fullWidth sx={{ mb: 2 }}>
+                        <InputLabel>
+                          {t('orders.selectAddress', 'Select Delivery Address')}
+                        </InputLabel>
+                        <Select
+                          value={selectedAddressId}
+                          label={t(
+                            'orders.selectAddress',
+                            'Select Delivery Address'
+                          )}
+                          onChange={(e) => setSelectedAddressId(e.target.value)}
+                          disabled={loading}
+                        >
+                          {addresses.map((addressWrapper) => {
+                            const address = addressWrapper.address;
+                            return (
+                              <MenuItem key={address.id} value={address.id}>
+                                <Box>
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Typography variant="body2">
+                                      {address.address_line_1}, {address.city}
+                                    </Typography>
+                                    {address.is_primary && (
+                                      <Chip
+                                        label="Primary"
+                                        size="small"
+                                        color="primary"
+                                      />
+                                    )}
+                                  </Box>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {address.address_type}
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            );
+                          })}
+                        </Select>
+                      </FormControl>
+
+                      {/* Selected Address Display */}
+                      {selectedAddressId &&
+                        (() => {
+                          const selectedAddressWrapper = addresses.find(
+                            (addr) => addr.address.id === selectedAddressId
+                          );
+                          if (!selectedAddressWrapper) return null;
+                          const address = selectedAddressWrapper.address;
+                          return (
+                            <Paper
+                              variant="outlined"
+                              sx={{ p: 2, bgcolor: 'grey.50' }}
+                            >
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                  mb: 1,
+                                }}
+                              >
+                                <CheckCircle color="success" fontSize="small" />
+                                <Typography
+                                  variant="subtitle2"
+                                  fontWeight="bold"
+                                >
+                                  {t('orders.deliveryTo', 'Delivery to')}
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                {address.address_line_1}
+                                {address.address_line_2 &&
+                                  `, ${address.address_line_2}`}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {address.city}, {address.state}{' '}
+                                {address.postal_code}
+                              </Typography>
+                            </Paper>
+                          );
+                        })()}
+
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        onClick={handleOpenAddressDialog}
+                        startIcon={<Add />}
+                        sx={{ mt: 2 }}
+                      >
+                        {t('orders.addAnotherAddress', 'Add Another Address')}
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Payment Information Card */}
+              <Card>
+                <CardContent sx={{ p: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: 3,
+                    }}
+                  >
+                    <Phone color="primary" />
+                    <Typography variant="h6" fontWeight="bold">
+                      {t('orders.paymentInformation', 'Payment Information')}
+                    </Typography>
+                  </Box>
+
+                  {!profile?.phone_number ? (
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.50' }}
+                    >
+                      <Phone
+                        sx={{ fontSize: 48, color: 'warning.main', mb: 2 }}
+                      />
+                      <Typography variant="subtitle1" gutterBottom>
+                        {t(
+                          'orders.phoneNumberRequired',
+                          'Phone Number Required'
+                        )}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                      >
+                        {t(
+                          'orders.phoneNumberRequiredMessage',
+                          'Please add your phone number to receive payment requests'
+                        )}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => navigate('/profile')}
+                        size="small"
+                      >
+                        {t('orders.addPhoneNumber', 'Add Phone Number')}
+                      </Button>
+                    </Paper>
+                  ) : (
+                    <>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          gutterBottom
+                        >
+                          {t('orders.mobilePayment', 'Mobile Money Payment')}
+                        </Typography>
+                        <Typography variant="body2">
+                          {t(
+                            'orders.paymentRequestMessage',
+                            'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                          )}
+                        </Typography>
+                      </Alert>
+
+                      <Paper
+                        variant="outlined"
+                        sx={{ p: 2, bgcolor: 'grey.50', mb: 2 }}
+                      >
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          sx={{ mt: 1, display: 'block' }}
+                          gutterBottom
                         >
                           {t(
-                            'orders.overridePhoneNote',
-                            'Enter the phone number where you want to receive the payment request'
+                            'orders.paymentPhoneNumber',
+                            'Payment Phone Number'
                           )}
                         </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Box>
-              )}
+                        <Typography variant="body1" fontWeight="bold">
+                          {useDifferentPhone
+                            ? overridePhoneNumber
+                            : profile.phone_number}
+                        </Typography>
+                      </Paper>
 
-              {/* Order Summary */}
-              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  {t('orders.orderSummary', 'Order Summary')}
-                </Typography>
-                <Typography variant="body2">
-                  {t('orders.subtotal', 'Subtotal')}:{' '}
-                  {formatCurrency(
-                    selectedItem.selling_price * quantity,
-                    selectedItem.item.currency
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={useDifferentPhone}
+                            onChange={(e) =>
+                              setUseDifferentPhone(e.target.checked)
+                            }
+                            disabled={loading}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2">
+                            {t(
+                              'orders.useDifferentPhone',
+                              'Use a different phone number'
+                            )}
+                          </Typography>
+                        }
+                      />
+
+                      {useDifferentPhone && (
+                        <Box sx={{ mt: 2 }}>
+                          <PhoneInput
+                            value={overridePhoneNumber}
+                            onChange={(value) =>
+                              setOverridePhoneNumber(value || '')
+                            }
+                            label={t(
+                              'orders.overridePhoneNumber',
+                              'Phone Number for Payment'
+                            )}
+                            defaultCountry="GA"
+                            fullWidth
+                          />
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 1, display: 'block' }}
+                          >
+                            {t(
+                              'orders.overridePhoneNote',
+                              'This number will receive the payment request for this order'
+                            )}
+                          </Typography>
+                        </Box>
+                      )}
+                    </>
                   )}
-                </Typography>
-                <Typography variant="body2">
-                  {t('orders.deliveryFee', 'Delivery Fee')}:{' '}
-                  {deliveryFeeLoading ? (
-                    <span style={{ fontStyle: 'italic' }}>
-                      {t('common.calculating', 'Calculating...')}
-                    </span>
-                  ) : deliveryFeeError ? (
-                    <span style={{ color: 'error.main', fontStyle: 'italic' }}>
-                      {t('common.error', 'Error')}
-                    </span>
-                  ) : (
-                    formatCurrency(
-                      deliveryFee?.deliveryFee || 0,
-                      deliveryFee?.currency
-                    )
-                  )}
-                </Typography>
-                <Typography variant="body2">
-                  {t('orders.tax', 'Tax')}: {formatCurrency(0)}
-                </Typography>
-                <Box
-                  sx={{ borderTop: 1, borderColor: 'divider', mt: 1, pt: 1 }}
-                >
-                  <Typography variant="h6">
-                    {t('orders.total', 'Total')}:{' '}
-                    {formatCurrency(
-                      totalCost,
-                      deliveryFee?.currency || selectedItem.item.currency
-                    )}
-                  </Typography>
-                </Box>
-              </Box>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Grid>
 
-              {/* Order Requirements Summary */}
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  {t('orders.orderRequirements', 'Order Requirements')}
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {profile?.phone_number ? (
-                      <Box sx={{ color: 'success.main' }}>✓</Box>
-                    ) : (
-                      <Box sx={{ color: 'error.main' }}>✗</Box>
-                    )}
-                    <Typography variant="body2">
-                      {t(
-                        'orders.phoneNumberRequirement',
-                        'Phone number for payment'
-                      )}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {selectedAddressId && addresses.length > 0 ? (
-                      <Box sx={{ color: 'success.main' }}>✓</Box>
-                    ) : (
-                      <Box sx={{ color: 'error.main' }}>✗</Box>
-                    )}
-                    <Typography variant="body2">
-                      {t(
-                        'orders.deliveryAddressRequirement',
-                        'Delivery address selected'
-                      )}
-                    </Typography>
-                  </Box>
-                </Box>
-                {(!profile?.phone_number ||
-                  !selectedAddressId ||
-                  addresses.length === 0 ||
-                  (useDifferentPhone && !overridePhoneNumber.trim())) && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      {t(
-                        'orders.completeRequirements',
-                        'Please complete all requirements above before placing your order.'
-                      )}
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
-
-              {/* Error Message */}
-              {error && (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                  <Typography variant="body2">{error}</Typography>
-                </Alert>
-              )}
-
-              {/* Place Order Button */}
-              <Box
-                sx={{
-                  mt: 3,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  px: { xs: 1, sm: 0 },
-                }}
-              >
-                <Button
-                  onClick={handleSubmit}
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  disabled={
-                    loading ||
-                    !selectedAddressId ||
-                    addresses.length === 0 ||
-                    !profile?.phone_number ||
-                    (useDifferentPhone && !overridePhoneNumber.trim())
-                  }
-                  startIcon={
-                    loading ? <CircularProgress size={20} /> : <ShoppingCart />
-                  }
-                  sx={{
-                    maxWidth: { xs: '100%', sm: '300px' },
-                    py: { xs: 1.5, sm: 1 },
-                  }}
-                >
-                  {loading
-                    ? t('orders.placingOrder', 'Placing Order...')
-                    : t('orders.placeOrder', 'Place Order')}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+          {/* Right Column - Order Summary (Desktop Sticky) */}
+          <Grid size={{ xs: 12, lg: 4 }}>
+            <OrderSummary
+              selectedItem={selectedItem}
+              quantity={quantity}
+              deliveryFee={deliveryFee?.deliveryFee || null}
+              deliveryFeeLoading={deliveryFeeLoading}
+              deliveryFeeError={deliveryFeeError}
+              formatCurrency={formatCurrency}
+              onSubmit={handleSubmit}
+              loading={loading}
+              disabled={!canPlaceOrder}
+              isMobile={isMobile}
+            />
+          </Grid>
         </Grid>
-      </Grid>
+      </Container>
 
       {/* Address Dialog */}
       <AddressDialog
