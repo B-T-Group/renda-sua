@@ -35,7 +35,8 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import { parsePhoneNumber } from 'libphonenumber-js';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -43,6 +44,7 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -250,6 +252,13 @@ const PlaceOrderPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // Get supported payment systems
+  const {
+    isCountrySupported,
+    supportedCountries,
+    loading: paymentSystemsLoading,
+  } = useSupportedPaymentSystems();
+
   // State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -429,6 +438,69 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
+  // Validate phone number country - must be before early returns
+  const phoneValidation = useMemo(() => {
+    const phoneToValidate = useDifferentPhone
+      ? overridePhoneNumber
+      : profile?.phone_number;
+
+    if (!phoneToValidate) {
+      return {
+        isValid: false,
+        countryCode: null,
+        message: null,
+      };
+    }
+
+    try {
+      const parsedPhone = parsePhoneNumber(phoneToValidate);
+      if (!parsedPhone) {
+        return {
+          isValid: false,
+          countryCode: null,
+          message: t(
+            'orders.invalidPhoneNumber',
+            'Invalid phone number format'
+          ),
+        };
+      }
+
+      const countryCode = parsedPhone.country;
+      const isSupported = countryCode ? isCountrySupported(countryCode) : false;
+
+      if (!isSupported) {
+        return {
+          isValid: false,
+          countryCode,
+          message: t(
+            'orders.unsupportedPhoneCountry',
+            'Phone number is not from a supported country. Supported countries: {{countries}}',
+            { countries: supportedCountries.join(', ') }
+          ),
+        };
+      }
+
+      return {
+        isValid: true,
+        countryCode,
+        message: null,
+      };
+    } catch {
+      return {
+        isValid: false,
+        countryCode: null,
+        message: t('orders.invalidPhoneNumber', 'Invalid phone number format'),
+      };
+    }
+  }, [
+    useDifferentPhone,
+    overridePhoneNumber,
+    profile?.phone_number,
+    isCountrySupported,
+    supportedCountries,
+    t,
+  ]);
+
   // Show loading skeleton
   if (inventoryLoading) {
     return <OrderPageSkeleton />;
@@ -464,10 +536,12 @@ const PlaceOrderPage: React.FC = () => {
   // Calculate if order can be placed
   const canPlaceOrder =
     !loading &&
+    !paymentSystemsLoading &&
     selectedAddressId &&
     addresses.length > 0 &&
     profile?.phone_number &&
-    (!useDifferentPhone || overridePhoneNumber.trim());
+    (!useDifferentPhone || overridePhoneNumber.trim()) &&
+    phoneValidation.isValid;
 
   return (
     <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: isMobile ? 20 : 4 }}>
@@ -1155,6 +1229,31 @@ const PlaceOrderPage: React.FC = () => {
                             )}
                           </Typography>
                         </Box>
+                      )}
+
+                      {/* Phone Number Country Validation Warning */}
+                      {phoneValidation.message && !phoneValidation.isValid && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="medium"
+                            gutterBottom
+                          >
+                            {t(
+                              'orders.phoneNumberNotSupported',
+                              'Phone Number Not Supported'
+                            )}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 2 }}>
+                            {phoneValidation.message}
+                          </Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {t(
+                              'orders.useAlternativePhone',
+                              'Please use the "Use a different phone number" option above to enter a phone number from a supported country.'
+                            )}
+                          </Typography>
+                        </Alert>
                       )}
                     </>
                   )}

@@ -57,6 +57,8 @@ export type {
 // Payment hooks
 export { useAirtelMoney } from './useAirtelMoney';
 export { useMtnMomoTopUp } from './useMtnMomoTopUp';
+export { useSupportedPaymentSystems } from './useSupportedPaymentSystems';
+export type { SupportedPaymentSystem } from './useSupportedPaymentSystems';
 
 // AWS hooks
 export { useAws } from './useAws';
