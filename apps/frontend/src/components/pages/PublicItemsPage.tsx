@@ -196,7 +196,10 @@ const PublicItemsPage: React.FC = () => {
   };
 
   // Check if user is a client (can place orders)
-  const isClient = isAuthenticated && profile?.client !== null && profile?.client !== undefined;
+  const isClient =
+    isAuthenticated &&
+    profile?.client !== null &&
+    profile?.client !== undefined;
 
   const handleOrderClick = (item: InventoryItem) => {
     if (!isAuthenticated) {
