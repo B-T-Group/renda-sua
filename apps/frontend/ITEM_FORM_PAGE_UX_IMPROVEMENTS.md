@@ -9,6 +9,7 @@ Complete refactoring of the `ItemFormPage` component to provide a **fast, intuit
 ## ✨ Key Improvements
 
 ### 1. **Fast Data Entry** ⚡
+
 - **Optimized field order**: Most important fields first
 - **Smart defaults**: Pre-filled values where appropriate
 - **Auto-completion**: Category, brand, and subcategory creation on-the-fly
@@ -16,6 +17,7 @@ Complete refactoring of the `ItemFormPage` component to provide a **fast, intuit
 - **Sticky submit buttons**: Always accessible at the bottom
 
 ### 2. **Intuitive Organization** 📋
+
 The form is now divided into **clear, logical sections**:
 
 ```
@@ -46,6 +48,7 @@ The form is now divided into **clear, logical sections**:
 ```
 
 ### 3. **Color Field - Truly Optional** 🎨
+
 **BEFORE**: Color was a required field with a default value of `#000000`
 **AFTER**: Color is hidden in a collapsible "Optional Details" section
 
@@ -65,15 +68,18 @@ The form is now divided into **clear, logical sections**:
 ```
 
 **Benefits**:
+
 - ✅ Reduces visual clutter for 90% of use cases
 - ✅ Only shown when actually needed
 - ✅ Doesn't distract from essential fields
 - ✅ Automatically expands if editing item with color set
 
 ### 4. **Description at the End** 📝
+
 **Reasoning**: Other details (name, category, brand, price, weight) are used by AI to generate a high-quality description.
 
 **Flow**:
+
 1. User enters essential info (name, category, price)
 2. User enters product details (brand, model, weight)
 3. User clicks "AI Generate" → AI uses all entered details
@@ -81,12 +87,7 @@ The form is now divided into **clear, logical sections**:
 
 ```tsx
 <Box>
-  <TextField
-    multiline
-    rows={4}
-    label="Description"
-    placeholder="Describe your product in detail..."
-  />
+  <TextField multiline rows={4} label="Description" placeholder="Describe your product in detail..." />
   <Button
     startIcon={<AutoAwesomeIcon />}
     onClick={handleGenerateDescription}
@@ -102,18 +103,21 @@ The form is now divided into **clear, logical sections**:
 ## 🎨 Design Improvements
 
 ### **Visual Hierarchy**
+
 1. **Clear section headers**: Bold, prominent typography
 2. **Generous spacing**: `Stack spacing={3}` between sections
 3. **Dividers**: Visual separation between major sections
 4. **Responsive layout**: Adapts to mobile and desktop
 
 ### **Typography Scale**
+
 - **H4**: Page title (`fontSize: { xs: '1.5rem', md: '2.125rem' }`)
 - **H6**: Section headers (`fontWeight: 600`)
 - **Body1**: Form labels
 - **Caption**: Helper text and descriptions
 
 ### **Color & Feedback**
+
 - **Primary**: Submit button, AI Generate button
 - **Success**: Fee applied alert
 - **Error**: SKU validation errors
@@ -124,6 +128,7 @@ The form is now divided into **clear, logical sections**:
 ## 📱 Responsive Design
 
 ### **Mobile** (xs: < 600px)
+
 - Single column layout
 - Smaller text sizes
 - Smaller buttons
@@ -131,6 +136,7 @@ The form is now divided into **clear, logical sections**:
 - Sticky submit buttons at bottom
 
 ### **Desktop** (sm+: >= 600px)
+
 - Two-column grid for related fields (Category/Subcategory, Price/Currency)
 - Larger, more spacious layout
 - Desktop-optimized button sizes
@@ -151,15 +157,11 @@ The form is now divided into **clear, logical sections**:
 ## 🚀 UX Features
 
 ### **1. Smart Defaults**
+
 ```tsx
 // Auto-select first category/subcategory for new items
 useEffect(() => {
-  if (
-    !isEditMode &&
-    !formData.item_sub_category_id &&
-    categories &&
-    categories.length > 0
-  ) {
+  if (!isEditMode && !formData.item_sub_category_id && categories && categories.length > 0) {
     setFormData((prev) => ({
       ...prev,
       item_sub_category_id: categories[0].item_sub_categories[0].id,
@@ -169,28 +171,22 @@ useEffect(() => {
 ```
 
 ### **2. Payment Fee Helper** (Add Mode Only)
+
 ```tsx
-{!isEditMode && formData.price > 0 && !feeApplied && (
-  <Stack direction="row" spacing={1} alignItems="center">
-    <Button
-      variant="text"
-      size="small"
-      startIcon={<AddIcon />}
-      onClick={handleApplyFee}
-    >
-      Add 3.5% Payment Fee
-    </Button>
-    <Chip
-      label={`+${(formData.price * 0.035).toFixed(2)} ${formData.currency}`}
-      size="small"
-      color="primary"
-      variant="outlined"
-    />
-  </Stack>
-)}
+{
+  !isEditMode && formData.price > 0 && !feeApplied && (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Button variant="text" size="small" startIcon={<AddIcon />} onClick={handleApplyFee}>
+        Add 3.5% Payment Fee
+      </Button>
+      <Chip label={`+${(formData.price * 0.035).toFixed(2)} ${formData.currency}`} size="small" color="primary" variant="outlined" />
+    </Stack>
+  );
+}
 ```
 
 **Benefits**:
+
 - ✅ Inline, non-intrusive suggestion
 - ✅ Shows exact fee amount
 - ✅ One-click to apply
@@ -198,6 +194,7 @@ useEffect(() => {
 - ✅ Only shown for new items
 
 ### **3. Inline Category/Brand Creation**
+
 Users can create categories, subcategories, and brands **on-the-fly** without leaving the form:
 
 ```tsx
@@ -212,7 +209,7 @@ Users can create categories, subcategories, and brands **on-the-fly** without le
   }}
   filterOptions={(options, { inputValue }) => {
     const filtered = options.filter(/* ... */);
-    
+
     if (inputValue && !isExisting) {
       return [
         ...filtered,
@@ -224,13 +221,14 @@ Users can create categories, subcategories, and brands **on-the-fly** without le
         },
       ];
     }
-    
+
     return filtered;
   }}
 />
 ```
 
 ### **4. SKU Validation**
+
 Real-time validation against existing SKUs:
 
 ```tsx
@@ -245,6 +243,7 @@ const validateSku = (sku: string) => {
 ```
 
 ### **5. Helpful Placeholders**
+
 Every field has contextually relevant placeholder text:
 
 ```tsx
@@ -269,7 +268,9 @@ Every field has contextually relevant placeholder text:
 ## 📊 Field Organization
 
 ### **Section 1: Essential Information** (Required)
+
 **Fields**:
+
 - ✅ Name (Required, Autofocus)
 - ✅ Category (Required, Auto-create)
 - ✅ Subcategory (Required, Auto-create, Disabled until category selected)
@@ -281,7 +282,9 @@ Every field has contextually relevant placeholder text:
 **Why First?**: These are the absolute minimum required to create an item.
 
 ### **Section 2: Product Details**
+
 **Fields**:
+
 - Brand (Optional, Auto-create)
 - Model (Optional)
 - Weight (Optional)
@@ -293,7 +296,9 @@ Every field has contextually relevant placeholder text:
 **Why Second?**: Provides context for AI description generation.
 
 ### **Section 3: Special Properties**
+
 **Fields**:
+
 - Fragile (Switch)
 - Perishable (Switch)
 - Requires Special Handling (Switch)
@@ -305,7 +310,9 @@ Every field has contextually relevant placeholder text:
 **Why Third?**: Defines handling requirements and order limits.
 
 ### **Section 4: Description** (Required, at END)
+
 **Fields**:
+
 - Description (Required, Multiline, 4 rows)
 - AI Generate Button (Requires name to be filled)
 
@@ -314,7 +321,9 @@ Every field has contextually relevant placeholder text:
 **Why Last?**: AI uses all previously entered details to generate rich description.
 
 ### **Section 5: Optional Details** (Collapsible)
+
 **Fields**:
+
 - Color (Color picker, Truly optional)
 
 **Layout**: Collapsible section, gray background when expanded
@@ -326,6 +335,7 @@ Every field has contextually relevant placeholder text:
 ## 🔒 Form Validation
 
 ### **Submit Button - Disabled When**:
+
 - `loading` (form is submitting)
 - `skusLoading` (fetching existing SKUs)
 - `!formData.name` (name is empty)
@@ -334,24 +344,13 @@ Every field has contextually relevant placeholder text:
 - `!!skuError` (SKU validation failed)
 
 ```tsx
-<Button
-  type="submit"
-  variant="contained"
-  startIcon={<SaveIcon />}
-  disabled={
-    loading ||
-    skusLoading ||
-    !formData.name ||
-    !formData.description ||
-    formData.price <= 0 ||
-    !!skuError
-  }
->
+<Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={loading || skusLoading || !formData.name || !formData.description || formData.price <= 0 || !!skuError}>
   {loading ? 'Saving...' : isEditMode ? 'Update Item' : 'Create Item'}
 </Button>
 ```
 
 ### **Real-time Validations**:
+
 1. **SKU Uniqueness**: Validated against existing SKUs in database
 2. **Price**: Must be > 0
 3. **Name**: Required
@@ -363,6 +362,7 @@ Every field has contextually relevant placeholder text:
 ## 🎯 User Flow Comparison
 
 ### **BEFORE** (Old Form)
+
 ```
 1. Enter name
 2. Enter SKU
@@ -383,6 +383,7 @@ Every field has contextually relevant placeholder text:
 ```
 
 **Issues**:
+
 - ❌ Color picker was prominent and always visible
 - ❌ Description was at the end (good) but no context
 - ❌ Too many required fields upfront
@@ -390,6 +391,7 @@ Every field has contextually relevant placeholder text:
 - ❌ Long, overwhelming form
 
 ### **AFTER** (New Form)
+
 ```
 1. Enter name (autofocus)
 2. Select/create category
@@ -409,6 +411,7 @@ Every field has contextually relevant placeholder text:
 ```
 
 **Improvements**:
+
 - ✅ Logical, fast flow
 - ✅ AI Generate uses all context
 - ✅ Color is truly optional (hidden)
@@ -420,9 +423,10 @@ Every field has contextually relevant placeholder text:
 ## 💡 AI Description Generation
 
 ### **Input Data for AI**:
+
 ```typescript
 const request = {
-  name: formData.name,           // Required
+  name: formData.name, // Required
   sku: formData.sku || undefined,
   category: category?.name || undefined,
   subCategory: subCategory?.name || undefined,
@@ -436,11 +440,13 @@ const request = {
 ```
 
 ### **Button States**:
+
 - **Enabled**: When `formData.name` is filled
 - **Disabled**: When `loading`, `aiLoading`, or `!formData.name`
 - **Loading Text**: "AI..." (instead of "AI Generate")
 
 ### **Success Flow**:
+
 1. User clicks "AI Generate"
 2. Button shows "AI..."
 3. AI generates description using all product details
@@ -453,6 +459,7 @@ const request = {
 ## 🧪 Testing Checklist
 
 ### **Form Functionality**:
+
 - [x] ✅ No linter errors
 - [x] ✅ Form submits successfully (add mode)
 - [x] ✅ Form submits successfully (edit mode)
@@ -466,12 +473,14 @@ const request = {
 - [x] ✅ Submit button disabled states work correctly
 
 ### **Responsive Design**:
+
 - [x] ✅ Mobile layout (single column)
 - [x] ✅ Desktop layout (2-column grids)
 - [x] ✅ Sticky submit buttons (mobile)
 - [x] ✅ Text sizes adapt to screen size
 
 ### **UX Flow**:
+
 - [x] ✅ Autofocus on name field
 - [x] ✅ Smart defaults applied
 - [x] ✅ Helpful placeholders visible
@@ -484,12 +493,14 @@ const request = {
 ## 📈 Performance
 
 ### **Optimizations**:
+
 1. **Memoized callbacks**: `useCallback` for fetch functions
 2. **Conditional rendering**: Optional details only rendered when expanded
 3. **Lazy loading**: Categories/brands fetched on mount
 4. **Debounced validation**: SKU validation (future enhancement)
 
 ### **Loading States**:
+
 - **Categories Loading**: "Loading categories..."
 - **Brands Loading**: "Loading brands..."
 - **SKUs Loading**: Submit button disabled
@@ -500,14 +511,14 @@ const request = {
 
 ## 🎉 Benefits Summary
 
-| Aspect | Improvement |
-|--------|-------------|
-| **Data Entry Speed** | 40% faster (fewer required fields upfront) |
-| **Visual Clarity** | 60% reduction in visual noise |
-| **User Confusion** | Eliminated color field prominence |
-| **AI Description Quality** | Higher quality (uses all product details) |
-| **Mobile Experience** | Fully responsive, touch-optimized |
-| **Form Completion Rate** | Expected increase (clearer flow) |
+| Aspect                     | Improvement                                |
+| -------------------------- | ------------------------------------------ |
+| **Data Entry Speed**       | 40% faster (fewer required fields upfront) |
+| **Visual Clarity**         | 60% reduction in visual noise              |
+| **User Confusion**         | Eliminated color field prominence          |
+| **AI Description Quality** | Higher quality (uses all product details)  |
+| **Mobile Experience**      | Fully responsive, touch-optimized          |
+| **Form Completion Rate**   | Expected increase (clearer flow)           |
 
 ---
 
@@ -527,18 +538,21 @@ const request = {
 ## 📝 Code Quality
 
 ### **TypeScript**:
+
 - ✅ Proper interfaces for all data structures
 - ✅ Type-safe form data handling
 - ✅ No `any` types
 - ✅ Proper nullable field handling
 
 ### **Accessibility**:
+
 - ✅ Proper ARIA labels
 - ✅ Keyboard navigation
 - ✅ Focus management
 - ✅ Screen reader support
 
 ### **Error Handling**:
+
 - ✅ SKU validation with clear messages
 - ✅ Network error handling
 - ✅ User-friendly error messages

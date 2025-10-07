@@ -232,7 +232,7 @@ const ItemFormPage: React.FC = () => {
               is_active:
                 foundItem.is_active !== undefined ? foundItem.is_active : true,
             });
-            
+
             // Set category and subcategory for edit mode
             if (foundItem.item_sub_category) {
               setSelectedCategoryId(
@@ -240,7 +240,7 @@ const ItemFormPage: React.FC = () => {
               );
               setSelectedSubCategoryId(foundItem.item_sub_category_id);
             }
-            
+
             // Open optional details if color is set
             if (foundItem.color) {
               setOptionalDetailsOpen(true);
@@ -650,7 +650,9 @@ const ItemFormPage: React.FC = () => {
                               });
                             }
                           } else {
-                            setSelectedCategoryId((newValue as ItemCategory).id);
+                            setSelectedCategoryId(
+                              (newValue as ItemCategory).id
+                            );
                             handleInputChange('item_sub_category_id', null);
                             setSelectedSubCategoryId(null);
                           }
@@ -748,10 +750,9 @@ const ItemFormPage: React.FC = () => {
                       }}
                       value={
                         selectedCategoryId
-                          ? getSubCategoriesByCategory(
-                              selectedCategoryId
-                            ).find((sub) => sub.id === selectedSubCategoryId) ||
-                            null
+                          ? getSubCategoriesByCategory(selectedCategoryId).find(
+                              (sub) => sub.id === selectedSubCategoryId
+                            ) || null
                           : null
                       }
                       onChange={async (_, newValue) => {
@@ -814,12 +815,17 @@ const ItemFormPage: React.FC = () => {
                           handleInputChange('item_sub_category_id', null);
                         }
                       }}
-                      disabled={!selectedCategoryId || loading || categoriesLoading}
+                      disabled={
+                        !selectedCategoryId || loading || categoriesLoading
+                      }
                       renderInput={(params) => (
                         <TextField
                           {...params}
                           fullWidth
-                          label={t('business.items.subCategory', 'Sub Category')}
+                          label={t(
+                            'business.items.subCategory',
+                            'Sub Category'
+                          )}
                           disabled={
                             !selectedCategoryId || loading || categoriesLoading
                           }
@@ -1009,8 +1015,9 @@ const ItemFormPage: React.FC = () => {
                         return option.name;
                       }}
                       value={
-                        brands.find((brand) => brand.id === formData.brand_id) ||
-                        null
+                        brands.find(
+                          (brand) => brand.id === formData.brand_id
+                        ) || null
                       }
                       onChange={async (_, newValue) => {
                         if (typeof newValue === 'string' && newValue.trim()) {
@@ -1051,7 +1058,9 @@ const ItemFormPage: React.FC = () => {
                       renderOption={(props, option) => (
                         <li {...props}>
                           <Box>
-                            <Typography variant="body1">{option.name}</Typography>
+                            <Typography variant="body1">
+                              {option.name}
+                            </Typography>
                             {option.description && (
                               <Typography
                                 variant="caption"
@@ -1080,7 +1089,9 @@ const ItemFormPage: React.FC = () => {
                       fullWidth
                       label={t('business.items.model', 'Model (Optional)')}
                       value={formData.model}
-                      onChange={(e) => handleInputChange('model', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('model', e.target.value)
+                      }
                       disabled={loading}
                       placeholder="Pro Max, XL, v2..."
                     />
@@ -1135,7 +1146,8 @@ const ItemFormPage: React.FC = () => {
                   disabled={loading || skusLoading}
                   error={!!skuError}
                   helperText={
-                    skuError || t('business.items.skuHelper', 'Stock Keeping Unit')
+                    skuError ||
+                    t('business.items.skuHelper', 'Stock Keeping Unit')
                   }
                   placeholder="ABC-123-XYZ"
                 />
@@ -1335,7 +1347,9 @@ const ItemFormPage: React.FC = () => {
                       label={t('business.items.color', 'Color (Optional)')}
                       type="color"
                       value={formData.color || '#000000'}
-                      onChange={(e) => handleInputChange('color', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('color', e.target.value)
+                      }
                       disabled={loading}
                       sx={{
                         '& input[type="color"]': {

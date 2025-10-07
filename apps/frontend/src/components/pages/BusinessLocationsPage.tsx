@@ -1,16 +1,12 @@
 import {
   Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  LocationOn as LocationIcon,
+  LocationOn as LocationOnIcon,
+  Store as StoreIcon,
 } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardActions,
-  CardContent,
   Chip,
   Container,
   Dialog,
@@ -18,9 +14,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
   Grid,
-  IconButton,
+  Paper,
+  Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
@@ -33,11 +33,15 @@ import {
   useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import LocationCard from '../business/LocationCard';
+import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessLocationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfile();
   const { refetch: refetchProfile } = useUserProfileContext();
@@ -65,15 +69,6 @@ const BusinessLocationsPage: React.FC = () => {
     }
   }, [profile?.business?.id, fetchLocations]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('BusinessLocationsPage - Profile:', profile);
-    console.log('BusinessLocationsPage - Business ID:', profile?.business?.id);
-    console.log('BusinessLocationsPage - Locations:', locations);
-    console.log('BusinessLocationsPage - Loading:', locationsLoading);
-    console.log('BusinessLocationsPage - Error:', locationsError);
-  }, [profile, locations, locationsLoading, locationsError]);
-
   const handleAddLocation = () => {
     setEditingLocation(null);
     setShowLocationModal(true);
@@ -94,16 +89,25 @@ const BusinessLocationsPage: React.FC = () => {
 
     try {
       await deleteLocation(locationToDelete.id);
-      enqueueSnackbar(t('business.locations.locationDeleted'), {
-        variant: 'success',
-      });
+      enqueueSnackbar(
+        t(
+          'business.locations.locationDeleted',
+          'Location deleted successfully'
+        ),
+        {
+          variant: 'success',
+        }
+      );
       setShowDeleteConfirm(false);
       setLocationToDelete(null);
     } catch (error: unknown) {
       console.error('Error deleting location:', error);
-      enqueueSnackbar(t('business.locations.deleteError'), {
-        variant: 'error',
-      });
+      enqueueSnackbar(
+        t('business.locations.deleteError', 'Failed to delete location'),
+        {
+          variant: 'error',
+        }
+      );
     }
   };
 
@@ -116,22 +120,33 @@ const BusinessLocationsPage: React.FC = () => {
           editingLocation.id,
           data as UpdateBusinessLocationData
         );
-        enqueueSnackbar(t('business.locations.locationUpdated'), {
-          variant: 'success',
-        });
+        enqueueSnackbar(
+          t(
+            'business.locations.locationUpdated',
+            'Location updated successfully'
+          ),
+          {
+            variant: 'success',
+          }
+        );
       } else {
-        console.log('BusinessLocationsPage: Adding new location');
         await addLocation(data as AddBusinessLocationData);
-        enqueueSnackbar(t('business.locations.locationAdded'), {
-          variant: 'success',
-        });
+        enqueueSnackbar(
+          t('business.locations.locationAdded', 'Location added successfully'),
+          {
+            variant: 'success',
+          }
+        );
       }
       setShowLocationModal(false);
       fetchLocations();
       setEditingLocation(null);
     } catch (error) {
       console.error('BusinessLocationsPage: Error saving location:', error);
-      enqueueSnackbar(t('business.locations.saveError'), { variant: 'error' });
+      enqueueSnackbar(
+        t('business.locations.saveError', 'Failed to save location'),
+        { variant: 'error' }
+      );
     }
   };
 
@@ -142,8 +157,14 @@ const BusinessLocationsPage: React.FC = () => {
       });
 
       const statusMessage = location.is_active
-        ? t('business.locations.locationDeactivated')
-        : t('business.locations.locationActivated');
+        ? t(
+            'business.locations.locationDeactivated',
+            'Location deactivated successfully'
+          )
+        : t(
+            'business.locations.locationActivated',
+            'Location activated successfully'
+          );
 
       enqueueSnackbar(statusMessage, {
         variant: 'success',
@@ -156,328 +177,273 @@ const BusinessLocationsPage: React.FC = () => {
         'BusinessLocationsPage: Error toggling location status:',
         error
       );
-      enqueueSnackbar(t('business.locations.statusUpdateError'), {
-        variant: 'error',
-      });
+      enqueueSnackbar(
+        t(
+          'business.locations.statusUpdateError',
+          'Failed to update location status'
+        ),
+        {
+          variant: 'error',
+        }
+      );
     }
   };
 
-  const formatAddress = (address: BusinessLocation['address']) => {
-    if (!address) return '';
-    return `${address.address_line_1}, ${address.city}, ${address.state} ${address.postal_code}`;
-  };
+  const activeLocations = locations.filter((location) => location.is_active);
+  const inactiveLocations = locations.filter((location) => !location.is_active);
 
   if (!profile?.business) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
         <Alert severity="error">
-          {t('business.dashboard.noBusinessProfile')}
+          {t(
+            'business.dashboard.noBusinessProfile',
+            'Business profile not found'
+          )}
         </Alert>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
       <SEOHead
-        title={t('seo.business-locations.title')}
-        description={t('seo.business-locations.description')}
-        keywords={t('seo.business-locations.keywords')}
+        title={t('seo.business-locations.title', 'Business Locations')}
+        description={t(
+          'seo.business-locations.description',
+          'Manage your business locations'
+        )}
+        keywords={t(
+          'seo.business-locations.keywords',
+          'business locations, manage locations'
+        )}
       />
 
-      <Typography variant="h4" gutterBottom>
-        {t('business.locations.title')}
-      </Typography>
-
-      <Box sx={{ mb: 3 }}>
-        <Box
-          display="flex"
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
           justifyContent="space-between"
-          alignItems="center"
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          spacing={2}
           mb={2}
         >
-          <Typography variant="h6">{t('business.locations.title')}</Typography>
+          <Box>
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: '1.75rem', md: '2.125rem' },
+              }}
+            >
+              {t('business.locations.title', 'Business Locations')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {t(
+                'business.locations.description',
+                'Manage all your business locations and their details'
+              )}
+            </Typography>
+          </Box>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleAddLocation}
+            size={isMobile ? 'medium' : 'large'}
+            sx={{ minWidth: { xs: '100%', sm: 'auto' } }}
           >
-            {t('business.locations.addLocation')}
+            {t('business.locations.addLocation', 'Add Location')}
           </Button>
-        </Box>
+        </Stack>
 
-        {locationsLoading ? (
-          <Box display="flex" justifyContent="center" p={3}>
-            <Typography>{t('common.loading')}</Typography>
-          </Box>
-        ) : locationsError ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {locationsError}
-          </Alert>
-        ) : locations.length === 0 ? (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            {t('business.locations.noLocations')}
-          </Alert>
-        ) : (
-          <Box>
-            {/* Active Locations */}
-            {locations.filter((location) => location.is_active).length > 0 && (
-              <Box sx={{ mb: 4 }}>
-                <Typography
-                  variant="h6"
-                  gutterBottom
-                  sx={{ display: 'flex', alignItems: 'center' }}
-                >
-                  <Chip
-                    label={t('business.locations.active')}
-                    color="success"
-                    size="small"
-                    sx={{ mr: 2 }}
-                  />
-                  {t('business.locations.activeLocations')}
+        {/* Stats Summary */}
+        {!locationsLoading && locations.length > 0 && (
+          <Paper sx={{ p: 2, bgcolor: 'primary.50' }}>
+            <Stack
+              direction="row"
+              spacing={3}
+              alignItems="center"
+              flexWrap="wrap"
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <StoreIcon sx={{ color: 'primary.main' }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {locations.length}
                 </Typography>
-                <Grid container spacing={2}>
-                  {locations
-                    .filter((location) => location.is_active)
-                    .map((location) => (
-                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                        <Card>
-                          <CardContent>
-                            <Box
-                              display="flex"
-                              justifyContent="space-between"
-                              alignItems="flex-start"
-                              mb={2}
-                            >
-                              <Typography variant="h6" component="div">
-                                {location.name}
-                              </Typography>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeleteLocation(location)}
-                                disabled={location.is_primary}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Box>
-
-                            <Box mb={2}>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                display="flex"
-                                alignItems="center"
-                                mb={1}
-                              >
-                                <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
-                                {formatAddress(location.address)}
-                              </Typography>
-                              {location.phone && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  <span role="img" aria-label="Phone">
-                                    📞
-                                  </span>{' '}
-                                  {location.phone}
-                                </Typography>
-                              )}
-                              {location.email && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  <span role="img" aria-label="Email">
-                                    ✉️
-                                  </span>{' '}
-                                  {location.email}
-                                </Typography>
-                              )}
-                            </Box>
-
-                            <Box>
-                              {location.is_primary && (
-                                <Chip
-                                  label={t('business.locations.primary')}
-                                  color="primary"
-                                  size="small"
-                                  sx={{ mb: 1 }}
-                                />
-                              )}
-                            </Box>
-
-                            <Box sx={{ mt: 2 }}>
-                              <Chip
-                                label={t(
-                                  `business.locations.${location.location_type}`
-                                )}
-                                color="secondary"
-                                size="small"
-                                sx={{ mr: 1 }}
-                              />
-                              <Chip
-                                label={t('business.locations.active')}
-                                color="success"
-                                size="small"
-                              />
-                            </Box>
-                          </CardContent>
-                          <CardActions>
-                            <Button
-                              size="small"
-                              startIcon={<EditIcon />}
-                              onClick={() => handleEditLocation(location)}
-                            >
-                              {t('business.locations.editLocation')}
-                            </Button>
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                handleToggleLocationStatus(location)
-                              }
-                            >
-                              {t('business.locations.deactivate')}
-                            </Button>
-                          </CardActions>
-                        </Card>
-                      </Grid>
-                    ))}
-                </Grid>
-              </Box>
-            )}
-
-            {/* Inactive Locations */}
-            {locations.filter((location) => !location.is_active).length > 0 && (
-              <Box>
-                <Typography
-                  variant="h6"
-                  gutterBottom
-                  sx={{ display: 'flex', alignItems: 'center' }}
-                >
-                  <Chip
-                    label={t('business.locations.inactive')}
-                    color="default"
-                    size="small"
-                    sx={{ mr: 2 }}
-                  />
-                  {t('business.locations.inactiveLocations')}
+                <Typography variant="body2" color="text.secondary">
+                  {t('business.locations.totalLocations', 'Total Locations')}
                 </Typography>
-                <Grid container spacing={2}>
-                  {locations
-                    .filter((location) => !location.is_active)
-                    .map((location) => (
-                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                        <Card sx={{ opacity: 0.7 }}>
-                          <CardContent>
-                            <Box
-                              display="flex"
-                              justifyContent="space-between"
-                              alignItems="flex-start"
-                              mb={2}
-                            >
-                              <Typography variant="h6" component="div">
-                                {location.name}
-                              </Typography>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeleteLocation(location)}
-                                disabled={location.is_primary}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Box>
-
-                            <Box mb={2}>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                display="flex"
-                                alignItems="center"
-                                mb={1}
-                              >
-                                <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
-                                {formatAddress(location.address)}
-                              </Typography>
-                              {location.phone && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  <span role="img" aria-label="Phone">
-                                    📞
-                                  </span>{' '}
-                                  {location.phone}
-                                </Typography>
-                              )}
-                              {location.email && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  <span role="img" aria-label="Email">
-                                    ✉️
-                                  </span>{' '}
-                                  {location.email}
-                                </Typography>
-                              )}
-                            </Box>
-
-                            <Box>
-                              {location.is_primary && (
-                                <Chip
-                                  label={t('business.locations.primary')}
-                                  color="primary"
-                                  size="small"
-                                  sx={{ mb: 1 }}
-                                />
-                              )}
-                            </Box>
-
-                            <Box sx={{ mt: 2 }}>
-                              <Chip
-                                label={t(
-                                  `business.locations.${location.location_type}`
-                                )}
-                                color="secondary"
-                                size="small"
-                                sx={{ mr: 1 }}
-                              />
-                              <Chip
-                                label={t('business.locations.inactive')}
-                                color="default"
-                                size="small"
-                              />
-                            </Box>
-                          </CardContent>
-                          <CardActions>
-                            <Button
-                              size="small"
-                              startIcon={<EditIcon />}
-                              onClick={() => handleEditLocation(location)}
-                            >
-                              {t('business.locations.editLocation')}
-                            </Button>
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                handleToggleLocationStatus(location)
-                              }
-                            >
-                              {t('business.locations.activate')}
-                            </Button>
-                          </CardActions>
-                        </Card>
-                      </Grid>
-                    ))}
-                </Grid>
               </Box>
-            )}
-          </Box>
+              {activeLocations.length > 0 && (
+                <>
+                  <Divider orientation="vertical" flexItem />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationOnIcon sx={{ color: 'success.main' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {activeLocations.length}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('business.locations.active', 'Active')}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+              {inactiveLocations.length > 0 && (
+                <>
+                  <Divider orientation="vertical" flexItem />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationOnIcon sx={{ color: 'grey.400' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {inactiveLocations.length}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('business.locations.inactive', 'Inactive')}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+            </Stack>
+          </Paper>
         )}
       </Box>
+
+      {/* Error Display */}
+      {locationsError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {locationsError}
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {locationsLoading && (
+        <Grid container spacing={2}>
+          {[1, 2, 3].map((index) => (
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+              <LocationCardSkeleton />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      {/* Empty State */}
+      {!locationsLoading && locations.length === 0 && (
+        <Paper
+          sx={{
+            p: { xs: 4, md: 6 },
+            textAlign: 'center',
+            bgcolor: 'grey.50',
+            border: '2px dashed',
+            borderColor: 'grey.300',
+            borderRadius: 2,
+          }}
+        >
+          <StoreIcon sx={{ fontSize: 80, color: 'grey.400', mb: 2 }} />
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            {t('business.locations.noLocations', 'No Locations Yet')}
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            {t(
+              'business.locations.noLocationsMessage',
+              'Add your first business location to start managing inventory and deliveries'
+            )}
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<AddIcon />}
+            onClick={handleAddLocation}
+          >
+            {t('business.locations.addFirstLocation', 'Add First Location')}
+          </Button>
+        </Paper>
+      )}
+
+      {/* Locations Grid */}
+      {!locationsLoading && locations.length > 0 && (
+        <Box>
+          {/* Active Locations */}
+          {activeLocations.length > 0 && (
+            <Box sx={{ mb: 4 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{ mb: 2 }}
+              >
+                <Chip
+                  label={t('business.locations.active', 'Active')}
+                  color="success"
+                  size="small"
+                  sx={{ fontWeight: 600 }}
+                />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {t('business.locations.activeLocations', 'Active Locations')}
+                </Typography>
+                <Chip
+                  label={activeLocations.length}
+                  size="small"
+                  variant="outlined"
+                />
+              </Stack>
+              <Grid container spacing={2}>
+                {activeLocations.map((location) => (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
+                    <LocationCard
+                      location={location}
+                      onEdit={handleEditLocation}
+                      onDelete={handleDeleteLocation}
+                      onToggleStatus={handleToggleLocationStatus}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
+
+          {/* Inactive Locations */}
+          {inactiveLocations.length > 0 && (
+            <Box>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{ mb: 2 }}
+              >
+                <Chip
+                  label={t('business.locations.inactive', 'Inactive')}
+                  color="default"
+                  size="small"
+                  sx={{ fontWeight: 600 }}
+                />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {t(
+                    'business.locations.inactiveLocations',
+                    'Inactive Locations'
+                  )}
+                </Typography>
+                <Chip
+                  label={inactiveLocations.length}
+                  size="small"
+                  variant="outlined"
+                />
+              </Stack>
+              <Grid container spacing={2}>
+                {inactiveLocations.map((location) => (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
+                    <LocationCard
+                      location={location}
+                      onEdit={handleEditLocation}
+                      onDelete={handleDeleteLocation}
+                      onToggleStatus={handleToggleLocationStatus}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Location Modal */}
       <LocationModal
@@ -493,18 +459,28 @@ const BusinessLocationsPage: React.FC = () => {
       <Dialog
         open={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
+        maxWidth="xs"
+        fullWidth
       >
-        <DialogTitle>{t('business.locations.deleteLocation')}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          {t('business.locations.deleteLocation', 'Delete Location')}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>
             {locationToDelete?.is_primary
-              ? t('business.locations.primaryLocationWarning')
-              : t('business.locations.deleteConfirm')}
+              ? t(
+                  'business.locations.primaryLocationWarning',
+                  'Cannot delete the primary location. Please set another location as primary first.'
+                )
+              : t(
+                  'business.locations.deleteConfirm',
+                  'Are you sure you want to delete this location? This action cannot be undone.'
+                )}
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setShowDeleteConfirm(false)}>
-            {t('common.cancel')}
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={handleConfirmDelete}
@@ -512,7 +488,7 @@ const BusinessLocationsPage: React.FC = () => {
             variant="contained"
             disabled={locationToDelete?.is_primary}
           >
-            {t('common.delete')}
+            {t('common.delete', 'Delete')}
           </Button>
         </DialogActions>
       </Dialog>
