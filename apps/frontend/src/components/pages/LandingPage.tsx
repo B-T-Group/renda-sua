@@ -241,24 +241,24 @@ const LandingPage: React.FC = () => {
                   </Button>
                   {!isAuthenticated && (
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       size="large"
                       component={RouterLink}
                       to="/app"
                       sx={{
-                        borderColor: 'primary.main',
-                        color: 'text.primary',
+                        bgcolor: 'white',
+                        color: 'primary.main',
                         px: 4,
                         py: 1.5,
                         fontSize: '1.1rem',
                         fontWeight: 600,
                         borderRadius: 3,
                         textTransform: 'none',
-                        borderWidth: 2,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                         '&:hover': {
-                          borderWidth: 2,
-                          bgcolor: 'rgba(255,255,255,0.1)',
-                          borderColor: 'primary.main',
+                          bgcolor: 'grey.50',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 12px 48px rgba(0,0,0,0.18)',
                         },
                       }}
                     >
@@ -280,7 +280,11 @@ const LandingPage: React.FC = () => {
                     <Schedule sx={{ fontSize: 24 }} />
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 600, fontSize: '0.95rem', color: 'white' }}
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        color: 'white',
+                      }}
                     >
                       {t(
                         'landing.hero.trustSignals.deliveryTime',
@@ -292,7 +296,11 @@ const LandingPage: React.FC = () => {
                     <Payment sx={{ fontSize: 24 }} />
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 600, fontSize: '0.95rem', color: 'white' }}
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        color: 'white',
+                      }}
                     >
                       {t(
                         'landing.hero.trustSignals.securePayment',
@@ -694,15 +702,15 @@ const LandingPage: React.FC = () => {
                     elevation={0}
                     sx={{
                       height: '100%',
-                      bgcolor: 'primary.main',
-                      border: '1px solid',
-                      borderColor: 'divider',
+                      bgcolor: 'white',
+                      border: '2px solid',
+                      borderColor: 'primary.main',
                       borderRadius: 3,
                       transition: 'all 0.3s ease',
                       '&:hover': {
                         transform: 'translateY(-8px)',
                         boxShadow: theme.shadows[12],
-                        borderColor: 'primary.main',
+                        borderColor: 'primary.dark',
                       },
                     }}
                   >
@@ -712,7 +720,7 @@ const LandingPage: React.FC = () => {
                           width: 60,
                           height: 60,
                           borderRadius: '50%',
-                          bgcolor: alpha(theme.palette.primary.main, 0.1),
+                          bgcolor: 'primary.main',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -732,7 +740,7 @@ const LandingPage: React.FC = () => {
                         sx={{
                           fontWeight: 700,
                           mb: 1,
-                          color: 'text.primary',
+                          color: 'primary.main',
                         }}
                       >
                         {benefit.title}
@@ -740,7 +748,7 @@ const LandingPage: React.FC = () => {
                       <Typography
                         variant="body2"
                         sx={{
-                          color: 'text.secondary',
+                          color: 'text.primary',
                           lineHeight: 1.6,
                         }}
                       >
