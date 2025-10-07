@@ -1,19 +1,49 @@
 import {
   ArrowBack as ArrowBackIcon,
+  Business as BusinessIcon,
+  CheckCircle,
+  Event,
   History as HistoryIcon,
+  LocalShipping,
+  LocationOn,
+  Payment,
+  Phone,
+  Receipt,
   Refresh as RefreshIcon,
+  ShoppingBag,
+  Star,
+  Store,
+  Timeline as TimelineIcon,
 } from '@mui/icons-material';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  CircularProgress,
+  Chip,
   Container,
+  Divider,
+  Grid,
   IconButton,
+  LinearProgress,
+  Paper,
+  Skeleton,
+  Stack,
+  Step,
+  StepConnector,
+  stepConnectorClasses,
+  StepIconProps,
+  StepLabel,
+  Stepper,
+  styled,
+  Tab,
+  Tabs,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +54,6 @@ import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
-import OrderView from '../common/OrderView';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import RatingDialog from '../dialogs/RatingDialog';
@@ -36,9 +65,132 @@ import ClientActions from '../orders/ClientActions';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
 import SEOHead from '../seo/SEOHead';
 
+// Custom Step Connector
+const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 22,
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      backgroundImage:
+        'linear-gradient( 95deg,rgb(25,118,210) 0%,rgb(33,150,243) 50%,rgb(66,165,245) 100%)',
+    },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      backgroundImage:
+        'linear-gradient( 95deg,rgb(46,125,50) 0%,rgb(56,142,60) 50%,rgb(76,175,80) 100%)',
+    },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    height: 3,
+    border: 0,
+    backgroundColor:
+      theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#eaeaf0',
+    borderRadius: 1,
+  },
+}));
+
+// Custom Step Icon
+const ColorlibStepIconRoot = styled('div')<{
+  ownerState: { completed?: boolean; active?: boolean };
+}>(({ theme, ownerState }) => ({
+  backgroundColor:
+    theme.palette.mode === 'dark' ? theme.palette.grey[700] : '#ccc',
+  zIndex: 1,
+  color: '#fff',
+  width: 50,
+  height: 50,
+  display: 'flex',
+  borderRadius: '50%',
+  justifyContent: 'center',
+  alignItems: 'center',
+  ...(ownerState.active && {
+    backgroundImage:
+      'linear-gradient( 136deg, rgb(25,118,210) 0%, rgb(33,150,243) 50%, rgb(66,165,245) 100%)',
+    boxShadow: '0 4px 10px 0 rgba(0,0,0,.25)',
+  }),
+  ...(ownerState.completed && {
+    backgroundImage:
+      'linear-gradient( 136deg, rgb(46,125,50) 0%, rgb(56,142,60) 50%, rgb(76,175,80) 100%)',
+  }),
+}));
+
+function ColorlibStepIcon(props: StepIconProps) {
+  const { active, completed, className } = props;
+
+  const icons: { [index: string]: React.ReactElement } = {
+    1: <ShoppingBag />,
+    2: <Payment />,
+    3: <CheckCircle />,
+    4: <Store />,
+    5: <LocalShipping />,
+    6: <CheckCircle />,
+  };
+
+  return (
+    <ColorlibStepIconRoot
+      ownerState={{ completed, active }}
+      className={className}
+    >
+      {icons[String(props.icon)]}
+    </ColorlibStepIconRoot>
+  );
+}
+
+// Loading Skeleton Component
+const OrderDetailSkeleton: React.FC = () => (
+  <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+    <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Skeleton variant="circular" width={40} height={40} />
+      <Skeleton variant="text" width={200} height={40} />
+    </Box>
+    <Grid container spacing={3}>
+      <Grid size={{ xs: 12, md: 8 }}>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Skeleton variant="text" width="60%" height={32} sx={{ mb: 2 }} />
+            <Skeleton
+              variant="rectangular"
+              height={120}
+              sx={{ mb: 2, borderRadius: 2 }}
+            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Skeleton
+                variant="rectangular"
+                width="30%"
+                height={60}
+                sx={{ borderRadius: 2 }}
+              />
+              <Skeleton
+                variant="rectangular"
+                width="30%"
+                height={60}
+                sx={{ borderRadius: 2 }}
+              />
+              <Skeleton
+                variant="rectangular"
+                width="30%"
+                height={60}
+                sx={{ borderRadius: 2 }}
+              />
+            </Box>
+          </CardContent>
+        </Card>
+        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
+      </Grid>
+      <Grid size={{ xs: 12, md: 4 }}>
+        <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
+      </Grid>
+    </Grid>
+  </Container>
+);
+
 const ManageOrderPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { orderId } = useParams<{ orderId: string }>();
   const { profile } = useUserProfile();
   const { accounts } = useAccountInfo();
@@ -67,6 +219,90 @@ const ManageOrderPage: React.FC = () => {
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   } | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Helper functions
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+      case 'pending_payment':
+        return 'warning';
+      case 'confirmed':
+        return 'info';
+      case 'preparing':
+        return 'primary';
+      case 'ready_for_pickup':
+        return 'secondary';
+      case 'assigned_to_agent':
+        return 'info';
+      case 'picked_up':
+        return 'primary';
+      case 'in_transit':
+        return 'primary';
+      case 'out_for_delivery':
+        return 'secondary';
+      case 'delivered':
+        return 'success';
+      case 'cancelled':
+        return 'error';
+      case 'failed':
+        return 'error';
+      case 'refunded':
+        return 'warning';
+      case 'complete':
+        return 'success';
+      default:
+        return 'default';
+    }
+  };
+
+  const getOrderStep = (status: string): number => {
+    const steps = {
+      pending: 0,
+      pending_payment: 0,
+      confirmed: 1,
+      preparing: 2,
+      ready_for_pickup: 3,
+      assigned_to_agent: 3,
+      picked_up: 4,
+      in_transit: 4,
+      out_for_delivery: 4,
+      delivered: 5,
+      complete: 5,
+    };
+    return steps[status as keyof typeof steps] ?? 0;
+  };
+
+  const formatCurrency = (amount: number, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formatAddress = (address: any) => {
+    if (!address) return '';
+    const parts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
 
   useEffect(() => {
     if (orderId) {
@@ -145,219 +381,658 @@ const ManageOrderPage: React.FC = () => {
     setNotificationAlert(null);
   };
 
-  const shouldShowFinancialDetails = () => {
-    // Show financial details for business admins or business owners
-    return (
-      profile?.business &&
-      (profile.business.is_admin ||
-        (order && order.business_id === profile.business.id))
-    );
-  };
-
+  // Show skeleton while loading
   if (loading) {
+    return <OrderDetailSkeleton />;
+  }
+
+  // Show error state
+  if (error || !order) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          minHeight="400px"
+      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
+          <IconButton onClick={handleBack}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h4" fontWeight="bold">
+            {t('orders.manageOrder', 'Order Details')}
+          </Typography>
+        </Box>
+        <Alert
+          severity={error ? 'error' : 'warning'}
+          action={
+            error && (
+              <Button color="inherit" size="small" onClick={() => refetch()}>
+                {t('common.retry', 'Retry')}
+              </Button>
+            )
+          }
         >
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box display="flex" alignItems="center" mb={2}>
-          <IconButton onClick={handleBack} sx={{ mr: 1 }}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h5">
-            {t('orders.manageOrder', 'Manage Order')}
-          </Typography>
-        </Box>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
-
-  if (!order) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box display="flex" alignItems="center" mb={2}>
-          <IconButton onClick={handleBack} sx={{ mr: 1 }}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h5">
-            {t('orders.manageOrder', 'Manage Order')}
-          </Typography>
-        </Box>
-        <Alert severity="warning">
-          {t('orders.orderNotFound', 'Order not found')}
+          {error || t('orders.orderNotFound', 'Order not found')}
         </Alert>
       </Container>
     );
   }
 
+  const currentStep = getOrderStep(order.current_status);
+  const isCancelled = ['cancelled', 'failed', 'refunded'].includes(
+    order.current_status
+  );
+
   return (
     <>
       <SEOHead
-        title={t('orders.manageOrder', 'Manage Order')}
+        title={`${t('orders.orderNumber', 'Order')} #${order.order_number}`}
         description={t(
           'orders.manageOrderDescription',
-          'View and manage order details',
-          {
-            orderNumber: order.order_number,
-          }
+          'View and manage order details'
         )}
       />
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        {/* Header */}
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          mb={3}
-        >
-          <Box display="flex" alignItems="center">
-            <IconButton onClick={handleBack} sx={{ mr: 1 }}>
-              <ArrowBackIcon />
-            </IconButton>
-            <Typography variant="h4">
-              {t('orders.manageOrder', 'Manage Order')}
-            </Typography>
+      <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: 4 }}>
+        <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+          {/* Header */}
+          <Box sx={{ mb: 3 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 2,
+                flexWrap: 'wrap',
+                gap: 2,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <IconButton
+                  onClick={handleBack}
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'grey.100' },
+                  }}
+                >
+                  <ArrowBackIcon />
+                </IconButton>
+                <Box>
+                  <Typography
+                    variant="h4"
+                    fontWeight="bold"
+                    sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
+                  >
+                    {t('orders.orderNumber', 'Order')} #{order.order_number}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.placedOn', 'Placed on')}{' '}
+                    {formatDate(order.created_at)}
+                  </Typography>
+                </Box>
+              </Box>
+              <Stack direction="row" spacing={1}>
+                <Chip
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  color={getStatusColor(order.current_status) as any}
+                  label={t(`common.orderStatus.${order.current_status}`)}
+                  size="medium"
+                  sx={{ fontWeight: 600, px: 2, py: 2.5 }}
+                />
+                <IconButton
+                  onClick={refetch}
+                  disabled={loading}
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'grey.100' },
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Stack>
+            </Box>
+
+            {/* Error Display */}
+            {actionError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {actionError}
+              </Alert>
+            )}
+
+            {/* Notification Alert */}
+            {notificationAlert && (
+              <Alert
+                severity={notificationAlert.severity}
+                sx={{ mb: 2 }}
+                onClose={handleClearNotification}
+              >
+                {notificationAlert.message}
+              </Alert>
+            )}
           </Box>
-          <IconButton onClick={refetch} disabled={loading}>
-            <RefreshIcon />
-          </IconButton>
-        </Box>
 
-        {/* Error Display */}
-        {actionError && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {actionError}
-          </Alert>
-        )}
+          {/* Order Progress Stepper */}
+          {!isCancelled && (
+            <Card sx={{ mb: 3, overflow: 'visible' }}>
+              <CardContent sx={{ p: { xs: 2, md: 4 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                  <TimelineIcon color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    {t('orders.orderProgress', 'Order Progress')}
+                  </Typography>
+                </Box>
+                <Stepper
+                  alternativeLabel
+                  activeStep={currentStep}
+                  connector={<ColorlibConnector />}
+                  sx={{ display: { xs: 'none', md: 'flex' } }}
+                >
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.pending', 'Order Placed')}
+                    </StepLabel>
+                  </Step>
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.confirmed', 'Confirmed')}
+                    </StepLabel>
+                  </Step>
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.preparing', 'Preparing')}
+                    </StepLabel>
+                  </Step>
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.ready', 'Ready')}
+                    </StepLabel>
+                  </Step>
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.inTransit', 'In Transit')}
+                    </StepLabel>
+                  </Step>
+                  <Step>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>
+                      {t('orders.status.delivered', 'Delivered')}
+                    </StepLabel>
+                  </Step>
+                </Stepper>
 
-        {/* Notification Alert */}
-        {notificationAlert && (
-          <Alert
-            severity={notificationAlert.severity}
-            sx={{ mb: 3 }}
-            onClose={handleClearNotification}
-          >
-            {notificationAlert.message}
-          </Alert>
-        )}
+                {/* Mobile Progress Bar */}
+                <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('orders.progress', 'Progress')}:{' '}
+                      {Math.round((currentStep / 5) * 100)}%
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(currentStep / 5) * 100}
+                      sx={{ height: 8, borderRadius: 1 }}
+                    />
+                  </Box>
+                  <Typography variant="body1" fontWeight="medium">
+                    {t(`common.orderStatus.${order.current_status}`)}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Order View */}
-        <Box sx={{ mb: 3 }}>
-          <OrderView
-            order={order}
-            showFinancialDetails={shouldShowFinancialDetails() ?? false}
-          />
-        </Box>
-
-        {/* Order Ratings Display */}
-        <OrderRatingsDisplay
-          ratings={ratings}
-          userType={profile?.user_type_id as 'client' | 'agent' | 'business'}
-        />
-
-        {/* Messages Section - Show to all users except agents who are not assigned to this order */}
-        {(!profile?.agent ||
-          order.assigned_agent_id === profile?.agent?.id) && (
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <UserMessagesComponent
-                entityType="order"
-                entityId={order.id}
-                title={t('messages.orderMessages', 'Order Messages')}
-                defaultExpanded={true}
-                maxVisibleMessages={10}
-                compact={false}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Persona-specific alerts */}
-        {profile?.agent && <AgentOrderAlerts order={order as any} />}
-        {profile?.business && (
-          <BusinessOrderAlerts
-            order={order as any}
-            onCancelOrder={handleCancelOrder}
-          />
-        )}
-        {profile?.client && <ClientOrderAlerts order={order as any} />}
-
-        {/* Order Actions - Persona-specific components */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {t('orders.availableActions', 'Available Actions')}
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Persona-specific actions */}
-              {profile?.agent && (
-                <AgentActions
-                  order={order}
-                  agentAccounts={accounts}
-                  onActionComplete={() => refetch()}
-                  onShowNotification={handleShowNotification}
-                />
-              )}
+          <Grid container spacing={3}>
+            {/* Main Content - Left Column */}
+            <Grid size={{ xs: 12, md: 8 }}>
+              {/* Persona-specific alerts */}
+              {/* eslint-disable @typescript-eslint/no-explicit-any */}
+              {profile?.agent && <AgentOrderAlerts order={order as any} />}
               {profile?.business && (
-                <BusinessActions
-                  order={order}
-                  onActionComplete={() => refetch()}
-                  onShowNotification={handleShowNotification}
-                  onShowHistory={() => setHistoryDialogOpen(true)}
+                <BusinessOrderAlerts
+                  order={order as any}
+                  onCancelOrder={handleCancelOrder}
                 />
               )}
-              {profile?.client && (
-                <ClientActions
-                  order={order}
-                  onActionComplete={() => refetch()}
-                  onShowNotification={handleShowNotification}
-                  onShowHistory={() => setHistoryDialogOpen(true)}
-                />
-              )}
+              {profile?.client && <ClientOrderAlerts order={order as any} />}
+              {/* eslint-enable @typescript-eslint/no-explicit-any */}
 
-              {/* Rating and History buttons */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                {/* Show rating button only if user can rate and hasn't rated yet */}
-                {order.current_status === 'complete' &&
-                  profile?.user_type_id !== 'business' &&
-                  ratings.length === 0 && (
+              {/* Tabbed Content */}
+              <Card sx={{ mb: 3 }}>
+                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                  <Tabs
+                    value={activeTab}
+                    onChange={(_, newValue) => setActiveTab(newValue)}
+                    variant={isMobile ? 'fullWidth' : 'standard'}
+                    sx={{ px: 2 }}
+                  >
+                    <Tab
+                      icon={<Receipt />}
+                      iconPosition="start"
+                      label={t('orders.details', 'Details')}
+                    />
+                    <Tab
+                      icon={<LocalShipping />}
+                      iconPosition="start"
+                      label={t('orders.delivery', 'Delivery')}
+                    />
+                    <Tab
+                      icon={<Star />}
+                      iconPosition="start"
+                      label={t('orders.ratings', 'Ratings')}
+                    />
+                  </Tabs>
+                </Box>
+
+                {/* Tab 0: Order Details */}
+                {activeTab === 0 && (
+                  <CardContent sx={{ p: 3 }}>
+                    {/* Order Items */}
+                    <Box sx={{ mb: 4 }}>
+                      <Typography variant="h6" fontWeight="bold" gutterBottom>
+                        {t('orders.orderItems', 'Order Items')}
+                      </Typography>
+                      <Stack spacing={2}>
+                        {order.order_items?.map((item) => (
+                          <Paper key={item.id} variant="outlined" sx={{ p: 2 }}>
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                              {item.item?.item_images?.[0]?.image_url && (
+                                <Box
+                                  component="img"
+                                  src={item.item.item_images[0].image_url}
+                                  alt={item.item.name}
+                                  sx={{
+                                    width: 80,
+                                    height: 80,
+                                    objectFit: 'cover',
+                                    borderRadius: 1,
+                                  }}
+                                />
+                              )}
+                              <Box sx={{ flex: 1 }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  fontWeight="medium"
+                                >
+                                  {item.item?.name}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t('orders.quantity', 'Quantity')}:{' '}
+                                  {item.quantity}
+                                </Typography>
+                                <Typography
+                                  variant="h6"
+                                  color="primary"
+                                  sx={{ mt: 1 }}
+                                >
+                                  {formatCurrency(
+                                    item.unit_price * item.quantity,
+                                    order.currency
+                                  )}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    </Box>
+
+                    {/* Business Info */}
+                    {order.business && (
+                      <Box sx={{ mb: 4 }}>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom>
+                          {t('orders.businessInfo', 'Business Information')}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 56,
+                                height: 56,
+                                bgcolor: 'primary.main',
+                              }}
+                            >
+                              <BusinessIcon />
+                            </Avatar>
+                            <Box>
+                              <Typography
+                                variant="subtitle1"
+                                fontWeight="medium"
+                              >
+                                {order.business.name}
+                              </Typography>
+                              {order.business.user?.phone_number && (
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  <Phone fontSize="small" color="action" />
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {order.business.user.phone_number}
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          </Box>
+                        </Paper>
+                      </Box>
+                    )}
+                  </CardContent>
+                )}
+
+                {/* Tab 1: Delivery Info */}
+                {activeTab === 1 && (
+                  <CardContent sx={{ p: 3 }}>
+                    {/* Delivery Address */}
+                    {order.delivery_address && (
+                      <Box sx={{ mb: 4 }}>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom>
+                          {t('orders.deliveryAddress', 'Delivery Address')}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            <LocationOn color="primary" />
+                            <Box>
+                              <Typography variant="body1">
+                                {formatAddress(order.delivery_address)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      </Box>
+                    )}
+
+                    {/* Agent Info */}
+                    {order.assigned_agent && (
+                      <Box>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom>
+                          {t('orders.deliveryAgent', 'Delivery Agent')}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 56,
+                                height: 56,
+                                bgcolor: 'info.main',
+                              }}
+                            >
+                              <LocalShipping />
+                            </Avatar>
+                            <Box>
+                              <Typography
+                                variant="subtitle1"
+                                fontWeight="medium"
+                              >
+                                {order.assigned_agent.user.first_name}{' '}
+                                {order.assigned_agent.user.last_name}
+                              </Typography>
+                              {order.assigned_agent.user.phone_number && (
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  <Phone fontSize="small" color="action" />
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {order.assigned_agent.user.phone_number}
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          </Box>
+                        </Paper>
+                      </Box>
+                    )}
+
+                    {!order.assigned_agent && (
+                      <Alert severity="info">
+                        {t(
+                          'orders.noAgentAssigned',
+                          'No delivery agent assigned yet'
+                        )}
+                      </Alert>
+                    )}
+                  </CardContent>
+                )}
+
+                {/* Tab 2: Ratings */}
+                {activeTab === 2 && (
+                  <CardContent sx={{ p: 3 }}>
+                    <OrderRatingsDisplay
+                      ratings={ratings}
+                      userType={
+                        profile?.user_type_id as 'client' | 'agent' | 'business'
+                      }
+                    />
+                    {ratings.length === 0 && (
+                      <Alert severity="info">
+                        {t('orders.noRatingsYet', 'No ratings yet')}
+                      </Alert>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+
+              {/* Messages Section */}
+              {(!profile?.agent ||
+                order.assigned_agent_id === profile?.agent?.id) && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <UserMessagesComponent
+                      entityType="order"
+                      entityId={order.id}
+                      title={t('messages.orderMessages', 'Order Messages')}
+                      defaultExpanded={true}
+                      maxVisibleMessages={10}
+                      compact={false}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </Grid>
+
+            {/* Right Column - Order Summary & Actions */}
+            <Grid size={{ xs: 12, md: 4 }}>
+              {/* Order Summary Card */}
+              <Card
+                sx={{
+                  mb: 3,
+                  position: { xs: 'static', md: 'sticky' },
+                  top: { md: 90 },
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>
+                    {t('orders.orderSummary', 'Order Summary')}
+                  </Typography>
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Order Date */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Event fontSize="small" color="action" />
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.orderDate', 'Order Date')}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" fontWeight="medium">
+                      {formatDate(order.created_at)}
+                    </Typography>
+                  </Box>
+
+                  {/* Payment Status */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Payment fontSize="small" color="action" />
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.paymentStatus', 'Payment')}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={order.payment_status || 'Pending'}
+                      size="small"
+                      color={
+                        order.payment_status === 'paid' ? 'success' : 'warning'
+                      }
+                    />
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Price Breakdown */}
+                  <Box sx={{ mb: 2 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.subtotal', 'Subtotal')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {formatCurrency(
+                          order.total_amount - (order.delivery_fee || 0),
+                          order.currency
+                        )}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.deliveryFee', 'Delivery Fee')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {formatCurrency(
+                          order.delivery_fee || 0,
+                          order.currency
+                        )}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      mb: 3,
+                    }}
+                  >
+                    <Typography variant="h6" fontWeight="bold">
+                      {t('orders.total', 'Total')}
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold" color="primary">
+                      {formatCurrency(order.total_amount, order.currency)}
+                    </Typography>
+                  </Box>
+
+                  <Divider sx={{ mb: 3 }} />
+
+                  {/* Action Buttons */}
+                  <Stack spacing={2}>
+                    {/* Persona-specific actions */}
+                    {profile?.agent && (
+                      <AgentActions
+                        order={order}
+                        agentAccounts={accounts}
+                        onActionComplete={() => refetch()}
+                        onShowNotification={handleShowNotification}
+                      />
+                    )}
+                    {profile?.business && (
+                      <BusinessActions
+                        order={order}
+                        onActionComplete={() => refetch()}
+                        onShowNotification={handleShowNotification}
+                        onShowHistory={() => setHistoryDialogOpen(true)}
+                      />
+                    )}
+                    {profile?.client && (
+                      <ClientActions
+                        order={order}
+                        onActionComplete={() => refetch()}
+                        onShowNotification={handleShowNotification}
+                        onShowHistory={() => setHistoryDialogOpen(true)}
+                      />
+                    )}
+
+                    {/* Rating button */}
+                    {order.current_status === 'complete' &&
+                      profile?.user_type_id !== 'business' &&
+                      ratings.length === 0 && (
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<Star />}
+                          onClick={() => setRatingDialogOpen(true)}
+                          fullWidth
+                        >
+                          {t('orders.actions.rateOrder', 'Rate Order')}
+                        </Button>
+                      )}
+
+                    {/* History button */}
                     <Button
                       variant="outlined"
-                      color="primary"
-                      onClick={() => setRatingDialogOpen(true)}
-                      disabled={loading}
+                      startIcon={<HistoryIcon />}
+                      onClick={() => setHistoryDialogOpen(true)}
+                      fullWidth
                     >
-                      {t('orders.actions.rateOrder', 'Rate Order')}
+                      {t('orders.actions.viewHistory', 'View History')}
                     </Button>
-                  )}
-
-                <Button
-                  variant="outlined"
-                  color="info"
-                  startIcon={<HistoryIcon />}
-                  onClick={() => setHistoryDialogOpen(true)}
-                  disabled={loading}
-                >
-                  {t('orders.actions.viewHistory', 'View History')}
-                </Button>
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-      </Container>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
 
       {/* Confirmation Modal */}
       <ConfirmationModal
