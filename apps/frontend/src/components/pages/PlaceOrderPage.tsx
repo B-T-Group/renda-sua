@@ -444,6 +444,15 @@ const PlaceOrderPage: React.FC = () => {
       ? overridePhoneNumber
       : profile?.phone_number;
 
+    // If using different phone but no phone number entered yet, don't show error but don't validate
+    if (useDifferentPhone && !overridePhoneNumber.trim()) {
+      return {
+        isValid: false, // Don't allow empty state for button enabling
+        countryCode: null,
+        message: null,
+      };
+    }
+
     if (!phoneToValidate) {
       return {
         isValid: false,
@@ -539,9 +548,11 @@ const PlaceOrderPage: React.FC = () => {
     !paymentSystemsLoading &&
     selectedAddressId &&
     addresses.length > 0 &&
-    profile?.phone_number &&
-    (!useDifferentPhone || overridePhoneNumber.trim()) &&
-    phoneValidation.isValid;
+    // If using different phone, require override phone number to be entered and valid
+    // If not using different phone, require profile phone number to be valid
+    (useDifferentPhone
+      ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
+      : profile?.phone_number && phoneValidation.isValid);
 
   return (
     <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: isMobile ? 20 : 4 }}>
@@ -1217,17 +1228,23 @@ const PlaceOrderPage: React.FC = () => {
                             )}
                             defaultCountry="GA"
                             fullWidth
+                            onlyCountries={supportedCountries}
+                            error={
+                              !phoneValidation.isValid &&
+                              overridePhoneNumber.trim() !== '' &&
+                              phoneValidation.message !== null
+                            }
+                            helperText={
+                              !phoneValidation.isValid &&
+                              overridePhoneNumber.trim() !== '' &&
+                              phoneValidation.message !== null
+                                ? phoneValidation.message || ''
+                                : t(
+                                    'orders.overridePhoneNote',
+                                    'This number will receive the payment request for this order'
+                                  )
+                            }
                           />
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ mt: 1, display: 'block' }}
-                          >
-                            {t(
-                              'orders.overridePhoneNote',
-                              'This number will receive the payment request for this order'
-                            )}
-                          </Typography>
                         </Box>
                       )}
 

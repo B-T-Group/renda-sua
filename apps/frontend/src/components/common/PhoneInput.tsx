@@ -15,6 +15,7 @@ interface PhoneInputProps {
   placeholder?: string;
   defaultCountry?: string;
   margin?: 'none' | 'dense' | 'normal';
+  onlyCountries?: string[];
 }
 
 const PhoneInput: React.FC<PhoneInputProps> = ({
@@ -29,6 +30,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   placeholder = 'Enter phone number',
   defaultCountry = 'US',
   margin = 'normal',
+  onlyCountries,
   ...props
 }) => {
   return (
@@ -105,6 +107,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           required={required}
+          countries={onlyCountries as any}
         />
       </Box>
 
