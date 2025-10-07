@@ -262,8 +262,8 @@ const LandingPage: React.FC = () => {
                   }}
                 >
                   <Box sx={theme.styles.trustSignal}>
-                    <Schedule sx={{ fontSize: 24 }} />
-                    <Typography variant="body2">
+                    <Schedule sx={{ fontSize: 24, color: 'white' }} />
+                    <Typography variant="body2" sx={{ color: 'white' }}>
                       {t(
                         'landing.hero.trustSignals.deliveryTime',
                         '24-48h delivery'
@@ -271,8 +271,8 @@ const LandingPage: React.FC = () => {
                     </Typography>
                   </Box>
                   <Box sx={theme.styles.trustSignal}>
-                    <Payment sx={{ fontSize: 24 }} />
-                    <Typography variant="body2">
+                    <Payment sx={{ fontSize: 24, color: 'white' }} />
+                    <Typography variant="body2" sx={{ color: 'white' }}>
                       {t(
                         'landing.hero.trustSignals.securePayment',
                         'Secure payments (Airtel Money)'
@@ -524,6 +524,7 @@ const LandingPage: React.FC = () => {
                     height: '100%',
                     border: '2px solid',
                     borderColor: 'divider',
+                    borderRadius: 2, // Explicitly set rectangular border radius
                     position: 'relative',
                     overflow: 'visible',
                     '&:hover': {
@@ -649,7 +650,13 @@ const LandingPage: React.FC = () => {
               const IconComponent = benefit.icon;
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-                  <Card elevation={0} sx={theme.styles.benefitCard}>
+                  <Card
+                    elevation={0}
+                    sx={{
+                      ...theme.styles.benefitCard,
+                      borderRadius: 2, // Explicitly set rectangular border radius
+                    }}
+                  >
                     <CardContent sx={{ p: 3, textAlign: 'center' }}>
                       <Box
                         sx={theme.styles.iconContainer(

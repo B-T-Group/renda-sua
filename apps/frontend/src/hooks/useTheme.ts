@@ -1,53 +1,30 @@
 import { useTheme as useMuiTheme } from '@mui/material/styles';
 import {
+  borderRadius,
+  breakpoints,
   componentStyles,
   getBorderRadius,
   getColorWithOpacity,
   getResponsiveSpacing,
   getShadow,
-  spacing,
-  borderRadius,
   shadows,
-  zIndex,
+  spacing,
   transitions,
-  breakpoints,
   typography,
+  zIndex,
 } from '../theme/themeUtils';
 
 /**
  * Enhanced useTheme hook that provides access to theme utilities and common styles
  * This hook extends the MUI useTheme hook with additional utilities for consistent styling
  */
-export const useTheme = (): ReturnType<typeof useMuiTheme> & {
-  utils: typeof spacing & typeof borderRadius & typeof shadows & typeof zIndex & typeof transitions & typeof breakpoints & typeof typography;
-  getColorWithOpacity: (color: string, opacity: number) => string;
-  getResponsiveSpacing: (spacingKey: keyof typeof spacing) => number;
-  getShadow: (shadowKey: keyof typeof shadows) => string;
-  getBorderRadius: (radiusKey: keyof typeof borderRadius) => string | number;
-  styles: {
-    card: any;
-    button: any;
-    input: any;
-    container: any;
-    section: any;
-    hero: any;
-    trustSignal: any;
-    stepNumber: (color: string) => any;
-    benefitCard: any;
-    iconContainer: (color: string) => any;
-  };
-  colors: any;
-  spacing: any;
-  radius: any;
-  elevation: any;
-  animation: any;
-} => {
-  const theme = useMuiTheme();
+export const useTheme = (): any => {
+  const muiTheme = useMuiTheme();
 
   return {
-    // Original MUI theme
-    ...theme,
-    
+    // Original MUI theme properties
+    ...muiTheme,
+
     // Theme utilities
     utils: {
       spacing,
@@ -60,89 +37,97 @@ export const useTheme = (): ReturnType<typeof useMuiTheme> & {
     },
 
     // Utility functions
-    getColorWithOpacity: (color: string, opacity: number) => 
-      getColorWithOpacity(theme, color, opacity),
-    getResponsiveSpacing: (spacingKey: keyof typeof spacing) => 
-      getResponsiveSpacing(theme, spacingKey),
-    getShadow: (shadowKey: keyof typeof shadows) => 
-      getShadow(shadowKey),
-    getBorderRadius: (radiusKey: keyof typeof borderRadius) => 
+    getColorWithOpacity: (color: string, opacity: number) =>
+      getColorWithOpacity(muiTheme, color, opacity),
+    getResponsiveSpacing: (spacingKey: keyof typeof spacing) =>
+      getResponsiveSpacing(muiTheme, spacingKey),
+    getShadow: (shadowKey: keyof typeof shadows) => getShadow(shadowKey),
+    getBorderRadius: (radiusKey: keyof typeof borderRadius) =>
       getBorderRadius(radiusKey),
 
     // Component styles
     styles: {
-      card: componentStyles.card(theme),
-      button: componentStyles.button(theme),
-      input: componentStyles.input(theme),
-      container: componentStyles.container(theme),
-      section: componentStyles.section(theme),
-      hero: componentStyles.hero(theme),
-      trustSignal: componentStyles.trustSignal(theme),
-      stepNumber: (color: string) => componentStyles.stepNumber(theme, color),
-      benefitCard: componentStyles.benefitCard(theme),
-      iconContainer: (color: string) => componentStyles.iconContainer(theme, color),
+      card: componentStyles.card(muiTheme),
+      button: componentStyles.button(muiTheme),
+      input: componentStyles.input(muiTheme),
+      container: componentStyles.container(muiTheme),
+      section: componentStyles.section(muiTheme),
+      hero: componentStyles.hero(muiTheme),
+      trustSignal: componentStyles.trustSignal(muiTheme),
+      stepNumber: (color: string) =>
+        componentStyles.stepNumber(muiTheme, color),
+      benefitCard: componentStyles.benefitCard(muiTheme),
+      iconContainer: (color: string) =>
+        componentStyles.iconContainer(muiTheme, color),
     },
 
     // Common color combinations
     colors: {
       primary: {
-        main: theme.palette.primary.main,
-        light: theme.palette.primary.light,
-        dark: theme.palette.primary.dark,
-        contrast: theme.palette.primary.contrastText,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'primary', opacity),
+        main: muiTheme.palette.primary.main,
+        light: muiTheme.palette.primary.light,
+        dark: muiTheme.palette.primary.dark,
+        contrast: muiTheme.palette.primary.contrastText,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'primary', opacity),
       },
       secondary: {
-        main: theme.palette.secondary.main,
-        light: theme.palette.secondary.light,
-        dark: theme.palette.secondary.dark,
-        contrast: theme.palette.secondary.contrastText,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'secondary', opacity),
+        main: muiTheme.palette.secondary.main,
+        light: muiTheme.palette.secondary.light,
+        dark: muiTheme.palette.secondary.dark,
+        contrast: muiTheme.palette.secondary.contrastText,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'secondary', opacity),
       },
       success: {
-        main: theme.palette.success.main,
-        light: theme.palette.success.light,
-        dark: theme.palette.success.dark,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'success', opacity),
+        main: muiTheme.palette.success.main,
+        light: muiTheme.palette.success.light,
+        dark: muiTheme.palette.success.dark,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'success', opacity),
       },
       warning: {
-        main: theme.palette.warning.main,
-        light: theme.palette.warning.light,
-        dark: theme.palette.warning.dark,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'warning', opacity),
+        main: muiTheme.palette.warning.main,
+        light: muiTheme.palette.warning.light,
+        dark: muiTheme.palette.warning.dark,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'warning', opacity),
       },
       error: {
-        main: theme.palette.error.main,
-        light: theme.palette.error.light,
-        dark: theme.palette.error.dark,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'error', opacity),
+        main: muiTheme.palette.error.main,
+        light: muiTheme.palette.error.light,
+        dark: muiTheme.palette.error.dark,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'error', opacity),
       },
       info: {
-        main: theme.palette.info.main,
-        light: theme.palette.info.light,
-        dark: theme.palette.info.dark,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'info', opacity),
+        main: muiTheme.palette.info.main,
+        light: muiTheme.palette.info.light,
+        dark: muiTheme.palette.info.dark,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'info', opacity),
       },
       background: {
-        default: theme.palette.background.default,
-        paper: theme.palette.background.paper,
-        withOpacity: (opacity: number) => getColorWithOpacity(theme, 'background', opacity),
+        default: muiTheme.palette.background.default,
+        paper: muiTheme.palette.background.paper,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'background', opacity),
       },
       text: {
-        primary: theme.palette.text.primary,
-        secondary: theme.palette.text.secondary,
-        disabled: theme.palette.text.disabled,
+        primary: muiTheme.palette.text.primary,
+        secondary: muiTheme.palette.text.secondary,
+        disabled: muiTheme.palette.text.disabled,
       },
     },
 
     // Common spacing values
     spacing: {
-      xs: theme.spacing(1), // 8px
-      sm: theme.spacing(2), // 16px
-      md: theme.spacing(3), // 24px
-      lg: theme.spacing(4), // 32px
-      xl: theme.spacing(6), // 48px
-      xxl: theme.spacing(8), // 64px
+      xs: muiTheme.spacing(1), // 8px
+      sm: muiTheme.spacing(2), // 16px
+      md: muiTheme.spacing(3), // 24px
+      lg: muiTheme.spacing(4), // 32px
+      xl: muiTheme.spacing(6), // 48px
+      xxl: muiTheme.spacing(8), // 64px
     },
 
     // Common border radius values
