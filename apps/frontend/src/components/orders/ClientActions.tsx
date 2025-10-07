@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 
 interface ClientActionsProps {
   order: OrderData;
@@ -22,27 +23,24 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   onShowHistory,
 }) => {
   const { t } = useTranslation();
-  const { cancelOrder, completeOrder } = useBackendOrders();
+  const { completeOrder } = useBackendOrders();
   const [loading, setLoading] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
-  const handleCancelOrder = async () => {
-    setLoading(true);
-    try {
-      await cancelOrder({ orderId: order.id });
-      onShowNotification?.(
-        t('messages.orderCancelSuccess', 'Order cancelled successfully'),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderCancelError', 'Failed to cancel order'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+  const handleCancelClick = () => {
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelSuccess = () => {
+    onShowNotification?.(
+      t('messages.orderCancelSuccess', 'Order cancelled successfully'),
+      'success'
+    );
+    onActionComplete?.();
+  };
+
+  const handleCancelError = (errorMessage: string) => {
+    onShowNotification?.(errorMessage, 'error');
   };
 
   const handleCompleteOrder = async () => {
@@ -54,12 +52,12 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderCompleteError', 'Failed to complete order'),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderCompleteError', 'Failed to complete order');
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -68,11 +66,11 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const getAvailableActions = () => {
     const actions = [];
 
-    // Cancel action - only available for pending, confirmed, preparing statuses
-    if (['pending', 'confirmed', 'preparing'].includes(order.current_status)) {
+    // Cancel action - only available for pending and confirmed statuses
+    if (['pending', 'confirmed'].includes(order.current_status)) {
       actions.push({
         label: t('orderActions.cancelOrder', 'Cancel Order'),
-        action: handleCancelOrder,
+        action: handleCancelClick,
         color: 'error' as const,
         icon: <Cancel />,
       });
@@ -98,40 +96,46 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        gap: 2,
-        flexWrap: 'wrap',
-        justifyContent: 'flex-end',
-      }}
-    >
-      {availableActions.map((action, index) => (
-        <Button
-          key={index}
-          variant="outlined"
-          color={action.color}
-          onClick={action.action}
-          disabled={
-            loading &&
-            (action.action === handleCancelOrder ||
-              action.action === handleCompleteOrder)
-          }
-          startIcon={
-            loading &&
-            (action.action === handleCancelOrder ||
-              action.action === handleCompleteOrder) ? (
-              <CircularProgress size={16} />
-            ) : (
-              action.icon
-            )
-          }
-          sx={{ minWidth: 120 }}
-        >
-          {action.label}
-        </Button>
-      ))}
-    </Box>
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+      >
+        {availableActions.map((action, index) => (
+          <Button
+            key={index}
+            variant="outlined"
+            color={action.color}
+            onClick={action.action}
+            disabled={loading && action.action === handleCompleteOrder}
+            startIcon={
+              loading && action.action === handleCompleteOrder ? (
+                <CircularProgress size={16} />
+              ) : (
+                action.icon
+              )
+            }
+            sx={{ minWidth: 120 }}
+          >
+            {action.label}
+          </Button>
+        ))}
+      </Box>
+
+      {/* Cancellation Reason Modal */}
+      <CancellationReasonModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        order={order}
+        persona="client"
+        onSuccess={handleCancelSuccess}
+        onError={handleCancelError}
+      />
+    </>
   );
 };
 

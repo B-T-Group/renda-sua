@@ -24,6 +24,7 @@
 - '!include public_mobile_payment_transactions.yaml'
 - '!include public_mtn_momo_payment_requests.yaml'
 - '!include public_order_holds.yaml'
+- '!include public_order_cancellation_reasons.yaml'
 - '!include public_order_items.yaml'
 - '!include public_order_status_history.yaml'
 - '!include public_orders.yaml'

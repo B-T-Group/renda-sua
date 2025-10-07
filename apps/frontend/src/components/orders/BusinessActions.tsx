@@ -1,9 +1,14 @@
-import { CheckCircle, AttachMoney as RefundIcon } from '@mui/icons-material';
+import {
+  Cancel,
+  CheckCircle,
+  AttachMoney as RefundIcon,
+} from '@mui/icons-material';
 import { Box, Button, CircularProgress } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 
 interface BusinessActionsProps {
   order: OrderData;
@@ -30,6 +35,23 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     completeOrder,
   } = useBackendOrders();
   const [loading, setLoading] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+
+  const handleCancelClick = () => {
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelSuccess = () => {
+    onShowNotification?.(
+      t('messages.orderCancelSuccess', 'Order cancelled successfully'),
+      'success'
+    );
+    onActionComplete?.();
+  };
+
+  const handleCancelError = (errorMessage: string) => {
+    onShowNotification?.(errorMessage, 'error');
+  };
 
   const handleConfirmOrder = async () => {
     setLoading(true);
@@ -40,12 +62,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderConfirmError', 'Failed to confirm order'),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderConfirmError', 'Failed to confirm order');
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -63,12 +85,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderStartPreparingError', 'Failed to start preparation'),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'messages.orderStartPreparingError',
+              'Failed to start preparation'
+            );
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -86,15 +111,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t(
-            'messages.orderCompletePreparationError',
-            'Failed to complete preparation'
-          ),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'messages.orderCompletePreparationError',
+              'Failed to complete preparation'
+            );
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -109,12 +134,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderRefundError', 'Failed to refund order'),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderRefundError', 'Failed to refund order');
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -129,19 +154,24 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderCompleteError', 'Failed to complete order'),
-        'error'
-      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderCompleteError', 'Failed to complete order');
+      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const getAvailableActions = () => {
-    const actions = [];
+    const actions: Array<{
+      label: string;
+      action: () => void | Promise<void>;
+      color: 'success' | 'primary' | 'error' | 'warning';
+      icon: JSX.Element;
+    }> = [];
 
     switch (order.current_status) {
       case 'pending':
@@ -150,6 +180,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           action: handleConfirmOrder,
           color: 'success' as const,
           icon: <CheckCircle />,
+        });
+        actions.push({
+          label: t('orderActions.cancelOrder', 'Cancel Order'),
+          action: handleCancelClick,
+          color: 'error' as const,
+          icon: <Cancel />,
         });
         break;
 
@@ -160,6 +196,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           color: 'primary' as const,
           icon: <CheckCircle />,
         });
+        actions.push({
+          label: t('orderActions.cancelOrder', 'Cancel Order'),
+          action: handleCancelClick,
+          color: 'error' as const,
+          icon: <Cancel />,
+        });
         break;
 
       case 'preparing':
@@ -168,6 +210,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           action: handleCompletePreparation,
           color: 'success' as const,
           icon: <CheckCircle />,
+        });
+        actions.push({
+          label: t('orderActions.cancelOrder', 'Cancel Order'),
+          action: handleCancelClick,
+          color: 'error' as const,
+          icon: <Cancel />,
         });
         break;
 
@@ -229,50 +277,46 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        gap: 2,
-        flexWrap: 'wrap',
-        justifyContent: 'flex-end',
-      }}
-    >
-      {availableActions.map((action, index) => (
-        <Button
-          key={index}
-          variant="outlined"
-          color={action.color}
-          onClick={action.action}
-          disabled={
-            loading &&
-            [
-              handleConfirmOrder,
-              handleStartPreparing,
-              handleCompletePreparation,
-              handleRefundOrder,
-              handleCompleteOrder,
-            ].includes(action.action)
-          }
-          startIcon={
-            loading &&
-            [
-              handleConfirmOrder,
-              handleStartPreparing,
-              handleCompletePreparation,
-              handleRefundOrder,
-              handleCompleteOrder,
-            ].includes(action.action) ? (
-              <CircularProgress size={16} />
-            ) : (
-              action.icon
-            )
-          }
-          sx={{ minWidth: 120 }}
-        >
-          {action.label}
-        </Button>
-      ))}
-    </Box>
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+      >
+        {availableActions.map((action, index) => {
+          const isLoadingAction =
+            loading && action.action !== handleCancelClick;
+          return (
+            <Button
+              key={index}
+              variant="outlined"
+              color={action.color}
+              onClick={action.action}
+              disabled={isLoadingAction}
+              startIcon={
+                isLoadingAction ? <CircularProgress size={16} /> : action.icon
+              }
+              sx={{ minWidth: 120 }}
+            >
+              {action.label}
+            </Button>
+          );
+        })}
+      </Box>
+
+      {/* Cancellation Reason Modal */}
+      <CancellationReasonModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        order={order}
+        persona="business"
+        onSuccess={handleCancelSuccess}
+        onError={handleCancelError}
+      />
+    </>
   );
 };
 
