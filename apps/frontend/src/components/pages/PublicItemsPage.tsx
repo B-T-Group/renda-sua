@@ -271,6 +271,7 @@ const PublicItemsPage: React.FC = () => {
               borderRadius: 3,
               position: 'relative',
               overflow: 'hidden',
+              boxShadow: '0 8px 32px rgba(30, 64, 175, 0.2)',
               '&::before': {
                 content: '""',
                 position: 'absolute',
@@ -279,8 +280,8 @@ const PublicItemsPage: React.FC = () => {
                 right: 0,
                 bottom: 0,
                 background:
-                  'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.05"%3E%3Ccircle cx="30" cy="30" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-                opacity: 0.3,
+                  'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.08) 0%, transparent 50%)',
+                pointerEvents: 'none',
               },
             }}
           >
@@ -288,12 +289,29 @@ const PublicItemsPage: React.FC = () => {
               <Box
                 sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}
               >
-                <ShoppingCart sx={{ fontSize: 40 }} />
-                <Typography variant="h5" fontWeight={700}>
+                <ShoppingCart sx={{ fontSize: 40, color: 'white' }} />
+                <Typography
+                  variant="h5"
+                  fontWeight={700}
+                  sx={{
+                    color: 'white',
+                    textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  }}
+                >
                   {t('public.items.ctaTitle', 'Ready to start shopping?')}
                 </Typography>
               </Box>
-              <Typography variant="body1" sx={{ mb: 3, opacity: 0.95 }}>
+              <Typography
+                variant="body1"
+                sx={{
+                  mb: 3,
+                  color: 'white',
+                  fontSize: '1.1rem',
+                  lineHeight: 1.6,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  fontWeight: 500,
+                }}
+              >
                 {t(
                   'public.items.ctaSubtitle',
                   'Sign in to place orders, track deliveries, and access exclusive deals from verified sellers.'
