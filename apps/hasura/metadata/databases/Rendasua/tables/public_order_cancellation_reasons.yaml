@@ -2,6 +2,17 @@ table:
   name: order_cancellation_reasons
   schema: public
 select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - value
+        - display
+        - rank
+        - persona
+        - created_at
+        - updated_at
+      filter: {}
   - role: anonymous
     permission:
       columns:
@@ -13,7 +24,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: user
+  - role: business
     permission:
       columns:
         - id
@@ -35,18 +46,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: agent
-    permission:
-      columns:
-        - id
-        - value
-        - display
-        - rank
-        - persona
-        - created_at
-        - updated_at
-      filter: {}
-  - role: business
+  - role: user
     permission:
       columns:
         - id

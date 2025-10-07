@@ -2,6 +2,16 @@ table:
   name: supported_payment_systems
   schema: public
 select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - name
+        - country
+        - active
+        - created_at
+        - updated_at
+      filter: {}
   - role: anonymous
     permission:
       columns:
@@ -12,7 +22,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: user
+  - role: business
     permission:
       columns:
         - id
@@ -32,17 +42,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: agent
-    permission:
-      columns:
-        - id
-        - name
-        - country
-        - active
-        - created_at
-        - updated_at
-      filter: {}
-  - role: business
+  - role: user
     permission:
       columns:
         - id

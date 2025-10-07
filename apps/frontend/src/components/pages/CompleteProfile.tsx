@@ -71,12 +71,11 @@ const personaOptions = [
 ];
 
 const CompleteProfile: React.FC = () => {
-  const { user } = useAuth0();
+  const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { refetch } = useUserProfileContext();
   const {
-    userTypes,
     vehicleTypes,
     loading: typesLoading,
     error: typesError,
@@ -154,6 +153,16 @@ const CompleteProfile: React.FC = () => {
       await apiClient.post('/users', profileData);
       setSuccess(true);
 
+      // Refresh the Auth0 token to ensure we have the latest token
+      try {
+        await getAccessTokenSilently({
+          cacheMode: 'off',
+        });
+      } catch (tokenError) {
+        console.warn('Failed to refresh Auth0 token:', tokenError);
+        // Continue with profile refresh even if token refresh fails
+      }
+
       // Refresh the user profile context
       await refetch();
 
@@ -161,10 +170,18 @@ const CompleteProfile: React.FC = () => {
       setTimeout(() => {
         navigate('/app');
       }, 2000);
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error || 'Failed to create user. Please try again.'
-      );
+    } catch (err: unknown) {
+      let errorMessage = 'Failed to create user. Please try again.';
+
+      if (err && typeof err === 'object' && 'response' in err) {
+        const response = (err as { response?: { data?: { error?: string } } })
+          .response;
+        if (response?.data?.error) {
+          errorMessage = response.data.error;
+        }
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

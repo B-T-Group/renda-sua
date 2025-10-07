@@ -1,4 +1,5 @@
 import { createTheme } from '@mui/material/styles';
+import { spacing, borderRadius, shadows, transitions } from './themeUtils';
 
 export const theme = createTheme({
   palette: {
@@ -125,6 +126,30 @@ export const theme = createTheme({
   },
   shape: {
     borderRadius: 16, // More rounded for modern delivery app feel
+  },
+  // Custom theme utilities
+  custom: {
+    spacing,
+    borderRadius,
+    shadows,
+    transitions,
+    // Additional design tokens
+    zIndex: {
+      dropdown: 1000,
+      sticky: 1020,
+      fixed: 1030,
+      modalBackdrop: 1040,
+      modal: 1050,
+      popover: 1060,
+      tooltip: 1070,
+    },
+    breakpoints: {
+      xs: 0,
+      sm: 600,
+      md: 900,
+      lg: 1200,
+      xl: 1536,
+    },
   },
   shadows: [
     'none',

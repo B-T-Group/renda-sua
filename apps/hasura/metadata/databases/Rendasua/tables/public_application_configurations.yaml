@@ -1,5 +1,3 @@
 table:
-  schema: public
   name: application_configurations
-object_relationships: []
-array_relationships: []
+  schema: public

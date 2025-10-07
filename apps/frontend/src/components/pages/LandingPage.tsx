@@ -20,12 +20,12 @@ import {
   Grid,
   Stack,
   Typography,
-  useTheme,
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSEO } from '../../hooks/useSEO';
+import { useTheme } from '../../hooks/useTheme';
 import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
 
@@ -130,30 +130,13 @@ const LandingPage: React.FC = () => {
       <SEOHead {...seoConfig} />
 
       {/* Hero Section */}
-      <Box
-        sx={{
-          position: 'relative',
-          bgcolor: 'primary.main',
-          color: 'white',
-          overflow: 'hidden',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background:
-              'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.08) 0%, transparent 50%)',
-            pointerEvents: 'none',
-          },
-        }}
-      >
+      <Box sx={theme.styles.hero}>
         <Container
           maxWidth="lg"
           sx={{
+            ...theme.styles.container,
             position: 'relative',
-            py: { xs: 8, md: 12 },
+            py: { xs: theme.spacing.xxl, md: theme.spacing.xxxl },
             zIndex: 1,
           }}
         >
@@ -170,11 +153,8 @@ const LandingPage: React.FC = () => {
                 <Typography
                   variant="h1"
                   sx={{
-                    fontWeight: 800,
-                    fontSize: { xs: '2.25rem', sm: '3rem', md: '3.5rem' },
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                    mb: 2,
+                    ...theme.utils.typography.responsive.h1,
+                    mb: theme.spacing.sm,
                     background:
                       'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.85) 100%)',
                     WebkitBackgroundClip: 'text',
@@ -192,11 +172,9 @@ const LandingPage: React.FC = () => {
                 <Typography
                   variant="h6"
                   sx={{
-                    mb: 4,
+                    ...theme.utils.typography.responsive.body,
+                    mb: theme.spacing.lg,
                     color: 'rgba(255, 255, 255, 0.9)',
-                    fontWeight: 400,
-                    lineHeight: 1.6,
-                    fontSize: { xs: '1rem', md: '1.2rem' },
                   }}
                 >
                   {t(
@@ -276,32 +254,18 @@ const LandingPage: React.FC = () => {
                     alignItems: 'center',
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={theme.styles.trustSignal}>
                     <Schedule sx={{ fontSize: 24 }} />
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: '0.95rem',
-                        color: 'white',
-                      }}
-                    >
+                    <Typography variant="body2">
                       {t(
                         'landing.hero.trustSignals.deliveryTime',
                         '24-48h delivery'
                       )}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={theme.styles.trustSignal}>
                     <Payment sx={{ fontSize: 24 }} />
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: '0.95rem',
-                        color: 'white',
-                      }}
-                    >
+                    <Typography variant="body2">
                       {t(
                         'landing.hero.trustSignals.securePayment',
                         'Secure payments (Airtel Money)'
@@ -549,17 +513,14 @@ const LandingPage: React.FC = () => {
                 <Card
                   elevation={0}
                   sx={{
+                    ...theme.styles.card,
                     height: '100%',
                     border: '2px solid',
                     borderColor: 'divider',
-                    borderRadius: 3,
                     position: 'relative',
                     overflow: 'visible',
-                    transition: 'all 0.3s ease',
                     '&:hover': {
-                      transform: 'translateY(-8px)',
                       borderColor: step.color,
-                      boxShadow: theme.shadows[8],
                     },
                   }}
                 >
@@ -573,24 +534,7 @@ const LandingPage: React.FC = () => {
                     }}
                   >
                     {/* Step Number */}
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: -15,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 30,
-                        height: 30,
-                        borderRadius: '50%',
-                        bgcolor: step.color,
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: '0.9rem',
-                      }}
-                    >
+                    <Box sx={theme.styles.stepNumber(step.color)}>
                       {index + 1}
                     </Box>
 
@@ -698,36 +642,9 @@ const LandingPage: React.FC = () => {
               const IconComponent = benefit.icon;
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-                  <Card
-                    elevation={0}
-                    sx={{
-                      height: '100%',
-                      bgcolor: 'white',
-                      border: '2px solid',
-                      borderColor: 'primary.main',
-                      borderRadius: 3,
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        transform: 'translateY(-8px)',
-                        boxShadow: theme.shadows[12],
-                        borderColor: 'primary.dark',
-                      },
-                    }}
-                  >
+                  <Card elevation={0} sx={theme.styles.benefitCard}>
                     <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                      <Box
-                        sx={{
-                          width: 60,
-                          height: 60,
-                          borderRadius: '50%',
-                          bgcolor: 'primary.main',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mx: 'auto',
-                          mb: 2,
-                        }}
-                      >
+                      <Box sx={theme.styles.iconContainer(theme.colors.primary.main)}>
                         <IconComponent
                           sx={{
                             fontSize: 32,
