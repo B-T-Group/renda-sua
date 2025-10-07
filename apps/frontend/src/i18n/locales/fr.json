@@ -932,5 +932,82 @@
         "dateValueRequired": "La valeur date est requise"
       }
     }
+  },
+  "landing": {
+    "seo": {
+      "title": "Rendasua - Livraison Rapide au Gabon | 24-48h",
+      "description": "Commandez et recevez vos articles en 24-48h partout au Gabon. Large sélection, meilleurs prix, paiement sécurisé Airtel Money. Livraison à domicile.",
+      "keywords": "livraison Gabon, Airtel Money, achat en ligne Gabon, livraison rapide, Rendasua, e-commerce Gabon, shopping en ligne"
+    },
+    "hero": {
+      "title": "Livraison Rapide d'Articles de Qualité au Gabon",
+      "subtitle": "Achetez parmi une large sélection de produits et recevez-les à votre porte en 24-48 heures",
+      "shopNow": "Acheter Maintenant",
+      "signUp": "S'inscrire",
+      "trustSignals": {
+        "deliveryTime": "Livraison 24-48h",
+        "securePayment": "Paiements sécurisés (Airtel Money)"
+      }
+    },
+    "howItWorks": {
+      "title": "Comment Ça Marche",
+      "subtitle": "Recevez vos articles en 4 étapes simples",
+      "steps": {
+        "placeOrder": {
+          "title": "Passez Votre Commande",
+          "description": "Parcourez notre large sélection et ajoutez des articles à votre panier"
+        },
+        "orderConfirmed": {
+          "title": "Commande Confirmée et Préparée",
+          "description": "Votre commande est confirmée et préparée par l'entreprise"
+        },
+        "pickup": {
+          "title": "Commande Récupérée",
+          "description": "Un agent de livraison récupère votre commande chez l'entreprise"
+        },
+        "delivered": {
+          "title": "Livrée Chez Vous",
+          "description": "Votre commande est livrée en toute sécurité à votre porte"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Pourquoi Choisir Rendasua ?",
+      "subtitle": "Découvrez le meilleur du shopping en ligne et de la livraison",
+      "fastDelivery": {
+        "title": "Livraison Rapide",
+        "description": "Recevez vos articles en 24-48 heures partout au Gabon"
+      },
+      "wideSelection": {
+        "title": "Large Sélection",
+        "description": "Parcourez des milliers de produits d'entreprises locales"
+      },
+      "bestPrices": {
+        "title": "Meilleurs Prix",
+        "description": "Prix compétitifs sans frais cachés ni charges"
+      },
+      "shopFromHome": {
+        "title": "Achetez de Chez Vous",
+        "description": "Commandez tout ce dont vous avez besoin depuis le confort de votre domicile"
+      }
+    },
+    "businessCta": {
+      "title": "Vendez sur Rendasua Aujourd'hui",
+      "subtitle": "Rejoignez des milliers d'entreprises qui vendent déjà sur notre plateforme",
+      "description": "Ouvrez un compte entreprise et commencez à vendre vos produits aux clients du Gabon. Gérez votre inventaire, suivez les commandes et développez votre entreprise avec notre plateforme complète.",
+      "openBusinessAccount": "Ouvrir un Compte Entreprise",
+      "benefits": {
+        "reachCustomers": "Atteignez les clients du Gabon",
+        "manageInventory": "Gérez l'inventaire sur plusieurs emplacements",
+        "trackOrders": "Suivez et exécutez les commandes efficacement",
+        "growBusiness": "Développez votre entreprise avec notre plateforme"
+      }
+    },
+    "finalCta": {
+      "title": "Prêt à Commencer vos Achats ?",
+      "subtitle": "Rejoignez des milliers de clients satisfaits qui achètent et reçoivent leurs articles rapidement et en toute sécurité au Gabon",
+      "browseItems": "Parcourir les Articles",
+      "createAccount": "Créer un Compte"
+    }
   }
 }

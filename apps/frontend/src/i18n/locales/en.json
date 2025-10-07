@@ -204,10 +204,7 @@
       "selectCategoryFirst": "Select a category first",
       "subCategory": "Sub Category",
       "loadingSubCategories": "Loading subcategories...",
-      "noSubCategories": "No subcategories available",
-      "specialHandling": "Special Handling",
-      "fragile": "Fragile",
-      "perishable": "Perishable"
+      "noSubCategories": "No subcategories available"
     },
     "orders": {
       "preparingNotice": "👨‍🍳 Preparation in progress. Complete carefully and mark as \"Ready for Pickup\" to notify available agents.",
@@ -1061,6 +1058,83 @@
         "arrayValueRequired": "Array value is required",
         "dateValueRequired": "Date value is required"
       }
+    }
+  },
+  "landing": {
+    "seo": {
+      "title": "Rendasua - Fast Delivery in Gabon | 24-48h",
+      "description": "Order and receive your items in 24-48h anywhere in Gabon. Wide selection, best prices, secure Airtel Money payment. Home delivery.",
+      "keywords": "delivery Gabon, Airtel Money, online shopping Gabon, fast delivery, Rendasua, e-commerce Gabon, online shopping"
+    },
+    "hero": {
+      "title": "Fast Delivery of Quality Items in Gabon",
+      "subtitle": "Shop from a wide selection of products and get them delivered to your doorstep within 24-48 hours",
+      "shopNow": "Shop Now",
+      "signUp": "Sign Up",
+      "trustSignals": {
+        "deliveryTime": "24-48h delivery",
+        "securePayment": "Secure payments (Airtel Money)"
+      }
+    },
+    "howItWorks": {
+      "title": "How It Works",
+      "subtitle": "Get your items delivered in 4 simple steps",
+      "steps": {
+        "placeOrder": {
+          "title": "Place Your Order",
+          "description": "Browse our wide selection and add items to your cart"
+        },
+        "orderConfirmed": {
+          "title": "Order Confirmed & Prepared",
+          "description": "Your order is confirmed and prepared by the business"
+        },
+        "pickup": {
+          "title": "Order Picked Up",
+          "description": "A delivery agent picks up your order from the business"
+        },
+        "delivered": {
+          "title": "Delivered to You",
+          "description": "Your order is delivered safely to your doorstep"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Why Choose Rendasua?",
+      "subtitle": "Experience the best in online shopping and delivery",
+      "fastDelivery": {
+        "title": "Fast Delivery",
+        "description": "Get your items delivered within 24-48 hours across Gabon"
+      },
+      "wideSelection": {
+        "title": "Wide Selection",
+        "description": "Browse thousands of products from local businesses"
+      },
+      "bestPrices": {
+        "title": "Best Prices",
+        "description": "Competitive prices with no hidden fees or charges"
+      },
+      "shopFromHome": {
+        "title": "Shop from Home",
+        "description": "Order everything you need from the comfort of your home"
+      }
+    },
+    "businessCta": {
+      "title": "Sell on Rendasua Today",
+      "subtitle": "Join thousands of businesses already selling on our platform",
+      "description": "Open a business account and start selling your products to customers across Gabon. Manage your inventory, track orders, and grow your business with our comprehensive platform.",
+      "openBusinessAccount": "Open Business Account",
+      "benefits": {
+        "reachCustomers": "Reach customers across Gabon",
+        "manageInventory": "Manage inventory across multiple locations",
+        "trackOrders": "Track and fulfill orders efficiently",
+        "growBusiness": "Grow your business with our platform"
+      }
+    },
+    "finalCta": {
+      "title": "Ready to Start Shopping?",
+      "subtitle": "Join thousands of satisfied customers shopping and receiving their items quickly and safely across Gabon",
+      "browseItems": "Browse Items",
+      "createAccount": "Create Account"
     }
   }
 }
