@@ -38,6 +38,7 @@ import {
   InventoryItem,
   useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 
@@ -94,6 +95,7 @@ const PublicItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { profile } = useUserProfile();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -192,6 +194,9 @@ const PublicItemsPage: React.FC = () => {
   const handleLogin = () => {
     loginWithRedirect();
   };
+
+  // Check if user is a client (can place orders)
+  const isClient = isAuthenticated && profile?.client !== null && profile?.client !== undefined;
 
   const handleOrderClick = (item: InventoryItem) => {
     if (!isAuthenticated) {
@@ -790,6 +795,7 @@ const PublicItemsPage: React.FC = () => {
                 distanceLoading={false}
                 distanceError={null}
                 isPublicView={!isAuthenticated}
+                canOrder={!isAuthenticated || isClient}
                 loginButtonText={t('public.items.login', 'Sign In to Order')}
                 orderButtonText={t('common.orderNow', 'Order Now')}
               />

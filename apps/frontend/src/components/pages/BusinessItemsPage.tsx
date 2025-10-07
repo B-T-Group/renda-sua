@@ -6,7 +6,6 @@ import {
   Inventory as InventoryIcon,
   LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
-  Search as SearchIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material';
@@ -25,12 +24,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControl,
   IconButton,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Skeleton,
   Stack,
   Tab,
@@ -41,7 +36,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -62,6 +56,7 @@ import { useItems } from '../../hooks/useItems';
 import AddItemDialog from '../business/AddItemDialog';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import CSVUploadDialog from '../business/CSVUploadDialog';
+import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -230,11 +225,14 @@ const BusinessItemsPage: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Table state
-  const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [brandFilter, setBrandFilter] = useState<string>('all');
+  // Filter state
+  const [filters, setFilters] = useState<ItemsFilterState>({
+    searchText: '',
+    statusFilter: 'all',
+    categoryFilter: 'all',
+    brandFilter: 'all',
+    stockFilter: 'all',
+  });
 
   const {
     items,
@@ -627,38 +625,70 @@ const BusinessItemsPage: React.FC = () => {
     },
   ];
 
+  // Helper function to get stock status
+  const getItemStockStatus = (item: any): string => {
+    const inventory = item.business_inventories?.[0];
+    if (!inventory) return 'noInventory';
+
+    const quantity = inventory.computed_available_quantity || 0;
+    const reorderPoint = inventory.reorder_point || 0;
+
+    if (quantity === 0) return 'outOfStock';
+    if (quantity <= reorderPoint) return 'lowStock';
+    return 'inStock';
+  };
+
   // Filter items based on search and filters
   const filteredItems =
     items?.filter((item) => {
       const matchesSearch =
-        searchText === '' ||
-        item.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchText.toLowerCase()) ||
-        item.sku?.toLowerCase().includes(searchText.toLowerCase());
+        filters.searchText === '' ||
+        item.name.toLowerCase().includes(filters.searchText.toLowerCase()) ||
+        item.description
+          ?.toLowerCase()
+          .includes(filters.searchText.toLowerCase()) ||
+        item.sku?.toLowerCase().includes(filters.searchText.toLowerCase());
 
       const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'active' && item.is_active) ||
-        (statusFilter === 'inactive' && !item.is_active);
+        filters.statusFilter === 'all' ||
+        (filters.statusFilter === 'active' && item.is_active) ||
+        (filters.statusFilter === 'inactive' && !item.is_active);
 
       const matchesCategory =
-        categoryFilter === 'all' ||
-        item.item_sub_category?.name === categoryFilter;
+        filters.categoryFilter === 'all' ||
+        item.item_sub_category?.name === filters.categoryFilter;
 
       const matchesBrand =
-        brandFilter === 'all' || item.brand?.name === brandFilter;
+        filters.brandFilter === 'all' ||
+        item.brand?.name === filters.brandFilter;
 
-      return matchesSearch && matchesStatus && matchesCategory && matchesBrand;
+      const matchesStock =
+        filters.stockFilter === 'all' ||
+        getItemStockStatus(item) === filters.stockFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesCategory &&
+        matchesBrand &&
+        matchesStock
+      );
     }) || [];
 
   // Get unique categories and brands for filters
   const categories = Array.from(
     new Set(
-      items?.map((item) => item.item_sub_category?.name).filter(Boolean) || []
+      items
+        ?.map((item) => item.item_sub_category?.name)
+        .filter((name): name is string => Boolean(name)) || []
     )
   );
   const brandsInItems = Array.from(
-    new Set(items?.map((item) => item.brand?.name).filter(Boolean) || [])
+    new Set(
+      items
+        ?.map((item) => item.brand?.name)
+        .filter((name): name is string => Boolean(name)) || []
+    )
   );
 
   if (profileLoading) {
@@ -804,96 +834,14 @@ const BusinessItemsPage: React.FC = () => {
             </Box>
 
             {/* Filters */}
-            <Box sx={{ mb: 3 }}>
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                flexWrap="wrap"
-              >
-                <TextField
-                  placeholder={t('business.items.filters.search')}
-                  variant="outlined"
-                  size="small"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  sx={{ minWidth: 200 }}
-                  InputProps={{
-                    startAdornment: (
-                      <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    ),
-                  }}
-                />
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.filters.status')}</InputLabel>
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    label={t('business.items.filters.status')}
-                  >
-                    <MenuItem value="all">
-                      {t('business.items.filters.allStatuses')}
-                    </MenuItem>
-                    <MenuItem value="active">
-                      {t('business.items.active')}
-                    </MenuItem>
-                    <MenuItem value="inactive">
-                      {t('business.items.inactive')}
-                    </MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.category')}</InputLabel>
-                  <Select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    label={t('business.items.category')}
-                  >
-                    <MenuItem value="all">{t('common.allCategories')}</MenuItem>
-                    {categories.map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.brand')}</InputLabel>
-                  <Select
-                    value={brandFilter}
-                    onChange={(e) => setBrandFilter(e.target.value)}
-                    label={t('business.items.brand')}
-                  >
-                    <MenuItem value="all">{t('common.allBrands')}</MenuItem>
-                    {brandsInItems.map((brand) => (
-                      <MenuItem key={brand} value={brand}>
-                        {brand}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    setSearchText('');
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                    setBrandFilter('all');
-                  }}
-                >
-                  {t('common.clearFilters')}
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  {t('common.showing')} {filteredItems.length} {t('common.of')}{' '}
-                  {items?.length || 0} {t('business.items.items')}
-                </Typography>
-              </Stack>
-            </Box>
+            <ItemsFilterBar
+              filters={filters}
+              onFiltersChange={setFilters}
+              categories={categories}
+              brands={brandsInItems}
+              totalItems={items?.length || 0}
+              filteredItemsCount={filteredItems.length}
+            />
 
             {itemsLoading ? (
               <ItemsCardsSkeleton />
@@ -993,85 +941,14 @@ const BusinessItemsPage: React.FC = () => {
             </Box>
 
             {/* Filters */}
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Stack
-                direction="row"
-                spacing={2}
-                flexWrap="wrap"
-                alignItems="center"
-              >
-                <TextField
-                  label={t('common.search')}
-                  variant="outlined"
-                  size="small"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  sx={{ minWidth: 200 }}
-                />
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.status')}</InputLabel>
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    label={t('business.items.status')}
-                  >
-                    <MenuItem value="all">{t('common.all')}</MenuItem>
-                    <MenuItem value="active">
-                      {t('business.items.active')}
-                    </MenuItem>
-                    <MenuItem value="inactive">
-                      {t('business.items.inactive')}
-                    </MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.category')}</InputLabel>
-                  <Select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    label={t('business.items.category')}
-                  >
-                    <MenuItem value="all">{t('common.all')}</MenuItem>
-                    {categories.map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>{t('business.items.brand')}</InputLabel>
-                  <Select
-                    value={brandFilter}
-                    onChange={(e) => setBrandFilter(e.target.value)}
-                    label={t('business.items.brand')}
-                  >
-                    <MenuItem value="all">{t('common.all')}</MenuItem>
-                    {brandsInItems.map((brand) => (
-                      <MenuItem key={brand} value={brand}>
-                        {brand}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    setSearchText('');
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                    setBrandFilter('all');
-                  }}
-                >
-                  {t('common.clearFilters')}
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  {t('common.showing')} {filteredItems.length} {t('common.of')}{' '}
-                  {items?.length || 0} {t('business.items.items')}
-                </Typography>
-              </Stack>
-            </Paper>
+            <ItemsFilterBar
+              filters={filters}
+              onFiltersChange={setFilters}
+              categories={categories}
+              brands={brandsInItems}
+              totalItems={items?.length || 0}
+              filteredItemsCount={filteredItems.length}
+            />
 
             {/* DataGrid */}
             {itemsLoading ? (

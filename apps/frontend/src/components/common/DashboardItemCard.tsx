@@ -32,6 +32,7 @@ interface DashboardItemCardProps {
   isPublicView?: boolean;
   loginButtonText?: string;
   orderButtonText?: string;
+  canOrder?: boolean; // NEW: Controls if user can place orders
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
@@ -45,6 +46,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   isPublicView = false,
   loginButtonText = 'Login to Order',
   orderButtonText = 'Order Now',
+  canOrder = true,
 }) => {
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
@@ -414,6 +416,15 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               sx={{ width: '75%' }}
             >
               Not Available
+            </Button>
+          ) : !canOrder ? (
+            <Button
+              variant="outlined"
+              disabled
+              size="small"
+              sx={{ width: '75%' }}
+            >
+              Available to Clients Only
             </Button>
           ) : isPublicView ? (
             <Button
