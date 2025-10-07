@@ -608,9 +608,14 @@
     "profile": "Profil",
     "logout": "Déconnexion",
     "emailVerification": {
-      "title": "Veuillez vérifier votre adresse e-mail",
-      "message": "Nous avons envoyé un e-mail de vérification à {{email}}. Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification pour finaliser la configuration de votre compte.",
-      "resendButton": "Demander un nouvel e-mail de vérification",
+      "pageTitle": "Vérifiez Votre Adresse E-mail",
+      "pageDescription": "Pour accéder à votre compte, veuillez vérifier votre adresse e-mail. Nous avons envoyé un lien de vérification à :",
+      "instructions": "Vérifiez votre e-mail et cliquez sur le lien de vérification. Si vous ne voyez pas l'e-mail, vérifiez votre dossier spam ou cliquez sur le bouton ci-dessous pour le renvoyer.",
+      "resending": "Envoi en cours...",
+      "refreshing": "Vérification en cours...",
+      "refreshButton": "J'ai Vérifié Mon E-mail",
+      "logoutButton": "Déconnexion",
+      "helpText": "Vous avez des difficultés ? Contactez le support pour obtenir de l'aide.",
       "resendSuccess": "E-mail de vérification envoyé avec succès",
       "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer."
     }

@@ -3,13 +3,14 @@ import { Lock } from '@mui/icons-material';
 import { Box, Typography } from '@mui/material';
 import React from 'react';
 import LoadingPage from '../common/LoadingPage';
+import EmailVerificationPage from '../pages/EmailVerificationPage';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading, user } = useAuth0();
 
   if (isLoading) {
     return (
@@ -42,7 +43,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  return <>{children}</>;
+  // Check if user's email is verified
+  if (user && !user.email_verified) {
+    console.log(
+      'User email is not verified, redirecting to email verification page',
+      user
+    );
+    return <EmailVerificationPage />;
+  }
+
+  return children;
 };
 
 export default ProtectedRoute;

@@ -30,9 +30,17 @@ import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
 
 const LandingPage: React.FC = () => {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
   const theme = useTheme();
   const { t } = useTranslation();
+
+  const handleSignUp = () => {
+    loginWithRedirect({
+      authorizationParams: {
+        screen_hint: 'signup',
+      },
+    });
+  };
 
   // SEO configuration for landing page
   const seoConfig = useSEO({
@@ -221,8 +229,7 @@ const LandingPage: React.FC = () => {
                     <Button
                       variant="contained"
                       size="large"
-                      component={RouterLink}
-                      to="/app"
+                      onClick={handleSignUp}
                       sx={{
                         bgcolor: 'white',
                         color: 'primary.main',
@@ -644,7 +651,11 @@ const LandingPage: React.FC = () => {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                   <Card elevation={0} sx={theme.styles.benefitCard}>
                     <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                      <Box sx={theme.styles.iconContainer(theme.colors.primary.main)}>
+                      <Box
+                        sx={theme.styles.iconContainer(
+                          theme.colors.primary.main
+                        )}
+                      >
                         <IconComponent
                           sx={{
                             fontSize: 32,
@@ -937,8 +948,7 @@ const LandingPage: React.FC = () => {
                 <Button
                   variant="outlined"
                   size="large"
-                  component={RouterLink}
-                  to="/app"
+                  onClick={handleSignUp}
                   sx={{
                     borderColor: 'primary.main',
                     color: 'text.primary',

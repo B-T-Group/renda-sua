@@ -1,10 +1,7 @@
-// Uncomment this line to use CSS modules
-// import styles from './app.module.css';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container } from '@mui/material';
 import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import EmailVerificationNotice from '../components/auth/EmailVerificationNotice';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import AccountInformation from '../components/common/AccountInformation';
 import LoadingPage from '../components/common/LoadingPage';
@@ -87,7 +84,6 @@ function App() {
       }}
     >
       <Header />
-      <EmailVerificationNotice />
       {/* Global Account Information for authenticated users (excluding clients) */}
       {isAuthenticated && userType !== 'client' && (
         <AccountInformation
