@@ -314,6 +314,10 @@
       "actions": {},
       "confirmTitle": "Confirmer la mise à jour du statut",
       "confirmStatusUpdate": "Êtes-vous sûr de vouloir mettre à jour le statut de la commande {{orderNumber}} vers {{newStatus}} ?",
+      "confirmStatusChange": "Confirmer le changement de statut",
+      "confirmStatusChangeMessage": "Êtes-vous sûr de vouloir changer le statut de la commande {{orderNumber}} vers {{newStatus}} ?",
+      "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
+      "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
       "notesPlaceholder": "Ajouter des notes supplémentaires sur ce changement de statut...",
       "table": {
         "items": "Articles",

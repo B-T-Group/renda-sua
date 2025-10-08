@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ConfigurationsService } from '../admin/configurations.service';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
@@ -33,7 +34,8 @@ export interface UpdateOrderStatusRequest {
 export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly orderStatusService: OrderStatusService
+    private readonly orderStatusService: OrderStatusService,
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   @Post()
@@ -176,6 +178,88 @@ export class OrdersController {
   }
 
   @Post('cancel')
+  @ApiOperation({
+    summary: 'Cancel an order',
+    description:
+      'Cancel an order. Clients can cancel orders before pickup by delivery agent. Cancellation fees may apply for confirmed orders.',
+  })
+  @ApiBody({
+    description: 'Order cancellation request',
+    schema: {
+      type: 'object',
+      properties: {
+        orderId: {
+          type: 'string',
+          description: 'Order ID to cancel',
+          example: 'order-123',
+        },
+        notes: {
+          type: 'string',
+          description: 'Optional cancellation notes',
+          example: 'Customer requested cancellation',
+        },
+      },
+      required: ['orderId'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order cancelled successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        order: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'order-123' },
+            order_number: { type: 'string', example: 'ORD-20241201-000001' },
+            current_status: { type: 'string', example: 'cancelled' },
+          },
+        },
+        message: { type: 'string', example: 'Order cancelled successfully' },
+        cancellationFee: { type: 'number', example: 500 },
+        refundAmount: { type: 'number', example: 4500 },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot cancel order in current status',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: {
+          type: 'string',
+          example:
+            'Cannot cancel order in picked_up status. Orders can only be cancelled before pickup by delivery agent.',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Unauthorized to cancel this order',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Unauthorized to cancel this order' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
   async cancelOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.cancelOrder(request);
   }
@@ -482,6 +566,126 @@ export class OrdersController {
         errorMessage.includes('access')
       ) {
         statusCode = HttpStatus.FORBIDDEN;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
+  }
+
+  @Get('cancellation-fee')
+  @ApiOperation({
+    summary: 'Get cancellation fee for a country',
+    description:
+      'Retrieves the cancellation fee configuration for a specific country',
+  })
+  @ApiQuery({
+    name: 'country',
+    required: true,
+    type: String,
+    description: 'Country code (ISO 3166-1 alpha-2)',
+    example: 'GA',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation fee retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        cancellationFee: { type: 'number', example: 500 },
+        currency: { type: 'string', example: 'XAF' },
+        country: { type: 'string', example: 'GA' },
+        message: {
+          type: 'string',
+          example: 'Cancellation fee retrieved successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Cancellation fee configuration not found for the specified country',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: {
+          type: 'string',
+          example: 'Cancellation fee configuration not found for country GA',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid country code provided',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Country code is required' },
+      },
+    },
+  })
+  async getCancellationFee(@Query('country') country: string) {
+    try {
+      // Validate country parameter
+      if (!country) {
+        throw new HttpException(
+          'Country code is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Get cancellation fee configuration
+      const config = await this.configurationsService.getConfigurationByKey(
+        'cancellation_fee',
+        country
+      );
+
+      if (!config) {
+        throw new HttpException(
+          `Cancellation fee configuration not found for country ${country}`,
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Determine currency based on country
+      const currencyMap: Record<string, string> = {
+        GA: 'XAF', // Gabon - Central African CFA franc
+        CM: 'XAF', // Cameroon - Central African CFA franc
+        CA: 'CAD', // Canada - Canadian Dollar
+        US: 'USD', // United States - US Dollar
+      };
+
+      const currency = currencyMap[country] || 'XAF';
+
+      return {
+        success: true,
+        cancellationFee: config.number_value,
+        currency,
+        country,
+        message: 'Cancellation fee retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (errorMessage.includes('required')) {
+        statusCode = HttpStatus.BAD_REQUEST;
       }
 
       throw new HttpException(

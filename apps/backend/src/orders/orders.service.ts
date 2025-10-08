@@ -684,20 +684,63 @@ export class OrdersService {
         'preparing',
       ];
     } else {
-      // Clients can cancel pending_payment, pending, or confirmed orders
-      cancellableStatuses = ['pending_payment', 'pending', 'confirmed'];
+      // Clients can cancel orders before they are picked up by delivery agent
+      cancellableStatuses = [
+        'pending_payment',
+        'pending',
+        'confirmed',
+        'preparing',
+        'ready_for_pickup',
+      ];
     }
 
     if (!cancellableStatuses.includes(order.current_status))
       throw new HttpException(
-        `Cannot cancel order in ${order.current_status} status`,
+        `Cannot cancel order in ${order.current_status} status. Orders can only be cancelled before pickup by delivery agent.`,
         HttpStatus.BAD_REQUEST
       );
+
+    // Calculate cancellation fee for client cancellations after confirmation
+    let cancellationFee = 0;
+    let refundAmount = 0;
+
+    if (
+      isOrderOwner &&
+      ['confirmed', 'preparing', 'ready_for_pickup'].includes(
+        order.current_status
+      )
+    ) {
+      try {
+        // Get cancellation fee configuration for the order's country
+        const cancellationConfig =
+          await this.configurationsService.getConfigurationByKey(
+            'cancellation_fee',
+            order.delivery_address?.country_code || 'GA'
+          );
+
+        if (cancellationConfig && cancellationConfig.number_value) {
+          cancellationFee = cancellationConfig.number_value;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to get cancellation fee configuration: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        // Continue without cancellation fee if config is not available
+      }
+    }
+
+    // Calculate refund amount for response
+    if (order.current_status !== 'pending_payment') {
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+      refundAmount = orderHold.client_hold_amount - cancellationFee;
+    }
 
     // If order was assigned to agent, release the agent hold
     // Skip releasing holds for pending_payment orders since no holds have been placed yet
     if (order.current_status !== 'pending_payment') {
-      await this.releaseOrderHold(order, 'cancelled');
+      await this.releaseOrderHold(order, 'cancelled', cancellationFee);
     }
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
@@ -737,6 +780,8 @@ export class OrdersService {
       success: true,
       order: updatedOrder,
       message: 'Order cancelled successfully',
+      cancellationFee: cancellationFee,
+      refundAmount: refundAmount,
     };
   }
 
@@ -2569,7 +2614,11 @@ export class OrdersService {
     });
   }
 
-  private async releaseOrderHold(order: any, status: string) {
+  private async releaseOrderHold(
+    order: any,
+    status: string,
+    cancellationFee = 0
+  ) {
     const orderHold = await this.getOrCreateOrderHold(order.id);
 
     if (order.assigned_agent?.user_id) {
@@ -2592,13 +2641,33 @@ export class OrdersService {
       order.currency
     );
 
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: orderHold.client_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}`,
-      referenceId: order.id,
-    });
+    // Calculate refund amount after deducting cancellation fee
+    const refundAmount = orderHold.client_hold_amount - cancellationFee;
+
+    if (refundAmount > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: refundAmount,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number}${
+          cancellationFee > 0
+            ? ` (cancellation fee: ${cancellationFee} deducted)`
+            : ''
+        }`,
+        referenceId: order.id,
+      });
+    }
+
+    // If there's a cancellation fee, create a separate transaction to record it
+    if (cancellationFee > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: cancellationFee,
+        transactionType: 'fee',
+        memo: `Cancellation fee for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+    }
 
     await this.accountsService.registerTransaction({
       accountId: clientAccount.id,

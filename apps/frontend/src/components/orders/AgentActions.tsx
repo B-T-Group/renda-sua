@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import ConfirmationModal from '../common/ConfirmationModal';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
@@ -30,6 +31,12 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimError, setClaimError] = useState<string | undefined>();
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    action: string;
+    label: string;
+    color: 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
+  } | null>(null);
 
   // Check if agent has sufficient funds to claim the order
   const hasSufficientFunds = () => {
@@ -185,13 +192,45 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
+    // Set up confirmation modal
+    const statusLabels: Record<string, string> = {
+      in_transit: t('orderActions.markAsInTransit', 'Mark as In Transit'),
+      out_for_delivery: t(
+        'orderActions.markAsOutForDelivery',
+        'Mark as Out for Delivery'
+      ),
+      delivered: t('orderActions.markAsDelivered', 'Mark as Delivered'),
+      failed: t('orderActions.markAsFailed', 'Mark as Failed'),
+    };
+
+    const statusColors: Record<
+      string,
+      'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning'
+    > = {
+      in_transit: 'primary',
+      out_for_delivery: 'secondary',
+      delivered: 'success',
+      failed: 'error',
+    };
+
+    setPendingAction({
+      action: newStatus,
+      label: statusLabels[newStatus] || newStatus,
+      color: statusColors[newStatus] || 'primary',
+    });
+    setConfirmationOpen(true);
+  };
+
+  const handleConfirmStatusUpdate = async () => {
+    if (!pendingAction || !profile?.id) return;
+
     setLoading(true);
     try {
-      await agentOrders.updateOrderStatusAction(order.id, newStatus);
+      await agentOrders.updateOrderStatusAction(order.id, pendingAction.action);
       onShowNotification?.(
         t(
           'messages.orderStatusUpdated',
-          `Order status updated to ${newStatus}`
+          `Order status updated to ${pendingAction.label}`
         ),
         'success'
       );
@@ -204,7 +243,14 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       );
     } finally {
       setLoading(false);
+      setConfirmationOpen(false);
+      setPendingAction(null);
     }
+  };
+
+  const handleCancelStatusUpdate = () => {
+    setConfirmationOpen(false);
+    setPendingAction(null);
   };
 
   const getAvailableActions = () => {
@@ -320,8 +366,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
             </Button>
           );
 
-          return action.tooltip ? (
-            <Tooltip key={index} title={action.tooltip}>
+          return (action as any).tooltip ? (
+            <Tooltip key={index} title={(action as any).tooltip}>
               <span>{button}</span>
             </Tooltip>
           ) : (
@@ -339,6 +385,25 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         loading={loading}
         success={claimSuccess}
         error={claimError}
+      />
+
+      <ConfirmationModal
+        open={confirmationOpen}
+        title={t('orders.confirmStatusChange', 'Confirm Status Change')}
+        message={
+          pendingAction
+            ? t('orders.confirmStatusChangeMessage', {
+                orderNumber: order.order_number,
+                newStatus: pendingAction.label,
+              })
+            : ''
+        }
+        confirmText={t('common.confirm', 'Confirm')}
+        cancelText={t('common.cancel', 'Cancel')}
+        onConfirm={handleConfirmStatusUpdate}
+        onCancel={handleCancelStatusUpdate}
+        confirmColor={pendingAction?.color || 'primary'}
+        loading={loading}
       />
     </>
   );

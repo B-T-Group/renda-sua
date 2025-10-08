@@ -412,6 +412,10 @@
       "actions": {},
       "confirmTitle": "Confirm Status Update",
       "confirmStatusUpdate": "Are you sure you want to update order {{orderNumber}} status to {{newStatus}}?",
+      "confirmStatusChange": "Confirm Status Change",
+      "confirmStatusChangeMessage": "Are you sure you want to change order {{orderNumber}} status to {{newStatus}}?",
+      "confirmOrderCompletion": "Confirm Order Completion",
+      "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
       "notesPlaceholder": "Add any additional notes about this status change...",
       "table": {
         "items": "Items",

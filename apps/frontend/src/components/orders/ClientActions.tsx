@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import ConfirmationModal from '../common/ConfirmationModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 
 interface ClientActionsProps {
@@ -26,6 +27,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const { completeOrder } = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [completeConfirmationOpen, setCompleteConfirmationOpen] =
+    useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -43,7 +46,11 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     onShowNotification?.(errorMessage, 'error');
   };
 
-  const handleCompleteOrder = async () => {
+  const handleCompleteOrderClick = () => {
+    setCompleteConfirmationOpen(true);
+  };
+
+  const handleConfirmCompleteOrder = async () => {
     setLoading(true);
     try {
       await completeOrder({ orderId: order.id });
@@ -60,7 +67,12 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
+      setCompleteConfirmationOpen(false);
     }
+  };
+
+  const handleCancelCompleteOrder = () => {
+    setCompleteConfirmationOpen(false);
   };
 
   const getAvailableActions = () => {
@@ -80,7 +92,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     if (order.current_status === 'delivered') {
       actions.push({
         label: t('orderActions.completeOrder', 'Complete Order'),
-        action: handleCompleteOrder,
+        action: handleCompleteOrderClick,
         color: 'success' as const,
         icon: <CheckCircle />,
       });
@@ -111,9 +123,9 @@ const ClientActions: React.FC<ClientActionsProps> = ({
             variant="outlined"
             color={action.color}
             onClick={action.action}
-            disabled={loading && action.action === handleCompleteOrder}
+            disabled={loading && action.action === handleCompleteOrderClick}
             startIcon={
-              loading && action.action === handleCompleteOrder ? (
+              loading && action.action === handleCompleteOrderClick ? (
                 <CircularProgress size={16} />
               ) : (
                 action.icon
@@ -134,6 +146,21 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         persona="client"
         onSuccess={handleCancelSuccess}
         onError={handleCancelError}
+      />
+
+      {/* Order Completion Confirmation Modal */}
+      <ConfirmationModal
+        open={completeConfirmationOpen}
+        title={t('orders.confirmOrderCompletion', 'Confirm Order Completion')}
+        message={t('orders.confirmOrderCompletionMessage', {
+          orderNumber: order.order_number,
+        })}
+        confirmText={t('common.confirm', 'Confirm')}
+        cancelText={t('common.cancel', 'Cancel')}
+        onConfirm={handleConfirmCompleteOrder}
+        onCancel={handleCancelCompleteOrder}
+        confirmColor="success"
+        loading={loading}
       />
     </>
   );
