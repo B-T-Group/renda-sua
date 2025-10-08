@@ -40,7 +40,7 @@ interface AddressManagerProps {
   maxAddresses?: number;
   allowDelete?: boolean;
   emptyStateMessage?: string;
-  onAccountCreated?: (account: any) => void;
+  onAccountCreated?: (account: { id: string; [key: string]: unknown }) => void;
 }
 
 const defaultAddressTypeOptions = [
@@ -147,7 +147,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
         address_line_2: addressForm.address_line_2,
         city: addressForm.city,
         state: addressForm.state,
-        postal_code: addressForm.postal_code,
+        postal_code: addressForm.postal_code ?? '00000',
         country: addressForm.country,
         address_type: addressForm.address_type || 'home',
         is_primary: addressForm.is_primary || false,
@@ -298,66 +298,77 @@ const AddressManager: React.FC<AddressManagerProps> = ({
             </Box>
           ) : (
             <Stack spacing={2}>
-              {addresses.map((address) => (
-                <Card key={address.id} variant="outlined">
-                  <CardContent>
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                    >
-                      <Box flex={1}>
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          <Typography variant="subtitle1" fontWeight="medium">
-                            {t(
-                              `addresses.types.${address.address_type}`,
-                              address.address_type
+              {addresses.map((addressWrapper) => {
+                const address = addressWrapper.address;
+                return (
+                  <Card key={address.id} variant="outlined">
+                    <CardContent>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                      >
+                        <Box flex={1}>
+                          <Box
+                            display="flex"
+                            alignItems="center"
+                            gap={1}
+                            mb={1}
+                          >
+                            <Typography variant="subtitle1" fontWeight="medium">
+                              {t(
+                                `addresses.types.${address.address_type}`,
+                                address.address_type
+                              )}
+                            </Typography>
+                            {address.is_primary && (
+                              <Chip
+                                label={t('addresses.primary')}
+                                size="small"
+                                color="primary"
+                              />
                             )}
+                          </Box>
+
+                          <Typography variant="body2" color="text.secondary">
+                            {formatAddress(address)}
                           </Typography>
-                          {address.is_primary && (
-                            <Chip
-                              label={t('addresses.primary')}
-                              size="small"
-                              color="primary"
-                            />
+
+                          {address.latitude && address.longitude && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {t('addresses.coordinates')}: {address.latitude},{' '}
+                              {address.longitude}
+                            </Typography>
                           )}
                         </Box>
 
-                        <Typography variant="body2" color="text.secondary">
-                          {formatAddress(address)}
-                        </Typography>
-
-                        {address.latitude && address.longitude && (
-                          <Typography variant="caption" color="text.secondary">
-                            {t('addresses.coordinates')}: {address.latitude},{' '}
-                            {address.longitude}
-                          </Typography>
-                        )}
-                      </Box>
-
-                      <Box display="flex" gap={1}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditAddress(address)}
-                          disabled={loading}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        {allowDelete && (
+                        <Box display="flex" gap={1}>
                           <IconButton
                             size="small"
-                            onClick={() => handleDeleteAddress(address)}
+                            onClick={() => handleEditAddress(address)}
                             disabled={loading}
-                            color="error"
                           >
-                            <DeleteIcon />
+                            <EditIcon />
                           </IconButton>
-                        )}
+                          {allowDelete && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteAddress(address)}
+                              disabled={loading}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </Box>
                       </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </Stack>
           )}
 

@@ -7,7 +7,7 @@ export interface CreateAddressDto {
   address_line_2?: string;
   city: string;
   state: string;
-  postal_code: string;
+  postal_code?: string;
   country: string;
   is_primary?: boolean;
   address_type?: string;
@@ -168,7 +168,7 @@ export class AddressesService {
           $addressLine2: String,
           $city: String!,
           $state: String!,
-          $postalCode: String!,
+          $postalCode: String,
           $country: String!,
           $isPrimary: Boolean!,
           $addressType: String!,

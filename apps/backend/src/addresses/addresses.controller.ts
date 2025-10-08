@@ -20,14 +20,13 @@ export class AddressesController {
         !addressData.address_line_1 ||
         !addressData.city ||
         !addressData.state ||
-        !addressData.postal_code ||
         !addressData.country
       ) {
         throw new HttpException(
           {
             success: false,
             error:
-              'Missing required fields: address_line_1, city, state, postal_code, and country are required',
+              'Missing required fields: address_line_1, city, state, and country are required',
           },
           HttpStatus.BAD_REQUEST
         );

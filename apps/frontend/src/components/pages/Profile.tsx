@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 
@@ -26,6 +27,7 @@ import PhoneInput from '../common/PhoneInput';
 import { SimpleDocumentUpload } from '../common/SimpleDocumentUpload';
 
 const Profile: React.FC = () => {
+  const { t } = useTranslation();
   const [editingProfile, setEditingProfile] = useState(false);
 
   // Form states
@@ -82,16 +84,15 @@ const Profile: React.FC = () => {
   };
 
   // Handle account creation from address creation
-  const handleAccountCreated = async (account: any) => {
+  const handleAccountCreated = async (account: {
+    id: string;
+    [key: string]: unknown;
+  }) => {
     console.log('New account created:', account);
     // Refresh the accounts list
     if (accountManagerRef.current) {
       await accountManagerRef.current.fetchAccounts();
     }
-  };
-
-  const capitalizeUserType = (userType: string) => {
-    return userType.charAt(0).toUpperCase() + userType.slice(1);
   };
 
   if (loading) {
@@ -110,7 +111,11 @@ const Profile: React.FC = () => {
   if (error) {
     return (
       <Box p={3}>
-        <Alert severity="error">Failed to load profile data: {error}</Alert>
+        <Alert severity="error">
+          {t('profile.failedToLoad', 'Failed to load profile data: {{error}}', {
+            error,
+          })}
+        </Alert>
       </Box>
     );
   }
@@ -130,7 +135,7 @@ const Profile: React.FC = () => {
       )}
 
       <Typography variant="h4" gutterBottom>
-        Profile Settings
+        {t('profile.title')}
       </Typography>
 
       <Box
@@ -149,7 +154,9 @@ const Profile: React.FC = () => {
               alignItems="center"
               mb={2}
             >
-              <Typography variant="h6">Personal Information</Typography>
+              <Typography variant="h6">
+                {t('profile.personalInformation')}
+              </Typography>
               <IconButton
                 onClick={() => setEditingProfile(!editingProfile)}
                 color="primary"
@@ -162,7 +169,7 @@ const Profile: React.FC = () => {
               <Box>
                 <TextField
                   fullWidth
-                  label="First Name"
+                  label={t('profile.firstName')}
                   value={profileForm.first_name}
                   onChange={(e) =>
                     setProfileForm((prev) => ({
@@ -174,7 +181,7 @@ const Profile: React.FC = () => {
                 />
                 <TextField
                   fullWidth
-                  label="Last Name"
+                  label={t('profile.lastName')}
                   value={profileForm.last_name}
                   onChange={(e) =>
                     setProfileForm((prev) => ({
@@ -192,8 +199,8 @@ const Profile: React.FC = () => {
                       phone_number: value || '',
                     }))
                   }
-                  label="Phone Number"
-                  helperText="This phone number should be your mobile money phone number and will be used for payments associated with your account."
+                  label={t('profile.phoneNumber')}
+                  helperText={t('profile.phoneNumberHelper')}
                   margin="normal"
                 />
                 <Box mt={2}>
@@ -202,24 +209,25 @@ const Profile: React.FC = () => {
                     startIcon={<SaveIcon />}
                     onClick={handleProfileSave}
                   >
-                    Save Changes
+                    {t('common.save')}
                   </Button>
                 </Box>
               </Box>
             ) : (
               <Box>
                 <Typography variant="body1">
-                  <strong>Name:</strong> {userProfile?.first_name}{' '}
-                  {userProfile?.last_name}
+                  <strong>{t('profile.name')}:</strong>{' '}
+                  {userProfile?.first_name} {userProfile?.last_name}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>Email:</strong> {userProfile?.email}
+                  <strong>{t('profile.email')}:</strong> {userProfile?.email}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>Phone:</strong> {userProfile?.phone_number}
+                  <strong>{t('profile.phone')}:</strong>{' '}
+                  {userProfile?.phone_number}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>Member since:</strong>{' '}
+                  <strong>{t('profile.memberSince')}:</strong>{' '}
                   {new Date(userProfile?.created_at || '').toLocaleDateString()}
                 </Typography>
               </Box>
@@ -243,7 +251,7 @@ const Profile: React.FC = () => {
                 ? userProfileWithAddresses.client?.id || ''
                 : userProfileWithAddresses.business?.id || ''
             }
-            title="Personal Addresses"
+            title={t('profile.personalAddresses')}
             showCoordinates={false}
             onAccountCreated={handleAccountCreated}
           />
@@ -254,10 +262,10 @@ const Profile: React.FC = () => {
           <Card sx={{ mt: 3 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Upload Documents
+                {t('profile.uploadDocuments')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Upload important documents for your account verification.
+                {t('profile.uploadDocumentsDescription')}
               </Typography>
               <SimpleDocumentUpload
                 documentTypes={documentTypes}
@@ -284,12 +292,12 @@ const Profile: React.FC = () => {
               userProfile.user_type_id as 'agent' | 'client' | 'business'
             }
             entityId={userProfile.id}
-            title="Account Overview"
+            title={t('profile.accountOverview')}
             showTransactions={true}
             showTotalSummary={true}
             maxTransactions={10}
             compactView={false}
-            emptyStateMessage="No accounts found. Accounts are automatically created when you make your first transaction."
+            emptyStateMessage={t('profile.noAccountsMessage')}
           />
         </Box>
       )}

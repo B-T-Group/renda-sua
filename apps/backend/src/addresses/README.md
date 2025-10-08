@@ -23,7 +23,6 @@ Creates a new address and optionally creates an account for the country's curren
   "address_line_2": "Apt 4B",
   "city": "Douala",
   "state": "Littoral",
-  "postal_code": "237",
   "country": "CM",
   "is_primary": false,
   "address_type": "home",
@@ -37,12 +36,12 @@ Creates a new address and optionally creates an account for the country's curren
 - `address_line_1`: Primary address line
 - `city`: City name
 - `state`: State/province name
-- `postal_code`: Postal/ZIP code
 - `country`: Country code (ISO 3166-1 alpha-2 format, e.g., "CM", "US", "GB")
 
 #### Optional Fields
 
 - `address_line_2`: Secondary address line
+- `postal_code`: Postal/ZIP code
 - `is_primary`: Whether this is the primary address (default: false)
 - `address_type`: Type of address - home, work, delivery, billing, etc. (default: "home")
 - `latitude`: Latitude coordinate

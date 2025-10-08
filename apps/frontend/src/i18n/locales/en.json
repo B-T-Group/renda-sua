@@ -767,6 +767,24 @@
       "resendError": "Failed to send verification email. Please try again."
     }
   },
+  "profile": {
+    "title": "Profile Settings",
+    "personalInformation": "Personal Information",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "phoneNumber": "Phone Number",
+    "phoneNumberHelper": "This phone number should be your mobile money phone number and will be used for payments associated with your account.",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "memberSince": "Member since",
+    "personalAddresses": "Personal Addresses",
+    "uploadDocuments": "Upload Documents",
+    "uploadDocumentsDescription": "Upload important documents for your account verification.",
+    "accountOverview": "Account Overview",
+    "noAccountsMessage": "No accounts found. Accounts are automatically created when you make your first transaction.",
+    "failedToLoad": "Failed to load profile data: {{error}}"
+  },
   "addresses": {
     "title": "Addresses",
     "addAddress": "Add Address",

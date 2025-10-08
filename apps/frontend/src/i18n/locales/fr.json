@@ -645,6 +645,24 @@
       "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer."
     }
   },
+  "profile": {
+    "title": "Paramètres du Profil",
+    "personalInformation": "Informations Personnelles",
+    "firstName": "Prénom",
+    "lastName": "Nom de Famille",
+    "phoneNumber": "Numéro de Téléphone",
+    "phoneNumberHelper": "Ce numéro de téléphone doit être votre numéro de mobile money et sera utilisé pour les paiements associés à votre compte.",
+    "name": "Nom",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "memberSince": "Membre depuis",
+    "personalAddresses": "Adresses Personnelles",
+    "uploadDocuments": "Télécharger des Documents",
+    "uploadDocumentsDescription": "Téléchargez des documents importants pour la vérification de votre compte.",
+    "accountOverview": "Aperçu du Compte",
+    "noAccountsMessage": "Aucun compte trouvé. Les comptes sont automatiquement créés lors de votre première transaction.",
+    "failedToLoad": "Échec du chargement des données du profil : {{error}}"
+  },
   "addresses": {
     "title": "Adresses",
     "addAddress": "Ajouter une adresse",
