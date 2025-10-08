@@ -24,9 +24,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBackendOrders, useCancellationReasons } from '../../hooks';
+import {
+  useBackendOrders,
+  useCancellationFee,
+  useCancellationReasons,
+} from '../../hooks';
 import type { OrderData } from '../../hooks/useOrderById';
 
 export interface CancellationReasonModalProps {
@@ -51,12 +55,59 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { reasons, loading: loadingReasons } = useCancellationReasons(persona);
   const { cancelOrder } = useBackendOrders();
+  const { getCancellationFee, error: feeError } = useCancellationFee();
 
   const [selectedReasonId, setSelectedReasonId] = useState<number | null>(null);
   const [otherReasonText, setOtherReasonText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancellationFee, setCancellationFee] = useState<number | null>(null);
+  const [currency, setCurrency] = useState<string>('XAF');
+  const [loadingFeeData, setLoadingFeeData] = useState(false);
+
+  // Check if order can be cancelled for free
+  const canCancelForFree = ['pending_payment', 'pending'].includes(
+    order.current_status
+  );
+
+  // Check if order can be cancelled at all
+  const canCancel = ![
+    'assigned_to_agent',
+    'out_for_delivery',
+    'in_transit',
+    'picked_up',
+  ].includes(order.current_status);
+
+  // Fetch cancellation fee when modal opens and order can be cancelled
+  useEffect(() => {
+    if (open && canCancel && !canCancelForFree && persona === 'client') {
+      setLoadingFeeData(true);
+      const countryCode = order.business_location?.address?.country || 'GA';
+
+      getCancellationFee(countryCode)
+        .then((feeData) => {
+          if (feeData) {
+            setCancellationFee(feeData.cancellationFee);
+            setCurrency(feeData.currency);
+          }
+          setLoadingFeeData(false);
+        })
+        .catch(() => {
+          setLoadingFeeData(false);
+        });
+    } else {
+      setCancellationFee(null);
+      setLoadingFeeData(false);
+    }
+  }, [
+    open,
+    canCancel,
+    canCancelForFree,
+    persona,
+    order.business_location?.address?.country,
+    getCancellationFee,
+  ]);
 
   // Find if "other" reason is selected
   const selectedReason = reasons.find((r) => r.id === selectedReasonId);
@@ -68,6 +119,17 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    // Check if order can be cancelled
+    if (!canCancel) {
+      setError(
+        t(
+          'orders.cannotCancelOrder',
+          'This order cannot be cancelled as it has already been picked up by a delivery agent.'
+        )
+      );
+      return;
+    }
+
     if (!selectedReasonId) {
       setError(
         t(
@@ -234,6 +296,105 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
           </Box>
         )}
 
+        {/* Cancellation Fee Information */}
+        {!success && canCancel && persona === 'client' && (
+          <Box
+            sx={{
+              mb: 3,
+              p: 2,
+              bgcolor: canCancelForFree ? 'success.50' : 'warning.50',
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: canCancelForFree ? 'success.200' : 'warning.200',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              {canCancelForFree ? (
+                <CheckCircle color="success" sx={{ fontSize: 20 }} />
+              ) : (
+                <Warning color="warning" sx={{ fontSize: 20 }} />
+              )}
+              <Typography
+                variant="subtitle2"
+                fontWeight="bold"
+                color={canCancelForFree ? 'success.main' : 'warning.main'}
+              >
+                {canCancelForFree
+                  ? t('orders.cancellationFree', 'Free Cancellation')
+                  : t('orders.cancellationFee', 'Cancellation Fee')}
+              </Typography>
+            </Box>
+
+            {canCancelForFree ? (
+              <Typography variant="body2" color="success.dark">
+                {t(
+                  'orders.cancellationFreeMessage',
+                  'You can cancel this order for free since it has not been confirmed yet.'
+                )}
+              </Typography>
+            ) : (
+              <Box>
+                {loadingFeeData ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'orders.loadingCancellationFee',
+                        'Loading cancellation fee...'
+                      )}
+                    </Typography>
+                  </Box>
+                ) : feeError ? (
+                  <Typography variant="body2" color="error.main">
+                    {t(
+                      'orders.cancellationFeeError',
+                      'Unable to load cancellation fee information.'
+                    )}
+                  </Typography>
+                ) : cancellationFee !== null ? (
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="warning.dark"
+                      sx={{ mb: 1 }}
+                    >
+                      {t(
+                        'orders.cancellationFeeMessage',
+                        'A cancellation fee will be deducted from your refund:'
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="warning.dark"
+                    >
+                      {cancellationFee.toLocaleString()} {currency}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {t(
+                        'orders.cancellationFeeNote',
+                        'This fee will be deducted from your refund amount.'
+                      )}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="warning.dark">
+                    {t(
+                      'orders.cancellationFeeUnknown',
+                      'A cancellation fee may apply. Please contact support for details.'
+                    )}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Box>
+        )}
+
         {/* Description */}
         {!success && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -362,6 +523,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
               onClick={handleSubmit}
               disabled={
                 submitting ||
+                !canCancel ||
                 !selectedReasonId ||
                 (isOtherSelected && !otherReasonText.trim())
               }

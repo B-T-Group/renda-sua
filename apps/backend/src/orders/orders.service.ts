@@ -715,7 +715,7 @@ export class OrdersService {
         const cancellationConfig =
           await this.configurationsService.getConfigurationByKey(
             'cancellation_fee',
-            order.delivery_address?.country_code || 'GA'
+            order.business_location?.address?.country || 'GA'
           );
 
         if (cancellationConfig && cancellationConfig.number_value) {
