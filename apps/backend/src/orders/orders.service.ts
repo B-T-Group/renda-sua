@@ -265,7 +265,7 @@ export class OrdersService {
 
     // Get hold percentage and calculate required amount
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.amount * holdPercentage) / 100;
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
 
     // Get or create agent account
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -1917,6 +1917,7 @@ export class OrdersService {
           id
           order_number
           current_status
+          subtotal
           total_amount
           currency
           business_id
