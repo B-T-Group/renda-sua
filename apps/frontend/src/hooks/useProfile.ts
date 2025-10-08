@@ -210,7 +210,7 @@ interface ProfileData {
   accounts: Account[];
 }
 
-export const useProfile = () => {
+export const useProfile = (onProfileUpdate?: () => void) => {
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -263,6 +263,12 @@ export const useProfile = () => {
       if (result?.update_users_by_pk) {
         setSuccessMessage('Profile updated successfully!');
         refetch(); // Refresh the profile data
+
+        // Also refresh the UserProfileContext if callback is provided
+        if (onProfileUpdate) {
+          onProfileUpdate();
+        }
+
         return true;
       } else {
         setErrorMessage('Failed to update profile.');

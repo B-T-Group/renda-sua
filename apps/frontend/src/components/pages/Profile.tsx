@@ -37,6 +37,10 @@ const Profile: React.FC = () => {
     phone_number: '',
   });
 
+  // Get addresses from UserProfileContext
+  const { profile: userProfileWithAddresses, refetch: refetchUserProfile } =
+    useUserProfileContext();
+
   // Custom hooks
   const {
     userProfile,
@@ -46,10 +50,7 @@ const Profile: React.FC = () => {
     errorMessage,
     handleProfileUpdate,
     clearMessages,
-  } = useProfile();
-
-  // Get addresses from UserProfileContext
-  const { profile: userProfileWithAddresses } = useUserProfileContext();
+  } = useProfile(refetchUserProfile);
 
   // Document management
   const { documentTypes } = useDocumentManagement();
