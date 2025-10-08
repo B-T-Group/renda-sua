@@ -78,8 +78,16 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const getAvailableActions = () => {
     const actions = [];
 
-    // Cancel action - only available for pending and confirmed statuses
-    if (['pending', 'confirmed'].includes(order.current_status)) {
+    // Cancel action - available for pending_payment, pending, preparing, and ready_for_pickup statuses
+    if (
+      [
+        'pending_payment',
+        'pending',
+        'preparing',
+        'ready_for_pickup',
+        'confirmed',
+      ].includes(order.current_status)
+    ) {
       actions.push({
         label: t('orderActions.cancelOrder', 'Cancel Order'),
         action: handleCancelClick,
