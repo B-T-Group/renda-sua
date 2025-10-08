@@ -1,8 +1,19 @@
-import { Edit, Phone } from '@mui/icons-material';
+import {
+  AttachMoney,
+  CheckCircle,
+  Edit,
+  Info,
+  LocalShipping,
+  Phone,
+  Warning,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -10,8 +21,12 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  Paper,
+  Stack,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,6 +55,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [phoneNumber, setPhoneNumber] = useState(userPhoneNumber || '');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState('');
@@ -78,7 +95,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
 
     try {
       await onConfirm(isEditingPhone ? phoneNumber : undefined);
-    } catch (error) {
+    } catch {
       // Error handling is done in the parent component
     }
   };
@@ -91,24 +108,58 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Phone color="primary" />
-          <Typography variant="h6">
-            {t('agent.claimOrder.title', 'Claim Order with Payment')}
-          </Typography>
-        </Box>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          borderRadius: isMobile ? 0 : 2,
+          minHeight: isMobile ? '100vh' : 'auto',
+        },
+      }}
+    >
+      <DialogTitle sx={{ pb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor: 'primary.50',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Phone color="primary" sx={{ fontSize: 24 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight="bold">
+              {t('agent.claimOrder.title', 'Claim Order with Payment')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'agent.claimOrder.subtitle',
+                'Secure your delivery opportunity'
+              )}
+            </Typography>
+          </Box>
+        </Stack>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent sx={{ px: isMobile ? 2 : 3, py: 2 }}>
+        {/* Status Alerts */}
         {error ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            <Typography variant="body2">{error}</Typography>
+          <Alert severity="error" sx={{ mb: 3 }} icon={<Warning />}>
+            <Typography variant="body2" fontWeight="medium">
+              {error}
+            </Typography>
           </Alert>
         ) : success ? (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            <Typography variant="body2">
+          <Alert severity="success" sx={{ mb: 3 }} icon={<CheckCircle />}>
+            <Typography variant="body2" fontWeight="medium">
               {t(
                 'agent.claimOrder.successMessage',
                 'Payment request sent successfully! Please check your phone and accept the payment request to claim the order.'
@@ -116,8 +167,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
             </Typography>
           </Alert>
         ) : (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="body2">
+          <Alert severity="info" sx={{ mb: 3 }} icon={<Info />}>
+            <Typography variant="body2" fontWeight="medium">
               {t(
                 'agent.claimOrder.info',
                 'A payment request will be sent to your phone number. Once you accept the payment request, the order will be automatically claimed by you.'
@@ -126,92 +177,180 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
           </Alert>
         )}
 
-        <Box mb={2}>
-          <Typography variant="subtitle1" gutterBottom>
-            {t('agent.claimOrder.orderDetails', 'Order Details')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('agent.claimOrder.orderNumber', 'Order #{{orderNumber}}', {
-              orderNumber: order.order_number,
-            })}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('agent.claimOrder.totalAmount', 'Total Amount: {{amount}}', {
-              amount: formatCurrency(order.total_amount, order.currency),
-            })}
-          </Typography>
-        </Box>
+        <Stack
+          direction={isMobile ? 'column' : 'row'}
+          spacing={3}
+          sx={{ mb: 3 }}
+        >
+          {/* Order Details Card */}
+          <Box sx={{ flex: 1 }}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent>
+                <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                  <LocalShipping color="primary" />
+                  <Typography variant="h6" fontWeight="bold">
+                    {t('agent.claimOrder.orderDetails', 'Order Details')}
+                  </Typography>
+                </Stack>
 
-        <Divider sx={{ my: 2 }} />
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('agent.claimOrder.orderNumber', 'Order Number')}
+                    </Typography>
+                    <Chip
+                      label={order.order_number}
+                      color="primary"
+                      variant="outlined"
+                      size="small"
+                    />
+                  </Box>
 
-        <Box mb={2}>
-          <Typography variant="subtitle1" gutterBottom>
-            {t('agent.claimOrder.paymentDetails', 'Payment Details')}
-          </Typography>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('agent.claimOrder.totalAmount', 'Total Amount')}
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold" color="primary">
+                      {formatCurrency(order.total_amount, order.currency)}
+                    </Typography>
+                  </Box>
 
-          <Box display="flex" justifyContent="space-between" mb={1}>
-            <Typography variant="body2">
-              {t(
-                'agent.claimOrder.holdAmount',
-                'Hold Amount ({{percentage}}%)',
-                {
-                  percentage: holdPercentage,
-                }
-              )}
-            </Typography>
-            <Typography variant="body2" fontWeight="medium">
-              {formatCurrency(holdAmount, order.currency)}
-            </Typography>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('agent.claimOrder.deliveryEarnings', 'Your Earnings')}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="success.main"
+                    >
+                      {formatCurrency(order.delivery_fee, order.currency)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
           </Box>
 
-          <Box display="flex" justifyContent="space-between" mb={1}>
-            <Typography variant="body2">
-              {t(
-                'agent.claimOrder.serviceCharge',
-                'Service Charge ({{percentage}}%)',
-                {
-                  percentage: chargePercentage,
-                }
-              )}
-            </Typography>
-            <Typography variant="body2" fontWeight="medium">
-              {formatCurrency(chargeAmount, order.currency)}
-            </Typography>
+          {/* Payment Details Card */}
+          <Box sx={{ flex: 1 }}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent>
+                <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                  <AttachMoney color="primary" />
+                  <Typography variant="h6" fontWeight="bold">
+                    {t('agent.claimOrder.paymentDetails', 'Payment Details')}
+                  </Typography>
+                </Stack>
+
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t(
+                        'agent.claimOrder.holdAmount',
+                        'Hold Amount (80% of subtotal)'
+                      )}
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {formatCurrency(holdAmount, order.currency)}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t(
+                        'agent.claimOrder.serviceCharge',
+                        'Service Charge (3.5%)'
+                      )}
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {formatCurrency(chargeAmount, order.currency)}
+                    </Typography>
+                  </Box>
+
+                  <Divider />
+
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('agent.claimOrder.totalCharge', 'Total to be Charged')}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="error.main"
+                    >
+                      {formatCurrency(totalChargeAmount, order.currency)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
           </Box>
+        </Stack>
 
-          <Divider sx={{ my: 1 }} />
-
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="subtitle2" fontWeight="bold">
-              {t('agent.claimOrder.totalCharge', 'Total Charge')}
-            </Typography>
-            <Typography variant="subtitle2" fontWeight="bold" color="primary">
-              {formatCurrency(totalChargeAmount, order.currency)}
-            </Typography>
-          </Box>
-        </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        <Box mb={2}>
-          <Box
-            display="flex"
+        {/* Phone Number Section */}
+        <Paper
+          variant="outlined"
+          sx={{
+            mt: 3,
+            p: 3,
+            bgcolor: 'grey.50',
+            border: '1px solid',
+            borderColor: 'grey.200',
+          }}
+        >
+          <Stack
+            direction="row"
             alignItems="center"
             justifyContent="space-between"
-            mb={1}
+            mb={2}
           >
-            <Typography variant="subtitle1">
-              {t('agent.claimOrder.phoneNumber', 'Phone Number')}
-            </Typography>
-            {!isEditingPhone && (
-              <IconButton size="small" onClick={handleEditPhone}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Phone color="primary" />
+              <Typography variant="h6" fontWeight="bold">
+                {t('agent.claimOrder.phoneNumber', 'Phone Number')}
+              </Typography>
+            </Stack>
+            {!isEditingPhone && userPhoneNumber && (
+              <IconButton
+                size="small"
+                onClick={handleEditPhone}
+                sx={{
+                  bgcolor: 'primary.50',
+                  '&:hover': { bgcolor: 'primary.100' },
+                }}
+              >
                 <Edit fontSize="small" />
               </IconButton>
             )}
-          </Box>
+          </Stack>
 
           {isEditingPhone ? (
-            <Box>
+            <Stack spacing={2}>
               <PhoneInput
                 value={phoneNumber}
                 onChange={handlePhoneChange}
@@ -224,7 +363,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                 defaultCountry="GA"
                 fullWidth
               />
-              <Box display="flex" gap={1} mt={1}>
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button
                   size="small"
                   variant="outlined"
@@ -240,8 +379,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                 >
                   {t('common.save', 'Save')}
                 </Button>
-              </Box>
-            </Box>
+              </Stack>
+            </Stack>
           ) : (
             <TextField
               value={
@@ -252,44 +391,61 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
               fullWidth
               variant="outlined"
               size="small"
+              sx={{
+                '& .MuiInputBase-input': {
+                  fontWeight: userPhoneNumber ? 'medium' : 'normal',
+                  color: userPhoneNumber ? 'text.primary' : 'text.secondary',
+                },
+              }}
             />
           )}
-        </Box>
-
-        <Alert severity="success" sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            {t(
-              'agent.claimOrder.deliveryEarnings',
-              'You will earn {{deliveryFee}} in delivery fees from this order.',
-              {
-                deliveryFee: formatCurrency(order.delivery_fee, order.currency),
-              }
-            )}
-          </Typography>
-        </Alert>
+        </Paper>
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions sx={{ px: isMobile ? 2 : 3, py: 2 }}>
         {success || error ? (
-          <Button onClick={onClose} variant="contained" color="primary">
+          <Button
+            onClick={onClose}
+            variant="contained"
+            color="primary"
+            fullWidth={isMobile}
+            size="large"
+          >
             {t('common.close', 'Close')}
           </Button>
         ) : (
-          <>
-            <Button onClick={onClose} disabled={loading}>
+          <Stack
+            direction={isMobile ? 'column' : 'row'}
+            spacing={2}
+            width="100%"
+            justifyContent="flex-end"
+          >
+            <Button
+              onClick={onClose}
+              disabled={loading}
+              variant="outlined"
+              fullWidth={isMobile}
+              size="large"
+            >
               {t('common.cancel', 'Cancel')}
             </Button>
             <Button
               onClick={handleConfirm}
               variant="contained"
               disabled={loading || (isEditingPhone && !phoneNumber.trim())}
-              startIcon={loading ? <CircularProgress size={16} /> : null}
+              startIcon={loading ? <CircularProgress size={20} /> : null}
+              fullWidth={isMobile}
+              size="large"
+              sx={{
+                minWidth: isMobile ? 'auto' : 200,
+                fontWeight: 'bold',
+              }}
             >
               {loading
                 ? t('agent.claimOrder.processing', 'Processing...')
                 : t('agent.claimOrder.confirmClaim', 'Confirm & Claim Order')}
             </Button>
-          </>
+          </Stack>
         )}
       </DialogActions>
     </Dialog>

@@ -2,9 +2,9 @@ import { Cancel, CheckCircle, LocalShipping } from '@mui/icons-material';
 import { Box, Button, CircularProgress, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
@@ -25,7 +25,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   onShowNotification,
 }) => {
   const { t } = useTranslation();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const agentOrders = useAgentOrders();
   const [loading, setLoading] = useState(false);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
@@ -381,7 +381,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onClose={handleCloseClaimDialog}
         onConfirm={handleClaimWithTopup}
         order={order}
-        userPhoneNumber={undefined}
+        userPhoneNumber={profile?.phone_number}
         loading={loading}
         success={claimSuccess}
         error={claimError}
