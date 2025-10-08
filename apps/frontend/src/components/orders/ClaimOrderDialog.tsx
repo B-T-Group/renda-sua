@@ -200,7 +200,9 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t('agent.claimOrder.orderNumber', 'Order Number')}
+                      {t('agent.claimOrder.orderNumber', 'Order Number', {
+                        orderNumber: order.order_number,
+                      })}
                     </Typography>
                     <Chip
                       label={order.order_number}
@@ -216,7 +218,12 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t('agent.claimOrder.totalAmount', 'Total Amount')}
+                      {t('agent.claimOrder.totalAmount', 'Total Amount', {
+                        amount: formatCurrency(
+                          order.total_amount,
+                          order.currency
+                        ),
+                      })}
                     </Typography>
                     <Typography variant="h6" fontWeight="bold" color="primary">
                       {formatCurrency(order.total_amount, order.currency)}
@@ -229,7 +236,12 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t('agent.claimOrder.deliveryEarnings', 'Your Earnings')}
+                      {t('agent.claimOrder.deliveryEarnings', 'Your Earnings', {
+                        deliveryFee: formatCurrency(
+                          order.delivery_fee,
+                          order.currency
+                        ),
+                      })}
                     </Typography>
                     <Typography
                       variant="h6"
@@ -264,7 +276,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                     >
                       {t(
                         'agent.claimOrder.holdAmount',
-                        'Hold Amount (80% of subtotal)'
+                        'Hold Amount (80% of subtotal)',
+                        { percentage: holdPercentage }
                       )}
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">
@@ -280,7 +293,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                     >
                       {t(
                         'agent.claimOrder.serviceCharge',
-                        'Service Charge (3.5%)'
+                        'Service Charge (3.5%)',
+                        { percentage: chargePercentage }
                       )}
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">

@@ -1070,5 +1070,27 @@
       "browseItems": "Parcourir les Articles",
       "createAccount": "Créer un Compte"
     }
+  },
+  "agent": {
+    "claimOrder": {
+      "title": "Réclamer la Commande avec Paiement",
+      "subtitle": "Sécurisez votre opportunité de livraison",
+      "info": "Une demande de paiement sera envoyée à votre numéro de téléphone. Une fois que vous acceptez la demande de paiement, la commande sera automatiquement réclamée par vous.",
+      "successMessage": "Demande de paiement envoyée avec succès ! Veuillez vérifier votre téléphone et accepter la demande de paiement pour réclamer la commande.",
+      "orderDetails": "Détails de la Commande",
+      "orderNumber": "Commande #{{orderNumber}}",
+      "totalAmount": "Montant Total : {{amount}}",
+      "paymentDetails": "Détails du Paiement",
+      "holdAmount": "Montant de Blocage ({{percentage}}%)",
+      "serviceCharge": "Frais de Service ({{percentage}}%)",
+      "totalCharge": "Total à Charger",
+      "phoneNumber": "Numéro de Téléphone",
+      "enterPhoneNumber": "Entrez le numéro de téléphone",
+      "noPhoneNumber": "Aucun numéro de téléphone enregistré",
+      "deliveryEarnings": "Vous gagnerez {{deliveryFee}} en frais de livraison de cette commande.",
+      "processing": "Traitement...",
+      "confirmClaim": "Confirmer et Réclamer la Commande",
+      "finalInfo": "Une demande de paiement sera envoyée à ce numéro. Confirmez le paiement pour réclamer la commande."
+    }
   }
 }

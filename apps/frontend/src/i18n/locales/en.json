@@ -642,7 +642,8 @@
       "noPhoneNumber": "No phone number on file",
       "deliveryEarnings": "You will earn {{deliveryFee}} in delivery fees from this order.",
       "processing": "Processing...",
-      "confirmClaim": "Confirm & Claim Order"
+      "confirmClaim": "Confirm & Claim Order",
+      "finalInfo": "A payment request will be sent to this number. Confirm the payment to claim the order."
     },
     "addressPrompt": {
       "title": "Add Your Address",
