@@ -26,6 +26,8 @@ interface GetInventoryItemsQueryParams {
   max_price?: string;
   currency?: string;
   is_active?: string;
+  country_code?: string;
+  state?: string;
 }
 
 @ApiTags('Inventory Items')
@@ -113,6 +115,20 @@ export class InventoryItemsController {
     type: Boolean,
     description: 'Filter by active status (default: true)',
   })
+  @ApiQuery({
+    name: 'country_code',
+    required: false,
+    type: String,
+    description: 'Filter by country code (e.g., GA for Gabon)',
+    example: 'GA',
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    type: String,
+    description: 'Filter by state/province name',
+    example: 'Littoral',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -135,6 +151,8 @@ export class InventoryItemsController {
           query.is_active !== undefined
             ? query.is_active === 'true'
             : undefined,
+        country_code: query.country_code,
+        state: query.state,
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

@@ -86,6 +86,8 @@ export interface GetInventoryItemsQuery {
   max_price?: number;
   currency?: string;
   is_active?: boolean;
+  country_code?: string;
+  state?: string;
 }
 
 export interface PaginatedInventoryItems {
@@ -118,6 +120,8 @@ export class InventoryItemsService {
       max_price,
       currency,
       is_active = true,
+      country_code,
+      state,
     } = query;
 
     // Build where conditions
@@ -175,6 +179,65 @@ export class InventoryItemsService {
     if (currency) {
       whereConditions.push({ item: { currency: { _eq: currency } } });
     }
+
+    // Location filtering - only show items from supported locations
+    // First, validate that requested location is supported
+    if (country_code || state) {
+      const isLocationSupported = await this.validateLocationSupport(
+        country_code,
+        state
+      );
+      if (!isLocationSupported) {
+        // Return empty results if location is not supported
+        return {
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+    }
+
+    // Build location filter
+    let supportedLocationFilter: any = {};
+
+    if (country_code || state) {
+      // If specific country/state is requested, filter by it
+      const locationConditions: any[] = [];
+
+      if (country_code) {
+        locationConditions.push({
+          business_location: {
+            address: { country: { _eq: country_code } },
+          },
+        });
+      }
+
+      if (state) {
+        locationConditions.push({
+          business_location: {
+            address: { state: { _eq: state } },
+          },
+        });
+      }
+
+      supportedLocationFilter = { _and: locationConditions };
+    } else {
+      // If no specific location requested, still filter by supported locations only
+      // This ensures we only show items from countries/states that are supported
+      supportedLocationFilter = {
+        business_location: {
+          address: {
+            country: {
+              _in: await this.getSupportedCountryCodes(),
+            },
+          },
+        },
+      };
+    }
+
+    whereConditions.push(supportedLocationFilter);
 
     const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
 
@@ -400,6 +463,77 @@ export class InventoryItemsService {
         'Failed to fetch inventory item',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  /**
+   * Validate if a location (country/state) is supported for delivery
+   */
+  private async validateLocationSupport(
+    countryCode?: string,
+    state?: string
+  ): Promise<boolean> {
+    try {
+      let whereClause: any = {
+        service_status: { _eq: 'active' },
+        delivery_enabled: { _eq: true },
+      };
+
+      if (countryCode) {
+        whereClause.country_code = { _eq: countryCode };
+      }
+
+      if (state) {
+        whereClause.state_code = { _eq: state };
+      }
+
+      const query = `
+        query ValidateLocationSupport($where: supported_country_states_bool_exp!) {
+          supported_country_states(where: $where, limit: 1) {
+            id
+          }
+        }
+      `;
+
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        where: whereClause,
+      });
+      const locations = response.supported_country_states || [];
+
+      return locations.length > 0;
+    } catch (error) {
+      this.logger.error('Failed to validate location support:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get list of supported country codes from supported_country_states table
+   */
+  private async getSupportedCountryCodes(): Promise<string[]> {
+    try {
+      const query = `
+        query GetSupportedCountryCodes {
+          supported_country_states(
+            where: { 
+              service_status: { _eq: "active" },
+              delivery_enabled: { _eq: true }
+            },
+            distinct_on: [country_code]
+          ) {
+            country_code
+          }
+        }
+      `;
+
+      const response = await this.hasuraSystemService.executeQuery(query);
+      const locations = response.supported_country_states || [];
+
+      return locations.map((loc: any) => loc.country_code);
+    } catch (error) {
+      this.logger.error('Failed to fetch supported country codes:', error);
+      // Return empty array as fallback - this will show no items if there's an error
+      return [];
     }
   }
 }

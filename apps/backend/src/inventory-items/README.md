@@ -19,6 +19,8 @@ This module provides API endpoints for managing inventory items in the system.
 - `max_price` (optional): Maximum price filter
 - `currency` (optional): Filter by currency (XAF, USD, etc.)
 - `is_active` (optional): Filter by active status (default: true)
+- `country_code` (optional): Filter by country code (e.g., GA for Gabon)
+- `state` (optional): Filter by state/province name (e.g., Littoral)
 
 **Response:**
 

@@ -76,7 +76,6 @@ export class AuthGuard implements CanActivate {
     try {
       const payload = await this.verifyToken(token);
       request.user = payload;
-      this.logger.debug('Token verified successfully');
       return true;
     } catch (error) {
       this.logger.error('Token verification failed', (error as Error).message);
