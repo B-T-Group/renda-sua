@@ -43,8 +43,10 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
+import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
+import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -92,6 +94,8 @@ interface OrderSummaryProps {
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
+  fastDeliveryFee: number;
+  requiresFastDelivery: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
   onSubmit: () => void;
   loading: boolean;
@@ -105,6 +109,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
+  fastDeliveryFee,
+  requiresFastDelivery,
   formatCurrency,
   onSubmit,
   loading,
@@ -113,7 +119,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 }) => {
   const { t } = useTranslation();
   const subtotal = selectedItem.selling_price * quantity;
-  const total = subtotal + (deliveryFee || 0);
+  const total =
+    subtotal +
+    (deliveryFee || 0) +
+    (requiresFastDelivery ? fastDeliveryFee : 0);
 
   return (
     <Paper
@@ -193,6 +202,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Typography>
           </Box>
 
+          {requiresFastDelivery && (
+            <Box
+              sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {t('orders.fastDeliveryFee', 'Fast Delivery Fee')}
+              </Typography>
+              <Typography variant="body2" fontWeight="medium" color="primary">
+                {formatCurrency(fastDeliveryFee, selectedItem.item.currency)}
+              </Typography>
+            </Box>
+          )}
+
           <Divider sx={{ my: 1.5 }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
@@ -268,6 +290,7 @@ const PlaceOrderPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
 
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -302,6 +325,14 @@ const PlaceOrderPage: React.FC = () => {
     entityType: 'client',
     entityId: profile?.client?.id || '',
   });
+
+  // Get fast delivery configuration
+  const selectedAddress = addresses.find(
+    (addr) => addr.address.id === selectedAddressId
+  )?.address;
+  const userCountry = selectedAddress?.country || 'GA'; // Default to Gabon
+  const { config: fastDeliveryConfig, isEnabledForCountry } =
+    useFastDeliveryConfig(userCountry);
 
   // Set default address when addresses load
   useEffect(() => {
@@ -346,6 +377,10 @@ const PlaceOrderPage: React.FC = () => {
         special_instructions: specialInstructions.trim() || undefined,
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
+        requires_fast_delivery: requiresFastDelivery,
+        fast_delivery_fee: requiresFastDelivery
+          ? fastDeliveryConfig?.fee || 0
+          : 0,
       };
 
       const response = await apiClient.post('/orders', orderData);
@@ -1107,6 +1142,22 @@ const PlaceOrderPage: React.FC = () => {
                 </CardContent>
               </Card>
 
+              {/* Fast Delivery Option Card */}
+              {fastDeliveryConfig && isEnabledForCountry(userCountry) && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <FastDeliveryOption
+                      config={fastDeliveryConfig}
+                      selected={requiresFastDelivery}
+                      onToggle={setRequiresFastDelivery}
+                      formatCurrency={(amount) =>
+                        formatCurrency(amount, selectedItem?.item.currency)
+                      }
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Payment Information Card */}
               <Card>
                 <CardContent sx={{ p: 3 }}>
@@ -1287,6 +1338,8 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
+              fastDeliveryFee={fastDeliveryConfig?.fee || 0}
+              requiresFastDelivery={requiresFastDelivery}
               formatCurrency={formatCurrency}
               onSubmit={handleSubmit}
               loading={loading}

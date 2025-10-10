@@ -1,5 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import React, { createContext, useContext, useEffect, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect } from 'react';
 import { tokenService } from '../services/tokenService';
 
 interface TokenRefreshContextType {
@@ -14,7 +14,9 @@ interface TokenRefreshProviderProps {
   children: ReactNode;
 }
 
-export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({ children }) => {
+export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({
+  children,
+}) => {
   const auth0 = useAuth0();
 
   useEffect(() => {
@@ -23,13 +25,14 @@ export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({ chil
 
     // Setup initial token refresh if user is authenticated
     if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
-      auth0.getAccessTokenSilently()
-        .then(token => {
+      auth0
+        .getAccessTokenSilently()
+        .then((token) => {
           if (token) {
             tokenService.scheduleTokenRefresh(token);
           }
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('Error setting up initial token refresh:', error);
         });
     }
@@ -55,19 +58,9 @@ export const TokenRefreshProvider: React.FC<TokenRefreshProviderProps> = ({ chil
 
 export const useTokenRefresh = (): TokenRefreshContextType | null => {
   const context = useContext(TokenRefreshContext);
-  
+
   // Return null instead of throwing error to allow graceful fallback
   return context;
 };
 
 export default TokenRefreshContext;
-
-
-
-
-
-
-
-
-
-

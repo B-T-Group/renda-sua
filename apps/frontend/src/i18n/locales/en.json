@@ -694,7 +694,17 @@
     "clear": "Clear",
     "clearFilters": "Clear Filters",
     "close": "Close",
+    "closed": "Closed",
     "confirm": "Confirm",
+    "days": {
+      "friday": "Friday",
+      "monday": "Monday",
+      "saturday": "Saturday",
+      "sunday": "Sunday",
+      "thursday": "Thursday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday"
+    },
     "delete": "Delete",
     "done": "Done",
     "edit": "Edit",
@@ -1026,6 +1036,16 @@
     "deliveryFees": "Delivery Fees",
     "deliveryTo": "Delivery to",
     "details": "Details",
+    "fastDelivery": {
+      "additionalFee": "additional fee",
+      "description": "Get your order delivered in {{minHours}}-{{maxHours}} hours with our premium delivery service.",
+      "enableOption": "Enable Fast Delivery",
+      "fee": "Fast Delivery Fee",
+      "operatingHours": "Operating Hours",
+      "premium": "Premium",
+      "timeWindow": "Delivery Time: {{minHours}}-{{maxHours}} hours",
+      "title": "Fast Delivery"
+    },
     "filters": {
       "allStatuses": "All Statuses",
       "dateFrom": "From Date",

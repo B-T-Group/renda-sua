@@ -1,0 +1,99 @@
+table:
+  name: supported_country_states
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - country_code
+        - country_name
+        - state_code
+        - state_name
+        - currency_code
+        - service_status
+        - delivery_enabled
+        - fast_delivery
+        - supported_payment_methods
+        - launch_date
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - country_code
+        - country_name
+        - state_code
+        - state_name
+        - currency_code
+        - service_status
+        - delivery_enabled
+        - fast_delivery
+        - supported_payment_methods
+        - launch_date
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - country_code
+        - country_name
+        - state_code
+        - state_name
+        - currency_code
+        - service_status
+        - delivery_enabled
+        - fast_delivery
+        - supported_payment_methods
+        - launch_date
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - country_code
+        - country_name
+        - state_code
+        - state_name
+        - currency_code
+        - service_status
+        - delivery_enabled
+        - fast_delivery
+        - supported_payment_methods
+        - launch_date
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - country_code
+        - country_name
+        - state_code
+        - state_name
+        - currency_code
+        - service_status
+        - delivery_enabled
+        - fast_delivery
+        - supported_payment_methods
+        - launch_date
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      filter: {}

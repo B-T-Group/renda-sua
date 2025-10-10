@@ -17,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { Public } from '../auth/public.decorator';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
@@ -341,6 +342,171 @@ export class OrdersController {
       throw new HttpException(
         'Failed to retrieve order',
         HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Public()
+  @Get('fast-delivery-config')
+  @ApiOperation({
+    summary: 'Get fast delivery configuration for a country',
+    description:
+      'Retrieves fast delivery settings including fees, timing, and operating hours for a specific country',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: true,
+    type: String,
+    description:
+      'Country code to get fast delivery configuration for (e.g., GA for Gabon)',
+    example: 'GA',
+  })
+  @ApiQuery({
+    name: 'stateCode',
+    required: false,
+    type: String,
+    description:
+      'State/province code to get fast delivery configuration for (e.g., Littoral)',
+    example: 'Littoral',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fast delivery configuration retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        config: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean', example: true },
+            fee: { type: 'number', example: 2000 },
+            minHours: { type: 'number', example: 2 },
+            maxHours: { type: 'number', example: 4 },
+            operatingHours: {
+              type: 'object',
+              properties: {
+                monday: {
+                  type: 'object',
+                  properties: {
+                    start: { type: 'string', example: '08:00' },
+                    end: { type: 'string', example: '20:00' },
+                    enabled: { type: 'boolean', example: true },
+                  },
+                },
+                tuesday: {
+                  type: 'object',
+                  properties: {
+                    start: { type: 'string', example: '08:00' },
+                    end: { type: 'string', example: '20:00' },
+                    enabled: { type: 'boolean', example: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+        message: {
+          type: 'string',
+          example: 'Fast delivery configuration retrieved successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid country code',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Country code is required' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No fast delivery configuration found for country',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: {
+          type: 'string',
+          example: 'No fast delivery configuration found for country GA',
+        },
+      },
+    },
+  })
+  async getFastDeliveryConfig(
+    @Query('countryCode') countryCode: string,
+    @Query('stateCode') stateCode?: string
+  ) {
+    try {
+      if (!countryCode) {
+        throw new HttpException(
+          'Country code is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const configurations =
+        await this.configurationsService.getFastDeliveryFromSupportedLocations(
+          countryCode,
+          stateCode
+        );
+
+      if (!configurations) {
+        throw new HttpException(
+          `No fast delivery configuration found for country ${countryCode}`,
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Parse configurations into structured format
+      const config = {
+        enabled: configurations.enabled || false,
+        fee: configurations.fee || 0,
+        minHours: configurations.minHours || 2,
+        maxHours: configurations.maxHours || 4,
+        operatingHours: configurations.operatingHours || {
+          monday: { start: '08:00', end: '20:00', enabled: true },
+          tuesday: { start: '08:00', end: '20:00', enabled: true },
+          wednesday: { start: '08:00', end: '20:00', enabled: true },
+          thursday: { start: '08:00', end: '20:00', enabled: true },
+          friday: { start: '08:00', end: '20:00', enabled: true },
+          saturday: { start: '08:00', end: '18:00', enabled: true },
+          sunday: { start: '10:00', end: '16:00', enabled: false },
+        },
+      };
+
+      return {
+        success: true,
+        config,
+        message: 'Fast delivery configuration retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('Country code is required')) {
+        statusCode = HttpStatus.BAD_REQUEST;
+      } else if (
+        errorMessage.includes('No fast delivery configuration found')
+      ) {
+        statusCode = HttpStatus.NOT_FOUND;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
       );
     }
   }
