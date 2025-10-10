@@ -76,6 +76,7 @@ insert_permissions:
         - payment_method
         - payment_status
         - delivery_fee
+        - fast_delivery_fee
         - subtotal
         - tax_amount
         - total_amount
@@ -91,6 +92,7 @@ insert_permissions:
         - business_location_id
         - client_id
         - delivery_address_id
+        - requires_fast_delivery
         - verified_agent_delivery
 select_permissions:
   - role: agent
@@ -105,6 +107,7 @@ select_permissions:
         - delivery_address_id
         - subtotal
         - delivery_fee
+        - fast_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -117,6 +120,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - requires_fast_delivery
         - verified_agent_delivery
       filter:
         assigned_agent:
@@ -135,6 +139,7 @@ select_permissions:
         - delivery_address_id
         - subtotal
         - delivery_fee
+        - fast_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -147,6 +152,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - requires_fast_delivery
         - verified_agent_delivery
       filter:
         business:
@@ -165,6 +171,7 @@ select_permissions:
         - delivery_address_id
         - subtotal
         - delivery_fee
+        - fast_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -177,6 +184,7 @@ select_permissions:
         - payment_status
         - created_at
         - updated_at
+        - requires_fast_delivery
         - verified_agent_delivery
       filter:
         client:
@@ -216,6 +224,8 @@ update_permissions:
       columns:
         - special_instructions
         - preferred_delivery_time
+        - requires_fast_delivery
+        - fast_delivery_fee
         - updated_at
         - verified_agent_delivery
       filter:
