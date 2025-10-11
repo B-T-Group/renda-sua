@@ -13,6 +13,8 @@
 - '!include public_client_addresses.yaml'
 - '!include public_clients.yaml'
 - '!include public_delivery_fees.yaml'
+- '!include public_delivery_time_slots.yaml'
+- '!include public_delivery_time_windows.yaml'
 - '!include public_document_types.yaml'
 - '!include public_entity_types.yaml'
 - '!include public_google_distance_cache.yaml'

@@ -1,0 +1,116 @@
+table:
+  name: delivery_time_slots
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+        - created_at
+        - updated_at
+      filter: {}
+insert_permissions:
+  - role: user
+    permission:
+      columns:
+        - country_code
+        - state_code
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+      filter: {}
+      check: {}
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+      filter: {}
+      check: {}
+delete_permissions:
+  - role: user
+    permission:
+      filter: {}

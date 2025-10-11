@@ -89,6 +89,13 @@ export interface CreateOrderRequest {
   verified_agent_delivery?: boolean;
   delivery_address_id: string;
   phone_number?: string;
+  requires_fast_delivery?: boolean;
+  fast_delivery_fee?: number;
+  delivery_window?: {
+    slot_id: string;
+    preferred_date: string;
+    special_instructions?: string;
+  };
 }
 
 export interface Item {

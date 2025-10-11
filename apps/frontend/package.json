@@ -5,7 +5,10 @@
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@mui/x-data-grid": "^8.7.0",
+    "@mui/x-date-pickers": "^8.14.0",
+    "@mui/x-date-pickers-pro": "^8.14.0",
     "country-state-city": "^3.2.1",
+    "date-fns": "^4.1.0",
     "graphql": "^16.11.0",
     "graphql-request": "^7.2.0",
     "graphql-ws": "^6.0.6",

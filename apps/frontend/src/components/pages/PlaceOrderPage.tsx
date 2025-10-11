@@ -46,6 +46,9 @@ import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
+import DeliveryTimeWindowSelector, {
+  DeliveryWindowData,
+} from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
@@ -291,6 +294,8 @@ const PlaceOrderPage: React.FC = () => {
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
+  const [deliveryWindow, setDeliveryWindow] =
+    useState<DeliveryWindowData | null>(null);
 
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -381,6 +386,7 @@ const PlaceOrderPage: React.FC = () => {
         fast_delivery_fee: requiresFastDelivery
           ? fastDeliveryConfig?.fee || 0
           : 0,
+        delivery_window: deliveryWindow,
       };
 
       const response = await apiClient.post('/orders', orderData);
@@ -1153,6 +1159,28 @@ const PlaceOrderPage: React.FC = () => {
                       formatCurrency={(amount) =>
                         formatCurrency(amount, selectedItem?.item.currency)
                       }
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Delivery Time Window Selection Card */}
+              {selectedAddress && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                      {t(
+                        'orders.deliveryTimeWindow.title',
+                        'When will you be available?'
+                      )}
+                    </Typography>
+                    <DeliveryTimeWindowSelector
+                      countryCode={selectedAddress.country}
+                      stateCode={selectedAddress.state}
+                      value={deliveryWindow}
+                      onChange={setDeliveryWindow}
+                      isFastDelivery={requiresFastDelivery}
+                      disabled={loading}
                     />
                   </CardContent>
                 </Card>

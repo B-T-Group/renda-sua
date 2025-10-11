@@ -1,0 +1,117 @@
+table:
+  name: delivery_time_windows
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - is_confirmed
+        - special_instructions
+        - confirmed_at
+        - confirmed_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - is_confirmed
+        - special_instructions
+        - confirmed_at
+        - confirmed_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - is_confirmed
+        - special_instructions
+        - confirmed_at
+        - confirmed_by
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - is_confirmed
+        - special_instructions
+        - confirmed_at
+        - confirmed_by
+        - created_at
+        - updated_at
+      filter: {}
+insert_permissions:
+  - role: user
+    permission:
+      columns:
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - special_instructions
+      filter: {}
+      check: {}
+  - role: client
+    permission:
+      columns:
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - special_instructions
+      filter: {}
+      check: {}
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - special_instructions
+        - is_confirmed
+        - confirmed_at
+        - confirmed_by
+      filter: {}
+      check: {}
+  - role: business
+    permission:
+      columns:
+        - is_confirmed
+        - confirmed_at
+        - confirmed_by
+      filter: {}
+      check: {}
+delete_permissions:
+  - role: user
+    permission:
+      filter: {}

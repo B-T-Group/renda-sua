@@ -4,6 +4,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import type { Configuration } from '../config/configuration';
+import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -39,7 +40,8 @@ export class OrdersService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly configurationsService: ConfigurationsService,
+    private readonly deliveryWindowsService: DeliveryWindowsService
   ) {}
 
   async confirmOrder(request: OrderStatusChangeRequest) {
@@ -2391,9 +2393,30 @@ export class OrdersService {
       }
     );
 
+    // Create delivery window if provided
+    let deliveryWindow = null;
+    if (orderData.delivery_window) {
+      try {
+        deliveryWindow = await this.deliveryWindowsService.createDeliveryWindow(
+          {
+            order_id: order.id,
+            slot_id: orderData.delivery_window.slot_id,
+            preferred_date: orderData.delivery_window.preferred_date,
+            special_instructions:
+              orderData.delivery_window.special_instructions,
+          }
+        );
+      } catch (error) {
+        this.logger.error('Failed to create delivery window:', error);
+        // Don't fail the order creation if delivery window creation fails
+        // The order can still be processed without a delivery window
+      }
+    }
+
     return {
       ...order,
       total_amount: total_amount,
+      delivery_window: deliveryWindow,
       payment_transaction: {
         success: paymentTransaction.success,
         transaction_id: paymentTransaction.transactionId,

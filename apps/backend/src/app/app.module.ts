@@ -14,6 +14,7 @@ import { BrandsModule } from '../brands/brands.module';
 import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
+import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
@@ -78,6 +79,7 @@ import { AppService } from './app.service';
     CategoriesModule,
     SubcategoriesModule,
     AiModule,
+    DeliveryModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
   providers: [AppService],
