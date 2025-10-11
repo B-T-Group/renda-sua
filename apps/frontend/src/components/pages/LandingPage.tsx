@@ -44,7 +44,7 @@ const LandingPage: React.FC = () => {
 
   // SEO configuration for landing page
   const seoConfig = useSEO({
-    title: t('landing.seo.title', 'Rendasua - Fast Delivery in Gabon | 24-48h'),
+    title: t('landing.seo.title', 'Rendasua - Fast Delivery | 24-48h'),
     description: t(
       'landing.seo.description',
       'Order and receive your items in 24-48h anywhere in Gabon. Wide selection, best prices, secure Airtel Money payment. Home delivery.'
@@ -170,10 +170,7 @@ const LandingPage: React.FC = () => {
                     backgroundClip: 'text',
                   }}
                 >
-                  {t(
-                    'landing.hero.title',
-                    'Fast Delivery of Quality Items in Gabon'
-                  )}
+                  {t('landing.hero.title', 'Fast Delivery of Quality Items')}
                 </Typography>
 
                 {/* Subtitle */}

@@ -1,17 +1,22 @@
-import React from 'react';
+import {
+  CheckCircle,
+  LocalShipping,
+  Payment,
+  Store,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
   Grid,
-  Typography,
-  TextField,
-  Chip,
   Stack,
+  TextField,
+  Typography,
 } from '@mui/material';
-import { LocalShipping, Store, Payment, CheckCircle } from '@mui/icons-material';
+import React from 'react';
 import { useTheme } from '../../hooks/useTheme';
 
 /**
@@ -63,7 +68,7 @@ const ThemeExample: React.FC = () => {
                   mb: theme.spacing.md,
                 }}
               >
-                Fast Delivery in Gabon
+                Fast Delivery
               </Typography>
               <Typography
                 variant="h6"
@@ -74,8 +79,8 @@ const ThemeExample: React.FC = () => {
                   opacity: 0.9,
                 }}
               >
-                Shop from a wide selection of products and get them delivered
-                to your doorstep within 24-48 hours
+                Shop from a wide selection of products and get them delivered to
+                your doorstep within 24-48 hours
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button
@@ -165,7 +170,9 @@ const ThemeExample: React.FC = () => {
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                   <Card sx={theme.styles.benefitCard}>
-                    <CardContent sx={{ p: theme.spacing.lg, textAlign: 'center' }}>
+                    <CardContent
+                      sx={{ p: theme.spacing.lg, textAlign: 'center' }}
+                    >
                       <Box sx={theme.styles.iconContainer(benefit.color)}>
                         <IconComponent sx={{ fontSize: 32, color: 'white' }} />
                       </Box>
@@ -198,7 +205,9 @@ const ThemeExample: React.FC = () => {
       </Box>
 
       {/* Form Example using theme styles */}
-      <Box sx={{ bgcolor: theme.colors.background.paper, ...theme.styles.section }}>
+      <Box
+        sx={{ bgcolor: theme.colors.background.paper, ...theme.styles.section }}
+      >
         <Container maxWidth="md">
           <Typography
             variant="h4"
@@ -242,7 +251,12 @@ const ThemeExample: React.FC = () => {
               variant="outlined"
               sx={theme.styles.input}
             />
-            <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: theme.spacing.lg }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              justifyContent="center"
+              sx={{ mt: theme.spacing.lg }}
+            >
               <Button
                 variant="contained"
                 size="large"
@@ -271,7 +285,12 @@ const ThemeExample: React.FC = () => {
       </Box>
 
       {/* Chips Example */}
-      <Box sx={{ ...theme.styles.section, bgcolor: theme.colors.background.default }}>
+      <Box
+        sx={{
+          ...theme.styles.section,
+          bgcolor: theme.colors.background.default,
+        }}
+      >
         <Container maxWidth="md">
           <Typography
             variant="h5"
@@ -283,7 +302,12 @@ const ThemeExample: React.FC = () => {
           >
             Category Tags
           </Typography>
-          <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={2}
+            justifyContent="center"
+            flexWrap="wrap"
+          >
             <Chip
               label="Electronics"
               color="primary"

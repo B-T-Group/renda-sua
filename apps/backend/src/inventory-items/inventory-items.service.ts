@@ -474,18 +474,12 @@ export class InventoryItemsService {
     state?: string
   ): Promise<boolean> {
     try {
-      let whereClause: any = {
+      const whereClause: any = {
         service_status: { _eq: 'active' },
         delivery_enabled: { _eq: true },
+        ...(countryCode && { country_code: { _eq: countryCode } }),
+        ...(state && { state_code: { _eq: state } }),
       };
-
-      if (countryCode) {
-        whereClause.country_code = { _eq: countryCode };
-      }
-
-      if (state) {
-        whereClause.state_code = { _eq: state };
-      }
 
       const query = `
         query ValidateLocationSupport($where: supported_country_states_bool_exp!) {
