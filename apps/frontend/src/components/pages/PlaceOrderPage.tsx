@@ -35,6 +35,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { State } from 'country-state-city';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -336,8 +337,20 @@ const PlaceOrderPage: React.FC = () => {
     (addr) => addr.address.id === selectedAddressId
   )?.address;
   const userCountry = selectedAddress?.country || 'GA'; // Default to Gabon
-  const { config: fastDeliveryConfig, isEnabledForCountry } =
-    useFastDeliveryConfig(userCountry);
+  let userState = selectedAddress?.state || 'Estuaire'; // Default to Estuaire
+
+  const stateAsNumber = parseInt(userState);
+
+  if (!isNaN(stateAsNumber)) {
+    console.log('userState is a number', userState);
+    const stateObj = State.getStateByCodeAndCountry(userState, userCountry);
+    console.log('stateObj', stateObj);
+    if (stateObj && stateObj.name) {
+      userState = stateObj.name;
+    }
+  }
+  const { config: fastDeliveryConfig, isEnabledForLocation } =
+    useFastDeliveryConfig(userCountry, userState);
 
   // Set default address when addresses load
   useEffect(() => {
@@ -1149,20 +1162,21 @@ const PlaceOrderPage: React.FC = () => {
               </Card>
 
               {/* Fast Delivery Option Card */}
-              {fastDeliveryConfig && isEnabledForCountry(userCountry) && (
-                <Card>
-                  <CardContent sx={{ p: 3 }}>
-                    <FastDeliveryOption
-                      config={fastDeliveryConfig}
-                      selected={requiresFastDelivery}
-                      onToggle={setRequiresFastDelivery}
-                      formatCurrency={(amount) =>
-                        formatCurrency(amount, selectedItem?.item.currency)
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              )}
+              {fastDeliveryConfig &&
+                isEnabledForLocation(userCountry, userState) && (
+                  <Card>
+                    <CardContent sx={{ p: 3 }}>
+                      <FastDeliveryOption
+                        config={fastDeliveryConfig}
+                        selected={requiresFastDelivery}
+                        onToggle={setRequiresFastDelivery}
+                        formatCurrency={(amount) =>
+                          formatCurrency(amount, selectedItem?.item.currency)
+                        }
+                      />
+                    </CardContent>
+                  </Card>
+                )}
 
               {/* Delivery Time Window Selection Card */}
               {selectedAddress && (

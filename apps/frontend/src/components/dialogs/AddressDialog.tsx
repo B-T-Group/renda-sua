@@ -18,7 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { City, Country, State } from 'country-state-city';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 
@@ -75,8 +75,11 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   );
 
   // Location data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [countries, setCountries] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [states, setStates] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [cities, setCities] = useState<any[]>([]);
 
   // Current location hook
@@ -212,13 +215,22 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       return '';
     }
 
-    // Try exact match first
+    // Try exact match first (by name)
     const exactMatch = states.find(
       (state) => state.name.toLowerCase() === stateName.toLowerCase()
     );
     if (exactMatch) {
       console.log('Found exact state match:', exactMatch.isoCode);
       return exactMatch.isoCode;
+    }
+
+    // Try exact match by isoCode (in case stateName is actually a code)
+    const codeMatch = states.find(
+      (state) => state.isoCode.toLowerCase() === stateName.toLowerCase()
+    );
+    if (codeMatch) {
+      console.log('Found state code match:', codeMatch.isoCode);
+      return codeMatch.isoCode;
     }
 
     // Try partial match
@@ -314,15 +326,13 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       if (location.address) {
         console.log('Location data received:', location);
 
-        // Convert country and state names to codes
+        // Convert country name to code
         const countryCode = findCountryCode(location.country || '');
-        const stateCode = findStateCode(location.state || '', countryCode);
 
         console.log('Conversion results:', {
           originalCountry: location.country,
           countryCode,
           originalState: location.state,
-          stateCode,
         });
 
         // Update the address form with current location data
@@ -330,7 +340,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           ...addressData,
           address_line_1: location.address || '',
           city: location.city || '',
-          state: stateCode, // Use state code instead of name
+          state: location.state || '', // Use state name directly
           country: countryCode, // Use country code instead of name
           postal_code: location.postalCode || '',
           latitude: location.latitude,
@@ -361,7 +371,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       // Reset state and city when country changes
       if (
         states.length > 0 &&
-        !states.find((state) => state.isoCode === addressData.state)
+        !states.find((state) => state.name === addressData.state)
       ) {
         onAddressChange({ ...addressData, state: '', city: '' });
       }
@@ -369,30 +379,53 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       setStates([]);
       setCities([]);
     }
-  }, [addressData.country]);
+  }, [
+    addressData.country,
+    addressData.state,
+    states,
+    onAddressChange,
+    addressData,
+  ]);
 
   // Update cities when state changes
   useEffect(() => {
     if (addressData.country && addressData.state) {
-      setCities(City.getCitiesOfState(addressData.country, addressData.state));
-      // Reset city when state changes
-      if (
-        cities.length > 0 &&
-        !cities.find((city) => city.name === addressData.city)
-      ) {
-        onAddressChange({ ...addressData, city: '' });
+      // Convert state name to state code for City.getCitiesOfState
+      const stateCode = findStateCode(addressData.state, addressData.country);
+      if (stateCode) {
+        setCities(City.getCitiesOfState(addressData.country, stateCode));
+        // Reset city when state changes
+        if (
+          cities.length > 0 &&
+          !cities.find((city) => city.name === addressData.city)
+        ) {
+          onAddressChange({ ...addressData, city: '' });
+        }
+      } else {
+        setCities([]);
       }
     } else {
       setCities([]);
     }
-  }, [addressData.country, addressData.state]);
+  }, [
+    addressData.country,
+    addressData.state,
+    addressData.city,
+    cities,
+    onAddressChange,
+    addressData,
+  ]);
 
-  const handleInputChange = (field: keyof AddressFormData, value: any) => {
-    onAddressChange({
-      ...addressData,
-      [field]: value,
-    });
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleInputChange = useCallback(
+    (field: keyof AddressFormData, value: any) => {
+      onAddressChange({
+        ...addressData,
+        [field]: value,
+      });
+    },
+    [addressData, onAddressChange]
+  );
 
   const handleClose = () => {
     if (!loading) {
@@ -507,7 +540,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               disabled={!addressData.country}
             >
               {states.map((state) => (
-                <MenuItem key={state.isoCode} value={state.isoCode}>
+                <MenuItem key={state.isoCode} value={state.name}>
                   {state.name}
                 </MenuItem>
               ))}

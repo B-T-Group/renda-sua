@@ -415,12 +415,21 @@ export class ConfigurationsService {
     }
   }
 
+  /**
+   * Get fast delivery configuration from supported locations
+   * Matches either state_code or state_name with the provided stateCode
+   * @param countryCode - Country code (e.g., 'GA')
+   * @param stateCode - State code or state name (e.g., 'Estuaire' or 'ES')
+   * @returns Fast delivery configuration or null if not found
+   */
   async getFastDeliveryFromSupportedLocations(
     countryCode: string,
     stateCode?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     try {
       let query: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let variables: any;
 
       if (stateCode) {
@@ -429,7 +438,10 @@ export class ConfigurationsService {
             supported_country_states(
               where: { 
                 country_code: { _eq: $country_code },
-                state_code: { _eq: $state_code }
+                _or: [
+                  { state_code: { _eq: $state_code } },
+                  { state_name: { _eq: $state_code } }
+                ]
               }
             ) {
               id
@@ -476,7 +488,9 @@ export class ConfigurationsService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to fetch fast delivery from supported locations for country: ${countryCode}`,
+        `Failed to fetch fast delivery from supported locations for country: ${countryCode}, state: ${
+          stateCode || 'any'
+        }`,
         error
       );
       throw error;
