@@ -197,7 +197,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
             ) : (
               <Grid container spacing={2}>
                 {slots.map((slot) => (
-                  <Grid item xs={12} sm={6} md={4} key={slot.id}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={slot.id}>
                     <Card
                       sx={{
                         cursor: slot.is_available ? 'pointer' : 'not-allowed',
