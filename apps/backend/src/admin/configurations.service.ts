@@ -439,7 +439,6 @@ export class ConfigurationsService {
               where: { 
                 country_code: { _eq: $country_code },
                 _or: [
-                  { state_code: { _eq: $state_code } },
                   { state_name: { _eq: $state_code } }
                 ]
               }

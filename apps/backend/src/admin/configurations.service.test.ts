@@ -9,7 +9,7 @@ describe('ConfigurationsService - getFastDeliveryFromSupportedLocations', () => 
     service = new ConfigurationsService();
   });
 
-  it('should match state by state_code', async () => {
+  it('should match state by state_name', async () => {
     // Test with state code 'ES' (Estuaire)
     const result = await service.getFastDeliveryFromSupportedLocations(
       'GA',
@@ -55,7 +55,7 @@ describe('ConfigurationsService - getFastDeliveryFromSupportedLocations', () => 
 
 // Scenario 1: Frontend sends state code
 const config1 = await service.getFastDeliveryFromSupportedLocations('GA', 'ES');
-// This will match the state_code field
+// This will match the state_name field
 
 // Scenario 2: Frontend sends state name
 const config2 = await service.getFastDeliveryFromSupportedLocations(

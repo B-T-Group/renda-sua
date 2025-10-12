@@ -1180,6 +1180,7 @@
     "transactionId": "Transaction ID",
     "unsupportedPhoneCountry": "Phone number is not from a supported country. Supported countries: {{countries}}",
     "useDifferentPhone": "Use a different phone number",
+    "useAlternativePhone": "Please use the \"Use a different phone number\" option above to enter a phone number from a supported country.",
     "verified": "Verified",
     "verifiedAgentDescription": "Only verified agents can deliver this order",
     "viewAndTakeAction": "View & Take Action",

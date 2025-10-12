@@ -478,7 +478,7 @@ export class InventoryItemsService {
         service_status: { _eq: 'active' },
         delivery_enabled: { _eq: true },
         ...(countryCode && { country_code: { _eq: countryCode } }),
-        ...(state && { state_code: { _eq: state } }),
+        ...(state && { state: { _eq: state } }),
       };
 
       const query = `

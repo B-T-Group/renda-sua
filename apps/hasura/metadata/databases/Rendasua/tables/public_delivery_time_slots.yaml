@@ -17,7 +17,7 @@ select_permissions:
       columns:
         - id
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time
@@ -33,7 +33,7 @@ select_permissions:
       columns:
         - id
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time
@@ -49,7 +49,7 @@ select_permissions:
       columns:
         - id
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time
@@ -65,7 +65,7 @@ select_permissions:
       columns:
         - id
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time
@@ -81,7 +81,7 @@ select_permissions:
       columns:
         - id
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time
@@ -97,7 +97,7 @@ insert_permissions:
     permission:
       columns:
         - country_code
-        - state_code
+        - state
         - slot_name
         - slot_type
         - start_time

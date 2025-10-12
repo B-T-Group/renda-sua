@@ -13,7 +13,7 @@ export interface SupportedLocation {
   id: string;
   countryCode: string;
   countryName: string;
-  stateCode: string | null;
+  state: string | null;
   stateName: string;
   currencyCode: string;
   serviceStatus: 'active' | 'coming_soon' | 'suspended' | 'inactive';
@@ -127,7 +127,6 @@ export class LocationsController {
             id
             country_code
             country_name
-            state_code
             state_name
             currency_code
             service_status
@@ -148,7 +147,7 @@ export class LocationsController {
           id: loc.id,
           countryCode: loc.country_code,
           countryName: loc.country_name,
-          stateCode: loc.state_code,
+          state: loc.state_name,
           stateName: loc.state_name,
           currencyCode: loc.currency_code,
           serviceStatus: loc.service_status,
@@ -235,17 +234,16 @@ export class LocationsController {
 
       if (stateCode) {
         query = `
-          query CheckLocationSupport($country_code: bpchar!, $state_code: String!) {
+          query CheckLocationSupport($country_code: bpchar!, $state: String!) {
             supported_country_states(
               where: { 
                 country_code: { _eq: $country_code },
-                state_code: { _eq: $state_code }
+                state_name: { _eq: $state }
               }
             ) {
               id
               country_code
               country_name
-              state_code
               state_name
               currency_code
               service_status
@@ -255,7 +253,7 @@ export class LocationsController {
             }
           }
         `;
-        variables = { country_code: countryCode, state_code: stateCode };
+        variables = { country_code: countryCode, state: stateCode };
       } else {
         query = `
           query CheckCountrySupport($country_code: bpchar!) {
@@ -266,7 +264,6 @@ export class LocationsController {
               id
               country_code
               country_name
-              state_code
               state_name
               currency_code
               service_status
@@ -336,7 +333,7 @@ export class LocationsController {
           },
           ...(stateCode && {
             state: {
-              code: location.state_code,
+              code: location.state_name,
               name: location.state_name,
               supported: location.service_status === 'active',
               serviceStatus: location.service_status,
@@ -496,7 +493,6 @@ export class LocationsController {
             }
             order_by: { state_name: asc }
           ) {
-            state_code
             state_name
             service_status
             delivery_enabled
@@ -511,7 +507,7 @@ export class LocationsController {
       const locations = response.supported_country_states || [];
 
       const states = locations.map((loc: any) => ({
-        code: loc.state_code,
+        code: loc.state_name,
         name: loc.state_name,
         serviceStatus: loc.service_status,
         deliveryEnabled: loc.delivery_enabled,

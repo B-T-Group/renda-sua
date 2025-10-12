@@ -94,7 +94,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     } else {
       onChange(null);
     }
-  }, [selectedDate, selectedSlotId, specialInstructions, onChange]);
+  }, [selectedDate, selectedSlotId, specialInstructions]);
 
   const handleDateChange = useCallback((date: Date | null) => {
     setSelectedDate(date);

@@ -35,7 +35,6 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { State } from 'country-state-city';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -337,18 +336,8 @@ const PlaceOrderPage: React.FC = () => {
     (addr) => addr.address.id === selectedAddressId
   )?.address;
   const userCountry = selectedAddress?.country || 'GA'; // Default to Gabon
-  let userState = selectedAddress?.state || 'Estuaire'; // Default to Estuaire
+  const userState = selectedAddress?.state || 'Estuaire Province'; // Default to Estuaire
 
-  const stateAsNumber = parseInt(userState);
-
-  if (!isNaN(stateAsNumber)) {
-    console.log('userState is a number', userState);
-    const stateObj = State.getStateByCodeAndCountry(userState, userCountry);
-    console.log('stateObj', stateObj);
-    if (stateObj && stateObj.name) {
-      userState = stateObj.name;
-    }
-  }
   const { config: fastDeliveryConfig, isEnabledForLocation } =
     useFastDeliveryConfig(userCountry, userState);
 

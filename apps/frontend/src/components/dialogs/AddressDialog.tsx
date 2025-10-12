@@ -367,11 +367,12 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   // Update states when country changes
   useEffect(() => {
     if (addressData.country) {
-      setStates(State.getStatesOfCountry(addressData.country));
+      const newStates = State.getStatesOfCountry(addressData.country);
+      setStates(newStates);
       // Reset state and city when country changes
       if (
-        states.length > 0 &&
-        !states.find((state) => state.name === addressData.state)
+        newStates.length > 0 &&
+        !newStates.find((state) => state.name === addressData.state)
       ) {
         onAddressChange({ ...addressData, state: '', city: '' });
       }
@@ -379,13 +380,8 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       setStates([]);
       setCities([]);
     }
-  }, [
-    addressData.country,
-    addressData.state,
-    states,
-    onAddressChange,
-    addressData,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressData.country, addressData.state]);
 
   // Update cities when state changes
   useEffect(() => {
@@ -393,11 +389,12 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       // Convert state name to state code for City.getCitiesOfState
       const stateCode = findStateCode(addressData.state, addressData.country);
       if (stateCode) {
-        setCities(City.getCitiesOfState(addressData.country, stateCode));
+        const newCities = City.getCitiesOfState(addressData.country, stateCode);
+        setCities(newCities);
         // Reset city when state changes
         if (
-          cities.length > 0 &&
-          !cities.find((city) => city.name === addressData.city)
+          newCities.length > 0 &&
+          !newCities.find((city) => city.name === addressData.city)
         ) {
           onAddressChange({ ...addressData, city: '' });
         }
@@ -407,17 +404,11 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
     } else {
       setCities([]);
     }
-  }, [
-    addressData.country,
-    addressData.state,
-    addressData.city,
-    cities,
-    onAddressChange,
-    addressData,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressData.country, addressData.state, addressData.city]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInputChange = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (field: keyof AddressFormData, value: any) => {
       onAddressChange({
         ...addressData,

@@ -4,7 +4,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 export interface DeliveryTimeSlot {
   id: string;
   country_code: string;
-  state_code?: string;
+  state?: string;
   slot_name: string;
   slot_type: 'standard' | 'fast';
   start_time: string;
@@ -44,13 +44,13 @@ export class DeliverySlotsService {
   ): Promise<AvailableSlot[]> {
     try {
       const slotType = isFastDelivery ? 'fast' : 'standard';
-      
+
       const query = `
-        query GetAvailableSlots($country_code: bpchar!, $state_code: String!, $slot_type: String!) {
+        query GetAvailableSlots($country_code: bpchar!, $state: String!, $slot_type: String!) {
           delivery_time_slots(
             where: {
               country_code: { _eq: $country_code },
-              state_code: { _eq: $state_code },
+              state: { _eq: $state },
               slot_type: { _eq: $slot_type },
               is_active: { _eq: true }
             },
@@ -58,7 +58,7 @@ export class DeliverySlotsService {
           ) {
             id
             country_code
-            state_code
+            state
             slot_name
             slot_type
             start_time
@@ -72,7 +72,7 @@ export class DeliverySlotsService {
 
       const response = await this.hasuraSystemService.executeQuery(query, {
         country_code: countryCode,
-        state_code: stateCode,
+        state: stateCode,
         slot_type: slotType,
       });
 
@@ -127,7 +127,8 @@ export class DeliverySlotsService {
       });
 
       const slot = response.delivery_time_slots_by_pk;
-      const bookedCount = response.delivery_time_windows_aggregate?.aggregate?.count || 0;
+      const bookedCount =
+        response.delivery_time_windows_aggregate?.aggregate?.count || 0;
       const totalCapacity = slot?.max_orders_per_slot || 0;
       const availableCapacity = Math.max(0, totalCapacity - bookedCount);
 
@@ -147,11 +148,14 @@ export class DeliverySlotsService {
   /**
    * Get all delivery time slots for a location (for admin purposes)
    */
-  async getAllSlots(countryCode: string, stateCode?: string): Promise<DeliveryTimeSlot[]> {
+  async getAllSlots(
+    countryCode: string,
+    stateCode?: string
+  ): Promise<DeliveryTimeSlot[]> {
     try {
       const whereClause: any = {
         country_code: { _eq: countryCode },
-        ...(stateCode && { state_code: { _eq: stateCode } }),
+        ...(stateCode && { state: { _eq: stateCode } }),
       };
 
       const query = `
@@ -162,7 +166,7 @@ export class DeliverySlotsService {
           ) {
             id
             country_code
-            state_code
+            state
             slot_name
             slot_type
             start_time
