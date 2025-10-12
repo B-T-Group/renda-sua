@@ -16,6 +16,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { Country, State } from 'country-state-city';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -183,13 +184,31 @@ const AddressManager: React.FC<AddressManagerProps> = ({
   };
 
   // Format address for display
+  // Converts country codes (e.g., 'US') to country names (e.g., 'United States')
+  // Converts state codes (e.g., 'CA') to state names (e.g., 'California')
   const formatAddress = (address: Address) => {
+    // Get country name from country code
+    // Example: 'US' -> 'United States', 'CA' -> 'Canada'
+    const countryName = address.country
+      ? Country.getCountryByCode(address.country)?.name || address.country
+      : '';
+
+    // Get state name from state code and country code
+    // Example: 'CA' + 'US' -> 'California', 'ON' + 'CA' -> 'Ontario'
+    const stateName =
+      address.state && address.country
+        ? State.getStateByCodeAndCountry(address.state, address.country)
+            ?.name || address.state
+        : address.state || '';
+
     const parts = [
       address.address_line_1,
       address.address_line_2,
       address.city,
-      `${address.state} ${address.postal_code}`,
-      address.country,
+      stateName && address.postal_code
+        ? `${stateName} ${address.postal_code}`
+        : stateName || address.postal_code,
+      countryName,
     ].filter(Boolean);
 
     return parts.join(', ');

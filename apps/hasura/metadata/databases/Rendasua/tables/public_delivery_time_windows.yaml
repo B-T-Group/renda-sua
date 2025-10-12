@@ -1,6 +1,16 @@
 table:
   name: delivery_time_windows
   schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: slot
+    using:
+      foreign_key_constraint_on: slot_id
+  - name: confirmedByUser
+    using:
+      foreign_key_constraint_on: confirmed_by
 select_permissions:
   - role: user
     permission:

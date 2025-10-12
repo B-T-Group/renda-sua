@@ -1,6 +1,16 @@
 table:
   name: delivery_time_slots
   schema: public
+array_relationships:
+  - name: delivery_time_windows
+    using:
+      manual_configuration:
+        column_mapping:
+          id: slot_id
+        insertion_order: null
+        remote_table:
+          name: delivery_time_windows
+          schema: public
 select_permissions:
   - role: user
     permission:
