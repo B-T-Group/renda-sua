@@ -19,7 +19,7 @@ object_relationships:
       foreign_key_constraint_on: delivery_address_id
   - name: delivery_time_window
     using:
-      foreign_key_constraint_on: delivery_window_id
+      foreign_key_constraint_on: delivery_time_window_id
   - name: order_hold
     using:
       foreign_key_constraint_on:

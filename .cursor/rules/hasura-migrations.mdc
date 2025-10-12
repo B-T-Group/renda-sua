@@ -1,0 +1,145 @@
+# Hasura Migration Rules for Rendasua Project
+
+## Description
+
+Rules for database migrations and schema management in the rendasua project using Hasura instead of Supabase.
+
+## Rules
+
+### Migration Management
+
+1. **Use Hasura for Migrations**: This project uses Hasura for database migrations, NOT Supabase.
+
+   ```bash
+   # ✅ Good - Use Hasura CLI
+   hasura migration create <migration_name>
+   hasura migrate apply
+   hasura metadata apply
+
+   # ❌ Bad - Don't use Supabase CLI
+   supabase migration new <migration_name>
+   supabase db reset
+   supabase db push
+   ```
+
+2. **Migration File Locations**:
+
+   - Hasura migrations: `apps/hasura/migrations/Rendasua/`
+   - Metadata: `apps/hasura/metadata/`
+   - Never use: `apps/hasura/supabase/migrations/`
+
+3. **Hasura CLI Commands**:
+
+   ```bash
+   # Navigate to hasura directory
+   cd apps/hasura
+
+   # Create new migration
+   hasura migration create <migration_name>
+
+   # Apply migrations
+   hasura migrate apply
+
+   # Apply metadata
+   hasura metadata apply
+
+   # Check status
+   hasura migrate status
+
+   # Console for schema management
+   hasura console
+   ```
+
+### Database Schema Changes
+
+1. **Always Use Hasura Console**: For schema changes, use Hasura console instead of direct SQL.
+
+   ```bash
+   # Start Hasura console
+   cd apps/hasura
+   hasura console
+   ```
+
+2. **Migration Workflow**:
+
+   - Make changes in Hasura console
+   - Export metadata: `hasura metadata export`
+   - Create migration: `hasura migration create <name>`
+   - Apply changes: `hasura migrate apply`
+
+3. **Foreign Key Constraints**: Always create proper foreign key constraints in migrations:
+
+   ```sql
+   -- ✅ Good - Proper foreign key constraint
+   ALTER TABLE public.delivery_time_windows
+   ADD CONSTRAINT fk_delivery_time_windows_confirmed_by
+   FOREIGN KEY (confirmed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+   ```
+
+### Relationship Management
+
+1. **Object Relationships**: Use foreign key constraints for object relationships.
+
+   ```yaml
+   # ✅ Good - Object relationship with foreign key
+   object_relationships:
+     - name: confirmedByUser
+       using:
+         foreign_key_constraint_on: confirmed_by
+   ```
+
+2. **Array Relationships**: Use manual configuration for array relationships.
+
+   ```yaml
+   # ✅ Good - Array relationship with manual config
+   array_relationships:
+     - name: delivery_time_windows
+       using:
+         manual_configuration:
+           column_mapping:
+             id: order_id
+           remote_table:
+             name: delivery_time_windows
+             schema: public
+   ```
+
+### Common Issues to Avoid
+
+1. **Don't Use Supabase CLI**: Never use `supabase` commands in this project.
+2. **Check Column Names**: Ensure relationship column names match actual database columns.
+3. **Foreign Key Constraints**: Always create proper foreign key constraints before defining relationships.
+4. **Metadata Consistency**: Keep Hasura metadata in sync with actual database schema.
+
+### Troubleshooting
+
+1. **Relationship Errors**: If you get "no foreign constraint exists" errors:
+
+   - Check if foreign key constraint exists in database
+   - Verify column names match between metadata and database
+   - Create missing foreign key constraints in migrations
+
+2. **Migration Issues**: If migrations fail:
+   - Check Hasura console for schema conflicts
+   - Verify migration SQL syntax
+   - Use `hasura migrate status` to check current state
+
+### Best Practices
+
+1. **Always Test Locally**: Test migrations in local Hasura instance first
+2. **Backup Before Changes**: Export metadata before making schema changes
+3. **Use Descriptive Names**: Use clear, descriptive names for migrations
+4. **Document Changes**: Add comments explaining complex schema changes
+5. **Version Control**: Always commit migration files and metadata changes
+
+### Project Structure
+
+```
+apps/hasura/
+├── migrations/
+│   └── Rendasua/           # Hasura migrations
+├── metadata/               # Hasura metadata
+├── config.yaml            # Hasura configuration
+└── README.md              # Hasura setup instructions
+```
+
+**Note**: This project uses Hasura for GraphQL API and database management. Do not use Supabase CLI commands or create Supabase-specific migrations.

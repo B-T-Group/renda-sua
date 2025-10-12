@@ -1,11 +1,13 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
-In this file I describe general rules to follow. 
+
+In this file I describe general rules to follow.
 
 ## General Rules
+
 - Do not have methods that are more that 20 lines of code
 
 ## General Backend Rules
@@ -23,6 +25,9 @@ These rules apply to the backend application
 - always use React best practices
 
 ## Hasura Rules
+
 - always track tables created
 - whenever applying hasura migrations, always provide hasura admin secret myadminsecretkey
-
+- **IMPORTANT**: This project uses Hasura for database management, NOT Supabase
+- Never use `supabase` CLI commands - use `hasura` commands instead
+- See hasura-migrations.mdc for detailed migration rules
