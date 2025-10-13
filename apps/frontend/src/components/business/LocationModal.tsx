@@ -17,6 +17,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { State } from 'country-state-city';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -82,11 +83,17 @@ const LocationModal: React.FC<LocationModalProps> = ({
         is_primary: location.is_primary,
       });
 
+      // Special case to account for legacy state values in the database not saved as state name but saved as state code
+      const state = State.getStateByCodeAndCountry(
+        location.address.state,
+        location.address.country
+      );
+
       setAddressData({
         address_line_1: location.address.address_line_1,
         address_line_2: location.address.address_line_2 || '',
         city: location.address.city,
-        state: location.address.state,
+        state: state?.name ?? location.address.state,
         postal_code: location.address.postal_code,
         country: location.address.country,
       });
@@ -154,10 +161,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
   };
 
   const hasAddress =
-    addressData.address_line_1 &&
-    addressData.city &&
-    addressData.state &&
-    addressData.country;
+    addressData.address_line_1 && addressData.city && addressData.country;
 
   return (
     <>
@@ -270,7 +274,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
                       `, ${addressData.address_line_2}`}
                   </Typography>
                   <Typography variant="body1">
-                    {addressData.city}, {addressData.state}{' '}
+                    {addressData.city}
+                    {addressData.state && `, ${addressData.state}`}{' '}
                     {addressData.postal_code}
                   </Typography>
                   <Typography variant="body1">{addressData.country}</Typography>
