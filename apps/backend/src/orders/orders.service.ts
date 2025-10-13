@@ -1537,6 +1537,7 @@ export class OrdersService {
           current_status
           subtotal
           delivery_fee
+          fast_delivery_fee
           tax_amount
           total_amount
           currency
@@ -1545,6 +1546,7 @@ export class OrdersService {
           business_id
           client_id
           delivery_address_id
+          requires_fast_delivery
           client {
             user_id
             user {
@@ -1655,11 +1657,17 @@ export class OrdersService {
         referenceId: order.id,
       });
 
+      // Calculate total delivery fees (base delivery fee + fast delivery fee)
+      const totalDeliveryFees =
+        order.delivery_fee + (order.fast_delivery_fee || 0);
+
       await this.accountsService.registerTransaction({
         accountId: transaction.account_id,
-        amount: order.delivery_fee,
+        amount: totalDeliveryFees,
         transactionType: 'hold',
-        memo: `Hold for order ${order.order_number} delivery fee`,
+        memo: `Hold for order ${order.order_number} delivery fees (base: ${
+          order.delivery_fee
+        }, fast: ${order.fast_delivery_fee || 0})`,
         referenceId: order.id,
       });
 
@@ -1667,7 +1675,7 @@ export class OrdersService {
       const orderHold = await this.getOrCreateOrderHold(order.id);
       await this.updateOrderHold(orderHold.id, {
         client_hold_amount: order.subtotal,
-        delivery_fees: order.delivery_fee,
+        delivery_fees: totalDeliveryFees,
       });
 
       // Update order status from pending_payment to pending and payment_status to paid
@@ -1706,6 +1714,7 @@ export class OrdersService {
             })) || [],
           subtotal: order.subtotal || 0,
           deliveryFee: order.delivery_fee || 0,
+          fastDeliveryFee: order.fast_delivery_fee || 0,
           taxAmount: order.tax_amount || 0,
           totalAmount: order.total_amount || 0,
           currency: order.currency || 'USD',
@@ -1991,6 +2000,50 @@ export class OrdersService {
   }
 
   /**
+   * Get fast delivery fee from supported_country_states table
+   */
+  private async getFastDeliveryFee(
+    state: string,
+    country: string
+  ): Promise<{ fee: number; enabled: boolean }> {
+    const query = `
+      query GetFastDeliveryFee($state: String!, $country: String!) {
+        supported_country_states(
+          where: { 
+            state_name: { _eq: $state }, 
+            country_code: { _eq: $country },
+            service_status: { _eq: "active" }
+          }
+        ) {
+          fast_delivery
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      state,
+      country,
+    });
+
+    if (
+      !result.supported_country_states ||
+      result.supported_country_states.length === 0
+    ) {
+      return { fee: 0, enabled: false };
+    }
+
+    const fastDeliveryConfig = result.supported_country_states[0].fast_delivery;
+    if (!fastDeliveryConfig || !fastDeliveryConfig.enabled) {
+      return { fee: 0, enabled: false };
+    }
+
+    return {
+      fee: fastDeliveryConfig.fee || 0,
+      enabled: fastDeliveryConfig.enabled || false,
+    };
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
   async createOrder(
@@ -2102,7 +2155,18 @@ export class OrdersService {
     const totalAmount =
       businessInventory.selling_price * orderData.item.quantity;
     const deliveryFee = deliveryFeeInfo.deliveryFee;
-    const total_amount = totalAmount + deliveryFee;
+
+    // Get fast delivery fee from supported_country_states if requires_fast_delivery is true
+    let fastDeliveryFee = 0;
+    if (orderData.requires_fast_delivery) {
+      const fastDeliveryInfo = await this.getFastDeliveryFee(
+        address.state,
+        address.country
+      );
+      fastDeliveryFee = fastDeliveryInfo.fee;
+    }
+
+    const total_amount = totalAmount + deliveryFee + fastDeliveryFee;
 
     // Get payment provider based on phone number (use request phone_number if provided, otherwise user's phone_number)
     const phoneNumber = orderData.phone_number || user.phone_number || '';
@@ -2239,6 +2303,7 @@ export class OrdersService {
     const actual_delivery_time = null;
     const assigned_agent_id = null;
     const verified_agent_delivery = !!orderData.verified_agent_delivery;
+    const requires_fast_delivery = !!orderData.requires_fast_delivery;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -2253,6 +2318,7 @@ export class OrdersService {
         $subTotal: numeric!,
         $taxAmount: numeric!,
         $deliveryFee: numeric!,
+        $fastDeliveryFee: numeric!,
         $totalAmount: numeric!,
         $currentStatus: order_status!,
         $paymentMethod: String!,
@@ -2261,8 +2327,9 @@ export class OrdersService {
         $estimatedDeliveryTime: timestamptz,
         $preferredDeliveryTime: timestamptz,
         $actualDeliveryTime: timestamptz,
-        $assignedAgentId: uuid
-        $verifiedAgentDelivery: Boolean!
+        $assignedAgentId: uuid,
+        $verifiedAgentDelivery: Boolean!,
+        $requiresFastDelivery: Boolean!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -2274,6 +2341,7 @@ export class OrdersService {
           payment_method: $paymentMethod,
           payment_status: $paymentStatus,
           delivery_fee: $deliveryFee,
+          fast_delivery_fee: $fastDeliveryFee,
           subtotal: $subTotal,
           tax_amount: $taxAmount,
           total_amount: $totalAmount,
@@ -2284,6 +2352,7 @@ export class OrdersService {
           current_status: $currentStatus,
           assigned_agent_id: $assignedAgentId,
           verified_agent_delivery: $verifiedAgentDelivery,
+          requires_fast_delivery: $requiresFastDelivery,
           order_items: {
             data: $orderItems
           }
@@ -2294,6 +2363,7 @@ export class OrdersService {
           payment_method
           payment_status
           delivery_fee
+          fast_delivery_fee
           subtotal
           tax_amount
           total_amount
@@ -2309,6 +2379,7 @@ export class OrdersService {
           business_location_id
           client_id
           delivery_address_id
+          requires_fast_delivery
           order_items {
             id
             business_inventory_id
@@ -2349,6 +2420,7 @@ export class OrdersService {
         subTotal: subtotal,
         taxAmount: tax_amount,
         deliveryFee: deliveryFee,
+        fastDeliveryFee: fastDeliveryFee,
         totalAmount: total_amount,
         currentStatus: current_status,
         paymentMethod: payment_method,
@@ -2359,6 +2431,7 @@ export class OrdersService {
         actualDeliveryTime: actual_delivery_time,
         assignedAgentId: assigned_agent_id,
         verifiedAgentDelivery: verified_agent_delivery,
+        requiresFastDelivery: requires_fast_delivery,
       }
     );
 
@@ -2403,7 +2476,9 @@ export class OrdersService {
             slot_id: orderData.delivery_window.slot_id,
             preferred_date: orderData.delivery_window.preferred_date,
             special_instructions:
-              orderData.delivery_window.special_instructions,
+              orderData.delivery_window.special_instructions ||
+              orderData.special_instructions ||
+              '',
           }
         );
       } catch (error) {

@@ -29,6 +29,7 @@ export interface NotificationData {
   }>;
   subtotal: number;
   deliveryFee: number;
+  fastDeliveryFee?: number;
   taxAmount: number;
   totalAmount: number;
   currency: string;
