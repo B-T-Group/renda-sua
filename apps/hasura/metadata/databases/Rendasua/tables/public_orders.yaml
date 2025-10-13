@@ -28,6 +28,15 @@ object_relationships:
           name: order_holds
           schema: public
 array_relationships:
+  - name: delivery_time_windows
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: delivery_time_windows
+          schema: public
   - name: order_holds
     using:
       manual_configuration:
@@ -63,15 +72,6 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: ratings
-          schema: public
-  - name: delivery_time_windows
-    using:
-      manual_configuration:
-        column_mapping:
-          id: order_id
-        insertion_order: null
-        remote_table:
-          name: delivery_time_windows
           schema: public
 insert_permissions:
   - role: client

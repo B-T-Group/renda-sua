@@ -11,8 +11,22 @@ array_relationships:
         remote_table:
           name: delivery_time_windows
           schema: public
-select_permissions:
+insert_permissions:
   - role: user
+    permission:
+      check: {}
+      columns:
+        - country_code
+        - state
+        - slot_name
+        - slot_type
+        - start_time
+        - end_time
+        - is_active
+        - max_orders_per_slot
+        - display_order
+select_permissions:
+  - role: agent
     permission:
       columns:
         - id
@@ -28,7 +42,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: agent
+  - role: anonymous
     permission:
       columns:
         - id
@@ -76,7 +90,7 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-  - role: anonymous
+  - role: user
     permission:
       columns:
         - id
@@ -92,21 +106,6 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-insert_permissions:
-  - role: user
-    permission:
-      columns:
-        - country_code
-        - state
-        - slot_name
-        - slot_type
-        - start_time
-        - end_time
-        - is_active
-        - max_orders_per_slot
-        - display_order
-      filter: {}
-      check: {}
 update_permissions:
   - role: user
     permission:

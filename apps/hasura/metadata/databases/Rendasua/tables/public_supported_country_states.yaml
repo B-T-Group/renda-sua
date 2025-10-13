@@ -2,7 +2,7 @@ table:
   name: supported_country_states
   schema: public
 select_permissions:
-  - role: user
+  - role: agent
     permission:
       columns:
         - id
@@ -20,7 +20,7 @@ select_permissions:
         - created_by
         - updated_by
       filter: {}
-  - role: agent
+  - role: anonymous
     permission:
       columns:
         - id
@@ -74,7 +74,7 @@ select_permissions:
         - created_by
         - updated_by
       filter: {}
-  - role: anonymous
+  - role: user
     permission:
       columns:
         - id

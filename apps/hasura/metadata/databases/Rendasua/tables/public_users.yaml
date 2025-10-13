@@ -99,6 +99,15 @@ array_relationships:
         remote_table:
           name: user_uploads
           schema: public
+  - name: delivery_time_windows_confirmed
+    using:
+      manual_configuration:
+        column_mapping:
+          id: confirmed_by
+        insertion_order: null
+        remote_table:
+          name: delivery_time_windows
+          schema: public
 insert_permissions:
   - role: agent
     permission:

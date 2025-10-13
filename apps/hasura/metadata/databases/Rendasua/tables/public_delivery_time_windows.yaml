@@ -2,32 +2,37 @@ table:
   name: delivery_time_windows
   schema: public
 object_relationships:
+  - name: confirmedByUser
+    using:
+      foreign_key_constraint_on: confirmed_by
   - name: order
     using:
       foreign_key_constraint_on: order_id
   - name: slot
     using:
       foreign_key_constraint_on: slot_id
-  - name: confirmedByUser
-    using:
-      foreign_key_constraint_on: confirmed_by
-select_permissions:
-  - role: user
+insert_permissions:
+  - role: client
     permission:
+      check: {}
       columns:
-        - id
         - order_id
         - slot_id
         - preferred_date
         - time_slot_start
         - time_slot_end
-        - is_confirmed
         - special_instructions
-        - confirmed_at
-        - confirmed_by
-        - created_at
-        - updated_at
-      filter: {}
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - order_id
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - special_instructions
+select_permissions:
   - role: agent
     permission:
       columns:
@@ -76,46 +81,39 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-insert_permissions:
   - role: user
     permission:
       columns:
+        - id
         - order_id
         - slot_id
         - preferred_date
         - time_slot_start
         - time_slot_end
+        - is_confirmed
         - special_instructions
+        - confirmed_at
+        - confirmed_by
+        - created_at
+        - updated_at
       filter: {}
-      check: {}
-  - role: client
-    permission:
-      columns:
-        - order_id
-        - slot_id
-        - preferred_date
-        - time_slot_start
-        - time_slot_end
-        - special_instructions
-      filter: {}
-      check: {}
 update_permissions:
-  - role: user
+  - role: business
     permission:
       columns:
-        - slot_id
-        - preferred_date
-        - time_slot_start
-        - time_slot_end
-        - special_instructions
         - is_confirmed
         - confirmed_at
         - confirmed_by
       filter: {}
       check: {}
-  - role: business
+  - role: user
     permission:
       columns:
+        - slot_id
+        - preferred_date
+        - time_slot_start
+        - time_slot_end
+        - special_instructions
         - is_confirmed
         - confirmed_at
         - confirmed_by
