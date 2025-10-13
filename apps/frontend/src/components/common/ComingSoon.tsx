@@ -170,3 +170,4 @@ const ComingSoon: React.FC<ComingSoonProps> = ({
 };
 
 export default ComingSoon;
+

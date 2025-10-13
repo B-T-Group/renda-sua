@@ -51,9 +51,15 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
   disabled = false,
 }) => {
   const { t } = useTranslation();
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedSlotId, setSelectedSlotId] = useState<string>('');
-  const [specialInstructions, setSpecialInstructions] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(
+    value?.preferred_date ? new Date(value.preferred_date) : null
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState<string>(
+    value?.slot_id || ''
+  );
+  const [specialInstructions, setSpecialInstructions] = useState<string>(
+    value?.special_instructions || ''
+  );
 
   // Calculate minimum date (tomorrow for standard delivery, today for fast delivery)
   const minDate = new Date();
@@ -72,17 +78,6 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     isFastDelivery
   );
 
-  // Initialize form values from props
-  useEffect(() => {
-    if (value) {
-      setSelectedDate(
-        value.preferred_date ? new Date(value.preferred_date) : null
-      );
-      setSelectedSlotId(value.slot_id || '');
-      setSpecialInstructions(value.special_instructions || '');
-    }
-  }, [value]);
-
   // Update parent component when form values change
   useEffect(() => {
     if (selectedDate && selectedSlotId) {
@@ -94,7 +89,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     } else {
       onChange(null);
     }
-  }, [selectedDate, selectedSlotId, specialInstructions]);
+  }, [selectedDate, selectedSlotId, specialInstructions, onChange]);
 
   const handleDateChange = useCallback((date: Date | null) => {
     setSelectedDate(date);
@@ -106,7 +101,8 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     setSelectedSlotId(slotId);
   }, []);
 
-  const formatTimeSlot = useCallback((slot: DeliveryTimeSlot) => {
+  const formatTimeSlot = useCallback((slot: DeliveryTimeSlot | undefined) => {
+    if (!slot) return '';
     return `${slot.slot_name} (${slot.start_time} - ${slot.end_time})`;
   }, []);
 
@@ -336,9 +332,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
                     sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }}
                   />
                   <Typography variant="body2">
-                    {formatTimeSlot(
-                      slots.find((s) => s.id === selectedSlotId)!
-                    )}
+                    {formatTimeSlot(slots.find((s) => s.id === selectedSlotId))}
                   </Typography>
                 </Box>
                 {specialInstructions && (

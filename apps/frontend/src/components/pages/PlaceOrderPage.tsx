@@ -30,13 +30,12 @@ import {
   Skeleton,
   Stack,
   Switch,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { parsePhoneNumber } from 'libphonenumber-js';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -288,14 +287,19 @@ const PlaceOrderPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [specialInstructions, setSpecialInstructions] = useState('');
-  const [verifiedAgentDelivery, setVerifiedAgentDelivery] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
+
+  const handleDeliveryWindowChange = useCallback(
+    (data: DeliveryWindowData | null) => {
+      setDeliveryWindow(data);
+    },
+    []
+  );
 
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -380,8 +384,6 @@ const PlaceOrderPage: React.FC = () => {
           business_inventory_id: selectedItem.id,
           quantity: quantity,
         },
-        verified_agent_delivery: verifiedAgentDelivery,
-        special_instructions: specialInstructions.trim() || undefined,
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         requires_fast_delivery: requiresFastDelivery,
@@ -865,58 +867,6 @@ const PlaceOrderPage: React.FC = () => {
                         </Select>
                       </FormControl>
                     </Grid>
-
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        fullWidth
-                        label={t(
-                          'orders.specialInstructions',
-                          'Special Instructions'
-                        )}
-                        placeholder={t(
-                          'orders.specialInstructionsPlaceholder',
-                          'Add any special instructions for this order (optional)'
-                        )}
-                        multiline
-                        rows={3}
-                        value={specialInstructions}
-                        onChange={(e) => setSpecialInstructions(e.target.value)}
-                        disabled={loading}
-                      />
-                    </Grid>
-
-                    <Grid size={{ xs: 12 }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={verifiedAgentDelivery}
-                            onChange={(e) =>
-                              setVerifiedAgentDelivery(e.target.checked)
-                            }
-                            disabled={loading}
-                          />
-                        }
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight="medium">
-                              {t(
-                                'orders.requireVerifiedAgent',
-                                'Verified Agent Only'
-                              )}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {t(
-                                'orders.verifiedAgentDescription',
-                                'Only verified agents can deliver this order'
-                              )}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </Grid>
                   </Grid>
                 </CardContent>
               </Card>
@@ -1181,7 +1131,7 @@ const PlaceOrderPage: React.FC = () => {
                       countryCode={selectedAddress.country}
                       stateCode={selectedAddress.state}
                       value={deliveryWindow}
-                      onChange={setDeliveryWindow}
+                      onChange={handleDeliveryWindowChange}
                       isFastDelivery={requiresFastDelivery}
                       disabled={loading}
                     />
