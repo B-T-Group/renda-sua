@@ -143,10 +143,13 @@ const LocationModal: React.FC<LocationModalProps> = ({
 
     const locationData = {
       ...formData,
-      address: addressData,
+      address: {
+        ...addressData,
+        state: addressData.state?.trim() || undefined,
+        address_line_2: addressData.address_line_2?.trim() || undefined,
+      },
     };
 
-    console.log('LocationModal: Calling onSave with data:', locationData);
     await onSave(locationData);
   };
 

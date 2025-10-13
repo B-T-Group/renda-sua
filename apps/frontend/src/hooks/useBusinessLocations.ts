@@ -294,7 +294,7 @@ export const useBusinessLocations = (
         const result = await executeAddNestedMutation({
           businessLocation: businessLocationInput,
         });
-        if (result.data?.insert_business_locations_one) {
+        if (result?.insert_business_locations_one) {
           // Optionally, you can refetch or update state here
           await fetchLocations();
 
@@ -303,7 +303,7 @@ export const useBusinessLocations = (
             onAddressCreated();
           }
 
-          return result.data.insert_business_locations_one;
+          return result.insert_business_locations_one;
         }
       } catch (err) {
         setError(
@@ -332,28 +332,24 @@ export const useBusinessLocations = (
         const result = await executeUpdateMutation({ id, data: locationData });
 
         // If address data is provided, update the address as well
-        if (
-          address &&
-          result.data?.update_business_locations_by_pk?.address?.id
-        ) {
-          const addressId =
-            result.data.update_business_locations_by_pk.address.id;
+        if (address && result.update_business_locations_by_pk?.address?.id) {
+          const addressId = result.update_business_locations_by_pk.address.id;
           await executeUpdateAddressMutation({ id: addressId, data: address });
 
           // Refetch locations to get updated data
           await fetchLocations();
-        } else if (result.data?.update_business_locations_by_pk) {
+        } else if (result.update_business_locations_by_pk) {
           // Update local state if no address update was needed
           setLocations((prev) =>
             prev.map((location) =>
               location.id === id
-                ? result.data.update_business_locations_by_pk
+                ? result.update_business_locations_by_pk
                 : location
             )
           );
         }
 
-        return result.data?.update_business_locations_by_pk;
+        return result.update_business_locations_by_pk;
       } catch (err) {
         console.error('useBusinessLocations: Error updating location:', err);
         setError(
@@ -375,9 +371,9 @@ export const useBusinessLocations = (
       setError(null);
       try {
         const result = await executeDeleteMutation({ id });
-        if (result.data?.delete_business_locations_by_pk) {
+        if (result.delete_business_locations_by_pk) {
           setLocations((prev) => prev.filter((location) => location.id !== id));
-          return result.data.delete_business_locations_by_pk;
+          return result.delete_business_locations_by_pk;
         }
       } catch (err) {
         setError(
