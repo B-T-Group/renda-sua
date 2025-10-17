@@ -22185,6 +22185,234 @@ export type Weight_Units_Enum_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['weight_units_enum']['input']>>;
 };
 
+export type GetUserByIdentifierQueryVariables = Exact<{
+  identifier: Scalars['String']['input'];
+}>;
+
+
+export type GetUserByIdentifierQuery = { __typename?: 'query_root', users: Array<{ __typename?: 'users', id: string, identifier: string, email: string, first_name: string, last_name: string, phone_number?: string | null, phone_number_verified?: boolean | null, email_verified?: boolean | null, user_type_id: User_Types_Enum, created_at: string, updated_at: string }> };
+
+export type GetUserByIdQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetUserByIdQuery = { __typename?: 'query_root', users_by_pk?: { __typename?: 'users', id: string, email: string, first_name: string, last_name: string, user_type_id: User_Types_Enum, created_at: string, updated_at: string, agent?: { __typename?: 'agents', id: string } | null, client?: { __typename?: 'clients', id: string } | null, business?: { __typename?: 'businesses', id: string } | null } | null };
+
+export type GetUserAccountQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+  currency: Scalars['currency_enum']['input'];
+}>;
+
+
+export type GetUserAccountQuery = { __typename?: 'query_root', accounts: Array<{ __typename?: 'accounts', id: string, available_balance: number, withheld_balance: number }> };
+
+export type GetAccountByIdQueryVariables = Exact<{
+  accountId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetAccountByIdQuery = { __typename?: 'query_root', accounts_by_pk?: { __typename?: 'accounts', id: string, user_id: string, currency: any, available_balance: number, withheld_balance: number, is_active?: boolean | null, created_at: string, updated_at: string } | null };
+
+export type GetUserClientQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetUserClientQuery = { __typename?: 'query_root', clients: Array<{ __typename?: 'clients', id: string, user_id: string, created_at: string, updated_at: string, client_addresses: Array<{ __typename?: 'client_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+
+export type GetUserBusinessQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetUserBusinessQuery = { __typename?: 'query_root', businesses: Array<{ __typename?: 'businesses', id: string, user_id: string, created_at: string, updated_at: string, business_addresses: Array<{ __typename?: 'business_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+
+export type GetUserAgentQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetUserAgentQuery = { __typename?: 'query_root', agents: Array<{ __typename?: 'agents', id: string, user_id: string, vehicle_type_id: Vehicle_Types_Enum, is_verified?: boolean | null, created_at: string, updated_at: string, agent_addresses: Array<{ __typename?: 'agent_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+
+export type GetClientByIdQueryVariables = Exact<{
+  id: Scalars['uuid']['input'];
+}>;
+
+
+export type GetClientByIdQuery = { __typename?: 'query_root', clients: Array<{ __typename?: 'clients', id: string, user_id: string }> };
+
+export type GetBusinessByIdQueryVariables = Exact<{
+  id: Scalars['uuid']['input'];
+}>;
+
+
+export type GetBusinessByIdQuery = { __typename?: 'query_root', businesses: Array<{ __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, is_verified?: boolean | null }> };
+
+export type GetAgentByIdQueryVariables = Exact<{
+  id: Scalars['uuid']['input'];
+}>;
+
+
+export type GetAgentByIdQuery = { __typename?: 'query_root', agents: Array<{ __typename?: 'agents', id: string, user_id: string, vehicle_type_id: Vehicle_Types_Enum, is_verified?: boolean | null }> };
+
+export type GetAgentAddressesQueryVariables = Exact<{
+  agentId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetAgentAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+
+export type GetClientAddressesQueryVariables = Exact<{
+  clientId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetClientAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+
+export type GetBusinessAddressesQueryVariables = Exact<{
+  businessId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetBusinessAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+
+export type GetAddressByIdQueryVariables = Exact<{
+  addressId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetAddressByIdQuery = { __typename?: 'query_root', addresses_by_pk?: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null } | null };
+
+export type CreateUserAccountMutationVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+  currency: Scalars['currency_enum']['input'];
+}>;
+
+
+export type CreateUserAccountMutation = { __typename?: 'mutation_root', insert_accounts_one?: { __typename?: 'accounts', id: string, user_id: string, currency: any, available_balance: number, withheld_balance: number, is_active?: boolean | null, created_at: string } | null };
+
+export type UpdateAccountBalanceMutationVariables = Exact<{
+  accountId: Scalars['uuid']['input'];
+  availableBalance: Scalars['numeric']['input'];
+  withheldBalance: Scalars['numeric']['input'];
+}>;
+
+
+export type UpdateAccountBalanceMutation = { __typename?: 'mutation_root', update_accounts_by_pk?: { __typename?: 'accounts', id: string, available_balance: number, withheld_balance: number, updated_at: string } | null };
+
+export type DropOrderMutationVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+}>;
+
+
+export type DropOrderMutation = { __typename?: 'mutation_root', update_orders_by_pk?: { __typename?: 'orders', id: string, current_status: any, assigned_agent_id?: string | null } | null };
+
+export type UpdateOrderStatusAndPaymentStatusMutationVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+  newStatus: Scalars['order_status']['input'];
+  paymentStatus: Scalars['String']['input'];
+}>;
+
+
+export type UpdateOrderStatusAndPaymentStatusMutation = { __typename?: 'mutation_root', update_orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, payment_status?: string | null, updated_at?: string | null } | null };
+
+export type CreateStatusHistoryMutationVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+  status: Scalars['order_status']['input'];
+  notes: Scalars['String']['input'];
+  changedByType: Scalars['String']['input'];
+  changedByUserId: Scalars['uuid']['input'];
+}>;
+
+
+export type CreateStatusHistoryMutation = { __typename?: 'mutation_root', insert_order_status_history?: { __typename?: 'order_status_history_mutation_response', affected_rows: number } | null };
+
+export type CreateOrderMutationVariables = Exact<{
+  orderData: Orders_Insert_Input;
+}>;
+
+
+export type CreateOrderMutation = { __typename?: 'mutation_root', insert_orders_one?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, business_location_id: string, created_at?: string | null } | null };
+
+export type UpdateOrderStatusMutationVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+  status: Scalars['order_status']['input'];
+}>;
+
+
+export type UpdateOrderStatusMutation = { __typename?: 'mutation_root', update_orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, updated_at?: string | null } | null };
+
+export type AssignOrderToAgentMutationVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+  agentId: Scalars['uuid']['input'];
+}>;
+
+
+export type AssignOrderToAgentMutation = { __typename?: 'mutation_root', update_orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, assigned_agent_id?: string | null, updated_at?: string | null } | null };
+
+export type CreateOrderItemsMutationVariables = Exact<{
+  orderItems: Array<Order_Items_Insert_Input> | Order_Items_Insert_Input;
+}>;
+
+
+export type CreateOrderItemsMutation = { __typename?: 'mutation_root', insert_order_items?: { __typename?: 'order_items_mutation_response', affected_rows: number, returning: Array<{ __typename?: 'order_items', id: string, order_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null }> } | null };
+
+export type CreateOrderHoldMutationVariables = Exact<{
+  orderHoldData: Order_Holds_Insert_Input;
+}>;
+
+
+export type CreateOrderHoldMutation = { __typename?: 'mutation_root', insert_order_holds_one?: { __typename?: 'order_holds', id: string, order_id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string } | null };
+
+export type UpdateOrderHoldMutationVariables = Exact<{
+  holdId: Scalars['uuid']['input'];
+  holdData: Order_Holds_Set_Input;
+}>;
+
+
+export type UpdateOrderHoldMutation = { __typename?: 'mutation_root', update_order_holds_by_pk?: { __typename?: 'order_holds', id: string, status: any, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, updated_at: string } | null };
+
+export type GetBusinessOrdersQueryVariables = Exact<{
+  filters?: InputMaybe<Orders_Bool_Exp>;
+}>;
+
+
+export type GetBusinessOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, assigned_agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } } | null, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, id: string, previous_status?: any | null, status: any, notes?: string | null, changed_by_user?: { __typename?: 'users', agent?: { __typename?: 'agents', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, business?: { __typename?: 'businesses', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, client?: { __typename?: 'clients', user: { __typename?: 'users', first_name: string, email: string, last_name: string } } | null } | null }> }> };
+
+export type GetOrderByIdQueryVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetOrderByIdQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, verified_agent_delivery?: boolean | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user_id: string, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null }, assigned_agent?: { __typename?: 'agents', id: string, user_id: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } } | null, order_items: Array<{ __typename?: 'order_items', id: string, business_inventory_id: string, item_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string, description: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, description: string, item_category: { __typename?: 'item_categories', id: number, name: string, description: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string, alt_text?: string | null, display_order?: number | null }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', id: string, order_id: string, status: any, previous_status?: any | null, notes?: string | null, changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, changed_by_user?: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, business?: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, client?: { __typename?: 'clients', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null } | null }>, order_holds: Array<{ __typename?: 'order_holds', id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string, updated_at: string }> } | null };
+
+export type GetOrderByNumberQueryVariables = Exact<{
+  orderNumber: Scalars['String']['input'];
+}>;
+
+
+export type GetOrderByNumberQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, fast_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, business_id: string, client_id: string, delivery_address_id: string, requires_fast_delivery: boolean, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> }> };
+
+export type GetOrderQueryVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetOrderQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, assigned_agent_id?: string | null, client: { __typename?: 'clients', user_id: string }, business: { __typename?: 'businesses', user_id: string }, business_location: { __typename?: 'business_locations', address_id: string }, assigned_agent?: { __typename?: 'agents', user_id: string } | null } | null };
+
+export type GetOrderWithItemsQueryVariables = Exact<{
+  orderId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetOrderWithItemsQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> } | null };
+
+export type OpenOrdersQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type OpenOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, created_at?: string | null, business: { __typename?: 'businesses', name: string }, client: { __typename?: 'clients', user: { __typename?: 'users', id: string, first_name: string, last_name: string, phone_number?: string | null, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, address: { __typename?: 'addresses', address_line_1: string, city: string, state: string, country: string, postal_code: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> }> };
+
 export type GetUsersQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -22197,10 +22425,3 @@ export type GetOrdersQueryVariables = Exact<{
 
 
 export type GetOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, total_amount: number, created_at?: string | null, client: { __typename?: 'clients', id: string } }> };
-
-export type CreateOrderMutationVariables = Exact<{
-  input: Orders_Insert_Input;
-}>;
-
-
-export type CreateOrderMutation = { __typename?: 'mutation_root', insert_orders_one?: { __typename?: 'orders', id: string, order_number: string, total_amount: number, created_at?: string | null } | null };

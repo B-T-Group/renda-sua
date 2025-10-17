@@ -1,56 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
-
-// Import interfaces from hasura-user.service
-export interface AddressRecord {
-  id: string;
-  address_line_1: string;
-  address_line_2?: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  is_primary: boolean;
-  address_type: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ClientRecord {
-  id: string;
-  user_id: string;
-  client_addresses?: {
-    address: AddressRecord;
-  }[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AgentRecord {
-  id: string;
-  user_id: string;
-  vehicle_type_id: string;
-  is_verified: boolean;
-  agent_addresses?: {
-    address: AddressRecord;
-  }[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BusinessRecord {
-  id: string;
-  user_id: string;
-  name: string;
-  is_admin: boolean;
-  is_verified: boolean;
-  business_addresses?: {
-    address: AddressRecord;
-  }[];
-  created_at: string;
-  updated_at: string;
-}
+import {
+  Addresses,
+  GetAccountByIdQuery,
+  GetUserAccountQuery,
+  GetUserAgentQuery,
+  GetUserBusinessQuery,
+  GetUserByIdQuery,
+  GetUserClientQuery,
+} from '../generated/graphql';
+import {
+  GET_ACCOUNT_BY_ID,
+  GET_USER_ACCOUNT,
+  GET_USER_AGENT,
+  GET_USER_BUSINESS,
+  GET_USER_BY_ID,
+  GET_USER_CLIENT,
+} from './hasura.queries';
 
 @Injectable()
 export class HasuraSystemService {
@@ -87,15 +54,18 @@ export class HasuraSystemService {
   /**
    * Execute a GraphQL query with admin privileges
    */
-  async executeQuery(query: string, variables?: any): Promise<any> {
-    return this.client.request(query, variables);
+  async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
+    return this.client.request<T>(query, variables);
   }
 
   /**
    * Execute a GraphQL mutation with admin privileges
    */
-  async executeMutation(mutation: string, variables?: any): Promise<any> {
-    return this.client.request(mutation, variables);
+  async executeMutation<T = any>(
+    mutation: string,
+    variables?: any
+  ): Promise<T> {
+    return this.client.request<T>(mutation, variables);
   }
 
   /**
@@ -153,29 +123,9 @@ export class HasuraSystemService {
    * If not present, you should add this to HasuraSystemService:
    */
   async getUserById(userId: string) {
-    const query = `
-      query ($userId: uuid!) {
-        users_by_pk(id: $userId) {
-          id
-          email
-          first_name
-          last_name
-          agent {
-           id
-          }
-          client {
-           id
-          }
-          business {
-           id
-          }
-          user_type_id
-          created_at
-          updated_at
-        }
-      }
-       `;
-    const result = await this.executeQuery(query, { userId });
+    const result = await this.executeQuery<GetUserByIdQuery>(GET_USER_BY_ID, {
+      userId,
+    });
     return result.users_by_pk;
   }
 
@@ -235,25 +185,14 @@ export class HasuraSystemService {
   /**
    * Get user account by userId and currency
    */
-  async getAccount(userId: string, currency: string): Promise<any> {
-    const query = `
-      query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
-        accounts(where: {
-          user_id: {_eq: $userId},
-          currency: {_eq: $currency},
-          is_active: {_eq: true}
-        }) {
-          id
-          available_balance
-          withheld_balance
-          total_balance
-        }
+  async getAccount(userId: string, currency: string) {
+    const result = await this.executeQuery<GetUserAccountQuery>(
+      GET_USER_ACCOUNT,
+      {
+        userId,
+        currency,
       }
-    `;
-    const result = await this.executeQuery(query, {
-      userId,
-      currency,
-    });
+    );
     let account = result.accounts[0] || null;
     if (!account) {
       // Create the account if it doesn't exist
@@ -265,26 +204,13 @@ export class HasuraSystemService {
   /**
    * Get account by ID
    */
-  async getAccountById(accountId: string): Promise<any> {
-    const query = `
-      query GetAccountById($accountId: uuid!) {
-        accounts_by_pk(id: $accountId) {
-          id
-          user_id
-          currency
-          available_balance
-          withheld_balance
-          total_balance
-          is_active
-          created_at
-          updated_at
-        }
+  async getAccountById(accountId: string) {
+    const result = await this.executeQuery<GetAccountByIdQuery>(
+      GET_ACCOUNT_BY_ID,
+      {
+        accountId,
       }
-    `;
-
-    const result = await this.executeQuery(query, {
-      accountId,
-    });
+    );
 
     return result.accounts_by_pk;
   }
@@ -359,35 +285,13 @@ export class HasuraSystemService {
   /**
    * Get user client by user ID
    */
-  async getUserClient(userId: string): Promise<ClientRecord> {
-    const getUserClientQuery = `
-      query GetUserClient($userId: uuid!) {
-        clients(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          client_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          created_at
-          updated_at
-        }
+  async getUserClient(userId: string) {
+    const clientResult = await this.executeQuery<GetUserClientQuery>(
+      GET_USER_CLIENT,
+      {
+        userId,
       }
-    `;
-
-    const clientResult = await this.executeQuery(getUserClientQuery, {
-      userId,
-    });
+    );
 
     return clientResult.clients[0];
   }
@@ -395,82 +299,36 @@ export class HasuraSystemService {
   /**
    * Get user business by user ID
    */
-  async getUserBusiness(userId: string): Promise<BusinessRecord> {
-    const getUserBusinessQuery = `
-      query GetUserBusiness($userId: uuid!) {
-        businesses(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          business_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          name
-          is_admin
-          is_verified
-          created_at
-          updated_at
-        }
+  async getUserBusiness(userId: string) {
+    const businessResult = await this.executeQuery<GetUserBusinessQuery>(
+      GET_USER_BUSINESS,
+      {
+        userId,
       }
-    `;
-
-    const businessResult = await this.executeQuery(getUserBusinessQuery, {
-      userId,
-    });
+    );
     return businessResult.businesses[0];
   }
 
   /**
    * Get user agent by user ID
    */
-  async getUserAgent(userId: string): Promise<AgentRecord> {
-    const getUserAgentQuery = `
-      query GetUserAgent($userId: uuid!) {
-        agents(where: {user_id: {_eq: $userId}}) {
-          id
-          user_id
-          vehicle_type_id
-          is_verified
-          agent_addresses {
-            address {
-              id
-              address_line_1
-              address_line_2
-              city
-              state
-              postal_code
-              country
-              is_primary
-              address_type
-              created_at
-            }
-          }
-          created_at
-          updated_at
-        }
+  async getUserAgent(userId: string) {
+    const agentResult = await this.executeQuery<GetUserAgentQuery>(
+      GET_USER_AGENT,
+      {
+        userId,
       }
-    `;
-
-    const agentResult = await this.executeQuery(getUserAgentQuery, {
-      userId,
-    });
+    );
     return agentResult.agents[0];
   }
 
   /**
    * Get all user addresses by user ID and user type
    */
-  async getAllUserAddresses(userId: string, userType: string): Promise<any[]> {
+  async getAllUserAddresses(
+    userId: string,
+    userType: string
+  ): Promise<(Addresses & { formatted_address: string })[]> {
     let query: string;
 
     switch (userType) {

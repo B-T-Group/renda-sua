@@ -5,6 +5,13 @@ import { AddressesService } from '../addresses/addresses.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
+import {
+  Addresses,
+  Business_Inventory,
+  Order_Holds,
+  Order_Items,
+  Orders,
+} from '../generated/graphql';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -20,9 +27,203 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
 }
+
 export interface GetOrderRequest {
   orderId: string;
   phone_number?: string;
+}
+
+// Custom interface for complex order data with all relationships
+export interface OrderWithDetails {
+  id: string;
+  order_number: string;
+  client_id: string;
+  business_id: string;
+  business_location_id: string;
+  assigned_agent_id?: string;
+  delivery_address_id: string;
+  subtotal: number;
+  delivery_fee: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  current_status: string;
+  estimated_delivery_time?: string;
+  actual_delivery_time?: string;
+  special_instructions?: string;
+  preferred_delivery_time?: string;
+  payment_method?: string;
+  payment_status?: string;
+  verified_agent_delivery?: boolean;
+  created_at: string;
+  updated_at: string;
+  access_reason: string;
+  client?: {
+    id: string;
+    user_id: string;
+    user: {
+      id: string;
+      identifier: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone_number: string;
+    };
+  };
+  business?: {
+    id: string;
+    user_id: string;
+    name: string;
+    is_admin: boolean;
+    user: {
+      id: string;
+      identifier: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone_number: string;
+    };
+  };
+  business_location?: {
+    id: string;
+    name: string;
+    location_type: string;
+    address: {
+      id: string;
+      address_line_1: string;
+      address_line_2?: string;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+      latitude?: number;
+      longitude?: number;
+    };
+  };
+  delivery_address?: {
+    id: string;
+    address_line_1: string;
+    address_line_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  assigned_agent?: {
+    id: string;
+    user_id: string;
+    is_verified: boolean;
+    user: {
+      id: string;
+      identifier: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone_number: string;
+    };
+  };
+  order_items?: Array<{
+    id: string;
+    business_inventory_id: string;
+    item_id: string;
+    item_name: string;
+    item_description?: string;
+    unit_price: number;
+    quantity: number;
+    total_price: number;
+    weight?: number;
+    weight_unit?: string;
+    dimensions?: string;
+    special_instructions?: string;
+    item?: {
+      id: string;
+      sku: string;
+      name: string;
+      description?: string;
+      currency: string;
+      model?: string;
+      color?: string;
+      weight?: number;
+      weight_unit?: string;
+      brand?: {
+        id: string;
+        name: string;
+        description?: string;
+      };
+      item_sub_category?: {
+        id: string;
+        name: string;
+        description?: string;
+        item_category: {
+          id: string;
+          name: string;
+          description?: string;
+        };
+      };
+      item_images?: Array<{
+        id: string;
+        image_url: string;
+        alt_text?: string;
+        display_order: number;
+      }>;
+    };
+  }>;
+  order_status_history?: Array<{
+    id: string;
+    order_id: string;
+    status: string;
+    previous_status?: string;
+    notes?: string;
+    changed_by_type: string;
+    changed_by_user_id: string;
+    created_at: string;
+    changed_by_user: {
+      id: string;
+      identifier: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      agent?: {
+        id: string;
+        user: {
+          first_name: string;
+          last_name: string;
+          email: string;
+        };
+      };
+      business?: {
+        id: string;
+        name: string;
+        user: {
+          first_name: string;
+          last_name: string;
+          email: string;
+        };
+      };
+      client?: {
+        id: string;
+        user: {
+          first_name: string;
+          last_name: string;
+          email: string;
+        };
+      };
+    };
+  }>;
+  order_holds?: Array<{
+    id: string;
+    client_id: string;
+    agent_id: string;
+    client_hold_amount: number;
+    agent_hold_amount: number;
+    delivery_fees: number;
+    currency: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 @Injectable()
@@ -185,7 +386,7 @@ export class OrdersService {
       );
     }
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.amount * holdPercentage) / 100;
+    const holdAmount = (order.total_amount * holdPercentage) / 100;
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -875,7 +1076,7 @@ export class OrdersService {
   /**
    * Fetch orders for the current user (client, agent, or business) with optional filters
    */
-  async getOrders(filters?: any): Promise<any[]> {
+  async getOrders(filters?: any): Promise<Orders[]> {
     const user = await this.hasuraUserService.getUser();
     let personaFilter: any = {};
     if (user.user_type_id === 'client' && user.client) {
@@ -1169,7 +1370,7 @@ export class OrdersService {
    * - Client that made the order (order.client_id)
    * - Agent assigned to the order (order.assigned_agent_id)
    */
-  async getOrderById(orderId: string): Promise<any> {
+  async getOrderById(orderId: string): Promise<OrderWithDetails> {
     const user = await this.hasuraUserService.getUser();
 
     // First, get the order to check ownership
@@ -1494,7 +1695,7 @@ export class OrdersService {
     };
   }
 
-  private async getOrderDetails(orderId: string): Promise<any> {
+  private async getOrderDetails(orderId: string): Promise<Orders | null> {
     const query = `
       query GetOrder($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
@@ -1528,7 +1729,9 @@ export class OrdersService {
     return result.orders_by_pk;
   }
 
-  private async getOrderDetailsByNumber(orderNumber: string): Promise<any> {
+  private async getOrderDetailsByNumber(
+    orderNumber: string
+  ): Promise<Orders | null> {
     const query = `
       query GetOrderByNumber($orderNumber: String!) {
         orders(where: { order_number: { _eq: $orderNumber } }, limit: 1) {
@@ -1624,7 +1827,7 @@ export class OrdersService {
   /**
    * Get order details by order number (public method for controllers)
    */
-  async getOrderByNumber(orderNumber: string): Promise<any> {
+  async getOrderByNumber(orderNumber: string): Promise<Orders> {
     if (!orderNumber) {
       throw new HttpException(
         'Order number is required',
@@ -1703,7 +1906,8 @@ export class OrdersService {
           clientEmail: order.client?.user?.email,
           businessName: order.business_location.business.name,
           businessEmail: order.business_location.business.user.email,
-          businessVerified: order.business_location.business.is_verified,
+          businessVerified:
+            order.business_location.business.is_verified || false,
           orderStatus: order.current_status,
           orderItems:
             order.order_items?.map((item: any) => ({
@@ -1719,8 +1923,8 @@ export class OrdersService {
           totalAmount: order.total_amount || 0,
           currency: order.currency || 'USD',
           deliveryAddress: this.formatAddress(order.delivery_address),
-          estimatedDeliveryTime: order.estimated_delivery_time,
-          specialInstructions: order.special_instructions,
+          estimatedDeliveryTime: order.estimated_delivery_time || undefined,
+          specialInstructions: order.special_instructions || undefined,
         };
 
         await this.notificationsService.sendOrderCreatedNotifications(
@@ -1761,6 +1965,13 @@ export class OrdersService {
       }
 
       const user = await this.hasuraSystemService.getUserById(account.user_id);
+
+      if (!user || !user.agent) {
+        throw new HttpException(
+          'User or agent not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
 
       const orderHold = await this.getOrCreateOrderHold(order.id);
 
@@ -1903,6 +2114,10 @@ export class OrdersService {
 
       const order = await this.getOrderDetails(orderId);
 
+      if (!order) {
+        throw new Error(`Order with ID ${orderId} not found`);
+      }
+
       // Create status history entry for the status change
       await this.createStatusHistoryEntry(
         orderId,
@@ -1921,7 +2136,7 @@ export class OrdersService {
     }
   }
 
-  private async getOrderWithItems(orderId: string): Promise<any> {
+  private async getOrderWithItems(orderId: string): Promise<Orders | null> {
     const query = `
       query GetOrderWithItems($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
@@ -2196,7 +2411,7 @@ export class OrdersService {
         amount: total_amount,
         currency: currency,
         description: `Order ${orderNumber}`,
-        customerPhone: user.phone_number,
+        customerPhone: user.phone_number || '',
         provider: provider,
         ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
@@ -2508,7 +2723,10 @@ export class OrdersService {
   /**
    * Get or create an order hold for the given order ID
    */
-  async getOrCreateOrderHold(orderId: string, deliveryFees = 0): Promise<any> {
+  async getOrCreateOrderHold(
+    orderId: string,
+    deliveryFees = 0
+  ): Promise<Order_Holds> {
     // First, try to get the existing order hold
     const getOrderHoldQuery = `
       query GetOrderHold($orderId: uuid!) {
@@ -2797,26 +3015,28 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(referenceId);
 
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      order.assigned_agent.user_id,
-      order.currency
-    );
+    if (order.assigned_agent) {
+      const agentAccount = await this.hasuraSystemService.getAccount(
+        order.assigned_agent.user_id,
+        order.currency
+      );
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: orderHold.agent_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}`,
-      referenceId: referenceId,
-    });
+      await this.accountsService.registerTransaction({
+        accountId: agentAccount.id,
+        amount: orderHold.agent_hold_amount,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number}`,
+        referenceId: referenceId,
+      });
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: orderHold.delivery_fees,
-      transactionType: 'deposit',
-      memo: `Delivery fee received for order ${order.order_number}`,
-      referenceId: referenceId,
-    });
+      await this.accountsService.registerTransaction({
+        accountId: agentAccount.id,
+        amount: orderHold.delivery_fees,
+        transactionType: 'deposit',
+        memo: `Delivery fee received for order ${order.order_number}`,
+        referenceId: referenceId,
+      });
+    }
 
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user_id,
@@ -2918,8 +3138,10 @@ export class OrdersService {
       }
 
       // Create formatted addresses
-      const userFormattedAddress = this.formatAddress(userAddress);
-      const businessFormattedAddress = this.formatAddress(businessAddress);
+      const userFormattedAddress = this.formatAddress(userAddress as Addresses);
+      const businessFormattedAddress = this.formatAddress(
+        businessAddress as Addresses
+      );
 
       // Try to calculate distance-based fee
       try {
@@ -3038,8 +3260,12 @@ export class OrdersService {
       }
 
       // Create formatted addresses
-      const clientFormattedAddress = this.formatAddress(clientAddress);
-      const businessFormattedAddress = this.formatAddress(businessAddress);
+      const clientFormattedAddress = this.formatAddress(
+        clientAddress as Addresses
+      );
+      const businessFormattedAddress = this.formatAddress(
+        businessAddress as Addresses
+      );
 
       // Try to calculate distance-based fee
       try {
@@ -3065,7 +3291,7 @@ export class OrdersService {
           // Calculate fee using tiered pricing model
           const deliveryFee = await this.calculateTieredDeliveryFee(
             distanceKm,
-            this.extractCountryCode(clientAddress, order) ?? 'GA'
+            this.extractCountryCode(clientAddress as Addresses, order) ?? 'GA'
           );
 
           return {
@@ -3101,7 +3327,7 @@ export class OrdersService {
   /**
    * Extract country code from address or order context
    */
-  extractCountryCode(address?: any, order?: any): string {
+  extractCountryCode(address?: Addresses, order?: Orders): string {
     // Try to get country from address first
     if (address?.country) {
       // Convert full country name to ISO 3166-1 alpha-2 code
@@ -3190,7 +3416,7 @@ export class OrdersService {
   /**
    * Format address for Google Distance Matrix API
    */
-  private formatAddress(address: any): string {
+  private formatAddress(address: Addresses): string {
     const parts = [
       address.address_line_1,
       address.address_line_2,
@@ -3206,7 +3432,9 @@ export class OrdersService {
   /**
    * Get item details by ID
    */
-  private async getItemDetails(itemId: string): Promise<any> {
+  private async getItemDetails(
+    itemId: string
+  ): Promise<Business_Inventory | null> {
     const query = `
       query GetItem($itemId: uuid!) {
         business_inventory_by_pk(id: $itemId) {
@@ -3359,7 +3587,9 @@ export class OrdersService {
    * Update inventory quantities when an order is completed
    * Decrements both reserved_quantity and total quantity
    */
-  private async updateInventoryOnCompletion(orderItems: any[]): Promise<void> {
+  private async updateInventoryOnCompletion(
+    orderItems: Order_Items[]
+  ): Promise<void> {
     try {
       for (const item of orderItems) {
         const businessInventoryId = item.business_inventory_id;

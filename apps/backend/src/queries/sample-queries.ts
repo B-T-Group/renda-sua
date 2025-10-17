@@ -28,14 +28,3 @@ export const GET_ORDERS = gql`
     }
   }
 `;
-
-export const CREATE_ORDER = gql`
-  mutation CreateOrder($input: orders_insert_input!) {
-    insert_orders_one(object: $input) {
-      id
-      order_number
-      total_amount
-      created_at
-    }
-  }
-`;

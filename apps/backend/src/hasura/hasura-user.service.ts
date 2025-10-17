@@ -3,80 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
 import { Configuration } from '../config/configuration';
+import {
+  Addresses,
+  Agents,
+  Businesses,
+  Clients,
+  GetUserByIdentifierQuery,
+  Users,
+} from '../generated/graphql';
 import { HasuraSystemService } from './hasura-system.service';
-
-export interface AddressRecord {
-  id: string;
-  address_line_1: string;
-  address_line_2?: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  is_primary: boolean;
-  address_type: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserRecord {
-  id: string;
-  identifier: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  phone_number?: string;
-  phone_number_verified?: boolean;
-  email_verified?: boolean;
-  user_type_id: string;
-  client?: ClientRecord;
-  agent?: AgentRecord;
-  business?: BusinessRecord;
-  addresses?: AddressRecord[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ClientRecord {
-  id: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AgentRecord {
-  id: string;
-  user_id: string;
-  vehicle_type_id: string;
-  is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BusinessRecord {
-  id: string;
-  user_id: string;
-  name: string;
-  is_admin: boolean;
-  is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserWithClientRecord {
-  user: UserRecord;
-  client: ClientRecord;
-}
-
-export interface UserWithAgentRecord {
-  user: UserRecord;
-  agent: AgentRecord;
-}
-
-export interface UserWithBusinessRecord {
-  user: UserRecord;
-  business: BusinessRecord;
-}
+import { GET_USER_BY_IDENTIFIER } from './hasura.queries';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -191,15 +127,18 @@ export class HasuraUserService {
   /**
    * Execute a GraphQL query with user privileges
    */
-  async executeQuery(query: string, variables?: any): Promise<any> {
-    return this.client.request(query, variables);
+  async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
+    return this.client.request<T>(query, variables);
   }
 
   /**
    * Execute a GraphQL mutation with user privileges
    */
-  async executeMutation(mutation: string, variables?: any): Promise<any> {
-    return this.client.request(mutation, variables);
+  async executeMutation<T = any>(
+    mutation: string,
+    variables?: any
+  ): Promise<T> {
+    return this.client.request<T>(mutation, variables);
   }
 
   /**
@@ -211,7 +150,7 @@ export class HasuraUserService {
     last_name: string;
     phone_number?: string;
     user_type_id: string;
-  }): Promise<UserRecord> {
+  }): Promise<Users> {
     const mutation = `
       mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $phone_number: String, $user_type_id: user_types_enum!) {
         insert_users_one(object: {
@@ -258,7 +197,7 @@ export class HasuraUserService {
     last_name: string;
     phone_number?: string;
     user_type_id: string;
-  }): Promise<UserWithClientRecord> {
+  }): Promise<{ user: Users; client: Clients }> {
     const mutation = `
       mutation CreateUserWithClient(
         $identifier: String!, 
@@ -325,13 +264,13 @@ export class HasuraUserService {
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
-      },
+      } as Users,
       client: {
         id: client.id,
         user_id: client.user_id,
         created_at: client.created_at,
         updated_at: client.updated_at,
-      },
+      } as Clients,
     };
   }
 
@@ -347,7 +286,7 @@ export class HasuraUserService {
       user_type_id: string;
     },
     agentData: { vehicle_type_id: string }
-  ): Promise<UserWithAgentRecord> {
+  ): Promise<{ user: Users; agent: Agents }> {
     const mutation = `
       mutation CreateUserWithAgent(
         $identifier: String!, 
@@ -420,7 +359,7 @@ export class HasuraUserService {
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
-      },
+      } as Users,
       agent: {
         id: agent.id,
         user_id: agent.user_id,
@@ -428,7 +367,7 @@ export class HasuraUserService {
         is_verified: agent.is_verified,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
-      },
+      } as Agents,
     };
   }
 
@@ -444,7 +383,7 @@ export class HasuraUserService {
       user_type_id: string;
     },
     businessData: { name: string }
-  ): Promise<UserWithBusinessRecord> {
+  ): Promise<{ user: Users; business: Businesses }> {
     const mutation = `
       mutation CreateUserWithBusiness(
         $identifier: String!, 
@@ -518,7 +457,7 @@ export class HasuraUserService {
         user_type_id: user.user_type_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
-      },
+      } as Users,
       business: {
         id: business.id,
         user_id: business.user_id,
@@ -527,7 +466,7 @@ export class HasuraUserService {
         is_verified: business.is_verified,
         created_at: business.created_at,
         updated_at: business.updated_at,
-      },
+      } as Businesses,
     };
   }
 
@@ -683,52 +622,54 @@ export class HasuraUserService {
   /**
    * Get the current user by identifier
    */
-  async getUser(): Promise<UserRecord> {
-    const getUserQuery = `
-      query GetUserByIdentifier($identifier: String!) {
-        users(where: {identifier: {_eq: $identifier}}) {
-          id
-          identifier
-          email
-          first_name
-          last_name
-          phone_number
-          phone_number_verified
-          email_verified
-          user_type_id
-          created_at
-          updated_at
-        }
+  async getUser(): Promise<
+    Users & {
+      client?: Clients;
+      agent?: Agents;
+      business?: Businesses;
+      addresses?: Addresses[];
+    }
+  > {
+    const userResult = await this.executeQuery<GetUserByIdentifierQuery>(
+      GET_USER_BY_IDENTIFIER,
+      {
+        identifier: this.identifier,
       }
-    `;
-
-    const userResult = await this.executeQuery(getUserQuery, {
-      identifier: this.identifier,
-    });
+    );
 
     if (!userResult.users || userResult.users.length === 0) {
       throw new Error('User not found');
     }
 
-    const user = userResult.users[0];
+    const user: Users & {
+      client?: Clients;
+      agent?: Agents;
+      business?: Businesses;
+      addresses?: Addresses[];
+    } = userResult.users[0] as Users & {
+      client?: Clients;
+      agent?: Agents;
+      business?: Businesses;
+      addresses?: Addresses[];
+    };
 
     // Get user type-specific data
     switch (user.user_type_id) {
       case 'client': {
         const client = await this.hasuraSystemService.getUserClient(user.id);
-        user.client = client;
+        user.client = client as Clients;
         break;
       }
       case 'agent': {
         const agent = await this.hasuraSystemService.getUserAgent(user.id);
-        user.agent = agent;
+        user.agent = agent as Agents;
         break;
       }
       case 'business': {
         const business = await this.hasuraSystemService.getUserBusiness(
           user.id
         );
-        user.business = business;
+        user.business = business as Businesses;
         break;
       }
       default:
@@ -740,9 +681,14 @@ export class HasuraUserService {
       user.id,
       user.user_type_id
     );
-    user.addresses = addresses;
+    user.addresses = addresses as Addresses[];
 
-    return user;
+    return user as Users & {
+      client?: Clients;
+      agent?: Agents;
+      business?: Businesses;
+      addresses?: Addresses[];
+    };
   }
 
   /**
