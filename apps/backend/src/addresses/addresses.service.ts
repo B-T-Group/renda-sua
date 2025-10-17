@@ -18,17 +18,17 @@ export interface CreateAddressDto {
 export interface AddressResponse {
   id: string;
   address_line_1: string;
-  address_line_2?: string;
+  address_line_2?: string | null;
   city: string;
   state: string;
   postal_code: string;
   country: string;
-  is_primary: boolean;
-  address_type: string;
-  latitude?: number;
-  longitude?: number;
-  created_at: string;
-  updated_at: string;
+  is_primary?: boolean | null;
+  address_type?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 @Injectable()

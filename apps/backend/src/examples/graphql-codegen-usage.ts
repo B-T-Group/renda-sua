@@ -7,7 +7,7 @@ import {
   GetUsersQuery,
   GetUsersQueryVariables,
 } from '../generated/graphql';
-import { CREATE_ORDER, GET_ORDERS, GET_USERS } from '../queries/sample-queries';
+import { GET_ORDERS, GET_USERS } from '../queries/sample-queries';
 
 /**
  * Example service showing how to use GraphQL codegen with Hasura
@@ -64,15 +64,16 @@ export class GraphQLExampleService {
    * Example: Create order with type safety
    */
   async createOrder(
-    orderData: CreateOrderMutationVariables['input']
+    orderData: CreateOrderMutationVariables['orderData']
   ): Promise<CreateOrderMutation> {
     try {
-      const variables: CreateOrderMutationVariables = { input: orderData };
-      const data = await this.client.request<CreateOrderMutation>(
-        CREATE_ORDER,
-        variables
-      );
-      return data;
+      // Note: CREATE_ORDER query needs to be defined in sample-queries.ts
+      // const variables: CreateOrderMutationVariables = { orderData };
+      // const data = await this.client.request<CreateOrderMutation>(
+      //   CREATE_ORDER,
+      //   variables
+      // );
+      throw new Error('CREATE_ORDER query not implemented');
     } catch (error: any) {
       console.error('Error creating order:', error);
       throw error;
