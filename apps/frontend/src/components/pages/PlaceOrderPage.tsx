@@ -612,6 +612,7 @@ const PlaceOrderPage: React.FC = () => {
           >
             {t('common.goBack', 'Go Back')}
           </Button>
+
           <Typography
             variant="h4"
             component="h1"

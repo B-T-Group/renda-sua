@@ -2007,7 +2007,7 @@ export class OrdersService {
     country: string
   ): Promise<{ fee: number; enabled: boolean }> {
     const query = `
-      query GetFastDeliveryFee($state: String!, $country: String!) {
+      query GetFastDeliveryFee($state: String!, $country: bpchar!) {
         supported_country_states(
           where: { 
             state_name: { _eq: $state }, 

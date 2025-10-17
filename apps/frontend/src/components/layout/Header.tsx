@@ -32,6 +32,7 @@ import LogoutButton from '../auth/LogoutButton';
 import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
+import UserBalanceSummary from '../common/UserBalanceSummary';
 
 const Header: React.FC = () => {
   const { isAuthenticated, user } = useAuth0();
@@ -268,13 +269,19 @@ const Header: React.FC = () => {
                     />
                   )}
                 </Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
                   {userType === 'business'
                     ? 'Business Account'
                     : userType === 'client'
                     ? 'Client Account'
                     : 'User Account'}
                 </Typography>
+                {/* User Balance for Mobile */}
+                <UserBalanceSummary compact={true} showIcon={true} />
               </Box>
             </ListItem>
             <Divider sx={{ my: 1 }} />
@@ -364,6 +371,13 @@ const Header: React.FC = () => {
               <Box sx={{ position: 'relative' }}>
                 <HeaderSearch />
               </Box>
+
+              {/* User Balance - Only show when authenticated */}
+              {isAuthenticated && (
+                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                  <UserBalanceSummary compact={true} showIcon={false} />
+                </Box>
+              )}
 
               {/* Language Switcher */}
               <LanguageSwitcher />

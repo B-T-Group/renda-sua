@@ -20,7 +20,7 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DeliveryTimeSlot,
@@ -123,6 +123,63 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     [t]
   );
 
+  // Helper function to check if a time slot has passed
+  const isTimeSlotPassed = useCallback(
+    (slot: DeliveryTimeSlot) => {
+      if (!selectedDate) return false;
+
+      const today = new Date();
+      const selectedDateOnly = new Date(selectedDate);
+
+      // Check if the selected date is today
+      const isToday = selectedDateOnly.toDateString() === today.toDateString();
+
+      if (!isToday) return false;
+
+      // Parse the slot start time (assuming format like "09:00" or "9:00 AM")
+      const parseTime = (timeStr: string): Date => {
+        const time = timeStr.replace(/\s*(AM|PM)/i, '').trim();
+        const [hours, minutes] = time.split(':').map(Number);
+
+        // Handle 12-hour format
+        let hour24 = hours;
+        if (timeStr.toLowerCase().includes('pm') && hours !== 12) {
+          hour24 = hours + 12;
+        } else if (timeStr.toLowerCase().includes('am') && hours === 12) {
+          hour24 = 0;
+        }
+
+        const slotTime = new Date(today);
+        slotTime.setHours(hour24, minutes || 0, 0, 0);
+        return slotTime;
+      };
+
+      try {
+        const slotStartTime = parseTime(slot.start_time);
+        const currentTime = new Date();
+
+        return slotStartTime <= currentTime;
+      } catch (error) {
+        console.warn('Failed to parse time slot:', slot.start_time, error);
+        return false;
+      }
+    },
+    [selectedDate]
+  );
+
+  // Filter slots to exclude passed time slots for current day
+  const filteredSlots = useMemo(() => {
+    if (!selectedDate) return slots;
+
+    const today = new Date();
+    const selectedDateOnly = new Date(selectedDate);
+    const isToday = selectedDateOnly.toDateString() === today.toDateString();
+
+    if (!isToday) return slots;
+
+    return slots.filter((slot) => !isTimeSlotPassed(slot));
+  }, [slots, selectedDate, isTimeSlotPassed]);
+
   if (disabled) {
     return (
       <Box>
@@ -190,9 +247,16 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
                   'No delivery slots available for this date'
                 )}
               </Alert>
+            ) : filteredSlots.length === 0 ? (
+              <Alert severity="info">
+                {t(
+                  'orders.deliveryTimeWindow.noSlotsAvailableToday',
+                  'No delivery slots available for the rest of today'
+                )}
+              </Alert>
             ) : (
               <Grid container spacing={2}>
-                {slots.map((slot) => (
+                {filteredSlots.map((slot) => (
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={slot.id}>
                     <Card
                       sx={{
@@ -332,7 +396,9 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
                     sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }}
                   />
                   <Typography variant="body2">
-                    {formatTimeSlot(slots.find((s) => s.id === selectedSlotId))}
+                    {formatTimeSlot(
+                      filteredSlots.find((s) => s.id === selectedSlotId)
+                    )}
                   </Typography>
                 </Box>
                 {specialInstructions && (

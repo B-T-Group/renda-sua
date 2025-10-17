@@ -24,6 +24,18 @@ export interface Address {
   updated_at: string;
 }
 
+export interface Account {
+  id: string;
+  user_id: string;
+  currency: string;
+  available_balance: number;
+  withheld_balance: number;
+  total_balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserProfile {
   id: string;
   identifier: string;
@@ -56,6 +68,7 @@ export interface UserProfile {
     updated_at: string;
   };
   addresses?: Address[];
+  accounts?: Account[];
   created_at: string;
   updated_at: string;
 }
@@ -211,7 +224,11 @@ interface UserProfileContextType {
   isProfileComplete: boolean;
   successMessage: string | null;
   errorMessage: string | null;
+  accounts: Account[];
+  accountsLoading: boolean;
+  accountsError: string | null;
   refetch: () => Promise<void>;
+  refetchAccounts: () => Promise<void>;
   clearProfile: () => void;
   updateProfile: (
     userId: string,
@@ -249,6 +266,9 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
 
   const { isAuthenticated, isLoading } = useAuth0();
   const apiClient = useApiClient();
@@ -264,6 +284,27 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     INSERT_BUSINESS_ADDRESS
   );
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
+
+  // GraphQL query for accounts
+  const GET_ACCOUNTS = `
+    query GetAccounts {
+      accounts {
+        id
+        user_id
+        currency
+        available_balance
+        withheld_balance
+        total_balance
+        is_active
+        created_at
+        updated_at
+      }
+    }
+  `;
+
+  const { execute: fetchAccounts } = useGraphQLRequest<{
+    accounts: Account[];
+  }>(GET_ACCOUNTS);
 
   const checkProfile = useCallback(async () => {
     if (!apiClient || !isAuthenticated) {
@@ -332,6 +373,27 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     }
   }, [apiClient, isAuthenticated]);
 
+  const checkAccounts = useCallback(async () => {
+    if (!isAuthenticated) {
+      setAccountsError('Not authenticated');
+      setAccountsLoading(false);
+      return;
+    }
+
+    setAccountsLoading(true);
+    setAccountsError(null);
+
+    try {
+      const result = await fetchAccounts();
+      setAccounts(result?.accounts || []);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setAccountsError(error.message || 'Failed to fetch accounts');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [isAuthenticated, fetchAccounts]);
+
   const clearProfile = () => {
     setProfile(null);
     setUserType(null);
@@ -339,6 +401,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setError(null);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setAccounts([]);
+    setAccountsError(null);
   };
 
   const clearMessages = () => {
@@ -456,10 +520,11 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     if (isLoading) return;
     if (isAuthenticated) {
       checkProfile();
+      checkAccounts();
     } else if (!isAuthenticated) {
       clearProfile();
     }
-  }, [isAuthenticated, isLoading, checkProfile]);
+  }, [isAuthenticated, isLoading, checkProfile, checkAccounts]);
 
   const value: UserProfileContextType = {
     profile,
@@ -469,7 +534,11 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     isProfileComplete,
     successMessage,
     errorMessage,
+    accounts,
+    accountsLoading,
+    accountsError,
     refetch: checkProfile,
+    refetchAccounts: checkAccounts,
     clearProfile,
     updateProfile,
     addAddress,
