@@ -4,7 +4,6 @@ export { useAccountManager } from './useAccountManager';
 export { useAddressManager } from './useAddressManager';
 export { useAuthFlow } from './useAuthFlow';
 export { useLoginFlow } from './useLoginFlow';
-export { useProfile } from './useProfile';
 export { useUserProfile } from './useUserProfile';
 export { useUserTypes } from './useUserTypes';
 

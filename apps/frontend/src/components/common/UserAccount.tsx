@@ -27,12 +27,12 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountById } from '../../hooks/useAccountInfo';
 import { useAirtelMoney } from '../../hooks/useAirtelMoney';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
-import { useProfile } from '../../hooks/useProfile';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
 
@@ -85,7 +85,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   onRefresh,
 }) => {
   const { t } = useTranslation();
-  const { userProfile } = useProfile();
+  const { profile } = useUserProfileContext();
 
   // Use the new hook to fetch account data
   const { account, loading, error, subscriptionFailed } =
@@ -369,7 +369,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
       <TopUpModal
         open={topUpModalOpen}
         onClose={() => setTopUpModalOpen(false)}
-        userPhoneNumber={userProfile?.phone_number || ''}
+        userPhoneNumber={profile?.phone_number || ''}
         currency={account.currency}
         loading={topUpLoading || airtelLoading || mobilePaymentsLoading}
         onConfirm={handleTopUpConfirm}
@@ -379,7 +379,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
       <WithdrawModal
         open={withdrawModalOpen}
         onClose={() => setWithdrawModalOpen(false)}
-        userPhoneNumber={userProfile?.phone_number || ''}
+        userPhoneNumber={profile?.phone_number || ''}
         currency={account.currency}
         availableBalance={account.available_balance}
         loading={mobilePaymentsLoading}

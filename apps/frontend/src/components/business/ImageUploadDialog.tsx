@@ -25,8 +25,8 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { ItemImage, useItemImages } from '../../hooks/useItemImages';
-import { useProfile } from '../../hooks/useProfile';
 
 interface ImageUploadDialogProps {
   open: boolean;
@@ -52,7 +52,7 @@ export default function ImageUploadDialog({
 }: ImageUploadDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { userProfile } = useProfile();
+  const { profile } = useUserProfileContext();
   const { loading, error, fetchItemImages, uploadItemImage, deleteItemImage } =
     useItemImages();
 
@@ -120,7 +120,7 @@ export default function ImageUploadDialog({
   };
 
   const handleUpload = async () => {
-    if (!userProfile?.id) {
+    if (!profile?.id) {
       enqueueSnackbar(t('business.inventory.userIdRequired'), {
         variant: 'error',
       });
@@ -138,7 +138,7 @@ export default function ImageUploadDialog({
         await uploadItemImage(
           itemId,
           file,
-          userProfile.id,
+          profile.id,
           bucketName,
           altTexts[fileKey] || '',
           captions[fileKey] || ''

@@ -19,8 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 
-import { useProfile } from '../../hooks/useProfile';
-
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
@@ -37,20 +35,17 @@ const Profile: React.FC = () => {
     phone_number: '',
   });
 
-  // Get addresses from UserProfileContext
-  const { profile: userProfileWithAddresses, refetch: refetchUserProfile } =
-    useUserProfileContext();
-
-  // Custom hooks
+  // Get profile data from UserProfileContext
   const {
-    userProfile,
+    profile,
     loading,
     error,
     successMessage,
     errorMessage,
-    handleProfileUpdate,
+    updateProfile,
     clearMessages,
-  } = useProfile(refetchUserProfile);
+    refetch,
+  } = useUserProfileContext();
 
   // Document management
   const { documentTypes } = useDocumentManagement();
@@ -60,20 +55,20 @@ const Profile: React.FC = () => {
 
   // Update form when data loads
   useEffect(() => {
-    if (userProfile) {
+    if (profile) {
       setProfileForm({
-        first_name: userProfile.first_name || '',
-        last_name: userProfile.last_name || '',
-        phone_number: userProfile.phone_number || '',
+        first_name: profile.first_name || '',
+        last_name: profile.last_name || '',
+        phone_number: profile.phone_number || '',
       });
     }
-  }, [userProfile]);
+  }, [profile]);
 
   const handleProfileSave = async () => {
-    if (!userProfile) return;
+    if (!profile) return;
 
-    const success = await handleProfileUpdate(
-      userProfile.id,
+    const success = await updateProfile(
+      profile.id,
       profileForm.first_name,
       profileForm.last_name,
       profileForm.phone_number
@@ -217,19 +212,18 @@ const Profile: React.FC = () => {
             ) : (
               <Box>
                 <Typography variant="body1">
-                  <strong>{t('profile.name')}:</strong>{' '}
-                  {userProfile?.first_name} {userProfile?.last_name}
+                  <strong>{t('profile.name')}:</strong> {profile?.first_name}{' '}
+                  {profile?.last_name}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>{t('profile.email')}:</strong> {userProfile?.email}
+                  <strong>{t('profile.email')}:</strong> {profile?.email}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>{t('profile.phone')}:</strong>{' '}
-                  {userProfile?.phone_number}
+                  <strong>{t('profile.phone')}:</strong> {profile?.phone_number}
                 </Typography>
                 <Typography variant="body1">
                   <strong>{t('profile.memberSince')}:</strong>{' '}
-                  {new Date(userProfile?.created_at || '').toLocaleDateString()}
+                  {new Date(profile?.created_at || '').toLocaleDateString()}
                 </Typography>
               </Box>
             )}
@@ -237,20 +231,15 @@ const Profile: React.FC = () => {
         </Card>
 
         {/* Addresses */}
-        {userProfileWithAddresses && (
+        {profile && (
           <AddressManager
-            entityType={
-              userProfileWithAddresses.user_type_id as
-                | 'agent'
-                | 'client'
-                | 'business'
-            }
+            entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
             entityId={
-              userProfileWithAddresses.user_type_id === 'agent'
-                ? userProfileWithAddresses.agent?.id || ''
-                : userProfileWithAddresses.user_type_id === 'client'
-                ? userProfileWithAddresses.client?.id || ''
-                : userProfileWithAddresses.business?.id || ''
+              profile.user_type_id === 'agent'
+                ? profile.agent?.id || ''
+                : profile.user_type_id === 'client'
+                ? profile.client?.id || ''
+                : profile.business?.id || ''
             }
             title={t('profile.personalAddresses')}
             showCoordinates={false}
@@ -285,14 +274,12 @@ const Profile: React.FC = () => {
       </Box>
 
       {/* Accounts */}
-      {userProfile && (
+      {profile && (
         <Box sx={{ mt: 3 }}>
           <AccountManager
             ref={accountManagerRef}
-            entityType={
-              userProfile.user_type_id as 'agent' | 'client' | 'business'
-            }
-            entityId={userProfile.id}
+            entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
+            entityId={profile.id}
             title={t('profile.accountOverview')}
             showTransactions={true}
             showTotalSummary={true}

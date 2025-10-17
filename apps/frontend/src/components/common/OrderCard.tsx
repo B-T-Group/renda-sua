@@ -177,7 +177,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
               fontWeight="bold"
               sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
             >
-              {t('common.orderNumber', { number: order.order_number })}
+              {t('common.orderNumber', { orderNumber: order.order_number })}
             </Typography>
             <Chip
               label={t(`common.orderStatus.${currentStatus}`)}
@@ -321,7 +321,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                       {order.order_items?.length || 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {t('orders.table.items', 'items')}
+                      {t('orders.items', 'items')}
                     </Typography>
                   </Box>
                 </Paper>

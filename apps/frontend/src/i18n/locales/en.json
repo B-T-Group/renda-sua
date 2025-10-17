@@ -737,6 +737,7 @@
       "${statusKey}": "Status",
       "assigned_to_agent": "Assigned to Agent",
       "cancelled": "Cancelled",
+      "complete": "Complete",
       "complete_preparation": "Complete Preparation",
       "completed": "Completed",
       "confirmed": "Confirmed",
@@ -750,6 +751,7 @@
       "ready_for_pickup": "Ready for Pickup",
       "refunded": "Refunded"
     },
+    "orderNumber": "Order #{{orderNumber}}",
     "orders": "Orders",
     "page": "Page",
     "pageSize": "Page size",
@@ -1171,6 +1173,7 @@
     "step3": "Your order will be transmitted to the merchant within 24 hours",
     "step4": "You will receive updates on your order status via email and in-app notifications",
     "subtotal": "Subtotal",
+    "items": "Items",
     "table": {
       "items": "Items"
     },

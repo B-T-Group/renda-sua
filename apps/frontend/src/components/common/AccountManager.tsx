@@ -38,7 +38,6 @@ import {
   EntityType,
   useAccountManager,
 } from '../../hooks/useAccountManager';
-import { useProfile } from '../../hooks/useProfile';
 import UserAccount from './UserAccount';
 
 interface AccountManagerProps {
@@ -103,9 +102,6 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
 
     // State for transaction dialog
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
-
-    // Get user profile for phone number
-    const { userProfile } = useProfile();
 
     // Handle view account details
     const handleViewAccount = (account: Account) => {

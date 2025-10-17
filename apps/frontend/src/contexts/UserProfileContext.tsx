@@ -2,11 +2,13 @@ import { useAuth0 } from '@auth0/auth0-react';
 import React, {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useState,
 } from 'react';
 import { useApiClient } from '../hooks/useApiClient';
+import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 
 export interface Address {
   id: string;
@@ -66,14 +68,167 @@ export interface UserProfileResponse {
 
 export type UserType = 'client' | 'agent' | 'business';
 
+// GraphQL Mutations
+const UPDATE_USER = `
+  mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number }
+    ) {
+      id
+      first_name
+      last_name
+      email
+      phone_number
+      identifier
+      user_type_id
+      created_at
+      updated_at
+    }
+  }
+`;
+
+const INSERT_AGENT_ADDRESS = `
+  mutation InsertAgentAddress($agentAddress: agent_addresses_insert_input!) {
+    insert_agent_addresses_one(object: $agentAddress) {
+      id
+      agent_id
+      address_id
+      created_at
+      updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
+const INSERT_CLIENT_ADDRESS = `
+  mutation InsertClientAddress($clientAddress: client_addresses_insert_input!) {
+    insert_client_addresses_one(object: $clientAddress) {
+      id
+      client_id
+      address_id
+      created_at
+      updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
+const INSERT_BUSINESS_ADDRESS = `
+  mutation InsertBusinessAddress($businessAddress: business_addresses_insert_input!) {
+    insert_business_addresses_one(object: $businessAddress) {
+      id
+      business_id
+      address_id
+      created_at
+      updated_at
+      address {
+        id
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+        is_primary
+        address_type
+        latitude
+        longitude
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
+const UPDATE_ADDRESS = `
+  mutation UpdateAddress($id: uuid!, $address: addresses_set_input!) {
+    update_addresses_by_pk(
+      pk_columns: { id: $id }
+      _set: $address
+    ) {
+      id
+      address_line_1
+      address_line_2
+      city
+      state
+      postal_code
+      country
+      is_primary
+      address_type
+      latitude
+      longitude
+      created_at
+      updated_at
+    }
+  }
+`;
+
+interface AddressFormData {
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  address_type: string;
+  is_primary: boolean;
+}
+
 interface UserProfileContextType {
   profile: UserProfile | null;
   loading: boolean;
   error: string | null;
   userType: UserType | null;
   isProfileComplete: boolean;
+  successMessage: string | null;
+  errorMessage: string | null;
   refetch: () => Promise<void>;
   clearProfile: () => void;
+  updateProfile: (
+    userId: string,
+    firstName: string,
+    lastName: string,
+    phoneNumber: string
+  ) => Promise<boolean>;
+  addAddress: (
+    addressData: AddressFormData,
+    userType: string,
+    profileId: string
+  ) => Promise<boolean>;
+  updateAddress: (
+    addressId: string,
+    addressData: AddressFormData
+  ) => Promise<boolean>;
+  clearMessages: () => void;
 }
 
 const UserProfileContext = createContext<UserProfileContextType | undefined>(
@@ -92,11 +247,25 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { isAuthenticated, isLoading } = useAuth0();
   const apiClient = useApiClient();
 
-  const checkProfile = async () => {
+  // GraphQL hooks for mutations
+  const { execute: updateUser } = useGraphQLRequest(UPDATE_USER);
+  const { execute: insertAgentAddress } =
+    useGraphQLRequest(INSERT_AGENT_ADDRESS);
+  const { execute: insertClientAddress } = useGraphQLRequest(
+    INSERT_CLIENT_ADDRESS
+  );
+  const { execute: insertBusinessAddress } = useGraphQLRequest(
+    INSERT_BUSINESS_ADDRESS
+  );
+  const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
+
+  const checkProfile = useCallback(async () => {
     if (!apiClient || !isAuthenticated) {
       setError('API client not available or not authenticated');
       setLoading(false);
@@ -143,27 +312,143 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
       } else {
         setError(response.data.message || 'Failed to fetch user profile');
       }
-    } catch (err: any) {
-      if (err.response?.status === 404) {
+    } catch (err: unknown) {
+      const error = err as {
+        response?: { status?: number; data?: { error?: string } };
+        message?: string;
+      };
+      if (error.response?.status === 404) {
         setError('Profile not found');
         setIsProfileComplete(false);
       } else {
         setError(
-          err.response?.data?.error ||
-            err.message ||
+          error.response?.data?.error ||
+            error.message ||
             'Failed to fetch user profile'
         );
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiClient, isAuthenticated]);
 
   const clearProfile = () => {
     setProfile(null);
     setUserType(null);
     setIsProfileComplete(false);
     setError(null);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+  };
+
+  const clearMessages = () => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+  };
+
+  const updateProfile = async (
+    userId: string,
+    firstName: string,
+    lastName: string,
+    phoneNumber: string
+  ): Promise<boolean> => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const variables = {
+        id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber,
+      };
+
+      const result = await updateUser(variables);
+
+      if (result?.update_users_by_pk) {
+        setSuccessMessage('Profile updated successfully!');
+        await checkProfile(); // Refresh the profile data
+        return true;
+      } else {
+        setErrorMessage('Failed to update profile.');
+        return false;
+      }
+    } catch (err: unknown) {
+      setErrorMessage('Failed to update profile.');
+      console.error('Error updating profile:', err);
+      return false;
+    }
+  };
+
+  const addAddress = async (
+    addressData: AddressFormData,
+    userType: string,
+    profileId: string
+  ): Promise<boolean> => {
+    try {
+      const addressInput = {
+        data: {
+          ...addressData,
+        },
+      };
+
+      switch (userType) {
+        case 'agent':
+          await insertAgentAddress({
+            agentAddress: {
+              agent_id: profileId,
+              address: addressInput,
+            },
+          });
+          break;
+        case 'client':
+          await insertClientAddress({
+            clientAddress: {
+              client_id: profileId,
+              address: addressInput,
+            },
+          });
+          break;
+        case 'business':
+          await insertBusinessAddress({
+            businessAddress: {
+              business_id: profileId,
+              address: addressInput,
+            },
+          });
+          break;
+        default:
+          throw new Error('Invalid user type for address creation');
+      }
+
+      setSuccessMessage('Address saved successfully!');
+      await checkProfile(); // Refresh the profile data
+      return true;
+    } catch (error) {
+      setErrorMessage('Failed to save address');
+      console.error('Error saving address:', error);
+      return false;
+    }
+  };
+
+  const updateAddressMutation = async (
+    addressId: string,
+    addressData: AddressFormData
+  ): Promise<boolean> => {
+    try {
+      await updateAddress({
+        id: addressId,
+        address: addressData,
+      });
+
+      setSuccessMessage('Address updated successfully!');
+      await checkProfile(); // Refresh the profile data
+      return true;
+    } catch (error) {
+      setErrorMessage('Failed to update address');
+      console.error('Error updating address:', error);
+      return false;
+    }
   };
 
   // Fetch profile when authenticated and API client is available
@@ -174,7 +459,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     } else if (!isAuthenticated) {
       clearProfile();
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, checkProfile]);
 
   const value: UserProfileContextType = {
     profile,
@@ -182,8 +467,14 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     error,
     userType,
     isProfileComplete,
+    successMessage,
+    errorMessage,
     refetch: checkProfile,
     clearProfile,
+    updateProfile,
+    addAddress,
+    updateAddress: updateAddressMutation,
+    clearMessages,
   };
 
   return (

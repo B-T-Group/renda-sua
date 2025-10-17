@@ -155,8 +155,8 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             mb={2}
           >
             <Typography variant="h6" component="div">
-              {t('business.common.orderNumber', {
-                number: order.order_number,
+              {t('common.orderNumber', {
+                orderNumber: order.order_number,
               })}
             </Typography>
             <Chip

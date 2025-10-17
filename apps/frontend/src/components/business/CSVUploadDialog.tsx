@@ -25,6 +25,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   AddInventoryItemData,
   useBusinessInventory,
@@ -32,7 +33,6 @@ import {
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
-import { useProfile } from '../../hooks/useProfile';
 import { ItemImage } from '../../types/image';
 
 interface CSVUploadDialogProps {
@@ -143,7 +143,7 @@ export default function CSVUploadDialog({
   const { locations } = useBusinessLocations(businessId);
   const { uploadItemImage, createItemImage, fetchItemImages, deleteItemImage } =
     useItemImages();
-  const { userProfile } = useProfile();
+  const { profile } = useUserProfileContext();
 
   const [csvData, setCsvData] = useState<CSVItemWithInventory[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -247,7 +247,7 @@ export default function CSVUploadDialog({
       return;
     }
 
-    if (!userProfile?.id) {
+    if (!profile?.id) {
       enqueueSnackbar(t('business.inventory.userIdRequired'), {
         variant: 'error',
       });
@@ -444,7 +444,7 @@ export default function CSVUploadDialog({
               alt_text: row.image_alt_text || row.name,
               caption: row.image_caption,
               display_order: 1,
-              uploaded_by: userProfile?.id || '',
+              uploaded_by: profile?.id || '',
             };
 
             await createItemImage(imageData);
