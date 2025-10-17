@@ -193,6 +193,34 @@ export interface OrderData {
     created_at: string;
     updated_at: string;
   }>;
+  delivery_time_windows: Array<{
+    id: string;
+    order_id: string;
+    slot_id: string;
+    preferred_date: string;
+    time_slot_start: string;
+    time_slot_end: string;
+    is_confirmed?: boolean;
+    special_instructions?: string;
+    confirmed_at?: string;
+    confirmed_by?: string;
+    created_at?: string;
+    updated_at?: string;
+    slot: {
+      id: string;
+      slot_name?: string;
+      slot_type?: string;
+      start_time?: string;
+      end_time?: string;
+      is_active?: boolean;
+    };
+    confirmedByUser?: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+    };
+  }>;
 }
 
 interface UseOrderByIdResult {

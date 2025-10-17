@@ -330,6 +330,34 @@ export const GET_ORDER_BY_ID = gql`
         created_at
         updated_at
       }
+      delivery_time_windows {
+        id
+        order_id
+        slot_id
+        preferred_date
+        time_slot_start
+        time_slot_end
+        is_confirmed
+        special_instructions
+        confirmed_at
+        confirmed_by
+        created_at
+        updated_at
+        slot {
+          id
+          slot_name
+          slot_type
+          start_time
+          end_time
+          is_active
+        }
+        confirmedByUser {
+          id
+          first_name
+          last_name
+          email
+        }
+      }
     }
   }
 `;
@@ -430,6 +458,34 @@ export const GET_ORDER_BY_NUMBER = gql`
             id
             image_url
           }
+        }
+      }
+      delivery_time_windows {
+        id
+        order_id
+        slot_id
+        preferred_date
+        time_slot_start
+        time_slot_end
+        is_confirmed
+        special_instructions
+        confirmed_at
+        confirmed_by
+        created_at
+        updated_at
+        slot {
+          id
+          slot_name
+          slot_type
+          start_time
+          end_time
+          is_active
+        }
+        confirmedByUser {
+          id
+          first_name
+          last_name
+          email
         }
       }
     }

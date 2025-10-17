@@ -20,6 +20,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import DeliveryTimeWindowDisplay from './DeliveryTimeWindowDisplay';
 
 interface OrderViewProps {
   order: OrderData;
@@ -700,6 +701,11 @@ const OrderView: React.FC<OrderViewProps> = ({
             </Card>
           </Grid>
         )}
+
+        {/* Delivery Time Window */}
+        <Grid item xs={12}>
+          <DeliveryTimeWindowDisplay order={order} />
+        </Grid>
 
         {/* Financial Details (Admin/Business only) */}
         {showFinancialDetails && order.order_holds.length > 0 && (

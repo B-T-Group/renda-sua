@@ -1706,6 +1706,7 @@ export class OrdersService {
           currency
           business_id
           client_id
+          
           delivery_address_id
           client {
             user_id
@@ -1719,6 +1720,34 @@ export class OrdersService {
           assigned_agent_id
           assigned_agent {
             user_id
+          }
+          delivery_time_windows {
+            id
+            order_id
+            slot_id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            special_instructions
+            confirmed_at
+            confirmed_by
+            created_at
+            updated_at
+            slot {
+              id
+              slot_name
+              slot_type
+              start_time
+              end_time
+              is_active
+            }
+            confirmedByUser {
+              id
+              first_name
+              last_name
+              email
+            }
           }
         }
       }
@@ -1813,6 +1842,34 @@ export class OrdersService {
                 id
                 name
               }
+            }
+          }
+          delivery_time_windows {
+            id
+            order_id
+            slot_id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            special_instructions
+            confirmed_at
+            confirmed_by
+            created_at
+            updated_at
+            slot {
+              id
+              slot_name
+              slot_type
+              start_time
+              end_time
+              is_active
+            }
+            confirmedByUser {
+              id
+              first_name
+              last_name
+              email
             }
           }
         }

@@ -53,6 +53,7 @@ import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
+import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
@@ -928,6 +929,11 @@ const ManageOrderPage: React.FC = () => {
                           )}
                         </Stack>
                       </Paper>
+                    </Box>
+
+                    {/* Delivery Time Window */}
+                    <Box sx={{ mb: 4 }}>
+                      <DeliveryTimeWindowDisplay order={order} />
                     </Box>
 
                     {/* Agent Info */}
