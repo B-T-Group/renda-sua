@@ -20,6 +20,8 @@ export interface ClientOrder {
   actual_delivery_time: string | null;
   special_instructions: string | null;
   preferred_delivery_time: string | null;
+  requires_fast_delivery: boolean;
+  fast_delivery_fee: number;
   payment_method: string | null;
   payment_status: string | null;
   created_at: string;
@@ -140,6 +142,8 @@ const GET_CLIENT_ORDERS = `
       actual_delivery_time
       special_instructions
       preferred_delivery_time
+      requires_fast_delivery
+      fast_delivery_fee
       payment_method
       payment_status
       created_at

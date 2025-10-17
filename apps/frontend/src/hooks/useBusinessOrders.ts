@@ -107,6 +107,8 @@ const GET_BUSINESS_ORDERS = `
       actual_delivery_time
       special_instructions
       preferred_delivery_time
+      requires_fast_delivery
+      fast_delivery_fee
       payment_method
       payment_status
       created_at

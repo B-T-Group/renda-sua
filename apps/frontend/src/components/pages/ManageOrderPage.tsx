@@ -755,6 +755,181 @@ const ManageOrderPage: React.FC = () => {
                       </Box>
                     )}
 
+                    {/* Delivery Information */}
+                    <Box sx={{ mb: 4 }}>
+                      <Typography variant="h6" fontWeight="bold" gutterBottom>
+                        {t('orders.deliveryInfo', 'Delivery Information')}
+                      </Typography>
+                      <Paper variant="outlined" sx={{ p: 2 }}>
+                        <Stack spacing={2}>
+                          {/* Preferred Delivery Time */}
+                          {order.preferred_delivery_time && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Event color="primary" />
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t(
+                                    'orders.preferredDeliveryTime',
+                                    'Preferred Delivery Time'
+                                  )}
+                                </Typography>
+                                <Typography variant="body1" fontWeight="medium">
+                                  {new Date(
+                                    order.preferred_delivery_time
+                                  ).toLocaleString()}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* Fast Delivery */}
+                          {order.requires_fast_delivery && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <LocalShipping color="primary" />
+                              <Box sx={{ flex: 1 }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t('orders.fastDelivery', 'Fast Delivery')}
+                                </Typography>
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                  }}
+                                >
+                                  <Chip
+                                    label={t(
+                                      'orders.fastDelivery.enabled',
+                                      'Enabled'
+                                    )}
+                                    color="primary"
+                                    size="small"
+                                  />
+                                  <Typography
+                                    variant="body1"
+                                    fontWeight="medium"
+                                    color="primary"
+                                  >
+                                    {formatCurrency(
+                                      order.fast_delivery_fee,
+                                      order.currency
+                                    )}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* Special Instructions */}
+                          {order.special_instructions && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'flex-start',
+                              }}
+                            >
+                              <Receipt color="primary" />
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t(
+                                    'orders.specialInstructions',
+                                    'Special Instructions'
+                                  )}
+                                </Typography>
+                                <Typography variant="body1">
+                                  {order.special_instructions}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* Estimated Delivery Time */}
+                          {order.estimated_delivery_time && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Event color="primary" />
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t(
+                                    'orders.estimatedDeliveryTime',
+                                    'Estimated Delivery Time'
+                                  )}
+                                </Typography>
+                                <Typography variant="body1" fontWeight="medium">
+                                  {new Date(
+                                    order.estimated_delivery_time
+                                  ).toLocaleString()}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* Actual Delivery Time */}
+                          {order.actual_delivery_time && (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <CheckCircle color="success" />
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {t(
+                                    'orders.actualDeliveryTime',
+                                    'Actual Delivery Time'
+                                  )}
+                                </Typography>
+                                <Typography
+                                  variant="body1"
+                                  fontWeight="medium"
+                                  color="success.main"
+                                >
+                                  {new Date(
+                                    order.actual_delivery_time
+                                  ).toLocaleString()}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+                        </Stack>
+                      </Paper>
+                    </Box>
+
                     {/* Agent Info */}
                     {order.assigned_agent && (
                       <Box>

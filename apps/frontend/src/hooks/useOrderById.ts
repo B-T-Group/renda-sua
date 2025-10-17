@@ -19,6 +19,8 @@ export interface OrderData {
   actual_delivery_time?: string;
   special_instructions?: string;
   preferred_delivery_time?: string;
+  requires_fast_delivery: boolean;
+  fast_delivery_fee: number;
   payment_method: string;
   payment_status: string;
   verified_agent_delivery: boolean;
