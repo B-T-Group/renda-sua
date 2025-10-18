@@ -85,16 +85,40 @@ const OpenOrdersPage: React.FC = () => {
     return filtered;
   }, [orders, filters.search]);
 
-  // Separate available and claimed orders
+  // Separate available and claimed orders, prioritizing fast delivery
   const { availableOrders, claimedOrders } = useMemo(() => {
-    const available = filteredOrders.filter(
-      (order) =>
-        order.current_status === 'ready_for_pickup' && !order.assigned_agent_id
-    );
-    const claimed = filteredOrders.filter(
-      (order) =>
-        order.current_status === 'ready_for_pickup' && order.assigned_agent_id
-    );
+    const available = filteredOrders
+      .filter(
+        (order) =>
+          order.current_status === 'ready_for_pickup' &&
+          !order.assigned_agent_id
+      )
+      .sort((a, b) => {
+        // Fast delivery orders first
+        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
+        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
+
+        // If both have same fast delivery status, sort by creation date (newest first)
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+
+    const claimed = filteredOrders
+      .filter(
+        (order) =>
+          order.current_status === 'ready_for_pickup' && order.assigned_agent_id
+      )
+      .sort((a, b) => {
+        // Fast delivery orders first
+        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
+        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
+
+        // If both have same fast delivery status, sort by creation date (newest first)
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
 
     return { availableOrders: available, claimedOrders: claimed };
   }, [filteredOrders]);

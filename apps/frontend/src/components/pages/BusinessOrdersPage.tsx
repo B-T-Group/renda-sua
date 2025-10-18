@@ -270,29 +270,40 @@ const BusinessOrdersPage: React.FC = () => {
     });
   };
 
-  const filteredOrders = orders.filter((order) => {
-    if (tabValue === 0) return true; // All orders
-    if (tabValue === 1)
-      return [
-        'pending',
-        'confirmed',
-        'preparing',
-        'complete_preparation',
-      ].includes(order.current_status);
-    if (tabValue === 2)
-      return [
-        'ready_for_pickup',
-        'assigned_to_agent',
-        'picked_up',
-        'in_transit',
-        'out_for_delivery',
-      ].includes(order.current_status);
-    if (tabValue === 3)
-      return ['delivered', 'cancelled', 'failed', 'refunded'].includes(
-        order.current_status
+  const filteredOrders = orders
+    .filter((order) => {
+      if (tabValue === 0) return true; // All orders
+      if (tabValue === 1)
+        return [
+          'pending',
+          'confirmed',
+          'preparing',
+          'complete_preparation',
+        ].includes(order.current_status);
+      if (tabValue === 2)
+        return [
+          'ready_for_pickup',
+          'assigned_to_agent',
+          'picked_up',
+          'in_transit',
+          'out_for_delivery',
+        ].includes(order.current_status);
+      if (tabValue === 3)
+        return ['delivered', 'cancelled', 'failed', 'refunded'].includes(
+          order.current_status
+        );
+      return true;
+    })
+    .sort((a, b) => {
+      // Fast delivery orders first
+      if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
+      if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
+
+      // If both have same fast delivery status, sort by creation date (newest first)
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-    return true;
-  });
+    });
 
   return (
     <>

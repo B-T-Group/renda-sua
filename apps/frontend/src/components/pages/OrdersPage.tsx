@@ -158,6 +158,21 @@ const OrdersPage: React.FC = () => {
       if (!buckets[s]) buckets[s] = [];
       buckets[s].push(o);
     });
+
+    // Sort orders within each status bucket to prioritize fast delivery orders
+    Object.keys(buckets).forEach((status) => {
+      buckets[status].sort((a, b) => {
+        // Fast delivery orders first
+        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
+        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
+
+        // If both have same fast delivery status, sort by creation date (newest first)
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+    });
+
     return buckets;
   }, [orders]);
 
