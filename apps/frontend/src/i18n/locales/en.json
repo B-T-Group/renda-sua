@@ -282,6 +282,7 @@
       "uploading": "Uploading..."
     },
     "dashboard": {
+      "welcome": "Welcome to your business dashboard",
       "accountSummary": "Account Summary",
       "adminManagement": "Admin Management",
       "analyticsDescription": "View business analytics, sales reports, and performance metrics.",

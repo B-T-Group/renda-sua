@@ -19,9 +19,11 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBusinessInventory } from '../../hooks/useBusinessInventory';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import { useUserProfile } from '../../hooks/useUserProfile';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  BusinessInventoryItem,
+  useBusinessInventory,
+} from '../../hooks/useBusinessInventory';
 import BusinessInventoryTable from '../business/BusinessInventoryTable';
 import InventoryCards from '../business/InventoryCards';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
@@ -52,13 +54,15 @@ function TabPanel(props: TabPanelProps) {
 const BusinessInventoryPage: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, loading: profileLoading } = useUserProfile();
+  const { profile, loading: profileLoading } = useUserProfileContext();
   const [tabValue, setTabValue] = useState(0);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
-  const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
+  const [updatingInventoryItem, setUpdatingInventoryItem] =
+    useState<BusinessInventoryItem | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [inventoryToDelete, setInventoryToDelete] = useState<any>(null);
+  const [inventoryToDelete, setInventoryToDelete] =
+    useState<BusinessInventoryItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const {
@@ -67,29 +71,14 @@ const BusinessInventoryPage: React.FC = () => {
     loading: inventoryLoading,
     error: inventoryError,
     fetchInventory,
-    updateInventoryItem,
     deleteInventoryItem,
-    refreshBusinessLocations,
   } = useBusinessInventory(profile?.business?.id);
-
-  // Debug logging
-  console.log('BusinessInventoryPage: profile:', profile);
-  console.log(
-    'BusinessInventoryPage: profile?.business?.id:',
-    profile?.business?.id
-  );
-  console.log('BusinessInventoryPage: businessLocations:', businessLocations);
-  console.log(
-    'BusinessInventoryPage: businessLocations.length:',
-    businessLocations.length
-  );
-  const { loading: locationsLoading } = useBusinessLocations();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
-  const handleDeleteInventoryItem = (item: any) => {
+  const handleDeleteInventoryItem = (item: BusinessInventoryItem) => {
     setInventoryToDelete(item);
     setShowDeleteConfirm(true);
   };
@@ -105,7 +94,7 @@ const BusinessInventoryPage: React.FC = () => {
       });
       setShowDeleteConfirm(false);
       setInventoryToDelete(null);
-    } catch (error) {
+    } catch {
       enqueueSnackbar(t('business.inventory.deleteError'), {
         variant: 'error',
       });
@@ -114,24 +103,9 @@ const BusinessInventoryPage: React.FC = () => {
     }
   };
 
-  const handleRestockInventoryItem = (item: any) => {
+  const handleRestockInventoryItem = (item: BusinessInventoryItem) => {
     setUpdatingInventoryItem(item);
     setShowUpdateInventoryDialog(true);
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount);
-  };
-
-  const getStockStatus = (quantity: number, reorderPoint: number) => {
-    if (quantity === 0)
-      return { status: 'outOfStock', color: 'error' as const };
-    if (quantity <= reorderPoint)
-      return { status: 'lowStock', color: 'warning' as const };
-    return { status: 'inStock', color: 'success' as const };
   };
 
   if (profileLoading) {
@@ -311,7 +285,7 @@ const BusinessInventoryPage: React.FC = () => {
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
-        item={updatingInventoryItem}
+        item={null}
         selectedInventory={updatingInventoryItem}
         onInventoryUpdated={() => {
           fetchInventory(); // Refresh inventory list

@@ -282,6 +282,7 @@
       "uploading": "Uploading..."
     },
     "dashboard": {
+      "welcome": "Bienvenue sur votre tableau de bord d'entreprise",
       "accountSummary": "Résumé du Compte",
       "adminManagement": "Gestion Administrateur",
       "analyticsDescription": "Consultez les analyses commerciales, rapports de vente et métriques de performance.",
