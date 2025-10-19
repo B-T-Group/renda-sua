@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useGraphQLClient } from './useGraphQLClient';
-import { useUserProfile } from './useUserProfile';
 
 export interface DocumentType {
   id: number;
@@ -39,7 +39,7 @@ export interface DocumentFilters {
 
 export const useDocumentManagement = () => {
   const { client } = useGraphQLClient();
-  const { profile: user } = useUserProfile();
+  const { profile: user } = useUserProfileContext();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(false);

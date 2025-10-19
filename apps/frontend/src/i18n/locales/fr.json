@@ -24,6 +24,7 @@
   },
   "accounts": {
     "account": "Compte",
+    "accountInformation": "Informations du Compte",
     "accountNotFound": "Compte introuvable",
     "accountSummary": "Résumé du Compte",
     "amount": "Montant",

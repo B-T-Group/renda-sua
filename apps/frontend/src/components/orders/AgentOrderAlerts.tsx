@@ -1,8 +1,8 @@
 import { Alert, Box } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { Order } from '../../hooks/useAgentOrders';
-import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface AgentOrderAlertsProps {
   order: Order;
@@ -10,7 +10,7 @@ interface AgentOrderAlertsProps {
 
 const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
 
   const agentVerified = profile?.agent?.is_verified || false;
 

@@ -1,12 +1,12 @@
 import React from 'react';
-import { useUserProfile } from '../../hooks/useUserProfile';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import AgentDashboard from '../pages/AgentDashboard';
 import BusinessDashboard from '../pages/BusinessDashboard';
 import Dashboard from '../pages/Dashboard';
 
 const SmartDashboard: React.FC = () => {
-  const { profile, loading } = useUserProfile();
+  const { profile, loading } = useUserProfileContext();
 
   if (loading) {
     return (

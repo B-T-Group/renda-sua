@@ -24,20 +24,23 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
 import { useItems } from '../../hooks/useItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
+import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
 
+  const { accounts } = useAccountInfo();
   const { orders } = useBusinessOrders(profile?.business?.id);
   const { inventory } = useBusinessInventory(profile?.business?.id);
   const { locations } = useBusinessLocations(profile?.business?.id);
@@ -243,6 +246,25 @@ const BusinessDashboard: React.FC = () => {
           {profile.business.is_admin && <StatusBadge type="admin" />}
         </Box>
       </Box>
+
+      {/* Account Information */}
+      {accounts.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            {t('accounts.accountInformation')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {accounts.map((account) => (
+              <UserAccount
+                key={account.id}
+                accountId={account.id}
+                compactView={true}
+                showTransactions={false}
+              />
+            ))}
+          </Box>
+        </Box>
+      )}
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
         {t('business.dashboard.subtitle')}

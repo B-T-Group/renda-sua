@@ -38,8 +38,8 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressAlert from '../common/AddressAlert';
 import OrderCard from '../common/OrderCard';
 
@@ -98,7 +98,7 @@ const OrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
     status: '',

@@ -41,6 +41,7 @@ import {
 } from '@mui/material';
 
 import React, { useCallback, useState } from 'react';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useDocumentApprove } from '../../hooks/useDocumentApprove';
 import { useDocumentDelete } from '../../hooks/useDocumentDelete';
 import {
@@ -49,7 +50,6 @@ import {
   UserDocument,
 } from '../../hooks/useDocumentManagement';
 import { useDocumentPreview } from '../../hooks/useDocumentPreview';
-import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface DocumentListProps {
   documents: UserDocument[];
@@ -90,7 +90,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     error: approveError,
   } = useDocumentApprove();
 
-  const { profile: user } = useUserProfile();
+  const { profile: user } = useUserProfileContext();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocumentType, setSelectedDocumentType] = useState<number | ''>(

@@ -24,6 +24,7 @@
   },
   "accounts": {
     "account": "Account",
+    "accountInformation": "Account Information",
     "accountNotFound": "Account not found",
     "accountSummary": "Account Summary",
     "amount": "Amount",

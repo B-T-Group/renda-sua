@@ -13,8 +13,8 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressManager from './AddressManager';
 
 interface AgentAddressPromptProps {
@@ -27,7 +27,7 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
   showAsCard = true,
 }) => {
   const { t } = useTranslation();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const [showAddressManager, setShowAddressManager] = useState(false);
 
   // Get agent addresses using the address manager hook

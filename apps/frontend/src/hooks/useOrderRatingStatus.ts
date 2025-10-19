@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useOrderRatings } from './useOrderRatings';
-import { useUserProfile } from './useUserProfile';
 
 export interface UseOrderRatingStatusReturn {
   hasRated: boolean;
@@ -12,7 +12,7 @@ export const useOrderRatingStatus = (
   orderId: string,
   orderStatus: string
 ): UseOrderRatingStatusReturn => {
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const { ratings } = useOrderRatings(orderId);
 
   const ratingStatus = useMemo(() => {

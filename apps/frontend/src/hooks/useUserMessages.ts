@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useGraphQLClient } from './useGraphQLClient';
-import { useUserProfile } from './useUserProfile';
 
 export interface EntityType {
   id: string;
@@ -32,7 +32,7 @@ export interface MessageFilters {
 
 export const useUserMessages = (specificUserId?: string) => {
   const { client } = useGraphQLClient();
-  const { profile: user } = useUserProfile();
+  const { profile: user } = useUserProfileContext();
   const [messages, setMessages] = useState<UserMessage[]>([]);
   const [entityTypes, setEntityTypes] = useState<EntityType[]>([]);
   const [loading, setLoading] = useState(false);

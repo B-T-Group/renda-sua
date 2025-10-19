@@ -29,12 +29,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   BusinessInventoryItem,
   useBusinessInventory,
 } from '../../hooks/useBusinessInventory';
 import { Item, useItems } from '../../hooks/useItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
@@ -49,7 +49,7 @@ export default function ItemViewPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
 
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);

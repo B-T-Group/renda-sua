@@ -1,7 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUserProfile } from '../../hooks';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import ErrorPage from '../pages/ErrorPage';
 
@@ -9,7 +9,7 @@ const ProfileRouter: React.FC = () => {
   const { isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   const { loading, error, userType, isProfileComplete, refetch } =
-    useUserProfile();
+    useUserProfileContext();
 
   useEffect(() => {
     if (!isAuthenticated) {

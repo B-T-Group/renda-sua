@@ -13,13 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, isLoading, user } = useAuth0();
 
   if (isLoading) {
-    return (
-      <LoadingPage
-        message="Authenticating"
-        subtitle="Please wait while we verify your credentials"
-        showProgress={true}
-      />
-    );
+    return <LoadingPage message="Authenticating" />;
   }
 
   if (!isAuthenticated) {

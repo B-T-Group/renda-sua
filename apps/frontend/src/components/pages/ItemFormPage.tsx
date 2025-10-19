@@ -34,6 +34,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAi } from '../../hooks/useAi';
 import { useBrands } from '../../hooks/useBrands';
 import {
@@ -43,7 +44,6 @@ import {
 } from '../../hooks/useCategory';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import SEOHead from '../seo/SEOHead';
 
 // Extended types for create options
@@ -104,7 +104,7 @@ const ItemFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { itemId } = useParams<{ itemId: string }>();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const { generateDescription, loading: aiLoading } = useAi();
 
   const isEditMode = !!itemId;

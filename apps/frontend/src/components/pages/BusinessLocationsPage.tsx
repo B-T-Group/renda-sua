@@ -32,7 +32,6 @@ import {
   UpdateBusinessLocationData,
   useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import LocationCard from '../business/LocationCard';
 import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
@@ -43,8 +42,7 @@ const BusinessLocationsPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfile();
-  const { refetch: refetchProfile } = useUserProfileContext();
+  const { profile, refetch: refetchProfile } = useUserProfileContext();
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<BusinessLocation | null>(null);

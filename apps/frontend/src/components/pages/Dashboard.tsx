@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   useBackendOrders,
   useDeliveryFees,
@@ -18,7 +19,6 @@ import {
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
@@ -28,7 +28,7 @@ import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth0();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const navigate = useNavigate();
   const {
     inventoryItems,

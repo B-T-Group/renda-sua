@@ -34,11 +34,11 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   InventoryItem,
   useInventoryItems,
 } from '../../hooks/useInventoryItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 
@@ -95,7 +95,7 @@ const PublicItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const { isAuthenticated, loginWithRedirect } = useAuth0();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [searchTerm, setSearchTerm] = useState('');

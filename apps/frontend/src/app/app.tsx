@@ -83,8 +83,8 @@ function App() {
       }}
     >
       <Header />
-      {/* Global Account Information for authenticated users (excluding clients) */}
-      {isAuthenticated && userType !== 'client' && (
+      {/* Global Account Information for authenticated users (excluding clients and business) */}
+      {isAuthenticated && userType !== 'client' && userType !== 'business' && (
         <AccountInformation
           onRefresh={undefined}
           compactView={false}

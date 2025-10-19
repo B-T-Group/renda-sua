@@ -251,6 +251,66 @@ const UserAccount: React.FC<UserAccountProps> = ({
     }
   };
 
+  // Minimal view for business dashboard
+  if (compactView) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          p: 1.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          backgroundColor: 'background.paper',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {account.currency} Account:
+          </Typography>
+          <Typography variant="body2" fontWeight={600}>
+            {formatCurrency(account.total_balance, account.currency)}
+          </Typography>
+          {account.withheld_balance > 0 && (
+            <Typography variant="caption" color="error">
+              ({formatCurrency(account.withheld_balance, account.currency)}{' '}
+              withheld)
+            </Typography>
+          )}
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Tooltip title={t('accounts.creditAccount')}>
+            <IconButton
+              onClick={handleTopUp}
+              disabled={loading}
+              color="primary"
+              size="small"
+              sx={{ p: 0.5 }}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {account.available_balance > 0 && (
+            <Tooltip title={t('accounts.withdraw')}>
+              <IconButton
+                onClick={handleWithdraw}
+                disabled={loading}
+                color="error"
+                size="small"
+                sx={{ p: 0.5 }}
+              >
+                <RemoveIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <>
       <Card variant="outlined">
@@ -267,15 +327,6 @@ const UserAccount: React.FC<UserAccountProps> = ({
                 <Typography variant="h6" color="primary">
                   {account.currency} {t('accounts.account')}
                 </Typography>
-                <Chip
-                  label={
-                    account.is_active
-                      ? t('common.active')
-                      : t('common.inactive')
-                  }
-                  color={account.is_active ? 'success' : 'default'}
-                  size="small"
-                />
                 {!subscriptionFailed && (
                   <Box
                     component="span"

@@ -10,9 +10,9 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAdminUserMessages } from '../../hooks/useAdminUserMessages';
 import { useUserDetails } from '../../hooks/useUserDetails';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import AdminUserMessageList from '../common/AdminUserMessageList';
 
 const AdminUserMessagesPage: React.FC = () => {
@@ -20,7 +20,7 @@ const AdminUserMessagesPage: React.FC = () => {
     userType: string;
     userId: string;
   }>();
-  const { profile: currentUser } = useUserProfile();
+  const { profile: currentUser } = useUserProfileContext();
   const { loading: userLoading, userName } = useUserDetails(userId || '');
   const {
     messages,

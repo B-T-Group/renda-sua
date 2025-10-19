@@ -48,10 +48,10 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
-import { useUserProfile } from '../../hooks/useUserProfile';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
@@ -193,7 +193,7 @@ const ManageOrderPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { orderId } = useParams<{ orderId: string }>();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const { accounts } = useAccountInfo();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();

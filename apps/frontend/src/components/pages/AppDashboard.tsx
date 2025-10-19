@@ -1,5 +1,5 @@
 import React from 'react';
-import { useUserProfile } from '../../hooks';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import AgentDashboard from './AgentDashboard';
 import BusinessDashboard from './BusinessDashboard';
@@ -7,7 +7,8 @@ import CompleteProfile from './CompleteProfile';
 import Dashboard from './Dashboard';
 
 const AppDashboard: React.FC = () => {
-  const { loading, error, userType, isProfileComplete } = useUserProfile();
+  const { loading, error, userType, isProfileComplete } =
+    useUserProfileContext();
 
   // Show loading while checking profile
   if (loading) {

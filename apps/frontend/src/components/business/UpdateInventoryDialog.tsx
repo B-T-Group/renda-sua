@@ -16,10 +16,10 @@ import {
 import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { Item } from '../../hooks/useItems';
-import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface UpdateInventoryDialogProps {
   open: boolean;
@@ -38,7 +38,7 @@ export default function UpdateInventoryDialog({
 }: UpdateInventoryDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfile();
+  const { profile } = useUserProfileContext();
   const { addInventoryItem, updateInventoryItem, loading } =
     useBusinessInventory();
   const {
