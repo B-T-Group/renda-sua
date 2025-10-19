@@ -212,7 +212,6 @@ const CheckoutPage: React.FC = () => {
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
-  const [specialInstructions, setSpecialInstructions] = useState('');
 
   const handleDeliveryWindowChange = useCallback(
     (data: DeliveryWindowData | null) => {
@@ -311,7 +310,7 @@ const CheckoutPage: React.FC = () => {
         cartItems,
         selectedAddressId,
         phoneNumber,
-        specialInstructions,
+        undefined, // specialInstructions removed
         requiresFastDelivery,
         fastDeliveryFee,
         deliveryWindow
@@ -457,74 +456,6 @@ const CheckoutPage: React.FC = () => {
                 </Button>
               </Box>
 
-              {/* Phone Number */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                  {t('checkout.contactNumber', 'Contact Number')}
-                </Typography>
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={useDifferentPhone}
-                      onChange={(e) => setUseDifferentPhone(e.target.checked)}
-                    />
-                  }
-                  label={t(
-                    'checkout.useDifferentPhone',
-                    'Use different phone number'
-                  )}
-                />
-
-                {useDifferentPhone && (
-                  <Box sx={{ mt: 2 }}>
-                    <PhoneInput
-                      value={overridePhoneNumber}
-                      onChange={(value) => setOverridePhoneNumber(value || '')}
-                      label={t('checkout.phoneNumber', 'Phone Number')}
-                    />
-                  </Box>
-                )}
-              </Box>
-
-              {/* Special Instructions */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                  {t('checkout.specialInstructions', 'Special Instructions')}
-                </Typography>
-                <FormControl fullWidth>
-                  <InputLabel>
-                    {t('checkout.instructions', 'Instructions (Optional)')}
-                  </InputLabel>
-                  <Select
-                    value={specialInstructions}
-                    onChange={(e) => setSpecialInstructions(e.target.value)}
-                    label={t(
-                      'checkout.instructions',
-                      'Instructions (Optional)'
-                    )}
-                  >
-                    <MenuItem value="">
-                      <em>
-                        {t(
-                          'checkout.noInstructions',
-                          'No special instructions'
-                        )}
-                      </em>
-                    </MenuItem>
-                    <MenuItem value="leave_at_door">
-                      {t('checkout.leaveAtDoor', 'Leave at door')}
-                    </MenuItem>
-                    <MenuItem value="call_before_delivery">
-                      {t('checkout.callBeforeDelivery', 'Call before delivery')}
-                    </MenuItem>
-                    <MenuItem value="deliver_to_reception">
-                      {t('checkout.deliverToReception', 'Deliver to reception')}
-                    </MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
               {/* Fast Delivery Option */}
               {isEnabledForLocation(userCountry, userState) &&
                 fastDeliveryConfig && (
@@ -555,21 +486,168 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
 
-              <Box
-                sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}
-              >
-                <Security color="primary" />
-                <Typography variant="body1">
-                  {t('checkout.securePayment', 'Secure payment processing')}
+              {/* Mobile Payment Method */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                  {t('checkout.mobilePaymentMethod', 'Mobile Payment Method')}
                 </Typography>
+
+                {/* Primary Phone Number Display */}
+                <Card
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mb: 2,
+                    bgcolor: useDifferentPhone ? 'grey.50' : 'primary.50',
+                    borderColor: useDifferentPhone ? 'grey.300' : 'primary.200',
+                    transition: 'all 0.2s ease-in-out',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Security
+                      color={useDifferentPhone ? 'disabled' : 'primary'}
+                    />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" fontWeight={500}>
+                        {t(
+                          'checkout.primaryPhoneNumber',
+                          'Primary Phone Number'
+                        )}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color={
+                          useDifferentPhone ? 'text.disabled' : 'text.secondary'
+                        }
+                      >
+                        {profile?.phone_number ||
+                          t('common.notAvailable', 'Not available')}
+                      </Typography>
+                      {!useDifferentPhone && (
+                        <Typography
+                          variant="caption"
+                          color="primary"
+                          sx={{ mt: 0.5, display: 'block' }}
+                        >
+                          {t(
+                            'checkout.selectedForPayment',
+                            'Selected for payment'
+                          )}
+                        </Typography>
+                      )}
+                    </Box>
+                    {!useDifferentPhone && (
+                      <Box
+                        sx={{
+                          bgcolor: 'primary.main',
+                          color: 'white',
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: 1,
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {t('checkout.active', 'Active')}
+                      </Box>
+                    )}
+                  </Box>
+                </Card>
+
+                {/* Toggle for Different Phone Number */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useDifferentPhone}
+                      onChange={(e) => setUseDifferentPhone(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        {t(
+                          'checkout.useDifferentPhone',
+                          'Use a different phone number for this order'
+                        )}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t(
+                          'checkout.useDifferentPhoneDescription',
+                          'Override your primary phone number for this specific order'
+                        )}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: 'flex-start', mb: 2 }}
+                />
+
+                {/* Alternative Phone Input */}
+                {useDifferentPhone && (
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      bgcolor: 'primary.50',
+                      borderColor: 'primary.200',
+                      border: '2px solid',
+                      animation: 'fadeIn 0.3s ease-in-out',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        mb: 2,
+                      }}
+                    >
+                      <Security color="primary" />
+                      <Typography
+                        variant="body2"
+                        fontWeight={500}
+                        color="primary"
+                      >
+                        {t(
+                          'checkout.alternativePhoneNumber',
+                          'Alternative Phone Number'
+                        )}
+                      </Typography>
+                    </Box>
+                    <PhoneInput
+                      value={overridePhoneNumber}
+                      onChange={(value) => setOverridePhoneNumber(value || '')}
+                      label={t(
+                        'checkout.enterPhoneNumber',
+                        'Enter phone number'
+                      )}
+                      defaultCountry={selectedAddress?.country || 'GA'}
+                    />
+                    {overridePhoneNumber && (
+                      <Typography
+                        variant="caption"
+                        color="primary"
+                        sx={{ mt: 1, display: 'block' }}
+                      >
+                        {t(
+                          'checkout.alternativePhoneSelected',
+                          'This number will be used for payment processing'
+                        )}
+                      </Typography>
+                    )}
+                  </Card>
+                )}
               </Box>
 
-              <Typography variant="body2" color="text.secondary">
-                {t(
-                  'checkout.paymentDescription',
-                  'Payment will be processed securely through mobile money'
-                )}
-              </Typography>
+              {/* Payment Security Notice */}
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  {t(
+                    'checkout.paymentSecurityNotice',
+                    'Your payment will be processed securely through mobile money. The phone number above will be used to initiate the payment transaction.'
+                  )}
+                </Typography>
+              </Alert>
             </CardContent>
           </Card>
         </Grid>

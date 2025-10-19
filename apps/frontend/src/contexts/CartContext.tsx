@@ -42,28 +42,45 @@ const CART_STORAGE_KEY = 'rendasua_cart';
 export const CartProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const { enqueueSnackbar } = useSnackbar();
-  const { t } = useTranslation();
-
-  // Load cart from localStorage on mount
-  useEffect(() => {
+  // Initialize cart from localStorage immediately
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+      console.log('Raw localStorage value:', savedCart);
       if (savedCart) {
         const parsedCart = JSON.parse(savedCart);
+        console.log('Parsed cart:', parsedCart);
         if (Array.isArray(parsedCart)) {
-          setCartItems(parsedCart);
+          console.log('Cart loaded from localStorage:', parsedCart);
+          return parsedCart;
+        } else {
+          console.warn('Parsed cart is not an array:', parsedCart);
         }
+      } else {
+        console.log('No saved cart found in localStorage');
       }
     } catch (error) {
       console.error('Failed to load cart from localStorage:', error);
     }
+    console.log('Cart initialized as empty array');
+    return [];
+  });
+
+  const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
+
+  // Debug: Log when CartProvider mounts/unmounts
+  useEffect(() => {
+    console.log('CartProvider mounted');
+    return () => {
+      console.log('CartProvider unmounting');
+    };
   }, []);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
     try {
+      console.log('Saving cart to localStorage:', cartItems);
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
     } catch (error) {
       console.error('Failed to save cart to localStorage:', error);
@@ -139,6 +156,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const clearCart = useCallback(() => {
+    console.log('Clearing cart');
     setCartItems([]);
     enqueueSnackbar(t('cart.cleared', 'Cart cleared'), { variant: 'info' });
   }, [enqueueSnackbar, t]);
