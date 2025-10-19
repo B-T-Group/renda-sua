@@ -20,8 +20,6 @@ import {
   Skeleton,
   Switch,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +30,6 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
-import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -205,17 +202,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 const CheckoutPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { cartItems, getCartByBusiness } = useCart();
+  const { cartItems } = useCart();
   const { profile } = useUserProfileContext();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  // Get supported payment systems
-  const {
-    isCountrySupported,
-    supportedCountries,
-    loading: paymentSystemsLoading,
-  } = useSupportedPaymentSystems();
 
   // State
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -370,9 +358,22 @@ const CheckoutPage: React.FC = () => {
     });
   };
 
-  const handleAddressSubmit = async (formData: AddressFormData) => {
+  const handleAddressSubmit = async () => {
     try {
-      await addAddress(formData);
+      // Ensure all required fields have default values
+      const addressData = {
+        address_line_1: addressFormData.address_line_1 || '',
+        address_line_2: addressFormData.address_line_2 || '',
+        city: addressFormData.city || '',
+        state: addressFormData.state || '',
+        postal_code: addressFormData.postal_code || '',
+        country: addressFormData.country || '',
+        address_type: addressFormData.address_type || 'home',
+        is_primary: addressFormData.is_primary || false,
+        latitude: addressFormData.latitude,
+        longitude: addressFormData.longitude,
+      };
+      await addAddress(addressData);
       handleCloseAddressDialog();
     } catch (error) {
       console.error('Error adding address:', error);
@@ -383,15 +384,9 @@ const CheckoutPage: React.FC = () => {
     return <CheckoutPageSkeleton />;
   }
 
-  const cartByBusiness = getCartByBusiness();
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.itemData.price * item.quantity,
-    0
-  );
   const fastDeliveryFee = requiresFastDelivery
     ? fastDeliveryConfig?.fee || 0
     : 0;
-  const total = subtotal + (deliveryFee || 0) + fastDeliveryFee;
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
@@ -485,7 +480,7 @@ const CheckoutPage: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <PhoneInput
                       value={overridePhoneNumber}
-                      onChange={setOverridePhoneNumber}
+                      onChange={(value) => setOverridePhoneNumber(value || '')}
                       label={t('checkout.phoneNumber', 'Phone Number')}
                     />
                   </Box>
@@ -531,20 +526,24 @@ const CheckoutPage: React.FC = () => {
               </Box>
 
               {/* Fast Delivery Option */}
-              {isEnabledForLocation && fastDeliveryConfig && (
-                <FastDeliveryOption
-                  config={fastDeliveryConfig}
-                  selected={requiresFastDelivery}
-                  onToggle={setRequiresFastDelivery}
-                  formatCurrency={formatCurrency}
-                />
-              )}
+              {isEnabledForLocation(userCountry, userState) &&
+                fastDeliveryConfig && (
+                  <FastDeliveryOption
+                    config={fastDeliveryConfig}
+                    selected={requiresFastDelivery}
+                    onToggle={setRequiresFastDelivery}
+                    formatCurrency={formatCurrency}
+                  />
+                )}
 
               {/* Delivery Time Window */}
               <DeliveryTimeWindowSelector
-                selectedWindow={deliveryWindow}
-                onWindowChange={handleDeliveryWindowChange}
-                businessLocationId={firstItem?.businessLocationId}
+                countryCode={selectedAddress?.country || 'GA'}
+                stateCode={selectedAddress?.state}
+                value={deliveryWindow}
+                onChange={handleDeliveryWindowChange}
+                isFastDelivery={requiresFastDelivery}
+                disabled={checkoutLoading}
               />
             </CardContent>
           </Card>
@@ -579,7 +578,7 @@ const CheckoutPage: React.FC = () => {
         <Grid size={{ xs: 12, lg: 4 }}>
           <OrderSummary
             cartItems={cartItems}
-            deliveryFee={deliveryFee}
+            deliveryFee={deliveryFee?.deliveryFee || null}
             deliveryFeeLoading={deliveryFeeLoading}
             deliveryFeeError={deliveryFeeError}
             fastDeliveryFee={fastDeliveryFee}
@@ -615,9 +614,9 @@ const CheckoutPage: React.FC = () => {
       <AddressDialog
         open={addressDialogOpen}
         onClose={handleCloseAddressDialog}
-        onSubmit={handleAddressSubmit}
-        formData={addressFormData}
-        setFormData={setAddressFormData}
+        onSave={handleAddressSubmit}
+        addressData={addressFormData}
+        onAddressChange={setAddressFormData}
       />
     </Container>
   );

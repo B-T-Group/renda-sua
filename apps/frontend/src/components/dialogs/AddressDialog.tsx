@@ -38,7 +38,7 @@ export interface AddressFormData {
 interface AddressDialogProps {
   open: boolean;
   title?: string;
-  addressData: AddressFormData;
+  addressData?: AddressFormData;
   loading?: boolean;
   showAddressType?: boolean;
   showIsPrimary?: boolean;
@@ -71,7 +71,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 }) => {
   const { t } = useTranslation();
   const [hasPostalCode, setHasPostalCode] = useState<boolean>(
-    (addressData.postal_code ?? '').trim() !== ''
+    (addressData?.postal_code ?? '').trim() !== ''
   );
 
   // Location data
@@ -337,21 +337,30 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
         // Update the address form with current location data
         onAddressChange({
-          ...addressData,
           address_line_1: location.address || '',
+          address_line_2: addressData?.address_line_2 || '',
           city: location.city || '',
           state: location.state || '', // Use state name directly
           country: countryCode, // Use country code instead of name
           postal_code: location.postalCode || '',
+          address_type: addressData?.address_type || 'home',
+          is_primary: addressData?.is_primary || false,
           latitude: location.latitude,
           longitude: location.longitude,
         });
       } else {
         // If no address but we have coordinates, just update coordinates
         onAddressChange({
-          ...addressData,
-          latitude: location.latitude,
-          longitude: location.longitude,
+          address_line_1: addressData?.address_line_1 || '',
+          address_line_2: addressData?.address_line_2 || '',
+          city: addressData?.city || '',
+          state: addressData?.state || '',
+          postal_code: addressData?.postal_code || '',
+          country: addressData?.country || '',
+          address_type: addressData?.address_type || 'home',
+          is_primary: addressData?.is_primary || false,
+          latitude: addressData?.latitude,
+          longitude: addressData?.longitude,
         });
       }
     } catch (error) {
@@ -366,7 +375,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
   // Update states when country changes
   useEffect(() => {
-    if (addressData.country) {
+    if (addressData?.country) {
       const newStates = State.getStatesOfCountry(addressData.country);
       setStates(newStates);
       // Reset state and city when country changes
@@ -374,18 +383,29 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
         newStates.length > 0 &&
         !newStates.find((state) => state.name === addressData.state)
       ) {
-        onAddressChange({ ...addressData, state: '', city: '' });
+        onAddressChange({
+          address_line_1: addressData?.address_line_1 || '',
+          address_line_2: addressData?.address_line_2 || '',
+          city: addressData?.city || '',
+          state: '',
+          postal_code: addressData?.postal_code || '',
+          country: addressData?.country || '',
+          address_type: addressData?.address_type || 'home',
+          is_primary: addressData?.is_primary || false,
+          latitude: addressData?.latitude,
+          longitude: addressData?.longitude,
+        });
       }
     } else {
       setStates([]);
       setCities([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressData.country, addressData.state]);
+  }, [addressData?.country, addressData?.state]);
 
   // Update cities when state changes
   useEffect(() => {
-    if (addressData.country && addressData.state) {
+    if (addressData?.country && addressData?.state) {
       // Convert state name to state code for City.getCitiesOfState
       const stateCode = findStateCode(addressData.state, addressData.country);
       if (stateCode) {
@@ -396,7 +416,18 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           newCities.length > 0 &&
           !newCities.find((city) => city.name === addressData.city)
         ) {
-          onAddressChange({ ...addressData, city: '' });
+          onAddressChange({
+            address_line_1: addressData?.address_line_1 || '',
+            address_line_2: addressData?.address_line_2 || '',
+            city: '',
+            state: addressData?.state || '',
+            postal_code: addressData?.postal_code || '',
+            country: addressData?.country || '',
+            address_type: addressData?.address_type || 'home',
+            is_primary: addressData?.is_primary || false,
+            latitude: addressData?.latitude,
+            longitude: addressData?.longitude,
+          });
         }
       } else {
         setCities([]);
@@ -405,13 +436,22 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       setCities([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressData.country, addressData.state, addressData.city]);
+  }, [addressData?.country, addressData?.state, addressData?.city]);
 
   const handleInputChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (field: keyof AddressFormData, value: any) => {
       onAddressChange({
-        ...addressData,
+        address_line_1: addressData?.address_line_1 || '',
+        address_line_2: addressData?.address_line_2 || '',
+        city: addressData?.city || '',
+        state: addressData?.state || '',
+        postal_code: addressData?.postal_code || '',
+        country: addressData?.country || '',
+        address_type: addressData?.address_type || 'home',
+        is_primary: addressData?.is_primary || false,
+        latitude: addressData?.latitude,
+        longitude: addressData?.longitude,
         [field]: value,
       });
     },
@@ -472,7 +512,18 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
                     const value = e.target.checked;
                     setHasPostalCode(value);
                     if (!value) {
-                      onAddressChange({ ...addressData, postal_code: '' });
+                      onAddressChange({
+                        address_line_1: addressData?.address_line_1 || '',
+                        address_line_2: addressData?.address_line_2 || '',
+                        city: addressData?.city || '',
+                        state: addressData?.state || '',
+                        postal_code: '',
+                        country: addressData?.country || '',
+                        address_type: addressData?.address_type || 'home',
+                        is_primary: addressData?.is_primary || false,
+                        latitude: addressData?.latitude,
+                        longitude: addressData?.longitude,
+                      });
                     }
                   }}
                 />
@@ -485,7 +536,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <TextField
               fullWidth
               label="Address Line 1"
-              value={addressData.address_line_1}
+              value={addressData?.address_line_1 || ''}
               onChange={(e) =>
                 handleInputChange('address_line_1', e.target.value)
               }
@@ -498,7 +549,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <TextField
               fullWidth
               label="Address Line 2 (Optional)"
-              value={addressData.address_line_2}
+              value={addressData?.address_line_2 || ''}
               onChange={(e) =>
                 handleInputChange('address_line_2', e.target.value)
               }
@@ -509,7 +560,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           <FormControl fullWidth required>
             <InputLabel>Country</InputLabel>
             <Select
-              value={addressData.country}
+              value={addressData?.country || ''}
               onChange={(e) => handleInputChange('country', e.target.value)}
               label="Country"
             >
@@ -525,10 +576,10 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           <FormControl fullWidth required>
             <InputLabel>State/Province</InputLabel>
             <Select
-              value={addressData.state}
+              value={addressData?.state || ''}
               onChange={(e) => handleInputChange('state', e.target.value)}
               label="State/Province"
-              disabled={!addressData.country}
+              disabled={!addressData?.country}
             >
               {states.map((state) => (
                 <MenuItem key={state.isoCode} value={state.name}>
@@ -542,10 +593,10 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           <FormControl fullWidth required>
             <InputLabel>City</InputLabel>
             <Select
-              value={addressData.city}
+              value={addressData?.city || ''}
               onChange={(e) => handleInputChange('city', e.target.value)}
               label="City"
-              disabled={!addressData.state}
+              disabled={!addressData?.state}
             >
               {cities.map((city) => (
                 <MenuItem key={city.name} value={city.name}>
@@ -560,7 +611,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <TextField
               fullWidth
               label="Postal Code"
-              value={addressData.postal_code}
+              value={addressData?.postal_code || ''}
               onChange={(e) => handleInputChange('postal_code', e.target.value)}
               required
             />
@@ -571,7 +622,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <FormControl fullWidth>
               <InputLabel>Address Type</InputLabel>
               <Select
-                value={addressData.address_type || ''}
+                value={addressData?.address_type || ''}
                 onChange={(e) =>
                   handleInputChange('address_type', e.target.value)
                 }
@@ -591,7 +642,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <FormControl fullWidth>
               <InputLabel>Primary Address</InputLabel>
               <Select
-                value={(addressData.is_primary ?? false).toString()}
+                value={(addressData?.is_primary ?? false).toString()}
                 onChange={(e) =>
                   handleInputChange('is_primary', e.target.value === 'true')
                 }
@@ -611,7 +662,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
                 label="Latitude (Optional)"
                 type="number"
                 inputProps={{ step: 'any' }}
-                value={addressData.latitude ?? ''}
+                value={addressData?.latitude ?? ''}
                 onChange={(e) =>
                   handleInputChange(
                     'latitude',
@@ -625,7 +676,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
                 label="Longitude (Optional)"
                 type="number"
                 inputProps={{ step: 'any' }}
-                value={addressData.longitude ?? ''}
+                value={addressData?.longitude ?? ''}
                 onChange={(e) =>
                   handleInputChange(
                     'longitude',
