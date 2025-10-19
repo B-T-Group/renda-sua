@@ -30,7 +30,6 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import FAQ from '../components/pages/FAQ';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
-import LoadingDemo from '../components/pages/LoadingDemo';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import OpenOrdersPage from '../components/pages/OpenOrdersPage';
@@ -211,9 +210,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-
-            {/* Demo route */}
-            <Route path="/loading-demo" element={<LoadingDemo />} />
 
             {/* FAQ route */}
             <Route path="/faq" element={<FAQ />} />

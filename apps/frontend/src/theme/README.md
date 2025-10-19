@@ -5,6 +5,7 @@ This document describes the comprehensive theme system used in the Rendasua fron
 ## Overview
 
 The theme system consists of:
+
 - **Base Theme**: MUI theme with custom colors, typography, and component overrides
 - **Theme Utilities**: Helper functions and design tokens for consistent styling
 - **Custom Hook**: Enhanced `useTheme` hook that provides easy access to theme values
@@ -22,7 +23,7 @@ src/hooks/
 └── useTheme.ts       # Enhanced useTheme hook
 
 src/components/examples/
-└── ThemeExample.tsx  # Example component showing theme usage
+└── (examples removed for production build)
 ```
 
 ## Usage
@@ -34,16 +35,16 @@ import { useTheme } from '../hooks/useTheme';
 
 const MyComponent = () => {
   const theme = useTheme();
-  
+
   return (
-    <Box sx={{ 
-      bgcolor: theme.colors.primary.main,
-      p: theme.spacing.md,
-      borderRadius: theme.radius.lg 
-    }}>
-      <Typography sx={{ color: theme.colors.primary.contrast }}>
-        Hello World
-      </Typography>
+    <Box
+      sx={{
+        bgcolor: theme.colors.primary.main,
+        p: theme.spacing.md,
+        borderRadius: theme.radius.lg,
+      }}
+    >
+      <Typography sx={{ color: theme.colors.primary.contrast }}>Hello World</Typography>
     </Box>
   );
 };
@@ -56,7 +57,7 @@ import { useTheme } from '../hooks/useTheme';
 
 const MyComponent = () => {
   const theme = useTheme();
-  
+
   return (
     <Card sx={theme.styles.card}>
       <CardContent>
@@ -73,11 +74,11 @@ const MyComponent = () => {
 ### Colors
 
 ```tsx
-theme.colors.primary.main        // Primary color
-theme.colors.primary.light       // Light variant
-theme.colors.primary.dark        // Dark variant
-theme.colors.primary.contrast    // Contrast text color
-theme.colors.primary.withOpacity(0.5) // With opacity
+theme.colors.primary.main; // Primary color
+theme.colors.primary.light; // Light variant
+theme.colors.primary.dark; // Dark variant
+theme.colors.primary.contrast; // Contrast text color
+theme.colors.primary.withOpacity(0.5); // With opacity
 
 // Available color palettes:
 // - primary, secondary, success, warning, error, info
@@ -87,56 +88,56 @@ theme.colors.primary.withOpacity(0.5) // With opacity
 ### Spacing
 
 ```tsx
-theme.spacing.xs    // 8px
-theme.spacing.sm    // 16px
-theme.spacing.md    // 24px
-theme.spacing.lg    // 32px
-theme.spacing.xl    // 48px
-theme.spacing.xxl   // 64px
+theme.spacing.xs; // 8px
+theme.spacing.sm; // 16px
+theme.spacing.md; // 24px
+theme.spacing.lg; // 32px
+theme.spacing.xl; // 48px
+theme.spacing.xxl; // 64px
 ```
 
 ### Border Radius
 
 ```tsx
-theme.radius.xs     // 4px
-theme.radius.sm     // 8px
-theme.radius.md     // 12px
-theme.radius.lg     // 16px
-theme.radius.xl     // 20px
-theme.radius.xxl    // 24px
-theme.radius.round  // 50%
+theme.radius.xs; // 4px
+theme.radius.sm; // 8px
+theme.radius.md; // 12px
+theme.radius.lg; // 16px
+theme.radius.xl; // 20px
+theme.radius.xxl; // 24px
+theme.radius.round; // 50%
 ```
 
 ### Shadows
 
 ```tsx
-theme.elevation.none  // No shadow
-theme.elevation.xs    // Subtle shadow
-theme.elevation.sm    // Small shadow
-theme.elevation.md    // Medium shadow
-theme.elevation.lg    // Large shadow
-theme.elevation.xl    // Extra large shadow
-theme.elevation.xxl   // Maximum shadow
+theme.elevation.none; // No shadow
+theme.elevation.xs; // Subtle shadow
+theme.elevation.sm; // Small shadow
+theme.elevation.md; // Medium shadow
+theme.elevation.lg; // Large shadow
+theme.elevation.xl; // Extra large shadow
+theme.elevation.xxl; // Maximum shadow
 ```
 
 ### Typography
 
 ```tsx
 // Responsive typography
-theme.utils.typography.responsive.h1    // Responsive h1
-theme.utils.typography.responsive.h2    // Responsive h2
-theme.utils.typography.responsive.h3    // Responsive h3
-theme.utils.typography.responsive.body  // Responsive body text
-theme.utils.typography.responsive.caption // Responsive caption
+theme.utils.typography.responsive.h1; // Responsive h1
+theme.utils.typography.responsive.h2; // Responsive h2
+theme.utils.typography.responsive.h3; // Responsive h3
+theme.utils.typography.responsive.body; // Responsive body text
+theme.utils.typography.responsive.caption; // Responsive caption
 ```
 
 ### Animations
 
 ```tsx
-theme.animation.fast    // 0.15s ease-out
-theme.animation.normal  // 0.3s ease-out
-theme.animation.slow    // 0.5s ease-out
-theme.animation.bounce  // 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)
+theme.animation.fast; // 0.15s ease-out
+theme.animation.normal; // 0.3s ease-out
+theme.animation.slow; // 0.5s ease-out
+theme.animation.bounce; // 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)
 ```
 
 ## Pre-defined Component Styles
@@ -144,70 +145,70 @@ theme.animation.bounce  // 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)
 ### Card Styles
 
 ```tsx
-theme.styles.card
+theme.styles.card;
 // Provides: border radius, shadow, border, hover effects
 ```
 
 ### Button Styles
 
 ```tsx
-theme.styles.button
+theme.styles.button;
 // Provides: border radius, text transform, font weight, transitions
 ```
 
 ### Input Styles
 
 ```tsx
-theme.styles.input
+theme.styles.input;
 // Provides: border radius, focus states, hover effects
 ```
 
 ### Container Styles
 
 ```tsx
-theme.styles.container
+theme.styles.container;
 // Provides: responsive padding
 ```
 
 ### Section Styles
 
 ```tsx
-theme.styles.section
+theme.styles.section;
 // Provides: responsive vertical padding
 ```
 
 ### Hero Section Styles
 
 ```tsx
-theme.styles.hero
+theme.styles.hero;
 // Provides: gradient background, overlay effects, positioning
 ```
 
 ### Trust Signal Styles
 
 ```tsx
-theme.styles.trustSignal
+theme.styles.trustSignal;
 // Provides: flex layout, alignment, typography
 ```
 
 ### Step Number Styles
 
 ```tsx
-theme.styles.stepNumber(color)
+theme.styles.stepNumber(color);
 // Provides: circular badge with number, positioning
 ```
 
 ### Benefit Card Styles
 
 ```tsx
-theme.styles.benefitCard
+theme.styles.benefitCard;
 // Provides: white background, blue border, hover effects
 ```
 
 ### Icon Container Styles
 
 ```tsx
-theme.styles.iconContainer(color)
+theme.styles.iconContainer(color);
 // Provides: circular container with background color
 ```
 
@@ -216,28 +217,28 @@ theme.styles.iconContainer(color)
 ### Color with Opacity
 
 ```tsx
-theme.getColorWithOpacity('primary', 0.5)
+theme.getColorWithOpacity('primary', 0.5);
 // Returns: rgba(30, 64, 175, 0.5)
 ```
 
 ### Responsive Spacing
 
 ```tsx
-theme.getResponsiveSpacing('md')
+theme.getResponsiveSpacing('md');
 // Returns: theme.spacing(3) // 24px
 ```
 
 ### Shadow
 
 ```tsx
-theme.getShadow('lg')
+theme.getShadow('lg');
 // Returns: '0px 10px 15px rgba(0, 0, 0, 0.1), 0px 4px 6px rgba(0, 0, 0, 0.05)'
 ```
 
 ### Border Radius
 
 ```tsx
-theme.getBorderRadius('lg')
+theme.getBorderRadius('lg');
 // Returns: 16
 ```
 
@@ -247,14 +248,14 @@ theme.getBorderRadius('lg')
 
 ```tsx
 // ❌ Bad - Hardcoded values
-<Box sx={{ 
+<Box sx={{
   padding: '24px',
   backgroundColor: '#1e40af',
   borderRadius: '16px'
 }}>
 
 // ✅ Good - Theme values
-<Box sx={{ 
+<Box sx={{
   p: theme.spacing.md,
   bgcolor: theme.colors.primary.main,
   borderRadius: theme.radius.lg
@@ -307,10 +308,10 @@ theme.getBorderRadius('lg')
 <Box sx={{ p: 2, m: 3, gap: 1.5 }}>
 
 // ✅ Good - Consistent spacing
-<Box sx={{ 
-  p: theme.spacing.sm, 
-  m: theme.spacing.md, 
-  gap: theme.spacing.xs 
+<Box sx={{
+  p: theme.spacing.sm,
+  m: theme.spacing.md,
+  gap: theme.spacing.xs
 }}>
 ```
 
@@ -330,17 +331,21 @@ theme.getBorderRadius('lg')
 ```tsx
 // Before
 const OldComponent = () => (
-  <Box sx={{
-    backgroundColor: '#1e40af',
-    padding: '24px',
-    borderRadius: '16px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-  }}>
-    <Typography sx={{ 
-      fontSize: '1.5rem', 
-      fontWeight: 600,
-      color: '#ffffff'
-    }}>
+  <Box
+    sx={{
+      backgroundColor: '#1e40af',
+      padding: '24px',
+      borderRadius: '16px',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize: '1.5rem',
+        fontWeight: 600,
+        color: '#ffffff',
+      }}
+    >
       Title
     </Typography>
   </Box>
@@ -349,18 +354,22 @@ const OldComponent = () => (
 // After
 const NewComponent = () => {
   const theme = useTheme();
-  
+
   return (
-    <Box sx={{
-      bgcolor: theme.colors.primary.main,
-      p: theme.spacing.md,
-      borderRadius: theme.radius.lg,
-      boxShadow: theme.elevation.md,
-    }}>
-      <Typography sx={{
-        ...theme.utils.typography.responsive.h3,
-        color: theme.colors.primary.contrast
-      }}>
+    <Box
+      sx={{
+        bgcolor: theme.colors.primary.main,
+        p: theme.spacing.md,
+        borderRadius: theme.radius.lg,
+        boxShadow: theme.elevation.md,
+      }}
+    >
+      <Typography
+        sx={{
+          ...theme.utils.typography.responsive.h3,
+          color: theme.colors.primary.contrast,
+        }}
+      >
         Title
       </Typography>
     </Box>
@@ -370,7 +379,7 @@ const NewComponent = () => {
 
 ## Examples
 
-See `src/components/examples/ThemeExample.tsx` for a comprehensive example of how to use the theme system in practice.
+The theme system is used throughout the application components. Check existing components for usage patterns.
 
 ## Color Palette
 
@@ -401,7 +410,7 @@ When adding new components or styles:
 2. Use theme utilities instead of hardcoded values
 3. Follow the established naming conventions
 4. Update this documentation if adding new utilities
-5. Add examples to `ThemeExample.tsx` if creating new patterns
+5. Add examples to existing components if creating new patterns
 
 ## Troubleshooting
 
@@ -414,6 +423,5 @@ When adding new components or styles:
 
 ### Getting Help
 
-- Check the `ThemeExample.tsx` for usage patterns
 - Review existing components for theme usage examples
 - Consult this documentation for available utilities
