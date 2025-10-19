@@ -227,6 +227,7 @@
       "title": "Available Orders"
     },
     "orders": {
+      "amountBreakdown": "Amount Breakdown",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
       "canClaim": "🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(\n                  deliveryFee\n                )} for the delivery.",
       "cancelledNotice": "This order has been cancelled and is no longer available for delivery.",
@@ -730,11 +731,6 @@
     "of": "of",
     "orderNow": "Order Now",
     "orderStatus": {
-      "${currentStatus}": "Status",
-      "${order": {
-        "current_status}": "Status"
-      },
-      "${statusKey}": "Status",
       "assigned_to_agent": "Assigned to Agent",
       "cancelled": "Cancelled",
       "complete": "Complete",
@@ -746,6 +742,7 @@
       "in_transit": "In Transit",
       "out_for_delivery": "Out for Delivery",
       "pending": "Pending",
+      "pending_payment": "Pending Payment",
       "picked_up": "Picked Up",
       "preparing": "Preparing",
       "ready_for_pickup": "Ready for Pickup",
@@ -1035,6 +1032,7 @@
     "deliveryAddress": "Delivery Address",
     "deliveryAgent": "Delivery Agent",
     "deliveryFee": "Delivery Fee",
+    "fastDeliveryFee": "Fast Delivery Fee",
     "deliveryFees": "Delivery Fees",
     "deliveryTo": "Delivery to",
     "details": "Details",
@@ -1158,7 +1156,6 @@
     "securePayment": "Secure Payment",
     "selectAddress": "Select Delivery Address",
     "selectCancellationReason": "Please select a cancellation reason",
-    "specialInstructions": "Special Instructions",
     "specialInstructionsPlaceholder": "Add any special instructions for this order (optional)",
     "stats": {
       "active": "Active",
@@ -1179,7 +1176,6 @@
     "step3": "Your order will be transmitted to the merchant within 24 hours",
     "step4": "You will receive updates on your order status via email and in-app notifications",
     "subtotal": "Subtotal",
-    "items": "Items",
     "table": {
       "items": "Items"
     },

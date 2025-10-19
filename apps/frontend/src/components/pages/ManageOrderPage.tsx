@@ -807,7 +807,10 @@ const ManageOrderPage: React.FC = () => {
                                   variant="body2"
                                   color="text.secondary"
                                 >
-                                  {t('orders.fastDelivery', 'Fast Delivery')}
+                                  {t(
+                                    'orders.fastDelivery.title',
+                                    'Fast Delivery'
+                                  )}
                                 </Typography>
                                 <Box
                                   sx={{

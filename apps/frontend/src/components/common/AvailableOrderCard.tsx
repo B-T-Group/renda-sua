@@ -1,6 +1,7 @@
 import {
   Business as BusinessIcon,
   LocalShipping as DeliveryIcon,
+  FlashOn,
   LocationOn as LocationIcon,
   Person as PersonIcon,
 } from '@mui/icons-material';
@@ -139,14 +140,24 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
           <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
             Order #{order.order_number}
           </Typography>
-          <Chip
-            label={t(
-              `common.orderStatus.${order.current_status}`,
-              order.current_status
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip
+              label={t(
+                `common.orderStatus.${order.current_status}`,
+                order.current_status
+              )}
+              color={getStatusColor(order.current_status) as any}
+              size="small"
+            />
+            {order.requires_fast_delivery && (
+              <Chip
+                label={t('orders.fastDelivery.title', 'Fast Delivery')}
+                color="warning"
+                size="small"
+                icon={<FlashOn fontSize="small" />}
+              />
             )}
-            color={getStatusColor(order.current_status) as any}
-            size="small"
-          />
+          </Box>
         </Box>
 
         {/* Business and Client Info */}

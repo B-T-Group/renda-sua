@@ -1,5 +1,6 @@
 import {
   AccessTime as AccessTimeIcon,
+  FlashOn,
   History as HistoryIcon,
   LocalShipping as LocalShippingIcon,
   Person as PersonIcon,
@@ -159,13 +160,23 @@ const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
                 orderNumber: order.order_number,
               })}
             </Typography>
-            <Chip
-              label={t(
-                `common.orderStatus.${order.current_status || 'unknown'}`
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip
+                label={t(
+                  `common.orderStatus.${order.current_status || 'unknown'}`
+                )}
+                color={getStatusColor(order.current_status || 'unknown') as any}
+                size="small"
+              />
+              {order.requires_fast_delivery && (
+                <Chip
+                  label={t('orders.fastDelivery.title', 'Fast Delivery')}
+                  color="warning"
+                  size="small"
+                  icon={<FlashOn fontSize="small" />}
+                />
               )}
-              color={getStatusColor(order.current_status || 'unknown') as any}
-              size="small"
-            />
+            </Box>
           </Box>
 
           <Box mb={2}>

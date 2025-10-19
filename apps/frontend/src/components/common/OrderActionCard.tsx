@@ -1,4 +1,10 @@
-import { Assignment, CheckCircle, Info, Warning } from '@mui/icons-material';
+import {
+  Assignment,
+  CheckCircle,
+  FlashOn,
+  Info,
+  Warning,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -197,14 +203,24 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
             Order #{order.order_number}
           </Typography>
-          <Chip
-            label={t(
-              `common.orderStatus.${order.current_status}`,
-              order.current_status
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip
+              label={t(
+                `common.orderStatus.${order.current_status}`,
+                order.current_status
+              )}
+              color={getStatusColor(order.current_status) as any}
+              size="small"
+            />
+            {order.requires_fast_delivery && (
+              <Chip
+                label={t('orders.fastDelivery.title', 'Fast Delivery')}
+                color="warning"
+                size="small"
+                icon={<FlashOn fontSize="small" />}
+              />
             )}
-            color={getStatusColor(order.current_status) as any}
-            size="small"
-          />
+          </Box>
         </Box>
 
         {/* Action Required Alert */}
@@ -232,10 +248,35 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             <strong>Items:</strong> {order.order_items?.length || 0}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Total:</strong>{' '}
-            {formatCurrency(order.total_amount, order.currency)}
-          </Typography>
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              <strong>Amount Breakdown:</strong>
+            </Typography>
+            <Box sx={{ pl: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Subtotal: {formatCurrency(order.subtotal, order.currency)}
+              </Typography>
+              {order.delivery_fee > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  Delivery: {formatCurrency(order.delivery_fee, order.currency)}
+                </Typography>
+              )}
+              {order.requires_fast_delivery && order.fast_delivery_fee > 0 && (
+                <Typography variant="body2" color="warning.main">
+                  Fast Delivery:{' '}
+                  {formatCurrency(order.fast_delivery_fee, order.currency)}
+                </Typography>
+              )}
+              {order.tax_amount > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  Tax: {formatCurrency(order.tax_amount, order.currency)}
+                </Typography>
+              )}
+              <Typography variant="body2" fontWeight="bold" color="primary">
+                Total: {formatCurrency(order.total_amount, order.currency)}
+              </Typography>
+            </Box>
+          </Box>
         </Box>
 
         {/* Addresses */}

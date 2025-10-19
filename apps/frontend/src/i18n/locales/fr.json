@@ -227,6 +227,7 @@
       "title": "Available Orders"
     },
     "orders": {
+      "amountBreakdown": "Répartition des Montants",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
       "canClaim": "🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(\n                  deliveryFee\n                )} for the delivery.",
       "cancelledNotice": "This order has been cancelled and is no longer available for delivery.",
@@ -730,11 +731,6 @@
     "of": "de",
     "orderNow": "Commander maintenant",
     "orderStatus": {
-      "${currentStatus}": "Statut",
-      "${order": {
-        "current_status}": "Statut"
-      },
-      "${statusKey}": "Statut",
       "assigned_to_agent": "Assigné à un agent",
       "cancelled": "Annulé",
       "complete": "Terminé",
@@ -746,6 +742,7 @@
       "in_transit": "En transit",
       "out_for_delivery": "En livraison",
       "pending": "En attente",
+      "pending_payment": "Paiement en attente",
       "picked_up": "Récupéré",
       "preparing": "En préparation",
       "ready_for_pickup": "Prêt pour le ramassage",
@@ -1035,6 +1032,7 @@
     "deliveryAddress": "Delivery Address",
     "deliveryAgent": "Delivery Agent",
     "deliveryFee": "Frais de Livraison",
+    "fastDeliveryFee": "Frais de Livraison Rapide",
     "deliveryFees": "Frais de Livraison",
     "deliveryTo": "Delivery to",
     "details": "Details",

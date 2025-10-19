@@ -1,6 +1,7 @@
 import {
   ArrowForward,
   CheckCircle,
+  FlashOn,
   LocalShipping as LocalShippingIcon,
   LocationOn,
   Schedule as ScheduleIcon,
@@ -179,14 +180,27 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
             >
               {t('common.orderNumber', { orderNumber: order.order_number })}
             </Typography>
-            <Chip
-              label={t(`common.orderStatus.${currentStatus}`)}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              color={getStatusColor(currentStatus) as any}
-              size="small"
-              sx={{ fontWeight: 600 }}
-              icon={isCompleted ? <CheckCircle fontSize="small" /> : undefined}
-            />
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip
+                label={t(`common.orderStatus.${currentStatus}`)}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                color={getStatusColor(currentStatus) as any}
+                size="small"
+                sx={{ fontWeight: 600 }}
+                icon={
+                  isCompleted ? <CheckCircle fontSize="small" /> : undefined
+                }
+              />
+              {order.requires_fast_delivery && (
+                <Chip
+                  label={t('orders.fastDelivery.title', 'Fast Delivery')}
+                  color="warning"
+                  size="small"
+                  sx={{ fontWeight: 600 }}
+                  icon={<FlashOn fontSize="small" />}
+                />
+              )}
+            </Box>
           </Box>
 
           <Typography
@@ -353,23 +367,85 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: 'flex-end',
             flexWrap: 'wrap',
             gap: 2,
           }}
         >
-          <Box>
+          {/* Amount Breakdown */}
+          <Box sx={{ flex: 1, minWidth: 200 }}>
             <Typography variant="caption" color="text.secondary" gutterBottom>
-              {t('orders.totalAmount', 'Total Amount')}
+              {t('orders.amountBreakdown', 'Amount Breakdown')}
             </Typography>
-            <Typography
-              variant="h5"
-              color="primary"
-              fontWeight="bold"
-              sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' } }}
-            >
-              {formatCurrency(order.total_amount, order.currency)}
-            </Typography>
+            <Stack spacing={0.5}>
+              {/* Subtotal */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('orders.subtotal', 'Subtotal')}:
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  {formatCurrency(order.subtotal, order.currency)}
+                </Typography>
+              </Box>
+
+              {/* Delivery Fee */}
+              {order.delivery_fee > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.deliveryFee', 'Delivery Fee')}:
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatCurrency(order.delivery_fee, order.currency)}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Fast Delivery Fee */}
+              {order.requires_fast_delivery && order.fast_delivery_fee > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.fastDeliveryFee', 'Fast Delivery Fee')}:
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight="medium"
+                    color="warning.main"
+                  >
+                    {formatCurrency(order.fast_delivery_fee, order.currency)}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Tax Amount */}
+              {order.tax_amount > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('orders.tax', 'Tax')}:
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatCurrency(order.tax_amount, order.currency)}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Divider */}
+              <Divider sx={{ my: 0.5 }} />
+
+              {/* Total Amount */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body1" fontWeight="bold" color="primary">
+                  {t('orders.totalAmount', 'Total')}:
+                </Typography>
+                <Typography
+                  variant="h6"
+                  color="primary"
+                  fontWeight="bold"
+                  sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                >
+                  {formatCurrency(order.total_amount, order.currency)}
+                </Typography>
+              </Box>
+            </Stack>
           </Box>
 
           <Button
