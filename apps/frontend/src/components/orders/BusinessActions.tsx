@@ -6,8 +6,12 @@ import {
 import { Box, Button, CircularProgress } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBackendOrders } from '../../hooks/useBackendOrders';
+import {
+  ConfirmOrderData,
+  useBackendOrders,
+} from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 
 interface BusinessActionsProps {
@@ -36,6 +40,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   } = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -53,10 +58,14 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     onShowNotification?.(errorMessage, 'error');
   };
 
-  const handleConfirmOrder = async () => {
+  const handleConfirmOrder = () => {
+    setConfirmModalOpen(true);
+  };
+
+  const handleConfirmOrderSuccess = async (data: ConfirmOrderData) => {
     setLoading(true);
     try {
-      await confirmOrder({ orderId: order.id });
+      await confirmOrder(data);
       onShowNotification?.(
         t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
         'success'
@@ -315,6 +324,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         persona="business"
         onSuccess={handleCancelSuccess}
         onError={handleCancelError}
+      />
+
+      {/* Confirm Order Modal */}
+      <ConfirmOrderModal
+        open={confirmModalOpen}
+        order={order}
+        onClose={() => setConfirmModalOpen(false)}
+        onConfirm={handleConfirmOrderSuccess}
+        loading={loading}
       />
     </>
   );

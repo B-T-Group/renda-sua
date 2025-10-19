@@ -21,6 +21,7 @@ import { Public } from '../auth/public.decorator';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
+  ConfirmOrderRequest,
   GetOrderRequest,
   OrderStatusChangeRequest,
 } from './orders.service';
@@ -134,7 +135,7 @@ export class OrdersController {
   }
 
   @Post('confirm')
-  async confirmOrder(@Body() request: OrderStatusChangeRequest) {
+  async confirmOrder(@Body() request: ConfirmOrderRequest) {
     return this.ordersService.confirmOrder(request);
   }
 

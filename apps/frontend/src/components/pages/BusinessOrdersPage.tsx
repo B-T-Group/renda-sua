@@ -57,7 +57,6 @@ const BusinessOrdersPage: React.FC = () => {
     refreshOrders,
   } = useBusinessOrders(profile?.business?.id);
   const {
-    confirmOrder,
     startPreparing,
     completePreparation,
     cancelOrder,
@@ -91,9 +90,6 @@ const BusinessOrdersPage: React.FC = () => {
       let response;
 
       switch (newStatus) {
-        case 'confirmed':
-          response = await confirmOrder({ orderId, notes });
-          break;
         case 'preparing':
           response = await startPreparing({ orderId, notes });
           break;

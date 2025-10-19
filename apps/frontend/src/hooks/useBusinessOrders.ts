@@ -79,6 +79,25 @@ export interface BusinessOrder {
     dimensions: string | null;
     special_instructions: string | null;
   }>;
+  delivery_time_windows?: Array<{
+    id: string;
+    slot_id: string;
+    preferred_date: string;
+    time_slot_start: string;
+    time_slot_end: string;
+    is_confirmed: boolean;
+    special_instructions?: string;
+    confirmed_at?: string;
+    confirmed_by?: string;
+    slot?: {
+      id: string;
+      slot_name: string;
+      slot_type: 'standard' | 'fast';
+      start_time: string;
+      end_time: string;
+    };
+  }>;
+  delivery_time_window_id?: string;
 }
 
 export interface OrderFilters {

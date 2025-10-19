@@ -136,6 +136,25 @@ export const GET_ORDERS = gql`
         status
         notes
       }
+      delivery_time_windows {
+        id
+        slot_id
+        preferred_date
+        time_slot_start
+        time_slot_end
+        is_confirmed
+        special_instructions
+        confirmed_at
+        confirmed_by
+        slot {
+          id
+          slot_name
+          slot_type
+          start_time
+          end_time
+        }
+      }
+      delivery_time_window_id
     }
   }
 `;

@@ -44,6 +44,17 @@ export interface OrderStatusChangeRequest {
   notes?: string;
 }
 
+export interface ConfirmOrderData {
+  orderId: string;
+  notes?: string;
+  delivery_time_window_id?: string;
+  delivery_window_details?: {
+    slot_id: string;
+    preferred_date: string;
+    special_instructions?: string;
+  };
+}
+
 export interface GetOrderRequest {
   orderId: string;
 }
@@ -159,7 +170,7 @@ export const useBackendOrders = () => {
 
   // Business Order Management APIs
   const confirmOrder = async (
-    request: OrderStatusChangeRequest
+    request: ConfirmOrderData
   ): Promise<OrderStatusChangeResponse> => {
     if (!apiClient) {
       throw new Error(

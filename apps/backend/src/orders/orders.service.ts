@@ -29,6 +29,18 @@ export interface OrderStatusChangeRequest {
   notes?: string;
 }
 
+export interface ConfirmOrderRequest {
+  orderId: string;
+  notes?: string;
+  // Optional: either provide existing window ID or create new window
+  delivery_time_window_id?: string;
+  delivery_window_details?: {
+    slot_id: string;
+    preferred_date: string;
+    special_instructions?: string;
+  };
+}
+
 export interface GetOrderRequest {
   orderId: string;
   phone_number?: string;
@@ -247,7 +259,161 @@ export class OrdersService {
     private readonly deliveryWindowsService: DeliveryWindowsService
   ) {}
 
-  async confirmOrder(request: OrderStatusChangeRequest) {
+  private async confirmExistingDeliveryWindow(
+    windowId: string,
+    orderId: string,
+    confirmedBy: string
+  ): Promise<string> {
+    // Verify the delivery window exists and belongs to this order
+    const query = `
+      query GetDeliveryWindow($windowId: uuid!, $orderId: uuid!) {
+        delivery_time_windows_by_pk(id: $windowId) {
+          id
+          order_id
+          is_confirmed
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      windowId,
+      orderId,
+    });
+
+    const window = result.delivery_time_windows_by_pk;
+    if (!window) {
+      throw new HttpException(
+        'Delivery time window not found',
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    if (window.order_id !== orderId) {
+      throw new HttpException(
+        'Delivery time window does not belong to this order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (window.is_confirmed) {
+      throw new HttpException(
+        'Delivery time window is already confirmed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Update the delivery window to confirmed
+    const updateQuery = `
+      mutation UpdateDeliveryWindow($windowId: uuid!, $confirmedBy: uuid!) {
+        update_delivery_time_windows_by_pk(
+          pk_columns: { id: $windowId }
+          _set: {
+            is_confirmed: true
+            confirmed_at: "now()"
+            confirmed_by: $confirmedBy
+          }
+        ) {
+          id
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeQuery(updateQuery, {
+      windowId,
+      confirmedBy,
+    });
+
+    return windowId;
+  }
+
+  private async createConfirmedDeliveryWindow(
+    details: {
+      slot_id: string;
+      preferred_date: string;
+      special_instructions?: string;
+    },
+    orderId: string,
+    confirmedBy: string
+  ): Promise<string> {
+    // First, get the slot details to extract time_slot_start and time_slot_end
+    const slotQuery = `
+      query GetSlot($slotId: uuid!) {
+        delivery_time_slots_by_pk(id: $slotId) {
+          id
+          start_time
+          end_time
+          is_active
+        }
+      }
+    `;
+
+    const slotResult = await this.hasuraSystemService.executeQuery(slotQuery, {
+      slotId: details.slot_id,
+    });
+
+    const slot = slotResult.delivery_time_slots_by_pk;
+    if (!slot) {
+      throw new HttpException(
+        'Delivery time slot not found',
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    if (!slot.is_active) {
+      throw new HttpException(
+        'Delivery time slot is not active',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Create the new delivery window
+    const createQuery = `
+      mutation CreateDeliveryWindow($data: delivery_time_windows_insert_input!) {
+        insert_delivery_time_windows_one(object: $data) {
+          id
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(createQuery, {
+      data: {
+        order_id: orderId,
+        slot_id: details.slot_id,
+        preferred_date: details.preferred_date,
+        time_slot_start: slot.start_time,
+        time_slot_end: slot.end_time,
+        is_confirmed: true,
+        confirmed_at: 'now()',
+        confirmed_by: confirmedBy,
+        special_instructions: details.special_instructions,
+      },
+    });
+
+    return result.insert_delivery_time_windows_one.id;
+  }
+
+  private async updateOrderDeliveryWindow(
+    orderId: string,
+    windowId: string
+  ): Promise<void> {
+    const query = `
+      mutation UpdateOrderDeliveryWindow($orderId: uuid!, $windowId: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_time_window_id: $windowId }
+        ) {
+          id
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeQuery(query, {
+      orderId,
+      windowId,
+    });
+  }
+
+  async confirmOrder(request: ConfirmOrderRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business)
       throw new HttpException(
@@ -267,10 +433,55 @@ export class OrdersService {
         `Cannot confirm order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+
+    // Validate that delivery window is provided
+    if (!request.delivery_time_window_id && !request.delivery_window_details) {
+      throw new HttpException(
+        'Delivery time window must be provided to confirm order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Validate that only one option is provided
+    if (request.delivery_time_window_id && request.delivery_window_details) {
+      throw new HttpException(
+        'Cannot provide both delivery_time_window_id and delivery_window_details',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    let confirmedWindowId: string;
+
+    if (request.delivery_time_window_id) {
+      // Confirm existing delivery window
+      confirmedWindowId = await this.confirmExistingDeliveryWindow(
+        request.delivery_time_window_id,
+        request.orderId,
+        user.id
+      );
+    } else if (request.delivery_window_details) {
+      // Create new confirmed delivery window
+      confirmedWindowId = await this.createConfirmedDeliveryWindow(
+        request.delivery_window_details,
+        request.orderId,
+        user.id
+      );
+    } else {
+      throw new HttpException(
+        'No delivery window provided',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Update order with confirmed delivery window and status
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed'
     );
+
+    // Update order's delivery_time_window_id
+    await this.updateOrderDeliveryWindow(request.orderId, confirmedWindowId);
+
     await this.createStatusHistoryEntry(
       request.orderId,
       'confirmed',
@@ -1232,6 +1443,25 @@ export class OrdersService {
             status
             notes
           }
+          delivery_time_windows {
+            id
+            slot_id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            special_instructions
+            confirmed_at
+            confirmed_by
+            slot {
+              id
+              slot_name
+              slot_type
+              start_time
+              end_time
+            }
+          }
+          delivery_time_window_id
         }
       }
 
