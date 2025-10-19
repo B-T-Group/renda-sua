@@ -90,6 +90,15 @@ const Header: React.FC = () => {
       return [{ label: 'Store', path: '/items', icon: <Assignment /> }];
     }
 
+    // For authenticated users, show different navigation based on user type
+    if (userType === 'client') {
+      return [
+        { label: 'Items', path: '/items', icon: <Assignment /> },
+        { label: 'Orders', path: '/orders', icon: <Assignment /> },
+      ];
+    }
+
+    // For business and agent users, show dashboard
     return [
       { label: 'Dashboard', path: '/app', icon: <Dashboard /> },
       { label: 'Orders', path: '/orders', icon: <Assignment /> },

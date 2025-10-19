@@ -30,6 +30,7 @@ import TermsOfServicePage from '../components/pages/TermsOfServicePage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
+import ItemsPage from '../components/pages/ItemsPage';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
@@ -38,7 +39,6 @@ import OpenOrdersPage from '../components/pages/OpenOrdersPage';
 import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
-import PublicItemsPage from '../components/pages/PublicItemsPage';
 import SupportPage from '../components/pages/SupportPage';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
@@ -99,7 +99,7 @@ function App() {
             <Route path="/" element={<LandingPage />} />
 
             {/* Public routes */}
-            <Route path="/items" element={<PublicItemsPage />} />
+            <Route path="/items" element={<ItemsPage />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/about" element={<AboutUsPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />

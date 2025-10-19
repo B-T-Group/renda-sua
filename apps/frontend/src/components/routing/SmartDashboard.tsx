@@ -1,9 +1,9 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
 import AgentDashboard from '../pages/AgentDashboard';
 import BusinessDashboard from '../pages/BusinessDashboard';
-import Dashboard from '../pages/Dashboard';
 
 const SmartDashboard: React.FC = () => {
   const { profile, loading } = useUserProfileContext();
@@ -28,11 +28,11 @@ const SmartDashboard: React.FC = () => {
   }
 
   if (profile?.client) {
-    return <Dashboard />;
+    return <Navigate to="/items" replace />;
   }
 
-  // Fallback to client dashboard if no specific type is found
-  return <Dashboard />;
+  // Fallback to agent dashboard if no specific type is found
+  return <AgentDashboard />;
 };
 
 export default SmartDashboard;
