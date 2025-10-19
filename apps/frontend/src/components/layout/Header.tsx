@@ -1,5 +1,12 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Description, Menu, Person } from '@mui/icons-material';
+import {
+  Assignment,
+  Dashboard,
+  Description,
+  Menu,
+  MoreVert,
+  Person,
+} from '@mui/icons-material';
 import {
   AppBar,
   Avatar,
@@ -42,11 +49,12 @@ const Header: React.FC = () => {
   const location = useLocation();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // State for mobile drawer and user menu
+  // State for mobile drawer, user menu, and submenu
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(
     null
   );
+  const [submenuAnchor, setSubmenuAnchor] = useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -60,50 +68,65 @@ const Header: React.FC = () => {
     setUserMenuAnchor(null);
   };
 
+  const handleSubmenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setSubmenuAnchor(event.currentTarget);
+  };
+
+  const handleSubmenuClose = () => {
+    setSubmenuAnchor(null);
+  };
+
   const isActiveRoute = (path: string) => {
     return location.pathname === path;
   };
 
-  const getNavigationItems = () => {
+  const getMainNavigationItems = () => {
     if (!isAuthenticated) {
-      return [
-        { label: 'Store', path: '/items' },
-        { label: 'Support', path: '/support' },
-      ];
+      return [{ label: 'Store', path: '/items', icon: <Assignment /> }];
     }
 
-    const baseItems = [
-      { label: 'Home', path: '/' },
-      { label: 'Dashboard', path: '/app' },
+    return [
+      { label: 'Dashboard', path: '/app', icon: <Dashboard /> },
+      { label: 'Orders', path: '/orders', icon: <Assignment /> },
     ];
+  };
+
+  const getSubmenuItems = () => {
+    if (!isAuthenticated) {
+      return [];
+    }
+
+    const submenuItems = [];
 
     // Add role-specific navigation
     if (userType === 'business') {
-      baseItems.push(
-        { label: 'Orders', path: '/orders' },
-        { label: 'Items', path: '/business/items' },
-        { label: 'Locations', path: '/business/locations' },
-        { label: 'Documents', path: '/documents' },
-        { label: 'Messages', path: '/messages' }
+      submenuItems.push(
+        { label: 'Items', path: '/business/items', icon: <Assignment /> },
+        {
+          label: 'Locations',
+          path: '/business/locations',
+          icon: <Assignment />,
+        },
+        { label: 'Documents', path: '/documents', icon: <Description /> },
+        { label: 'Messages', path: '/messages', icon: <Assignment /> }
       );
     } else if (userType === 'client') {
-      baseItems.push(
-        { label: 'Orders', path: '/orders' },
-        { label: 'Documents', path: '/documents' },
-        { label: 'Messages', path: '/messages' }
+      submenuItems.push(
+        { label: 'Documents', path: '/documents', icon: <Description /> },
+        { label: 'Messages', path: '/messages', icon: <Assignment /> }
       );
     } else if (userType === 'agent') {
-      baseItems.push(
-        { label: 'My Orders', path: '/orders' },
-        { label: 'Documents', path: '/documents' },
-        { label: 'Messages', path: '/messages' }
+      submenuItems.push(
+        { label: 'Documents', path: '/documents', icon: <Description /> },
+        { label: 'Messages', path: '/messages', icon: <Assignment /> }
       );
     }
 
-    // Always add Support link for authenticated users
-    baseItems.push({ label: 'Support', path: '/support' });
+    return submenuItems;
+  };
 
-    return baseItems;
+  const getAllNavigationItems = () => {
+    return [...getMainNavigationItems(), ...getSubmenuItems()];
   };
 
   const getUserInitials = () => {
@@ -134,10 +157,15 @@ const Header: React.FC = () => {
     );
   };
 
-  const NavigationButton = ({ item }: { item: any }) => (
+  const NavigationButton = ({
+    item,
+  }: {
+    item: { label: string; path: string; icon: React.ReactElement };
+  }) => (
     <Button
       component={RouterLink}
       to={item.path}
+      startIcon={item.icon}
       sx={{
         color: isActiveRoute(item.path) ? '#000' : '#1d1d1f',
         textTransform: 'none',
@@ -198,7 +226,7 @@ const Header: React.FC = () => {
       </Box>
 
       <List sx={{ pt: 1 }}>
-        {getNavigationItems().map((item) => (
+        {getAllNavigationItems().map((item) => (
           <ListItem key={item.path} disablePadding>
             <ListItemButton
               component={RouterLink}
@@ -224,7 +252,7 @@ const Header: React.FC = () => {
                   minWidth: 40,
                 }}
               >
-                {/* Icon placeholder - can be customized per item if needed */}
+                {item.icon}
               </ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -359,9 +387,36 @@ const Header: React.FC = () => {
                   transform: 'translateX(-50%)',
                 }}
               >
-                {getNavigationItems().map((item) => (
+                {getMainNavigationItems().map((item) => (
                   <NavigationButton key={item.path} item={item} />
                 ))}
+
+                {/* Submenu Button */}
+                {getSubmenuItems().length > 0 && (
+                  <Button
+                    onClick={handleSubmenuOpen}
+                    startIcon={<MoreVert />}
+                    sx={{
+                      color: '#1d1d1f',
+                      textTransform: 'none',
+                      fontWeight: 400,
+                      fontSize: '0.875rem',
+                      fontFamily:
+                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                      px: 2,
+                      py: 1,
+                      minWidth: 'auto',
+                      borderRadius: 0,
+                      transition: 'color 0.2s ease-in-out',
+                      '&:hover': {
+                        color: '#000',
+                        backgroundColor: 'transparent',
+                      },
+                    }}
+                  >
+                    More
+                  </Button>
+                )}
               </Stack>
             )}
 
@@ -503,6 +558,34 @@ const Header: React.FC = () => {
                     <MenuItem onClick={handleUserMenuClose}>
                       <LogoutButton />
                     </MenuItem>
+                  </MenuComponent>
+
+                  {/* Submenu */}
+                  <MenuComponent
+                    anchorEl={submenuAnchor}
+                    open={Boolean(submenuAnchor)}
+                    onClose={handleSubmenuClose}
+                    PaperProps={{
+                      sx: {
+                        mt: 1,
+                        minWidth: 200,
+                        borderRadius: 2,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                      },
+                    }}
+                  >
+                    {getSubmenuItems().map((item) => (
+                      <MenuItem
+                        key={item.path}
+                        component={RouterLink}
+                        to={item.path}
+                        onClick={handleSubmenuClose}
+                        sx={{ py: 1.5 }}
+                      >
+                        <ListItemIcon>{item.icon}</ListItemIcon>
+                        {item.label}
+                      </MenuItem>
+                    ))}
                   </MenuComponent>
                 </>
               ) : (

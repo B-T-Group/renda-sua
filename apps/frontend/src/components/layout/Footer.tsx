@@ -87,6 +87,15 @@ const Footer: React.FC = () => {
                   >
                     {t('footer.faq', 'FAQ')}
                   </Typography>
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
+                    to="/support"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.support', 'Support')}
+                  </Typography>
                   <Typography variant="body2" color="grey.400">
                     {t('footer.helpCenter')}
                   </Typography>
