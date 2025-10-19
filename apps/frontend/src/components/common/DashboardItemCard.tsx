@@ -24,6 +24,7 @@ interface DashboardItemCardProps {
   item: InventoryItem;
   formatCurrency: (amount: number, currency?: string) => string;
   onOrderClick: (item: InventoryItem) => void;
+  onAddToCart?: (item: InventoryItem) => void;
   estimatedDistance?: string | null;
   estimatedDuration?: string | null;
   distanceLoading?: boolean;
@@ -32,13 +33,17 @@ interface DashboardItemCardProps {
   isPublicView?: boolean;
   loginButtonText?: string;
   orderButtonText?: string;
-  canOrder?: boolean; // NEW: Controls if user can place orders
+  addToCartButtonText?: string;
+  buyNowButtonText?: string;
+  canOrder?: boolean; // Controls if user can place orders
+  showCartButtons?: boolean; // NEW: Controls if cart buttons should be shown
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   item: inventory,
   formatCurrency,
   onOrderClick,
+  onAddToCart,
   estimatedDistance,
   estimatedDuration,
   distanceLoading,
@@ -46,7 +51,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   isPublicView = false,
   loginButtonText = 'Login to Order',
   orderButtonText = 'Order Now',
+  addToCartButtonText = 'Add to Cart',
+  buyNowButtonText = 'Buy Now',
   canOrder = true,
+  showCartButtons = false,
 }) => {
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
@@ -397,7 +405,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           )}
         </CardContent>
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <CardActions sx={{ p: 1.5, pt: 0, justifyContent: 'center' }}>
           {inventory.computed_available_quantity === 0 ? (
             <Button
@@ -437,6 +445,45 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {loginButtonText}
             </Button>
+          ) : showCartButtons && onAddToCart ? (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                width: '100%',
+              }}
+            >
+              <Button
+                variant="outlined"
+                startIcon={<ShoppingCart />}
+                onClick={() => onAddToCart(inventory)}
+                size="small"
+                fullWidth
+                sx={{
+                  minHeight: '36px',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                }}
+              >
+                {addToCartButtonText}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => onOrderClick(inventory)}
+                size="small"
+                fullWidth
+                sx={{
+                  minHeight: '36px',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                }}
+              >
+                {buyNowButtonText}
+              </Button>
+            </Box>
           ) : (
             <Button
               variant="contained"

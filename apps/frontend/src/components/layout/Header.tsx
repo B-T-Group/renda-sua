@@ -6,10 +6,12 @@ import {
   Menu,
   MoreVert,
   Person,
+  ShoppingCart,
 } from '@mui/icons-material';
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
   Button,
   Chip,
@@ -32,7 +34,8 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
@@ -44,9 +47,11 @@ import UserBalanceSummary from '../common/UserBalanceSummary';
 const Header: React.FC = () => {
   const { isAuthenticated, user } = useAuth0();
   const { userType, profile } = useUserProfileContext();
+  const { getCartItemCount } = useCart();
   const { t } = useTranslation();
   const theme = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // State for mobile drawer, user menu, and submenu
@@ -436,6 +441,25 @@ const Header: React.FC = () => {
 
               {/* Language Switcher */}
               <LanguageSwitcher />
+
+              {/* Cart Icon - Only show for clients */}
+              {isAuthenticated && userType === 'client' && (
+                <IconButton
+                  onClick={() => navigate('/cart')}
+                  size="small"
+                  sx={{
+                    color: '#1d1d1f',
+                    padding: '6px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                    },
+                  }}
+                >
+                  <Badge badgeContent={getCartItemCount()} color="primary">
+                    <ShoppingCart />
+                  </Badge>
+                </IconButton>
+              )}
 
               {isAuthenticated ? (
                 <>

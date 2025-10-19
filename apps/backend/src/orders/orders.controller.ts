@@ -41,6 +41,74 @@ export class OrdersController {
   ) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create order with multiple items' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              business_inventory_id: { type: 'string', format: 'uuid' },
+              quantity: { type: 'number', minimum: 1 },
+            },
+            required: ['business_inventory_id', 'quantity'],
+          },
+        },
+        delivery_address_id: { type: 'string', format: 'uuid' },
+        special_instructions: { type: 'string' },
+        verified_agent_delivery: { type: 'boolean' },
+        phone_number: { type: 'string' },
+        requires_fast_delivery: { type: 'boolean' },
+        fast_delivery_fee: { type: 'number' },
+        delivery_window: {
+          type: 'object',
+          properties: {
+            slot_id: { type: 'string' },
+            preferred_date: { type: 'string', format: 'date' },
+            special_instructions: { type: 'string' },
+          },
+        },
+      },
+      required: ['items', 'delivery_address_id'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Order created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        order: { type: 'object' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid data or insufficient stock',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User or address not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
   async createOrder(@Body() orderData: CreateOrderRequest) {
     try {
       // Validate required fields

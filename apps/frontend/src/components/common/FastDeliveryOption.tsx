@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { FastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 
 interface FastDeliveryOptionProps {
-  config: FastDeliveryConfig;
+  config: FastDeliveryConfig | null;
   selected: boolean;
   onToggle: (enabled: boolean) => void;
   formatCurrency: (amount: number) => string;
@@ -67,7 +67,7 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
     return dayMap[day] || day;
   };
 
-  if (!config.enabled) {
+  if (!config || !config.enabled) {
     return null;
   }
 

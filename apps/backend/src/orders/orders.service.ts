@@ -15,7 +15,7 @@ import {
 } from '../generated/graphql';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
+import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import {
@@ -2608,10 +2608,15 @@ export class OrdersService {
       throw new Error('Delivery address not found');
     }
 
-    // Get the business inventory item
+    // Validate that we have items
+    if (!orderData.items || orderData.items.length === 0) {
+      throw new Error('No items provided for order');
+    }
+
+    // Get all business inventory items
     const getBusinessInventoryQuery = `
-      query GetBusinessInventory($businessInventoryId: uuid!) {
-        business_inventory_by_pk(id: $businessInventoryId) {
+      query GetBusinessInventory($businessInventoryIds: [uuid!]!) {
+        business_inventory(where: { id: { _in: $businessInventoryIds } }) {
           id
           computed_available_quantity
           selling_price
@@ -2636,45 +2641,83 @@ export class OrdersService {
             name
             description
             currency
+            weight
           }
         }
       }
     `;
 
+    const businessInventoryIds = orderData.items.map(
+      (item: OrderItem) => item.business_inventory_id
+    );
     const businessInventoryResult = await this.hasuraSystemService.executeQuery(
       getBusinessInventoryQuery,
       {
-        businessInventoryId: orderData.item.business_inventory_id,
+        businessInventoryIds: businessInventoryIds,
       }
     );
 
-    if (!businessInventoryResult.business_inventory_by_pk) {
+    if (
+      !businessInventoryResult.business_inventory ||
+      businessInventoryResult.business_inventory.length === 0
+    ) {
       throw new Error('No valid business inventory found');
     }
 
-    const businessInventory =
-      businessInventoryResult.business_inventory_by_pk as any;
+    const businessInventories =
+      businessInventoryResult.business_inventory as any[];
 
-    if (!businessInventory.is_active) {
-      throw new Error(
-        `Item ${businessInventory.item.name} is not currently available`
-      );
+    // Validate all items are from the same business
+    const businessIds = [
+      ...new Set(
+        businessInventories.map((inv) => inv.business_location.business_id)
+      ),
+    ];
+    if (businessIds.length > 1) {
+      throw new Error('All items must be from the same business');
     }
 
-    if (
-      orderData.item.quantity > businessInventory.computed_available_quantity
-    ) {
-      throw new Error(
-        `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${orderData.item.quantity}`
+    // Validate all items are active and have sufficient quantity
+    for (let i = 0; i < orderData.items.length; i++) {
+      const item = orderData.items[i];
+      const businessInventory = businessInventories.find(
+        (inv) => inv.id === item.business_inventory_id
       );
+
+      if (!businessInventory) {
+        throw new Error(
+          `Business inventory not found for item ${item.business_inventory_id}`
+        );
+      }
+
+      if (!businessInventory.is_active) {
+        throw new Error(
+          `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      if (item.quantity > businessInventory.computed_available_quantity) {
+        throw new Error(
+          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${item.quantity}`
+        );
+      }
     }
 
-    const currency = businessInventory.item.currency;
+    // Use the first item's currency (all items should have the same currency from same business)
+    const currency = businessInventories[0].item.currency;
 
-    // Calculate delivery fee using the new method
+    // Calculate total weight for delivery fee calculation
+    const totalWeight = businessInventories.reduce(
+      (sum, inv, idx) =>
+        sum + (inv.item.weight || 0) * orderData.items[idx].quantity,
+      0
+    );
+
+    // Calculate delivery fee using the first item's business inventory ID and total weight
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
-      orderData.item.business_inventory_id,
-      orderData.delivery_address?.id
+      orderData.items[0].business_inventory_id,
+      orderData.delivery_address?.id,
+      totalWeight
     );
 
     // Ensure user has an account for the currency (creates one if it doesn't exist)
@@ -2685,9 +2728,12 @@ export class OrdersService {
 
     const orderNumber = this.createOrderNumber();
 
-    // Calculate order amounts
-    const totalAmount =
-      businessInventory.selling_price * orderData.item.quantity;
+    // Calculate order amounts for all items
+    const totalAmount = businessInventories.reduce(
+      (sum, inv, idx) =>
+        sum + inv.selling_price * orderData.items[idx].quantity,
+      0
+    );
     const deliveryFee = deliveryFeeInfo.deliveryFee;
 
     // Get fast delivery fee from supported_country_states if requires_fast_delivery is true
@@ -2823,12 +2869,12 @@ export class OrdersService {
       );
     }
 
-    const business_location_id = businessInventory.business_location_id;
+    const business_location_id = businessInventories[0].business_location_id;
     const delivery_address_id = address.id;
     const subtotal = totalAmount;
     const tax_amount = 0;
     const current_status = 'pending_payment';
-    const business_id = businessInventory.business_location.business_id;
+    const business_id = businessInventories[0].business_location.business_id;
     const payment_method = 'online';
     const payment_status = 'pending';
     const special_instructions = orderData.special_instructions || '';
@@ -2927,18 +2973,21 @@ export class OrdersService {
       }
     `;
 
-    // Prepare order items data
-    const orderItemsData = [
-      {
-        business_inventory_id: orderData.item.business_inventory_id,
+    // Prepare order items data for all items
+    const orderItemsData = orderData.items.map((item: OrderItem) => {
+      const businessInventory = businessInventories.find(
+        (inv) => inv.id === item.business_inventory_id
+      );
+      return {
+        business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,
         item_name: businessInventory.item.name,
         item_description: businessInventory.item.description,
-        quantity: orderData.item.quantity,
+        quantity: item.quantity,
         unit_price: businessInventory.selling_price,
-        total_price: totalAmount,
-      },
-    ];
+        total_price: businessInventory.selling_price * item.quantity,
+      };
+    });
 
     // Create the order
     const orderResult = await this.hasuraSystemService.executeMutation(
@@ -3414,7 +3463,8 @@ export class OrdersService {
    */
   async calculateItemDeliveryFee(
     itemId: string,
-    addressId?: string
+    addressId?: string,
+    totalWeight?: number
   ): Promise<{
     deliveryFee: number;
     distance?: number;

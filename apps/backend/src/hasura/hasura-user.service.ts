@@ -20,7 +20,7 @@ export interface OrderItem {
 }
 
 export interface CreateOrderRequest {
-  item: OrderItem;
+  items: OrderItem[];
   special_instructions?: string;
   verified_agent_delivery?: boolean;
   delivery_address_id: string;

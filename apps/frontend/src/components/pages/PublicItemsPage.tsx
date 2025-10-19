@@ -34,6 +34,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   InventoryItem,
@@ -96,6 +97,7 @@ const PublicItemsPage: React.FC = () => {
   const theme = useTheme();
   const { isAuthenticated, loginWithRedirect } = useAuth0();
   const { profile } = useUserProfileContext();
+  const { addToCart } = useCart();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -208,6 +210,27 @@ const PublicItemsPage: React.FC = () => {
     }
     // For authenticated users, redirect to place order page for this specific item
     navigate(`/items/${item.id}/place_order`);
+  };
+
+  const handleAddToCart = (item: InventoryItem) => {
+    if (!isAuthenticated) {
+      handleLogin();
+      return;
+    }
+
+    addToCart({
+      inventoryItemId: item.id,
+      quantity: 1,
+      businessId: item.business_location.business_id,
+      businessLocationId: item.business_location_id,
+      itemData: {
+        name: item.item.name,
+        price: item.selling_price,
+        currency: item.item.currency,
+        imageUrl: item.item.item_images?.[0]?.image_url,
+        weight: item.item.weight,
+      },
+    });
   };
 
   // Format currency helper
@@ -811,14 +834,18 @@ const PublicItemsPage: React.FC = () => {
                 item={inventoryItem}
                 formatCurrency={formatCurrency}
                 onOrderClick={handleOrderClick}
+                onAddToCart={handleAddToCart}
                 estimatedDistance={null}
                 estimatedDuration={null}
                 distanceLoading={false}
                 distanceError={null}
                 isPublicView={!isAuthenticated}
                 canOrder={!isAuthenticated || isClient}
+                showCartButtons={isAuthenticated && isClient}
                 loginButtonText={t('public.items.login', 'Sign In to Order')}
                 orderButtonText={t('common.orderNow', 'Order Now')}
+                addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                buyNowButtonText={t('cart.buyNow', 'Buy Now')}
               />
             ))}
           </Box>

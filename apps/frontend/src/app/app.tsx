@@ -19,7 +19,9 @@ import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
+import CartPage from '../components/pages/CartPage';
 import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
+import CheckoutPage from '../components/pages/CheckoutPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
@@ -102,6 +104,26 @@ function App() {
             <Route path="/about" element={<AboutUsPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsOfServicePage />} />
+
+            {/* Cart route */}
+            <Route
+              path="/cart"
+              element={
+                <ProtectedRoute>
+                  <CartPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Checkout route */}
+            <Route
+              path="/checkout"
+              element={
+                <ProtectedRoute>
+                  <CheckoutPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Place Order route */}
             <Route

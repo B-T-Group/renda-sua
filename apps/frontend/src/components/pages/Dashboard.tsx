@@ -9,7 +9,9 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   useBackendOrders,
@@ -27,8 +29,10 @@ import StatusBadge from '../common/StatusBadge';
 import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 
 const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth0();
   const { profile } = useUserProfileContext();
+  const { addToCart } = useCart();
   const navigate = useNavigate();
   const {
     inventoryItems,
@@ -65,7 +69,7 @@ const Dashboard: React.FC = () => {
     if (destinationAddressIds.length > 0) {
       fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
     }
-  }, [destinationAddressIds]);
+  }, [destinationAddressIds, fetchDistanceMatrix]);
 
   // Initialize filtered items when inventory items change
   React.useEffect(() => {
@@ -103,7 +107,7 @@ const Dashboard: React.FC = () => {
   }, [orders, profile?.user_type_id]);
 
   // Helper to get distance/duration for an item
-  const getItemDistanceInfo = (item: any) => {
+  const getItemDistanceInfo = (item: InventoryItem) => {
     if (!distanceData || !item.business_location?.address?.id) return null;
     const idx = distanceData.destination_ids.indexOf(
       item.business_location.address.id
@@ -117,13 +121,24 @@ const Dashboard: React.FC = () => {
     };
   };
 
-  const handleOrderClick = (item: any) => {
+  const handleOrderClick = (item: InventoryItem) => {
     navigate(`/items/${item.id}/place_order`);
   };
 
-  const handleTopUpClick = () => {
-    // Navigate to profile page for account management
-    window.location.href = '/profile';
+  const handleAddToCart = (item: InventoryItem) => {
+    addToCart({
+      inventoryItemId: item.id,
+      quantity: 1,
+      businessId: item.business_location.business_id,
+      businessLocationId: item.business_location_id,
+      itemData: {
+        name: item.item.name,
+        price: item.selling_price,
+        currency: item.item.currency,
+        imageUrl: item.item.item_images?.[0]?.image_url,
+        weight: item.item.weight,
+      },
+    });
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -310,10 +325,14 @@ const Dashboard: React.FC = () => {
                     item={item}
                     formatCurrency={formatCurrency}
                     onOrderClick={handleOrderClick}
+                    onAddToCart={handleAddToCart}
                     estimatedDistance={distanceInfo?.distance}
                     estimatedDuration={distanceInfo?.duration}
                     distanceLoading={distanceLoading}
                     distanceError={distanceError}
+                    showCartButtons={profile?.user_type_id === 'client'}
+                    addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                    buyNowButtonText={t('cart.buyNow', 'Buy Now')}
                   />
                 );
               }

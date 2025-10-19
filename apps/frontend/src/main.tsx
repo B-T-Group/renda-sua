@@ -8,6 +8,7 @@ import './styles/apple-fonts.css';
 
 import App from './app/app';
 import { environment } from './config/environment';
+import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import './i18n'; // Initialize i18n
@@ -46,9 +47,11 @@ root.render(
         >
           <LoadingProvider>
             <UserProfileProvider>
-              <ApolloProvider>
-                <App />
-              </ApolloProvider>
+              <CartProvider>
+                <ApolloProvider>
+                  <App />
+                </ApolloProvider>
+              </CartProvider>
             </UserProfileProvider>
           </LoadingProvider>
         </BrowserRouter>
