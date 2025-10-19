@@ -1,6 +1,8 @@
 import {
   ArrowForward,
   CheckCircle,
+  ExpandLess,
+  ExpandMore,
   FlashOn,
   LocalShipping as LocalShippingIcon,
   LocationOn,
@@ -14,7 +16,9 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Divider,
+  IconButton,
   LinearProgress,
   Paper,
   Stack,
@@ -22,9 +26,20 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+
+interface OrderItem {
+  id: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  item?: {
+    item_images?: Array<{ image_url: string }>;
+  };
+}
 
 interface OrderCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +51,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [showItems, setShowItems] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -337,6 +353,15 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                     <Typography variant="caption" color="text.secondary">
                       {t('orders.items', 'items')}
                     </Typography>
+                    {order.order_items && order.order_items.length > 1 && (
+                      <IconButton
+                        size="small"
+                        onClick={() => setShowItems(!showItems)}
+                        sx={{ ml: 'auto' }}
+                      >
+                        {showItems ? <ExpandLess /> : <ExpandMore />}
+                      </IconButton>
+                    )}
                   </Box>
                 </Paper>
               </Box>
@@ -355,6 +380,128 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                     </Typography>
                   </Box>
                 </Box>
+              )}
+
+              {/* Order Items - Collapsible */}
+              {order.order_items && order.order_items.length > 1 && (
+                <Collapse in={showItems}>
+                  <Box sx={{ mt: 2 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {t('orders.orderItems', 'Order Items')}
+                    </Typography>
+                    <Stack spacing={1}>
+                      {order.order_items.map(
+                        (item: OrderItem, index: number) => (
+                          <Paper
+                            key={item.id || index}
+                            variant="outlined"
+                            sx={{ p: 1.5 }}
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                gap: 2,
+                                alignItems: 'center',
+                              }}
+                            >
+                              {/* Item Image */}
+                              <Box
+                                sx={{
+                                  width: 50,
+                                  height: 50,
+                                  borderRadius: 1,
+                                  overflow: 'hidden',
+                                  bgcolor: 'grey.100',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {item.item?.item_images?.[0]?.image_url ? (
+                                  <img
+                                    src={item.item.item_images[0].image_url}
+                                    alt={item.item_name || 'Item'}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                    }}
+                                    onError={(e) => {
+                                      const target =
+                                        e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      const parent = target.parentElement;
+                                      if (parent) {
+                                        parent.innerHTML = '📦';
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <Typography
+                                    variant="h6"
+                                    color="text.secondary"
+                                  >
+                                    <span
+                                      role="img"
+                                      aria-label={t(
+                                        'orders.package',
+                                        'Package'
+                                      )}
+                                    >
+                                      📦
+                                    </span>
+                                  </Typography>
+                                )}
+                              </Box>
+
+                              {/* Item Details */}
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight="medium"
+                                  sx={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {item.item_name ||
+                                    t('orders.unknownItem', 'Unknown Item')}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {t('orders.quantity', 'Qty')}: {item.quantity}{' '}
+                                  ×{' '}
+                                  {formatCurrency(
+                                    item.unit_price,
+                                    order.currency
+                                  )}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight="medium"
+                                  color="primary"
+                                >
+                                  {formatCurrency(
+                                    item.total_price,
+                                    order.currency
+                                  )}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Paper>
+                        )
+                      )}
+                    </Stack>
+                  </Box>
+                </Collapse>
               )}
             </Stack>
           </Box>
