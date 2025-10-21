@@ -266,7 +266,7 @@ export class OrdersService {
   ): Promise<string> {
     // Verify the delivery window exists and belongs to this order
     const query = `
-      query GetDeliveryWindow($windowId: uuid!, $orderId: uuid!) {
+      query GetDeliveryWindow($windowId: uuid!) {
         delivery_time_windows_by_pk(id: $windowId) {
           id
           order_id
@@ -277,7 +277,6 @@ export class OrdersService {
 
     const result = await this.hasuraSystemService.executeQuery(query, {
       windowId,
-      orderId,
     });
 
     const window = result.delivery_time_windows_by_pk;
