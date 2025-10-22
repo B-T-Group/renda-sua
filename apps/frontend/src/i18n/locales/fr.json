@@ -218,7 +218,17 @@
       "successMessage": "Demande de paiement envoyée avec succès ! Veuillez vérifier votre téléphone et accepter la demande de paiement pour réclamer la commande.",
       "title": "Réclamer la Commande avec Paiement",
       "totalAmount": "Montant Total : {{amount}}",
-      "totalCharge": "Total à Charger"
+      "totalCharge": "Total à Charger",
+      "paymentExplanation": {
+        "title": "Pourquoi dois-je effectuer un paiement?",
+        "description": "Pour livrer une commande, vous devez nous donner une garantie qui représente un certain pourcentage de la valeur de la commande. Plus vous complétez de commandes, plus vous construisez la confiance avec le système et le montant retenu sera réduit. Une fois la commande livrée, votre compte est crédité des frais de livraison et votre montant retenu est libéré.",
+        "benefits": {
+          "guarantee": "Agit comme garantie pour l'achèvement de la commande",
+          "trust": "Construit la confiance avec le système au fil du temps",
+          "reduction": "Le montant retenu diminue avec plus de commandes complétées",
+          "release": "Le montant est libéré lors de la livraison réussie"
+        }
+      }
     },
     "openOrders": {
       "available": "Available Orders",
@@ -230,7 +240,7 @@
     "orders": {
       "amountBreakdown": "Répartition des Montants",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
-      "canClaim": "🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(\n                  deliveryFee\n                )} for the delivery.",
+      "canClaim": "🚀 Parfaite opportunité ! Réclamez cette commande et gagnez {{deliveryFee}} pour la livraison.",
       "cancelledNotice": "This order has been cancelled and is no longer available for delivery.",
       "completedByOther": "Order has been completed successfully.",
       "completedByYou": "✅ Order completed! Your ${formatCurrency(\n                deliveryFee\n              )} delivery payment has been processed. Thank you for your excellent service!",
@@ -1022,7 +1032,8 @@
     "completedAndCancelled": "Completed & Cancelled Orders",
     "confirmAction": "Confirm Action",
     "confirmOrder": "Confirm Order",
-    "confirmOrderCompletion": "Confirm Order Completion",
+    "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
+    "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Êtes-vous sûr de vouloir changer le statut de la commande ?",
     "contact": "Contact",

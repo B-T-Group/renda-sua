@@ -326,6 +326,102 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
           </Box>
         </Stack>
 
+        {/* Payment Explanation Section */}
+        <Paper
+          variant="outlined"
+          sx={{
+            mt: 3,
+            p: 3,
+            bgcolor: 'info.50',
+            border: '1px solid',
+            borderColor: 'info.200',
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+            <Info color="info" />
+            <Typography variant="h6" fontWeight="bold" color="info.main">
+              {t(
+                'agent.claimOrder.paymentExplanation.title',
+                'Why do I need to make a payment?'
+              )}
+            </Typography>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'agent.claimOrder.paymentExplanation.description',
+              'To deliver an order you need to give us some guarantee which is a certain percentage of the value of the order. The more orders you complete, the more trust you build with the system and the hold amount will be reduced. Once the order is delivered, your account is credited with the delivery fee and your amount on hold is released.'
+            )}
+          </Typography>
+
+          <Stack spacing={1}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'info.main',
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'agent.claimOrder.paymentExplanation.benefits.guarantee',
+                  'Acts as a guarantee for order completion'
+                )}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'info.main',
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'agent.claimOrder.paymentExplanation.benefits.trust',
+                  'Builds trust with the system over time'
+                )}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'info.main',
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'agent.claimOrder.paymentExplanation.benefits.reduction',
+                  'Hold amount reduces with more completed orders'
+                )}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'info.main',
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'agent.claimOrder.paymentExplanation.benefits.release',
+                  'Amount is released upon successful delivery'
+                )}
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+
         {/* Phone Number Section */}
         <Paper
           variant="outlined"

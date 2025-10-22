@@ -102,9 +102,8 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               severity: 'success' as const,
               message: t(
                 'agent.orders.canClaim',
-                `🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(
-                  deliveryFee
-                )} for the delivery.`
+                '🚀 Perfect opportunity! Claim this order and earn {{deliveryFee}} for the delivery.',
+                { deliveryFee: formatCurrency(deliveryFee) }
               ),
             });
           }

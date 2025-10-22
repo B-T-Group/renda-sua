@@ -281,7 +281,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                                 <Chip
                                   label={
                                     window.slot?.slot_type === 'fast'
-                                      ? t('orders.fastDelivery', 'Fast')
+                                      ? t(
+                                          'orders.fastDelivery.title',
+                                          'Fast Delivery'
+                                        )
                                       : t('orders.standardDelivery', 'Standard')
                                   }
                                   size="small"

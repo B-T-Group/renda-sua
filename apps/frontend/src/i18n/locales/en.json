@@ -218,7 +218,17 @@
       "successMessage": "Payment request sent successfully! Please check your phone and accept the payment request to claim the order.",
       "title": "Claim Order with Payment",
       "totalAmount": "Total Amount: {{amount}}",
-      "totalCharge": "Total Charge"
+      "totalCharge": "Total Charge",
+      "paymentExplanation": {
+        "title": "Why do I need to make a payment?",
+        "description": "To deliver an order you need to give us some guarantee which is a certain percentage of the value of the order. The more orders you complete, the more trust you build with the system and the hold amount will be reduced. Once the order is delivered, your account is credited with the delivery fee and your amount on hold is released.",
+        "benefits": {
+          "guarantee": "Acts as a guarantee for order completion",
+          "trust": "Builds trust with the system over time",
+          "reduction": "Hold amount reduces with more completed orders",
+          "release": "Amount is released upon successful delivery"
+        }
+      }
     },
     "openOrders": {
       "available": "Available Orders",
@@ -230,7 +240,7 @@
     "orders": {
       "amountBreakdown": "Amount Breakdown",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
-      "canClaim": "🚀 Perfect opportunity! Claim this order and earn ${formatCurrency(\n                  deliveryFee\n                )} for the delivery.",
+      "canClaim": "🚀 Perfect opportunity! Claim this order and earn {{deliveryFee}} for the delivery.",
       "cancelledNotice": "This order has been cancelled and is no longer available for delivery.",
       "completedByOther": "Order has been completed successfully.",
       "completedByYou": "✅ Order completed! Your ${formatCurrency(\n                deliveryFee\n              )} delivery payment has been processed. Thank you for your excellent service!",
@@ -1023,6 +1033,7 @@
     "confirmAction": "Confirm Action",
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
+    "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Are you sure you want to change the order status?",
     "contact": "Contact",
