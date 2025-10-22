@@ -142,8 +142,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="body2">
-            {t('checkout.subtotal', 'Subtotal')} ({cartItems.length}{' '}
-            {t('cart.itemCount', 'items')})
+            {t('checkout.subtotal', 'Subtotal')} (
+            {t('cart.itemCount', 'items', { count: cartItems.length })})
           </Typography>
           <Typography variant="body2">{formatCurrency(subtotal)}</Typography>
         </Box>

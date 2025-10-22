@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface OrderConfirmationData {
-  order: {
+  order?: {
     id: string;
     order_number: string;
     total_amount: number;
@@ -38,6 +38,25 @@ interface OrderConfirmationData {
       status: string;
     };
   };
+  orders?: Array<{
+    id: string;
+    order_number: string;
+    total_amount: number;
+    currency: string;
+    current_status: string;
+    created_at: string;
+    payment_transaction: {
+      transaction_id: string;
+      success: boolean;
+      message: string;
+    };
+    database_transaction: {
+      id: string;
+      reference: string;
+      status: string;
+    };
+  }>;
+  multipleOrders?: boolean;
 }
 
 const OrderConfirmationPage: React.FC = () => {
@@ -48,7 +67,7 @@ const OrderConfirmationPage: React.FC = () => {
   // Get order data from navigation state
   const orderData = location.state as OrderConfirmationData;
 
-  if (!orderData?.order) {
+  if (!orderData?.order && !orderData?.orders) {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -67,7 +86,16 @@ const OrderConfirmationPage: React.FC = () => {
     );
   }
 
-  const { order } = orderData;
+  // Determine if we have single or multiple orders
+  const isMultipleOrders =
+    orderData.multipleOrders ||
+    (orderData.orders && orderData.orders.length > 1);
+  const orders = orderData.orders || (orderData.order ? [orderData.order] : []);
+  const totalAmount = orders.reduce(
+    (sum, order) => sum + order.total_amount,
+    0
+  );
+  const currency = orders[0]?.currency || 'USD';
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');
@@ -97,14 +125,33 @@ const OrderConfirmationPage: React.FC = () => {
             lineHeight: 1.2,
           }}
         >
-          {t('orders.orderPlacedSuccessfully', 'Order Placed Successfully!')}
+          {isMultipleOrders
+            ? t(
+                'orders.ordersPlacedSuccessfully',
+                'Orders Placed Successfully!'
+              )
+            : t('orders.orderPlacedSuccessfully', 'Order Placed Successfully!')}
         </Typography>
         <Typography
           variant="h6"
           color="text.secondary"
           sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
         >
-          {t('orders.orderNumber', 'Order Number')}: {order.order_number}
+          {isMultipleOrders ? (
+            <>
+              {t('orders.orderCount', '{{count}} Orders Placed', {
+                count: orders.length,
+              })}
+              <br />
+              {t('orders.totalAmount', 'Total Amount')}:{' '}
+              {totalAmount.toLocaleString()} {currency}
+            </>
+          ) : (
+            <>
+              {t('orders.orderNumber', 'Order Number')}:{' '}
+              {orders[0].order_number}
+            </>
+          )}
         </Typography>
       </Box>
 
@@ -203,69 +250,182 @@ const OrderConfirmationPage: React.FC = () => {
                 fontSize: { xs: '1.1rem', sm: '1.25rem' },
               }}
             >
-              {t('orders.orderDetails', 'Order Details')}
+              {isMultipleOrders
+                ? t('orders.ordersDetails', 'Orders Details')
+                : t('orders.orderDetails', 'Order Details')}
             </Typography>
           </Box>
 
-          <Grid container spacing={{ xs: 2, sm: 3 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.orderNumber', 'Order Number')}
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                  {order.order_number}
-                </Typography>
-              </Box>
+          {isMultipleOrders ? (
+            // Multiple Orders Display
+            <Box>
+              {orders.map((order, index) => (
+                <Card key={order.id} variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ mb: 2, fontWeight: 'bold' }}
+                    >
+                      {t('orders.orderNumber', 'Order')} #{index + 1}:{' '}
+                      {order.order_number}
+                    </Typography>
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.orderStatus', 'Order Status')}
-                </Typography>
-                <Chip
-                  label={t(
-                    `orders.status.${order.current_status}`,
-                    order.current_status
-                  )}
-                  color="warning"
-                  size="small"
-                />
-              </Box>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.orderStatus', 'Status')}
+                          </Typography>
+                          <Chip
+                            label={t(
+                              `orders.status.${order.current_status}`,
+                              order.current_status
+                            )}
+                            color="warning"
+                            size="small"
+                          />
+                        </Box>
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.totalAmount', 'Total Amount')}
-                </Typography>
-                <Typography
-                  variant="h6"
-                  color="primary.main"
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  {order.total_amount.toLocaleString()} {order.currency}
-                </Typography>
-              </Box>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.orderAmount', 'Amount')}
+                          </Typography>
+                          <Typography
+                            variant="body1"
+                            sx={{ fontWeight: 'medium' }}
+                          >
+                            {order.total_amount.toLocaleString()}{' '}
+                            {order.currency}
+                          </Typography>
+                        </Box>
+                      </Grid>
+
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.orderDate', 'Date')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {new Date(order.created_at).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.orderTime', 'Time')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {new Date(order.created_at).toLocaleTimeString()}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Total Summary */}
+              <Card
+                variant="outlined"
+                sx={{ bgcolor: 'primary.50', borderColor: 'primary.200' }}
+              >
+                <CardContent sx={{ p: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      {t('orders.totalAmount', 'Total Amount')}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      color="primary.main"
+                      sx={{ fontWeight: 'bold' }}
+                    >
+                      {totalAmount.toLocaleString()} {currency}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Box>
+          ) : (
+            // Single Order Display
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.orderNumber', 'Order Number')}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                    {orders[0].order_number}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.orderStatus', 'Order Status')}
+                  </Typography>
+                  <Chip
+                    label={t(
+                      `orders.status.${orders[0].current_status}`,
+                      orders[0].current_status
+                    )}
+                    color="warning"
+                    size="small"
+                  />
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.totalAmount', 'Total Amount')}
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    color="primary.main"
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    {orders[0].total_amount.toLocaleString()}{' '}
+                    {orders[0].currency}
+                  </Typography>
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.orderDate', 'Order Date')}
+                  </Typography>
+                  <Typography variant="body1">
+                    {new Date(orders[0].created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.orderTime', 'Order Time')}
+                  </Typography>
+                  <Typography variant="body1">
+                    {new Date(orders[0].created_at).toLocaleTimeString()}
+                  </Typography>
+                </Box>
+              </Grid>
             </Grid>
-
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.orderDate', 'Order Date')}
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(order.created_at).toLocaleDateString()}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.orderTime', 'Order Time')}
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(order.created_at).toLocaleTimeString()}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
+          )}
         </CardContent>
       </Card>
 
@@ -299,82 +459,211 @@ const OrderConfirmationPage: React.FC = () => {
             </Typography>
           </Box>
 
-          <Grid container spacing={{ xs: 2, sm: 3 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.transactionId', 'Transaction ID')}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontWeight: 'medium',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {order.payment_transaction?.transaction_id || 'N/A'}
-                </Typography>
-              </Box>
+          {isMultipleOrders ? (
+            // Multiple Orders Payment Details
+            <Box>
+              {orders.map((order, index) => (
+                <Card key={order.id} variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ mb: 2, fontWeight: 'bold' }}
+                    >
+                      {t('orders.orderNumber', 'Order')} #{index + 1}:{' '}
+                      {order.order_number}
+                    </Typography>
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.paymentStatus', 'Payment Status')}
-                </Typography>
-                <Chip
-                  label={
-                    order.payment_transaction?.success
-                      ? t('orders.paymentInitiated', 'Payment Initiated')
-                      : t('orders.paymentFailed', 'Payment Failed')
-                  }
-                  color={
-                    order.payment_transaction?.success ? 'success' : 'error'
-                  }
-                  size="small"
-                />
-              </Box>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.transactionId', 'Transaction ID')}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontWeight: 'medium',
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {order.payment_transaction?.transaction_id || 'N/A'}
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t('orders.paymentStatus', 'Payment Status')}
+                          </Typography>
+                          <Chip
+                            label={
+                              order.payment_transaction?.success
+                                ? t(
+                                    'orders.paymentInitiated',
+                                    'Payment Initiated'
+                                  )
+                                : t('orders.paymentFailed', 'Payment Failed')
+                            }
+                            color={
+                              order.payment_transaction?.success
+                                ? 'success'
+                                : 'error'
+                            }
+                            size="small"
+                          />
+                        </Box>
+                      </Grid>
+
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t(
+                              'orders.databaseTransactionId',
+                              'Database Transaction ID'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontWeight: 'medium',
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {order.database_transaction?.id || 'N/A'}
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                          >
+                            {t(
+                              'orders.databaseTransactionStatus',
+                              'Database Transaction Status'
+                            )}
+                          </Typography>
+                          <Chip
+                            label={order.database_transaction?.status || 'N/A'}
+                            color="info"
+                            size="small"
+                          />
+                        </Box>
+                      </Grid>
+                    </Grid>
+
+                    {order.payment_transaction?.message && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {t('orders.paymentMessage', 'Payment Message')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontStyle: 'italic' }}
+                        >
+                          {order.payment_transaction.message}
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          ) : (
+            // Single Order Payment Details
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.transactionId', 'Transaction ID')}
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 'medium',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {orders[0].payment_transaction?.transaction_id || 'N/A'}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('orders.paymentStatus', 'Payment Status')}
+                  </Typography>
+                  <Chip
+                    label={
+                      orders[0].payment_transaction?.success
+                        ? t('orders.paymentInitiated', 'Payment Initiated')
+                        : t('orders.paymentFailed', 'Payment Failed')
+                    }
+                    color={
+                      orders[0].payment_transaction?.success
+                        ? 'success'
+                        : 'error'
+                    }
+                    size="small"
+                  />
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t(
+                      'orders.databaseTransactionId',
+                      'Database Transaction ID'
+                    )}
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 'medium',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {orders[0].database_transaction?.id || 'N/A'}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t(
+                      'orders.databaseTransactionStatus',
+                      'Database Transaction Status'
+                    )}
+                  </Typography>
+                  <Chip
+                    label={orders[0].database_transaction?.status || 'N/A'}
+                    color="info"
+                    size="small"
+                  />
+                </Box>
+              </Grid>
             </Grid>
+          )}
 
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t('orders.databaseTransactionId', 'Database Transaction ID')}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontWeight: 'medium',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {order.database_transaction?.id || 'N/A'}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {t(
-                    'orders.databaseTransactionStatus',
-                    'Database Transaction Status'
-                  )}
-                </Typography>
-                <Chip
-                  label={order.database_transaction?.status || 'N/A'}
-                  color="info"
-                  size="small"
-                />
-              </Box>
-            </Grid>
-          </Grid>
-
-          {order.payment_transaction?.message && (
+          {/* Show payment message for single order */}
+          {!isMultipleOrders && orders[0].payment_transaction?.message && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2" color="text.secondary">
                 {t('orders.paymentMessage', 'Payment Message')}
               </Typography>
               <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                {order.payment_transaction.message}
+                {orders[0].payment_transaction.message}
               </Typography>
             </Box>
           )}
@@ -442,8 +731,10 @@ const OrderConfirmationPage: React.FC = () => {
           variant="outlined"
           onClick={handleViewOrders}
           size="large"
-          fullWidth={{ xs: true, sm: false }}
-          sx={{ maxWidth: { xs: '100%', sm: '200px' } }}
+          sx={{
+            maxWidth: { xs: '100%', sm: '200px' },
+            width: { xs: '100%', sm: 'auto' },
+          }}
         >
           {t('orders.viewMyOrders', 'View My Orders')}
         </Button>
@@ -452,8 +743,10 @@ const OrderConfirmationPage: React.FC = () => {
           onClick={handleGoToDashboard}
           startIcon={<Home />}
           size="large"
-          fullWidth={{ xs: true, sm: false }}
-          sx={{ maxWidth: { xs: '100%', sm: '200px' } }}
+          sx={{
+            maxWidth: { xs: '100%', sm: '200px' },
+            width: { xs: '100%', sm: 'auto' },
+          }}
         >
           {t('common.goToDashboard', 'Go to Dashboard')}
         </Button>
