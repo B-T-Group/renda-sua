@@ -49,36 +49,28 @@ export class MyPVitService {
   private readonly config: MyPVitConfig;
 
   constructor(private readonly configService: ConfigService) {
+    // Get the MyPVit configuration from the configuration service
+    const mypvitConfig = this.configService.get<MyPVitConfig>('mypvit');
+    
     this.config = {
-      baseUrl:
-        this.configService.get<string>('MYPVIT_BASE_URL') ||
-        'https://api.mypvit.pro',
-      merchantSlug:
-        this.configService.get<string>('MYPVIT_MERCHANT_SLUG') ||
-        'MR_1755783875',
-      airtelSecretKey: '', // RENAMED - Will be fetched from AWS Secrets Manager
-      moovSecretKey: '', // NEW - Will be fetched from AWS Secrets Manager
-      environment:
-        (this.configService.get<string>('MYPVIT_ENVIRONMENT') as
-          | 'test'
-          | 'production') || 'test',
-      callbackUrlCode:
-        this.configService.get<string>('MYPVIT_CALLBACK_URL_CODE') || 'FJXSU',
-      secretRefreshUrlCode:
-        this.configService.get<string>('MYPVIT_SECRET_REFRESH_URL_CODE') ||
-        'TRUVU',
-      airtelMerchantOperationAccountCode:
-        this.configService.get<string>(
-          'MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE'
-        ) || 'ACC_68A722C33473B', // RENAMED
-      moovMerchantOperationAccountCode:
-        this.configService.get<string>(
-          'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE'
-        ) || 'ACC_68A722C33473B', // NEW
-      paymentEndpointCode:
-        this.configService.get<string>('MYPVIT_PAYMENT_ENDPOINT_CODE') ||
-        'X5T3RIBYQUDFBZSH',
+      baseUrl: mypvitConfig?.baseUrl || 'https://api.mypvit.pro',
+      merchantSlug: mypvitConfig?.merchantSlug || 'MR_1755783875',
+      airtelSecretKey: mypvitConfig?.airtelSecretKey || '', // Loaded from AWS Secrets Manager
+      moovSecretKey: mypvitConfig?.moovSecretKey || '', // Loaded from AWS Secrets Manager
+      environment: mypvitConfig?.environment || 'test',
+      callbackUrlCode: mypvitConfig?.callbackUrlCode || 'FJXSU',
+      secretRefreshUrlCode: mypvitConfig?.secretRefreshUrlCode || 'TRUVU',
+      airtelMerchantOperationAccountCode: mypvitConfig?.airtelMerchantOperationAccountCode || 'ACC_68A722C33473B',
+      moovMerchantOperationAccountCode: mypvitConfig?.moovMerchantOperationAccountCode || 'ACC_68F90896204C1',
+      paymentEndpointCode: mypvitConfig?.paymentEndpointCode || 'X5T3RIBYQUDFBZSH',
     };
+
+    // Log secret key status for debugging
+    this.logger.log(`MyPVit configuration loaded:`);
+    this.logger.log(`- Airtel secret key: ${this.config.airtelSecretKey ? 'LOADED' : 'EMPTY'}`);
+    this.logger.log(`- MOOV secret key: ${this.config.moovSecretKey ? 'LOADED' : 'EMPTY'}`);
+    this.logger.log(`- Airtel account code: ${this.config.airtelMerchantOperationAccountCode}`);
+    this.logger.log(`- MOOV account code: ${this.config.moovMerchantOperationAccountCode}`);
 
     this.httpClient = axios.create({
       baseURL: this.config.baseUrl,
@@ -147,6 +139,8 @@ export class MyPVitService {
       const secretKey = phoneNumber
         ? this.getSecretKeyForProvider(phoneNumber)
         : this.config.airtelSecretKey;
+
+      this.logger.log(`Using secret key for payment: ${secretKey ? 'PRESENT' : 'EMPTY'} (length: ${secretKey?.length || 0})`);
 
       // Use the REST endpoint for payment initiation
       const response = await this.httpClient.post(
@@ -526,12 +520,15 @@ export class MyPVitService {
    */
   getSecretKeyForProvider(phoneNumber: string): string {
     if (!phoneNumber) {
+      this.logger.log('No phone number provided, using Airtel secret key');
       return this.config.airtelSecretKey;
     }
 
     const cleanNumber = phoneNumber.replace(/^0+/, '');
     const prefix = cleanNumber.substring(0, 3);
     const prefixTwo = cleanNumber.substring(0, 2);
+
+    this.logger.log(`Phone number analysis: ${phoneNumber} -> ${cleanNumber} (prefix: ${prefix}, prefixTwo: ${prefixTwo})`);
 
     // MOOV prefixes
     if (
@@ -542,10 +539,12 @@ export class MyPVitService {
       prefixTwo === '65' ||
       prefixTwo === '66'
     ) {
+      this.logger.log('Detected MOOV provider, using MOOV secret key');
       return this.config.moovSecretKey;
     }
 
     // Airtel or default
+    this.logger.log('Detected Airtel provider (or default), using Airtel secret key');
     return this.config.airtelSecretKey;
   }
 }
