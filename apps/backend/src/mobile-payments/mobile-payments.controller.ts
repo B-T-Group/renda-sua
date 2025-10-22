@@ -738,9 +738,7 @@ export class MobilePaymentsController {
         secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
         console.log('Updating Airtel secret key');
       } else {
-        throw new Error(
-          `Unknown operation account code: ${webhookData.operation_account_code}`
-        );
+        secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY';
       }
 
       console.log(
