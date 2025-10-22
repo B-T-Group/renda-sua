@@ -701,7 +701,7 @@ export class MobilePaymentsController {
   async handleSecretRefreshCallback(
     @Body()
     webhookData: {
-      operation_account_code: string;
+      merchant_operation_account_code: string;
       secret_key: string;
       expires_in: number;
     },
@@ -729,10 +729,12 @@ export class MobilePaymentsController {
         'ACC_68A722C33473B';
 
       let secretKeyName: string;
-      if (webhookData.operation_account_code === moovAccountCode) {
+      if (webhookData.merchant_operation_account_code === moovAccountCode) {
         secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
         console.log('Updating MOOV secret key');
-      } else if (webhookData.operation_account_code === airtelAccountCode) {
+      } else if (
+        webhookData.merchant_operation_account_code === airtelAccountCode
+      ) {
         secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
         console.log('Updating Airtel secret key');
       } else {
@@ -755,7 +757,7 @@ export class MobilePaymentsController {
         data: {
           message: `${secretKeyName} updated successfully`,
           secretName,
-          operation_account_code: webhookData.operation_account_code,
+          operation_account_code: webhookData.merchant_operation_account_code,
           expires_in: webhookData.expires_in,
           updated_at: new Date().toISOString(),
         },
