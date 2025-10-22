@@ -709,9 +709,7 @@ export class MobilePaymentsController {
   ) {
     try {
       console.log('Received secret refresh webhook:', {
-        operation_account_code: webhookData.operation_account_code,
-        secret_key: webhookData.secret_key.substring(0, 10) + '...',
-        expires_in: webhookData.expires_in,
+        ...(webhookData as object),
         provider,
       });
 
