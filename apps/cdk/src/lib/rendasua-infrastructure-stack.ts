@@ -58,32 +58,29 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Create the MOOV mobile payments key refresh Lambda function
-    const refreshMoovMobilePaymentsKeyFunction = new lambda.Function(
-      this,
-      `RefreshMoovMobilePaymentsKey-${environment}`,
-      {
-        functionName: `refresh-moov-mobile-payments-key-${environment}`,
-        runtime: lambda.Runtime.PYTHON_3_9,
-        handler: 'refresh-moov-mobile-payments-key.handler',
-        code: lambda.Code.fromAsset('src/lambda'),
-        timeout: cdk.Duration.minutes(5),
-        memorySize: 256,
-        layers: [requestsLayer],
-        environment: {
-          ENVIRONMENT: environment,
-          MOOV_OPERATION_ACCOUNT_CODE:
-            environment === 'production'
-              ? 'ACC_68F90896204C1'
-              : 'ACC_68A722C33473B', // Same for both environments
-          RECEPTION_URL_CODE: environment === 'production' ? 'BQ1TV' : 'TRUVU',
-          MYPVIT_SECRET_KEY_REFRESH_PATH:
-            environment === 'production'
-              ? 'CJF0DPOVZU87UUK8'
-              : 'CTCNJRBWZIDALEGT',
-        },
-      }
-    );
+    // Create the MOOV mobile payments key refresh Lambda function (only in production)
+    let refreshMoovMobilePaymentsKeyFunction: lambda.Function | undefined;
+    if (environment === 'production') {
+      refreshMoovMobilePaymentsKeyFunction = new lambda.Function(
+        this,
+        `RefreshMoovMobilePaymentsKey-${environment}`,
+        {
+          functionName: `refresh-moov-mobile-payments-key-${environment}`,
+          runtime: lambda.Runtime.PYTHON_3_9,
+          handler: 'refresh-moov-mobile-payments-key.handler',
+          code: lambda.Code.fromAsset('src/lambda'),
+          timeout: cdk.Duration.minutes(5),
+          memorySize: 256,
+          layers: [requestsLayer],
+          environment: {
+            ENVIRONMENT: environment,
+            MOOV_OPERATION_ACCOUNT_CODE: 'ACC_68F90896204C1',
+            RECEPTION_URL_CODE: 'BQ1TV',
+            MYPVIT_SECRET_KEY_REFRESH_PATH: 'CJF0DPOVZU87UUK8',
+          },
+        }
+      );
+    }
 
     // Add permissions for Secrets Manager to both functions
     const secretsManagerPolicy = new iam.PolicyStatement({
@@ -103,7 +100,13 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     refreshAirtelMobilePaymentsKeyFunction.addToRolePolicy(
       secretsManagerPolicy
     );
-    refreshMoovMobilePaymentsKeyFunction.addToRolePolicy(secretsManagerPolicy);
+
+    // Add permissions to MOOV function only if it exists (production only)
+    if (refreshMoovMobilePaymentsKeyFunction) {
+      refreshMoovMobilePaymentsKeyFunction.addToRolePolicy(
+        secretsManagerPolicy
+      );
+    }
 
     // Create EventBridge rule for Airtel function (every 45 minutes)
     new events.Rule(this, `RefreshAirtelMobilePaymentsKeyRule-${environment}`, {
@@ -116,15 +119,18 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       ],
     });
 
-    // Create EventBridge rule for MOOV function (every 45 minutes)
-    new events.Rule(this, `RefreshMoovMobilePaymentsKeyRule-${environment}`, {
-      ruleName: `refresh-moov-mobile-payments-key-rule-${environment}`,
-      description: 'Triggers MOOV mobile payments key refresh every 45 minutes',
-      schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
-      targets: [
-        new targets.LambdaFunction(refreshMoovMobilePaymentsKeyFunction),
-      ],
-    });
+    // Create EventBridge rule for MOOV function (every 45 minutes) - only in production
+    if (refreshMoovMobilePaymentsKeyFunction) {
+      new events.Rule(this, `RefreshMoovMobilePaymentsKeyRule-${environment}`, {
+        ruleName: `refresh-moov-mobile-payments-key-rule-${environment}`,
+        description:
+          'Triggers MOOV mobile payments key refresh every 45 minutes',
+        schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
+        targets: [
+          new targets.LambdaFunction(refreshMoovMobilePaymentsKeyFunction),
+        ],
+      });
+    }
 
     // Output Airtel function details
     new cdk.CfnOutput(
@@ -149,27 +155,29 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Output MOOV function details
-    new cdk.CfnOutput(
-      this,
-      `RefreshMoovMobilePaymentsKeyFunctionArn-${environment}`,
-      {
-        value: refreshMoovMobilePaymentsKeyFunction.functionArn,
-        description:
-          'ARN of the MOOV mobile payments key refresh Lambda function',
-        exportName: `RefreshMoovMobilePaymentsKeyFunctionArn-${environment}`,
-      }
-    );
+    // Output MOOV function details (only in production)
+    if (refreshMoovMobilePaymentsKeyFunction) {
+      new cdk.CfnOutput(
+        this,
+        `RefreshMoovMobilePaymentsKeyFunctionArn-${environment}`,
+        {
+          value: refreshMoovMobilePaymentsKeyFunction.functionArn,
+          description:
+            'ARN of the MOOV mobile payments key refresh Lambda function',
+          exportName: `RefreshMoovMobilePaymentsKeyFunctionArn-${environment}`,
+        }
+      );
 
-    new cdk.CfnOutput(
-      this,
-      `RefreshMoovMobilePaymentsKeyFunctionName-${environment}`,
-      {
-        value: refreshMoovMobilePaymentsKeyFunction.functionName,
-        description:
-          'Name of the MOOV mobile payments key refresh Lambda function',
-        exportName: `RefreshMoovMobilePaymentsKeyFunctionName-${environment}`,
-      }
-    );
+      new cdk.CfnOutput(
+        this,
+        `RefreshMoovMobilePaymentsKeyFunctionName-${environment}`,
+        {
+          value: refreshMoovMobilePaymentsKeyFunction.functionName,
+          description:
+            'Name of the MOOV mobile payments key refresh Lambda function',
+          exportName: `RefreshMoovMobilePaymentsKeyFunctionName-${environment}`,
+        }
+      );
+    }
   }
 }
