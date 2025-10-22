@@ -228,9 +228,13 @@ export class MobilePaymentsService {
         case 'mypvit':
         case 'airtel':
         case 'moov': {
+          const phoneNumber = removeCountryCode(
+            paymentRequest.customerPhone || ''
+          );
           const mypvitResponse = await this.myPVitService.initiatePayment(
             providerRequest as MyPVitPaymentRequest,
-            reference
+            reference,
+            phoneNumber
           );
 
           response = {
@@ -568,20 +572,20 @@ export class MobilePaymentsService {
     switch (provider) {
       case 'mypvit':
       case 'airtel':
-      case 'moov':
+      case 'moov': {
+        const phoneNumber = removeCountryCode(request.customerPhone || '');
         return {
           amount: request.amount,
           service: 'RESTFUL',
           callback_url_code: this.myPVitService.getCallbackUrlCode(),
-          customer_account_number: removeCountryCode(
-            request.customerPhone || ''
-          ),
+          customer_account_number: phoneNumber,
           merchant_operation_account_code:
-            this.myPVitService.getMerchantOperationAccountCode(),
+            this.myPVitService.getMerchantOperationAccountCode(phoneNumber), // UPDATED
           transaction_type: request.transactionType || 'PAYMENT',
           owner_charge: request.ownerCharge || 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
+      }
       default:
         throw new Error(`Unsupported provider: ${provider}`);
     }

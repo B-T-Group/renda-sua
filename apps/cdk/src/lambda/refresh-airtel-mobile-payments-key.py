@@ -1,6 +1,5 @@
 import json
 import os
-import urllib.parse
 from datetime import datetime
 from typing import Dict, Any
 
@@ -11,31 +10,21 @@ from botocore.exceptions import ClientError
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Lambda function to refresh mobile payments key
-    
-    Args:
-        event: Lambda event containing environment information
-        context: Lambda context
-    
-    Returns:
-        Dict containing status code and response body
+    Lambda function to refresh Airtel mobile payments key
     """
-    print(f"Starting mobile payments key refresh for environment: {os.environ.get('ENVIRONMENT')}")
+    print(f"Starting Airtel mobile payments key refresh for environment: {os.environ.get('ENVIRONMENT')}")
 
     try:
         # Get environment variables
-        operation_account_code = os.environ.get('OPERATION_ACCOUNT_CODE', 'ACC_68A722C33473B')
+        operation_account_code = os.environ.get('AIRTEL_OPERATION_ACCOUNT_CODE', 'ACC_68A722C33473B')
         reception_url_code = os.environ.get('RECEPTION_URL_CODE', 'TRUVU')
         mypvit_secret_key = os.environ.get('MYPVIT_SECRET_KEY_REFRESH_PATH', 'CTCNJRBWZIDALEGT')
 
-        if not operation_account_code or not reception_url_code or not mypvit_secret_key:
-            raise ValueError(
-                'Missing required environment variables: OPERATION_ACCOUNT_CODE, RECEPTION_URL_CODE, or MYPVIT_SECRET_KEY_REFRESH_PATH'
-            )
+        if not all([operation_account_code, reception_url_code, mypvit_secret_key]):
+            raise ValueError('Missing required environment variables')
 
-        print(f"Operation Account Code: {operation_account_code}")
+        print(f"Airtel Operation Account Code: {operation_account_code}")
         print(f"Reception URL Code: {reception_url_code}")
-        print(f"MyPVit Secret Key: {mypvit_secret_key}")
 
         # Get refresh key password from AWS Secrets Manager
         secrets_manager = boto3.client('secretsmanager')
@@ -66,12 +55,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'password': refresh_key_password,
         }
 
-        print('Making POST request to MyPVit renew-secret endpoint')
-        print('Form data (password hidden):', {
-            'operationAccountCode': form_data['operationAccountCode'],
-            'receptionUrlCode': form_data['receptionUrlCode'],
-            'password': '***HIDDEN***',
-        })
+        print('Making POST request to MyPVit renew-secret endpoint for Airtel')
 
         # Make POST request to MyPVit renew-secret endpoint
         api_url = f'https://api.mypvit.pro/{mypvit_secret_key}/renew-secret'
@@ -87,14 +71,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         )
 
         print(f"MyPVit API Response Status: {response.status_code}")
-        print(f"MyPVit API Response Headers: {dict(response.headers)}")
         print(f"MyPVit API Response Data: {response.text}")
 
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'success': True,
-                'message': 'Mobile payments key refresh request completed',
+                'provider': 'airtel',
+                'message': 'Airtel mobile payments key refresh request completed',
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': os.environ.get('ENVIRONMENT'),
                 'responseStatus': response.status_code,
@@ -103,9 +87,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
     except Exception as error:
-        print(f"Error refreshing mobile payments key: {str(error)}")
+        print(f"Error refreshing Airtel mobile payments key: {str(error)}")
 
-        # Log additional error details for requests errors
         if isinstance(error, requests.exceptions.RequestException):
             print(f"Request Error Details: {str(error)}")
             if hasattr(error, 'response') and error.response is not None:
@@ -116,6 +99,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 500,
             'body': json.dumps({
                 'success': False,
+                'provider': 'airtel',
                 'error': str(error),
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': os.environ.get('ENVIRONMENT'),

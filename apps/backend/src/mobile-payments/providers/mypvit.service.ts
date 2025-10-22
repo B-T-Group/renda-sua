@@ -1,7 +1,3 @@
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -51,7 +47,6 @@ export class MyPVitService {
   private readonly logger = new Logger(MyPVitService.name);
   private readonly httpClient: AxiosInstance;
   private readonly config: MyPVitConfig;
-  private readonly secretsManager: SecretsManagerClient;
 
   constructor(private readonly configService: ConfigService) {
     this.config = {
@@ -61,7 +56,8 @@ export class MyPVitService {
       merchantSlug:
         this.configService.get<string>('MYPVIT_MERCHANT_SLUG') ||
         'MR_1755783875',
-      secretKey: '', // Will be fetched from AWS Secrets Manager
+      airtelSecretKey: '', // RENAMED - Will be fetched from AWS Secrets Manager
+      moovSecretKey: '', // NEW - Will be fetched from AWS Secrets Manager
       environment:
         (this.configService.get<string>('MYPVIT_ENVIRONMENT') as
           | 'test'
@@ -71,19 +67,18 @@ export class MyPVitService {
       secretRefreshUrlCode:
         this.configService.get<string>('MYPVIT_SECRET_REFRESH_URL_CODE') ||
         'TRUVU',
-      merchantOperationAccountCode:
+      airtelMerchantOperationAccountCode:
         this.configService.get<string>(
-          'MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE'
-        ) || 'ACC_68A722C33473B',
+          'MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE'
+        ) || 'ACC_68A722C33473B', // RENAMED
+      moovMerchantOperationAccountCode:
+        this.configService.get<string>(
+          'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE'
+        ) || 'ACC_68F90896204C1', // NEW
       paymentEndpointCode:
         this.configService.get<string>('MYPVIT_PAYMENT_ENDPOINT_CODE') ||
         'X5T3RIBYQUDFBZSH',
     };
-
-    // Initialize AWS Secrets Manager client
-    this.secretsManager = new SecretsManagerClient({
-      region: this.configService.get<string>('AWS_REGION') || 'ca-central-1',
-    });
 
     this.httpClient = axios.create({
       baseURL: this.config.baseUrl,
@@ -94,17 +89,7 @@ export class MyPVitService {
       },
     });
 
-    // Add request interceptor for authentication
-    this.httpClient.interceptors.request.use(async (config) => {
-      // Fetch secret from AWS Secrets Manager for every request
-      const secretKey = await this.getSecretKey();
-
-      config.headers['Content-Type'] = 'application/json';
-      config.headers['X-Secret'] = secretKey;
-      config.headers['X-Callback-MediaType'] = 'application/json';
-
-      return config;
-    });
+    // Note: Secret key will be set per request based on phone number context
 
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
@@ -126,47 +111,12 @@ export class MyPVitService {
   }
 
   /**
-   * Get secret key from AWS Secrets Manager
-   */
-  private async getSecretKey(): Promise<string> {
-    try {
-      const environment =
-        this.configService.get<string>('NODE_ENV') || 'development';
-      const secretName = `${environment}-rendasua-backend-secrets`;
-
-      const command = new GetSecretValueCommand({
-        SecretId: secretName,
-      });
-
-      const response = await this.secretsManager.send(command);
-
-      if (!response.SecretString) {
-        throw new Error('Secret value is empty or not found');
-      }
-
-      const secretData = JSON.parse(response.SecretString);
-      const secretKey = secretData.MYPVIT_SECRET_KEY;
-
-      if (!secretKey) {
-        throw new Error('MYPVIT_SECRET_KEY not found in secret');
-      }
-
-      return secretKey;
-    } catch (error) {
-      this.logger.error(
-        'Failed to get secret key from AWS Secrets Manager:',
-        error
-      );
-      throw new Error('Failed to get MyPVit secret key');
-    }
-  }
-
-  /**
    * Initialize a payment transaction using REST API
    */
   async initiatePayment(
     paymentRequest: MyPVitPaymentRequest,
-    reference?: string
+    reference?: string,
+    phoneNumber?: string
   ): Promise<MyPVitPaymentResponse> {
     try {
       // Generate a unique reference (max 15 characters) if not provided
@@ -193,10 +143,22 @@ export class MyPVitService {
         free_info: paymentRequest.free_info,
       };
 
+      // Get the appropriate secret key based on phone number
+      const secretKey = phoneNumber
+        ? this.getSecretKeyForProvider(phoneNumber)
+        : this.config.airtelSecretKey;
+
       // Use the REST endpoint for payment initiation
       const response = await this.httpClient.post(
         `/${this.config.paymentEndpointCode}/rest`,
-        payload
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Secret': secretKey,
+            'X-Callback-MediaType': 'application/json',
+          },
+        }
       );
 
       // Check if the response indicates success based on status_code
@@ -222,7 +184,7 @@ export class MyPVitService {
           status_code: response.data.status_code,
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to initiate payment:', error);
       return {
         success: false,
@@ -238,13 +200,26 @@ export class MyPVitService {
    * Check transaction status using STATUS API
    */
   async checkTransactionStatus(
-    transactionId: string
+    transactionId: string,
+    phoneNumber?: string
   ): Promise<MyPVitTransactionStatus> {
     try {
       this.logger.log(`Checking transaction status for: ${transactionId}`);
 
+      // Get the appropriate secret key based on phone number
+      const secretKey = phoneNumber
+        ? this.getSecretKeyForProvider(phoneNumber)
+        : this.config.airtelSecretKey;
+
       const response = await this.httpClient.get(
-        `/RYXA6SLFNRBFFQJX/status/${transactionId}`
+        `/RYXA6SLFNRBFFQJX/status/${transactionId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Secret': secretKey,
+            'X-Callback-MediaType': 'application/json',
+          },
+        }
       );
 
       // Check if the response indicates success based on status_code
@@ -279,9 +254,9 @@ export class MyPVitService {
    * Verify payment callback
    */
   async verifyCallback(
-    payload: any,
-    signature: string,
-    timestamp: string
+    _payload: unknown,
+    _signature: string,
+    _timestamp: string
   ): Promise<boolean> {
     // Signature verification disabled - always return true
     return true;
@@ -303,12 +278,28 @@ export class MyPVitService {
   /**
    * Cancel a pending transaction
    */
-  async cancelTransaction(transactionId: string): Promise<boolean> {
+  async cancelTransaction(
+    transactionId: string,
+    phoneNumber?: string
+  ): Promise<boolean> {
     try {
       this.logger.log(`Cancelling transaction: ${transactionId}`);
 
+      // Get the appropriate secret key based on phone number
+      const secretKey = phoneNumber
+        ? this.getSecretKeyForProvider(phoneNumber)
+        : this.config.airtelSecretKey;
+
       const response = await this.httpClient.post(
-        `/RYXA6SLFNRBFFQJX/status/${transactionId}/cancel`
+        `/RYXA6SLFNRBFFQJX/status/${transactionId}/cancel`,
+        {},
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Secret': secretKey,
+            'X-Callback-MediaType': 'application/json',
+          },
+        }
       );
 
       return response.data.success || false;
@@ -327,7 +318,7 @@ export class MyPVitService {
     status?: string;
     limit?: number;
     offset?: number;
-  }): Promise<any[]> {
+  }): Promise<unknown[]> {
     try {
       const params = new URLSearchParams();
 
@@ -355,11 +346,24 @@ export class MyPVitService {
   /**
    * Check merchant balance
    */
-  async checkBalance(): Promise<{ balance: number; currency: string }> {
+  async checkBalance(
+    phoneNumber?: string
+  ): Promise<{ balance: number; currency: string }> {
     try {
       this.logger.log('Checking merchant balance');
 
-      const response = await this.httpClient.get('/LIRYOTW7QL3DCDPJ/balance');
+      // Get the appropriate secret key based on phone number
+      const secretKey = phoneNumber
+        ? this.getSecretKeyForProvider(phoneNumber)
+        : this.config.airtelSecretKey;
+
+      const response = await this.httpClient.get('/LIRYOTW7QL3DCDPJ/balance', {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Secret': secretKey,
+          'X-Callback-MediaType': 'application/json',
+        },
+      });
 
       if (response.data.success) {
         return {
@@ -473,9 +477,75 @@ export class MyPVitService {
   }
 
   /**
-   * Get merchant operation account code
+   * Get merchant operation account code based on phone number
+   * @param phoneNumber - Phone number without country code
+   * @returns Account code for Airtel or MOOV
    */
-  getMerchantOperationAccountCode(): string {
-    return this.config.merchantOperationAccountCode;
+  getMerchantOperationAccountCode(phoneNumber: string): string {
+    if (!phoneNumber) {
+      return this.config.airtelMerchantOperationAccountCode;
+    }
+
+    // Remove any leading zeros or country code remnants
+    const cleanNumber = phoneNumber.replace(/^0+/, '');
+
+    // Extract first 2-3 digits
+    const prefix = cleanNumber.substring(0, 3);
+    const prefixTwo = cleanNumber.substring(0, 2);
+
+    // MOOV prefixes: 062, 065, 066 (or 62, 65, 66)
+    if (
+      prefix === '062' ||
+      prefix === '065' ||
+      prefix === '066' ||
+      prefixTwo === '62' ||
+      prefixTwo === '65' ||
+      prefixTwo === '66'
+    ) {
+      return this.config.moovMerchantOperationAccountCode;
+    }
+
+    // Airtel prefixes: 074, 077 (or 74, 77)
+    if (
+      prefix === '074' ||
+      prefix === '077' ||
+      prefixTwo === '74' ||
+      prefixTwo === '77'
+    ) {
+      return this.config.airtelMerchantOperationAccountCode;
+    }
+
+    // Default to Airtel account
+    return this.config.airtelMerchantOperationAccountCode;
+  }
+
+  /**
+   * Get secret key based on phone number provider
+   * @param phoneNumber - Phone number without country code
+   * @returns Secret key for Airtel or MOOV
+   */
+  getSecretKeyForProvider(phoneNumber: string): string {
+    if (!phoneNumber) {
+      return this.config.airtelSecretKey;
+    }
+
+    const cleanNumber = phoneNumber.replace(/^0+/, '');
+    const prefix = cleanNumber.substring(0, 3);
+    const prefixTwo = cleanNumber.substring(0, 2);
+
+    // MOOV prefixes
+    if (
+      prefix === '062' ||
+      prefix === '065' ||
+      prefix === '066' ||
+      prefixTwo === '62' ||
+      prefixTwo === '65' ||
+      prefixTwo === '66'
+    ) {
+      return this.config.moovSecretKey;
+    }
+
+    // Airtel or default
+    return this.config.airtelSecretKey;
   }
 }

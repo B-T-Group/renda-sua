@@ -103,11 +103,13 @@ export interface OpenAIConfig {
 export interface MyPVitConfig {
   baseUrl: string;
   merchantSlug: string;
-  secretKey: string;
+  airtelSecretKey: string; // RENAMED from secretKey
+  moovSecretKey: string; // NEW
   environment: 'test' | 'production';
   callbackUrlCode: string;
   secretRefreshUrlCode: string;
-  merchantOperationAccountCode: string;
+  airtelMerchantOperationAccountCode: string; // RENAMED from merchantOperationAccountCode
+  moovMerchantOperationAccountCode: string; // NEW
   paymentEndpointCode: string;
 }
 
@@ -213,15 +215,19 @@ export default async (): Promise<Configuration> => {
     mypvit: {
       baseUrl: process.env.MYPVIT_BASE_URL || 'https://api.mypvit.pro',
       merchantSlug: process.env.MYPVIT_MERCHANT_SLUG || 'MR_1755783875',
-      secretKey: process.env.MYPVIT_SECRET_KEY || 'CTCNJRBWZIDALEGT',
+      airtelSecretKey: secrets.AIRTEL_MYPVIT_SECRET_KEY || '', // RENAMED
+      moovSecretKey: secrets.MOOV_MYPVIT_SECRET_KEY || '', // NEW
       environment:
         (process.env.MYPVIT_ENVIRONMENT as 'test' | 'production') || 'test',
       callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
       secretRefreshUrlCode:
         process.env.MYPVIT_SECRET_REFRESH_URL_CODE || 'TRUVU',
-      merchantOperationAccountCode:
-        process.env.MYPVIT_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B',
+      airtelMerchantOperationAccountCode:
+        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
+        'ACC_68A722C33473B', // RENAMED
+      moovMerchantOperationAccountCode:
+        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
+        'ACC_68A722C33473B', // NEW
       paymentEndpointCode:
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
     },

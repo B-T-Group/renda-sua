@@ -715,35 +715,49 @@ export class MobilePaymentsController {
         provider,
       });
 
-      // Validate webhook data
       if (!webhookData.secret_key) {
-        throw new Error(
-          'Missing required webhook data: operation_account_code or secret_key'
-        );
+        throw new Error('Missing required webhook data: secret_key');
       }
 
-      // Get environment from configuration or default to 'development'
       const environment = process.env.NODE_ENV || 'development';
       const secretName = `${environment}-rendasua-backend-secrets`;
 
-      console.log('Updating secret in AWS Secrets Manager:', secretName);
+      // Determine which secret key to update based on operation account code
+      const airtelAccountCode =
+        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
+        'ACC_68A722C33473B';
+      const moovAccountCode =
+        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
+        'ACC_68F90896204C1';
 
-      // Update the secret in AWS Secrets Manager
+      let secretKeyName: string;
+      if (webhookData.operation_account_code === moovAccountCode) {
+        secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
+        console.log('Updating MOOV secret key');
+      } else if (webhookData.operation_account_code === airtelAccountCode) {
+        secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
+        console.log('Updating Airtel secret key');
+      } else {
+        throw new Error(
+          `Unknown operation account code: ${webhookData.operation_account_code}`
+        );
+      }
+
+      console.log(
+        `Updating ${secretKeyName} in AWS Secrets Manager:`,
+        secretName
+      );
+
       await this.mobilePaymentsService.updateSecretInSecretsManager(
         secretName,
-        'MYPVIT_SECRET_KEY',
-        webhookData.secret_key,
-        {
-          operation_account_code: webhookData.operation_account_code,
-          expires_in: webhookData.expires_in,
-          updated_at: new Date().toISOString(),
-        }
+        secretKeyName,
+        webhookData.secret_key
       );
 
       return {
         success: true,
         data: {
-          message: 'Secret key updated successfully',
+          message: `${secretKeyName} updated successfully`,
           secretName,
           operation_account_code: webhookData.operation_account_code,
           expires_in: webhookData.expires_in,
