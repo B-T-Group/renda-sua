@@ -1,3 +1,7 @@
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -47,6 +51,7 @@ export class MyPVitService {
   private readonly logger = new Logger(MyPVitService.name);
   private readonly httpClient: AxiosInstance;
   private readonly config: MyPVitConfig;
+  private readonly secretsManager: SecretsManagerClient;
 
   constructor(private readonly configService: ConfigService) {
     // Get the MyPVit configuration from the configuration service
@@ -97,7 +102,12 @@ export class MyPVitService {
       },
     });
 
-    // Note: Secret key will be set per request based on phone number context
+    // Initialize AWS Secrets Manager client
+    this.secretsManager = new SecretsManagerClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
+
+    // Note: Secret key will be fetched dynamically per request based on phone number context
 
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
@@ -151,13 +161,11 @@ export class MyPVitService {
         free_info: paymentRequest.free_info,
       };
 
-      // Get the appropriate secret key based on phone number
-      const secretKey = phoneNumber
-        ? this.getSecretKeyForProvider(phoneNumber)
-        : this.config.airtelSecretKey;
+      // Get the current secret key from AWS Secrets Manager
+      const secretKey = await this.getCurrentSecretKey(phoneNumber);
 
       this.logger.log(
-        `Using secret key for payment: ${
+        `Using current secret key for payment: ${
           secretKey ? 'PRESENT' : 'EMPTY'
         } (length: ${secretKey?.length || 0})`
       );
@@ -220,10 +228,8 @@ export class MyPVitService {
     try {
       this.logger.log(`Checking transaction status for: ${transactionId}`);
 
-      // Get the appropriate secret key based on phone number
-      const secretKey = phoneNumber
-        ? this.getSecretKeyForProvider(phoneNumber)
-        : this.config.airtelSecretKey;
+      // Get the current secret key from AWS Secrets Manager
+      const secretKey = await this.getCurrentSecretKey(phoneNumber);
 
       const response = await this.httpClient.get(
         `/RYXA6SLFNRBFFQJX/status/${transactionId}`,
@@ -299,10 +305,8 @@ export class MyPVitService {
     try {
       this.logger.log(`Cancelling transaction: ${transactionId}`);
 
-      // Get the appropriate secret key based on phone number
-      const secretKey = phoneNumber
-        ? this.getSecretKeyForProvider(phoneNumber)
-        : this.config.airtelSecretKey;
+      // Get the current secret key from AWS Secrets Manager
+      const secretKey = await this.getCurrentSecretKey(phoneNumber);
 
       const response = await this.httpClient.post(
         `/RYXA6SLFNRBFFQJX/status/${transactionId}/cancel`,
@@ -366,10 +370,8 @@ export class MyPVitService {
     try {
       this.logger.log('Checking merchant balance');
 
-      // Get the appropriate secret key based on phone number
-      const secretKey = phoneNumber
-        ? this.getSecretKeyForProvider(phoneNumber)
-        : this.config.airtelSecretKey;
+      // Get the current secret key from AWS Secrets Manager
+      const secretKey = await this.getCurrentSecretKey(phoneNumber);
 
       const response = await this.httpClient.get('/LIRYOTW7QL3DCDPJ/balance', {
         headers: {
@@ -570,5 +572,67 @@ export class MyPVitService {
       'Detected Airtel provider (or default), using Airtel secret key'
     );
     return this.config.airtelSecretKey;
+  }
+
+  /**
+   * Fetch current secret key from AWS Secrets Manager
+   * @param phoneNumber - Phone number to determine which secret key to fetch
+   * @returns Current secret key for the provider
+   */
+  private async getCurrentSecretKey(phoneNumber?: string): Promise<string> {
+    try {
+      const environment =
+        this.configService.get<string>('NODE_ENV') || 'development';
+      const secretName = `${environment}-rendasua-backend-secrets`;
+
+      this.logger.log(`Fetching current secret key from: ${secretName}`);
+
+      const command = new GetSecretValueCommand({
+        SecretId: secretName,
+      });
+
+      const response = await this.secretsManager.send(command);
+
+      if (!response.SecretString) {
+        throw new Error(`Secret ${secretName} has no string value`);
+      }
+
+      const secretValue = JSON.parse(response.SecretString);
+
+      // Determine which secret key to use based on phone number
+      if (!phoneNumber) {
+        this.logger.log('No phone number provided, using Airtel secret key');
+        return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
+      }
+
+      const cleanNumber = phoneNumber.replace(/^0+/, '');
+      const prefix = cleanNumber.substring(0, 3);
+      const prefixTwo = cleanNumber.substring(0, 2);
+
+      // MOOV prefixes
+      if (
+        prefix === '062' ||
+        prefix === '065' ||
+        prefix === '066' ||
+        prefixTwo === '62' ||
+        prefixTwo === '65' ||
+        prefixTwo === '66'
+      ) {
+        this.logger.log('Detected MOOV provider, fetching MOOV secret key');
+        return secretValue.MOOV_MYPVIT_SECRET_KEY || '';
+      }
+
+      // Airtel or default
+      this.logger.log(
+        'Detected Airtel provider (or default), fetching Airtel secret key'
+      );
+      return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch current secret key: ${error.message}`);
+      // Fallback to cached secret key
+      return phoneNumber
+        ? this.getSecretKeyForProvider(phoneNumber)
+        : this.config.airtelSecretKey;
+    }
   }
 }
