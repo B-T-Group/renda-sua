@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import {
@@ -13,7 +15,8 @@ export class OrderStatusService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   /**
@@ -167,10 +170,20 @@ export class OrderStatusService {
       const orderDetails = await this.getOrderDetailsForNotification(orderId);
 
       if (orderDetails) {
-        await this.notificationsService.sendOrderStatusChangeNotifications(
-          orderDetails,
-          order.current_status
-        );
+        // Check if notifications are enabled
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
+
+        if (notificationsEnabled) {
+          await this.notificationsService.sendOrderStatusChangeNotifications(
+            orderDetails,
+            order.current_status
+          );
+        } else {
+          this.logger.log(
+            `Order status change notifications disabled for order ${orderId} (${order.current_status} → ${newStatus})`
+          );
+        }
       }
     } catch (error) {
       this.logger.error(

@@ -2204,50 +2204,60 @@ export class OrdersService {
 
       // Send order creation notifications
       try {
-        // Validate required data before creating notification data
-        if (!order.business_location?.business?.name) {
-          throw new Error('Business name is undefined');
-        }
-        if (!order.business_location?.business?.user?.email) {
-          throw new Error('Business email is undefined');
-        }
-        if (!order.delivery_address) {
-          throw new Error('Delivery address is undefined');
-        }
+        // Check if notifications are enabled
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
 
-        const notificationData: NotificationData = {
-          orderId: order.id,
-          orderNumber: order.order_number,
-          clientName: `${order.client?.user?.first_name || ''} ${
-            order.client?.user?.last_name || ''
-          }`.trim(),
-          clientEmail: order.client?.user?.email,
-          businessName: order.business_location.business.name,
-          businessEmail: order.business_location.business.user.email,
-          businessVerified:
-            order.business_location.business.is_verified || false,
-          orderStatus: order.current_status,
-          orderItems:
-            order.order_items?.map((item: any) => ({
-              name: item.item_name || 'Unknown Item',
-              quantity: item.quantity || 0,
-              unitPrice: item.unit_price || 0,
-              totalPrice: item.total_price || 0,
-            })) || [],
-          subtotal: order.subtotal || 0,
-          deliveryFee: order.delivery_fee || 0,
-          fastDeliveryFee: order.fast_delivery_fee || 0,
-          taxAmount: order.tax_amount || 0,
-          totalAmount: order.total_amount || 0,
-          currency: order.currency || 'USD',
-          deliveryAddress: this.formatAddress(order.delivery_address),
-          estimatedDeliveryTime: order.estimated_delivery_time || undefined,
-          specialInstructions: order.special_instructions || undefined,
-        };
+        if (notificationsEnabled) {
+          // Validate required data before creating notification data
+          if (!order.business_location?.business?.name) {
+            throw new Error('Business name is undefined');
+          }
+          if (!order.business_location?.business?.user?.email) {
+            throw new Error('Business email is undefined');
+          }
+          if (!order.delivery_address) {
+            throw new Error('Delivery address is undefined');
+          }
 
-        await this.notificationsService.sendOrderCreatedNotifications(
-          notificationData
-        );
+          const notificationData: NotificationData = {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            clientName: `${order.client?.user?.first_name || ''} ${
+              order.client?.user?.last_name || ''
+            }`.trim(),
+            clientEmail: order.client?.user?.email,
+            businessName: order.business_location.business.name,
+            businessEmail: order.business_location.business.user.email,
+            businessVerified:
+              order.business_location.business.is_verified || false,
+            orderStatus: order.current_status,
+            orderItems:
+              order.order_items?.map((item: any) => ({
+                name: item.item_name || 'Unknown Item',
+                quantity: item.quantity || 0,
+                unitPrice: item.unit_price || 0,
+                totalPrice: item.total_price || 0,
+              })) || [],
+            subtotal: order.subtotal || 0,
+            deliveryFee: order.delivery_fee || 0,
+            fastDeliveryFee: order.fast_delivery_fee || 0,
+            taxAmount: order.tax_amount || 0,
+            totalAmount: order.total_amount || 0,
+            currency: order.currency || 'USD',
+            deliveryAddress: this.formatAddress(order.delivery_address),
+            estimatedDeliveryTime: order.estimated_delivery_time || undefined,
+            specialInstructions: order.special_instructions || undefined,
+          };
+
+          await this.notificationsService.sendOrderCreatedNotifications(
+            notificationData
+          );
+        } else {
+          this.logger.log(
+            `Order creation notifications disabled for order ${order.order_number}`
+          );
+        }
       } catch (error) {
         this.logger.error(
           `Failed to send order creation notifications: ${

@@ -111,6 +111,10 @@ export interface MyPVitConfig {
   paymentEndpointCode: string;
 }
 
+export interface NotificationConfig {
+  orderStatusChangeEnabled: boolean;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -131,6 +135,7 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  notification: NotificationConfig;
 }
 
 import {
@@ -312,6 +317,9 @@ export default async (): Promise<Configuration> => {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || secrets.OPENAI_API_KEY || '',
+    },
+    notification: {
+      orderStatusChangeEnabled: process.env.NODE_ENV === 'production',
     },
   };
 };
