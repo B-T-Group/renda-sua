@@ -729,16 +729,16 @@ export class MobilePaymentsController {
         'ACC_68A722C33473B';
 
       let secretKeyName: string;
-      if (webhookData.merchant_operation_account_code === moovAccountCode) {
-        secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
-        console.log('Updating MOOV secret key');
-      } else if (
-        webhookData.merchant_operation_account_code === airtelAccountCode
-      ) {
+      if (webhookData.merchant_operation_account_code === airtelAccountCode) {
         secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
         console.log('Updating Airtel secret key');
+      } else if (
+        webhookData.merchant_operation_account_code === moovAccountCode
+      ) {
+        secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
+        console.log('Updating MOOV secret key');
       } else {
-        secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY';
+        throw new Error('Invalid merchant operation account code');
       }
 
       console.log(
