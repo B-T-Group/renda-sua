@@ -380,10 +380,12 @@ const PlaceOrderPage: React.FC = () => {
     setError(null); // Clear any previous errors
     try {
       const orderData = {
-        item: {
-          business_inventory_id: selectedItem.id,
-          quantity: quantity,
-        },
+        items: [
+          {
+            business_inventory_id: selectedItem.id,
+            quantity: quantity,
+          },
+        ],
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         requires_fast_delivery: requiresFastDelivery,
