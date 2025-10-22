@@ -74,7 +74,7 @@ export class MyPVitService {
       moovMerchantOperationAccountCode:
         this.configService.get<string>(
           'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE'
-        ) || 'ACC_68F90896204C1', // NEW
+        ) || 'ACC_68A722C33473B', // NEW
       paymentEndpointCode:
         this.configService.get<string>('MYPVIT_PAYMENT_ENDPOINT_CODE') ||
         'X5T3RIBYQUDFBZSH',

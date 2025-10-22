@@ -72,7 +72,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         layers: [requestsLayer],
         environment: {
           ENVIRONMENT: environment,
-          MOOV_OPERATION_ACCOUNT_CODE: 'ACC_68F90896204C1', // Same for both environments
+          MOOV_OPERATION_ACCOUNT_CODE:
+            environment === 'production'
+              ? 'ACC_68F90896204C1'
+              : 'ACC_68A722C33473B', // Same for both environments
           RECEPTION_URL_CODE: environment === 'production' ? 'BQ1TV' : 'TRUVU',
           MYPVIT_SECRET_KEY_REFRESH_PATH:
             environment === 'production'

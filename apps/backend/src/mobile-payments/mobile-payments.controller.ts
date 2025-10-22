@@ -728,7 +728,7 @@ export class MobilePaymentsController {
         'ACC_68A722C33473B';
       const moovAccountCode =
         process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68F90896204C1';
+        'ACC_68A722C33473B';
 
       let secretKeyName: string;
       if (webhookData.operation_account_code === moovAccountCode) {

@@ -16,7 +16,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     try:
         # Get environment variables
-        operation_account_code = os.environ.get('MOOV_OPERATION_ACCOUNT_CODE', 'ACC_68F90896204C1')
+        operation_account_code = os.environ.get('MOOV_OPERATION_ACCOUNT_CODE', 'ACC_68A722C33473B')
         reception_url_code = os.environ.get('RECEPTION_URL_CODE', 'TRUVU')
         mypvit_secret_key = os.environ.get('MYPVIT_SECRET_KEY_REFRESH_PATH', 'CTCNJRBWZIDALEGT')
 
