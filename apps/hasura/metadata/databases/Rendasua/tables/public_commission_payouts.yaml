@@ -1,0 +1,96 @@
+table:
+  name: commission_payouts
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: recipient_user
+    using:
+      foreign_key_constraint_on: recipient_user_id
+  - name: account_transaction
+    using:
+      foreign_key_constraint_on: account_transaction_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_id
+        - recipient_user_id
+        - recipient_type
+        - commission_type
+        - amount
+        - currency
+        - commission_percentage
+        - account_transaction_id
+        - created_at
+      filter:
+        recipient_user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - recipient_user_id
+        - recipient_type
+        - commission_type
+        - amount
+        - currency
+        - commission_percentage
+        - account_transaction_id
+        - created_at
+      filter:
+        recipient_user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - recipient_user_id
+        - recipient_type
+        - commission_type
+        - amount
+        - currency
+        - commission_percentage
+        - account_transaction_id
+        - created_at
+      filter:
+        recipient_user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: partner
+    permission:
+      columns:
+        - id
+        - order_id
+        - recipient_user_id
+        - recipient_type
+        - commission_type
+        - amount
+        - currency
+        - commission_percentage
+        - account_transaction_id
+        - created_at
+      filter:
+        recipient_user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: admin
+    permission:
+      columns:
+        - id
+        - order_id
+        - recipient_user_id
+        - recipient_type
+        - commission_type
+        - amount
+        - currency
+        - commission_percentage
+        - account_transaction_id
+        - created_at
+      filter: {}

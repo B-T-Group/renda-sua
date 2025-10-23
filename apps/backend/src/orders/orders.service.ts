@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -257,7 +258,8 @@ export class OrdersService {
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly configurationsService: ConfigurationsService,
-    private readonly deliveryWindowsService: DeliveryWindowsService
+    private readonly deliveryWindowsService: DeliveryWindowsService,
+    private readonly commissionsService: CommissionsService
   ) {}
 
   private async confirmExistingDeliveryWindow(
@@ -3379,6 +3381,7 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(referenceId);
 
+    // Release holds first
     if (order.assigned_agent) {
       const agentAccount = await this.hasuraSystemService.getAccount(
         order.assigned_agent.user_id,
@@ -3390,14 +3393,6 @@ export class OrdersService {
         amount: orderHold.agent_hold_amount,
         transactionType: 'release',
         memo: `Hold released for order ${order.order_number}`,
-        referenceId: referenceId,
-      });
-
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: orderHold.delivery_fees,
-        transactionType: 'deposit',
-        memo: `Delivery fee received for order ${order.order_number}`,
         referenceId: referenceId,
       });
     }
@@ -3431,22 +3426,19 @@ export class OrdersService {
       referenceId: referenceId,
     });
 
-    const businessUserId = order.business.user_id;
-    const currency = order.currency;
-
-    // 5. Get the business account for the order's currency
-    const businessAccount = await this.hasuraSystemService.getAccount(
-      businessUserId,
-      currency
-    );
-
-    await this.accountsService.registerTransaction({
-      accountId: businessAccount.id,
-      amount: order.total_amount,
-      transactionType: 'deposit',
-      memo: `Order payment received for order ${order.order_number}`,
-      referenceId: referenceId,
-    });
+    // Now distribute commissions using the new commission system
+    try {
+      await this.commissionsService.distributeCommissions(order);
+      this.logger.log(
+        `Successfully distributed commissions for order ${order.order_number}`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to distribute commissions for order ${order.order_number}: ${error.message}`
+      );
+      // Don't fail the order completion if commission distribution fails
+      // The order should still be marked as complete
+    }
 
     await this.updateOrderHold(orderHold.id, {
       status: 'completed',

@@ -154,6 +154,21 @@ insert_permissions:
         - email_verified
         - created_at
         - updated_at
+  - role: partner
+    permission:
+      check: {}
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - phone_number
+        - phone_number_verified
+        - email_verified
+        - created_at
+        - updated_at
   - role: user
     permission:
       check: {}
@@ -221,6 +236,23 @@ select_permissions:
       filter:
         identifier:
           _eq: X-Hasura-User-Id
+  - role: partner
+    permission:
+      columns:
+        - id
+        - user_type_id
+        - identifier
+        - first_name
+        - last_name
+        - email
+        - phone_number
+        - phone_number_verified
+        - email_verified
+        - created_at
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
   - role: user
     permission:
       columns:
@@ -266,6 +298,19 @@ update_permissions:
           _eq: X-Hasura-User-Id
       check: null
   - role: client
+    permission:
+      columns:
+        - first_name
+        - last_name
+        - phone_number
+        - phone_number_verified
+        - email_verified
+        - updated_at
+      filter:
+        identifier:
+          _eq: X-Hasura-User-Id
+      check: null
+  - role: partner
     permission:
       columns:
         - first_name

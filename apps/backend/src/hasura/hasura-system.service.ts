@@ -2,6 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
 import {
+  Commission_Payouts_Insert_Input,
+  GetPartnersQuery,
+  GetRendasuaHQUserQuery,
+  InsertCommissionPayoutMutation,
+  Partners,
+} from '../commissions/generated-types';
+import {
   Addresses,
   GetAccountByIdQuery,
   GetUserAccountQuery,
@@ -42,7 +49,7 @@ export class HasuraSystemService {
   /**
    * Creates a GraphQL client with admin secret for system operations
    */
-  createClient(): any {
+  createClient(): GraphQLClient {
     return new GraphQLClient(this.hasuraUrl, {
       headers: {
         'x-hasura-admin-secret': this.adminSecret,
@@ -431,5 +438,94 @@ export class HasuraSystemService {
         })
         .filter(Boolean) || []
     );
+  }
+
+  /**
+   * Get active partners
+   */
+  async getPartners(): Promise<Partners[]> {
+    const query = `
+      query GetActivePartners {
+        partners(where: { is_active: { _eq: true } }) {
+          id
+          user_id
+          company_name
+          base_delivery_fee_commission
+          per_km_delivery_fee_commission
+          item_commission
+          is_active
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const response = await this.executeQuery<GetPartnersQuery>(query);
+    return response.partners || [];
+  }
+
+  /**
+   * Get RendaSua HQ user
+   */
+  async getRendasuaHQUser(): Promise<
+    GetRendasuaHQUserQuery['users'][0] | null
+  > {
+    const query = `
+      query GetRendasuaHQUser {
+        users(where: { email: { _eq: "hq@rendasua.com" } }) {
+          id
+          user_type_id
+          identifier
+          first_name
+          last_name
+          email
+          phone_number
+        }
+      }
+    `;
+
+    const response = await this.executeQuery<GetRendasuaHQUserQuery>(query);
+    return response.users?.[0] || null;
+  }
+
+  /**
+   * Insert commission payout audit record
+   */
+  async insertCommissionPayout(payout: {
+    orderId: string;
+    recipientUserId: string;
+    recipientType: string;
+    commissionType: string;
+    amount: number;
+    currency: string;
+    commissionPercentage?: number;
+    accountTransactionId: string;
+  }): Promise<InsertCommissionPayoutMutation['insert_commission_payouts_one']> {
+    const mutation = `
+      mutation InsertCommissionPayout($payout: commission_payouts_insert_input!) {
+        insert_commission_payouts_one(object: $payout) {
+          id
+        }
+      }
+    `;
+
+    const variables = {
+      payout: {
+        order_id: payout.orderId,
+        recipient_user_id: payout.recipientUserId,
+        recipient_type: payout.recipientType,
+        commission_type: payout.commissionType,
+        amount: payout.amount,
+        currency: payout.currency,
+        commission_percentage: payout.commissionPercentage,
+        account_transaction_id: payout.accountTransactionId,
+      } as Commission_Payouts_Insert_Input,
+    };
+
+    const response = await this.executeMutation<InsertCommissionPayoutMutation>(
+      mutation,
+      variables
+    );
+    return response.insert_commission_payouts_one;
   }
 }

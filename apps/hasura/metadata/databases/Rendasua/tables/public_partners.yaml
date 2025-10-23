@@ -1,0 +1,72 @@
+table:
+  name: partners
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+array_relationships:
+  - name: commission_payouts
+    using:
+      manual_configuration:
+        column_mapping:
+          id: recipient_user_id
+        insertion_order: null
+        remote_table:
+          name: commission_payouts
+          schema: public
+select_permissions:
+  - role: partner
+    permission:
+      columns:
+        - id
+        - user_id
+        - company_name
+        - base_delivery_fee_commission
+        - per_km_delivery_fee_commission
+        - item_commission
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+  - role: admin
+    permission:
+      columns:
+        - id
+        - user_id
+        - company_name
+        - base_delivery_fee_commission
+        - per_km_delivery_fee_commission
+        - item_commission
+        - is_active
+        - created_at
+        - updated_at
+      filter: {}
+update_permissions:
+  - role: partner
+    permission:
+      columns:
+        - company_name
+        - base_delivery_fee_commission
+        - per_km_delivery_fee_commission
+        - item_commission
+        - updated_at
+      filter:
+        user:
+          identifier:
+            _eq: X-Hasura-User-Id
+      check: null
+  - role: admin
+    permission:
+      columns:
+        - company_name
+        - base_delivery_fee_commission
+        - per_km_delivery_fee_commission
+        - item_commission
+        - is_active
+        - updated_at
+      filter: {}
+      check: null
