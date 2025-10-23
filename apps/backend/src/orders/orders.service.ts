@@ -3530,8 +3530,9 @@ export class OrdersService {
           distanceMatrix.rows?.[0]?.elements?.[0]?.status === 'OK' &&
           distanceMatrix.rows[0].elements[0].distance
         ) {
-          const distanceKm =
-            distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
+          const distanceKm = Math.round(
+            distanceMatrix.rows[0].elements[0].distance.value / 1000
+          ); // Convert meters to km and round to nearest integer
 
           // Calculate fee using tiered pricing model
           const feeComponents = await this.calculateTieredDeliveryFee(
