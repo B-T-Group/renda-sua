@@ -198,7 +198,9 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
-                label={t(`common.orderStatus.${currentStatus}`)}
+                label={String(
+                  t(`common.orderStatus.${currentStatus}`, currentStatus)
+                )}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 color={getStatusColor(currentStatus) as any}
                 size="small"

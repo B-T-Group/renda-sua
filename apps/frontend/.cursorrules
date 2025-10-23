@@ -13,17 +13,20 @@
 ### Test File Guidelines
 
 #### When Test Files Are Allowed
+
 - User explicitly requests: "Create a test for X"
 - User explicitly requests: "Write a test script for Y"
 - User explicitly requests: "Add unit tests for Z"
 
 #### When Test Files Are NOT Allowed
+
 - Debugging issues (use console.log or existing debugging tools)
 - Verifying fixes (use existing endpoints or tools)
 - Temporary validation (use existing test infrastructure)
 - Code verification (use TypeScript compilation and linting)
 
 #### Alternative Approaches
+
 - **Use existing endpoints** for testing functionality
 - **Use console.log** for debugging
 - **Use TypeScript compilation** for type checking
@@ -32,6 +35,7 @@
 - **Use API testing tools** like Postman or curl for backend testing
 
 ### Cleanup Responsibility
+
 - **Always clean up** any test files created during development
 - **Remove temporary scripts** after use
 - **Don't commit test files** unless they're part of the official test suite
@@ -41,12 +45,14 @@
 ### CRITICAL: Use Proper Client Hooks for All Requests
 
 #### GraphQL Requests (Hasura)
+
 - **ALWAYS use `useGraphQLClient`** for all Hasura GraphQL requests
 - **ALWAYS use `useGraphQLRequest`** hook for executing GraphQL queries and mutations
 - **NEVER make direct GraphQL requests** using fetch, axios, or other HTTP clients
 - **NEVER bypass authentication** - all requests must go through the authenticated client
 
 #### Backend API Requests
+
 - **ALWAYS use `useApiClient`** for all backend API requests (NestJS endpoints)
 - **ALWAYS use the returned axios instance** for making HTTP requests
 - **NEVER make direct API requests** using fetch, axios.create(), or other HTTP clients
@@ -55,6 +61,7 @@
 ### Implementation Examples
 
 #### ✅ CORRECT GraphQL Usage
+
 ```typescript
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 
@@ -63,6 +70,7 @@ const result = await execute({ userId: '123' });
 ```
 
 #### ✅ CORRECT Backend API Usage
+
 ```typescript
 import { useApiClient } from '../hooks/useApiClient';
 
@@ -71,6 +79,7 @@ const response = await apiClient.post('/addresses', addressData);
 ```
 
 #### ❌ WRONG - Direct HTTP Requests
+
 ```typescript
 // DON'T DO THIS
 const response = await fetch('/api/addresses', { method: 'POST' });
@@ -81,32 +90,36 @@ const client = new GraphQLClient(url);
 ### Authentication and Security
 
 #### GraphQL Client Features
+
 - **Automatic token management** - handles Auth0 token refresh
 - **Proper headers** - includes Authorization and Hasura headers
 - **Error handling** - manages authentication errors gracefully
 - **Loading states** - provides loading indicators
 
 #### API Client Features
+
 - **Automatic token injection** - adds Auth0 tokens to requests
 - **Request/response interceptors** - handles loading states and errors
-- **Timeout handling** - 15-second timeout for requests
+- **Timeout handling** - 30-second timeout for requests
 - **Error handling** - manages API errors consistently
 
 ### Migration Guidelines
 
 #### When Updating Existing Code
+
 1. **Replace direct fetch calls** with `useApiClient`
 2. **Replace direct GraphQL calls** with `useGraphQLRequest`
 3. **Update error handling** to use the client's error management
 4. **Update loading states** to use the client's loading management
 
 #### Example Migration
+
 ```typescript
 // OLD - Direct fetch
 const response = await fetch('/api/addresses', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(data)
+  body: JSON.stringify(data),
 });
 
 // NEW - Using useApiClient
@@ -117,12 +130,14 @@ const response = await apiClient.post('/addresses', data);
 ### Component Integration
 
 #### Hooks Usage
+
 - **Use `useGraphQLRequest`** for all Hasura operations
 - **Use `useApiClient`** for all backend API operations
 - **Handle loading states** from the hooks
 - **Handle errors** from the hooks
 
 #### Error Handling
+
 - **Always check for client errors** before making requests
 - **Use the error states** provided by the hooks
 - **Display user-friendly error messages**
@@ -131,11 +146,13 @@ const response = await apiClient.post('/addresses', data);
 ### Testing Considerations
 
 #### Mocking
+
 - **Mock the client hooks** in tests, not the underlying HTTP clients
 - **Test error scenarios** using the hook's error states
 - **Test loading states** using the hook's loading states
 
 #### Integration Testing
+
 - **Test the full request flow** through the hooks
 - **Verify authentication** is properly handled
 - **Verify error handling** works correctly
@@ -143,11 +160,13 @@ const response = await apiClient.post('/addresses', data);
 ### Performance Considerations
 
 #### Caching
+
 - **Use React Query or SWR** for caching if needed
 - **Don't cache sensitive data** in localStorage
 - **Clear cache** on logout
 
 #### Optimization
+
 - **Memoize query strings** to prevent unnecessary re-renders
 - **Use the skip option** to prevent unnecessary requests
 - **Batch requests** when possible
@@ -155,11 +174,13 @@ const response = await apiClient.post('/addresses', data);
 ### Security Best Practices
 
 #### Token Management
+
 - **Never store tokens** in localStorage or sessionStorage
 - **Let Auth0 handle** token refresh automatically
 - **Clear tokens** on logout
 
 #### Request Validation
+
 - **Validate input data** before sending requests
 - **Sanitize user input** to prevent injection attacks
 - **Use TypeScript** for type safety
@@ -167,6 +188,7 @@ const response = await apiClient.post('/addresses', data);
 ### Common Patterns
 
 #### Data Fetching Pattern
+
 ```typescript
 const { data, loading, error, execute } = useGraphQLRequest(QUERY);
 
@@ -178,6 +200,7 @@ useEffect(() => {
 ```
 
 #### API Call Pattern
+
 ```typescript
 const apiClient = useApiClient();
 
@@ -194,11 +217,13 @@ const handleSubmit = async (data) => {
 ### File Organization
 
 #### Hook Location
+
 - **GraphQL hooks** in `src/hooks/useGraphQL*.ts`
 - **API hooks** in `src/hooks/useApi*.ts`
 - **Custom hooks** in `src/hooks/` directory
 
 #### Import Structure
+
 ```typescript
 // GraphQL imports
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
@@ -220,4 +245,4 @@ Before committing any API or GraphQL related code, ensure:
 - [ ] TypeScript types defined
 - [ ] Tests updated to use proper hooks
 
-This ensures consistent, secure, and maintainable API communication throughout the application. 
+This ensures consistent, secure, and maintainable API communication throughout the application.

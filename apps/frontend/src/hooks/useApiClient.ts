@@ -36,7 +36,7 @@ export const useApiClient = (): AxiosInstance => {
   const apiClient = useMemo(() => {
     const instance = axios.create({
       baseURL: environment.apiUrl,
-      timeout: 15000,
+      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
