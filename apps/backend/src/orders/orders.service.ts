@@ -1968,11 +1968,14 @@ export class OrdersService {
           id
           order_number
           current_status
+          subtotal
+          base_delivery_fee
+          per_km_delivery_fee
+          tax_amount
           total_amount
           currency
           business_id
           client_id
-          
           delivery_address_id
           client {
             user_id
@@ -1986,6 +1989,7 @@ export class OrdersService {
           assigned_agent_id
           assigned_agent {
             user_id
+            is_verified
           }
           delivery_time_windows {
             id
