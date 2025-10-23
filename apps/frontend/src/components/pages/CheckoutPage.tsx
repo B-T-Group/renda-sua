@@ -212,6 +212,7 @@ const CheckoutPage: React.FC = () => {
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
+  const [isCheckoutInProgress, setIsCheckoutInProgress] = useState(false);
 
   const handleDeliveryWindowChange = useCallback(
     (data: DeliveryWindowData | null) => {
@@ -284,10 +285,10 @@ const CheckoutPage: React.FC = () => {
 
   // Redirect if cart is empty
   useEffect(() => {
-    if (cartItems.length === 0) {
+    if (cartItems.length === 0 && !isCheckoutInProgress) {
       navigate('/cart');
     }
-  }, [cartItems.length, navigate]);
+  }, [cartItems.length, navigate, isCheckoutInProgress]);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -303,6 +304,8 @@ const CheckoutPage: React.FC = () => {
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
       return;
     }
+
+    setIsCheckoutInProgress(true); // Set flag before checkout
 
     try {
       const phoneNumber = useDifferentPhone ? overridePhoneNumber : undefined;
@@ -335,6 +338,7 @@ const CheckoutPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Checkout error:', error);
+      setIsCheckoutInProgress(false); // Reset flag on error
     }
   };
 
