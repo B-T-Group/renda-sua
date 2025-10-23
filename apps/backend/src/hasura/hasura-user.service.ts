@@ -26,7 +26,6 @@ export interface CreateOrderRequest {
   delivery_address_id: string;
   phone_number?: string;
   requires_fast_delivery?: boolean;
-  fast_delivery_fee?: number;
   delivery_window?: {
     slot_id: string;
     preferred_date: string;

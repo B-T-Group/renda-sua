@@ -10,7 +10,8 @@ export interface OrderData {
   assigned_agent_id?: string;
   delivery_address_id: string;
   subtotal: number;
-  delivery_fee: number;
+  base_delivery_fee: number;
+  per_km_delivery_fee: number;
   tax_amount: number;
   total_amount: number;
   currency: string;
@@ -20,8 +21,6 @@ export interface OrderData {
   special_instructions?: string;
   preferred_delivery_time?: string;
   requires_fast_delivery: boolean;
-  fast_delivery_fee: number;
-  payment_method: string;
   payment_status: string;
   verified_agent_delivery: boolean;
   created_at: string;

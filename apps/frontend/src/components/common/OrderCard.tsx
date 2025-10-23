@@ -535,30 +535,17 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                 </Typography>
               </Box>
 
-              {/* Delivery Fee */}
-              {order.delivery_fee > 0 && (
+              {/* Total Delivery Fee */}
+              {order.base_delivery_fee + order.per_km_delivery_fee > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">
                     {t('orders.deliveryFee', 'Delivery Fee')}:
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(order.delivery_fee, order.currency)}
-                  </Typography>
-                </Box>
-              )}
-
-              {/* Fast Delivery Fee */}
-              {order.requires_fast_delivery && order.fast_delivery_fee > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.fastDeliveryFee', 'Fast Delivery Fee')}:
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight="medium"
-                    color="warning.main"
-                  >
-                    {formatCurrency(order.fast_delivery_fee, order.currency)}
+                    {formatCurrency(
+                      order.base_delivery_fee + order.per_km_delivery_fee,
+                      order.currency
+                    )}
                   </Typography>
                 </Box>
               )}

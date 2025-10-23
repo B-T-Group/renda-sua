@@ -256,15 +256,13 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
               <Typography variant="body2" color="text.secondary">
                 Subtotal: {formatCurrency(order.subtotal, order.currency)}
               </Typography>
-              {order.delivery_fee > 0 && (
+              {order.base_delivery_fee + order.per_km_delivery_fee > 0 && (
                 <Typography variant="body2" color="text.secondary">
-                  Delivery: {formatCurrency(order.delivery_fee, order.currency)}
-                </Typography>
-              )}
-              {order.requires_fast_delivery && order.fast_delivery_fee > 0 && (
-                <Typography variant="body2" color="warning.main">
-                  Fast Delivery:{' '}
-                  {formatCurrency(order.fast_delivery_fee, order.currency)}
+                  Delivery:{' '}
+                  {formatCurrency(
+                    order.base_delivery_fee + order.per_km_delivery_fee,
+                    order.currency
+                  )}
                 </Typography>
               )}
               {order.tax_amount > 0 && (

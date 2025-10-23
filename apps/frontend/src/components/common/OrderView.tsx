@@ -651,7 +651,10 @@ const OrderView: React.FC<OrderViewProps> = ({
                     {t('orders.deliveryFee', 'Delivery Fee')}
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(order.delivery_fee, order.currency)}
+                    {formatCurrency(
+                      order.base_delivery_fee + order.per_km_delivery_fee,
+                      order.currency
+                    )}
                   </Typography>
                 </Box>
                 <Box display="flex" justifyContent="space-between" mb={2}>

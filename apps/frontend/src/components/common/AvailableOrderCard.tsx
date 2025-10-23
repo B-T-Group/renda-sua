@@ -40,8 +40,8 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
       return orderHold.delivery_fees || 0;
     }
 
-    // Fallback to order delivery_fee if order_holds not available
-    return order.delivery_fee || 0;
+    // Fallback to order delivery fee components if order_holds not available
+    return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
   };
 
   const formatAddress = (address: any) => {

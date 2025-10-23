@@ -12,7 +12,8 @@ export interface DeliveryFeeResponse {
 
 export const useDeliveryFee = (
   itemId: string | null,
-  addressId?: string | null
+  addressId?: string | null,
+  requiresFastDelivery?: boolean
 ) => {
   const [deliveryFee, setDeliveryFee] = useState<DeliveryFeeResponse | null>(
     null
@@ -33,9 +34,19 @@ export const useDeliveryFee = (
       setError(null);
 
       try {
-        const url = addressId
-          ? `/orders/item/${itemId}/deliveryFee?addressId=${addressId}`
-          : `/orders/item/${itemId}/deliveryFee`;
+        const params = new URLSearchParams();
+        if (addressId) {
+          params.append('addressId', addressId);
+        }
+        if (requiresFastDelivery) {
+          params.append('requiresFastDelivery', 'true');
+        }
+
+        const queryString = params.toString();
+        const url = `/orders/item/${itemId}/deliveryFee${
+          queryString ? `?${queryString}` : ''
+        }`;
+
         const response = await apiClient.get(url);
 
         if (response.data.success) {
@@ -56,7 +67,7 @@ export const useDeliveryFee = (
     };
 
     fetchDeliveryFee();
-  }, [itemId, addressId, apiClient]);
+  }, [itemId, addressId, requiresFastDelivery, apiClient]);
 
   return {
     deliveryFee,

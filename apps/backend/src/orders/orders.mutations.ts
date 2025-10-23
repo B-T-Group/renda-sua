@@ -71,7 +71,7 @@ export const CREATE_ORDER = gql`
       order_number
       current_status
       subtotal
-      delivery_fee
+      base_delivery_fee
       tax_amount
       total_amount
       currency

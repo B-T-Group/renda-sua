@@ -323,7 +323,11 @@ const PlaceOrderPage: React.FC = () => {
     deliveryFee,
     loading: deliveryFeeLoading,
     error: deliveryFeeError,
-  } = useDeliveryFee(selectedItem?.id || null, selectedAddressId);
+  } = useDeliveryFee(
+    selectedItem?.id || null,
+    selectedAddressId,
+    requiresFastDelivery
+  );
 
   // Get client addresses
   const {
@@ -389,9 +393,6 @@ const PlaceOrderPage: React.FC = () => {
         delivery_address_id: selectedAddressId,
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         requires_fast_delivery: requiresFastDelivery,
-        fast_delivery_fee: requiresFastDelivery
-          ? fastDeliveryConfig?.fee || 0
-          : 0,
         delivery_window: deliveryWindow,
       };
 

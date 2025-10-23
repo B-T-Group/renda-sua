@@ -12,7 +12,7 @@ export const GET_ORDERS = gql`
       assigned_agent_id
       delivery_address_id
       subtotal
-      delivery_fee
+      base_delivery_fee
       tax_amount
       total_amount
       currency
@@ -22,7 +22,7 @@ export const GET_ORDERS = gql`
       special_instructions
       preferred_delivery_time
       requires_fast_delivery
-      fast_delivery_fee
+      per_km_delivery_fee
       payment_method
       payment_status
       created_at
@@ -171,9 +171,10 @@ export const GET_ORDER_BY_ID = gql`
       assigned_agent_id
       delivery_address_id
       subtotal
-      delivery_fee
+      base_delivery_fee
       tax_amount
       total_amount
+      per_km_delivery_fee
       currency
       current_status
       estimated_delivery_time
@@ -391,8 +392,8 @@ export const GET_ORDER_BY_NUMBER = gql`
       order_number
       current_status
       subtotal
-      delivery_fee
-      fast_delivery_fee
+      base_delivery_fee
+      per_km_delivery_fee
       tax_amount
       total_amount
       currency
@@ -550,7 +551,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
       order_number
       current_status
       subtotal
-      delivery_fee
+      base_delivery_fee
       tax_amount
       total_amount
       currency
@@ -719,14 +720,14 @@ export const GET_OPEN_ORDERS = gql`
         }
       }
       subtotal
-      delivery_fee
+      base_delivery_fee
       tax_amount
       total_amount
       currency
       estimated_delivery_time
       special_instructions
       requires_fast_delivery
-      fast_delivery_fee
+      per_km_delivery_fee
       created_at
     }
   }

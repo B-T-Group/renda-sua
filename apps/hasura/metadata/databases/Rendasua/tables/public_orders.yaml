@@ -87,8 +87,8 @@ insert_permissions:
         - order_number
         - payment_method
         - payment_status
-        - delivery_fee
-        - fast_delivery_fee
+        - base_delivery_fee
+        - per_km_delivery_fee
         - subtotal
         - tax_amount
         - total_amount
@@ -118,8 +118,8 @@ select_permissions:
         - assigned_agent_id
         - delivery_address_id
         - subtotal
-        - delivery_fee
-        - fast_delivery_fee
+        - base_delivery_fee
+        - per_km_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -150,8 +150,8 @@ select_permissions:
         - assigned_agent_id
         - delivery_address_id
         - subtotal
-        - delivery_fee
-        - fast_delivery_fee
+        - base_delivery_fee
+        - per_km_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -182,8 +182,8 @@ select_permissions:
         - assigned_agent_id
         - delivery_address_id
         - subtotal
-        - delivery_fee
-        - fast_delivery_fee
+        - base_delivery_fee
+        - per_km_delivery_fee
         - tax_amount
         - total_amount
         - currency
@@ -237,7 +237,7 @@ update_permissions:
         - special_instructions
         - preferred_delivery_time
         - requires_fast_delivery
-        - fast_delivery_fee
+        - per_km_delivery_fee
         - updated_at
         - verified_agent_delivery
       filter:

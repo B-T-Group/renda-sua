@@ -11,7 +11,8 @@ export interface ClientOrder {
   assigned_agent_id: string | null;
   delivery_address_id: string;
   subtotal: number;
-  delivery_fee: number;
+  base_delivery_fee: number;
+  per_km_delivery_fee: number;
   tax_amount: number;
   total_amount: number;
   currency: string;
@@ -21,8 +22,6 @@ export interface ClientOrder {
   special_instructions: string | null;
   preferred_delivery_time: string | null;
   requires_fast_delivery: boolean;
-  fast_delivery_fee: number;
-  payment_method: string | null;
   payment_status: string | null;
   created_at: string;
   updated_at: string;
@@ -133,7 +132,8 @@ const GET_CLIENT_ORDERS = `
       assigned_agent_id
       delivery_address_id
       subtotal
-      delivery_fee
+      base_delivery_fee
+      per_km_delivery_fee
       tax_amount
       total_amount
       currency
@@ -143,8 +143,6 @@ const GET_CLIENT_ORDERS = `
       special_instructions
       preferred_delivery_time
       requires_fast_delivery
-      fast_delivery_fee
-      payment_method
       payment_status
       created_at
       updated_at

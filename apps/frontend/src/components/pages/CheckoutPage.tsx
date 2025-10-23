@@ -259,7 +259,11 @@ const CheckoutPage: React.FC = () => {
     deliveryFee,
     loading: deliveryFeeLoading,
     error: deliveryFeeError,
-  } = useDeliveryFee(firstItem?.inventoryItemId || null, selectedAddressId);
+  } = useDeliveryFee(
+    firstItem?.inventoryItemId || null,
+    selectedAddressId,
+    requiresFastDelivery
+  );
 
   // Checkout hook
   const {

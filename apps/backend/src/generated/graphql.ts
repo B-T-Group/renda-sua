@@ -15336,6 +15336,8 @@ export type Orders = {
   /** An object relationship */
   assigned_agent?: Maybe<Agents>;
   assigned_agent_id?: Maybe<Scalars['uuid']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee: Scalars['numeric']['output'];
   /** An object relationship */
   business: Businesses;
   business_id: Scalars['uuid']['output'];
@@ -15351,7 +15353,6 @@ export type Orders = {
   /** An object relationship */
   delivery_address: Addresses;
   delivery_address_id: Scalars['uuid']['output'];
-  delivery_fee: Scalars['numeric']['output'];
   /** An object relationship */
   delivery_time_window?: Maybe<Delivery_Time_Windows>;
   /** Reference to client preferred delivery time window */
@@ -15361,8 +15362,6 @@ export type Orders = {
   /** An aggregate relationship */
   delivery_time_windows_aggregate: Delivery_Time_Windows_Aggregate;
   estimated_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee: Scalars['numeric']['output'];
   id: Scalars['uuid']['output'];
   /** An object relationship */
   order_hold?: Maybe<Order_Holds>;
@@ -15381,6 +15380,8 @@ export type Orders = {
   order_status_history_aggregate: Order_Status_History_Aggregate;
   payment_method?: Maybe<Scalars['String']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee: Scalars['numeric']['output'];
   preferred_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
   /** An array relationship */
   ratings: Array<Ratings>;
@@ -15579,9 +15580,10 @@ export type Orders_Arr_Rel_Insert_Input = {
 /** aggregate avg on columns */
 export type Orders_Avg_Fields = {
   __typename?: 'orders_avg_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -15589,9 +15591,10 @@ export type Orders_Avg_Fields = {
 
 /** order by avg() on columns of table "orders" */
 export type Orders_Avg_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -15605,6 +15608,7 @@ export type Orders_Bool_Exp = {
   actual_delivery_time?: InputMaybe<Timestamptz_Comparison_Exp>;
   assigned_agent?: InputMaybe<Agents_Bool_Exp>;
   assigned_agent_id?: InputMaybe<Uuid_Comparison_Exp>;
+  base_delivery_fee?: InputMaybe<Numeric_Comparison_Exp>;
   business?: InputMaybe<Businesses_Bool_Exp>;
   business_id?: InputMaybe<Uuid_Comparison_Exp>;
   business_location?: InputMaybe<Business_Locations_Bool_Exp>;
@@ -15616,13 +15620,11 @@ export type Orders_Bool_Exp = {
   current_status?: InputMaybe<Order_Status_Comparison_Exp>;
   delivery_address?: InputMaybe<Addresses_Bool_Exp>;
   delivery_address_id?: InputMaybe<Uuid_Comparison_Exp>;
-  delivery_fee?: InputMaybe<Numeric_Comparison_Exp>;
   delivery_time_window?: InputMaybe<Delivery_Time_Windows_Bool_Exp>;
   delivery_time_window_id?: InputMaybe<Uuid_Comparison_Exp>;
   delivery_time_windows?: InputMaybe<Delivery_Time_Windows_Bool_Exp>;
   delivery_time_windows_aggregate?: InputMaybe<Delivery_Time_Windows_Aggregate_Bool_Exp>;
   estimated_delivery_time?: InputMaybe<Timestamptz_Comparison_Exp>;
-  fast_delivery_fee?: InputMaybe<Numeric_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   order_hold?: InputMaybe<Order_Holds_Bool_Exp>;
   order_holds?: InputMaybe<Order_Holds_Bool_Exp>;
@@ -15634,6 +15636,7 @@ export type Orders_Bool_Exp = {
   order_status_history_aggregate?: InputMaybe<Order_Status_History_Aggregate_Bool_Exp>;
   payment_method?: InputMaybe<String_Comparison_Exp>;
   payment_status?: InputMaybe<String_Comparison_Exp>;
+  per_km_delivery_fee?: InputMaybe<Numeric_Comparison_Exp>;
   preferred_delivery_time?: InputMaybe<Timestamptz_Comparison_Exp>;
   ratings?: InputMaybe<Ratings_Bool_Exp>;
   ratings_aggregate?: InputMaybe<Ratings_Aggregate_Bool_Exp>;
@@ -15656,9 +15659,10 @@ export enum Orders_Constraint {
 
 /** input type for incrementing numeric columns in table "orders" */
 export type Orders_Inc_Input = {
-  delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   subtotal?: InputMaybe<Scalars['numeric']['input']>;
   tax_amount?: InputMaybe<Scalars['numeric']['input']>;
   total_amount?: InputMaybe<Scalars['numeric']['input']>;
@@ -15669,6 +15673,8 @@ export type Orders_Insert_Input = {
   actual_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   assigned_agent?: InputMaybe<Agents_Obj_Rel_Insert_Input>;
   assigned_agent_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   business?: InputMaybe<Businesses_Obj_Rel_Insert_Input>;
   business_id?: InputMaybe<Scalars['uuid']['input']>;
   business_location?: InputMaybe<Business_Locations_Obj_Rel_Insert_Input>;
@@ -15680,14 +15686,11 @@ export type Orders_Insert_Input = {
   current_status?: InputMaybe<Scalars['order_status']['input']>;
   delivery_address?: InputMaybe<Addresses_Obj_Rel_Insert_Input>;
   delivery_address_id?: InputMaybe<Scalars['uuid']['input']>;
-  delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   delivery_time_window?: InputMaybe<Delivery_Time_Windows_Obj_Rel_Insert_Input>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: InputMaybe<Scalars['uuid']['input']>;
   delivery_time_windows?: InputMaybe<Delivery_Time_Windows_Arr_Rel_Insert_Input>;
   estimated_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   order_hold?: InputMaybe<Order_Holds_Obj_Rel_Insert_Input>;
   order_holds?: InputMaybe<Order_Holds_Arr_Rel_Insert_Input>;
@@ -15696,6 +15699,8 @@ export type Orders_Insert_Input = {
   order_status_history?: InputMaybe<Order_Status_History_Arr_Rel_Insert_Input>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   preferred_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   ratings?: InputMaybe<Ratings_Arr_Rel_Insert_Input>;
   /** Indicates whether this order requires expedited/fast delivery service (typically 2-4 hours) */
@@ -15714,6 +15719,8 @@ export type Orders_Max_Fields = {
   __typename?: 'orders_max_fields';
   actual_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
   assigned_agent_id?: Maybe<Scalars['uuid']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   business_id?: Maybe<Scalars['uuid']['output']>;
   business_location_id?: Maybe<Scalars['uuid']['output']>;
   client_id?: Maybe<Scalars['uuid']['output']>;
@@ -15721,16 +15728,15 @@ export type Orders_Max_Fields = {
   currency?: Maybe<Scalars['String']['output']>;
   current_status?: Maybe<Scalars['order_status']['output']>;
   delivery_address_id?: Maybe<Scalars['uuid']['output']>;
-  delivery_fee?: Maybe<Scalars['numeric']['output']>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: Maybe<Scalars['uuid']['output']>;
   estimated_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   order_number?: Maybe<Scalars['String']['output']>;
   payment_method?: Maybe<Scalars['String']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   preferred_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
   special_instructions?: Maybe<Scalars['String']['output']>;
   subtotal?: Maybe<Scalars['numeric']['output']>;
@@ -15743,6 +15749,8 @@ export type Orders_Max_Fields = {
 export type Orders_Max_Order_By = {
   actual_delivery_time?: InputMaybe<Order_By>;
   assigned_agent_id?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
   business_id?: InputMaybe<Order_By>;
   business_location_id?: InputMaybe<Order_By>;
   client_id?: InputMaybe<Order_By>;
@@ -15750,16 +15758,15 @@ export type Orders_Max_Order_By = {
   currency?: InputMaybe<Order_By>;
   current_status?: InputMaybe<Order_By>;
   delivery_address_id?: InputMaybe<Order_By>;
-  delivery_fee?: InputMaybe<Order_By>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: InputMaybe<Order_By>;
   estimated_delivery_time?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   order_number?: InputMaybe<Order_By>;
   payment_method?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   preferred_delivery_time?: InputMaybe<Order_By>;
   special_instructions?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
@@ -15773,6 +15780,8 @@ export type Orders_Min_Fields = {
   __typename?: 'orders_min_fields';
   actual_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
   assigned_agent_id?: Maybe<Scalars['uuid']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   business_id?: Maybe<Scalars['uuid']['output']>;
   business_location_id?: Maybe<Scalars['uuid']['output']>;
   client_id?: Maybe<Scalars['uuid']['output']>;
@@ -15780,16 +15789,15 @@ export type Orders_Min_Fields = {
   currency?: Maybe<Scalars['String']['output']>;
   current_status?: Maybe<Scalars['order_status']['output']>;
   delivery_address_id?: Maybe<Scalars['uuid']['output']>;
-  delivery_fee?: Maybe<Scalars['numeric']['output']>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: Maybe<Scalars['uuid']['output']>;
   estimated_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   order_number?: Maybe<Scalars['String']['output']>;
   payment_method?: Maybe<Scalars['String']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   preferred_delivery_time?: Maybe<Scalars['timestamptz']['output']>;
   special_instructions?: Maybe<Scalars['String']['output']>;
   subtotal?: Maybe<Scalars['numeric']['output']>;
@@ -15802,6 +15810,8 @@ export type Orders_Min_Fields = {
 export type Orders_Min_Order_By = {
   actual_delivery_time?: InputMaybe<Order_By>;
   assigned_agent_id?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
   business_id?: InputMaybe<Order_By>;
   business_location_id?: InputMaybe<Order_By>;
   client_id?: InputMaybe<Order_By>;
@@ -15809,16 +15819,15 @@ export type Orders_Min_Order_By = {
   currency?: InputMaybe<Order_By>;
   current_status?: InputMaybe<Order_By>;
   delivery_address_id?: InputMaybe<Order_By>;
-  delivery_fee?: InputMaybe<Order_By>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: InputMaybe<Order_By>;
   estimated_delivery_time?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   order_number?: InputMaybe<Order_By>;
   payment_method?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   preferred_delivery_time?: InputMaybe<Order_By>;
   special_instructions?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
@@ -15855,6 +15864,7 @@ export type Orders_Order_By = {
   actual_delivery_time?: InputMaybe<Order_By>;
   assigned_agent?: InputMaybe<Agents_Order_By>;
   assigned_agent_id?: InputMaybe<Order_By>;
+  base_delivery_fee?: InputMaybe<Order_By>;
   business?: InputMaybe<Businesses_Order_By>;
   business_id?: InputMaybe<Order_By>;
   business_location?: InputMaybe<Business_Locations_Order_By>;
@@ -15866,12 +15876,10 @@ export type Orders_Order_By = {
   current_status?: InputMaybe<Order_By>;
   delivery_address?: InputMaybe<Addresses_Order_By>;
   delivery_address_id?: InputMaybe<Order_By>;
-  delivery_fee?: InputMaybe<Order_By>;
   delivery_time_window?: InputMaybe<Delivery_Time_Windows_Order_By>;
   delivery_time_window_id?: InputMaybe<Order_By>;
   delivery_time_windows_aggregate?: InputMaybe<Delivery_Time_Windows_Aggregate_Order_By>;
   estimated_delivery_time?: InputMaybe<Order_By>;
-  fast_delivery_fee?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   order_hold?: InputMaybe<Order_Holds_Order_By>;
   order_holds_aggregate?: InputMaybe<Order_Holds_Aggregate_Order_By>;
@@ -15880,6 +15888,7 @@ export type Orders_Order_By = {
   order_status_history_aggregate?: InputMaybe<Order_Status_History_Aggregate_Order_By>;
   payment_method?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   preferred_delivery_time?: InputMaybe<Order_By>;
   ratings_aggregate?: InputMaybe<Ratings_Aggregate_Order_By>;
   requires_fast_delivery?: InputMaybe<Order_By>;
@@ -15903,6 +15912,8 @@ export enum Orders_Select_Column {
   /** column name */
   AssignedAgentId = 'assigned_agent_id',
   /** column name */
+  BaseDeliveryFee = 'base_delivery_fee',
+  /** column name */
   BusinessId = 'business_id',
   /** column name */
   BusinessLocationId = 'business_location_id',
@@ -15917,13 +15928,9 @@ export enum Orders_Select_Column {
   /** column name */
   DeliveryAddressId = 'delivery_address_id',
   /** column name */
-  DeliveryFee = 'delivery_fee',
-  /** column name */
   DeliveryTimeWindowId = 'delivery_time_window_id',
   /** column name */
   EstimatedDeliveryTime = 'estimated_delivery_time',
-  /** column name */
-  FastDeliveryFee = 'fast_delivery_fee',
   /** column name */
   Id = 'id',
   /** column name */
@@ -15932,6 +15939,8 @@ export enum Orders_Select_Column {
   PaymentMethod = 'payment_method',
   /** column name */
   PaymentStatus = 'payment_status',
+  /** column name */
+  PerKmDeliveryFee = 'per_km_delivery_fee',
   /** column name */
   PreferredDeliveryTime = 'preferred_delivery_time',
   /** column name */
@@ -15970,6 +15979,8 @@ export enum Orders_Select_Column_Orders_Aggregate_Bool_Exp_Bool_Or_Arguments_Col
 export type Orders_Set_Input = {
   actual_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   assigned_agent_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   business_id?: InputMaybe<Scalars['uuid']['input']>;
   business_location_id?: InputMaybe<Scalars['uuid']['input']>;
   client_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -15977,16 +15988,15 @@ export type Orders_Set_Input = {
   currency?: InputMaybe<Scalars['String']['input']>;
   current_status?: InputMaybe<Scalars['order_status']['input']>;
   delivery_address_id?: InputMaybe<Scalars['uuid']['input']>;
-  delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: InputMaybe<Scalars['uuid']['input']>;
   estimated_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   order_number?: InputMaybe<Scalars['String']['input']>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   preferred_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   /** Indicates whether this order requires expedited/fast delivery service (typically 2-4 hours) */
   requires_fast_delivery?: InputMaybe<Scalars['Boolean']['input']>;
@@ -16002,9 +16012,10 @@ export type Orders_Set_Input = {
 /** aggregate stddev on columns */
 export type Orders_Stddev_Fields = {
   __typename?: 'orders_stddev_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16012,9 +16023,10 @@ export type Orders_Stddev_Fields = {
 
 /** order by stddev() on columns of table "orders" */
 export type Orders_Stddev_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16023,9 +16035,10 @@ export type Orders_Stddev_Order_By = {
 /** aggregate stddev_pop on columns */
 export type Orders_Stddev_Pop_Fields = {
   __typename?: 'orders_stddev_pop_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16033,9 +16046,10 @@ export type Orders_Stddev_Pop_Fields = {
 
 /** order by stddev_pop() on columns of table "orders" */
 export type Orders_Stddev_Pop_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16044,9 +16058,10 @@ export type Orders_Stddev_Pop_Order_By = {
 /** aggregate stddev_samp on columns */
 export type Orders_Stddev_Samp_Fields = {
   __typename?: 'orders_stddev_samp_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16054,9 +16069,10 @@ export type Orders_Stddev_Samp_Fields = {
 
 /** order by stddev_samp() on columns of table "orders" */
 export type Orders_Stddev_Samp_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16074,6 +16090,8 @@ export type Orders_Stream_Cursor_Input = {
 export type Orders_Stream_Cursor_Value_Input = {
   actual_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   assigned_agent_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   business_id?: InputMaybe<Scalars['uuid']['input']>;
   business_location_id?: InputMaybe<Scalars['uuid']['input']>;
   client_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -16081,16 +16099,15 @@ export type Orders_Stream_Cursor_Value_Input = {
   currency?: InputMaybe<Scalars['String']['input']>;
   current_status?: InputMaybe<Scalars['order_status']['input']>;
   delivery_address_id?: InputMaybe<Scalars['uuid']['input']>;
-  delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   /** Reference to client preferred delivery time window */
   delivery_time_window_id?: InputMaybe<Scalars['uuid']['input']>;
   estimated_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   order_number?: InputMaybe<Scalars['String']['input']>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
   preferred_delivery_time?: InputMaybe<Scalars['timestamptz']['input']>;
   /** Indicates whether this order requires expedited/fast delivery service (typically 2-4 hours) */
   requires_fast_delivery?: InputMaybe<Scalars['Boolean']['input']>;
@@ -16106,9 +16123,10 @@ export type Orders_Stream_Cursor_Value_Input = {
 /** aggregate sum on columns */
 export type Orders_Sum_Fields = {
   __typename?: 'orders_sum_fields';
-  delivery_fee?: Maybe<Scalars['numeric']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['numeric']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['numeric']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['numeric']['output']>;
   subtotal?: Maybe<Scalars['numeric']['output']>;
   tax_amount?: Maybe<Scalars['numeric']['output']>;
   total_amount?: Maybe<Scalars['numeric']['output']>;
@@ -16116,9 +16134,10 @@ export type Orders_Sum_Fields = {
 
 /** order by sum() on columns of table "orders" */
 export type Orders_Sum_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16130,6 +16149,8 @@ export enum Orders_Update_Column {
   ActualDeliveryTime = 'actual_delivery_time',
   /** column name */
   AssignedAgentId = 'assigned_agent_id',
+  /** column name */
+  BaseDeliveryFee = 'base_delivery_fee',
   /** column name */
   BusinessId = 'business_id',
   /** column name */
@@ -16145,13 +16166,9 @@ export enum Orders_Update_Column {
   /** column name */
   DeliveryAddressId = 'delivery_address_id',
   /** column name */
-  DeliveryFee = 'delivery_fee',
-  /** column name */
   DeliveryTimeWindowId = 'delivery_time_window_id',
   /** column name */
   EstimatedDeliveryTime = 'estimated_delivery_time',
-  /** column name */
-  FastDeliveryFee = 'fast_delivery_fee',
   /** column name */
   Id = 'id',
   /** column name */
@@ -16160,6 +16177,8 @@ export enum Orders_Update_Column {
   PaymentMethod = 'payment_method',
   /** column name */
   PaymentStatus = 'payment_status',
+  /** column name */
+  PerKmDeliveryFee = 'per_km_delivery_fee',
   /** column name */
   PreferredDeliveryTime = 'preferred_delivery_time',
   /** column name */
@@ -16190,9 +16209,10 @@ export type Orders_Updates = {
 /** aggregate var_pop on columns */
 export type Orders_Var_Pop_Fields = {
   __typename?: 'orders_var_pop_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16200,9 +16220,10 @@ export type Orders_Var_Pop_Fields = {
 
 /** order by var_pop() on columns of table "orders" */
 export type Orders_Var_Pop_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16211,9 +16232,10 @@ export type Orders_Var_Pop_Order_By = {
 /** aggregate var_samp on columns */
 export type Orders_Var_Samp_Fields = {
   __typename?: 'orders_var_samp_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16221,9 +16243,10 @@ export type Orders_Var_Samp_Fields = {
 
 /** order by var_samp() on columns of table "orders" */
 export type Orders_Var_Samp_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -16232,9 +16255,10 @@ export type Orders_Var_Samp_Order_By = {
 /** aggregate variance on columns */
 export type Orders_Variance_Fields = {
   __typename?: 'orders_variance_fields';
-  delivery_fee?: Maybe<Scalars['Float']['output']>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: Maybe<Scalars['Float']['output']>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: Maybe<Scalars['Float']['output']>;
   subtotal?: Maybe<Scalars['Float']['output']>;
   tax_amount?: Maybe<Scalars['Float']['output']>;
   total_amount?: Maybe<Scalars['Float']['output']>;
@@ -16242,9 +16266,10 @@ export type Orders_Variance_Fields = {
 
 /** order by variance() on columns of table "orders" */
 export type Orders_Variance_Order_By = {
-  delivery_fee?: InputMaybe<Order_By>;
-  /** Additional fee charged for fast delivery service, added to the base delivery_fee */
-  fast_delivery_fee?: InputMaybe<Order_By>;
+  /** Base delivery fee used for this order (either base_delivery_fee or fast_delivery_fee from config) */
+  base_delivery_fee?: InputMaybe<Order_By>;
+  /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
+  per_km_delivery_fee?: InputMaybe<Order_By>;
   subtotal?: InputMaybe<Order_By>;
   tax_amount?: InputMaybe<Order_By>;
   total_amount?: InputMaybe<Order_By>;
@@ -22333,7 +22358,7 @@ export type CreateOrderMutationVariables = Exact<{
 }>;
 
 
-export type CreateOrderMutation = { __typename?: 'mutation_root', insert_orders_one?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, business_location_id: string, created_at?: string | null } | null };
+export type CreateOrderMutation = { __typename?: 'mutation_root', insert_orders_one?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, business_location_id: string, created_at?: string | null } | null };
 
 export type UpdateOrderStatusMutationVariables = Exact<{
   orderId: Scalars['uuid']['input'];
@@ -22378,21 +22403,21 @@ export type GetBusinessOrdersQueryVariables = Exact<{
 }>;
 
 
-export type GetBusinessOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, assigned_agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } } | null, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, id: string, previous_status?: any | null, status: any, notes?: string | null, changed_by_user?: { __typename?: 'users', agent?: { __typename?: 'agents', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, business?: { __typename?: 'businesses', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, client?: { __typename?: 'clients', user: { __typename?: 'users', first_name: string, email: string, last_name: string } } | null } | null }> }> };
+export type GetBusinessOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, requires_fast_delivery: boolean, per_km_delivery_fee: number, payment_method?: string | null, payment_status?: string | null, created_at?: string | null, updated_at?: string | null, delivery_time_window_id?: string | null, client: { __typename?: 'clients', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, assigned_agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } } | null, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, id: string, previous_status?: any | null, status: any, notes?: string | null, changed_by_user?: { __typename?: 'users', agent?: { __typename?: 'agents', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, business?: { __typename?: 'businesses', user: { __typename?: 'users', email: string, first_name: string, last_name: string } } | null, client?: { __typename?: 'clients', user: { __typename?: 'users', first_name: string, email: string, last_name: string } } | null } | null }>, delivery_time_windows: Array<{ __typename?: 'delivery_time_windows', id: string, slot_id: string, preferred_date: any, time_slot_start: any, time_slot_end: any, is_confirmed?: boolean | null, special_instructions?: string | null, confirmed_at?: string | null, confirmed_by?: string | null, slot: { __typename?: 'delivery_time_slots', id: string, slot_name: string, slot_type: string, start_time: any, end_time: any } }> }> };
 
 export type GetOrderByIdQueryVariables = Exact<{
   orderId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetOrderByIdQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, verified_agent_delivery?: boolean | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user_id: string, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null }, assigned_agent?: { __typename?: 'agents', id: string, user_id: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } } | null, order_items: Array<{ __typename?: 'order_items', id: string, business_inventory_id: string, item_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string, description: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, description: string, item_category: { __typename?: 'item_categories', id: number, name: string, description: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string, alt_text?: string | null, display_order?: number | null }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', id: string, order_id: string, status: any, previous_status?: any | null, notes?: string | null, changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, changed_by_user?: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, business?: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, client?: { __typename?: 'clients', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null } | null }>, order_holds: Array<{ __typename?: 'order_holds', id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string, updated_at: string }> } | null };
+export type GetOrderByIdQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, verified_agent_delivery?: boolean | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user_id: string, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null }, assigned_agent?: { __typename?: 'agents', id: string, user_id: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } } | null, order_items: Array<{ __typename?: 'order_items', id: string, business_inventory_id: string, item_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string, description: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, description: string, item_category: { __typename?: 'item_categories', id: number, name: string, description: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string, alt_text?: string | null, display_order?: number | null }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', id: string, order_id: string, status: any, previous_status?: any | null, notes?: string | null, changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, changed_by_user?: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, business?: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, client?: { __typename?: 'clients', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null } | null }>, order_holds: Array<{ __typename?: 'order_holds', id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string, updated_at: string }>, delivery_time_windows: Array<{ __typename?: 'delivery_time_windows', id: string, order_id: string, slot_id: string, preferred_date: any, time_slot_start: any, time_slot_end: any, is_confirmed?: boolean | null, special_instructions?: string | null, confirmed_at?: string | null, confirmed_by?: string | null, created_at?: string | null, updated_at?: string | null, slot: { __typename?: 'delivery_time_slots', id: string, slot_name: string, slot_type: string, start_time: any, end_time: any, is_active?: boolean | null }, confirmedByUser?: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } | null }> } | null };
 
 export type GetOrderByNumberQueryVariables = Exact<{
   orderNumber: Scalars['String']['input'];
 }>;
 
 
-export type GetOrderByNumberQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, fast_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, business_id: string, client_id: string, delivery_address_id: string, requires_fast_delivery: boolean, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> }> };
+export type GetOrderByNumberQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, base_delivery_fee: number, per_km_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, business_id: string, client_id: string, delivery_address_id: string, requires_fast_delivery: boolean, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, is_verified?: boolean | null, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }>, delivery_time_windows: Array<{ __typename?: 'delivery_time_windows', id: string, order_id: string, slot_id: string, preferred_date: any, time_slot_start: any, time_slot_end: any, is_confirmed?: boolean | null, special_instructions?: string | null, confirmed_at?: string | null, confirmed_by?: string | null, created_at?: string | null, updated_at?: string | null, slot: { __typename?: 'delivery_time_slots', id: string, slot_name: string, slot_type: string, start_time: any, end_time: any, is_active?: boolean | null }, confirmedByUser?: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } | null }> }> };
 
 export type GetOrderQueryVariables = Exact<{
   orderId: Scalars['uuid']['input'];
@@ -22406,12 +22431,12 @@ export type GetOrderWithItemsQueryVariables = Exact<{
 }>;
 
 
-export type GetOrderWithItemsQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> } | null };
+export type GetOrderWithItemsQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, current_status: any, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, business_id: string, client_id: string, delivery_address_id: string, client: { __typename?: 'clients', user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } }, business_location: { __typename?: 'business_locations', id: string, address_id: string, business: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', id: string, email: string } }, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> } | null };
 
 export type OpenOrdersQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type OpenOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, subtotal: number, delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, created_at?: string | null, business: { __typename?: 'businesses', name: string }, client: { __typename?: 'clients', user: { __typename?: 'users', id: string, first_name: string, last_name: string, phone_number?: string | null, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, address: { __typename?: 'addresses', address_line_1: string, city: string, state: string, country: string, postal_code: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> }> };
+export type OpenOrdersQuery = { __typename?: 'query_root', orders: Array<{ __typename?: 'orders', id: string, order_number: string, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, currency: string, estimated_delivery_time?: string | null, special_instructions?: string | null, requires_fast_delivery: boolean, per_km_delivery_fee: number, created_at?: string | null, business: { __typename?: 'businesses', name: string }, client: { __typename?: 'clients', user: { __typename?: 'users', id: string, first_name: string, last_name: string, phone_number?: string | null, email: string } }, business_location: { __typename?: 'business_locations', id: string, name: string, address: { __typename?: 'addresses', address_line_1: string, city: string, state: string, country: string, postal_code: string } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string }, order_items: Array<{ __typename?: 'order_items', id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, weight?: number | null, weight_unit?: string | null, dimensions?: string | null, special_instructions?: string | null, item: { __typename?: 'items', sku?: string | null, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, brand?: { __typename?: 'brands', id: string, name: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, item_category: { __typename?: 'item_categories', id: number, name: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string }> } }> }> };
 
 export type GetUsersQueryVariables = Exact<{ [key: string]: never; }>;
 

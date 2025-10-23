@@ -56,7 +56,8 @@ export interface OrderWithDetails {
   assigned_agent_id?: string;
   delivery_address_id: string;
   subtotal: number;
-  delivery_fee: number;
+  base_delivery_fee: number;
+  per_km_delivery_fee: number;
   tax_amount: number;
   total_amount: number;
   currency: string;
@@ -2178,17 +2179,15 @@ export class OrdersService {
         referenceId: order.id,
       });
 
-      // Calculate total delivery fees (base delivery fee + fast delivery fee)
+      // Calculate total delivery fees (base delivery fee + per-km delivery fee)
       const totalDeliveryFees =
-        order.delivery_fee + (order.fast_delivery_fee || 0);
+        order.base_delivery_fee + order.per_km_delivery_fee;
 
       await this.accountsService.registerTransaction({
         accountId: transaction.account_id,
         amount: totalDeliveryFees,
         transactionType: 'hold',
-        memo: `Hold for order ${order.order_number} delivery fees (base: ${
-          order.delivery_fee
-        }, fast: ${order.fast_delivery_fee || 0})`,
+        memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee}, per-km: ${order.per_km_delivery_fee})`,
         referenceId: order.id,
       });
 
@@ -2240,8 +2239,8 @@ export class OrdersService {
                 totalPrice: item.total_price || 0,
               })) || [],
             subtotal: order.subtotal || 0,
-            deliveryFee: order.delivery_fee || 0,
-            fastDeliveryFee: order.fast_delivery_fee || 0,
+            deliveryFee: order.base_delivery_fee || 0,
+            fastDeliveryFee: order.per_km_delivery_fee || 0,
             taxAmount: order.tax_amount || 0,
             totalAmount: order.total_amount || 0,
             currency: order.currency || 'USD',
@@ -2722,10 +2721,11 @@ export class OrdersService {
       0
     );
 
-    // Calculate delivery fee using the first item's business inventory ID and total weight
+    // Calculate delivery fee using the new structure
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
       orderData.items[0].business_inventory_id,
       orderData.delivery_address?.id,
+      orderData.requires_fast_delivery,
       totalWeight
     );
 
@@ -2743,21 +2743,8 @@ export class OrdersService {
         sum + inv.selling_price * orderData.items[idx].quantity,
       0
     );
-    const deliveryFee = deliveryFeeInfo.deliveryFee;
 
-    // Get fast delivery fee from supported_country_states if requires_fast_delivery is true
-    let fastDeliveryFee = 0;
-    if (orderData.requires_fast_delivery) {
-      const fastDeliveryInfo = await this.getFastDeliveryFee(
-        address.state,
-        address.country
-      );
-      fastDeliveryFee = fastDeliveryInfo.fee;
-    }
-
-    const total_amount = totalAmount + deliveryFee + fastDeliveryFee;
-
-    // Get payment provider based on phone number (use request phone_number if provided, otherwise user's phone_number)
+    const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     const phoneNumber = orderData.phone_number || user.phone_number || '';
     const provider = this.getProvider(phoneNumber);
 
@@ -2906,8 +2893,8 @@ export class OrdersService {
         $currency: String!,
         $subTotal: numeric!,
         $taxAmount: numeric!,
-        $deliveryFee: numeric!,
-        $fastDeliveryFee: numeric!,
+        $baseDeliveryFee: numeric!,
+        $perKmDeliveryFee: numeric!,
         $totalAmount: numeric!,
         $currentStatus: order_status!,
         $paymentMethod: String!,
@@ -2929,8 +2916,8 @@ export class OrdersService {
           order_number: $orderNumber,
           payment_method: $paymentMethod,
           payment_status: $paymentStatus,
-          delivery_fee: $deliveryFee,
-          fast_delivery_fee: $fastDeliveryFee,
+          base_delivery_fee: $baseDeliveryFee,
+          per_km_delivery_fee: $perKmDeliveryFee,
           subtotal: $subTotal,
           tax_amount: $taxAmount,
           total_amount: $totalAmount,
@@ -2951,8 +2938,8 @@ export class OrdersService {
           order_number
           payment_method
           payment_status
-          delivery_fee
-          fast_delivery_fee
+          base_delivery_fee
+          per_km_delivery_fee
           subtotal
           tax_amount
           total_amount
@@ -3011,8 +2998,8 @@ export class OrdersService {
         currency: currency,
         subTotal: subtotal,
         taxAmount: tax_amount,
-        deliveryFee: deliveryFee,
-        fastDeliveryFee: fastDeliveryFee,
+        baseDeliveryFee: deliveryFeeInfo.baseDeliveryFee,
+        perKmDeliveryFee: deliveryFeeInfo.perKmDeliveryFee,
         totalAmount: total_amount,
         currentStatus: current_status,
         paymentMethod: payment_method,
@@ -3473,12 +3460,16 @@ export class OrdersService {
   async calculateItemDeliveryFee(
     itemId: string,
     addressId?: string,
+    requiresFastDelivery = false,
     totalWeight?: number
   ): Promise<{
     deliveryFee: number;
     distance?: number;
     method: 'distance_based' | 'flat_fee';
     currency: string;
+    country: string;
+    baseDeliveryFee: number;
+    perKmDeliveryFee: number;
   }> {
     try {
       // Get user for authorization
@@ -3543,16 +3534,20 @@ export class OrdersService {
             distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
 
           // Calculate fee using tiered pricing model
-          const deliveryFee = await this.calculateTieredDeliveryFee(
+          const feeComponents = await this.calculateTieredDeliveryFee(
             distanceKm,
-            'GA' // Default to GA, should be determined from address or order context
+            businessAddress.country,
+            requiresFastDelivery
           );
 
           return {
-            deliveryFee,
+            deliveryFee: feeComponents.totalFee,
+            baseDeliveryFee: feeComponents.baseFee,
+            perKmDeliveryFee: feeComponents.perKmFee,
             distance: distanceKm,
             method: 'distance_based',
             currency: item.item.currency,
+            country: businessAddress.country,
           };
         }
       } catch (distanceError) {
@@ -3562,10 +3557,27 @@ export class OrdersService {
       // Fallback to flat fee from delivery_fees table
       const flatFee = await this.getFlatDeliveryFee(item.item.currency);
 
+      let finalDeliveryFee = flatFee;
+
+      // Add fast delivery fee if required
+      if (requiresFastDelivery) {
+        const fastDeliveryConfig = await this.getFastDeliveryFee(
+          userAddress.state || '',
+          userAddress.country || ''
+        );
+
+        if (fastDeliveryConfig.enabled) {
+          finalDeliveryFee += fastDeliveryConfig.fee;
+        }
+      }
+
       return {
-        deliveryFee: flatFee,
+        deliveryFee: finalDeliveryFee,
         method: 'flat_fee',
         currency: item.item.currency,
+        country: businessAddress.country,
+        baseDeliveryFee: flatFee,
+        perKmDeliveryFee: 0,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -3667,13 +3679,13 @@ export class OrdersService {
             distanceMatrix.rows[0].elements[0].distance.value / 1000; // Convert meters to km
 
           // Calculate fee using tiered pricing model
-          const deliveryFee = await this.calculateTieredDeliveryFee(
+          const feeComponents = await this.calculateTieredDeliveryFee(
             distanceKm,
             this.extractCountryCode(clientAddress as Addresses, order) ?? 'GA'
           );
 
           return {
-            deliveryFee,
+            deliveryFee: feeComponents.totalFee,
             distance: distanceKm,
             method: 'distance_based',
             currency: order.currency,
@@ -3735,48 +3747,54 @@ export class OrdersService {
 
   /**
    * Calculate delivery fee using tiered pricing model based on application configurations
+   * Returns base fee and per-km fee components separately
    */
   private async calculateTieredDeliveryFee(
     distanceKm: number,
-    countryCode = 'GA'
-  ): Promise<number> {
+    countryCode = 'GA',
+    requiresFastDelivery = false
+  ): Promise<{ baseFee: number; perKmFee: number; totalFee: number }> {
     try {
-      // Get delivery fee configurations from application_configurations table
-      const [baseDeliveryFee, deliveryFeeRatePerKm, deliveryFeeMin] =
-        await Promise.all([
-          this.configurationsService.getConfigurationByKey(
-            'base_delivery_fee',
-            countryCode
-          ),
-          this.configurationsService.getConfigurationByKey(
-            'delivery_fee_rate_per_km',
-            countryCode
-          ),
-          this.configurationsService.getConfigurationByKey(
-            'delivery_fee_min',
-            countryCode
-          ),
-        ]);
+      // Get configurations - use fast_delivery_fee as base if fast delivery is enabled
+      const configKey = requiresFastDelivery
+        ? 'fast_delivery_fee'
+        : 'base_delivery_fee';
+      const [baseConfig, rateConfig, minConfig] = await Promise.all([
+        this.configurationsService.getConfigurationByKey(
+          configKey,
+          countryCode
+        ),
+        this.configurationsService.getConfigurationByKey(
+          'delivery_fee_rate_per_km',
+          countryCode
+        ),
+        this.configurationsService.getConfigurationByKey(
+          'delivery_fee_min',
+          countryCode
+        ),
+      ]);
 
       // Use fallback values if configurations are not found
-      const baseFee = baseDeliveryFee?.number_value || 300; // Default to GA values
-      const ratePerKm = deliveryFeeRatePerKm?.number_value || 200;
-      const minFee = deliveryFeeMin?.number_value || 500;
+      const baseFee =
+        baseConfig?.number_value || (requiresFastDelivery ? 1500 : 1000);
+      const ratePerKm = rateConfig?.number_value || 200;
+      const minFee = minConfig?.number_value || 500;
 
       this.logger.log(
-        `Calculating delivery fee for country ${countryCode}: base=${baseFee}, rate=${ratePerKm}/km, min=${minFee}, distance=${distanceKm}km`
+        `Calculating delivery fee for country ${countryCode}: base=${baseFee}, rate=${ratePerKm}/km, min=${minFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
       );
 
-      const calculatedFee = baseFee + distanceKm * ratePerKm;
-      const finalFee = Math.max(minFee, calculatedFee);
+      const perKmFee = distanceKm * ratePerKm;
+      const calculatedFee = baseFee + perKmFee;
+      const totalFee = Math.max(minFee, calculatedFee);
 
       this.logger.log(
-        `Delivery fee calculated: ${calculatedFee} -> ${finalFee} (min fee applied: ${
-          finalFee === minFee
+        `Delivery fee calculated: base=${baseFee}, perKm=${perKmFee}, total=${totalFee} (min fee applied: ${
+          totalFee === minFee
         })`
       );
 
-      return finalFee;
+      return { baseFee, perKmFee, totalFee };
     } catch (error) {
       this.logger.error(
         `Failed to calculate tiered delivery fee for country ${countryCode}:`,
@@ -3784,10 +3802,20 @@ export class OrdersService {
       );
 
       // Fallback to hardcoded GA values if configuration lookup fails
-      const fallbackConfig = { baseFee: 300, ratePerKm: 200, minFee: 500 };
-      const calculatedFee =
-        fallbackConfig.baseFee + distanceKm * fallbackConfig.ratePerKm;
-      return Math.max(fallbackConfig.minFee, calculatedFee);
+      const fallbackConfig = {
+        baseFee: requiresFastDelivery ? 1500 : 1000,
+        ratePerKm: 200,
+        minFee: 1000,
+      };
+      const perKmFee = distanceKm * fallbackConfig.ratePerKm;
+      const calculatedFee = fallbackConfig.baseFee + perKmFee;
+      const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
+
+      return {
+        baseFee: fallbackConfig.baseFee,
+        perKmFee,
+        totalFee,
+      };
     }
   }
 

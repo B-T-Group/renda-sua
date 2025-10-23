@@ -238,7 +238,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                     >
                       {t('agent.claimOrder.deliveryEarnings', 'Your Earnings', {
                         deliveryFee: formatCurrency(
-                          order.delivery_fee,
+                          order.base_delivery_fee + order.per_km_delivery_fee,
                           order.currency
                         ),
                       })}
@@ -248,7 +248,10 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       fontWeight="bold"
                       color="success.main"
                     >
-                      {formatCurrency(order.delivery_fee, order.currency)}
+                      {formatCurrency(
+                        order.base_delivery_fee + order.per_km_delivery_fee,
+                        order.currency
+                      )}
                     </Typography>
                   </Box>
                 </Stack>

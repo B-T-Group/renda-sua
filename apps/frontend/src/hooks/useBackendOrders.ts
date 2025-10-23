@@ -75,7 +75,7 @@ export interface OrderDetails {
   assigned_agent_id?: string;
   delivery_address_id: string;
   subtotal: number;
-  delivery_fee: number;
+  base_delivery_fee: number;
   tax_amount: number;
   total_amount: number;
   currency: string;

@@ -62,7 +62,6 @@ export class OrdersController {
         verified_agent_delivery: { type: 'boolean' },
         phone_number: { type: 'string' },
         requires_fast_delivery: { type: 'boolean' },
-        fast_delivery_fee: { type: 'number' },
         delivery_window: {
           type: 'object',
           properties: {
@@ -724,6 +723,13 @@ export class OrdersController {
     description:
       'Address ID to calculate delivery fee to (uses primary address if not provided)',
   })
+  @ApiQuery({
+    name: 'requiresFastDelivery',
+    required: false,
+    type: Boolean,
+    description:
+      'Whether fast delivery is required (affects delivery fee calculation)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Delivery fee calculated successfully',
@@ -770,12 +776,14 @@ export class OrdersController {
   })
   async getItemDeliveryFee(
     @Param('itemId') itemId: string,
-    @Query('addressId') addressId?: string
+    @Query('addressId') addressId?: string,
+    @Query('requiresFastDelivery') requiresFastDelivery?: boolean
   ) {
     try {
       const deliveryFeeInfo = await this.ordersService.calculateItemDeliveryFee(
         itemId,
-        addressId
+        addressId,
+        requiresFastDelivery || false
       );
 
       return {

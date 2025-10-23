@@ -251,7 +251,8 @@ export class OrderStatusService {
           order_number
           current_status
           subtotal
-          delivery_fee
+          base_delivery_fee
+          per_km_delivery_fee
           tax_amount
           total_amount
           currency
@@ -323,7 +324,7 @@ export class OrderStatusService {
         totalPrice: item.total_price,
       })),
       subtotal: order.subtotal,
-      deliveryFee: order.delivery_fee,
+      deliveryFee: order.base_delivery_fee + order.per_km_delivery_fee,
       taxAmount: order.tax_amount,
       totalAmount: order.total_amount,
       currency: order.currency,

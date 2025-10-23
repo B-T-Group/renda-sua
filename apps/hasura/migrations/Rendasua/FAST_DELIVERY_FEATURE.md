@@ -1,42 +1,67 @@
-# Fast Delivery Feature Documentation
+# Delivery Fee Structure Documentation
 
 ## Overview
 
-The fast delivery feature allows customers to request expedited delivery service for their orders, typically with a 2-4 hour delivery window compared to the standard delivery time.
+The delivery fee system has been restructured to provide more transparent and flexible pricing. Delivery fees now consist of two components: a base fee and a per-kilometer fee, with different base fees for standard and fast delivery services.
 
 ## Database Schema Changes
 
-### New Columns in `orders` Table
+### Updated Columns in `orders` Table
 
-1. **`requires_fast_delivery`** (BOOLEAN, NOT NULL, DEFAULT FALSE)
+1. **`base_delivery_fee`** (DECIMAL(10,2), NOT NULL, DEFAULT 0)
 
-   - Indicates whether the order requires fast delivery service
-   - Can be set by clients during order creation or before order confirmation
-
-2. **`fast_delivery_fee`** (DECIMAL(10,2), NOT NULL, DEFAULT 0)
-   - Additional fee charged for fast delivery service
-   - Added on top of the standard `delivery_fee`
+   - Base delivery fee used for this order
+   - Uses either `base_delivery_fee` or `fast_delivery_fee` from application_configurations depending on delivery type
    - Must be non-negative (enforced by constraint)
 
-### Indexes
+2. **`per_km_delivery_fee`** (DECIMAL(10,2), NOT NULL, DEFAULT 0)
+   - Per-kilometer delivery fee calculated as (per_km_rate \* distance)
+   - Represents the distance-based component of the delivery fee
+   - Must be non-negative (enforced by constraint)
 
-- **`idx_orders_requires_fast_delivery`**: Partial index on orders where `requires_fast_delivery = TRUE` for efficient filtering
+### Removed Columns
+
+- **`delivery_fee`** - Renamed to `base_delivery_fee`
+- **`fast_delivery_fee`** - Renamed to `per_km_delivery_fee`
 
 ### Constraints
 
-- **`orders_fast_delivery_fee_check`**: Ensures `fast_delivery_fee >= 0`
+- **`orders_base_delivery_fee_check`**: Ensures `base_delivery_fee >= 0`
+- **`orders_per_km_delivery_fee_check`**: Ensures `per_km_delivery_fee >= 0`
+
+## Delivery Fee Calculation
+
+### Formula
+
+```
+total_delivery_fee = base_delivery_fee + per_km_delivery_fee
+```
+
+### Base Fee Selection
+
+- **Standard Delivery**: Uses `base_delivery_fee` from application_configurations
+- **Fast Delivery**: Uses `fast_delivery_fee` from application_configurations as the base fee
+
+### Per-Kilometer Fee
+
+- Calculated as: `per_km_delivery_fee = distance_km * delivery_fee_rate_per_km`
+- Distance is calculated using Google Distance Matrix API
+- Rate per kilometer is configured in application_configurations
 
 ## Configuration Settings
 
 All configurations are stored in the `application_configurations` table with `country_code = 'GA'` (Gabon):
 
-| Config Key                 | Type     | Default Value | Description                      |
-| -------------------------- | -------- | ------------- | -------------------------------- |
-| `fast_delivery_fee`        | currency | 2000.00 XAF   | Additional fee for fast delivery |
-| `fast_delivery_time_hours` | number   | 4 hours       | Maximum delivery time window     |
-| `fast_delivery_min_hours`  | number   | 2 hours       | Minimum realistic delivery time  |
-| `fast_delivery_hours`      | json     | (see below)   | Service operating hours by day   |
-| `fast_delivery_enabled`    | boolean  | true          | Global feature flag              |
+| Config Key                 | Type     | Default Value | Description                     |
+| -------------------------- | -------- | ------------- | ------------------------------- |
+| `base_delivery_fee`        | currency | 300.00 XAF    | Base fee for standard delivery  |
+| `fast_delivery_fee`        | currency | 2000.00 XAF   | Base fee for fast delivery      |
+| `delivery_fee_rate_per_km` | currency | 200.00 XAF    | Rate per kilometer              |
+| `delivery_fee_min`         | currency | 500.00 XAF    | Minimum total delivery fee      |
+| `fast_delivery_time_hours` | number   | 4 hours       | Maximum delivery time window    |
+| `fast_delivery_min_hours`  | number   | 2 hours       | Minimum realistic delivery time |
+| `fast_delivery_hours`      | json     | (see below)   | Service operating hours by day  |
+| `fast_delivery_enabled`    | boolean  | true          | Global feature flag             |
 
 ### Fast Delivery Operating Hours
 
@@ -72,10 +97,10 @@ All configurations are stored in the `application_configurations` table with `co
 
 ## GraphQL Usage Examples
 
-### Create Order with Fast Delivery
+### Create Order with New Delivery Fee Structure
 
 ```graphql
-mutation CreateOrderWithFastDelivery {
+mutation CreateOrderWithNewDeliveryFee {
   insert_orders_one(
     object: {
       client_id: "client-uuid"
@@ -83,10 +108,10 @@ mutation CreateOrderWithFastDelivery {
       business_location_id: "location-uuid"
       delivery_address_id: "address-uuid"
       requires_fast_delivery: true
-      fast_delivery_fee: 2000.00
-      delivery_fee: 1500.00
+      base_delivery_fee: 2000.00
+      per_km_delivery_fee: 400.00
       subtotal: 15000.00
-      total_amount: 18500.00
+      total_amount: 17400.00
       currency: "XAF"
       # ... other order fields
     }
@@ -94,22 +119,23 @@ mutation CreateOrderWithFastDelivery {
     id
     order_number
     requires_fast_delivery
-    fast_delivery_fee
+    base_delivery_fee
+    per_km_delivery_fee
     total_amount
   }
 }
 ```
 
-### Query Orders with Fast Delivery
+### Query Orders with New Delivery Fee Structure
 
 ```graphql
-query GetFastDeliveryOrders {
+query GetOrdersWithNewDeliveryFee {
   orders(where: { requires_fast_delivery: { _eq: true }, current_status: { _in: ["pending", "confirmed", "preparing"] } }, order_by: { created_at: desc }) {
     id
     order_number
     requires_fast_delivery
-    fast_delivery_fee
-    delivery_fee
+    base_delivery_fee
+    per_km_delivery_fee
     total_amount
     estimated_delivery_time
     created_at
@@ -117,14 +143,14 @@ query GetFastDeliveryOrders {
 }
 ```
 
-### Update Fast Delivery Setting
+### Update Delivery Fee Components
 
 ```graphql
-mutation UpdateFastDelivery($orderId: uuid!) {
-  update_orders_by_pk(pk_columns: { id: $orderId }, _set: { requires_fast_delivery: true, fast_delivery_fee: 2000.00 }) {
+mutation UpdateDeliveryFeeComponents($orderId: uuid!) {
+  update_orders_by_pk(pk_columns: { id: $orderId }, _set: { base_delivery_fee: 2000.00, per_km_delivery_fee: 400.00 }) {
     id
-    requires_fast_delivery
-    fast_delivery_fee
+    base_delivery_fee
+    per_km_delivery_fee
   }
 }
 ```
@@ -157,28 +183,36 @@ query GetFastDeliveryConfig {
 2. **Total Calculation**:
 
    ```
-   total_amount = subtotal + delivery_fee + fast_delivery_fee + tax_amount
+   total_amount = subtotal + base_delivery_fee + per_km_delivery_fee + tax_amount
    ```
 
-3. **Availability Check**:
-   - Check `fast_delivery_enabled` flag
-   - Validate against operating hours
-   - Consider business location capabilities
+3. **Fee Breakdown Display**:
+   - Show base delivery fee separately
+   - Show per-kilometer fee separately
+   - Display total delivery fee as sum of both components
 
 ### Backend Implementation
 
 1. **Order Processing**:
 
-   - Validate fast delivery fee against configuration
-   - Adjust estimated_delivery_time based on `fast_delivery_time_hours`
-   - Priority queue for agents (fast delivery orders first)
+   - Calculate base delivery fee based on delivery type (standard vs fast)
+   - Calculate per-kilometer fee using distance and rate
+   - Store both components separately in the database
+   - Apply minimum fee constraint if needed
 
-2. **Agent Assignment**:
+2. **Delivery Fee Calculation**:
+
+   - Use `calculateTieredDeliveryFee` method that returns components separately
+   - For fast delivery: `base_fee = fast_delivery_fee` from config
+   - For standard delivery: `base_fee = base_delivery_fee` from config
+   - `per_km_fee = distance_km * delivery_fee_rate_per_km`
+
+3. **Agent Assignment**:
 
    - Fast delivery orders should be assigned to available agents first
    - Consider agent proximity for faster pickup
 
-3. **Notifications**:
+4. **Notifications**:
    - Alert agents about fast delivery requirements
    - Send time-sensitive notifications to all parties
 
@@ -223,15 +257,15 @@ hasura migrate apply --version 1759900000000 --type down --database-name Rendasu
 ### Sample Test Data
 
 ```sql
--- Create a test order with fast delivery
+-- Create a test order with new delivery fee structure
 INSERT INTO orders (
     client_id,
     business_id,
     business_location_id,
     delivery_address_id,
     requires_fast_delivery,
-    fast_delivery_fee,
-    delivery_fee,
+    base_delivery_fee,
+    per_km_delivery_fee,
     subtotal,
     total_amount,
     currency
@@ -242,9 +276,9 @@ INSERT INTO orders (
     'test-address-uuid',
     true,
     2000.00,
-    1500.00,
+    400.00,
     15000.00,
-    18500.00,
+    17400.00,
     'XAF'
 );
 ```
@@ -268,13 +302,24 @@ SELECT
 FROM orders
 WHERE created_at >= NOW() - INTERVAL '30 days';
 
--- Average fast delivery fee collected
+-- Average delivery fee components
 SELECT
-    AVG(fast_delivery_fee) as avg_fee,
-    SUM(fast_delivery_fee) as total_revenue
+    AVG(base_delivery_fee) as avg_base_fee,
+    AVG(per_km_delivery_fee) as avg_per_km_fee,
+    AVG(base_delivery_fee + per_km_delivery_fee) as avg_total_fee,
+    SUM(base_delivery_fee + per_km_delivery_fee) as total_revenue
 FROM orders
-WHERE requires_fast_delivery = true
-  AND created_at >= NOW() - INTERVAL '30 days';
+WHERE created_at >= NOW() - INTERVAL '30 days';
+
+-- Fast delivery vs standard delivery fee comparison
+SELECT
+    requires_fast_delivery,
+    AVG(base_delivery_fee) as avg_base_fee,
+    AVG(per_km_delivery_fee) as avg_per_km_fee,
+    AVG(base_delivery_fee + per_km_delivery_fee) as avg_total_fee
+FROM orders
+WHERE created_at >= NOW() - INTERVAL '30 days'
+GROUP BY requires_fast_delivery;
 
 -- Fast delivery completion time
 SELECT
