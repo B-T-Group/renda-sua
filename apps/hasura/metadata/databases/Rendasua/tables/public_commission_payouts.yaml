@@ -80,17 +80,3 @@ select_permissions:
         recipient_user:
           identifier:
             _eq: X-Hasura-User-Id
-  - role: admin
-    permission:
-      columns:
-        - id
-        - order_id
-        - recipient_user_id
-        - recipient_type
-        - commission_type
-        - amount
-        - currency
-        - commission_percentage
-        - account_transaction_id
-        - created_at
-      filter: {}
