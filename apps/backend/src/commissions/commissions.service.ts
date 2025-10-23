@@ -78,6 +78,8 @@ export class CommissionsService {
       // Calculate commission breakdown
       const breakdown = await this.calculateCommissions(order);
 
+      console.log('breakdown', breakdown);
+
       // Get RendaSua HQ user
       const rendasuaHQUser = await this.getRendasuaHQUser();
       if (!rendasuaHQUser) {
