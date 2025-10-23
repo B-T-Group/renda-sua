@@ -1321,7 +1321,8 @@ export class OrdersService {
           assigned_agent_id
           delivery_address_id
           subtotal
-          delivery_fee
+          base_delivery_fee
+          per_km_delivery_fee
           tax_amount
           total_amount
           currency
@@ -1331,7 +1332,6 @@ export class OrdersService {
           special_instructions
           preferred_delivery_time
           requires_fast_delivery
-          fast_delivery_fee
           payment_method
           payment_status
           created_at
