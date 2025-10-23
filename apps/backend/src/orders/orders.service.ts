@@ -990,8 +990,6 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    await this.releaseHoldAndProcessPayment(order.id);
-
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'complete'
@@ -1017,6 +1015,8 @@ export class OrdersService {
       );
       // Don't fail the completion if inventory update fails
     }
+
+    await this.releaseHoldAndProcessPayment(order.id);
 
     return {
       success: true,
