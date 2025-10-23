@@ -2034,8 +2034,8 @@ export class OrdersService {
           order_number
           current_status
           subtotal
-          delivery_fee
-          fast_delivery_fee
+          base_delivery_fee
+          per_km_delivery_fee
           tax_amount
           total_amount
           currency

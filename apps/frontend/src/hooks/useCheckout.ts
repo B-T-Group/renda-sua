@@ -171,7 +171,6 @@ export const useCheckout = () => {
           phone_number: phoneNumber,
           special_instructions: specialInstructions,
           requires_fast_delivery: requiresFastDelivery,
-          fast_delivery_fee: fastDeliveryFee,
           delivery_window: deliveryWindow,
         };
 
