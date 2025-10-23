@@ -113,7 +113,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       ruleName: `refresh-airtel-mobile-payments-key-rule-${environment}`,
       description:
         'Triggers Airtel mobile payments key refresh every 45 minutes',
-      schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
+      schedule: events.Schedule.rate(cdk.Duration.minutes(30)),
       targets: [
         new targets.LambdaFunction(refreshAirtelMobilePaymentsKeyFunction),
       ],
@@ -125,7 +125,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         ruleName: `refresh-moov-mobile-payments-key-rule-${environment}`,
         description:
           'Triggers MOOV mobile payments key refresh every 45 minutes',
-        schedule: events.Schedule.rate(cdk.Duration.minutes(45)),
+        schedule: events.Schedule.rate(cdk.Duration.minutes(30)),
         targets: [
           new targets.LambdaFunction(refreshMoovMobilePaymentsKeyFunction),
         ],
