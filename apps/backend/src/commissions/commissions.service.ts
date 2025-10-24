@@ -14,6 +14,86 @@ export class CommissionsService {
   ) {}
 
   /**
+   * Calculate agent earnings for a specific order
+   */
+  async calculateAgentEarnings(
+    orderId: string,
+    isAgentVerified: boolean
+  ): Promise<{
+    totalEarnings: number;
+    baseDeliveryCommission: number;
+    perKmDeliveryCommission: number;
+    currency: string;
+  }> {
+    try {
+      // Get order details
+      const order = await this.getOrderById(orderId);
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Get commission configurations
+      const config = await this.getCommissionConfigs();
+
+      // Calculate base delivery fee commission for agent
+      const baseDeliveryCommission = this.calculateBaseDeliveryFeeCommissions(
+        order.base_delivery_fee,
+        isAgentVerified,
+        config,
+        [] // Empty partners array since we only want agent portion
+      ).agent;
+
+      // Calculate per-km delivery fee commission for agent
+      const perKmDeliveryCommission = this.calculatePerKmDeliveryFeeCommissions(
+        order.per_km_delivery_fee,
+        isAgentVerified,
+        config,
+        [] // Empty partners array since we only want agent portion
+      ).agent;
+
+      const totalEarnings = baseDeliveryCommission + perKmDeliveryCommission;
+
+      return {
+        totalEarnings,
+        baseDeliveryCommission,
+        perKmDeliveryCommission,
+        currency: order.currency,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to calculate agent earnings: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get order by ID
+   */
+  private async getOrderById(orderId: string): Promise<any> {
+    const query = `
+      query GetOrderById($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          order_number
+          base_delivery_fee
+          per_km_delivery_fee
+          currency
+          subtotal
+          assigned_agent {
+            id
+            is_verified
+            user_id
+          }
+        }
+      }
+    `;
+
+    const response = await this.hasuraSystemService.executeQuery(query, {
+      orderId,
+    });
+    return response.orders_by_pk;
+  }
+
+  /**
    * Calculate commission breakdown for an order
    */
   async calculateCommissions(order: any): Promise<CommissionBreakdown> {
