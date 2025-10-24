@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Receipt - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+      }
+
+      .receipt-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 2.5em;
+        font-weight: bold;
+      }
+
+      .header p {
+        margin: 10px 0 0 0;
+        font-size: 1.2em;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px;
+      }
+
+      .receipt-title {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e9ecef;
+      }
+
+      .receipt-title h2 {
+        color: #27ae60;
+        font-size: 2em;
+        margin: 0;
+      }
+
+      .receipt-title .order-number {
+        color: #666;
+        font-size: 1.1em;
+        margin-top: 5px;
+      }
+
+      .receipt-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 30px;
+      }
+
+      .info-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #27ae60;
+      }
+
+      .info-section h3 {
+        margin: 0 0 15px 0;
+        color: #27ae60;
+        font-size: 1.2em;
+      }
+
+      .info-section p {
+        margin: 8px 0;
+        font-size: 0.95em;
+      }
+
+      .info-section strong {
+        color: #333;
+        font-weight: 600;
+      }
+
+      .order-items {
+        margin: 30px 0;
+      }
+
+      .order-items h3 {
+        color: #27ae60;
+        margin-bottom: 20px;
+        font-size: 1.3em;
+      }
+
+      .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .items-table th {
+        background: #27ae60;
+        color: white;
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+      }
+
+      .items-table td {
+        padding: 15px;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .items-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .items-table tr:nth-child(even) {
+        background: #f8f9fa;
+      }
+
+      .quantity {
+        text-align: center;
+        font-weight: 600;
+      }
+
+      .price {
+        text-align: right;
+        font-weight: 600;
+      }
+
+      .total-price {
+        text-align: right;
+        font-weight: bold;
+        color: #27ae60;
+      }
+
+      .pricing-breakdown {
+        background: #f8f9fa;
+        padding: 25px;
+        border-radius: 8px;
+        margin: 30px 0;
+        border-left: 4px solid #27ae60;
+      }
+
+      .pricing-breakdown h3 {
+        color: #27ae60;
+        margin: 0 0 20px 0;
+        font-size: 1.3em;
+      }
+
+      .pricing-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .pricing-row:last-child {
+        border-bottom: none;
+        border-top: 2px solid #27ae60;
+        margin-top: 10px;
+        padding-top: 15px;
+        font-weight: bold;
+        font-size: 1.1em;
+        color: #27ae60;
+      }
+
+      .payment-info {
+        background: #e8f5e8;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 30px 0;
+        text-align: center;
+      }
+
+      .payment-info h3 {
+        color: #27ae60;
+        margin: 0 0 10px 0;
+      }
+
+      .payment-status {
+        display: inline-block;
+        background: #27ae60;
+        color: white;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9em;
+      }
+
+      .footer {
+        background: #2c3e50;
+        color: white;
+        padding: 30px;
+        text-align: center;
+        margin-top: 30px;
+      }
+
+      .footer h3 {
+        margin: 0 0 15px 0;
+        color: #ecf0f1;
+      }
+
+      .footer p {
+        margin: 8px 0;
+        opacity: 0.8;
+      }
+
+      .thank-you {
+        font-size: 1.1em;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: #27ae60;
+      }
+
+      @media print {
+        body {
+          background-color: white;
+          padding: 0;
+        }
+
+        .receipt-container {
+          box-shadow: none;
+          border-radius: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="receipt-container">
+      <div class="header">
+        <h1>Rendasua</h1>
+        <p>Your Trusted Delivery Partner</p>
+      </div>
+
+      <div class="content">
+        <div class="receipt-title">
+          <h2>Order Receipt</h2>
+          <div class="order-number">Order #{{orderNumber}}</div>
+        </div>
+
+        <div class="receipt-info">
+          <div class="info-section">
+            <h3>Order Information</h3>
+            <p><strong>Order Date:</strong> {{orderDate}}</p>
+            <p><strong>Completion Date:</strong> {{completionDate}}</p>
+            <p><strong>Status:</strong> Completed</p>
+          </div>
+
+          <div class="info-section">
+            <h3>Client Information</h3>
+            <p><strong>Name:</strong> {{clientName}}</p>
+            <p><strong>Delivery Address:</strong></p>
+            <p>{{deliveryAddress}}</p>
+          </div>
+        </div>
+
+        <div class="receipt-info">
+          <div class="info-section">
+            <h3>Business Information</h3>
+            <p><strong>Business:</strong> {{businessName}}</p>
+            <p><strong>Location:</strong> {{businessLocation}}</p>
+          </div>
+
+          {{#agentName}}
+          <div class="info-section">
+            <h3>Delivery Agent</h3>
+            <p><strong>Agent:</strong> {{agentName}}</p>
+            <p><strong>Service:</strong> Professional Delivery</p>
+          </div>
+          {{/agentName}}
+        </div>
+
+        <div class="order-items">
+          <h3>Order Items</h3>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="quantity">Quantity</th>
+                <th class="price">Unit Price</th>
+                <th class="total-price">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#orderItems}}
+              <tr>
+                <td>{{itemName}}</td>
+                <td class="quantity">{{quantity}}</td>
+                <td class="price">{{currency}} {{unitPrice}}</td>
+                <td class="total-price">{{currency}} {{totalPrice}}</td>
+              </tr>
+              {{/orderItems}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pricing-breakdown">
+          <h3>Pricing Breakdown</h3>
+          <div class="pricing-row">
+            <span>Subtotal:</span>
+            <span>{{currency}} {{subtotal}}</span>
+          </div>
+          <div class="pricing-row">
+            <span>Base Delivery Fee:</span>
+            <span>{{currency}} {{baseDeliveryFee}}</span>
+          </div>
+          <div class="pricing-row">
+            <span>Per KM Delivery Fee:</span>
+            <span>{{currency}} {{perKmDeliveryFee}}</span>
+          </div>
+          <div class="pricing-row">
+            <span>Tax Amount:</span>
+            <span>{{currency}} {{taxAmount}}</span>
+          </div>
+          <div class="pricing-row">
+            <span>Total Amount:</span>
+            <span>{{currency}} {{totalAmount}}</span>
+          </div>
+        </div>
+
+        <div class="payment-info">
+          <h3>Payment Information</h3>
+          <p>
+            <strong>Status:</strong>
+            <span class="payment-status">{{paymentStatus}}</span>
+          </p>
+          <p><strong>Payment Method:</strong> Mobile Payment</p>
+          <p><strong>Currency:</strong> {{currency}}</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="thank-you">Thank you for choosing Rendasua!</div>
+        <h3>Contact Information</h3>
+        <p>Email: support@rendasua.com</p>
+        <p>Phone: +241 XX XX XX XX</p>
+        <p>Website: www.rendasua.com</p>
+        <p>&copy; {{currentYear}} Rendasua. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -23,6 +23,7 @@ import {
   NotificationData,
   NotificationsService,
 } from '../notifications/notifications.service';
+import { PdfService } from '../pdf/pdf.service';
 import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
@@ -259,7 +260,8 @@ export class OrdersService {
     private readonly notificationsService: NotificationsService,
     private readonly configurationsService: ConfigurationsService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
-    private readonly commissionsService: CommissionsService
+    private readonly commissionsService: CommissionsService,
+    private readonly pdfService: PdfService
   ) {}
 
   private async confirmExistingDeliveryWindow(
@@ -1017,6 +1019,15 @@ export class OrdersService {
     }
 
     await this.releaseHoldAndProcessPayment(order.id);
+
+    // Generate receipt automatically after successful completion
+    try {
+      await this.pdfService.generateReceipt(order.id, order.client.user_id);
+      this.logger.log(`Receipt generated for order ${order.id}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to generate receipt: ${error.message}`);
+      // Don't fail completion if receipt generation fails
+    }
 
     return {
       success: true,

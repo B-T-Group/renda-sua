@@ -117,6 +117,11 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+export interface PdfEndpointConfig {
+  apiToken: string;
+  sandbox: boolean;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -138,6 +143,7 @@ export interface Configuration {
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   notification: NotificationConfig;
+  pdfEndpoint: PdfEndpointConfig;
 }
 
 import {
@@ -326,6 +332,10 @@ export default async (): Promise<Configuration> => {
     },
     notification: {
       orderStatusChangeEnabled: process.env.NODE_ENV === 'production',
+    },
+    pdfEndpoint: {
+      apiToken: secrets.PDF_ENDPOINT_TOKEN || '',
+      sandbox: process.env.NODE_ENV !== 'production',
     },
   };
 };

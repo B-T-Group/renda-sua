@@ -732,3 +732,67 @@ export const GET_OPEN_ORDERS = gql`
     }
   }
 `;
+
+// Query for fetching order data specifically for receipt generation
+export const GET_ORDER_FOR_RECEIPT = gql`
+  query GetOrderForReceipt($orderId: uuid!) {
+    orders_by_pk(id: $orderId) {
+      id
+      order_number
+      created_at
+      updated_at
+      current_status
+      subtotal
+      base_delivery_fee
+      per_km_delivery_fee
+      tax_amount
+      total_amount
+      currency
+      payment_status
+      client {
+        user_id
+        user {
+          first_name
+          last_name
+          email
+        }
+      }
+      business {
+        user_id
+        name
+        business_location {
+          address {
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+          }
+        }
+      }
+      assigned_agent {
+        user_id
+        user {
+          first_name
+          last_name
+        }
+      }
+      delivery_address {
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+      }
+      order_items {
+        id
+        item_name
+        quantity
+        unit_price
+        total_price
+      }
+    }
+  }
+`;
