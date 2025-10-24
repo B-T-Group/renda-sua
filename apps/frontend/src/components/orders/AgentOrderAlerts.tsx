@@ -1,8 +1,7 @@
-import { Alert, Box, CircularProgress } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAgentEarnings } from '../../hooks/useAgentEarnings';
 import type { Order } from '../../hooks/useAgentOrders';
 
 interface AgentOrderAlertsProps {
@@ -12,40 +11,24 @@ interface AgentOrderAlertsProps {
 const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
-  const {
-    earnings,
-    loading: earningsLoading,
-    error: earningsError,
-  } = useAgentEarnings(order.id);
 
   const agentVerified = profile?.agent?.is_verified || false;
 
   const getDeliveryFee = () => {
-    // Use agent earnings if available, otherwise fallback to full delivery fee
-    if (earnings && !earningsLoading && !earningsError) {
-      return earnings.totalEarnings;
-    }
-
-    // Fallback to order delivery fee components if earnings not available
+    // Get delivery fee from order_holds table (new API response)
     if (order.order_holds && order.order_holds.length > 0) {
-      const orderHold = order.order_holds[0];
+      const orderHold = order.order_holds[0]; // Get the first order hold
       return orderHold.delivery_fees || 0;
     }
 
+    // Fallback to order delivery fee components if order_holds not available
     return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
-  };
-
-  const getDeliveryFeeDisplay = () => {
-    if (earningsLoading) {
-      return <CircularProgress size={16} sx={{ ml: 1 }} />;
-    }
-    return formatCurrency(getDeliveryFee());
   };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: earnings?.currency || order.currency || 'USD',
+      currency: order.currency || 'USD',
     }).format(amount);
   };
 
@@ -90,7 +73,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'success' as const,
             message: t(
               'agent.orders.assignedToYou',
-              `Great! You've claimed this order. Earn ${getDeliveryFeeDisplay()} by completing the delivery. Pick up from the business and deliver to the customer.`
+              `Great! You've claimed this order. Earn ${formatCurrency(
+                getDeliveryFee()
+              )} by completing the delivery. Pick up from the business and deliver to the customer.`
             ),
           });
         } else if (order.assigned_agent_id) {
@@ -117,7 +102,7 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               message: t(
                 'agent.orders.canClaim',
                 '🚀 Perfect opportunity! Claim this order and earn {{deliveryFee}} for the delivery.',
-                { deliveryFee: getDeliveryFeeDisplay() }
+                { deliveryFee: formatCurrency(getDeliveryFee()) }
               ),
             });
           }
@@ -130,7 +115,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'warning' as const,
             message: t(
               'agent.orders.pickedUpByYou',
-              `You've picked up this order. Deliver it promptly to earn your ${getDeliveryFeeDisplay()} delivery fee. Keep the customer informed of your progress.`
+              `You've picked up this order. Deliver it promptly to earn your ${formatCurrency(
+                getDeliveryFee()
+              )} delivery fee. Keep the customer informed of your progress.`
             ),
           });
         } else {
@@ -150,7 +137,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'warning' as const,
             message: t(
               'agent.orders.inTransitByYou',
-              `Order in transit. You're almost there! Complete the delivery to earn ${getDeliveryFeeDisplay()}. Update the customer on your ETA.`
+              `Order in transit. You're almost there! Complete the delivery to earn ${formatCurrency(
+                getDeliveryFee()
+              )}. Update the customer on your ETA.`
             ),
           });
         } else {
@@ -170,7 +159,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'warning' as const,
             message: t(
               'agent.orders.outForDeliveryByYou',
-              `Final step! You're out for delivery. Complete this delivery to earn ${getDeliveryFeeDisplay()}. Make sure to get confirmation from the customer.`
+              `Final step! You're out for delivery. Complete this delivery to earn ${formatCurrency(
+                getDeliveryFee()
+              )}. Make sure to get confirmation from the customer.`
             ),
           });
         } else {
@@ -190,7 +181,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'success' as const,
             message: t(
               'agent.orders.deliveredByYou',
-              `🎉 Excellent work! You've successfully delivered this order and earned ${getDeliveryFeeDisplay()}. Payment will be processed shortly.`
+              `🎉 Excellent work! You've successfully delivered this order and earned ${formatCurrency(
+                getDeliveryFee()
+              )}. Payment will be processed shortly.`
             ),
           });
         } else {
@@ -210,7 +203,9 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
             severity: 'success' as const,
             message: t(
               'agent.orders.completedByYou',
-              `✅ Order completed! Your ${getDeliveryFeeDisplay()} delivery payment has been processed. Thank you for your excellent service!`
+              `✅ Order completed! Your ${formatCurrency(
+                getDeliveryFee()
+              )} delivery payment has been processed. Thank you for your excellent service!`
             ),
           });
         } else {

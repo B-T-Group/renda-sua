@@ -1,5 +1,5 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 
 interface AgentEarnings {
   totalEarnings: number;
@@ -25,10 +25,10 @@ export const useAgentEarnings = (orderId: string): UseAgentEarningsReturn => {
   const [earnings, setEarnings] = useState<AgentEarnings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getAccessTokenSilently } = useAuth0();
+  const apiClient = useApiClient();
 
   const fetchEarnings = useCallback(async () => {
-    if (!orderId) {
+    if (!orderId || !apiClient) {
       setError('Order ID is required');
       return;
     }
@@ -37,23 +37,8 @@ export const useAgentEarnings = (orderId: string): UseAgentEarningsReturn => {
     setError(null);
 
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/orders/${orderId}/agent-earnings`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch agent earnings');
-      }
-
-      const data: AgentEarningsResponse = await response.json();
+      const response = await apiClient.get(`/orders/${orderId}/agent-earnings`);
+      const data: AgentEarningsResponse = response.data;
 
       if (data.success) {
         setEarnings(data.earnings);
@@ -70,7 +55,7 @@ export const useAgentEarnings = (orderId: string): UseAgentEarningsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [orderId, getAccessTokenSilently]);
+  }, [orderId]);
 
   useEffect(() => {
     fetchEarnings();

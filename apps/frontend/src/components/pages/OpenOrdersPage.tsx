@@ -271,7 +271,11 @@ const OpenOrdersPage: React.FC = () => {
                       sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                     >
                       {claimedOrders.map((order) => (
-                        <OrderCard key={order.id} order={order} />
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          showAgentEarnings={true}
+                        />
                       ))}
                     </Box>
                   </Box>

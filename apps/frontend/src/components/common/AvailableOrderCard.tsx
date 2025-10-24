@@ -34,14 +34,17 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
   };
 
   const getDeliveryFee = () => {
-    // Get delivery fee from order_holds table (new API response)
+    // Use order delivery fee components directly
+    // The backend now returns agent commission amounts in these fields for agents
     if (order.order_holds && order.order_holds.length > 0) {
-      const orderHold = order.order_holds[0]; // Get the first order hold
+      const orderHold = order.order_holds[0];
       return orderHold.delivery_fees || 0;
     }
-
-    // Fallback to order delivery fee components if order_holds not available
     return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
+  };
+
+  const getDeliveryFeeDisplay = () => {
+    return formatCurrency(getDeliveryFee(), order.currency);
   };
 
   const formatAddress = (address: any) => {
@@ -72,7 +75,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
     }
   };
 
-  const deliveryFee = getDeliveryFee();
+  const deliveryFeeDisplay = getDeliveryFeeDisplay();
 
   return (
     <Card sx={{ display: 'flex', mb: 2, position: 'relative' }}>
@@ -243,7 +246,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
                 color="success.main"
                 sx={{ fontWeight: 700 }}
               >
-                {formatCurrency(deliveryFee, order.currency)}
+                {deliveryFeeDisplay}
               </Typography>
             </Box>
             <Typography

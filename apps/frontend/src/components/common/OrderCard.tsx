@@ -44,9 +44,13 @@ interface OrderItem {
 interface OrderCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
+  showAgentEarnings?: boolean;
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
+const OrderCard: React.FC<OrderCardProps> = ({
+  order,
+  showAgentEarnings = false,
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -122,6 +126,20 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const getDeliveryFee = () => {
+    // Use order delivery fee components directly
+    // The backend now returns agent commission amounts in these fields for agents
+    if (order.order_holds && order.order_holds.length > 0) {
+      const orderHold = order.order_holds[0];
+      return orderHold.delivery_fees || 0;
+    }
+    return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
+  };
+
+  const getDeliveryFeeDisplay = () => {
+    return formatCurrency(getDeliveryFee(), order.currency);
   };
 
   // Get the first item's image for display
@@ -544,10 +562,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                     {t('orders.deliveryFee', 'Delivery Fee')}:
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(
-                      order.base_delivery_fee + order.per_km_delivery_fee,
-                      order.currency
-                    )}
+                    {getDeliveryFeeDisplay()}
                   </Typography>
                 </Box>
               )}

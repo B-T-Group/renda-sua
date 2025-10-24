@@ -14,6 +14,56 @@ export class CommissionsService {
   ) {}
 
   /**
+   * Calculate agent earnings for a specific order (synchronous version)
+   * Takes order and config as input for better performance
+   */
+  calculateAgentEarningsSync(
+    order: {
+      id: string;
+      base_delivery_fee: number;
+      per_km_delivery_fee: number;
+      currency: string;
+    },
+    isAgentVerified: boolean,
+    config: CommissionConfig
+  ): {
+    totalEarnings: number;
+    baseDeliveryCommission: number;
+    perKmDeliveryCommission: number;
+    currency: string;
+  } {
+    try {
+      // Calculate base delivery fee commission for agent
+      const baseDeliveryCommission = this.calculateBaseDeliveryFeeCommissions(
+        order.base_delivery_fee,
+        isAgentVerified,
+        config,
+        [] // Empty partners array since we only want agent portion
+      ).agent;
+
+      // Calculate per-km delivery fee commission for agent
+      const perKmDeliveryCommission = this.calculatePerKmDeliveryFeeCommissions(
+        order.per_km_delivery_fee,
+        isAgentVerified,
+        config,
+        [] // Empty partners array since we only want agent portion
+      ).agent;
+
+      const totalEarnings = baseDeliveryCommission + perKmDeliveryCommission;
+
+      return {
+        totalEarnings,
+        baseDeliveryCommission,
+        perKmDeliveryCommission,
+        currency: order.currency,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to calculate agent earnings: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Calculate agent earnings for a specific order
    */
   async calculateAgentEarnings(

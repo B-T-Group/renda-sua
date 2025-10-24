@@ -264,6 +264,141 @@ export class OrdersService {
     private readonly pdfService: PdfService
   ) {}
 
+  /**
+   * Transform order delivery fees to show agent commission amounts (optimized version)
+   */
+  transformOrderForAgentSync(
+    order: any,
+    isAgentVerified: boolean,
+    commissionConfig: any
+  ): any {
+    try {
+      // Calculate agent commissions using synchronous method
+      const earnings = this.commissionsService.calculateAgentEarningsSync(
+        {
+          id: order.id,
+          base_delivery_fee: order.base_delivery_fee,
+          per_km_delivery_fee: order.per_km_delivery_fee,
+          currency: order.currency,
+        },
+        isAgentVerified,
+        commissionConfig
+      );
+
+      // Replace delivery fees with agent commission amounts
+      return {
+        ...order,
+        base_delivery_fee: earnings.baseDeliveryCommission,
+        per_km_delivery_fee: earnings.perKmDeliveryCommission,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to transform order ${order.id} for agent: ${error.message}`
+      );
+      // Return original order if transformation fails
+      return order;
+    }
+  }
+
+  /**
+   * Transform order delivery fees to show agent commission amounts
+   */
+  async transformOrderForAgent(
+    order: any,
+    isAgentVerified: boolean
+  ): Promise<any> {
+    try {
+      // Calculate agent commissions
+      const earnings = await this.commissionsService.calculateAgentEarnings(
+        order.id,
+        isAgentVerified
+      );
+
+      // Replace delivery fees with agent commission amounts
+      return {
+        ...order,
+        base_delivery_fee: earnings.baseDeliveryCommission,
+        per_km_delivery_fee: earnings.perKmDeliveryCommission,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to transform order ${order.id} for agent: ${error.message}`
+      );
+      // Return original order if transformation fails
+      return order;
+    }
+  }
+
+  /**
+   * Transform multiple orders to show agent commission amounts (optimized version)
+   */
+  transformOrdersForAgentSync(
+    orders: any[],
+    isAgentVerified: boolean,
+    commissionConfig: any
+  ): any[] {
+    try {
+      return orders.map((order) =>
+        this.transformOrderForAgentSync(
+          order,
+          isAgentVerified,
+          commissionConfig
+        )
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to transform orders for agent: ${error.message}`
+      );
+      // Return original orders if transformation fails
+      return orders;
+    }
+  }
+
+  /**
+   * Transform multiple orders to show agent commission amounts
+   */
+  async transformOrdersForAgent(
+    orders: any[],
+    isAgentVerified: boolean
+  ): Promise<any[]> {
+    try {
+      return Promise.all(
+        orders.map((order) =>
+          this.transformOrderForAgent(order, isAgentVerified)
+        )
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to transform orders for agent: ${error.message}`
+      );
+      // Return original orders if transformation fails
+      return orders;
+    }
+  }
+
+  /**
+   * Check if current user is an agent and get verification status
+   */
+  private async getAgentInfo(): Promise<{
+    isAgent: boolean;
+    isVerified: boolean;
+  } | null> {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.agent) {
+        return { isAgent: false, isVerified: false };
+      }
+
+      return {
+        isAgent: true,
+        isVerified: user.agent.is_verified || false,
+      };
+    } catch (error: any) {
+      this.logger.warn(`Failed to get agent info: ${error.message}`);
+      return null;
+    }
+  }
+
   private async confirmExistingDeliveryWindow(
     windowId: string,
     orderId: string,
@@ -1485,6 +1620,20 @@ export class OrdersService {
       query,
       variables
     );
+
+    // Transform orders for agents to show commission amounts
+    const agentInfo = await this.getAgentInfo();
+    if (agentInfo?.isAgent) {
+      // Get commission config once for all orders
+      const commissionConfig =
+        await this.commissionsService.getCommissionConfigs();
+      return this.transformOrdersForAgentSync(
+        result.orders,
+        agentInfo.isVerified,
+        commissionConfig
+      );
+    }
+
     return result.orders;
   }
 
@@ -1607,7 +1756,16 @@ export class OrdersService {
       return businessCountry === agentCountry && businessState === agentState;
     });
 
-    return { success: true, orders: filteredOrders };
+    // Transform orders for agents to show commission amounts
+    const commissionConfig =
+      await this.commissionsService.getCommissionConfigs();
+    const transformedOrders = this.transformOrdersForAgentSync(
+      filteredOrders,
+      user.agent.is_verified || false,
+      commissionConfig
+    );
+
+    return { success: true, orders: transformedOrders };
   }
 
   /**
@@ -1895,6 +2053,22 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
 
+    // Transform order for agents to show commission amounts
+    const agentInfo = await this.getAgentInfo();
+    if (agentInfo?.isAgent) {
+      const commissionConfig =
+        await this.commissionsService.getCommissionConfigs();
+      const transformedOrder = this.transformOrderForAgentSync(
+        orderData,
+        agentInfo.isVerified,
+        commissionConfig
+      );
+      return {
+        ...transformedOrder,
+        access_reason: accessReason,
+      };
+    }
+
     return {
       ...orderData,
       access_reason: accessReason,
@@ -2176,6 +2350,18 @@ export class OrdersService {
     const order = await this.getOrderDetailsByNumber(orderNumber);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Transform order for agents to show commission amounts
+    const agentInfo = await this.getAgentInfo();
+    if (agentInfo?.isAgent) {
+      const commissionConfig =
+        await this.commissionsService.getCommissionConfigs();
+      return this.transformOrderForAgentSync(
+        order,
+        agentInfo.isVerified,
+        commissionConfig
+      );
     }
 
     return order;

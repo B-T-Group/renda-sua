@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -95,7 +96,8 @@ export interface ActiveOrder {
 export class AgentsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly commissionsService: CommissionsService
   ) {}
 
   @Get('active_orders')
@@ -213,10 +215,40 @@ export class AgentsController {
         agentId,
       });
 
+      // Transform orders to show agent commission amounts
+      const orders = result.orders || [];
+
+      // Get commission config once for all orders
+      const commissionConfig =
+        await this.commissionsService.getCommissionConfigs();
+
+      const transformedOrders = orders.map((order: any) => {
+        try {
+          const earnings = this.commissionsService.calculateAgentEarningsSync(
+            {
+              id: order.id,
+              base_delivery_fee: order.base_delivery_fee,
+              per_km_delivery_fee: order.per_km_delivery_fee,
+              currency: order.currency,
+            },
+            user.agent?.is_verified || false,
+            commissionConfig
+          );
+          return {
+            ...order,
+            base_delivery_fee: earnings.baseDeliveryCommission,
+            per_km_delivery_fee: earnings.perKmDeliveryCommission,
+          };
+        } catch (_error: any) {
+          // Return original order if transformation fails
+          return order;
+        }
+      });
+
       return {
         success: true,
-        orders: result.orders || [],
-        count: (result.orders || []).length,
+        orders: transformedOrders,
+        count: transformedOrders.length,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
