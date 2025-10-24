@@ -285,11 +285,12 @@ export class OrdersService {
         commissionConfig
       );
 
-      // Replace delivery fees with agent commission amounts
+      // Replace delivery fees with agent commission amounts and set total to subtotal
       return {
         ...order,
         base_delivery_fee: earnings.baseDeliveryCommission,
         per_km_delivery_fee: earnings.perKmDeliveryCommission,
+        total_amount: order.subtotal, // Set total to just the cost of items (subtotal)
       };
     } catch (error: any) {
       this.logger.warn(
@@ -1669,6 +1670,9 @@ export class OrdersService {
         orders(where: {current_status: {_eq: "ready_for_pickup"}, assigned_agent_id: {_is_null: true}}) {
           id
           order_number
+          base_delivery_fee
+          per_km_delivery_fee
+          subtotal
           business {
             name
           }
