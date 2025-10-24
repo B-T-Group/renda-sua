@@ -18,9 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { Public } from '../auth/public.decorator';
-import { CommissionsService } from '../commissions/commissions.service';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   ConfirmOrderRequest,
@@ -39,9 +37,7 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
-    private readonly configurationsService: ConfigurationsService,
-    private readonly commissionsService: CommissionsService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   @Post()
