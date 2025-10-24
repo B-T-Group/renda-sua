@@ -15,13 +15,8 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const agentVerified = profile?.agent?.is_verified || false;
 
   const getDeliveryFee = () => {
-    // Get delivery fee from order_holds table (new API response)
-    if (order.order_holds && order.order_holds.length > 0) {
-      const orderHold = order.order_holds[0]; // Get the first order hold
-      return orderHold.delivery_fees || 0;
-    }
-
-    // Fallback to order delivery fee components if order_holds not available
+    // Always use order delivery fee components directly
+    // Do not use hold data for delivery fee calculation
     return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
   };
 

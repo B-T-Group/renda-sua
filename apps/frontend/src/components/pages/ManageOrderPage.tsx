@@ -1114,12 +1114,7 @@ const ManageOrderPage: React.FC = () => {
                         {t('orders.subtotal', 'Subtotal')}
                       </Typography>
                       <Typography variant="body2">
-                        {formatCurrency(
-                          order.total_amount -
-                            (order.base_delivery_fee +
-                              order.per_km_delivery_fee || 0),
-                          order.currency
-                        )}
+                        {formatCurrency(order.subtotal, order.currency)}
                       </Typography>
                     </Box>
                     <Box
@@ -1155,7 +1150,12 @@ const ManageOrderPage: React.FC = () => {
                       {t('orders.total', 'Total')}
                     </Typography>
                     <Typography variant="h6" fontWeight="bold" color="primary">
-                      {formatCurrency(order.total_amount, order.currency)}
+                      {formatCurrency(
+                        order.subtotal +
+                          order.base_delivery_fee +
+                          order.per_km_delivery_fee,
+                        order.currency
+                      )}
                     </Typography>
                   </Box>
 

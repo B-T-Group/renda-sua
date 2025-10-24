@@ -158,7 +158,7 @@ const OrderView: React.FC<OrderViewProps> = ({
           </Box>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Box
                 sx={{
                   p: 2,
@@ -182,19 +182,21 @@ const OrderView: React.FC<OrderViewProps> = ({
                   {t('orders.paymentMethod', 'Payment Method')}
                 </Typography>
                 <Typography variant="body1" fontWeight="600" sx={{ ml: 3 }}>
-                  {order.payment_method || 'Not specified'}
+                  {(order as any).payment_method || 'Not specified'}
                   <Chip
-                    label={order.payment_status || 'pending'}
+                    label={(order as any).payment_status || 'pending'}
                     size="small"
                     color={
-                      order.payment_status === 'paid' ? 'success' : 'warning'
+                      (order as any).payment_status === 'paid'
+                        ? 'success'
+                        : 'warning'
                     }
                     sx={{ ml: 1, height: 20, fontSize: '0.75rem' }}
                   />
                 </Typography>
               </Box>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Box
                 sx={{
                   textAlign: { xs: 'left', md: 'right' },
@@ -234,7 +236,7 @@ const OrderView: React.FC<OrderViewProps> = ({
 
       <Grid container spacing={4}>
         {/* Business Information */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <Card
             sx={{
               height: '100%',
@@ -335,7 +337,7 @@ const OrderView: React.FC<OrderViewProps> = ({
         </Grid>
 
         {/* Client Information */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <Card
             sx={{
               height: '100%',
@@ -425,7 +427,7 @@ const OrderView: React.FC<OrderViewProps> = ({
 
         {/* Agent Information */}
         {order.assigned_agent && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ height: '100%' }}>
               <CardContent
                 sx={{
@@ -470,7 +472,7 @@ const OrderView: React.FC<OrderViewProps> = ({
         )}
 
         {/* Order Items */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent
               sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
@@ -536,7 +538,7 @@ const OrderView: React.FC<OrderViewProps> = ({
 
                         <Grid container spacing={1}>
                           {item.item.brand && (
-                            <Grid item>
+                            <Grid>
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
@@ -546,7 +548,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                             </Grid>
                           )}
                           {item.item.model && (
-                            <Grid item>
+                            <Grid>
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
@@ -556,7 +558,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                             </Grid>
                           )}
                           {item.item.color && (
-                            <Grid item>
+                            <Grid>
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
@@ -622,7 +624,7 @@ const OrderView: React.FC<OrderViewProps> = ({
         </Grid>
 
         {/* Order Summary */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent
               sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
@@ -691,7 +693,7 @@ const OrderView: React.FC<OrderViewProps> = ({
 
         {/* Special Instructions */}
         {order.special_instructions && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -706,13 +708,13 @@ const OrderView: React.FC<OrderViewProps> = ({
         )}
 
         {/* Delivery Time Window */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <DeliveryTimeWindowDisplay order={order} />
         </Grid>
 
         {/* Financial Details (Admin/Business only) */}
         {showFinancialDetails && order.order_holds.length > 0 && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -724,7 +726,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                       {t('orders.holdStatus')}: {hold.status}
                     </Typography>
                     <Grid container spacing={2}>
-                      <Grid item xs={6}>
+                      <Grid size={{ xs: 6 }}>
                         <Typography variant="body2" color="text.secondary">
                           {t('orders.clientHold')}:{' '}
                           {formatCurrency(
@@ -733,7 +735,7 @@ const OrderView: React.FC<OrderViewProps> = ({
                           )}
                         </Typography>
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid size={{ xs: 6 }}>
                         <Typography variant="body2" color="text.secondary">
                           {t('orders.agentHold')}:{' '}
                           {formatCurrency(
@@ -742,10 +744,13 @@ const OrderView: React.FC<OrderViewProps> = ({
                           )}
                         </Typography>
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid size={{ xs: 6 }}>
                         <Typography variant="body2" color="text.secondary">
                           {t('orders.deliveryFees')}:{' '}
-                          {formatCurrency(hold.delivery_fees, hold.currency)}
+                          {formatCurrency(
+                            order.base_delivery_fee + order.per_km_delivery_fee,
+                            order.currency
+                          )}
                         </Typography>
                       </Grid>
                     </Grid>

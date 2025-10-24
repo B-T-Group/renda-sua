@@ -34,12 +34,8 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({ order }) => {
   };
 
   const getDeliveryFee = () => {
-    // Use order delivery fee components directly
-    // The backend now returns agent commission amounts in these fields for agents
-    if (order.order_holds && order.order_holds.length > 0) {
-      const orderHold = order.order_holds[0];
-      return orderHold.delivery_fees || 0;
-    }
+    // Always use order delivery fee components directly
+    // Do not use hold data for delivery fee calculation
     return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
   };
 
