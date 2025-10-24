@@ -7,7 +7,6 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -15,12 +14,13 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PdfService } from './pdf.service';
 
 @ApiTags('PDF')
 @Controller('pdf')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class PdfController {
   private readonly logger = new Logger(PdfController.name);
