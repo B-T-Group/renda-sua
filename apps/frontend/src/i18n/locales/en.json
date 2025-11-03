@@ -1037,6 +1037,30 @@
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
+    "confirmModal": {
+      "title": "Confirm Order",
+      "orderSummary": "Order Summary",
+      "items": "Items",
+      "itemCount": "item(s)",
+      "totalAmount": "Total Amount",
+      "clientPreferences": "Client's preferred delivery windows:",
+      "deliveryWindow": "Delivery Time Window",
+      "createDifferentWindow": "Create Different Time Window",
+      "createNewWindow": "Create a new delivery time window:",
+      "noClientPreferences": "No client preferences available. Create a delivery time window:",
+      "createNewWindowRequired": "Create a delivery time window (at least 2 hours from now):",
+      "specialInstructions": "Special Instructions",
+      "notes": "Confirmation Notes",
+      "notesPlaceholder": "Add any notes about this confirmation...",
+      "confirm": "Confirm Order",
+      "confirming": "Confirming...",
+      "noWindowSelected": "Please select a delivery time window",
+      "noOrder": "No order selected",
+      "confirmError": "Failed to confirm order",
+      "windowTooClose": "Selected delivery window is in the past or too close. Please create a different time window that is at least 2 hours from now.",
+      "someWindowsInvalid": "Some delivery windows are in the past or too close. Only valid windows are shown below. If none are shown, please create a new time window that is at least 2 hours from now.",
+      "allWindowsInvalid": "All client preferred delivery windows are in the past or too close (within 2 hours). Please create a new time window that is at least 2 hours from now."
+    },
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Are you sure you want to change the order status?",
     "contact": "Contact",
@@ -1295,7 +1319,11 @@
       "sortPriceHigh": "Price: High to Low",
       "sortPriceLow": "Price: Low to High",
       "subtitle": "Discover amazing products from local businesses",
-      "title": "Browse Items"
+      "title": "Browse Items",
+      "locationFilterNote": "Items are filtered based on your location",
+      "state": "State",
+      "country": "Country",
+      "availableItems": "Available Items"
     }
   },
   "rating": {

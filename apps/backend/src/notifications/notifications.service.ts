@@ -277,6 +277,7 @@ export class NotificationsService {
       currency: data.currency || 'USD',
       deliveryAddress: data.deliveryAddress || 'Unknown Address',
       estimatedDeliveryTime: data.estimatedDeliveryTime,
+      deliveryTimeWindow: data.estimatedDeliveryTime, // Use same field for delivery window
       specialInstructions: data.specialInstructions,
       notes: data.notes,
       businessVerified: data.businessVerified || false,

@@ -123,10 +123,10 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     [t]
   );
 
-  // Helper function to check if a time slot has passed
-  const isTimeSlotPassed = useCallback(
+  // Helper function to check if a time slot is valid (not passed and at least 2 hours in the future)
+  const isTimeSlotValid = useCallback(
     (slot: DeliveryTimeSlot) => {
-      if (!selectedDate) return false;
+      if (!selectedDate) return true;
 
       const today = new Date();
       const selectedDateOnly = new Date(selectedDate);
@@ -134,7 +134,8 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
       // Check if the selected date is today
       const isToday = selectedDateOnly.toDateString() === today.toDateString();
 
-      if (!isToday) return false;
+      // For future dates, all slots are valid
+      if (!isToday) return true;
 
       // Parse the slot start time (assuming format like "09:00" or "9:00 AM")
       const parseTime = (timeStr: string): Date => {
@@ -158,7 +159,14 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
         const slotStartTime = parseTime(slot.start_time);
         const currentTime = new Date();
 
-        return slotStartTime <= currentTime;
+        // Check if slot is in the past
+        if (slotStartTime <= currentTime) {
+          return false;
+        }
+
+        // Check if slot is at least 2 hours in the future
+        const twoHoursFromNow = new Date(currentTime.getTime() + 2 * 60 * 60 * 1000);
+        return slotStartTime >= twoHoursFromNow;
       } catch (error) {
         console.warn('Failed to parse time slot:', slot.start_time, error);
         return false;
@@ -167,18 +175,12 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     [selectedDate]
   );
 
-  // Filter slots to exclude passed time slots for current day
+  // Filter slots to exclude invalid time slots (passed or within 2 hours)
   const filteredSlots = useMemo(() => {
     if (!selectedDate) return slots;
 
-    const today = new Date();
-    const selectedDateOnly = new Date(selectedDate);
-    const isToday = selectedDateOnly.toDateString() === today.toDateString();
-
-    if (!isToday) return slots;
-
-    return slots.filter((slot) => !isTimeSlotPassed(slot));
-  }, [slots, selectedDate, isTimeSlotPassed]);
+    return slots.filter((slot) => isTimeSlotValid(slot));
+  }, [slots, selectedDate, isTimeSlotValid]);
 
   if (disabled) {
     return (

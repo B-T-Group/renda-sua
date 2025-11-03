@@ -1053,10 +1053,20 @@
       "clientPreferences": "Fenêtres de livraison préférées du client :",
       "deliveryWindow": "Fenêtre de Temps de Livraison",
       "createDifferentWindow": "Créer une Fenêtre de Temps Différente",
+      "createNewWindow": "Créer une nouvelle fenêtre de livraison :",
+      "noClientPreferences": "Aucune préférence client disponible. Créez une fenêtre de livraison :",
+      "createNewWindowRequired": "Créer une fenêtre de livraison (au moins 2 heures à partir de maintenant) :",
       "specialInstructions": "Instructions Spéciales",
       "notes": "Notes de Confirmation",
       "notesPlaceholder": "Ajoutez des notes sur cette confirmation...",
-      "confirm": "Confirmer la Commande"
+      "confirm": "Confirmer la Commande",
+      "confirming": "Confirmation...",
+      "noWindowSelected": "Veuillez sélectionner une fenêtre de livraison",
+      "noOrder": "Aucune commande sélectionnée",
+      "confirmError": "Échec de la confirmation de la commande",
+      "windowTooClose": "La fenêtre de livraison sélectionnée est dans le passé ou trop proche. Veuillez créer une autre fenêtre de temps qui est au moins 2 heures à partir de maintenant.",
+      "someWindowsInvalid": "Certaines fenêtres de livraison sont dans le passé ou trop proches. Seules les fenêtres valides sont affichées ci-dessous. Si aucune n'est affichée, veuillez créer une nouvelle fenêtre de temps qui est au moins 2 heures à partir de maintenant.",
+      "allWindowsInvalid": "Toutes les fenêtres de livraison préférées du client sont dans le passé ou trop proches (dans les 2 heures). Veuillez créer une nouvelle fenêtre de temps qui est au moins 2 heures à partir de maintenant."
     },
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Êtes-vous sûr de vouloir changer le statut de la commande ?",
@@ -1318,7 +1328,11 @@
       "sortPriceHigh": "Price: High to Low",
       "sortPriceLow": "Price: Low to High",
       "subtitle": "Découvrez des produits incroyables d'entreprises locales",
-      "title": "Parcourir les Articles"
+      "title": "Parcourir les Articles",
+      "locationFilterNote": "Les articles sont filtrés en fonction de votre localisation",
+      "state": "État/Province",
+      "country": "Pays",
+      "availableItems": "Articles Disponibles"
     }
   },
   "rating": {

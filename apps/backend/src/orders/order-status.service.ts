@@ -258,6 +258,7 @@ export class OrderStatusService {
           currency
           estimated_delivery_time
           special_instructions
+          delivery_time_window_id
           client {
             user {
               first_name
@@ -293,6 +294,17 @@ export class OrderStatusService {
             unit_price
             total_price
           }
+          delivery_time_window: delivery_time_windows(where: { is_confirmed: { _eq: true } }, limit: 1) {
+            id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            special_instructions
+            slot: delivery_time_slots {
+              slot_name
+              slot_type
+            }
+          }
         }
       }
     `;
@@ -303,6 +315,31 @@ export class OrderStatusService {
     const order = result.orders_by_pk;
 
     if (!order) return null;
+
+    // Format delivery window details if available
+    let deliveryTimeWindow: string | undefined;
+    if (order.delivery_time_window && order.delivery_time_window.length > 0) {
+      const window = order.delivery_time_window[0];
+      const windowDate = new Date(window.preferred_date);
+      const formattedDate = windowDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      const formatTime = (time: string) => {
+        const [hours, minutes] = time.split(':');
+        const hour = parseInt(hours, 10);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${ampm}`;
+      };
+      const timeRange = `${formatTime(window.time_slot_start)} - ${formatTime(window.time_slot_end)}`;
+      const slotName = window.slot?.slot_name || '';
+      deliveryTimeWindow = `${formattedDate}, ${timeRange}${slotName ? ` (${slotName})` : ''}`;
+      if (window.special_instructions) {
+        deliveryTimeWindow += ` - ${window.special_instructions}`;
+      }
+    }
 
     return {
       orderId: order.id,
@@ -329,7 +366,7 @@ export class OrderStatusService {
       totalAmount: order.total_amount,
       currency: order.currency,
       deliveryAddress: this.formatAddress(order.delivery_address),
-      estimatedDeliveryTime: order.estimated_delivery_time,
+      estimatedDeliveryTime: deliveryTimeWindow || order.estimated_delivery_time,
       specialInstructions: order.special_instructions,
     };
   }

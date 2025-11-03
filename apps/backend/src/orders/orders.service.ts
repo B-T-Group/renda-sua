@@ -412,6 +412,9 @@ export class OrdersService {
           id
           order_id
           is_confirmed
+          preferred_date
+          time_slot_start
+          time_slot_end
         }
       }
     `;
@@ -438,6 +441,28 @@ export class OrdersService {
     if (window.is_confirmed) {
       throw new HttpException(
         'Delivery time window is already confirmed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Validate that the window is at least 2 hours in the future
+    const now = new Date();
+    const windowDate = new Date(window.preferred_date);
+    const [startHours, startMinutes] = window.time_slot_start.split(':').map(Number);
+    const windowDateTime = new Date(windowDate);
+    windowDateTime.setHours(startHours, startMinutes, 0, 0);
+
+    if (windowDateTime < now) {
+      throw new HttpException(
+        'Delivery time window is in the past. Please create a new time window.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    if (windowDateTime < twoHoursFromNow) {
+      throw new HttpException(
+        'Delivery time window must be at least 2 hours from now. Please create a new time window.',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -502,6 +527,28 @@ export class OrdersService {
     if (!slot.is_active) {
       throw new HttpException(
         'Delivery time slot is not active',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Validate that the window is at least 2 hours in the future
+    const now = new Date();
+    const windowDate = new Date(details.preferred_date);
+    const [startHours, startMinutes] = slot.start_time.split(':').map(Number);
+    const windowDateTime = new Date(windowDate);
+    windowDateTime.setHours(startHours, startMinutes, 0, 0);
+
+    if (windowDateTime < now) {
+      throw new HttpException(
+        'Delivery time window is in the past. Please select a time that is at least 2 hours from now.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    if (windowDateTime < twoHoursFromNow) {
+      throw new HttpException(
+        'Delivery time window must be at least 2 hours from now. Please select a later time.',
         HttpStatus.BAD_REQUEST
       );
     }

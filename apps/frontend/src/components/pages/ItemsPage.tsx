@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
   InputAdornment,
   Pagination,
@@ -19,7 +20,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import { Country, State } from 'country-state-city';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
@@ -234,6 +236,26 @@ const ItemsPage: React.FC = () => {
     }).format(amount);
   };
 
+  // Get user's primary address for location display
+  const primaryAddress = profile?.addresses?.find((addr) => addr.is_primary) || profile?.addresses?.[0];
+  
+  // Convert country code to country name
+  const userCountryName = useMemo(() => {
+    if (!primaryAddress?.country) return null;
+    const countryCode = primaryAddress.country;
+    const country = Country.getCountryByCode(countryCode);
+    return country?.name || countryCode;
+  }, [primaryAddress?.country]);
+
+  // Convert state code to state name
+  const userStateName = useMemo(() => {
+    if (!primaryAddress?.state || !primaryAddress?.country) return null;
+    const stateCode = primaryAddress.state;
+    const countryCode = primaryAddress.country;
+    const state = State.getStateByCodeAndCountry(stateCode, countryCode);
+    return state?.name || stateCode;
+  }, [primaryAddress?.state, primaryAddress?.country]);
+
   // Check if any filters are active
   const hasActiveFilters = searchTerm;
 
@@ -427,6 +449,37 @@ const ItemsPage: React.FC = () => {
             ? t('dashboard.availableItems', 'Available Items')
             : t('public.items.availableItems', 'Available Items')}
         </Typography>
+
+        {/* Location Filter Note */}
+        {(userStateName || userCountryName) && (
+          <Alert
+            severity="info"
+            sx={{ mb: 3, mt: 2 }}
+          >
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              {t(
+                'public.items.locationFilterNote',
+                'Items are filtered based on your location'
+              )}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+              {userStateName && (
+                <Chip
+                  label={`${t('public.items.state', 'State')}: ${userStateName}`}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+              {userCountryName && (
+                <Chip
+                  label={`${t('public.items.country', 'Country')}: ${userCountryName}`}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+          </Alert>
+        )}
 
         {/* Filter Component - Only for authenticated clients */}
         {isClient && inventoryItems.length > 0 && (
