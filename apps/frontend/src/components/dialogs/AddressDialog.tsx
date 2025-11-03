@@ -18,7 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { City, Country, State } from 'country-state-city';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 
@@ -49,18 +49,6 @@ interface AddressDialogProps {
   onAddressChange: (address: AddressFormData) => void;
 }
 
-const getDefaultAddressTypeOptions = (
-  t: (key: string, defaultValue?: string) => string
-) => [
-  { value: 'home', label: t('addresses.addressTypes.home', 'Home') },
-  { value: 'work', label: t('addresses.addressTypes.work', 'Work') },
-  {
-    value: 'delivery',
-    label: t('addresses.addressTypes.delivery', 'Delivery'),
-  },
-  { value: 'billing', label: t('addresses.addressTypes.billing', 'Billing') },
-];
-
 const AddressDialog: React.FC<AddressDialogProps> = ({
   open,
   title,
@@ -77,7 +65,24 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   const { t } = useTranslation();
   const dialogTitle =
     title || t('addresses.addressDialog.defaultTitle', 'Address');
-  const defaultAddressTypeOptions = getDefaultAddressTypeOptions(t);
+
+  // Memoize default address type options to avoid recreating on every render
+  const defaultAddressTypeOptions = useMemo(
+    () => [
+      { value: 'home', label: t('addresses.addressTypes.home', 'Home') },
+      { value: 'work', label: t('addresses.addressTypes.work', 'Work') },
+      {
+        value: 'delivery',
+        label: t('addresses.addressTypes.delivery', 'Delivery'),
+      },
+      {
+        value: 'billing',
+        label: t('addresses.addressTypes.billing', 'Billing'),
+      },
+    ],
+    [t]
+  );
+
   const finalAddressTypeOptions =
     addressTypeOptions || defaultAddressTypeOptions;
   const [hasPostalCode, setHasPostalCode] = useState<boolean>(
