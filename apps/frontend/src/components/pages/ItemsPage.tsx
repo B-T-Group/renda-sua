@@ -351,79 +351,42 @@ const ItemsPage: React.FC = () => {
           </Paper>
         )}
 
-        {/* Enhanced Authentication CTA - Only for non-authenticated users */}
+        {/* Authentication CTA - Only for non-authenticated users */}
         {!isAuthenticated && (
-          <Paper
-            elevation={0}
+          <Alert
+            severity="info"
+            icon={<AccountIcon />}
+            action={
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={handleLogin}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  minWidth: 120,
+                }}
+              >
+                {t('public.items.authCta.button', 'Sign In')}
+              </Button>
+            }
             sx={{
               mb: 4,
-              p: { xs: 3, md: 4 },
-              background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-              color: 'white',
-              borderRadius: 3,
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: '0 8px 32px rgba(30, 64, 175, 0.2)',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background:
-                  'radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%)',
-                pointerEvents: 'none',
+              '& .MuiAlert-message': {
+                width: '100%',
               },
             }}
           >
-            <Box sx={{ position: 'relative', zIndex: 1 }}>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{ mb: 2, fontSize: { xs: '1.25rem', md: '1.5rem' } }}
-              >
-                {t('public.items.authCta.title', 'Sign In to Order')}
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{
-                  mb: 3,
-                  opacity: 0.9,
-                  fontSize: { xs: '0.875rem', md: '1rem' },
-                }}
-              >
-                {t(
-                  'public.items.authCta.description',
-                  'Create an account to place orders, track deliveries, and manage your purchases.'
-                )}
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<AccountIcon />}
-                onClick={handleLogin}
-                sx={{
-                  bgcolor: 'white',
-                  color: '#1e40af',
-                  fontWeight: 'bold',
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontSize: '1rem',
-                  '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.9)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
-                  },
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                {t('public.items.authCta.button', 'Sign In / Sign Up')}
-              </Button>
-            </Box>
-          </Paper>
+            <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
+              {t('public.items.authCta.title', 'Sign in to place orders')}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              {t(
+                'public.items.authCta.description',
+                'Create an account to browse and order items.'
+              )}
+            </Typography>
+          </Alert>
         )}
       </Box>
 
