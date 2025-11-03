@@ -1,3 +1,4 @@
+import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
@@ -44,6 +45,7 @@ export function useDistanceMatrix(cacheDuration: number = CACHE_DURATION) {
   const [data, setData] = useState<DistanceMatrixResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth0();
   const apiClient = useApiClient();
 
   const isCacheValid = useCallback(
@@ -96,6 +98,21 @@ export function useDistanceMatrix(cacheDuration: number = CACHE_DURATION) {
       payload: DistanceMatrixPayload,
       forceRefresh = false
     ): Promise<DistanceMatrixResponse> => {
+      // Return empty results if user is not authenticated
+      if (!isAuthenticated) {
+        const emptyResponse: DistanceMatrixResponse = {
+          origin_id: null,
+          destination_ids: [],
+          origin_addresses: [],
+          destination_addresses: [],
+          rows: [],
+          status: 'NOT_AUTHENTICATED',
+        };
+        setData(emptyResponse);
+        setLoading(false);
+        return emptyResponse;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -131,14 +148,18 @@ export function useDistanceMatrix(cacheDuration: number = CACHE_DURATION) {
 
         setData(response.data);
         return response.data;
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : 'Failed to fetch distance matrix';
+        setError(errorMessage);
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [apiClient, isCacheValid, isPayloadEqual]
+    [apiClient, isAuthenticated, isCacheValid, isPayloadEqual]
   );
 
   const clearCache = useCallback(() => {
