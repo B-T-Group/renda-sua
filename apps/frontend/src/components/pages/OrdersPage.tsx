@@ -715,7 +715,11 @@ const OrdersPage: React.FC = () => {
                 </Paper>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {(groupedByStatus[statusKey] || []).map((order) => (
-                    <OrderCard key={order.id} order={order} />
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      onActionComplete={refreshOrders}
+                    />
                   ))}
                 </Box>
               </Box>
@@ -791,7 +795,11 @@ const OrdersPage: React.FC = () => {
                           }}
                         >
                           {(groupedByStatus[statusKey] || []).map((order) => (
-                            <OrderCard key={order.id} order={order} />
+                            <OrderCard
+                              key={order.id}
+                              order={order}
+                              onActionComplete={refreshOrders}
+                            />
                           ))}
                         </Box>
                       </Box>

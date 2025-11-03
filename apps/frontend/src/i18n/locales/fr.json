@@ -970,8 +970,11 @@
   "orders": {
     "actions": {
       "cancel": "Annuler",
+      "completeOrder": "Terminer la Commande",
       "completePreparation": "Terminer la préparation",
       "confirm": "Confirmer",
+      "confirmOrder": "Confirmer la Commande",
+      "finishPreparing": "Terminer la Préparation",
       "rateOrder": "Évaluer la Commande",
       "readyForPickup": "Prêt pour enlèvement",
       "refund": "Rembourser",

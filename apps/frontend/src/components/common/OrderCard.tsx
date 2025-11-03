@@ -16,6 +16,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Collapse,
   Divider,
   IconButton,
@@ -26,9 +27,17 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  ConfirmOrderData,
+  useBackendOrders,
+} from '../../hooks/useBackendOrders';
+import type { OrderData } from '../../hooks/useOrderById';
+import ConfirmOrderModal from '../business/ConfirmOrderModal';
 
 interface OrderItem {
   id: string;
@@ -45,17 +54,25 @@ interface OrderCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
   showAgentEarnings?: boolean;
+  onActionComplete?: () => void;
 }
 
 const OrderCard: React.FC<OrderCardProps> = ({
   order,
   showAgentEarnings = false,
+  onActionComplete,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { profile } = useUserProfileContext();
+  const { enqueueSnackbar } = useSnackbar();
+  const { confirmOrder, startPreparing, completePreparation, completeOrder } =
+    useBackendOrders();
   const [showItems, setShowItems] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -159,6 +176,171 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const isCancelled = ['cancelled', 'failed', 'refunded'].includes(
     currentStatus
   );
+
+  // Determine user type
+  const userType = profile?.business
+    ? 'business'
+    : profile?.client
+    ? 'client'
+    : profile?.agent
+    ? 'agent'
+    : null;
+
+  // Handle confirm order action
+  const handleConfirmOrder = () => {
+    setConfirmModalOpen(true);
+  };
+
+  const handleConfirmOrderSuccess = async (data: ConfirmOrderData) => {
+    setLoadingAction('confirm');
+    try {
+      await confirmOrder(data);
+      enqueueSnackbar(
+        t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
+        { variant: 'success' }
+      );
+      setConfirmModalOpen(false);
+      onActionComplete?.();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderConfirmError', 'Failed to confirm order');
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Handle start preparing
+  const handleStartPreparing = async () => {
+    setLoadingAction('startPreparing');
+    try {
+      await startPreparing({ orderId: order.id });
+      enqueueSnackbar(
+        t(
+          'messages.orderStartPreparingSuccess',
+          'Order preparation started successfully'
+        ),
+        { variant: 'success' }
+      );
+      onActionComplete?.();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'messages.orderStartPreparingError',
+              'Failed to start preparation'
+            );
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Handle finish preparing
+  const handleFinishPreparing = async () => {
+    setLoadingAction('finishPreparing');
+    try {
+      await completePreparation({ orderId: order.id });
+      enqueueSnackbar(
+        t(
+          'messages.orderCompletePreparationSuccess',
+          'Order preparation completed successfully'
+        ),
+        { variant: 'success' }
+      );
+      onActionComplete?.();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t(
+              'messages.orderCompletePreparationError',
+              'Failed to complete preparation'
+            );
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Handle complete order
+  const handleCompleteOrder = async () => {
+    setLoadingAction('completeOrder');
+    try {
+      await completeOrder({ orderId: order.id });
+      enqueueSnackbar(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        { variant: 'success' }
+      );
+      onActionComplete?.();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t('messages.orderCompleteError', 'Failed to complete order');
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Get available quick actions based on status and user type
+  const getAvailableActions = () => {
+    const actions: Array<{
+      label: string;
+      onClick: () => void;
+      color: 'primary' | 'success';
+      loading: boolean;
+    }> = [];
+
+    if (userType === 'business') {
+      if (currentStatus === 'pending') {
+        actions.push({
+          label: t('orders.actions.confirmOrder', 'Confirm Order'),
+          onClick: handleConfirmOrder,
+          color: 'success',
+          loading: loadingAction === 'confirm',
+        });
+      } else if (currentStatus === 'confirmed') {
+        actions.push({
+          label: t('orders.actions.startPreparing', 'Start Preparing'),
+          onClick: handleStartPreparing,
+          color: 'primary',
+          loading: loadingAction === 'startPreparing',
+        });
+      } else if (currentStatus === 'preparing') {
+        actions.push({
+          label: t('orders.actions.finishPreparing', 'Finish Preparing'),
+          onClick: handleFinishPreparing,
+          color: 'success',
+          loading: loadingAction === 'finishPreparing',
+        });
+      } else if (currentStatus === 'delivered') {
+        actions.push({
+          label: t('orders.actions.completeOrder', 'Complete Order'),
+          onClick: handleCompleteOrder,
+          color: 'success',
+          loading: loadingAction === 'completeOrder',
+        });
+      }
+    } else if (userType === 'client') {
+      if (currentStatus === 'delivered') {
+        actions.push({
+          label: t('orders.actions.completeOrder', 'Complete Order'),
+          onClick: handleCompleteOrder,
+          color: 'success',
+          loading: loadingAction === 'completeOrder',
+        });
+      }
+    }
+
+    return actions;
+  };
+
+  const availableActions = getAvailableActions();
 
   return (
     <Card
@@ -525,6 +707,36 @@ const OrderCard: React.FC<OrderCardProps> = ({
 
         <Divider sx={{ my: 2 }} />
 
+        {/* Quick Action Buttons */}
+        {availableActions.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {availableActions.map((action, index) => (
+                <Button
+                  key={index}
+                  variant="outlined"
+                  color={action.color}
+                  onClick={action.onClick}
+                  disabled={action.loading || !!loadingAction}
+                  startIcon={
+                    action.loading ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <CheckCircle />
+                    )
+                  }
+                  sx={{
+                    minWidth: { xs: '100%', sm: 140 },
+                    textTransform: 'none',
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
         {/* Footer Section */}
         <Box
           sx={{
@@ -614,6 +826,15 @@ const OrderCard: React.FC<OrderCardProps> = ({
           </Button>
         </Box>
       </CardContent>
+
+      {/* Confirm Order Modal */}
+      <ConfirmOrderModal
+        open={confirmModalOpen}
+        order={order as OrderData}
+        onClose={() => setConfirmModalOpen(false)}
+        onConfirm={handleConfirmOrderSuccess}
+        loading={loadingAction === 'confirm'}
+      />
     </Card>
   );
 };

@@ -968,8 +968,11 @@
   "orders": {
     "actions": {
       "cancel": "Cancel",
+      "completeOrder": "Complete Order",
       "completePreparation": "Complete Preparation",
       "confirm": "Confirm",
+      "confirmOrder": "Confirm Order",
+      "finishPreparing": "Finish Preparing",
       "rateOrder": "Rate Order",
       "readyForPickup": "Ready for Pickup",
       "refund": "Refund",
