@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Order } from './useAgentOrders';
 import { useApiClient } from './useApiClient';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { useAddressManager } from './useAddressManager';
 
 export interface OpenOrdersResponse {
   success: boolean;
@@ -14,10 +16,53 @@ export const useOpenOrders = () => {
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
+  const { profile } = useUserProfileContext();
+
+  const agentId = profile?.agent?.id;
+  const isAgent = !!profile?.agent;
+
+  // Check if agent has addresses (only if user is an agent)
+  const { addresses, loading: addressesLoading } = useAddressManager({
+    entityType: 'agent',
+    entityId: agentId || '',
+    autoFetch: isAgent,
+  });
+
+  const hasAddresses = addresses && addresses.length > 0;
+
+  // Update loading state based on address loading
+  useEffect(() => {
+    if (addressesLoading) {
+      setLoading(true);
+    }
+  }, [addressesLoading]);
 
   const fetchOpenOrders = useCallback(async () => {
+    // If not an agent, don't fetch
+    if (!isAgent) {
+      setLoading(false);
+      setOpenOrders([]);
+      return [];
+    }
+
+    // Wait for agent ID and address loading to complete
+    if (!agentId || addressesLoading) {
+      if (!addressesLoading && !agentId) {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Don't fetch if agent has no addresses
+    if (!hasAddresses) {
+      setLoading(false);
+      setOpenOrders([]);
+      return [];
+    }
+
     if (!apiClient) {
       setError('API client not available');
+      setLoading(false);
       return [];
     }
 
@@ -48,7 +93,7 @@ export const useOpenOrders = () => {
     } finally {
       setLoading(false);
     }
-  }, [apiClient]);
+  }, [apiClient, hasAddresses, agentId, addressesLoading, isAgent]);
 
   useEffect(() => {
     fetchOpenOrders();

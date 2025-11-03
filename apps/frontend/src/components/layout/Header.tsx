@@ -87,21 +87,21 @@ const Header: React.FC = () => {
 
   const getMainNavigationItems = () => {
     if (!isAuthenticated) {
-      return [{ label: 'Store', path: '/items', icon: <Assignment /> }];
+      return [{ label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> }];
     }
 
     // For authenticated users, show different navigation based on user type
     if (userType === 'client') {
       return [
-        { label: 'Items', path: '/items', icon: <Assignment /> },
-        { label: 'Orders', path: '/orders', icon: <Assignment /> },
+        { label: t('common.items', 'Items'), path: '/items', icon: <Assignment /> },
+        { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },
       ];
     }
 
     // For business and agent users, show dashboard
     return [
-      { label: 'Dashboard', path: '/app', icon: <Dashboard /> },
-      { label: 'Orders', path: '/orders', icon: <Assignment /> },
+      { label: t('common.dashboard', 'Dashboard'), path: '/app', icon: <Dashboard /> },
+      { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },
     ];
   };
 
@@ -115,24 +115,24 @@ const Header: React.FC = () => {
     // Add role-specific navigation
     if (userType === 'business') {
       submenuItems.push(
-        { label: 'Items', path: '/business/items', icon: <Assignment /> },
+        { label: t('common.items', 'Items'), path: '/business/items', icon: <Assignment /> },
         {
-          label: 'Locations',
+          label: t('common.locations', 'Locations'),
           path: '/business/locations',
           icon: <Assignment />,
         },
-        { label: 'Documents', path: '/documents', icon: <Description /> },
-        { label: 'Messages', path: '/messages', icon: <Assignment /> }
+        { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
+        { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
     } else if (userType === 'client') {
       submenuItems.push(
-        { label: 'Documents', path: '/documents', icon: <Description /> },
-        { label: 'Messages', path: '/messages', icon: <Assignment /> }
+        { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
+        { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
     } else if (userType === 'agent') {
       submenuItems.push(
-        { label: 'Documents', path: '/documents', icon: <Description /> },
-        { label: 'Messages', path: '/messages', icon: <Assignment /> }
+        { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
+        { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
     }
 

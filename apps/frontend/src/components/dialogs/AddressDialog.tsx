@@ -49,27 +49,37 @@ interface AddressDialogProps {
   onAddressChange: (address: AddressFormData) => void;
 }
 
-const defaultAddressTypeOptions = [
-  { value: 'home', label: 'Home' },
-  { value: 'work', label: 'Work' },
-  { value: 'delivery', label: 'Delivery' },
-  { value: 'billing', label: 'Billing' },
+const getDefaultAddressTypeOptions = (
+  t: (key: string, defaultValue?: string) => string
+) => [
+  { value: 'home', label: t('addresses.addressTypes.home', 'Home') },
+  { value: 'work', label: t('addresses.addressTypes.work', 'Work') },
+  {
+    value: 'delivery',
+    label: t('addresses.addressTypes.delivery', 'Delivery'),
+  },
+  { value: 'billing', label: t('addresses.addressTypes.billing', 'Billing') },
 ];
 
 const AddressDialog: React.FC<AddressDialogProps> = ({
   open,
-  title = 'Address',
+  title,
   addressData,
   loading = false,
   showAddressType = true,
   showIsPrimary = true,
   showCoordinates = true,
-  addressTypeOptions = defaultAddressTypeOptions,
+  addressTypeOptions,
   onClose,
   onSave,
   onAddressChange,
 }) => {
   const { t } = useTranslation();
+  const dialogTitle =
+    title || t('addresses.addressDialog.defaultTitle', 'Address');
+  const defaultAddressTypeOptions = getDefaultAddressTypeOptions(t);
+  const finalAddressTypeOptions =
+    addressTypeOptions || defaultAddressTypeOptions;
   const [hasPostalCode, setHasPostalCode] = useState<boolean>(
     (addressData?.postal_code ?? '').trim() !== ''
   );
@@ -466,7 +476,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
+      <DialogTitle>{dialogTitle}</DialogTitle>
       <DialogContent>
         {/* Get Current Location Button */}
         <Box sx={{ mb: 3 }}>
@@ -528,14 +538,20 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
                   }}
                 />
               }
-              label="Do you have a postal code?"
+              label={t(
+                'addresses.addressDialog.hasPostalCode',
+                'Do you have a postal code?'
+              )}
             />
           </Box>
           {/* Address Line 1 */}
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
             <TextField
               fullWidth
-              label="Address Line 1"
+              label={t(
+                'addresses.addressDialog.addressLine1',
+                'Address Line 1'
+              )}
               value={addressData?.address_line_1 || ''}
               onChange={(e) =>
                 handleInputChange('address_line_1', e.target.value)
@@ -548,7 +564,10 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
             <TextField
               fullWidth
-              label="Address Line 2 (Optional)"
+              label={t(
+                'addresses.addressDialog.addressLine2',
+                'Address Line 2 (Optional)'
+              )}
               value={addressData?.address_line_2 || ''}
               onChange={(e) =>
                 handleInputChange('address_line_2', e.target.value)
@@ -558,11 +577,13 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
           {/* Country */}
           <FormControl fullWidth required>
-            <InputLabel>Country</InputLabel>
+            <InputLabel>
+              {t('addresses.addressDialog.country', 'Country')}
+            </InputLabel>
             <Select
               value={addressData?.country || ''}
               onChange={(e) => handleInputChange('country', e.target.value)}
-              label="Country"
+              label={t('addresses.addressDialog.country', 'Country')}
             >
               {countries.map((country) => (
                 <MenuItem key={country.isoCode} value={country.isoCode}>
@@ -574,11 +595,16 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
           {/* State/Province */}
           <FormControl fullWidth required>
-            <InputLabel>State/Province</InputLabel>
+            <InputLabel>
+              {t('addresses.addressDialog.stateProvince', 'State/Province')}
+            </InputLabel>
             <Select
               value={addressData?.state || ''}
               onChange={(e) => handleInputChange('state', e.target.value)}
-              label="State/Province"
+              label={t(
+                'addresses.addressDialog.stateProvince',
+                'State/Province'
+              )}
               disabled={!addressData?.country}
             >
               {states.map((state) => (
@@ -591,11 +617,11 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
           {/* City */}
           <FormControl fullWidth required>
-            <InputLabel>City</InputLabel>
+            <InputLabel>{t('addresses.addressDialog.city', 'City')}</InputLabel>
             <Select
               value={addressData?.city || ''}
               onChange={(e) => handleInputChange('city', e.target.value)}
-              label="City"
+              label={t('addresses.addressDialog.city', 'City')}
               disabled={!addressData?.state}
             >
               {cities.map((city) => (
@@ -610,25 +636,26 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           {hasPostalCode ? (
             <TextField
               fullWidth
-              label="Postal Code"
+              label={t('addresses.addressDialog.postalCode', 'Postal Code')}
               value={addressData?.postal_code || ''}
               onChange={(e) => handleInputChange('postal_code', e.target.value)}
-              required
             />
           ) : null}
 
           {/* Address Type (optional) */}
           {showAddressType && (
             <FormControl fullWidth>
-              <InputLabel>Address Type</InputLabel>
+              <InputLabel>
+                {t('addresses.addressDialog.addressType', 'Address Type')}
+              </InputLabel>
               <Select
                 value={addressData?.address_type || ''}
                 onChange={(e) =>
                   handleInputChange('address_type', e.target.value)
                 }
-                label="Address Type"
+                label={t('addresses.addressDialog.addressType', 'Address Type')}
               >
-                {addressTypeOptions.map((option) => (
+                {finalAddressTypeOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
                     {option.label}
                   </MenuItem>
@@ -640,16 +667,25 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           {/* Primary Address (optional) */}
           {showIsPrimary && (
             <FormControl fullWidth>
-              <InputLabel>Primary Address</InputLabel>
+              <InputLabel>
+                {t('addresses.addressDialog.primaryAddress', 'Primary Address')}
+              </InputLabel>
               <Select
                 value={(addressData?.is_primary ?? false).toString()}
                 onChange={(e) =>
                   handleInputChange('is_primary', e.target.value === 'true')
                 }
-                label="Primary Address"
+                label={t(
+                  'addresses.addressDialog.primaryAddress',
+                  'Primary Address'
+                )}
               >
-                <MenuItem value="true">Yes</MenuItem>
-                <MenuItem value="false">No</MenuItem>
+                <MenuItem value="true">
+                  {t('addresses.addressDialog.yes', 'Yes')}
+                </MenuItem>
+                <MenuItem value="false">
+                  {t('addresses.addressDialog.no', 'No')}
+                </MenuItem>
               </Select>
             </FormControl>
           )}
@@ -659,7 +695,10 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             <>
               <TextField
                 fullWidth
-                label="Latitude (Optional)"
+                label={t(
+                  'addresses.addressDialog.latitude',
+                  'Latitude (Optional)'
+                )}
                 type="number"
                 inputProps={{ step: 'any' }}
                 value={addressData?.latitude ?? ''}
@@ -673,7 +712,10 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               />
               <TextField
                 fullWidth
-                label="Longitude (Optional)"
+                label={t(
+                  'addresses.addressDialog.longitude',
+                  'Longitude (Optional)'
+                )}
                 type="number"
                 inputProps={{ step: 'any' }}
                 value={addressData?.longitude ?? ''}
@@ -691,7 +733,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
-          Cancel
+          {t('addresses.addressDialog.cancel', 'Cancel')}
         </Button>
         <Button
           onClick={onSave}
@@ -699,7 +741,9 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           disabled={loading}
           startIcon={loading ? <CircularProgress size={16} /> : null}
         >
-          {loading ? 'Saving...' : 'Save'}
+          {loading
+            ? t('addresses.addressDialog.saving', 'Saving...')
+            : t('addresses.addressDialog.save', 'Save')}
         </Button>
       </DialogActions>
     </Dialog>

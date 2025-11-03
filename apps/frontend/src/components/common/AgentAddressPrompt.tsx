@@ -14,8 +14,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAddressManager } from '../../hooks/useAddressManager';
-import AddressManager from './AddressManager';
+import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 interface AgentAddressPromptProps {
   onAddressAdded?: () => void;
@@ -27,18 +26,22 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
   showAsCard = true,
 }) => {
   const { t } = useTranslation();
-  const { profile } = useUserProfileContext();
-  const [showAddressManager, setShowAddressManager] = useState(false);
-
-  // Get agent addresses using the address manager hook
-  const { addresses } = useAddressManager({
-    entityType: 'agent',
-    entityId: profile?.agent?.id || '',
-    autoFetch: true,
+  const { profile, addAddress, refetch } = useUserProfileContext();
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [addressForm, setAddressForm] = useState<AddressFormData>({
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: '',
+    address_type: 'home',
+    is_primary: true,
   });
 
-  // Check if agent has any addresses
-  const hasAddresses = addresses && addresses.length > 0;
+  // Check if agent has any addresses from profile context
+  const hasAddresses = profile?.addresses && profile.addresses.length > 0;
 
   // If agent has addresses, don't show the prompt
   if (hasAddresses) {
@@ -46,12 +49,55 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
   }
 
   const handleAddAddress = () => {
-    setShowAddressManager(true);
+    setAddressForm({
+      address_line_1: '',
+      address_line_2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      country: '',
+      address_type: 'home',
+      is_primary: true,
+    });
+    setAddressDialogOpen(true);
   };
 
-  const handleAddressAdded = () => {
-    setShowAddressManager(false);
-    onAddressAdded?.();
+  const handleAddressChange = (address: AddressFormData) => {
+    setAddressForm(address);
+  };
+
+  const handleSaveAddress = async () => {
+    if (!profile?.agent?.id) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Ensure required fields are set
+      const addressData = {
+        ...addressForm,
+        address_type: addressForm.address_type || 'home',
+        is_primary: addressForm.is_primary ?? true,
+      };
+
+      const success = await addAddress(addressData, 'agent', profile.agent.id);
+
+      if (success) {
+        setAddressDialogOpen(false);
+        await refetch(); // Update context with new address data
+        onAddressAdded?.();
+      }
+      // If save fails, error is handled by context and dialog stays open
+    } catch (error) {
+      // Error is handled by context
+      console.error('Error saving address:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setAddressDialogOpen(false);
   };
 
   const content = (
@@ -135,23 +181,18 @@ const AgentAddressPrompt: React.FC<AgentAddressPromptProps> = ({
         content
       )}
 
-      {/* Address Manager Dialog */}
-      {showAddressManager && (
-        <AddressManager
-          entityType="agent"
-          entityId={profile?.agent?.id || ''}
-          title={t('agent.addressPrompt.addAddress', 'Add Address')}
-          showAddressType={true}
-          showIsPrimary={true}
-          maxAddresses={5}
-          allowDelete={true}
-          emptyStateMessage={t(
-            'agent.addressPrompt.noAddresses',
-            'No addresses found. Add your primary address to see orders in your vicinity.'
-          )}
-          onAccountCreated={handleAddressAdded}
-        />
-      )}
+      {/* Address Dialog */}
+      <AddressDialog
+        open={addressDialogOpen}
+        title={t('agent.addressPrompt.addAddress', 'Add Address')}
+        addressData={addressForm}
+        loading={saving}
+        showAddressType={true}
+        showIsPrimary={true}
+        onClose={handleCloseDialog}
+        onSave={handleSaveAddress}
+        onAddressChange={handleAddressChange}
+      />
     </>
   );
 };

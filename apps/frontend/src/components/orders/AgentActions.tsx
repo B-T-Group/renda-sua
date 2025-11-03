@@ -264,6 +264,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           color: 'primary' as const,
           icon: <CheckCircle />,
           disabled: false, // Always enabled - will show dialog if insufficient funds
+          isClaim: true, // Mark as claim action for special styling
         });
         break;
 
@@ -352,15 +353,33 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         }}
       >
         {availableActions.map((action, index) => {
+          const isClaimAction = (action as any).isClaim;
           const button = (
             <Button
               key={index}
-              variant="outlined"
+              variant={isClaimAction ? 'contained' : 'outlined'}
               color={action.color}
               onClick={action.action}
               disabled={loading || action.disabled}
               startIcon={loading ? <CircularProgress size={16} /> : action.icon}
-              sx={{ minWidth: 120 }}
+              size={isClaimAction ? 'large' : 'medium'}
+              sx={{
+                minWidth: isClaimAction ? 180 : 120,
+                fontSize: isClaimAction ? '1rem' : '0.875rem',
+                fontWeight: isClaimAction ? 700 : 500,
+                py: isClaimAction ? 1.5 : 1,
+                px: isClaimAction ? 3 : 2,
+                boxShadow: isClaimAction
+                  ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
+                  : 'none',
+                '&:hover': isClaimAction
+                  ? {
+                      boxShadow: '0 6px 20px 0 rgba(25, 118, 210, 0.5)',
+                      transform: 'translateY(-2px)',
+                    }
+                  : {},
+                transition: 'all 0.3s ease-in-out',
+              }}
             >
               {action.label}
             </Button>

@@ -1,4 +1,14 @@
-import { Alert, Box } from '@mui/material';
+import { TrendingUp } from '@mui/icons-material';
+import {
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  Divider,
+  Stack,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -10,6 +20,7 @@ interface AgentOrderAlertsProps {
 
 const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { profile } = useUserProfileContext();
 
   const agentVerified = profile?.agent?.is_verified || false;
@@ -92,13 +103,17 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               ),
             });
           } else {
+            // Store delivery fee for prominent display
+            const deliveryFee = getDeliveryFee();
             alerts.push({
               severity: 'success' as const,
               message: t(
                 'agent.orders.canClaim',
                 '🚀 Perfect opportunity! Claim this order and earn {{deliveryFee}} for the delivery.',
-                { deliveryFee: formatCurrency(getDeliveryFee()) }
+                { deliveryFee: formatCurrency(deliveryFee) }
               ),
+              showEarnings: true, // Flag to show earnings prominently
+              deliveryFee: deliveryFee, // Store for display
             });
           }
         }
@@ -260,16 +275,141 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
 
   return (
     <Box sx={{ mb: 2 }}>
-      {alerts.map((alert, index) => (
-        <Alert
-          key={index}
-          severity={alert.severity}
-          variant="outlined"
-          sx={{ mb: index < alerts.length - 1 ? 1 : 0 }}
-        >
-          {alert.message}
-        </Alert>
-      ))}
+      {alerts.map((alert, index) => {
+        const showEarnings = (alert as any).showEarnings;
+        const deliveryFee = (alert as any).deliveryFee;
+
+        return (
+          <Box key={index} sx={{ mb: index < alerts.length - 1 ? 2 : 0 }}>
+            {showEarnings && deliveryFee !== undefined ? (
+              <Card
+                elevation={0}
+                sx={{
+                  bgcolor: 'background.paper',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderLeft: `4px solid ${theme.palette.success.main}`,
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': {
+                    boxShadow: theme.shadows[2],
+                    borderLeftWidth: '6px',
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Stack spacing={3}>
+                    {/* Header Section */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 2,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            bgcolor: 'success.light',
+                            color: 'success.main',
+                          }}
+                        >
+                          <TrendingUp sx={{ fontSize: 20 }} />
+                        </Box>
+                        <Box>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                            sx={{
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            {t(
+                              'agent.orders.earningsOpportunity',
+                              'Earn from this delivery'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.25 }}
+                          >
+                            {t(
+                              'agent.orders.canClaim',
+                              'Perfect opportunity! Claim this order and earn {{deliveryFee}} for the delivery.',
+                              { deliveryFee: formatCurrency(deliveryFee) }
+                            )
+                              .replace(/🚀/g, '')
+                              .trim()}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+
+                    <Divider />
+
+                    {/* Earnings Display */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 2,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: 1 }}
+                        >
+                          {t('agent.orders.deliveryEarnings', 'Delivery Fee')}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        variant="h4"
+                        fontWeight={700}
+                        color="success.main"
+                        sx={{
+                          fontSize: { xs: '1.75rem', md: '2.25rem' },
+                          lineHeight: 1.2,
+                          letterSpacing: '-0.02em',
+                        }}
+                      >
+                        {formatCurrency(deliveryFee)}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : (
+              <Alert
+                severity={alert.severity}
+                variant="outlined"
+                sx={{ mb: 0 }}
+              >
+                {alert.message}
+              </Alert>
+            )}
+          </Box>
+        );
+      })}
     </Box>
   );
 };
