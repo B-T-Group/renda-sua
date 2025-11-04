@@ -979,7 +979,8 @@
   },
   "orderActions": {
     "cancelOrder": "Annuler la Commande",
-    "claimOrder": "Réclamer",
+    "claimOrder": "Réclamer la Commande",
+    "claiming": "Réclamation en cours...",
     "completeOrder": "Terminer la Commande",
     "completePreparation": "Terminer la Préparation",
     "confirmOrder": "Confirmer la Commande",
@@ -1267,6 +1268,7 @@
     "tax": "Taxe",
     "total": "Total",
     "totalAmount": "Montant Total",
+    "totalQuantity": "Quantité Totale",
     "transactionId": "ID de Transaction",
     "unsupportedPhoneCountry": "Le numéro de téléphone n'est pas d'un pays pris en charge. Pays pris en charge : {{countries}}",
     "useDifferentPhone": "Utiliser un numéro de téléphone différent",

@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
-import AgentOrderAlerts from '../orders/AgentOrderAlerts';
 import SEOHead from '../seo/SEOHead';
 
 interface OrderFilters {
@@ -231,11 +230,11 @@ const OpenOrdersPage: React.FC = () => {
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {availableOrders.map((order) => (
-                    <Box key={order.id}>
-                      {/* Agent-specific alerts for available orders */}
-                      <AgentOrderAlerts order={order} />
-                      <AvailableOrderCard order={order} />
-                    </Box>
+                    <AvailableOrderCard
+                      key={order.id}
+                      order={order}
+                      onClaimSuccess={refetch}
+                    />
                   ))}
                 </Box>
               </Box>

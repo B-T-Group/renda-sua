@@ -977,7 +977,8 @@
   },
   "orderActions": {
     "cancelOrder": "Cancel Order",
-    "claimOrder": "Claim",
+    "claimOrder": "Claim Order",
+    "claiming": "Claiming...",
     "completeOrder": "Complete Order",
     "completePreparation": "Complete Preparation",
     "confirmOrder": "Confirm Order",
@@ -1258,6 +1259,7 @@
     "tax": "Tax",
     "total": "Total",
     "totalAmount": "Total Amount",
+    "totalQuantity": "Total Quantity",
     "transactionId": "Transaction ID",
     "unsupportedPhoneCountry": "Phone number is not from a supported country. Supported countries: {{countries}}",
     "useDifferentPhone": "Use a different phone number",
