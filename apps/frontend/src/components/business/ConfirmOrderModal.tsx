@@ -122,9 +122,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const isValidTimeWindow = useCallback(
     (window: DeliveryWindowOption): boolean => {
       const now = new Date();
-      const windowDate = new Date(window.preferred_date);
       const [startHours, startMinutes] = window.time_slot_start.split(':');
-      const windowDateTime = new Date(windowDate);
+      const windowDateTime = new Date(
+        `${window.preferred_date}T${window.time_slot_start}`
+      );
       windowDateTime.setHours(parseInt(startHours, 10));
       windowDateTime.setMinutes(parseInt(startMinutes, 10));
 
@@ -145,7 +146,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
 
   const allExistingWindows: DeliveryWindowOption[] =
     order.delivery_time_windows || [];
-  
+
   // Filter to only show valid time windows (at least 2 hours in the future)
   const existingWindows = allExistingWindows.filter(isValidTimeWindow);
   const hasValidExistingWindows = existingWindows.length > 0;
@@ -194,7 +195,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       // For now, we'll validate based on date and let backend handle time validation
       // But we can add frontend validation if we have slot details
       const windowDateTime = new Date(windowDate);
-      
+
       // If it's today, the time slot must be at least 2 hours in the future
       // This will be more accurately validated in the backend
       if (windowDate.toDateString() === now.toDateString()) {
@@ -446,14 +447,14 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                           'Create a new delivery time window:'
                         )
                       : !hasValidExistingWindows && hasInvalidWindows
-                        ? t(
-                            'orders.confirmModal.createNewWindowRequired',
-                            'Create a delivery time window (at least 2 hours from now):'
-                          )
-                        : t(
-                            'orders.confirmModal.noClientPreferences',
-                            'No client preferences available. Create a delivery time window:'
-                          )}
+                      ? t(
+                          'orders.confirmModal.createNewWindowRequired',
+                          'Create a delivery time window (at least 2 hours from now):'
+                        )
+                      : t(
+                          'orders.confirmModal.noClientPreferences',
+                          'No client preferences available. Create a delivery time window:'
+                        )}
                   </Typography>
 
                   <DeliveryTimeWindowSelector

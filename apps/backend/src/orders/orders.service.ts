@@ -553,30 +553,89 @@ export class OrdersService {
       );
     }
 
-    // Create the new delivery window
-    const createQuery = `
-      mutation CreateDeliveryWindow($data: delivery_time_windows_insert_input!) {
-        insert_delivery_time_windows_one(object: $data) {
+    // Check if a delivery window already exists for this order
+    const checkQuery = `
+      query GetExistingWindow($orderId: uuid!) {
+        delivery_time_windows(where: { order_id: { _eq: $orderId } }) {
           id
+          is_confirmed
         }
       }
     `;
 
-    const result = await this.hasuraSystemService.executeQuery(createQuery, {
-      data: {
-        order_id: orderId,
-        slot_id: details.slot_id,
-        preferred_date: details.preferred_date,
-        time_slot_start: slot.start_time,
-        time_slot_end: slot.end_time,
-        is_confirmed: true,
-        confirmed_at: 'now()',
-        confirmed_by: confirmedBy,
-        special_instructions: details.special_instructions,
-      },
+    const checkResult = await this.hasuraSystemService.executeQuery(checkQuery, {
+      orderId,
     });
 
-    return result.insert_delivery_time_windows_one.id;
+    const existingWindow = checkResult.delivery_time_windows?.[0];
+
+    if (existingWindow) {
+      // Update existing delivery window
+      const updateQuery = `
+        mutation UpdateDeliveryWindow(
+          $windowId: uuid!
+          $slotId: uuid!
+          $preferredDate: date!
+          $timeSlotStart: time!
+          $timeSlotEnd: time!
+          $confirmedBy: uuid!
+          $specialInstructions: String
+        ) {
+          update_delivery_time_windows_by_pk(
+            pk_columns: { id: $windowId }
+            _set: {
+              slot_id: $slotId
+              preferred_date: $preferredDate
+              time_slot_start: $timeSlotStart
+              time_slot_end: $timeSlotEnd
+              is_confirmed: true
+              confirmed_at: "now()"
+              confirmed_by: $confirmedBy
+              special_instructions: $specialInstructions
+            }
+          ) {
+            id
+          }
+        }
+      `;
+
+      const updateResult = await this.hasuraSystemService.executeQuery(updateQuery, {
+        windowId: existingWindow.id,
+        slotId: details.slot_id,
+        preferredDate: details.preferred_date,
+        timeSlotStart: slot.start_time,
+        timeSlotEnd: slot.end_time,
+        confirmedBy,
+        specialInstructions: details.special_instructions || null,
+      });
+
+      return updateResult.update_delivery_time_windows_by_pk.id;
+    } else {
+      // Create new delivery window
+      const createQuery = `
+        mutation CreateDeliveryWindow($data: delivery_time_windows_insert_input!) {
+          insert_delivery_time_windows_one(object: $data) {
+            id
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(createQuery, {
+        data: {
+          order_id: orderId,
+          slot_id: details.slot_id,
+          preferred_date: details.preferred_date,
+          time_slot_start: slot.start_time,
+          time_slot_end: slot.end_time,
+          is_confirmed: true,
+          confirmed_at: 'now()',
+          confirmed_by: confirmedBy,
+          special_instructions: details.special_instructions,
+        },
+      });
+
+      return result.insert_delivery_time_windows_one.id;
+    }
   }
 
   private async updateOrderDeliveryWindow(
