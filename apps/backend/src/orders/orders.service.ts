@@ -448,7 +448,9 @@ export class OrdersService {
     // Validate that the window is at least 2 hours in the future
     const now = new Date();
     const windowDate = new Date(window.preferred_date);
-    const [startHours, startMinutes] = window.time_slot_start.split(':').map(Number);
+    const [startHours, startMinutes] = window.time_slot_start
+      .split(':')
+      .map(Number);
     const windowDateTime = new Date(windowDate);
     windowDateTime.setHours(startHours, startMinutes, 0, 0);
 
@@ -563,9 +565,12 @@ export class OrdersService {
       }
     `;
 
-    const checkResult = await this.hasuraSystemService.executeQuery(checkQuery, {
-      orderId,
-    });
+    const checkResult = await this.hasuraSystemService.executeQuery(
+      checkQuery,
+      {
+        orderId,
+      }
+    );
 
     const existingWindow = checkResult.delivery_time_windows?.[0];
 
@@ -599,15 +604,18 @@ export class OrdersService {
         }
       `;
 
-      const updateResult = await this.hasuraSystemService.executeQuery(updateQuery, {
-        windowId: existingWindow.id,
-        slotId: details.slot_id,
-        preferredDate: details.preferred_date,
-        timeSlotStart: slot.start_time,
-        timeSlotEnd: slot.end_time,
-        confirmedBy,
-        specialInstructions: details.special_instructions || null,
-      });
+      const updateResult = await this.hasuraSystemService.executeQuery(
+        updateQuery,
+        {
+          windowId: existingWindow.id,
+          slotId: details.slot_id,
+          preferredDate: details.preferred_date,
+          timeSlotStart: slot.start_time,
+          timeSlotEnd: slot.end_time,
+          confirmedBy,
+          specialInstructions: details.special_instructions || null,
+        }
+      );
 
       return updateResult.update_delivery_time_windows_by_pk.id;
     } else {
