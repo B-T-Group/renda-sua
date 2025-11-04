@@ -37,6 +37,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     label: string;
     color: 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
+  const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
 
   // Check if agent has sufficient funds to claim the order
   const hasSufficientFunds = () => {
@@ -98,30 +99,42 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 
     // Check if agent has sufficient funds
     if (hasSufficientFunds()) {
-      // Use regular claim order API
-      setLoading(true);
-      try {
-        const result = await agentOrders.getOrderForPickup(order.id);
-        onShowNotification?.(
-          t(
-            'messages.orderAssignedSuccess',
-            `Order ${result.order.order_number} claimed successfully`
-          ),
-          'success'
-        );
-        onActionComplete?.();
-      } catch (error: any) {
-        onShowNotification?.(
-          error.message ||
-            t('messages.orderClaimError', 'Failed to claim order'),
-          'error'
-        );
-      } finally {
-        setLoading(false);
-      }
+      // Show confirmation dialog before claiming
+      setShowClaimConfirmation(true);
     } else {
       // Show dialog for claim with topup
       setShowClaimDialog(true);
+    }
+  };
+
+  const handleConfirmClaim = async () => {
+    if (!profile?.id) {
+      onShowNotification?.(
+        t('messages.agentProfileNotFound', 'Agent profile not found'),
+        'error'
+      );
+      return;
+    }
+
+    setShowClaimConfirmation(false);
+    setLoading(true);
+    try {
+      const result = await agentOrders.getOrderForPickup(order.id);
+      onShowNotification?.(
+        t(
+          'messages.orderAssignedSuccess',
+          `Order ${result.order.order_number} claimed successfully`
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message || t('messages.orderClaimError', 'Failed to claim order'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -404,6 +417,22 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         loading={loading}
         success={claimSuccess}
         error={claimError}
+      />
+
+      <ConfirmationModal
+        open={showClaimConfirmation}
+        title={t('orders.confirmClaimOrder', 'Confirm Claim Order')}
+        message={t(
+          'orders.confirmClaimOrderMessage',
+          'Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.',
+          { orderNumber: order.order_number }
+        )}
+        confirmText={t('orderActions.claimOrder', 'Claim Order')}
+        cancelText={t('common.cancel', 'Cancel')}
+        onConfirm={handleConfirmClaim}
+        onCancel={() => setShowClaimConfirmation(false)}
+        confirmColor="primary"
+        loading={loading}
       />
 
       <ConfirmationModal

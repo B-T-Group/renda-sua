@@ -262,6 +262,7 @@
       "subtitle": "Find and claim orders ready for pickup and delivery",
       "title": "Available Orders"
     },
+    "activeOrders": "Active Orders",
     "orders": {
       "amountBreakdown": "Amount Breakdown",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
@@ -1066,6 +1067,8 @@
     "completeYourOrder": "Complete Your Order",
     "completedAndCancelled": "Completed & Cancelled Orders",
     "confirmAction": "Confirm Action",
+    "confirmClaimOrder": "Confirm Claim Order",
+    "confirmClaimOrderMessage": "Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.",
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
@@ -1217,6 +1220,11 @@
     "phoneNumberRequiredMessage": "Please add your phone number to receive payment requests",
     "pickupAddress": "Pickup from",
     "pickupLocation": "Pickup Location",
+    "routeInfo": "Route Information",
+    "estimatedDistance": "Estimated Distance",
+    "estimatedTime": "Estimated Time",
+    "calculatingRoute": "Calculating route...",
+    "routeInfoUnavailable": "Route information unavailable",
     "placeOrder": "Place Order",
     "placedOn": "Placed on",
     "placingOrder": "Placing Order...",

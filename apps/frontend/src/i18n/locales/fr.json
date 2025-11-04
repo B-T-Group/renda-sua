@@ -262,6 +262,7 @@
       "subtitle": "Trouver et réclamer des commandes prêtes pour la collecte et la livraison",
       "title": "Commandes Disponibles"
     },
+    "activeOrders": "Commandes Actives",
     "orders": {
       "amountBreakdown": "Répartition des Montants",
       "assignedToOther": "Cette commande a été réclamée par un autre agent et n'est plus disponible.",
@@ -1069,6 +1070,8 @@
     "completedAndCancelled": "Commandes Terminées et Annulées",
     "confirmAction": "Confirmer l'Action",
     "amountBreakdown": "Répartition des Montants",
+    "confirmClaimOrder": "Confirmer la Réclamation de Commande",
+    "confirmClaimOrderMessage": "Êtes-vous sûr de vouloir réclamer la commande #{{orderNumber}} ? Cette action ne peut pas être annulée.",
     "confirmOrder": "Confirmer la Commande",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
@@ -1224,6 +1227,11 @@
     "phoneNumberRequiredMessage": "Veuillez ajouter votre numéro de téléphone pour recevoir les demandes de paiement",
     "pickupAddress": "Récupérer depuis",
     "pickupLocation": "Lieu de Récupération",
+    "routeInfo": "Informations sur l'Itinéraire",
+    "estimatedDistance": "Distance Estimée",
+    "estimatedTime": "Temps Estimé",
+    "calculatingRoute": "Calcul de l'itinéraire...",
+    "routeInfoUnavailable": "Informations sur l'itinéraire indisponibles",
     "placeOrder": "Passer la Commande",
     "placedOn": "Passée le",
     "placingOrder": "Passage de la Commande...",

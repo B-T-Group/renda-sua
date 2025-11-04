@@ -22,11 +22,12 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAgentOrders } from '../../hooks/useAgentOrders';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { Order } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
+import ConfirmationModal from './ConfirmationModal';
 
 interface AvailableOrderCardProps {
   order: Order;
@@ -41,11 +42,12 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
-  const agentOrders = useAgentOrders();
+  const apiClient = useApiClient();
   const { profile, accounts: agentAccounts } = useUserProfileContext();
 
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
+  const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimError, setClaimError] = useState<string | undefined>();
@@ -104,28 +106,50 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
 
     // Check if agent has sufficient funds
     if (hasSufficientFunds()) {
-      // Use regular claim order API
-      setClaimLoading(true);
-      setClaimError(undefined);
-      try {
-        const result = await agentOrders.getOrderForPickup(order.id);
+      // Show confirmation dialog before claiming
+      setShowClaimConfirmation(true);
+    } else {
+      // Show dialog for claim with topup
+      setShowClaimDialog(true);
+    }
+  };
+
+  const handleConfirmClaim = async () => {
+    if (!profile?.agent?.id) {
+      setClaimError(
+        t('messages.agentProfileNotFound', 'Agent profile not found')
+      );
+      return;
+    }
+
+    setShowClaimConfirmation(false);
+    // Use regular claim order API directly (no distance-matrix needed)
+    setClaimLoading(true);
+    setClaimError(undefined);
+    try {
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+      const response = await apiClient.post('/orders/claim_order', {
+        orderId: order.id,
+      });
+      if (response.data.success) {
         setClaimSuccess(true);
         onClaimSuccess?.();
         // Optionally navigate to manage order page after a short delay
         setTimeout(() => {
           navigate(`/orders/${order.id}`);
         }, 1500);
-      } catch (error: any) {
-        setClaimError(
-          error.message ||
-            t('messages.orderClaimError', 'Failed to claim order')
-        );
-      } finally {
-        setClaimLoading(false);
+      } else {
+        throw new Error(response.data.error || 'Failed to claim order');
       }
-    } else {
-      // Show dialog for claim with topup
-      setShowClaimDialog(true);
+    } catch (error: any) {
+      setClaimError(
+        error.message ||
+          t('messages.orderClaimError', 'Failed to claim order')
+      );
+    } finally {
+      setClaimLoading(false);
     }
   };
 
@@ -135,14 +159,32 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     setClaimSuccess(false);
 
     try {
-      await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
-      setClaimSuccess(true);
-      setShowClaimDialog(false);
-      onClaimSuccess?.();
-      // Optionally navigate to manage order page after a short delay
-      setTimeout(() => {
-        navigate(`/orders/${order.id}`);
-      }, 1500);
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+      const payload: { orderId: string; phone_number?: string } = {
+        orderId: order.id,
+      };
+      if (phoneNumber) {
+        payload.phone_number = phoneNumber;
+      }
+      const response = await apiClient.post(
+        '/orders/claim_order_with_topup',
+        payload
+      );
+      if (response.data.success) {
+        setClaimSuccess(true);
+        setShowClaimDialog(false);
+        onClaimSuccess?.();
+        // Optionally navigate to manage order page after a short delay
+        setTimeout(() => {
+          navigate(`/orders/${order.id}`);
+        }, 1500);
+      } else {
+        throw new Error(
+          response.data.error || 'Failed to claim order with topup'
+        );
+      }
     } catch (error: any) {
       setClaimError(
         error.message ||
@@ -483,6 +525,23 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         loading={claimLoading}
         success={claimSuccess}
         error={claimError}
+      />
+
+      {/* Claim Confirmation Dialog */}
+      <ConfirmationModal
+        open={showClaimConfirmation}
+        title={t('orders.confirmClaimOrder', 'Confirm Claim Order')}
+        message={t(
+          'orders.confirmClaimOrderMessage',
+          'Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.',
+          { orderNumber: order.order_number }
+        )}
+        confirmText={t('orderActions.claimOrder', 'Claim Order')}
+        cancelText={t('common.cancel', 'Cancel')}
+        onConfirm={handleConfirmClaim}
+        onCancel={() => setShowClaimConfirmation(false)}
+        confirmColor="primary"
+        loading={claimLoading}
       />
     </Card>
   );

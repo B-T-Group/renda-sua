@@ -98,7 +98,15 @@ const Header: React.FC = () => {
       ];
     }
 
-    // For business and agent users, show dashboard
+    // For agents, show Available Orders and Active Orders
+    if (userType === 'agent') {
+      return [
+        { label: t('agent.openOrders.title', 'Available Orders'), path: '/open-orders', icon: <Assignment /> },
+        { label: t('agent.activeOrders', 'Active Orders'), path: '/orders', icon: <Assignment /> },
+      ];
+    }
+
+    // For business users, show dashboard
     return [
       { label: t('common.dashboard', 'Dashboard'), path: '/app', icon: <Dashboard /> },
       { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },

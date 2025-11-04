@@ -3,7 +3,6 @@ import { Box, Container } from '@mui/material';
 import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
-import AccountInformation from '../components/common/AccountInformation';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
@@ -85,14 +84,7 @@ function App() {
       }}
     >
       <Header />
-      {/* Global Account Information for authenticated users (excluding clients and business) */}
-      {isAuthenticated && userType !== 'client' && userType !== 'business' && (
-        <AccountInformation
-          onRefresh={undefined}
-          compactView={false}
-          showTransactions={true}
-        />
-      )}
+
       <Box sx={{ flex: 1, py: 4 }}>
         <Container maxWidth="xl">
           <Routes>
