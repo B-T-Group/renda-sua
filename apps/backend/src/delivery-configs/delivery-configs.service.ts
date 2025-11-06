@@ -74,9 +74,7 @@ export class DeliveryConfigService {
    * @param countryCode - ISO 3166-1 alpha-2 country code
    * @returns Map of config keys to their parsed values
    */
-  async getAllDeliveryConfigs(
-    countryCode: string
-  ): Promise<Map<string, any>> {
+  async getAllDeliveryConfigs(countryCode: string): Promise<Map<string, any>> {
     try {
       const query = `
         query GetAllDeliveryConfigs($country_code: bpchar!) {
@@ -192,9 +190,7 @@ export class DeliveryConfigService {
   /**
    * Get fast delivery service hours configuration
    */
-  async getFastDeliveryServiceHours(
-    countryCode: string
-  ): Promise<object> {
+  async getFastDeliveryServiceHours(countryCode: string): Promise<object> {
     const value = await this.getDeliveryConfig(
       countryCode,
       'fast_delivery_service_hours'
@@ -246,4 +242,3 @@ export class DeliveryConfigService {
     }
   }
 }
-

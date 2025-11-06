@@ -7,7 +7,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { DeliveryConfigService, FastDeliveryConfig } from '../delivery-configs/delivery-configs.service';
+import {
+  DeliveryConfigService,
+  FastDeliveryConfig,
+} from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface SupportedLocation {
@@ -145,12 +148,16 @@ export class LocationsController {
       const locations = response.supported_country_states || [];
 
       // Get fast delivery configs for each unique country
-      const countryCodes = [...new Set(locations.map((loc: any) => loc.country_code as string))] as string[];
+      const countryCodes = [
+        ...new Set(locations.map((loc: any) => loc.country_code as string)),
+      ] as string[];
       const fastDeliveryConfigs = new Map<string, FastDeliveryConfig>();
-      
+
       for (const countryCode of countryCodes) {
         try {
-          const config = await this.deliveryConfigService.getFastDeliveryConfig(countryCode);
+          const config = await this.deliveryConfigService.getFastDeliveryConfig(
+            countryCode
+          );
           fastDeliveryConfigs.set(countryCode, config);
         } catch (error) {
           // If config not found, use defaults
@@ -166,13 +173,15 @@ export class LocationsController {
       // Transform the data to match the interface
       const transformedLocations: SupportedLocation[] = locations.map(
         (loc: any) => {
-          const fastDeliveryConfig = fastDeliveryConfigs.get(loc.country_code) || {
+          const fastDeliveryConfig = fastDeliveryConfigs.get(
+            loc.country_code
+          ) || {
             enabled: false,
             baseFee: 0,
             sla: 0,
             serviceHours: {},
           };
-          
+
           return {
             id: loc.id,
             countryCode: loc.country_code,
@@ -537,10 +546,9 @@ export class LocationsController {
       const locations = response.supported_country_states || [];
 
       const states = locations.map(async (loc: any) => {
-        const fastDeliveryEnabled = await this.deliveryConfigService.isFastDeliveryEnabled(
-          countryCode
-        );
-        
+        const fastDeliveryEnabled =
+          await this.deliveryConfigService.isFastDeliveryEnabled(countryCode);
+
         return {
           code: loc.state_name,
           name: loc.state_name,
