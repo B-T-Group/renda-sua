@@ -190,6 +190,27 @@
       "unauthorized": "Vous n'êtes pas autorisé à accéder à cette page",
       "validationRules": "Règles de Validation"
     },
+    "commissionAccounts": {
+      "availableBalance": "Solde Disponible",
+      "companyAccount": "Compte Entreprise",
+      "date": "Date",
+      "loading": {
+        "fetchCommissionUsers": "Chargement des utilisateurs de commission...",
+        "fetchTransactions": "Chargement des transactions..."
+      },
+      "memo": "Mémo",
+      "noAccounts": "Aucun compte de commission trouvé",
+      "noTransactions": "Aucune transaction trouvée",
+      "partner": "Partenaire",
+      "partnerAccounts": "Comptes Partenaires",
+      "referenceId": "ID de Référence",
+      "title": "Comptes Entreprise & Partenaires",
+      "totalBalance": "Solde Total",
+      "transactions": "Transactions du Compte",
+      "type": "Type",
+      "viewTransactions": "Voir les Transactions",
+      "withheldBalance": "Solde Retenu"
+    },
     "manageAgents": "Gérer les Agents",
     "manageBusinesses": "Gérer les Entreprises",
     "manageClients": "Gérer les Clients",
@@ -344,6 +365,8 @@
       "manageClientsDescription": "Voir et mettre à jour les clients",
       "manageConfigurations": "Gérer les Configurations",
       "manageConfigurationsDescription": "Gérer les configurations et paramètres de l'application",
+      "manageCommissionAccounts": "Comptes Entreprise & Partenaires",
+      "manageCommissionAccountsDescription": "Voir le compte entreprise et les comptes partenaires avec les transactions de commission",
       "noBusinessProfile": "Aucun profil d'entreprise trouvé",
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
       "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets."

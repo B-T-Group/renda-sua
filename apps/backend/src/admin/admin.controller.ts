@@ -8,6 +8,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminMessageService } from './admin-message.service';
@@ -29,8 +37,10 @@ export interface AdminMessageResponse {
   error?: string;
 }
 
+@ApiTags('admin')
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
+@ApiBearerAuth()
 export class AdminController {
   constructor(
     private readonly adminMessageService: AdminMessageService,
@@ -212,6 +222,149 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch user details',
+      };
+    }
+  }
+
+  @Get('commission-users')
+  @ApiOperation({
+    summary: 'Get commission users',
+    description:
+      'Retrieve all users that receive commissions (partners and company account hq@rendasua.com) with their accounts',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of commission users with accounts',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          identifier: { type: 'string' },
+          email: { type: 'string', example: 'hq@rendasua.com' },
+          first_name: { type: 'string' },
+          last_name: { type: 'string' },
+          phone_number: { type: 'string' },
+          user_type_id: { type: 'string', example: 'partner' },
+          accounts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                currency: { type: 'string', example: 'XAF' },
+                available_balance: { type: 'number' },
+                withheld_balance: { type: 'number' },
+                total_balance: { type: 'number' },
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getCommissionUsers() {
+    try {
+      const users = await this.adminService.getCommissionUsers();
+      return { success: true, users };
+    } catch (error: any) {
+      console.error('Error fetching commission users:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch commission users',
+      };
+    }
+  }
+
+  @Get('accounts/:accountId/transactions')
+  @ApiOperation({
+    summary: 'Get account transactions',
+    description:
+      'Retrieve paginated transactions for a specific account by account ID',
+  })
+  @ApiParam({
+    name: 'accountId',
+    description: 'Account UUID',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiQuery({
+    name: 'page',
+    description: 'Page number (default: 1)',
+    required: false,
+    type: Number,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Items per page (default: 50)',
+    required: false,
+    type: Number,
+    example: 50,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated account transactions',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        transactions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              account_id: { type: 'string', format: 'uuid' },
+              amount: { type: 'number' },
+              transaction_type: { type: 'string', example: 'deposit' },
+              memo: { type: 'string' },
+              reference_id: { type: 'string', format: 'uuid' },
+              created_at: { type: 'string', format: 'date-time' },
+              account: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  currency: { type: 'string' },
+                  user_id: { type: 'string', format: 'uuid' },
+                },
+              },
+            },
+          },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrev: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  })
+  async getAccountTransactions(
+    @Param('accountId') accountId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    try {
+      const result = await this.adminService.getAccountTransactions({
+        accountId,
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+      });
+      return { success: true, ...result };
+    } catch (error: any) {
+      console.error('Error fetching account transactions:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch account transactions',
       };
     }
   }

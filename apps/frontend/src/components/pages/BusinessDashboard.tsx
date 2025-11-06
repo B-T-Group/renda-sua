@@ -10,6 +10,7 @@ import {
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
   Group as UsersIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -151,6 +152,14 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#607d8b',
       path: '/admin/configurations',
+    },
+    {
+      title: t('business.dashboard.manageCommissionAccounts'),
+      description: t('business.dashboard.manageCommissionAccountsDescription'),
+      icon: <AccountBalanceIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#1976d2',
+      path: '/admin/commission-accounts',
     },
   ];
 

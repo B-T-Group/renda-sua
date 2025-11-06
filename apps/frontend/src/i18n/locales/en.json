@@ -190,6 +190,27 @@
       "unauthorized": "You are not authorized to access this page",
       "validationRules": "Validation Rules"
     },
+    "commissionAccounts": {
+      "availableBalance": "Available Balance",
+      "companyAccount": "Company Account",
+      "date": "Date",
+      "loading": {
+        "fetchCommissionUsers": "Loading commission users...",
+        "fetchTransactions": "Loading transactions..."
+      },
+      "memo": "Memo",
+      "noAccounts": "No commission accounts found",
+      "noTransactions": "No transactions found",
+      "partner": "Partner",
+      "partnerAccounts": "Partner Accounts",
+      "referenceId": "Reference ID",
+      "title": "Company Accounts & Partners",
+      "totalBalance": "Total Balance",
+      "transactions": "Account Transactions",
+      "type": "Type",
+      "viewTransactions": "View Transactions",
+      "withheldBalance": "Withheld Balance"
+    },
     "manageAgents": "Manage Agents",
     "manageBusinesses": "Manage Businesses",
     "manageClients": "Manage Clients",
@@ -342,6 +363,8 @@
       "manageClientsDescription": "View and update clients",
       "manageConfigurations": "Manage Configurations",
       "manageConfigurationsDescription": "Manage application configurations and settings",
+      "manageCommissionAccounts": "Company Accounts & Partners",
+      "manageCommissionAccountsDescription": "View company account and partner accounts with commission transactions",
       "noBusinessProfile": "No business profile found",
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools."

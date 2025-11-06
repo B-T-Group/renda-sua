@@ -12,6 +12,7 @@ import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
+import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import AppRedirect from '../components/pages/AppRedirect';
@@ -185,6 +186,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminConfigurationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/commission-accounts"
+              element={
+                <ProtectedRoute>
+                  <AdminCommissionAccounts />
                 </ProtectedRoute>
               }
             />

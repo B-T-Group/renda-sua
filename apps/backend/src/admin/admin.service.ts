@@ -653,4 +653,105 @@ export class AdminService {
 
     return result.users_by_pk;
   }
+
+  async getCommissionUsers() {
+    const query = `
+      query GetCommissionUsers {
+        users(
+          where: {
+            _or: [
+              { user_type_id: { _eq: "partner" } }
+              { email: { _eq: "hq@rendasua.com" } }
+            ]
+          }
+          order_by: { created_at: desc }
+        ) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          user_type_id
+          created_at
+          updated_at
+          accounts {
+            id
+            currency
+            available_balance
+            withheld_balance
+            total_balance
+            is_active
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query);
+
+    return result.users || [];
+  }
+
+  async getAccountTransactions(params: {
+    accountId: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = params.page || 1;
+    const limit = params.limit || 50;
+    const offset = (page - 1) * limit;
+
+    const query = `
+      query GetAccountTransactions($accountId: uuid!, $limit: Int!, $offset: Int!) {
+        account_transactions(
+          where: { account_id: { _eq: $accountId } }
+          order_by: { created_at: desc }
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          account_id
+          amount
+          transaction_type
+          memo
+          reference_id
+          created_at
+          account {
+            id
+            currency
+            user_id
+          }
+        }
+        account_transactions_aggregate(where: { account_id: { _eq: $accountId } }) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      accountId: params.accountId,
+      limit,
+      offset,
+    });
+
+    const transactions = result.account_transactions || [];
+    const totalCount = result.account_transactions_aggregate?.aggregate?.count || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      transactions,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
 }

@@ -108,6 +108,9 @@ export const GET_USER_BUSINESS = gql`
     businesses(where: { user_id: { _eq: $userId } }) {
       id
       user_id
+      name
+      is_admin
+      is_verified
       business_addresses {
         address {
           id
