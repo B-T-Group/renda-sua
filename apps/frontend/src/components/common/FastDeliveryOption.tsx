@@ -117,15 +117,6 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" color="primary" fontWeight="bold">
-            {formatCurrency(config.fee)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-            {t('orders.fastDelivery.additionalFee', 'additional fee')}
-          </Typography>
-        </Box>
-
         <FormControlLabel
           control={
             <Switch
