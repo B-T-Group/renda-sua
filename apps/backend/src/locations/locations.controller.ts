@@ -7,7 +7,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { DeliveryConfigService, FastDeliveryConfig } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface SupportedLocation {
@@ -145,8 +145,8 @@ export class LocationsController {
       const locations = response.supported_country_states || [];
 
       // Get fast delivery configs for each unique country
-      const countryCodes = [...new Set(locations.map((loc: any) => loc.country_code))];
-      const fastDeliveryConfigs = new Map();
+      const countryCodes = [...new Set(locations.map((loc: any) => loc.country_code as string))] as string[];
+      const fastDeliveryConfigs = new Map<string, FastDeliveryConfig>();
       
       for (const countryCode of countryCodes) {
         try {

@@ -24,12 +24,12 @@ export class DeliveryConfigService {
    * Get a single delivery configuration value for a country
    * @param countryCode - ISO 3166-1 alpha-2 country code (e.g., 'GA')
    * @param configKey - Configuration key from delivery_configs table
-   * @returns Configuration value parsed according to its data type
+   * @returns Configuration value parsed according to its data type, or null if not found
    */
   async getDeliveryConfig(
     countryCode: string,
     configKey: string
-  ): Promise<string | number | boolean | object> {
+  ): Promise<string | number | boolean | object | null> {
     try {
       const query = `
         query GetDeliveryConfig($country_code: bpchar!, $config_key: String!) {
