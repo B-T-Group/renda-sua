@@ -8,9 +8,9 @@ export interface OrderItem {
   id: string;
   item_name: string;
   item_description: string;
-  unit_price: number;
+  unit_price?: number; // Optional for agents
   quantity: number;
-  total_price: number;
+  total_price?: number; // Optional for agents
   weight?: number;
   weight_unit?: string;
   dimensions?: string;
@@ -73,11 +73,11 @@ export interface Order {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id: string;
-  subtotal: number;
-  base_delivery_fee: number;
-  per_km_delivery_fee: number;
+  subtotal?: number; // Optional for agents
+  base_delivery_fee?: number; // Optional for agents
+  per_km_delivery_fee?: number; // Optional for agents
   tax_amount: number;
-  total_amount: number;
+  total_amount?: number; // Optional for agents
   currency: string;
   current_status: string;
   estimated_delivery_time?: string;
@@ -89,6 +89,7 @@ export interface Order {
   verified_agent_delivery?: boolean;
   created_at: string;
   updated_at: string;
+  delivery_commission?: number; // Computed field for agents
   client: Client;
   business: Business;
   business_location: BusinessLocation;
@@ -99,7 +100,7 @@ export interface Order {
     delivery_fees: number;
     currency: string;
     status: string;
-  }>;
+  }>; // Optional for agents
   order_status_history?: Array<{
     id: string;
     order_id: string;

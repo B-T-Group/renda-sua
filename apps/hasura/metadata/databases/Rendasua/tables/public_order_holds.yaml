@@ -12,26 +12,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: order_id
 select_permissions:
-  - role: agent
-    permission:
-      columns:
-        - id
-        - order_id
-        - client_id
-        - agent_id
-        - client_hold_amount
-        - agent_hold_amount
-        - delivery_fees
-        - currency
-        - status
-        - created_at
-        - updated_at
-      filter:
-        agent:
-          user:
-            identifier:
-              _eq: X-Hasura-User-Id
-      allow_aggregations: true
   - role: business
     permission:
       columns:
@@ -74,17 +54,3 @@ select_permissions:
               _eq: X-Hasura-User-Id
       allow_aggregations: true
 update_permissions:
-  - role: agent
-    permission:
-      columns:
-        - status
-      filter:
-        agent:
-          user:
-            identifier:
-              _eq: X-Hasura-User-Id
-      check:
-        agent:
-          user:
-            identifier:
-              _eq: X-Hasura-User-Id

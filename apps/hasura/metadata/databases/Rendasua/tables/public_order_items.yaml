@@ -46,9 +46,7 @@ select_permissions:
         - item_id
         - item_name
         - item_description
-        - unit_price
         - quantity
-        - total_price
         - weight
         - weight_unit
         - dimensions

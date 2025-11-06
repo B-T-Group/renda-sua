@@ -287,12 +287,30 @@ export class OrdersService {
         commissionConfig
       );
 
-      // Replace delivery fees with agent commission amounts and set total to subtotal
+      // Remove financial fields and order_holds, add delivery_commission
+      const {
+        base_delivery_fee: _base_delivery_fee,
+        per_km_delivery_fee: _per_km_delivery_fee,
+        subtotal: _subtotal,
+        total_amount: _total_amount,
+        order_holds: _order_holds,
+        ...restOrder
+      } = order;
+
+      // Remove unit_price and total_price from order_items if present
+      const orderItems = restOrder.order_items?.map((item: any) => {
+        const {
+          unit_price: _unit_price,
+          total_price: _total_price,
+          ...restItem
+        } = item;
+        return restItem;
+      });
+
       return {
-        ...order,
-        base_delivery_fee: earnings.baseDeliveryCommission,
-        per_km_delivery_fee: earnings.perKmDeliveryCommission,
-        total_amount: order.subtotal, // Set total to just the cost of items (subtotal)
+        ...restOrder,
+        delivery_commission: earnings.totalEarnings,
+        order_items: orderItems,
       };
     } catch (error: any) {
       this.logger.warn(
@@ -1781,6 +1799,9 @@ export class OrdersService {
     const agentState = agentAddress.state;
 
     // Query for orders in ready_for_pickup and assigned_agent_id is null
+    // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
+    // but will be removed in transformation. Financial fields like subtotal, total_amount,
+    // order_holds, and order item prices are excluded.
     const query = `
       query OpenOrders {
         orders(where: {current_status: {_eq: "ready_for_pickup"}, assigned_agent_id: {_is_null: true}}) {
@@ -1788,7 +1809,6 @@ export class OrdersService {
           order_number
           base_delivery_fee
           per_km_delivery_fee
-          subtotal
           business {
             name
           }
@@ -1820,17 +1840,10 @@ export class OrdersService {
             country
             postal_code
           }
-          total_amount
           currency
           current_status
           verified_agent_delivery
           created_at
-          order_holds {
-            id
-            delivery_fees
-            currency
-            status
-          }
           order_items {
             id
             item_name
@@ -1853,8 +1866,6 @@ export class OrdersService {
               }
             }
             quantity
-            unit_price
-            total_price
           }
         }
       }
@@ -1939,7 +1950,218 @@ export class OrdersService {
     }
 
     // Get comprehensive order data with all relationships
-    const query = `
+    // For agents, exclude financial fields (subtotal, total_amount, order_holds, order item prices)
+    // but keep base_delivery_fee and per_km_delivery_fee for commission calculation
+    const isAgent = user.agent !== null;
+    const query = isAgent
+      ? `
+      query GetOrderById($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          order_number
+          client_id
+          business_id
+          business_location_id
+          assigned_agent_id
+          delivery_address_id
+          base_delivery_fee
+          per_km_delivery_fee
+          currency
+          current_status
+          estimated_delivery_time
+          actual_delivery_time
+          special_instructions
+          preferred_delivery_time
+          requires_fast_delivery
+          payment_method
+          payment_status
+          verified_agent_delivery
+          created_at
+          updated_at
+          client {
+            id
+            user_id
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          business {
+            id
+            user_id
+            name
+            is_admin
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          business_location {
+            id
+            name
+            location_type
+            address {
+              id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+              latitude
+              longitude
+            }
+          }
+          delivery_address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            latitude
+            longitude
+          }
+          assigned_agent {
+            id
+            user_id
+            is_verified
+            user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              phone_number
+            }
+          }
+          order_items {
+            id
+            business_inventory_id
+            item_id
+            item_name
+            item_description
+            quantity
+            weight
+            weight_unit
+            dimensions
+            special_instructions
+            item {
+              id
+              sku
+              name
+              description
+              currency
+              model
+              color
+              weight
+              weight_unit
+              brand {
+                id
+                name
+                description
+              }
+              item_sub_category {
+                id
+                name
+                description
+                item_category {
+                  id
+                  name
+                  description
+                }
+              }
+              item_images {
+                id
+                image_url
+                alt_text
+                display_order
+              }
+            }
+          }
+          order_status_history {
+            id
+            order_id
+            status
+            previous_status
+            notes
+            changed_by_type
+            changed_by_user_id
+            created_at
+            changed_by_user {
+              id
+              identifier
+              first_name
+              last_name
+              email
+              agent {
+                id
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+              business {
+                id
+                name
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+              client {
+                id
+                user {
+                  first_name
+                  last_name
+                  email
+                }
+              }
+            }
+          }
+          delivery_time_windows {
+            id
+            order_id
+            slot_id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            special_instructions
+            confirmed_at
+            confirmed_by
+            created_at
+            updated_at
+            slot {
+              id
+              slot_name
+              slot_type
+              start_time
+              end_time
+              is_active
+            }
+            confirmedByUser {
+              id
+              first_name
+              last_name
+              email
+            }
+          }
+        }
+      }
+    `
+      : `
       query GetOrderById($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
           id

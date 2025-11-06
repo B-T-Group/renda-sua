@@ -118,6 +118,9 @@ export class AgentsController {
       const agentId = user.agent.id;
 
       // Query for active orders assigned to this agent
+      // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
+      // but will be removed in transformation. Financial fields like subtotal, total_amount,
+      // and order item prices are excluded.
       const query = `
         query GetAgentActiveOrders($agentId: uuid!) {
           orders(
@@ -133,11 +136,8 @@ export class AgentsController {
             business_location_id
             assigned_agent_id
             delivery_address_id
-            subtotal
             base_delivery_fee
             per_km_delivery_fee
-            tax_amount
-            total_amount
             currency
             current_status
             estimated_delivery_time
@@ -199,9 +199,7 @@ export class AgentsController {
               id
               item_name
               item_description
-              unit_price
               quantity
-              total_price
               weight
               weight_unit
               dimensions
@@ -215,7 +213,7 @@ export class AgentsController {
         agentId,
       });
 
-      // Transform orders to show agent commission amounts
+      // Transform orders to remove financial fields and add delivery_commission
       const orders = result.orders || [];
 
       // Get commission config once for all orders
@@ -234,13 +232,23 @@ export class AgentsController {
             user.agent?.is_verified || false,
             commissionConfig
           );
+
+          // Remove financial fields and add delivery_commission
+          const {
+            base_delivery_fee: _base_delivery_fee,
+            per_km_delivery_fee: _per_km_delivery_fee,
+            subtotal: _subtotal,
+            total_amount: _total_amount,
+            order_holds: _order_holds,
+            ...restOrder
+          } = order;
+
           return {
-            ...order,
-            base_delivery_fee: earnings.baseDeliveryCommission,
-            per_km_delivery_fee: earnings.perKmDeliveryCommission,
+            ...restOrder,
+            delivery_commission: earnings.totalEarnings,
           };
         } catch (_error: any) {
-          // Return original order if transformation fails
+          // Return original order if transformation fails (but this shouldn't happen)
           return order;
         }
       });

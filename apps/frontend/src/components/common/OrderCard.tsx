@@ -749,62 +749,95 @@ const OrderCard: React.FC<OrderCardProps> = ({
         >
           {/* Amount Breakdown */}
           <Box sx={{ flex: 1, minWidth: 200 }}>
-            <Typography variant="caption" color="text.secondary" gutterBottom>
-              {t('orders.amountBreakdown', 'Amount Breakdown')}
-            </Typography>
-            <Stack spacing={0.5}>
-              {/* Subtotal */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('orders.subtotal', 'Subtotal')}:
+            {profile?.agent ? (
+              // Agent view: Show only delivery commission
+              <>
+                <Typography variant="caption" color="text.secondary" gutterBottom>
+                  {t('orders.deliveryCommission', 'Delivery Commission')}
                 </Typography>
-                <Typography variant="body2" fontWeight="medium">
-                  {formatCurrency(order.subtotal, order.currency)}
+                <Stack spacing={0.5}>
+                  {order.delivery_commission !== undefined && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body1" fontWeight="bold" color="primary">
+                        {t('orders.earnings', 'Your Earnings')}:
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        color="primary"
+                        fontWeight="bold"
+                        sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                      >
+                        {formatCurrency(order.delivery_commission, order.currency)}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              </>
+            ) : (
+              // Business/Client view: Show full breakdown
+              <>
+                <Typography variant="caption" color="text.secondary" gutterBottom>
+                  {t('orders.amountBreakdown', 'Amount Breakdown')}
                 </Typography>
-              </Box>
+                <Stack spacing={0.5}>
+                  {/* Subtotal */}
+                  {order.subtotal !== undefined && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.subtotal', 'Subtotal')}:
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {formatCurrency(order.subtotal, order.currency)}
+                      </Typography>
+                    </Box>
+                  )}
 
-              {/* Total Delivery Fee */}
-              {order.base_delivery_fee + order.per_km_delivery_fee > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.deliveryFee', 'Delivery Fee')}:
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {getDeliveryFeeDisplay()}
-                  </Typography>
-                </Box>
-              )}
+                  {/* Total Delivery Fee */}
+                  {(order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0) > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.deliveryFee', 'Delivery Fee')}:
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {getDeliveryFeeDisplay()}
+                      </Typography>
+                    </Box>
+                  )}
 
-              {/* Tax Amount */}
-              {order.tax_amount > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.tax', 'Tax')}:
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(order.tax_amount, order.currency)}
-                  </Typography>
-                </Box>
-              )}
+                  {/* Tax Amount */}
+                  {order.tax_amount > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.tax', 'Tax')}:
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {formatCurrency(order.tax_amount, order.currency)}
+                      </Typography>
+                    </Box>
+                  )}
 
-              {/* Divider */}
-              <Divider sx={{ my: 0.5 }} />
+                  {/* Divider */}
+                  <Divider sx={{ my: 0.5 }} />
 
-              {/* Total Amount */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body1" fontWeight="bold" color="primary">
-                  {t('orders.totalAmount', 'Total')}:
-                </Typography>
-                <Typography
-                  variant="h6"
-                  color="primary"
-                  fontWeight="bold"
-                  sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-                >
-                  {formatCurrency(order.total_amount, order.currency)}
-                </Typography>
-              </Box>
-            </Stack>
+                  {/* Total Amount */}
+                  {order.total_amount !== undefined && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body1" fontWeight="bold" color="primary">
+                        {t('orders.totalAmount', 'Total')}:
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        color="primary"
+                        fontWeight="bold"
+                        sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                      >
+                        {formatCurrency(order.total_amount, order.currency)}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              </>
+            )}
           </Box>
 
           <Button

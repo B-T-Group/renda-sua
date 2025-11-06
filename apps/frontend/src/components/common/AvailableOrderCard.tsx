@@ -409,54 +409,48 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
                 {t('orders.totalQuantity', 'Total Quantity')}:{' '}
                 {getTotalItemQuantity()}
               </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontWeight: 600, mt: 0.5 }}
-              >
-                {t('orders.total', 'Total')}:{' '}
-                {formatCurrency(order.total_amount, order.currency)}
-              </Typography>
             </Box>
 
-            {/* Delivery Fee Highlight - More Prominent */}
-            <Box
-              sx={{
-                textAlign: { xs: 'left', sm: 'right' },
-                bgcolor: 'background.paper',
-                borderRadius: 2,
-                p: 2,
-                minWidth: { xs: '100%', sm: 160 },
-                border: `2px solid ${theme.palette.success.main}`,
-                boxShadow: `0 2px 8px ${theme.palette.success.main}20`,
-              }}
-            >
+            {/* Delivery Commission Highlight - More Prominent */}
+            {order.delivery_commission !== undefined && (
               <Box
                 sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                  gap: 1,
-                  mb: 0.5,
+                  textAlign: { xs: 'left', sm: 'right' },
+                  bgcolor: 'background.paper',
+                  borderRadius: 2,
+                  p: 2,
+                  minWidth: { xs: '100%', sm: 160 },
+                  border: `2px solid ${theme.palette.success.main}`,
+                  boxShadow: `0 2px 8px ${theme.palette.success.main}20`,
                 }}
               >
-                <DeliveryIcon color="success" sx={{ fontSize: 24 }} />
-                <Typography
-                  variant="h5"
-                  color="success.main"
-                  sx={{ fontWeight: 700 }}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                    gap: 1,
+                    mb: 0.5,
+                  }}
                 >
-                  {deliveryFeeDisplay}
+                  <DeliveryIcon color="success" sx={{ fontSize: 24 }} />
+                  <Typography
+                    variant="h5"
+                    color="success.main"
+                    sx={{ fontWeight: 700 }}
+                  >
+                    {formatCurrency(order.delivery_commission, order.currency)}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                >
+                  {t('orders.deliveryCommission', 'Delivery Commission')}
                 </Typography>
               </Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600, textTransform: 'uppercase' }}
-              >
-                {t('orders.deliveryFee', 'Delivery Fee')}
-              </Typography>
-            </Box>
+            )}
           </Box>
         </Stack>
 

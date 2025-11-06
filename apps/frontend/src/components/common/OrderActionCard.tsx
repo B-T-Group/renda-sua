@@ -250,29 +250,52 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           </Typography>
           <Box sx={{ mb: 1 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-              <strong>Amount Breakdown:</strong>
+              {userType === 'agent' ? (
+                <strong>{t('orders.deliveryCommission', 'Delivery Commission')}:</strong>
+              ) : (
+                <strong>{t('orders.amountBreakdown', 'Amount Breakdown')}:</strong>
+              )}
             </Typography>
             <Box sx={{ pl: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Subtotal: {formatCurrency(order.subtotal, order.currency)}
-              </Typography>
-              {order.base_delivery_fee + order.per_km_delivery_fee > 0 && (
-                <Typography variant="body2" color="text.secondary">
-                  Delivery:{' '}
-                  {formatCurrency(
-                    order.base_delivery_fee + order.per_km_delivery_fee,
-                    order.currency
+              {userType === 'agent' ? (
+                // Agent view: Show only delivery commission
+                order.delivery_commission !== undefined && (
+                  <Typography variant="body2" fontWeight="bold" color="primary">
+                    {t('orders.earnings', 'Your Earnings')}:{' '}
+                    {formatCurrency(order.delivery_commission, order.currency)}
+                  </Typography>
+                )
+              ) : (
+                // Business/Client view: Show full breakdown
+                <>
+                  {order.subtotal !== undefined && (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('orders.subtotal', 'Subtotal')}:{' '}
+                      {formatCurrency(order.subtotal, order.currency)}
+                    </Typography>
                   )}
-                </Typography>
+                  {(order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0) > 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('orders.deliveryFee', 'Delivery')}:{' '}
+                      {formatCurrency(
+                        (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
+                        order.currency
+                      )}
+                    </Typography>
+                  )}
+                  {order.tax_amount > 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('orders.tax', 'Tax')}: {formatCurrency(order.tax_amount, order.currency)}
+                    </Typography>
+                  )}
+                  {order.total_amount !== undefined && (
+                    <Typography variant="body2" fontWeight="bold" color="primary">
+                      {t('orders.total', 'Total')}:{' '}
+                      {formatCurrency(order.total_amount, order.currency)}
+                    </Typography>
+                  )}
+                </>
               )}
-              {order.tax_amount > 0 && (
-                <Typography variant="body2" color="text.secondary">
-                  Tax: {formatCurrency(order.tax_amount, order.currency)}
-                </Typography>
-              )}
-              <Typography variant="body2" fontWeight="bold" color="primary">
-                Total: {formatCurrency(order.total_amount, order.currency)}
-              </Typography>
             </Box>
           </Box>
         </Box>

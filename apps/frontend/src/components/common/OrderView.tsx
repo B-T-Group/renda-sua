@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { OrderData } from '../../hooks/useOrderById';
 import DeliveryTimeWindowDisplay from './DeliveryTimeWindowDisplay';
 
@@ -32,6 +33,8 @@ const OrderView: React.FC<OrderViewProps> = ({
   showFinancialDetails = false,
 }) => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
+  const isAgent = !!profile?.agent;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -640,52 +643,87 @@ const OrderView: React.FC<OrderViewProps> = ({
               </Typography>
 
               <Box sx={{ flexGrow: 1 }}>
-                <Box display="flex" justifyContent="space-between" mb={1.5}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.subtotal', 'Subtotal')}
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(order.subtotal, order.currency)}
-                  </Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between" mb={1.5}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.deliveryFee', 'Delivery Fee')}
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(
-                      order.base_delivery_fee + order.per_km_delivery_fee,
-                      order.currency
+                {isAgent ? (
+                  // Agent view: Show only delivery commission
+                  <>
+                    {order.delivery_commission !== undefined && (
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        sx={{
+                          backgroundColor: 'primary.50',
+                          p: 2,
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'primary.200',
+                        }}
+                      >
+                        <Typography variant="h6" fontWeight="bold">
+                          {t('orders.earnings', 'Your Earnings')}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="bold" color="primary">
+                          {formatCurrency(order.delivery_commission, order.currency)}
+                        </Typography>
+                      </Box>
                     )}
-                  </Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between" mb={2}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('orders.tax', 'Tax')}
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {formatCurrency(order.tax_amount, order.currency)}
-                  </Typography>
-                </Box>
-                <Divider sx={{ my: 2 }} />
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  sx={{
-                    backgroundColor: 'primary.50',
-                    p: 2,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'primary.200',
-                  }}
-                >
-                  <Typography variant="h6" fontWeight="bold">
-                    {t('orders.total', 'Total')}
-                  </Typography>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    {formatCurrency(order.total_amount, order.currency)}
-                  </Typography>
-                </Box>
+                  </>
+                ) : (
+                  // Business/Client view: Show full breakdown
+                  <>
+                    {order.subtotal !== undefined && (
+                      <Box display="flex" justifyContent="space-between" mb={1.5}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('orders.subtotal', 'Subtotal')}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {formatCurrency(order.subtotal, order.currency)}
+                        </Typography>
+                      </Box>
+                    )}
+                    {(order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0) > 0 && (
+                      <Box display="flex" justifyContent="space-between" mb={1.5}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('orders.deliveryFee', 'Delivery Fee')}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {formatCurrency(
+                            (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
+                            order.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
+                    <Box display="flex" justifyContent="space-between" mb={2}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.tax', 'Tax')}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {formatCurrency(order.tax_amount, order.currency)}
+                      </Typography>
+                    </Box>
+                    <Divider sx={{ my: 2 }} />
+                    {order.total_amount !== undefined && (
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        sx={{
+                          backgroundColor: 'primary.50',
+                          p: 2,
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'primary.200',
+                        }}
+                      >
+                        <Typography variant="h6" fontWeight="bold">
+                          {t('orders.total', 'Total')}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="bold" color="primary">
+                          {formatCurrency(order.total_amount, order.currency)}
+                        </Typography>
+                      </Box>
+                    )}
+                  </>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -712,8 +750,8 @@ const OrderView: React.FC<OrderViewProps> = ({
           <DeliveryTimeWindowDisplay order={order} />
         </Grid>
 
-        {/* Financial Details (Admin/Business only) */}
-        {showFinancialDetails && order.order_holds.length > 0 && (
+        {/* Financial Details (Admin/Business only) - Hidden for agents */}
+        {showFinancialDetails && !isAgent && order.order_holds && order.order_holds.length > 0 && (
           <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent>
