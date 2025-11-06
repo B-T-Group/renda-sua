@@ -16,9 +16,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
-  Stack,
   Typography,
-  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import React, { useState } from 'react';
@@ -42,7 +40,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { profile, accounts: agentAccounts } = useUserProfileContext();
@@ -235,21 +232,22 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
       sx={{
         display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
-        mb: 2,
+        mb: 1.5,
         position: 'relative',
       }}
     >
       {/* Order Image */}
       <Box
         sx={{
-          width: { xs: '100%', sm: '250px' },
-          minHeight: { xs: 150, sm: 200 },
+          width: { xs: '100%', sm: '240px' },
+          minHeight: { xs: 120, sm: 120 },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'grey.100',
           overflow: 'hidden',
           borderRadius: 0,
+          flexShrink: 0,
         }}
       >
         {order.order_items?.[0]?.item?.item_images?.[0]?.image_url ? (
@@ -291,19 +289,27 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
       </Box>
 
       {/* Order Details */}
-      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <CardContent
+        sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.5 }}
+      >
+        {/* Header Row */}
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
             mb: 1,
+            gap: 1,
           }}
         >
-          <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+          <Typography
+            variant="h6"
+            component="h3"
+            sx={{ fontWeight: 600, fontSize: '1.1rem' }}
+          >
             Order #{order.order_number}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
             <Chip
               label={t(
                 `common.orderStatus.${order.current_status}`,
@@ -311,242 +317,241 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               )}
               color={getStatusColor(order.current_status) as any}
               size="small"
+              sx={{ height: 24, fontSize: '0.7rem' }}
             />
             {order.requires_fast_delivery && (
               <Chip
                 label={t('orders.fastDelivery.title', 'Fast Delivery')}
                 color="warning"
                 size="small"
-                icon={<FlashOn fontSize="small" />}
+                icon={<FlashOn sx={{ fontSize: 14 }} />}
+                sx={{ height: 24, fontSize: '0.7rem' }}
               />
             )}
           </Box>
         </Box>
 
-        {/* Business and Client Info */}
-        <Box sx={{ display: 'flex', gap: 3, mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <BusinessIcon color="primary" sx={{ fontSize: 16 }} />
-            <Typography variant="body2" color="text.secondary">
+        {/* Business and Client Info - Compact */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <BusinessIcon color="primary" sx={{ fontSize: 14 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: '0.75rem' }}
+            >
               {order.business?.name || t('common.business', 'Business')}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PersonIcon color="primary" sx={{ fontSize: 16 }} />
-            <Typography variant="body2" color="text.secondary">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <PersonIcon color="primary" sx={{ fontSize: 14 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: '0.75rem' }}
+            >
               {order.client?.user?.first_name} {order.client?.user?.last_name}
             </Typography>
           </Box>
         </Box>
 
-        {/* Addresses */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-          {/* Pickup Address */}
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-            <LocationIcon color="primary" sx={{ fontSize: 16, mt: 0.2 }} />
-            <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600 }}
-              >
-                {t('orders.pickupAddress', 'Pickup from')}:
-              </Typography>
-              <Typography variant="body2">
-                {formatAddress(order.business_location?.address)}
-              </Typography>
-            </Box>
+        {/* Addresses - Full Text, Vertically Aligned */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <LocationIcon
+              color="primary"
+              sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
+            >
+              <strong>{t('orders.pickupAddress', 'Pickup')}:</strong>{' '}
+              {formatAddress(order.business_location?.address)}
+            </Typography>
           </Box>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <LocationIcon
+              color="secondary"
+              sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
+            >
+              <strong>{t('orders.deliveryAddress', 'Deliver')}:</strong>{' '}
+              {formatAddress(order.delivery_address)}
+            </Typography>
+          </Box>
+        </Box>
 
-          {/* Delivery Address */}
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-            <LocationIcon color="secondary" sx={{ fontSize: 16, mt: 0.2 }} />
-            <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600 }}
+        <Divider sx={{ my: 1 }} />
+
+        {/* Order Summary - Compact Horizontal Layout */}
+        <Box sx={{ mb: 1.5 }}>
+          {/* Financial Info - Inline */}
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1.5,
+              mb: 1,
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Delivery Commission */}
+            {order.delivery_commission !== undefined && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  bgcolor: 'success.50',
+                  borderRadius: 1,
+                  px: 1.5,
+                  py: 0.75,
+                  border: `1px solid ${theme.palette.success.main}40`,
+                }}
               >
-                {t('orders.deliveryAddress', 'Deliver to')}:
-              </Typography>
-              <Typography variant="body2">
-                {formatAddress(order.delivery_address)}
+                <DeliveryIcon color="success" sx={{ fontSize: 18 }} />
+                <Box>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.65rem',
+                      display: 'block',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {t('orders.deliveryCommission', 'Earn')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="success.main"
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {formatCurrency(order.delivery_commission, order.currency)}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {/* Claim Cost */}
+            {order.agent_hold_amount !== undefined &&
+              order.agent_hold_amount > 0 && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    bgcolor: 'warning.50',
+                    borderRadius: 1,
+                    px: 1.5,
+                    py: 0.75,
+                    border: `1px solid ${theme.palette.warning.main}40`,
+                  }}
+                >
+                  <AttachMoney color="warning" sx={{ fontSize: 18 }} />
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        fontSize: '0.65rem',
+                        display: 'block',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {t('orders.costToClaim', 'Cost')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="warning.main"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '0.9rem',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {formatCurrency(getClaimCost(), order.currency)}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+            {/* Items Count */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                color: 'text.secondary',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                {order.order_items?.length || 0} {t('orders.items', 'items')} •{' '}
+                {getTotalItemQuantity()} {t('orders.totalQuantity', 'qty')}
               </Typography>
             </Box>
           </Box>
         </Box>
 
-        <Divider sx={{ my: 2 }} />
-
-        {/* Order Summary */}
-        <Stack spacing={2} sx={{ mb: 2 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              justifyContent: 'space-between',
-              alignItems: { xs: 'stretch', sm: 'flex-start' },
-              gap: 2,
-            }}
-          >
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {t('orders.items', 'Items')}: {order.order_items?.length || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {t('orders.totalQuantity', 'Total Quantity')}:{' '}
-                {getTotalItemQuantity()}
-              </Typography>
-            </Box>
-
-            {/* Delivery Commission Highlight - More Prominent */}
-            {order.delivery_commission !== undefined && (
-              <Box
-                sx={{
-                  textAlign: { xs: 'left', sm: 'right' },
-                  bgcolor: 'background.paper',
-                  borderRadius: 2,
-                  p: 2,
-                  minWidth: { xs: '100%', sm: 160 },
-                  border: `2px solid ${theme.palette.success.main}`,
-                  boxShadow: `0 2px 8px ${theme.palette.success.main}20`,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                    gap: 1,
-                    mb: 0.5,
-                  }}
-                >
-                  <DeliveryIcon color="success" sx={{ fontSize: 24 }} />
-                  <Typography
-                    variant="h5"
-                    color="success.main"
-                    sx={{ fontWeight: 700 }}
-                  >
-                    {formatCurrency(order.delivery_commission, order.currency)}
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 600, textTransform: 'uppercase' }}
-                >
-                  {t('orders.deliveryCommission', 'Delivery Commission')}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          {/* Claim Cost Information */}
-          {order.agent_hold_amount !== undefined &&
-            order.agent_hold_amount > 0 && (
-              <Box
-                sx={{
-                  bgcolor: 'warning.50',
-                  borderRadius: 2,
-                  p: 2,
-                  border: `1px solid ${theme.palette.warning.main}40`,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    mb: 1,
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AttachMoney color="warning" sx={{ fontSize: 20 }} />
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontWeight: 600 }}
-                    >
-                      {t('orders.costToClaim', 'Cost to Claim Order')}
-                    </Typography>
-                  </Box>
-                  <Typography
-                    variant="h6"
-                    color="warning.main"
-                    sx={{ fontWeight: 700 }}
-                  >
-                    {formatCurrency(getClaimCost(), order.currency)}
-                  </Typography>
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t(
-                    'orders.costToClaimBreakdown',
-                    'Includes hold amount ({{holdAmount}}) + service charge (3.5%)',
-                    {
-                      holdAmount: formatCurrency(
-                        order.agent_hold_amount,
-                        order.currency
-                      ),
-                    }
-                  )}
-                </Typography>
-              </Box>
-            )}
-        </Stack>
-
-        {/* Action Buttons */}
-        <Stack
-          direction={isMobile ? 'column' : 'row'}
-          spacing={2}
+        {/* Action Buttons - Compact */}
+        <Box
           sx={{
+            display: 'flex',
+            gap: 1,
             justifyContent: 'flex-end',
-            alignItems: isMobile ? 'stretch' : 'center',
+            alignItems: 'center',
+            flexWrap: 'wrap',
           }}
         >
           <Button
             variant="outlined"
             color="primary"
+            size="small"
             onClick={() => navigate(`/orders/${order.id}`)}
             sx={{
               fontWeight: 600,
-              width: isMobile ? '100%' : 'auto',
+              fontSize: '0.8rem',
+              py: 0.5,
+              px: 1.5,
             }}
           >
-            {t('orders.viewOrderDetails', 'View Order Details')}
+            {t('orders.viewOrderDetails', 'Details')}
           </Button>
           <Button
             variant="contained"
             color="primary"
-            size="large"
+            size="medium"
             onClick={handleClaim}
             disabled={claimLoading}
             startIcon={
               claimLoading ? (
-                <CircularProgress size={16} color="inherit" />
+                <CircularProgress size={14} color="inherit" />
               ) : (
-                <CheckCircle />
+                <CheckCircle sx={{ fontSize: 18 }} />
               )
             }
             sx={{
               fontWeight: 700,
-              fontSize: '1rem',
-              py: 1.5,
-              px: 3,
-              minWidth: isMobile ? '100%' : 180,
-              width: isMobile ? '100%' : 'auto',
-              boxShadow: '0 4px 14px 0 rgba(25, 118, 210, 0.39)',
-              '&:hover': {
-                boxShadow: '0 6px 20px 0 rgba(25, 118, 210, 0.5)',
-                transform: 'translateY(-2px)',
-              },
-              transition: 'all 0.3s ease-in-out',
+              fontSize: '0.85rem',
+              py: 0.75,
+              px: 2,
+              minWidth: 120,
             }}
           >
             {claimLoading
               ? t('orderActions.claiming', 'Claiming...')
               : t('orderActions.claimOrder', 'Claim Order')}
           </Button>
-        </Stack>
+        </Box>
       </CardContent>
 
       {/* Claim Order Dialog */}
