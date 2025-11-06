@@ -526,7 +526,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
                       <LocalShippingIcon fontSize="small" color="primary" />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="caption" color="text.secondary">
-                          {t('orders.agent', 'Agent')}
+                          {t('orders.agent.label', 'Agent')}
                         </Typography>
                         <Typography
                           variant="body2"

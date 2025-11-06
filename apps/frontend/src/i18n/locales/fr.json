@@ -1024,7 +1024,8 @@
         "in_transit": "Action Requise : Mettre à jour le statut de livraison",
         "picked_up": "Action Requise : Démarrer la livraison",
         "ready_for_pickup": "Action Requise : Réclamer cette commande"
-      }
+      },
+      "label": "Agent"
     },
     "agentHold": "Retenue Agent",
     "allOrders": "Toutes les Commandes",

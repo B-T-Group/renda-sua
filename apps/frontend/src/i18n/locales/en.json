@@ -1022,7 +1022,8 @@
         "in_transit": "Action Required: Update delivery status",
         "picked_up": "Action Required: Start delivery",
         "ready_for_pickup": "Action Required: Claim this order"
-      }
+      },
+      "label": "Agent"
     },
     "agentHold": "Agent Hold",
     "allOrders": "All Orders",
