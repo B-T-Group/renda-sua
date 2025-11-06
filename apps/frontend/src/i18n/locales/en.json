@@ -230,7 +230,7 @@
       "confirmClaim": "Confirm & Claim Order",
       "deliveryEarnings": "You will earn {{deliveryFee}} in delivery fees from this order.",
       "enterPhoneNumber": "Enter phone number",
-      "holdAmount": "Hold Amount ({{percentage}}%)",
+      "holdAmount": "Hold Amount",
       "info": "A payment request will be sent to your phone number. Once you accept the payment request, the order will be automatically claimed by you.",
       "noPhoneNumber": "No phone number on file",
       "orderDetails": "Order Details",

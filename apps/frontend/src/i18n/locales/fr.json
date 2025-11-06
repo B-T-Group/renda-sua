@@ -230,7 +230,7 @@
       "confirmClaim": "Confirmer et Réclamer la Commande",
       "deliveryEarnings": "Vous gagnerez {{deliveryFee}} en frais de livraison de cette commande.",
       "enterPhoneNumber": "Entrez le numéro de téléphone",
-      "holdAmount": "Montant de Blocage ({{percentage}}%)",
+      "holdAmount": "Montant de Blocage",
       "info": "Une demande de paiement sera envoyée à votre numéro de téléphone. Une fois que vous acceptez la demande de paiement, la commande sera automatiquement réclamée par vous.",
       "noPhoneNumber": "Aucun numéro de téléphone enregistré",
       "orderDetails": "Détails de la Commande",
