@@ -269,42 +269,6 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
               </Alert>
             )}
 
-            {/* Total Summary */}
-            {showTotalSummary && accounts.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  {t('accounts.summary')}
-                </Typography>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2,
-                  }}
-                >
-                  {currencies.map((currency) => (
-                    <Card key={currency} variant="outlined">
-                      <CardContent sx={{ p: 2 }}>
-                        <Typography variant="h6" color="primary">
-                          {formatCurrency(getTotalBalance(currency), currency)}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('accounts.totalBalance')} ({currency})
-                        </Typography>
-                        <Typography variant="body2" color="success.main">
-                          {t('accounts.available')}:{' '}
-                          {formatCurrency(
-                            getAvailableBalance(currency),
-                            currency
-                          )}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              </Box>
-            )}
-
             {/* Account List */}
             {accounts.length === 0 ? (
               <Box
