@@ -53,7 +53,6 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
-import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
@@ -225,13 +224,6 @@ const ManageOrderPage: React.FC = () => {
   // Set default tab to Delivery (1) for agents, Details (0) for others
   const [activeTab, setActiveTab] = useState(profile?.agent ? 1 : 0);
 
-  // Distance matrix hook for pickup to delivery route
-  const { fetchDistanceMatrix, loading: distanceMatrixLoading } = useDistanceMatrix();
-  const [distanceTimeInfo, setDistanceTimeInfo] = useState<{
-    distance: string;
-    duration: string;
-  } | null>(null);
-
   // Helper functions
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -327,38 +319,6 @@ const ManageOrderPage: React.FC = () => {
       setActiveTab(1);
     }
   }, [profile?.agent]);
-
-  // Fetch distance matrix when order loads and user is an agent
-  useEffect(() => {
-    // Reset distance info when order changes
-    setDistanceTimeInfo(null);
-
-    if (order && profile?.agent && order.business_location?.address?.id && order.delivery_address?.id) {
-      const fetchDistance = async () => {
-        try {
-          const result = await fetchDistanceMatrix({
-            origin_address_id: order.business_location.address.id,
-            destination_address_ids: [order.delivery_address.id],
-          });
-
-          // Extract distance and duration from the response
-          if (result.rows && result.rows.length > 0 && result.rows[0].elements && result.rows[0].elements.length > 0) {
-            const element = result.rows[0].elements[0];
-            if (element.status === 'OK' && element.distance && element.duration) {
-              setDistanceTimeInfo({
-                distance: element.distance.text,
-                duration: element.duration.text,
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch distance matrix:', error);
-        }
-      };
-
-      fetchDistance();
-    }
-  }, [order, profile?.agent, fetchDistanceMatrix]);
 
   const handleBack = () => {
     // Navigate back to the smart orders route
@@ -823,72 +783,6 @@ const ManageOrderPage: React.FC = () => {
                               </Typography>
                             </Box>
                           </Box>
-                        </Paper>
-                      </Box>
-                    )}
-
-                    {/* Distance and Time Information */}
-                    {profile?.agent && (
-                      <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" fontWeight="bold" gutterBottom>
-                          {t('orders.routeInfo', 'Route Information')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          {distanceMatrixLoading ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <CircularProgress size={20} />
-                              <Typography variant="body2" color="text.secondary">
-                                {t('orders.calculatingRoute', 'Calculating route...')}
-                              </Typography>
-                            </Box>
-                          ) : distanceTimeInfo ? (
-                            <Stack spacing={2}>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <LocalShipping color="primary" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t('orders.estimatedDistance', 'Estimated Distance')}
-                                  </Typography>
-                                  <Typography variant="body1" fontWeight="medium">
-                                    {distanceTimeInfo.distance}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: 2,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <Event color="primary" />
-                                <Box>
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    {t('orders.estimatedTime', 'Estimated Time')}
-                                  </Typography>
-                                  <Typography variant="body1" fontWeight="medium">
-                                    {distanceTimeInfo.duration}
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            </Stack>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              {t('orders.routeInfoUnavailable', 'Route information unavailable')}
-                            </Typography>
-                          )}
                         </Paper>
                       </Box>
                     )}

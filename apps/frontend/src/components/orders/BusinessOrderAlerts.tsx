@@ -44,9 +44,8 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
           severity: 'warning' as const,
           message: t(
             'business.orders.pendingNotice',
-            `💰 New order worth ${formatCurrency(
-              revenue
-            )}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.`
+            '💰 New order worth {{revenue}}! Customer is waiting for confirmation. Confirm quickly to ensure customer satisfaction and secure this sale.',
+            { revenue: formatCurrency(revenue) }
           ),
         });
         break;
@@ -136,9 +135,8 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
           severity: 'success' as const,
           message: t(
             'business.orders.deliveredNotice',
-            `🎉 Order delivered successfully! Customer received their ${formatCurrency(
-              revenue
-            )} order. Excellent service provided!`
+            '🎉 Order delivered successfully! Customer received their {{revenue}} order. Excellent service provided!',
+            { revenue: formatCurrency(revenue) }
           ),
         });
         break;
@@ -148,9 +146,8 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
           severity: 'error' as const,
           message: t(
             'business.orders.failedNotice',
-            `🚨 Delivery failed! This impacts customer satisfaction and your ${formatCurrency(
-              revenue
-            )} revenue. Contact support immediately to resolve and potentially reassign to another agent.`
+            '🚨 Delivery failed! This impacts customer satisfaction and your {{revenue}} revenue. Contact support immediately to resolve and potentially reassign to another agent.',
+            { revenue: formatCurrency(revenue) }
           ),
         });
         break;
@@ -160,9 +157,8 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
           severity: 'error' as const,
           message: t(
             'business.orders.cancelledNotice',
-            `❌ Order cancelled. Potential revenue of ${formatCurrency(
-              revenue
-            )} lost. Review cancellation reason and process refund if payment was received.`
+            '❌ Order cancelled. Potential revenue of {{revenue}} lost. Review cancellation reason and process refund if payment was received.',
+            { revenue: formatCurrency(revenue) }
           ),
         });
         break;

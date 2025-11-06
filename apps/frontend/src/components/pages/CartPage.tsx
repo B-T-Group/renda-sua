@@ -13,67 +13,18 @@ import {
   CardMedia,
   Container,
   Divider,
-  Grid,
   IconButton,
   Paper,
-  Skeleton,
   Typography,
-  useTheme,
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 
-// Loading Skeleton Components
-const CartItemSkeleton: React.FC = () => (
-  <Card sx={{ mb: 2 }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <Skeleton
-          variant="rectangular"
-          width={80}
-          height={80}
-          sx={{ borderRadius: 1 }}
-        />
-        <Box sx={{ flex: 1 }}>
-          <Skeleton variant="text" width="60%" height={24} sx={{ mb: 1 }} />
-          <Skeleton variant="text" width="40%" height={20} sx={{ mb: 2 }} />
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Skeleton variant="rounded" width={32} height={32} />
-              <Skeleton variant="text" width={20} height={20} />
-              <Skeleton variant="rounded" width={32} height={32} />
-            </Box>
-            <Skeleton variant="text" width={60} height={20} />
-          </Box>
-        </Box>
-      </Box>
-    </CardContent>
-  </Card>
-);
-
-const CartSummarySkeleton: React.FC = () => (
-  <Paper sx={{ p: 3 }}>
-    <Skeleton variant="text" width="40%" height={32} sx={{ mb: 2 }} />
-    <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
-    <Skeleton variant="text" width="50%" height={20} sx={{ mb: 2 }} />
-    <Divider sx={{ my: 2 }} />
-    <Skeleton variant="text" width="70%" height={24} sx={{ mb: 2 }} />
-    <Skeleton variant="rectangular" width="100%" height={40} />
-  </Paper>
-);
-
 const CartPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const theme = useTheme();
   const {
     cartItems,
     removeFromCart,
@@ -135,9 +86,15 @@ const CartPage: React.FC = () => {
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', lg: 'row' },
+          gap: 3,
+        }}
+      >
         {/* Cart Items */}
-        <Grid item xs={12} lg={8}>
+        <Box sx={{ flex: { xs: '1', lg: '2' } }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
             {t('cart.items', 'Items')} ({cartItems.length})
           </Typography>
@@ -261,10 +218,10 @@ const CartPage: React.FC = () => {
               ))}
             </Box>
           ))}
-        </Grid>
+        </Box>
 
         {/* Cart Summary */}
-        <Grid item xs={12} lg={4}>
+        <Box sx={{ flex: { xs: '1', lg: '1' } }}>
           <Paper sx={{ p: 3, position: 'sticky', top: 20 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               {t('cart.orderSummary', 'Order Summary')}
@@ -279,7 +236,7 @@ const CartPage: React.FC = () => {
                   {t('cart.itemCount', 'items')})
                 </Typography>
                 <Typography variant="body2">
-                  {formatCurrency(cartTotal)}
+                  {formatCurrency(Number(cartTotal) || 0)}
                 </Typography>
               </Box>
 
@@ -302,7 +259,7 @@ const CartPage: React.FC = () => {
             >
               <Typography variant="h6">{t('cart.total', 'Total')}</Typography>
               <Typography variant="h6" color="primary">
-                {formatCurrency(cartTotal)}
+                {formatCurrency(Number(cartTotal) || 0)}
               </Typography>
             </Box>
 
@@ -334,8 +291,8 @@ const CartPage: React.FC = () => {
               {t('cart.continueShopping', 'Continue Shopping')}
             </Button>
           </Paper>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
     </Container>
   );
 };

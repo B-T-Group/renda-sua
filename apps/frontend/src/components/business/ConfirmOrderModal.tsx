@@ -77,11 +77,26 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     }
   }, [open]);
 
-  const handleWindowSelection = useCallback((windowId: string) => {
-    setSelectedWindowId(windowId);
-    setCreateNewWindow(false);
-    setNewWindowData(null);
-  }, []);
+  const handleWindowSelection = useCallback(
+    (windowId: string) => {
+      setSelectedWindowId(windowId);
+      setCreateNewWindow(false);
+      setNewWindowData(null);
+
+      // Prefill delivery instructions from the selected window's special_instructions
+      if (order) {
+        const selectedWindow = order.delivery_time_windows?.find(
+          (w) => w.id === windowId
+        );
+        if (selectedWindow?.special_instructions) {
+          setNotes(selectedWindow.special_instructions);
+        } else {
+          setNotes('');
+        }
+      }
+    },
+    [order]
+  );
 
   const handleCreateNewWindow = useCallback(() => {
     setCreateNewWindow(true);
@@ -118,39 +133,13 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     });
   }, []);
 
-  // Check if a time window is valid (at least 2 hours in the future)
-  const isValidTimeWindow = useCallback(
-    (window: DeliveryWindowOption): boolean => {
-      const now = new Date();
-      const [startHours, startMinutes] = window.time_slot_start.split(':');
-      const windowDateTime = new Date(
-        `${window.preferred_date}T${window.time_slot_start}`
-      );
-      windowDateTime.setHours(parseInt(startHours, 10));
-      windowDateTime.setMinutes(parseInt(startMinutes, 10));
-
-      // Check if window is in the past
-      if (windowDateTime < now) {
-        return false;
-      }
-
-      // Check if window is at least 2 hours in the future
-      const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-      return windowDateTime >= twoHoursFromNow;
-    },
-    []
-  );
-
-  // Calculate existing windows and validation info early
-  if (!order) return null;
-
+  // Calculate existing windows using optional chaining
   const allExistingWindows: DeliveryWindowOption[] =
-    order.delivery_time_windows || [];
+    order?.delivery_time_windows || [];
 
-  // Filter to only show valid time windows (at least 2 hours in the future)
-  const existingWindows = allExistingWindows.filter(isValidTimeWindow);
-  const hasValidExistingWindows = existingWindows.length > 0;
-  const hasInvalidWindows = allExistingWindows.length > existingWindows.length;
+  // Show all windows, even if expired or in the past
+  const existingWindows = allExistingWindows;
+  const hasExistingWindows = existingWindows.length > 0;
 
   const handleConfirm = useCallback(async () => {
     setError('');
@@ -176,11 +165,11 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       const selectedWindow = existingWindows.find(
         (w) => w.id === selectedWindowId
       );
-      if (selectedWindow && !isValidTimeWindow(selectedWindow)) {
+      if (!selectedWindow) {
         setError(
           t(
-            'orders.confirmModal.windowTooClose',
-            'Selected delivery window is in the past or too close. Please create a different time window that is at least 2 hours from now.'
+            'orders.confirmModal.windowNotFound',
+            'Selected delivery window not found'
           )
         );
         return;
@@ -191,16 +180,9 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     if (newWindowData) {
       const now = new Date();
       const windowDate = new Date(newWindowData.preferred_date);
-      // Get slot start time - we need to fetch it or validate it
-      // For now, we'll validate based on date and let backend handle time validation
-      // But we can add frontend validation if we have slot details
-      const windowDateTime = new Date(windowDate);
-
-      // If it's today, the time slot must be at least 2 hours in the future
-      // This will be more accurately validated in the backend
+      // Backend will handle time validation
       if (windowDate.toDateString() === now.toDateString()) {
-        // We can't fully validate without slot time, so backend will handle it
-        // But we'll at least check if it's today
+        // Backend will validate if it's today
       }
     }
 
@@ -233,8 +215,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     onClose,
     t,
     existingWindows,
-    isValidTimeWindow,
   ]);
+
+  // Early return after all hooks
+  if (!order) return null;
 
   return (
     <Dialog
@@ -310,16 +294,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                 )}
               </Typography>
 
-              {hasValidExistingWindows && !createNewWindow && (
+              {hasExistingWindows && !createNewWindow && (
                 <Box>
-                  {hasInvalidWindows && (
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                      {t(
-                        'orders.confirmModal.someWindowsInvalid',
-                        'Some delivery windows are in the past or too close. Only valid windows are shown below. If none are shown, please create a new time window that is at least 2 hours from now.'
-                      )}
-                    </Alert>
-                  )}
                   <Typography
                     variant="body2"
                     color="text.secondary"
@@ -426,16 +402,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                 </Box>
               )}
 
-              {(!hasValidExistingWindows || createNewWindow) && (
+              {(!hasExistingWindows || createNewWindow) && (
                 <Box>
-                  {!hasValidExistingWindows && hasInvalidWindows && (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      {t(
-                        'orders.confirmModal.allWindowsInvalid',
-                        'All client preferred delivery windows are in the past or too close (within 2 hours). Please create a new time window that is at least 2 hours from now.'
-                      )}
-                    </Alert>
-                  )}
                   <Typography
                     variant="body2"
                     color="text.secondary"
@@ -445,11 +413,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                       ? t(
                           'orders.confirmModal.createNewWindow',
                           'Create a new delivery time window:'
-                        )
-                      : !hasValidExistingWindows && hasInvalidWindows
-                      ? t(
-                          'orders.confirmModal.createNewWindowRequired',
-                          'Create a delivery time window (at least 2 hours from now):'
                         )
                       : t(
                           'orders.confirmModal.noClientPreferences',

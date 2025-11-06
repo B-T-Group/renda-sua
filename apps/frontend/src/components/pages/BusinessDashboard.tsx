@@ -19,6 +19,7 @@ import {
   CardActions,
   CardContent,
   Container,
+  Skeleton,
   Typography,
 } from '@mui/material';
 import React from 'react';
@@ -41,10 +42,12 @@ const BusinessDashboard: React.FC = () => {
   const { profile } = useUserProfileContext();
 
   const { accounts } = useAccountInfo();
-  const { orders } = useBusinessOrders(profile?.business?.id);
-  const { inventory } = useBusinessInventory(profile?.business?.id);
-  const { locations } = useBusinessLocations(profile?.business?.id);
-  const { items } = useItems(profile?.business?.id);
+  const { orders, loading: ordersLoading } = useBusinessOrders(profile?.business?.id);
+  const { inventory, loading: inventoryLoading } = useBusinessInventory(profile?.business?.id);
+  const { locations, loading: locationsLoading } = useBusinessLocations(profile?.business?.id);
+  const { items, loading: itemsLoading } = useItems(profile?.business?.id);
+
+  const isLoading = ordersLoading || inventoryLoading || locationsLoading || itemsLoading;
 
   // Debug logging
   console.log('Business Dashboard Data:', {
@@ -194,7 +197,7 @@ const BusinessDashboard: React.FC = () => {
               color="primary"
               sx={{ mb: 1 }}
             >
-              {card.count}
+              {isLoading ? <Skeleton variant="text" width={60} height={40} sx={{ mx: 'auto' }} /> : card.count}
             </Typography>
           )}
         </CardContent>
@@ -202,6 +205,7 @@ const BusinessDashboard: React.FC = () => {
           <Button
             variant="contained"
             onClick={() => navigate(card.path)}
+            disabled={isLoading}
             sx={{
               backgroundColor: card.color,
               '&:hover': {
@@ -341,7 +345,11 @@ const BusinessDashboard: React.FC = () => {
               <Typography color="textSecondary" gutterBottom>
                 {t('common.totalOrders')}
               </Typography>
-              <Typography variant="h4">{orders.length}</Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={40} />
+              ) : (
+                <Typography variant="h4">{orders.length}</Typography>
+              )}
             </CardContent>
           </Card>
           <Card
@@ -357,7 +365,11 @@ const BusinessDashboard: React.FC = () => {
               <Typography color="textSecondary" gutterBottom>
                 {t('common.totalItems')}
               </Typography>
-              <Typography variant="h4">{items.length}</Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={40} />
+              ) : (
+                <Typography variant="h4">{items.length}</Typography>
+              )}
             </CardContent>
           </Card>
           <Card
@@ -373,7 +385,11 @@ const BusinessDashboard: React.FC = () => {
               <Typography color="textSecondary" gutterBottom>
                 {t('common.totalLocations')}
               </Typography>
-              <Typography variant="h4">{locations.length}</Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={40} />
+              ) : (
+                <Typography variant="h4">{locations.length}</Typography>
+              )}
             </CardContent>
           </Card>
           <Card
@@ -389,7 +405,11 @@ const BusinessDashboard: React.FC = () => {
               <Typography color="textSecondary" gutterBottom>
                 {t('common.totalInventory')}
               </Typography>
-              <Typography variant="h4">{inventory.length}</Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={40} />
+              ) : (
+                <Typography variant="h4">{inventory.length}</Typography>
+              )}
             </CardContent>
           </Card>
         </Box>

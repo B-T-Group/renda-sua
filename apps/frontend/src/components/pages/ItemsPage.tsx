@@ -27,7 +27,6 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
-import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import {
   InventoryItem,
   useInventoryItems,
@@ -114,30 +113,6 @@ const ItemsPage: React.FC = () => {
     profile?.client !== null &&
     profile?.client !== undefined;
 
-  // Aggregate unique destination address IDs from inventoryItems for distance calculation
-  const destinationAddressIds = React.useMemo(() => {
-    return Array.from(
-      new Set(
-        (inventoryItems || [])
-          .map((item) => item.business_location?.address?.id)
-          .filter(Boolean)
-      )
-    );
-  }, [inventoryItems]);
-
-  const {
-    data: distanceData,
-    loading: distanceLoading,
-    error: distanceError,
-    fetchDistanceMatrix,
-  } = useDistanceMatrix();
-
-  React.useEffect(() => {
-    if (destinationAddressIds.length > 0) {
-      fetchDistanceMatrix({ destination_address_ids: destinationAddressIds });
-    }
-  }, [destinationAddressIds, fetchDistanceMatrix]);
-
   // Filter orders that require action based on user type and status
   const ordersRequiringAction = React.useMemo(() => {
     if (!orders || !profile?.user_type_id) return [];
@@ -162,21 +137,6 @@ const ItemsPage: React.FC = () => {
       }
     });
   }, [orders, profile?.user_type_id]);
-
-  // Helper to get distance/duration for an item
-  const getItemDistanceInfo = (item: InventoryItem) => {
-    if (!distanceData || !item.business_location?.address?.id) return null;
-    const idx = distanceData.destination_ids.indexOf(
-      item.business_location.address.id
-    );
-    if (idx === -1 || !distanceData.rows[0]?.elements[idx]) return null;
-    const el = distanceData.rows[0].elements[idx];
-    if (el.status !== 'OK') return null;
-    return {
-      distance: el.distance?.text,
-      duration: el.duration?.text,
-    };
-  };
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setCurrentPage(value);
@@ -237,8 +197,10 @@ const ItemsPage: React.FC = () => {
   };
 
   // Get user's primary address for location display
-  const primaryAddress = profile?.addresses?.find((addr) => addr.is_primary) || profile?.addresses?.[0];
-  
+  const primaryAddress =
+    profile?.addresses?.find((addr) => addr.is_primary) ||
+    profile?.addresses?.[0];
+
   // Convert country code to country name
   const userCountryName = useMemo(() => {
     if (!primaryAddress?.country) return null;
@@ -402,7 +364,10 @@ const ItemsPage: React.FC = () => {
             <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
               {t('public.items.authCta.title', 'Sign in to place orders')}
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{ color: 'text.secondary', mt: 0.5 }}
+            >
               {t(
                 'public.items.authCta.description',
                 'Create an account to browse and order items.'
@@ -452,10 +417,7 @@ const ItemsPage: React.FC = () => {
 
         {/* Location Filter Note */}
         {(userStateName || userCountryName) && (
-          <Alert
-            severity="info"
-            sx={{ mb: 3, mt: 2 }}
-          >
+          <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
             <Typography variant="body2" sx={{ mb: 0.5 }}>
               {t(
                 'public.items.locationFilterNote',
@@ -465,14 +427,20 @@ const ItemsPage: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
               {userStateName && (
                 <Chip
-                  label={`${t('public.items.state', 'State')}: ${userStateName}`}
+                  label={`${t(
+                    'public.items.state',
+                    'State'
+                  )}: ${userStateName}`}
                   size="small"
                   variant="outlined"
                 />
               )}
               {userCountryName && (
                 <Chip
-                  label={`${t('public.items.country', 'Country')}: ${userCountryName}`}
+                  label={`${t(
+                    'public.items.country',
+                    'Country'
+                  )}: ${userCountryName}`}
                   size="small"
                   variant="outlined"
                 />
@@ -579,32 +547,22 @@ const ItemsPage: React.FC = () => {
                 gap: 3,
               }}
             >
-              {paginatedItems.map((inventoryItem) => {
-                const distanceInfo = getItemDistanceInfo(inventoryItem);
-                return (
-                  <DashboardItemCard
-                    key={inventoryItem.id}
-                    item={inventoryItem}
-                    formatCurrency={formatCurrency}
-                    onOrderClick={handleOrderClick}
-                    onAddToCart={handleAddToCart}
-                    estimatedDistance={distanceInfo?.distance}
-                    estimatedDuration={distanceInfo?.duration}
-                    distanceLoading={distanceLoading}
-                    distanceError={distanceError}
-                    isPublicView={!isAuthenticated}
-                    canOrder={!isAuthenticated || isClientUser}
-                    showCartButtons={isAuthenticated && isClientUser}
-                    loginButtonText={t(
-                      'public.items.login',
-                      'Sign In to Order'
-                    )}
-                    orderButtonText={t('common.orderNow', 'Order Now')}
-                    addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                    buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                  />
-                );
-              })}
+              {paginatedItems.map((inventoryItem) => (
+                <DashboardItemCard
+                  key={inventoryItem.id}
+                  item={inventoryItem}
+                  formatCurrency={formatCurrency}
+                  onOrderClick={handleOrderClick}
+                  onAddToCart={handleAddToCart}
+                  isPublicView={!isAuthenticated}
+                  canOrder={!isAuthenticated || isClientUser}
+                  showCartButtons={isAuthenticated && isClientUser}
+                  loginButtonText={t('public.items.login', 'Sign In to Order')}
+                  orderButtonText={t('common.orderNow', 'Order Now')}
+                  addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                  buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+                />
+              ))}
             </Box>
 
             {/* Pagination */}
