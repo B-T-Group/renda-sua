@@ -61,9 +61,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState('');
 
-  // Calculate hold amount (80% of item price only, not including delivery fees)
-  const holdPercentage = 80;
-  const holdAmount = (order.subtotal * holdPercentage) / 100;
+  // Use hold amount from order (calculated by backend)
+  const holdAmount = order.agent_hold_amount || 0;
 
   // Calculate charge amount (3.5% of hold amount)
   const chargePercentage = 3.5;
@@ -218,27 +217,9 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t('agent.claimOrder.totalAmount', 'Total Amount', {
-                        amount: formatCurrency(
-                          order.total_amount,
-                          order.currency
-                        ),
-                      })}
-                    </Typography>
-                    <Typography variant="h6" fontWeight="bold" color="primary">
-                      {formatCurrency(order.total_amount, order.currency)}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
                       {t('agent.claimOrder.deliveryEarnings', 'Your Earnings', {
                         deliveryFee: formatCurrency(
-                          order.base_delivery_fee + order.per_km_delivery_fee,
+                          order.delivery_commission || 0,
                           order.currency
                         ),
                       })}
@@ -249,7 +230,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="success.main"
                     >
                       {formatCurrency(
-                        order.base_delivery_fee + order.per_km_delivery_fee,
+                        order.delivery_commission || 0,
                         order.currency
                       )}
                     </Typography>
@@ -277,11 +258,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t(
-                        'agent.claimOrder.holdAmount',
-                        'Hold Amount (80% of subtotal)',
-                        { percentage: holdPercentage }
-                      )}
+                      {t('agent.claimOrder.holdAmount', 'Hold Amount')}
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">
                       {formatCurrency(holdAmount, order.currency)}

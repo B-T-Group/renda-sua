@@ -1,5 +1,12 @@
 import { Cancel, CheckCircle, LocalShipping } from '@mui/icons-material';
-import { Box, Button, CircularProgress, Tooltip } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -39,13 +46,19 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   } | null>(null);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
 
+  const formatCurrency = (amount: number, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
   // Check if agent has sufficient funds to claim the order
   const hasSufficientFunds = () => {
     if (!agentAccounts?.length) return false; // Assume sufficient if no account data
 
-    // Calculate required hold amount (typically a percentage of total order amount)
-    const holdPercentage = 80; // 80% hold percentage - matches backend config
-    const requiredHoldAmount = (order.total_amount * holdPercentage) / 100;
+    // Use hold amount from order (calculated by backend)
+    const requiredHoldAmount = order.agent_hold_amount || 0;
 
     // Check if agent has sufficient balance in the order's currency
     const accountForCurrency = agentAccounts.find(
@@ -433,6 +446,25 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onCancel={() => setShowClaimConfirmation(false)}
         confirmColor="primary"
         loading={loading}
+        additionalContent={
+          order.agent_hold_amount !== undefined &&
+          order.agent_hold_amount > 0 ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                {t(
+                  'orders.claimOrderHoldAmountInfo',
+                  'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
+                  {
+                    holdAmount: formatCurrency(
+                      order.agent_hold_amount,
+                      order.currency
+                    ),
+                  }
+                )}
+              </Typography>
+            </Alert>
+          ) : undefined
+        }
       />
 
       <ConfirmationModal

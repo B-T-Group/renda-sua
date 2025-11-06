@@ -7,6 +7,7 @@ import {
   Person as PersonIcon,
 } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -22,9 +23,9 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useApiClient } from '../../hooks/useApiClient';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { Order } from '../../hooks/useAgentOrders';
+import { useApiClient } from '../../hooks/useApiClient';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
 import ConfirmationModal from './ConfirmationModal';
@@ -73,9 +74,8 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   const hasSufficientFunds = () => {
     if (!agentAccounts?.length) return false; // Assume insufficient if no account data
 
-    // Calculate required hold amount (typically a percentage of total order amount)
-    const holdPercentage = 80; // 80% hold percentage - matches backend config
-    const requiredHoldAmount = (order.total_amount * holdPercentage) / 100;
+    // Use hold amount from order (calculated by backend)
+    const requiredHoldAmount = order.agent_hold_amount || 0;
 
     // Check if agent has sufficient balance in the order's currency
     const accountForCurrency = agentAccounts.find(
@@ -145,8 +145,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
       }
     } catch (error: any) {
       setClaimError(
-        error.message ||
-          t('messages.orderClaimError', 'Failed to claim order')
+        error.message || t('messages.orderClaimError', 'Failed to claim order')
       );
     } finally {
       setClaimLoading(false);
@@ -231,8 +230,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         return 'default';
     }
   };
-
-  const deliveryFeeDisplay = getDeliveryFeeDisplay();
 
   return (
     <Card
@@ -394,18 +391,10 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
             }}
           >
             <Box sx={{ flex: 1 }}>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                gutterBottom
-              >
+              <Typography variant="body2" color="text.secondary" gutterBottom>
                 {t('orders.items', 'Items')}: {order.order_items?.length || 0}
               </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                gutterBottom
-              >
+              <Typography variant="body2" color="text.secondary" gutterBottom>
                 {t('orders.totalQuantity', 'Total Quantity')}:{' '}
                 {getTotalItemQuantity()}
               </Typography>
@@ -536,6 +525,25 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         onCancel={() => setShowClaimConfirmation(false)}
         confirmColor="primary"
         loading={claimLoading}
+        additionalContent={
+          order.agent_hold_amount !== undefined &&
+          order.agent_hold_amount > 0 ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                {t(
+                  'orders.claimOrderHoldAmountInfo',
+                  'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
+                  {
+                    holdAmount: formatCurrency(
+                      order.agent_hold_amount,
+                      order.currency
+                    ),
+                  }
+                )}
+              </Typography>
+            </Alert>
+          ) : undefined
+        }
       />
     </Card>
   );
