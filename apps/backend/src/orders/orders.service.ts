@@ -4332,20 +4332,17 @@ export class OrdersService {
       // Use fallback values if configurations are not found
       const finalBaseFee = baseFee || (requiresFastDelivery ? 1500 : 1000);
       const finalRatePerKm = ratePerKm || 200;
-      const minFee = 1000; // We can add this to configs later if needed
 
       this.logger.log(
-        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, min=${minFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
+        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, distance=${distanceKm}km, fast=${requiresFastDelivery}`
       );
 
       const perKmFee = distanceKm * finalRatePerKm;
       const calculatedFee = finalBaseFee + perKmFee;
-      const totalFee = Math.max(minFee, calculatedFee);
+      const totalFee = calculatedFee;
 
       this.logger.log(
-        `Delivery fee calculated: base=${finalBaseFee}, perKm=${perKmFee}, total=${totalFee} (min fee applied: ${
-          totalFee === minFee
-        })`
+        `Delivery fee calculated: base=${finalBaseFee}, perKm=${perKmFee}, total=${totalFee})`
       );
 
       return { baseFee: finalBaseFee, perKmFee, totalFee };
