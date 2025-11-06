@@ -1,4 +1,5 @@
 import {
+  AttachMoney,
   Business as BusinessIcon,
   CheckCircle,
   LocalShipping as DeliveryIcon,
@@ -60,14 +61,12 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     }).format(amount);
   };
 
-  const getDeliveryFee = () => {
-    // Always use order delivery fee components directly
-    // Do not use hold data for delivery fee calculation
-    return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
-  };
-
-  const getDeliveryFeeDisplay = () => {
-    return formatCurrency(getDeliveryFee(), order.currency);
+  // Calculate cost to claim order (hold amount + service charge)
+  const getClaimCost = () => {
+    const holdAmount = order.agent_hold_amount || 0;
+    const chargePercentage = 3.5;
+    const chargeAmount = (holdAmount * chargePercentage) / 100;
+    return holdAmount + chargeAmount;
   };
 
   // Check if agent has sufficient funds to claim the order
@@ -441,6 +440,58 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               </Box>
             )}
           </Box>
+
+          {/* Claim Cost Information */}
+          {order.agent_hold_amount !== undefined &&
+            order.agent_hold_amount > 0 && (
+              <Box
+                sx={{
+                  bgcolor: 'warning.50',
+                  borderRadius: 2,
+                  p: 2,
+                  border: `1px solid ${theme.palette.warning.main}40`,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 1,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AttachMoney color="warning" sx={{ fontSize: 20 }} />
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {t('orders.costToClaim', 'Cost to Claim Order')}
+                    </Typography>
+                  </Box>
+                  <Typography
+                    variant="h6"
+                    color="warning.main"
+                    sx={{ fontWeight: 700 }}
+                  >
+                    {formatCurrency(getClaimCost(), order.currency)}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t(
+                    'orders.costToClaimBreakdown',
+                    'Includes hold amount ({{holdAmount}}) + service charge (3.5%)',
+                    {
+                      holdAmount: formatCurrency(
+                        order.agent_hold_amount,
+                        order.currency
+                      ),
+                    }
+                  )}
+                </Typography>
+              </Box>
+            )}
         </Stack>
 
         {/* Action Buttons */}
