@@ -327,8 +327,8 @@ export class AccountsService {
    */
   async getAccountTransactions(
     accountId: string,
-    limit: number = 50,
-    offset: number = 0
+    limit = 50,
+    offset = 0
   ): Promise<any[]> {
     const query = `
       query GetAccountTransactions($accountId: uuid!, $limit: Int!, $offset: Int!) {

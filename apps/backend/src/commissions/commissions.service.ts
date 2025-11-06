@@ -244,11 +244,7 @@ export class CommissionsService {
       );
 
       // Process order subtotal (business payment)
-      await this.processOrderSubtotalPayment(
-        order,
-        breakdown.orderSubtotal,
-        rendasuaHQUser
-      );
+      await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
 
       this.logger.log(
         `Successfully distributed commissions for order ${order.order_number}`
@@ -601,10 +597,8 @@ export class CommissionsService {
    */
   private async processOrderSubtotalPayment(
     order: any,
-    breakdown: { business: number; rendasua: number },
-    rendasuaHQUser: any
+    breakdown: { business: number; rendasua: number }
   ): Promise<void> {
-    // Pay business (subtotal minus RendaSua's 5%)
     if (breakdown.business > 0) {
       await this.payCommission(
         order,
@@ -612,18 +606,6 @@ export class CommissionsService {
         'business',
         'order_subtotal',
         breakdown.business,
-        order.currency
-      );
-    }
-
-    // Pay RendaSua HQ (5% of subtotal)
-    if (breakdown.rendasua > 0) {
-      await this.payCommission(
-        order,
-        rendasuaHQUser.id,
-        'rendasua',
-        'order_subtotal',
-        breakdown.rendasua,
         order.currency
       );
     }

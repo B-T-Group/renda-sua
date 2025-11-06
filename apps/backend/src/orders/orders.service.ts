@@ -853,7 +853,7 @@ export class OrdersService {
       );
     }
     const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.total_amount * holdPercentage) / 100;
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
