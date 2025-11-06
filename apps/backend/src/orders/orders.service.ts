@@ -5,6 +5,7 @@ import { AddressesService } from '../addresses/addresses.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
   Addresses,
@@ -259,6 +260,7 @@ export class OrdersService {
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly configurationsService: ConfigurationsService,
+    private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
     private readonly pdfService: PdfService
@@ -2865,47 +2867,29 @@ export class OrdersService {
   }
 
   /**
-   * Get fast delivery fee from supported_country_states table
+   * Get fast delivery fee from country_delivery_configs table
    */
   private async getFastDeliveryFee(
     state: string,
     country: string
   ): Promise<{ fee: number; enabled: boolean }> {
-    const query = `
-      query GetFastDeliveryFee($state: String!, $country: bpchar!) {
-        supported_country_states(
-          where: { 
-            state_name: { _eq: $state }, 
-            country_code: { _eq: $country },
-            service_status: { _eq: "active" }
-          }
-        ) {
-          fast_delivery
-        }
-      }
-    `;
+    try {
+      const [enabled, baseFee] = await Promise.all([
+        this.deliveryConfigService.isFastDeliveryEnabled(country),
+        this.deliveryConfigService.getFastDeliveryBaseFee(country),
+      ]);
 
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      state,
-      country,
-    });
-
-    if (
-      !result.supported_country_states ||
-      result.supported_country_states.length === 0
-    ) {
+      return {
+        fee: baseFee || 0,
+        enabled: enabled || false,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to get fast delivery fee for country ${country}:`,
+        error
+      );
       return { fee: 0, enabled: false };
     }
-
-    const fastDeliveryConfig = result.supported_country_states[0].fast_delivery;
-    if (!fastDeliveryConfig || !fastDeliveryConfig.enabled) {
-      return { fee: 0, enabled: false };
-    }
-
-    return {
-      fee: fastDeliveryConfig.fee || 0,
-      enabled: fastDeliveryConfig.enabled || false,
-    };
   }
 
   /**
@@ -3868,8 +3852,13 @@ export class OrdersService {
         console.warn('Failed to calculate distance-based fee:', distanceError);
       }
 
-      // Fallback to flat fee from delivery_fees table
-      const flatFee = await this.getFlatDeliveryFee(item.item.currency);
+      // Fallback to normal delivery base fee
+      const countryCode = this.extractCountryCode(
+        businessAddress as unknown as Addresses
+      );
+      const flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
+        countryCode
+      );
 
       let finalDeliveryFee = flatFee;
 
@@ -4009,8 +3998,12 @@ export class OrdersService {
         console.warn('Failed to calculate distance-based fee:', distanceError);
       }
 
-      // Fallback to flat fee from delivery_fees table
-      const flatFee = await this.getFlatDeliveryFee(order.currency);
+      // Fallback to normal delivery base fee
+      const countryCode =
+        this.extractCountryCode(clientAddress as Addresses, order) ?? 'GA';
+      const flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
+        countryCode
+      );
 
       return {
         deliveryFee: flatFee,
@@ -4060,7 +4053,7 @@ export class OrdersService {
   }
 
   /**
-   * Calculate delivery fee using tiered pricing model based on application configurations
+   * Calculate delivery fee using tiered pricing model based on country_delivery_configs
    * Returns base fee and per-km fee components separately
    */
   private async calculateTieredDeliveryFee(
@@ -4069,47 +4062,35 @@ export class OrdersService {
     requiresFastDelivery = false
   ): Promise<{ baseFee: number; perKmFee: number; totalFee: number }> {
     try {
-      // Get configurations - use fast_delivery_fee as base if fast delivery is enabled
-      const configKey = requiresFastDelivery
-        ? 'fast_delivery_fee'
-        : 'base_delivery_fee';
-      const [baseConfig, rateConfig, minConfig] = await Promise.all([
-        this.configurationsService.getConfigurationByKey(
-          configKey,
-          countryCode
-        ),
-        this.configurationsService.getConfigurationByKey(
-          'delivery_fee_rate_per_km',
-          countryCode
-        ),
-        this.configurationsService.getConfigurationByKey(
-          'delivery_fee_min',
-          countryCode
-        ),
+      // Get configurations from country_delivery_configs
+      const [baseFee, ratePerKm] = await Promise.all([
+        requiresFastDelivery
+          ? this.deliveryConfigService.getFastDeliveryBaseFee(countryCode)
+          : this.deliveryConfigService.getNormalDeliveryBaseFee(countryCode),
+        this.deliveryConfigService.getPerKmDeliveryFee(countryCode),
       ]);
 
       // Use fallback values if configurations are not found
-      const baseFee =
-        baseConfig?.number_value || (requiresFastDelivery ? 1500 : 1000);
-      const ratePerKm = rateConfig?.number_value || 200;
-      const minFee = minConfig?.number_value || 500;
+      const finalBaseFee = baseFee || (requiresFastDelivery ? 1500 : 1000);
+      const finalRatePerKm = ratePerKm || 200;
+      const minFee = 1000; // We can add this to configs later if needed
 
       this.logger.log(
-        `Calculating delivery fee for country ${countryCode}: base=${baseFee}, rate=${ratePerKm}/km, min=${minFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
+        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, min=${minFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
       );
 
-      const perKmFee = distanceKm * ratePerKm;
-      const calculatedFee = baseFee + perKmFee;
+      const perKmFee = distanceKm * finalRatePerKm;
+      const calculatedFee = finalBaseFee + perKmFee;
       const totalFee = Math.max(minFee, calculatedFee);
 
       this.logger.log(
-        `Delivery fee calculated: base=${baseFee}, perKm=${perKmFee}, total=${totalFee} (min fee applied: ${
+        `Delivery fee calculated: base=${finalBaseFee}, perKm=${perKmFee}, total=${totalFee} (min fee applied: ${
           totalFee === minFee
         })`
       );
 
-      return { baseFee, perKmFee, totalFee };
-    } catch (error) {
+      return { baseFee: finalBaseFee, perKmFee, totalFee };
+    } catch (error: any) {
       this.logger.error(
         `Failed to calculate tiered delivery fee for country ${countryCode}:`,
         error
@@ -4180,45 +4161,6 @@ export class OrdersService {
       itemId,
     });
     return result.business_inventory_by_pk;
-  }
-
-  /**
-   * Get flat delivery fee from delivery_fees table
-   */
-  private async getFlatDeliveryFee(currency: string): Promise<number> {
-    const query = `
-      query GetDeliveryFee($currency: currency_enum!) {
-        delivery_fees(where: { currency: { _eq: $currency } }, limit: 1) {
-          fee
-        }
-      }
-    `;
-
-    try {
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        currency,
-      });
-      const deliveryFee = result.delivery_fees?.[0]?.fee;
-
-      if (!deliveryFee) {
-        // Fallback to default values if no fee found in database
-        const defaultFees = {
-          XAF: 1500,
-          USD: 10,
-          CAD: 10,
-          EUR: 8,
-        };
-        return (
-          defaultFees[currency as keyof typeof defaultFees] || defaultFees.XAF
-        );
-      }
-
-      return deliveryFee;
-    } catch (error) {
-      console.error('Error fetching delivery fee from database:', error);
-      // Return default fee as last resort
-      return 1500; // Default XAF fee
-    }
   }
 
   /**

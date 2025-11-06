@@ -2,6 +2,7 @@ import { Global, Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { CommissionsModule } from '../commissions/commissions.module';
+import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
@@ -19,6 +20,7 @@ import { OrdersService } from './orders.service';
     NotificationsModule,
     AdminModule,
     DeliveryModule,
+    DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
   ],

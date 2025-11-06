@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { Public } from '../auth/public.decorator';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
@@ -37,6 +38,7 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
+    private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configurationsService: ConfigurationsService
   ) {}
 
@@ -518,34 +520,22 @@ export class OrdersController {
         );
       }
 
-      const configurations =
-        await this.configurationsService.getFastDeliveryFromSupportedLocations(
-          countryCode,
-          stateCode
-        );
+      const fastDeliveryConfig =
+        await this.deliveryConfigService.getFastDeliveryConfig(countryCode);
 
-      if (!configurations) {
+      if (!fastDeliveryConfig || !fastDeliveryConfig.enabled) {
         throw new HttpException(
-          `No fast delivery configuration found for country ${countryCode}`,
+          `Fast delivery is not available for country ${countryCode}`,
           HttpStatus.NOT_FOUND
         );
       }
 
-      // Parse configurations into structured format
       const config = {
-        enabled: configurations.enabled || false,
-        fee: configurations.fee || 0,
-        minHours: configurations.minHours || 2,
-        maxHours: configurations.maxHours || 4,
-        operatingHours: configurations.operatingHours || {
-          monday: { start: '08:00', end: '20:00', enabled: true },
-          tuesday: { start: '08:00', end: '20:00', enabled: true },
-          wednesday: { start: '08:00', end: '20:00', enabled: true },
-          thursday: { start: '08:00', end: '20:00', enabled: true },
-          friday: { start: '08:00', end: '20:00', enabled: true },
-          saturday: { start: '08:00', end: '18:00', enabled: true },
-          sunday: { start: '10:00', end: '16:00', enabled: false },
-        },
+        enabled: fastDeliveryConfig.enabled,
+        fee: fastDeliveryConfig.baseFee,
+        minHours: 2,
+        maxHours: fastDeliveryConfig.sla,
+        operatingHours: fastDeliveryConfig.serviceHours,
       };
 
       return {

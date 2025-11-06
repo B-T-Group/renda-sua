@@ -7,6 +7,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface SupportedLocation {
@@ -73,7 +74,10 @@ export interface LocationSupportCheck {
 export class LocationsController {
   private readonly logger = new Logger(LocationsController.name);
 
-  constructor(private readonly hasuraService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraService: HasuraSystemService,
+    private readonly deliveryConfigService: DeliveryConfigService
+  ) {}
 
   @Get('supported')
   @ApiOperation({
@@ -131,7 +135,6 @@ export class LocationsController {
             currency_code
             service_status
             delivery_enabled
-            fast_delivery
             supported_payment_methods
             launch_date
           }
@@ -141,27 +144,55 @@ export class LocationsController {
       const response = await this.hasuraService.executeQuery(query);
       const locations = response.supported_country_states || [];
 
+      // Get fast delivery configs for each unique country
+      const countryCodes = [...new Set(locations.map((loc: any) => loc.country_code))];
+      const fastDeliveryConfigs = new Map();
+      
+      for (const countryCode of countryCodes) {
+        try {
+          const config = await this.deliveryConfigService.getFastDeliveryConfig(countryCode);
+          fastDeliveryConfigs.set(countryCode, config);
+        } catch (error) {
+          // If config not found, use defaults
+          fastDeliveryConfigs.set(countryCode, {
+            enabled: false,
+            baseFee: 0,
+            sla: 0,
+            serviceHours: {},
+          });
+        }
+      }
+
       // Transform the data to match the interface
       const transformedLocations: SupportedLocation[] = locations.map(
-        (loc: any) => ({
-          id: loc.id,
-          countryCode: loc.country_code,
-          countryName: loc.country_name,
-          state: loc.state_name,
-          stateName: loc.state_name,
-          currencyCode: loc.currency_code,
-          serviceStatus: loc.service_status,
-          deliveryEnabled: loc.delivery_enabled,
-          fastDelivery: loc.fast_delivery || {
+        (loc: any) => {
+          const fastDeliveryConfig = fastDeliveryConfigs.get(loc.country_code) || {
             enabled: false,
-            fee: 0,
-            minHours: 0,
-            maxHours: 0,
-            operatingHours: {},
-          },
-          supportedPaymentMethods: loc.supported_payment_methods || [],
-          launchDate: loc.launch_date,
-        })
+            baseFee: 0,
+            sla: 0,
+            serviceHours: {},
+          };
+          
+          return {
+            id: loc.id,
+            countryCode: loc.country_code,
+            countryName: loc.country_name,
+            state: loc.state_name,
+            stateName: loc.state_name,
+            currencyCode: loc.currency_code,
+            serviceStatus: loc.service_status,
+            deliveryEnabled: loc.delivery_enabled,
+            fastDelivery: {
+              enabled: fastDeliveryConfig.enabled,
+              fee: fastDeliveryConfig.baseFee,
+              minHours: 2,
+              maxHours: fastDeliveryConfig.sla,
+              operatingHours: fastDeliveryConfig.serviceHours,
+            },
+            supportedPaymentMethods: loc.supported_payment_methods || [],
+            launchDate: loc.launch_date,
+          };
+        }
       );
 
       return {
@@ -496,7 +527,6 @@ export class LocationsController {
             state_name
             service_status
             delivery_enabled
-            fast_delivery
           }
         }
       `;
@@ -506,17 +536,25 @@ export class LocationsController {
       });
       const locations = response.supported_country_states || [];
 
-      const states = locations.map((loc: any) => ({
-        code: loc.state_name,
-        name: loc.state_name,
-        serviceStatus: loc.service_status,
-        deliveryEnabled: loc.delivery_enabled,
-        fastDeliveryEnabled: loc.fast_delivery?.enabled || false,
-      }));
+      const states = locations.map(async (loc: any) => {
+        const fastDeliveryEnabled = await this.deliveryConfigService.isFastDeliveryEnabled(
+          countryCode
+        );
+        
+        return {
+          code: loc.state_name,
+          name: loc.state_name,
+          serviceStatus: loc.service_status,
+          deliveryEnabled: loc.delivery_enabled,
+          fastDeliveryEnabled,
+        };
+      });
+
+      const resolvedStates = await Promise.all(states);
 
       return {
         success: true,
-        states,
+        states: resolvedStates,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
