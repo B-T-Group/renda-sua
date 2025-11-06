@@ -8,9 +8,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CommissionsService } from '../commissions/commissions.service';
+import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import type { Configuration } from '../config/configuration';
 
 export interface PickUpOrderRequest {
   order_id: string;
