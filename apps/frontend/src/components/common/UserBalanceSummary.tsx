@@ -2,6 +2,7 @@ import { AccountBalance } from '@mui/icons-material';
 import { Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
 interface UserBalanceSummaryProps {
@@ -14,7 +15,12 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
   showIcon = true,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { accounts, accountsLoading } = useUserProfileContext();
+
+  const handleClick = () => {
+    navigate('/profile');
+  };
 
   // Filter accounts with balance > 0
   const accountsWithBalance = accounts.filter(
@@ -24,7 +30,19 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
   // Show loading state
   if (accountsLoading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box
+        onClick={handleClick}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          cursor: 'pointer',
+          '&:hover': {
+            opacity: 0.8,
+          },
+          transition: 'opacity 0.2s ease-in-out',
+        }}
+      >
         {showIcon && <AccountBalance color="primary" />}
         <CircularProgress size={16} />
         <Typography variant="body2" color="text.secondary">
@@ -63,7 +81,19 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
 
     if (currencies.length === 1) {
       return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          onClick={handleClick}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              opacity: 0.8,
+            },
+            transition: 'opacity 0.2s ease-in-out',
+          }}
+        >
           {showIcon && <AccountBalance color="primary" />}
           <Typography variant="body2" fontWeight="medium">
             {t('accounts.balance', 'Balance')}:{' '}
@@ -74,7 +104,19 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
     } else {
       // Multiple currencies - show each currency separately
       return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          onClick={handleClick}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              opacity: 0.8,
+            },
+            transition: 'opacity 0.2s ease-in-out',
+          }}
+        >
           {showIcon && <AccountBalance color="primary" />}
           <Typography variant="body2" fontWeight="medium">
             {t('accounts.balance', 'Balance')}:
@@ -103,7 +145,19 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
   } else {
     // Non-compact view - show each account separately
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box
+        onClick={handleClick}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          cursor: 'pointer',
+          '&:hover': {
+            opacity: 0.8,
+          },
+          transition: 'opacity 0.2s ease-in-out',
+        }}
+      >
         {showIcon && <AccountBalance color="primary" />}
         <Typography variant="body2" fontWeight="medium">
           {t('accounts.balance', 'Balance')}:
