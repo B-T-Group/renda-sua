@@ -656,11 +656,11 @@ export class AdminService {
 
   async getCommissionUsers() {
     const query = `
-      query GetCommissionUsers {
+      query GetCommissionUsers($userType: user_types_enum!) {
         users(
           where: {
             _or: [
-              { user_type_id: { _eq: "partner" } }
+              { user_type_id: { _eq: $userType } }
               { email: { _eq: "hq@rendasua.com" } }
             ]
           }
@@ -689,7 +689,9 @@ export class AdminService {
       }
     `;
 
-    const result = await this.hasuraSystemService.executeQuery(query);
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userType: 'partner',
+    });
 
     return result.users || [];
   }

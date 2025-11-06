@@ -1,4 +1,5 @@
 import {
+  AccountBalance as AccountBalanceIcon,
   Person as AgentIcon,
   TrendingUp as AnalyticsIcon,
   Business as BizIcon,
@@ -10,7 +11,6 @@ import {
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
   Group as UsersIcon,
-  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -43,12 +43,19 @@ const BusinessDashboard: React.FC = () => {
   const { profile } = useUserProfileContext();
 
   const { accounts } = useAccountInfo();
-  const { orders, loading: ordersLoading } = useBusinessOrders(profile?.business?.id);
-  const { inventory, loading: inventoryLoading } = useBusinessInventory(profile?.business?.id);
-  const { locations, loading: locationsLoading } = useBusinessLocations(profile?.business?.id);
+  const { orders, loading: ordersLoading } = useBusinessOrders(
+    profile?.business?.id
+  );
+  const { inventory, loading: inventoryLoading } = useBusinessInventory(
+    profile?.business?.id
+  );
+  const { locations, loading: locationsLoading } = useBusinessLocations(
+    profile?.business?.id
+  );
   const { items, loading: itemsLoading } = useItems(profile?.business?.id);
 
-  const isLoading = ordersLoading || inventoryLoading || locationsLoading || itemsLoading;
+  const isLoading =
+    ordersLoading || inventoryLoading || locationsLoading || itemsLoading;
 
   // Debug logging
   console.log('Business Dashboard Data:', {
@@ -206,7 +213,16 @@ const BusinessDashboard: React.FC = () => {
               color="primary"
               sx={{ mb: 1 }}
             >
-              {isLoading ? <Skeleton variant="text" width={60} height={40} sx={{ mx: 'auto' }} /> : card.count}
+              {isLoading ? (
+                <Skeleton
+                  variant="text"
+                  width={60}
+                  height={40}
+                  sx={{ mx: 'auto' }}
+                />
+              ) : (
+                card.count
+              )}
             </Typography>
           )}
         </CardContent>
