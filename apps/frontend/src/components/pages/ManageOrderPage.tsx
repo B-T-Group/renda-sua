@@ -23,7 +23,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Container,
   Divider,
   Grid,
@@ -675,10 +674,11 @@ const ManageOrderPage: React.FC = () => {
                                   color="primary"
                                   sx={{ mt: 1 }}
                                 >
-                                  {formatCurrency(
-                                    item.unit_price * item.quantity,
-                                    order.currency
-                                  )}
+                                  {item.unit_price !== undefined &&
+                                    formatCurrency(
+                                      item.unit_price * item.quantity,
+                                      order.currency
+                                    )}
                                 </Typography>
                               </Box>
                             </Box>
@@ -756,7 +756,11 @@ const ManageOrderPage: React.FC = () => {
                           <Box sx={{ display: 'flex', gap: 2 }}>
                             <LocationOn color="primary" />
                             <Box sx={{ flex: 1 }}>
-                              <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                              <Typography
+                                variant="subtitle2"
+                                fontWeight="medium"
+                                gutterBottom
+                              >
                                 {order.business_location.name}
                               </Typography>
                               <Typography variant="body1">
@@ -788,182 +792,195 @@ const ManageOrderPage: React.FC = () => {
                     )}
 
                     {/* Delivery Information */}
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        {t('orders.deliveryInfo', 'Delivery Information')}
-                      </Typography>
-                      <Paper variant="outlined" sx={{ p: 2 }}>
-                        <Stack spacing={2}>
-                          {/* Preferred Delivery Time */}
-                          {order.preferred_delivery_time && (
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'center',
-                              }}
-                            >
-                              <Event color="primary" />
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t(
-                                    'orders.preferredDeliveryTime',
-                                    'Preferred Delivery Time'
-                                  )}
-                                </Typography>
-                                <Typography variant="body1" fontWeight="medium">
-                                  {new Date(
-                                    order.preferred_delivery_time
-                                  ).toLocaleString()}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          )}
-
-                          {/* Fast Delivery */}
-                          {order.requires_fast_delivery && (
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'center',
-                              }}
-                            >
-                              <LocalShipping color="primary" />
-                              <Box sx={{ flex: 1 }}>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t(
-                                    'orders.fastDelivery.title',
-                                    'Fast Delivery'
-                                  )}
-                                </Typography>
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                  }}
-                                >
-                                  <Chip
-                                    label={t(
-                                      'orders.fastDelivery.enabled',
-                                      'Enabled'
+                    {(order.preferred_delivery_time ||
+                      order.requires_fast_delivery ||
+                      order.special_instructions ||
+                      order.estimated_delivery_time ||
+                      order.actual_delivery_time) && (
+                      <Box sx={{ mb: 4 }}>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom>
+                          {t('orders.deliveryInfo', 'Delivery Information')}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Stack spacing={2}>
+                            {/* Preferred Delivery Time */}
+                            {order.preferred_delivery_time && (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  gap: 2,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Event color="primary" />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t(
+                                      'orders.preferredDeliveryTime',
+                                      'Preferred Delivery Time'
                                     )}
-                                    color="primary"
-                                    size="small"
-                                  />
+                                  </Typography>
                                   <Typography
                                     variant="body1"
                                     fontWeight="medium"
-                                    color="primary"
                                   >
-                                    {formatCurrency(
-                                      order.base_delivery_fee,
-                                      order.currency
-                                    )}
+                                    {new Date(
+                                      order.preferred_delivery_time
+                                    ).toLocaleString()}
                                   </Typography>
                                 </Box>
                               </Box>
-                            </Box>
-                          )}
+                            )}
 
-                          {/* Special Instructions */}
-                          {order.special_instructions && (
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'flex-start',
-                              }}
-                            >
-                              <Receipt color="primary" />
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t(
-                                    'orders.specialInstructions',
-                                    'Special Instructions'
-                                  )}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {order.special_instructions}
-                                </Typography>
+                            {/* Fast Delivery */}
+                            {order.requires_fast_delivery && (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  gap: 2,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <LocalShipping color="primary" />
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t(
+                                      'orders.fastDelivery.title',
+                                      'Fast Delivery'
+                                    )}
+                                  </Typography>
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Chip
+                                      label={t(
+                                        'orders.fastDelivery.enabled',
+                                        'Enabled'
+                                      )}
+                                      color="primary"
+                                      size="small"
+                                    />
+                                    <Typography
+                                      variant="body1"
+                                      fontWeight="medium"
+                                      color="primary"
+                                    >
+                                      {order.base_delivery_fee !== undefined &&
+                                        formatCurrency(
+                                          order.base_delivery_fee,
+                                          order.currency
+                                        )}
+                                    </Typography>
+                                  </Box>
+                                </Box>
                               </Box>
-                            </Box>
-                          )}
+                            )}
 
-                          {/* Estimated Delivery Time */}
-                          {order.estimated_delivery_time && (
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'center',
-                              }}
-                            >
-                              <Event color="primary" />
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t(
-                                    'orders.estimatedDeliveryTime',
-                                    'Estimated Delivery Time'
-                                  )}
-                                </Typography>
-                                <Typography variant="body1" fontWeight="medium">
-                                  {new Date(
-                                    order.estimated_delivery_time
-                                  ).toLocaleString()}
-                                </Typography>
+                            {/* Special Instructions */}
+                            {order.special_instructions && (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  gap: 2,
+                                  alignItems: 'flex-start',
+                                }}
+                              >
+                                <Receipt color="primary" />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t(
+                                      'orders.specialInstructions',
+                                      'Special Instructions'
+                                    )}
+                                  </Typography>
+                                  <Typography variant="body1">
+                                    {order.special_instructions}
+                                  </Typography>
+                                </Box>
                               </Box>
-                            </Box>
-                          )}
+                            )}
 
-                          {/* Actual Delivery Time */}
-                          {order.actual_delivery_time && (
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'center',
-                              }}
-                            >
-                              <CheckCircle color="success" />
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t(
-                                    'orders.actualDeliveryTime',
-                                    'Actual Delivery Time'
-                                  )}
-                                </Typography>
-                                <Typography
-                                  variant="body1"
-                                  fontWeight="medium"
-                                  color="success.main"
-                                >
-                                  {new Date(
-                                    order.actual_delivery_time
-                                  ).toLocaleString()}
-                                </Typography>
+                            {/* Estimated Delivery Time */}
+                            {order.estimated_delivery_time && (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  gap: 2,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Event color="primary" />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t(
+                                      'orders.estimatedDeliveryTime',
+                                      'Estimated Delivery Time'
+                                    )}
+                                  </Typography>
+                                  <Typography
+                                    variant="body1"
+                                    fontWeight="medium"
+                                  >
+                                    {new Date(
+                                      order.estimated_delivery_time
+                                    ).toLocaleString()}
+                                  </Typography>
+                                </Box>
                               </Box>
-                            </Box>
-                          )}
-                        </Stack>
-                      </Paper>
-                    </Box>
+                            )}
+
+                            {/* Actual Delivery Time */}
+                            {order.actual_delivery_time && (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  gap: 2,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <CheckCircle color="success" />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t(
+                                      'orders.actualDeliveryTime',
+                                      'Actual Delivery Time'
+                                    )}
+                                  </Typography>
+                                  <Typography
+                                    variant="body1"
+                                    fontWeight="medium"
+                                    color="success.main"
+                                  >
+                                    {new Date(
+                                      order.actual_delivery_time
+                                    ).toLocaleString()}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            )}
+                          </Stack>
+                        </Paper>
+                      </Box>
+                    )}
 
                     {/* Delivery Time Window */}
                     <Box sx={{ mb: 4 }}>
@@ -1134,61 +1151,108 @@ const ManageOrderPage: React.FC = () => {
 
                   {/* Price Breakdown */}
                   <Box sx={{ mb: 2 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.subtotal', 'Subtotal')}
-                      </Typography>
-                      <Typography variant="body2">
-                        {formatCurrency(order.subtotal, order.currency)}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.deliveryFee', 'Delivery Fee')}
-                      </Typography>
-                      <Typography variant="body2">
-                        {formatCurrency(
-                          order.base_delivery_fee + order.per_km_delivery_fee ||
-                            0,
-                          order.currency
+                    {profile?.agent ? (
+                      // Agent view: Show only delivery commission
+                      order.delivery_commission !== undefined && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            mb: 1,
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            {t(
+                              'orders.deliveryCommission',
+                              'Delivery Commission'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            fontWeight="bold"
+                            color="primary"
+                          >
+                            {formatCurrency(
+                              order.delivery_commission,
+                              order.currency
+                            )}
+                          </Typography>
+                        </Box>
+                      )
+                    ) : (
+                      // Business/Client view: Show full breakdown
+                      <>
+                        {order.subtotal !== undefined && (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              mb: 1,
+                            }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              {t('orders.subtotal', 'Subtotal')}
+                            </Typography>
+                            <Typography variant="body2">
+                              {formatCurrency(order.subtotal, order.currency)}
+                            </Typography>
+                          </Box>
                         )}
-                      </Typography>
-                    </Box>
+                        {(order.base_delivery_fee !== undefined ||
+                          order.per_km_delivery_fee !== undefined) && (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              mb: 1,
+                            }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              {t('orders.deliveryFee', 'Delivery Fee')}
+                            </Typography>
+                            <Typography variant="body2">
+                              {formatCurrency(
+                                (order.base_delivery_fee || 0) +
+                                  (order.per_km_delivery_fee || 0),
+                                order.currency
+                              )}
+                            </Typography>
+                          </Box>
+                        )}
+                      </>
+                    )}
                   </Box>
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      mb: 3,
-                    }}
-                  >
-                    <Typography variant="h6" fontWeight="bold">
-                      {t('orders.total', 'Total')}
-                    </Typography>
-                    <Typography variant="h6" fontWeight="bold" color="primary">
-                      {formatCurrency(
-                        order.subtotal +
-                          order.base_delivery_fee +
-                          order.per_km_delivery_fee,
-                        order.currency
-                      )}
-                    </Typography>
-                  </Box>
+                  {!profile?.agent &&
+                    order.subtotal !== undefined &&
+                    (order.base_delivery_fee !== undefined ||
+                      order.per_km_delivery_fee !== undefined) && (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 3,
+                        }}
+                      >
+                        <Typography variant="h6" fontWeight="bold">
+                          {t('orders.total', 'Total')}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          fontWeight="bold"
+                          color="primary"
+                        >
+                          {formatCurrency(
+                            order.subtotal +
+                              (order.base_delivery_fee || 0) +
+                              (order.per_km_delivery_fee || 0),
+                            order.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
 
                   <Divider sx={{ mb: 3 }} />
 

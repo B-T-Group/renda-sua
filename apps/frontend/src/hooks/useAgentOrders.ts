@@ -90,6 +90,7 @@ export interface Order {
   created_at: string;
   updated_at: string;
   delivery_commission?: number; // Computed field for agents
+  agent_hold_amount?: number; // Amount required by agent to claim this order
   client: Client;
   business: Business;
   business_location: BusinessLocation;

@@ -26,9 +26,8 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const agentVerified = profile?.agent?.is_verified || false;
 
   const getDeliveryFee = () => {
-    // Always use order delivery fee components directly
-    // Do not use hold data for delivery fee calculation
-    return (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0);
+    // Use delivery_commission from order (computed field for agents)
+    return order.delivery_commission || 0;
   };
 
   const formatCurrency = (amount: number) => {

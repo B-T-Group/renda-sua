@@ -27,6 +27,7 @@ export interface OrderData {
   updated_at: string;
   access_reason: string;
   delivery_commission?: number; // Computed field for agents
+  agent_hold_amount?: number; // Amount required by agent to claim this order
   client: {
     id: string;
     user_id: string;

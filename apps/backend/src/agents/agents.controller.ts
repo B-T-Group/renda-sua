@@ -6,9 +6,11 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import type { Configuration } from '../config/configuration';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -97,7 +99,8 @@ export class AgentsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly commissionsService: CommissionsService
+    private readonly commissionsService: CommissionsService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   @Get('active_orders')
@@ -119,7 +122,8 @@ export class AgentsController {
 
       // Query for active orders assigned to this agent
       // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
-      // but will be removed in transformation. Financial fields like subtotal, total_amount,
+      // subtotal is kept for agent_hold_amount calculation
+      // but all financial fields will be removed in transformation. Financial fields like total_amount
       // and order item prices are excluded.
       const query = `
         query GetAgentActiveOrders($agentId: uuid!) {
@@ -136,6 +140,7 @@ export class AgentsController {
             business_location_id
             assigned_agent_id
             delivery_address_id
+            subtotal
             base_delivery_fee
             per_km_delivery_fee
             currency
@@ -216,9 +221,11 @@ export class AgentsController {
       // Transform orders to remove financial fields and add delivery_commission
       const orders = result.orders || [];
 
-      // Get commission config once for all orders
+      // Get commission config and hold percentage once for all orders
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
+      const holdPercentage =
+        this.configService.get('order')?.agentHoldPercentage || 80;
 
       const transformedOrders = orders.map((order: any) => {
         try {
@@ -233,7 +240,13 @@ export class AgentsController {
             commissionConfig
           );
 
-          // Remove financial fields and add delivery_commission
+          // Calculate agent hold amount (needed to claim the order)
+          const agentHoldAmount =
+            order.subtotal !== undefined
+              ? (order.subtotal * holdPercentage) / 100
+              : 0;
+
+          // Remove financial fields and add delivery_commission and agent_hold_amount
           const {
             base_delivery_fee: _base_delivery_fee,
             per_km_delivery_fee: _per_km_delivery_fee,
@@ -246,6 +259,7 @@ export class AgentsController {
           return {
             ...restOrder,
             delivery_commission: earnings.totalEarnings,
+            agent_hold_amount: agentHoldAmount,
           };
         } catch (_error: any) {
           // Return original order if transformation fails (but this shouldn't happen)

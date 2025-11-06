@@ -267,12 +267,28 @@ export class OrdersService {
   ) {}
 
   /**
+   * Get agent hold percentage from configuration
+   */
+  async getAgentHoldPercentage(): Promise<number> {
+    try {
+      const config = this.configService.get('order');
+      return config?.agentHoldPercentage || 80; // Default to 80% if not configured
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to get agent hold percentage: ${error.message}. Using default 80%.`
+      );
+      return 80; // Default fallback
+    }
+  }
+
+  /**
    * Transform order delivery fees to show agent commission amounts (optimized version)
    */
   transformOrderForAgentSync(
     order: any,
     isAgentVerified: boolean,
-    commissionConfig: any
+    commissionConfig: any,
+    holdPercentage: number
   ): any {
     try {
       // Calculate agent commissions using synchronous method
@@ -287,7 +303,14 @@ export class OrdersService {
         commissionConfig
       );
 
-      // Remove financial fields and order_holds, add delivery_commission
+      // Calculate agent hold amount (needed to claim the order)
+      // Note: We need subtotal for this calculation, but it will be removed from the response
+      const agentHoldAmount =
+        order.subtotal !== undefined
+          ? (order.subtotal * holdPercentage) / 100
+          : 0;
+
+      // Remove financial fields and order_holds, add delivery_commission and agent_hold_amount
       const {
         base_delivery_fee: _base_delivery_fee,
         per_km_delivery_fee: _per_km_delivery_fee,
@@ -310,6 +333,7 @@ export class OrdersService {
       return {
         ...restOrder,
         delivery_commission: earnings.totalEarnings,
+        agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
       };
     } catch (error: any) {
@@ -356,14 +380,16 @@ export class OrdersService {
   transformOrdersForAgentSync(
     orders: any[],
     isAgentVerified: boolean,
-    commissionConfig: any
+    commissionConfig: any,
+    holdPercentage: number
   ): any[] {
     try {
       return orders.map((order) =>
         this.transformOrderForAgentSync(
           order,
           isAgentVerified,
-          commissionConfig
+          commissionConfig,
+          holdPercentage
         )
       );
     } catch (error: any) {
@@ -1759,13 +1785,15 @@ export class OrdersService {
     // Transform orders for agents to show commission amounts
     const agentInfo = await this.getAgentInfo();
     if (agentInfo?.isAgent) {
-      // Get commission config once for all orders
+      // Get commission config and hold percentage once for all orders
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
+      const holdPercentage = await this.getAgentHoldPercentage();
       return this.transformOrdersForAgentSync(
         result.orders,
         agentInfo.isVerified,
-        commissionConfig
+        commissionConfig,
+        holdPercentage
       );
     }
 
@@ -1800,13 +1828,15 @@ export class OrdersService {
 
     // Query for orders in ready_for_pickup and assigned_agent_id is null
     // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
-    // but will be removed in transformation. Financial fields like subtotal, total_amount,
+    // subtotal is kept for agent_hold_amount calculation
+    // but all financial fields will be removed in transformation. Financial fields like total_amount,
     // order_holds, and order item prices are excluded.
     const query = `
       query OpenOrders {
         orders(where: {current_status: {_eq: "ready_for_pickup"}, assigned_agent_id: {_is_null: true}}) {
           id
           order_number
+          subtotal
           base_delivery_fee
           per_km_delivery_fee
           business {
@@ -1890,10 +1920,12 @@ export class OrdersService {
     // Transform orders for agents to show commission amounts
     const commissionConfig =
       await this.commissionsService.getCommissionConfigs();
+    const holdPercentage = await this.getAgentHoldPercentage();
     const transformedOrders = this.transformOrdersForAgentSync(
       filteredOrders,
       user.agent.is_verified || false,
-      commissionConfig
+      commissionConfig,
+      holdPercentage
     );
 
     return { success: true, orders: transformedOrders };
@@ -1950,8 +1982,8 @@ export class OrdersService {
     }
 
     // Get comprehensive order data with all relationships
-    // For agents, exclude financial fields (subtotal, total_amount, order_holds, order item prices)
-    // but keep base_delivery_fee and per_km_delivery_fee for commission calculation
+    // For agents, exclude financial fields (total_amount, order_holds, order item prices)
+    // but keep base_delivery_fee, per_km_delivery_fee, and subtotal for commission and hold amount calculation
     const isAgent = user.agent !== null;
     const query = isAgent
       ? `
@@ -1964,6 +1996,7 @@ export class OrdersService {
           business_location_id
           assigned_agent_id
           delivery_address_id
+          subtotal
           base_delivery_fee
           per_km_delivery_fee
           currency
@@ -2400,10 +2433,12 @@ export class OrdersService {
     if (agentInfo?.isAgent) {
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
+      const holdPercentage = await this.getAgentHoldPercentage();
       const transformedOrder = this.transformOrderForAgentSync(
         orderData,
         agentInfo.isVerified,
-        commissionConfig
+        commissionConfig,
+        holdPercentage
       );
       return {
         ...transformedOrder,
@@ -2699,10 +2734,12 @@ export class OrdersService {
     if (agentInfo?.isAgent) {
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
+      const holdPercentage = await this.getAgentHoldPercentage();
       return this.transformOrderForAgentSync(
         order,
         agentInfo.isVerified,
-        commissionConfig
+        commissionConfig,
+        holdPercentage
       );
     }
 
