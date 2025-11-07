@@ -513,6 +513,117 @@ export class HasuraUserService {
   }
 
   /**
+   * Fetch all user addresses by user ID and user type
+   */
+  private async fetchUserAddresses(
+    userId: string,
+    userType: string
+  ): Promise<(Addresses & { formatted_address: string })[]> {
+    let query: string;
+
+    switch (userType) {
+      case 'client':
+        query = `
+          query GetAllClientAddresses($userId: uuid!) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'agent':
+        query = `
+          query GetAllAgentAddresses($userId: uuid!) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      case 'business':
+        query = `
+          query GetAllBusinessAddresses($userId: uuid!) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                is_primary
+                address_type
+                created_at
+                updated_at
+              }
+            }
+          }
+        `;
+        break;
+      default:
+        return [];
+    }
+
+    const addressResult = await this.executeQuery(query, {
+      userId,
+    });
+
+    const addresses =
+      addressResult.client_addresses ||
+      addressResult.agent_addresses ||
+      addressResult.business_addresses;
+
+    return (
+      addresses
+        ?.map((item: any) => {
+          const address = item.address;
+          if (!address) return null;
+
+          // Create formatted address by combining address fields
+          const addressParts = [
+            address.address_line_1,
+            address.address_line_2,
+            address.city,
+            address.state,
+            address.postal_code,
+            address.country,
+          ].filter((part) => part && part.trim() !== '');
+
+          return {
+            ...address,
+            formatted_address: addressParts.join(', '),
+          };
+        })
+        .filter(Boolean) || []
+    );
+  }
+
+  /**
    * Get user address by user ID and user type
    */
   async getUserAddress(userId: string, userType: string): Promise<any> {
@@ -647,75 +758,7 @@ export class HasuraUserService {
 
       const userData = userResult.users[0];
 
-      // Extract addresses from the appropriate junction table based on user type
-      let addresses: Addresses[] = [];
-      if (userData.client?.client_addresses) {
-        addresses = userData.client.client_addresses
-          .map((ca: any) => {
-            const address = ca.address;
-            if (!address) return null;
-
-            // Create formatted address
-            const addressParts = [
-              address.address_line_1,
-              address.address_line_2,
-              address.city,
-              address.state,
-              address.postal_code,
-              address.country,
-            ].filter((part) => part && part.trim() !== '');
-
-            return {
-              ...address,
-              formatted_address: addressParts.join(', '),
-            };
-          })
-          .filter(Boolean);
-      } else if (userData.agent?.agent_addresses) {
-        addresses = userData.agent.agent_addresses
-          .map((aa: any) => {
-            const address = aa.address;
-            if (!address) return null;
-
-            const addressParts = [
-              address.address_line_1,
-              address.address_line_2,
-              address.city,
-              address.state,
-              address.postal_code,
-              address.country,
-            ].filter((part) => part && part.trim() !== '');
-
-            return {
-              ...address,
-              formatted_address: addressParts.join(', '),
-            };
-          })
-          .filter(Boolean);
-      } else if (userData.business?.business_addresses) {
-        addresses = userData.business.business_addresses
-          .map((ba: any) => {
-            const address = ba.address;
-            if (!address) return null;
-
-            const addressParts = [
-              address.address_line_1,
-              address.address_line_2,
-              address.city,
-              address.state,
-              address.postal_code,
-              address.country,
-            ].filter((part) => part && part.trim() !== '');
-
-            return {
-              ...address,
-              formatted_address: addressParts.join(', '),
-            };
-          })
-          .filter(Boolean);
-      }
-
-      // Build the user object with all data
+      // Build the user object with client/agent/business data
       const user: Users & {
         client?: Clients;
         agent?: Agents;
@@ -726,8 +769,16 @@ export class HasuraUserService {
         client: userData.client || undefined,
         agent: userData.agent || undefined,
         business: userData.business || undefined,
-        addresses: addresses as Addresses[],
       };
+
+      // Fetch addresses separately using the junction table queries
+      // This is still more efficient than the original 4 sequential queries
+      // (now 2 queries: user+relations, then addresses)
+      const addresses = await this.fetchUserAddresses(
+        user.id,
+        user.user_type_id
+      );
+      user.addresses = addresses as Addresses[];
 
       return user;
     } catch (error: any) {

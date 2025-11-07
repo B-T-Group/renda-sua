@@ -19,7 +19,8 @@ export const GET_USER_BY_IDENTIFIER = gql`
   }
 `;
 
-// Consolidated query for getting user by identifier with all related data (client/agent/business and addresses)
+// Consolidated query for getting user by identifier with all related data (client/agent/business)
+// Note: Addresses are fetched separately to avoid relationship access issues
 export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
   query GetUserByIdentifierWithRelations($identifier: String!) {
     users(where: { identifier: { _eq: $identifier } }) {
@@ -37,21 +38,6 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
       client {
         id
         user_id
-        client_addresses {
-          address {
-            id
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-            is_primary
-            address_type
-            created_at
-            updated_at
-          }
-        }
         created_at
         updated_at
       }
@@ -60,21 +46,6 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         user_id
         vehicle_type_id
         is_verified
-        agent_addresses {
-          address {
-            id
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-            is_primary
-            address_type
-            created_at
-            updated_at
-          }
-        }
         created_at
         updated_at
       }
@@ -84,21 +55,6 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         name
         is_admin
         is_verified
-        business_addresses {
-          address {
-            id
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-            is_primary
-            address_type
-            created_at
-            updated_at
-          }
-        }
         created_at
         updated_at
       }
