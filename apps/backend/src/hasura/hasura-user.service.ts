@@ -10,7 +10,6 @@ import {
   Clients,
   Users,
 } from '../generated/graphql';
-import { HasuraSystemService } from './hasura-system.service';
 import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
 
 export interface OrderItem {
@@ -66,8 +65,7 @@ export class HasuraUserService {
   private readonly client: GraphQLClient;
   constructor(
     @Inject(REQUEST) private readonly request: any,
-    private readonly configService: ConfigService<Configuration>,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly configService: ConfigService<Configuration>
   ) {
     const hasuraConfig = this.configService.get('hasura');
     this.hasuraUrl =
