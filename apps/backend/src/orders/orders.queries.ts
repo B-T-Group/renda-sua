@@ -760,15 +760,17 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       business {
         user_id
         name
-        business_location {
-          address {
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-          }
+      }
+      business_location {
+        id
+        name
+        address {
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
         }
       }
       assigned_agent {

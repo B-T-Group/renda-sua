@@ -22,15 +22,17 @@ export interface OrderReceiptData {
   business: {
     user_id: string;
     name: string;
-    business_location: {
-      address: {
-        address_line_1: string;
-        address_line_2?: string;
-        city: string;
-        state: string;
-        postal_code: string;
-        country: string;
-      };
+  };
+  business_location: {
+    id: string;
+    name: string;
+    address: {
+      address_line_1: string;
+      address_line_2?: string;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
     };
   };
   assigned_agent?: {

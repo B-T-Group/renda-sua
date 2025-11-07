@@ -124,7 +124,7 @@ export class PdfService {
         deliveryAddress: this.formatAddress(orderData.delivery_address),
         businessName: orderData.business.name,
         businessLocation: this.formatAddress(
-          orderData.business.business_location.address
+          orderData.business_location.address
         ),
         agentName: orderData.assigned_agent
           ? `${orderData.assigned_agent.user.first_name} ${orderData.assigned_agent.user.last_name}`
