@@ -1,13 +1,5 @@
+import { AccessTime, LocalShipping } from '@mui/icons-material';
 import {
-  AccessTime,
-  ExpandLess,
-  ExpandMore,
-  LocalShipping,
-} from '@mui/icons-material';
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Box,
   Card,
   CardContent,
@@ -16,7 +8,7 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { FastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 
@@ -40,14 +32,9 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
   formatCurrency,
 }) => {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
 
   const handleToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     onToggle(event.target.checked);
-  };
-
-  const handleExpandChange = () => {
-    setExpanded(!expanded);
   };
 
   const formatTime = (time: string) => {
@@ -73,32 +60,56 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
 
   return (
     <Card
-      elevation={2}
+      elevation={selected ? 4 : 2}
       sx={{
-        border: selected ? 2 : 1,
-        borderColor: selected ? 'primary.main' : 'divider',
+        border: selected ? 3 : 2,
+        borderColor: selected ? 'primary.main' : 'primary.200',
         bgcolor: selected ? 'primary.50' : 'background.paper',
-        transition: 'all 0.2s ease-in-out',
+        background: selected
+          ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.08) 0%, rgba(25, 118, 210, 0.04) 100%)'
+          : 'background.paper',
+        transition: 'all 0.3s ease-in-out',
+        boxShadow: selected
+          ? '0 8px 24px rgba(25, 118, 210, 0.2)'
+          : '0 2px 8px rgba(0, 0, 0, 0.1)',
+        '&:hover': {
+          boxShadow: selected
+            ? '0 12px 32px rgba(25, 118, 210, 0.3)'
+            : '0 4px 12px rgba(0, 0, 0, 0.15)',
+          transform: 'translateY(-2px)',
+        },
       }}
     >
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <LocalShipping
-            color={selected ? 'primary' : 'action'}
-            sx={{ mr: 1 }}
+            color="primary"
+            sx={{
+              mr: 1,
+              fontSize: 32,
+              filter: selected
+                ? 'drop-shadow(0 2px 4px rgba(25, 118, 210, 0.3))'
+                : 'none',
+            }}
           />
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h5" fontWeight="bold" color="primary">
             {t('orders.fastDelivery.title', 'Fast Delivery')}
           </Typography>
           <Chip
             label={t('orders.fastDelivery.premium', 'Premium')}
             color="primary"
             size="small"
-            sx={{ ml: 2 }}
+            sx={{
+              ml: 2,
+              fontWeight: 'bold',
+              boxShadow: selected
+                ? '0 2px 4px rgba(25, 118, 210, 0.3)'
+                : 'none',
+            }}
           />
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
           {t(
             'orders.fastDelivery.description',
             'Get your order delivered in {{minHours}}-{{maxHours}} hours with our premium delivery service.',
@@ -107,8 +118,8 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <AccessTime sx={{ mr: 1, color: 'text.secondary' }} />
-          <Typography variant="body2" color="text.secondary">
+          <AccessTime sx={{ mr: 1, color: 'primary.main' }} />
+          <Typography variant="body1" fontWeight="medium" color="primary">
             {t(
               'orders.fastDelivery.timeWindow',
               'Delivery Time: {{minHours}}-{{maxHours}} hours',
@@ -123,74 +134,73 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
               checked={selected}
               onChange={handleToggle}
               color="primary"
+              size="medium"
             />
           }
           label={
-            <Typography variant="body1" fontWeight="medium">
+            <Typography variant="body1" fontWeight="bold">
               {t('orders.fastDelivery.enableOption', 'Enable Fast Delivery')}
             </Typography>
           }
+          sx={{ mb: 3 }}
         />
 
-        <Accordion
-          expanded={expanded}
-          onChange={handleExpandChange}
-          sx={{ mt: 2, boxShadow: 'none' }}
-        >
-          <AccordionSummary
-            expandIcon={expanded ? <ExpandLess /> : <ExpandMore />}
-            sx={{
-              minHeight: 40,
-              '& .MuiAccordionSummary-content': {
-                margin: '8px 0',
-              },
-            }}
+        {/* Operating Hours - Always Visible */}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 2, borderColor: 'divider' }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            color="primary"
+            sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
           >
-            <Typography variant="body2" fontWeight="medium">
-              {t('orders.fastDelivery.operatingHours', 'Operating Hours')}
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails sx={{ pt: 0 }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {Object.entries(config.operatingHours).map(
-                ([day, hours]: [string, OperatingHours]) => (
-                  <Box
-                    key={day}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      p: 1,
-                      borderRadius: 1,
-                      bgcolor: hours.enabled ? 'success.50' : 'grey.100',
-                      border: 1,
-                      borderColor: hours.enabled ? 'success.200' : 'grey.300',
-                      minWidth: { xs: '100%', sm: 'calc(50% - 4px)' },
-                    }}
+            <AccessTime />
+            {t('orders.fastDelivery.operatingHours', 'Operating Hours')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+            {Object.entries(config.operatingHours).map(
+              ([day, hours]: [string, OperatingHours]) => (
+                <Box
+                  key={day}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: hours.enabled ? 'success.50' : 'grey.100',
+                    border: 2,
+                    borderColor: hours.enabled ? 'success.main' : 'grey.300',
+                    minWidth: { xs: '100%', sm: 'calc(50% - 6px)' },
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: hours.enabled
+                        ? '0 4px 8px rgba(46, 125, 50, 0.2)'
+                        : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    },
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    fontWeight="bold"
+                    sx={{ minWidth: 90 }}
                   >
-                    <Typography
-                      variant="body2"
-                      fontWeight="medium"
-                      sx={{ minWidth: 80 }}
-                    >
-                      {getDayName(day)}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color={hours.enabled ? 'success.main' : 'text.disabled'}
-                      sx={{ ml: 1 }}
-                    >
-                      {hours.enabled
-                        ? `${formatTime(hours.start)} - ${formatTime(
-                            hours.end
-                          )}`
-                        : t('common.closed', 'Closed')}
-                    </Typography>
-                  </Box>
-                )
-              )}
-            </Box>
-          </AccordionDetails>
-        </Accordion>
+                    {getDayName(day)}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight="medium"
+                    color={hours.enabled ? 'success.main' : 'text.disabled'}
+                    sx={{ ml: 1 }}
+                  >
+                    {hours.enabled
+                      ? `${formatTime(hours.start)} - ${formatTime(hours.end)}`
+                      : t('common.closed', 'Closed')}
+                  </Typography>
+                </Box>
+              )
+            )}
+          </Box>
+        </Box>
       </CardContent>
     </Card>
   );

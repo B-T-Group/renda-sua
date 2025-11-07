@@ -1131,6 +1131,8 @@
     "confirmStatusChange": "Confirmer le Changement de Statut",
     "confirmStatusChangeMessage": "Êtes-vous sûr de vouloir changer le statut de la commande ?",
     "contact": "Contact",
+    "costToClaim": "Caution",
+    "costToClaimDescription": "Un dépôt de garantie est requis pour réclamer cette commande. Ce montant est calculé automatiquement et sera libéré après une livraison réussie.",
     "createOrderError": "Une erreur s'est produite lors de la création de votre commande. Veuillez réessayer.",
     "createOrderFailed": "Échec de la création de la commande",
     "createdAt": "Créé le",

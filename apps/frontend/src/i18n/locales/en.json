@@ -1124,6 +1124,8 @@
     "confirmStatusChange": "Confirm Status Change",
     "confirmStatusChangeMessage": "Are you sure you want to change the order status?",
     "contact": "Contact",
+    "costToClaim": "Caution",
+    "costToClaimDescription": "A security deposit is required to claim this order. This amount is automatically calculated and will be released upon successful delivery.",
     "createOrderError": "An error occurred while creating your order. Please try again.",
     "createOrderFailed": "Failed to create order",
     "createdAt": "Created",

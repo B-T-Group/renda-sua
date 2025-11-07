@@ -447,41 +447,62 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               order.agent_hold_amount > 0 && (
                 <Box
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
                     bgcolor: 'warning.50',
                     borderRadius: 1,
                     px: 1.5,
-                    py: 0.75,
+                    py: 1,
                     border: `1px solid ${theme.palette.warning.main}40`,
                   }}
                 >
-                  <AttachMoney color="warning" sx={{ fontSize: 18 }} />
-                  <Box>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        fontSize: '0.65rem',
-                        display: 'block',
-                        lineHeight: 1,
-                      }}
-                    >
-                      {t('orders.costToClaim', 'Cost')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="warning.main"
-                      sx={{
-                        fontWeight: 700,
-                        fontSize: '0.9rem',
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {formatCurrency(getClaimCost(), order.currency)}
-                    </Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      mb: 0.5,
+                    }}
+                  >
+                    <AttachMoney color="warning" sx={{ fontSize: 18 }} />
+                    <Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          fontSize: '0.65rem',
+                          display: 'block',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {t('orders.costToClaim', 'Caution')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="warning.main"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: '0.9rem',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {formatCurrency(getClaimCost(), order.currency)}
+                      </Typography>
+                    </Box>
                   </Box>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.7rem',
+                      display: 'block',
+                      lineHeight: 1.3,
+                      ml: 3.5,
+                    }}
+                  >
+                    {t(
+                      'orders.costToClaimDescription',
+                      'A security deposit is required to claim this order. This amount is automatically calculated and will be released upon successful delivery.'
+                    )}
+                  </Typography>
                 </Box>
               )}
 

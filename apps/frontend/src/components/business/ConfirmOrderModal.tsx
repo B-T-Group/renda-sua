@@ -265,7 +265,12 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     {new Intl.NumberFormat('en-US', {
                       style: 'currency',
                       currency: order.currency || 'USD',
-                    }).format(order.total_amount || 0)}
+                    }).format(
+                      order.total_amount ||
+                        (order.subtotal || 0) +
+                          (order.base_delivery_fee || 0) +
+                          (order.per_km_delivery_fee || 0)
+                    )}
                   </Typography>
                 </Box>
                 <Box sx={{ flex: '1 1 200px' }}>

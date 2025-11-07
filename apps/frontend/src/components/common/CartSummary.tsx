@@ -75,8 +75,7 @@ const CartSummary: React.FC<CartSummaryProps> = ({
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="body2">
-            {t('cart.subtotal', 'Subtotal')} ({cartItems.length}{' '}
-            {t('cart.itemCount', 'items')})
+            {t('cart.subtotal', 'Subtotal')} ({t('cart.itemCount', '{{count}} item(s)', { count: cartItems.length })})
           </Typography>
           <Typography variant="body2">{formatCurrency(cartTotal)}</Typography>
         </Box>
