@@ -29,12 +29,11 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
       case 'pending':
         alerts.push({
           severity: 'info' as const,
-          message: t(
-            'client.orders.pendingNotice',
-            `⏳ Your ${formatCurrency(
-              orderTotal
-            )} order is awaiting business confirmation. They typically respond within 10-15 minutes. You'll be notified once confirmed!`
-          ),
+          message: t('client.orders.pendingNotice', {
+            orderTotal: formatCurrency(orderTotal),
+            defaultValue:
+              '⏳ Your {{orderTotal}} order is awaiting business confirmation. They typically respond within 10-15 minutes. You\'ll be notified once confirmed!',
+          }),
         });
         break;
 
@@ -121,24 +120,22 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
       case 'delivered':
         alerts.push({
           severity: 'success' as const,
-          message: t(
-            'client.orders.deliveredNotice',
-            `🎉 Delivered! Your ${formatCurrency(
-              orderTotal
-            )} order has arrived safely. We hope you love it! Thank you for choosing our service.`
-          ),
+          message: t('client.orders.deliveredNotice', {
+            orderTotal: formatCurrency(orderTotal),
+            defaultValue:
+              '🎉 Delivered! Your {{orderTotal}} order has arrived safely. We hope you love it! Thank you for choosing our service.',
+          }),
         });
         break;
 
       case 'cancelled':
         alerts.push({
           severity: 'error' as const,
-          message: t(
-            'client.orders.cancelledNotice',
-            `❌ Your order has been cancelled. Any payment of ${formatCurrency(
-              orderTotal
-            )} will be refunded within 3-5 business days. Contact support if you have questions.`
-          ),
+          message: t('client.orders.cancelledNotice', {
+            orderTotal: formatCurrency(orderTotal),
+            defaultValue:
+              '❌ Your order has been cancelled. Any payment of {{orderTotal}} will be refunded within 3-5 business days. Contact support if you have questions.',
+          }),
         });
         break;
 
@@ -155,12 +152,11 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
       case 'refunded':
         alerts.push({
           severity: 'info' as const,
-          message: t(
-            'client.orders.refundedNotice',
-            `💰 Your ${formatCurrency(
-              orderTotal
-            )} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.`
-          ),
+          message: t('client.orders.refundedNotice', {
+            orderTotal: formatCurrency(orderTotal),
+            defaultValue:
+              '💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.',
+          }),
         });
         break;
 

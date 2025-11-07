@@ -713,7 +713,7 @@
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
       "assignedToAgentNotice": "An agent has been assigned to your order and will pick it up soon.",
-      "cancelledNotice": "❌ Your order has been cancelled. Any payment of ${formatCurrency(\n              orderTotal\n            )} will be refunded within 3-5 business days. Contact support if you have questions.",
+      "cancelledNotice": "❌ Votre commande a été annulée. Tout paiement de {{orderTotal}} sera remboursé dans les 3 à 5 jours ouvrables. Contactez le support si vous avez des questions.",
       "completeNotice": "✅ Order complete! We hope you enjoyed your purchase. Please consider leaving a review to help other customers!",
       "confirmation": {
         "continueShopping": "Continuer les Achats",
@@ -734,11 +734,12 @@
         "viewOrders": "Voir Mes Commandes",
         "whatToExpect": "Voici ce à quoi vous attendre :"
       },
-      "deliveredNotice": "🎉 Delivered! Your ${formatCurrency(\n              orderTotal\n            )} order has arrived safely. We hope you love it! Thank you for choosing our service.",
+      "deliveredNotice": "🎉 Livré ! Votre commande de {{orderTotal}} est arrivée en toute sécurité. Nous espérons que vous l'aimerez ! Merci d'avoir choisi notre service.",
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
+      "pendingNotice": "⏳ Votre commande de {{orderTotal}} attend la confirmation de l'entreprise. Ils répondent généralement dans les 10 à 15 minutes. Vous serez notifié une fois confirmé !",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
-      "refundedNotice": "💰 Your ${formatCurrency(\n              orderTotal\n            )} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
+      "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
     }

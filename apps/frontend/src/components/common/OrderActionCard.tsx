@@ -13,26 +13,35 @@ import {
   CardActions,
   CardContent,
   Chip,
+  CircularProgress,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { Order } from '../../hooks/useOrders';
+import ConfirmationModal from './ConfirmationModal';
 
 interface OrderActionCardProps {
   order: Order;
   userType: 'client' | 'business' | 'agent';
   formatCurrency: (amount: number, currency?: string) => string;
+  onActionComplete?: () => void;
 }
 
 const OrderActionCard: React.FC<OrderActionCardProps> = ({
   order,
   userType,
   formatCurrency,
+  onActionComplete,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { completeOrder } = useBackendOrders();
+  const [loading, setLoading] = useState(false);
+  const [completeConfirmationOpen, setCompleteConfirmationOpen] =
+    useState(false);
 
   const getActionRequiredInfo = () => {
     const status = order.current_status;
@@ -140,8 +149,6 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
       default:
         return { required: false };
     }
-
-    return { required: false };
   };
 
   const getStatusColor = (status: string) => {
@@ -184,6 +191,29 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
       address.country,
     ].filter(Boolean);
     return parts.join(', ');
+  };
+
+  const handleCompleteOrderClick = () => {
+    setCompleteConfirmationOpen(true);
+  };
+
+  const handleConfirmCompleteOrder = async () => {
+    setLoading(true);
+    try {
+      await completeOrder({ orderId: order.id });
+      setCompleteConfirmationOpen(false);
+      onActionComplete?.();
+    } catch (error) {
+      console.error('Failed to complete order:', error);
+      // Error is handled by the hook, but we still close the modal
+      setCompleteConfirmationOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelCompleteOrder = () => {
+    setCompleteConfirmationOpen(false);
   };
 
   const actionInfo = getActionRequiredInfo();
@@ -251,18 +281,25 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           <Box sx={{ mb: 1 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
               {userType === 'agent' ? (
-                <strong>{t('orders.deliveryCommission', 'Delivery Commission')}:</strong>
+                <strong>
+                  {t('orders.deliveryCommission', 'Delivery Commission')}:
+                </strong>
               ) : (
-                <strong>{t('orders.amountBreakdown', 'Amount Breakdown')}:</strong>
+                <strong>
+                  {t('orders.amountBreakdown', 'Amount Breakdown')}:
+                </strong>
               )}
             </Typography>
             <Box sx={{ pl: 1 }}>
               {userType === 'agent' ? (
                 // Agent view: Show only delivery commission
-                order.delivery_commission !== undefined && (
+                (order as any).delivery_commission !== undefined && (
                   <Typography variant="body2" fontWeight="bold" color="primary">
                     {t('orders.earnings', 'Your Earnings')}:{' '}
-                    {formatCurrency(order.delivery_commission, order.currency)}
+                    {formatCurrency(
+                      (order as any).delivery_commission,
+                      order.currency
+                    )}
                   </Typography>
                 )
               ) : (
@@ -274,22 +311,30 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
                       {formatCurrency(order.subtotal, order.currency)}
                     </Typography>
                   )}
-                  {(order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0) > 0 && (
+                  {(order.base_delivery_fee || 0) +
+                    (order.per_km_delivery_fee || 0) >
+                    0 && (
                     <Typography variant="body2" color="text.secondary">
                       {t('orders.deliveryFee', 'Delivery')}:{' '}
                       {formatCurrency(
-                        (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
+                        (order.base_delivery_fee || 0) +
+                          (order.per_km_delivery_fee || 0),
                         order.currency
                       )}
                     </Typography>
                   )}
                   {order.tax_amount > 0 && (
                     <Typography variant="body2" color="text.secondary">
-                      {t('orders.tax', 'Tax')}: {formatCurrency(order.tax_amount, order.currency)}
+                      {t('orders.tax', 'Tax')}:{' '}
+                      {formatCurrency(order.tax_amount, order.currency)}
                     </Typography>
                   )}
                   {order.total_amount !== undefined && (
-                    <Typography variant="body2" fontWeight="bold" color="primary">
+                    <Typography
+                      variant="body2"
+                      fontWeight="bold"
+                      color="primary"
+                    >
                       {t('orders.total', 'Total')}:{' '}
                       {formatCurrency(order.total_amount, order.currency)}
                     </Typography>
@@ -323,17 +368,71 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
       </CardContent>
 
       <CardActions>
-        <Button
-          variant="contained"
-          color="primary"
-          fullWidth
-          onClick={() => navigate(`/orders/${order.id}`)}
-        >
-          {actionInfo.required
-            ? t('orders.viewAndTakeAction', 'View & Take Action')
-            : t('orders.viewDetails', 'View Details')}
-        </Button>
+        {userType === 'client' &&
+        order.current_status === 'delivered' &&
+        actionInfo.required ? (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+              width: '100%',
+            }}
+          >
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleCompleteOrderClick}
+              disabled={loading}
+              startIcon={
+                loading ? <CircularProgress size={16} /> : <CheckCircle />
+              }
+              fullWidth
+            >
+              {loading
+                ? t('orders.completing', 'Completing...')
+                : t('orders.completeOrder', 'Complete Order')}
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(`/orders/${order.id}`)}
+              fullWidth
+            >
+              {t('orders.viewDetails', 'View Details')}
+            </Button>
+          </Box>
+        ) : (
+          <Button
+            variant="contained"
+            color="primary"
+            fullWidth
+            onClick={() => navigate(`/orders/${order.id}`)}
+          >
+            {actionInfo.required
+              ? t('orders.viewAndTakeAction', 'View & Take Action')
+              : t('orders.viewDetails', 'View Details')}
+          </Button>
+        )}
       </CardActions>
+
+      {/* Order Completion Confirmation Modal */}
+      {userType === 'client' && (
+        <ConfirmationModal
+          open={completeConfirmationOpen}
+          title={t('orders.confirmOrderCompletion', 'Confirm Order Completion')}
+          message={t('orders.confirmOrderCompletionMessage', {
+            orderNumber: order.order_number,
+            defaultValue: `Are you sure you want to complete order #${order.order_number}? This action cannot be undone.`,
+          })}
+          confirmText={t('common.confirm', 'Confirm')}
+          cancelText={t('common.cancel', 'Cancel')}
+          onConfirm={handleConfirmCompleteOrder}
+          onCancel={handleCancelCompleteOrder}
+          confirmColor="success"
+          loading={loading}
+        />
+      )}
     </Card>
   );
 };

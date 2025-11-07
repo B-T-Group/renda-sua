@@ -711,7 +711,7 @@
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
       "assignedToAgentNotice": "An agent has been assigned to your order and will pick it up soon.",
-      "cancelledNotice": "❌ Your order has been cancelled. Any payment of ${formatCurrency(\n              orderTotal\n            )} will be refunded within 3-5 business days. Contact support if you have questions.",
+      "cancelledNotice": "❌ Your order has been cancelled. Any payment of {{orderTotal}} will be refunded within 3-5 business days. Contact support if you have questions.",
       "completeNotice": "✅ Order complete! We hope you enjoyed your purchase. Please consider leaving a review to help other customers!",
       "confirmation": {
         "continueShopping": "Continue Shopping",
@@ -732,11 +732,12 @@
         "viewOrders": "View My Orders",
         "whatToExpect": "Here's what to expect:"
       },
-      "deliveredNotice": "🎉 Delivered! Your ${formatCurrency(\n              orderTotal\n            )} order has arrived safely. We hope you love it! Thank you for choosing our service.",
+      "deliveredNotice": "🎉 Delivered! Your {{orderTotal}} order has arrived safely. We hope you love it! Thank you for choosing our service.",
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
+      "pendingNotice": "⏳ Your {{orderTotal}} order is awaiting business confirmation. They typically respond within 10-15 minutes. You'll be notified once confirmed!",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
-      "refundedNotice": "💰 Your ${formatCurrency(\n              orderTotal\n            )} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
+      "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
       "subtitle": "Track your order status and history",
       "title": "My Orders"
     }
@@ -1284,6 +1285,7 @@
     "step2": "Confirm the payment request to authorize the transaction",
     "step3": "Your order will be transmitted to the merchant within 24 hours",
     "step4": "You will receive updates on your order status via email and in-app notifications",
+    "amountBreakdown": "Amount Breakdown",
     "subtotal": "Subtotal",
     "table": {
       "items": "Items"

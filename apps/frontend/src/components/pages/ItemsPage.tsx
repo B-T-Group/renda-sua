@@ -75,7 +75,7 @@ const ItemsPage: React.FC = () => {
   });
 
   // Dashboard-specific hooks for authenticated clients
-  const { orders } = useOrders();
+  const { orders, refreshOrders } = useOrders();
 
   // Filter inventory items based on search (only for public users)
   const filteredItemsFromSearch = inventoryItems.filter(
@@ -329,6 +329,7 @@ const ItemsPage: React.FC = () => {
                     profile?.user_type_id as 'client' | 'business' | 'agent'
                   }
                   formatCurrency={formatCurrency}
+                  onActionComplete={refreshOrders}
                 />
               ))}
             </Box>

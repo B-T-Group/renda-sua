@@ -39,7 +39,7 @@ const Dashboard: React.FC = () => {
     loading: inventoryLoading,
     error: inventoryError,
   } = useInventoryItems();
-  const { orders } = useOrders();
+  const { orders, refreshOrders } = useOrders();
   const { loading: deliveryFeesLoading, error: deliveryFeesError } =
     useDeliveryFees();
   const { error: orderError } = useBackendOrders();
@@ -256,6 +256,7 @@ const Dashboard: React.FC = () => {
                   profile?.user_type_id as 'client' | 'business' | 'agent'
                 }
                 formatCurrency={formatCurrency}
+                onActionComplete={refreshOrders}
               />
             ))}
           </Box>

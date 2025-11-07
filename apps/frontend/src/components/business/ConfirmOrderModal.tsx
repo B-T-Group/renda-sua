@@ -118,7 +118,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   );
 
   const formatDate = useCallback((dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(`${dateString}T00:00:00.000`).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -265,7 +265,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     {new Intl.NumberFormat('en-US', {
                       style: 'currency',
                       currency: order.currency || 'USD',
-                    }).format(order.total_amount)}
+                    }).format(order.total_amount || 0)}
                   </Typography>
                 </Box>
                 <Box sx={{ flex: '1 1 200px' }}>

@@ -51,12 +51,64 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
     );
   }
 
-  const formatDate = (dateString: string) => {
+  const combineDateAndTime = (
+    dateString: string,
+    timeString: string
+  ): Date | null => {
     try {
-      return new Date(dateString).toLocaleDateString();
+      // Normalize time string to HH:MM:SS.000 format
+      let normalizedTime = timeString.trim();
+
+      if (normalizedTime.includes(':')) {
+        const parts = normalizedTime.split(':');
+
+        // Handle HH:MM format - add seconds
+        if (parts.length === 2) {
+          normalizedTime = `${normalizedTime}:00`;
+        }
+
+        // Ensure milliseconds are included (if not already present)
+        if (!normalizedTime.includes('.')) {
+          normalizedTime = `${normalizedTime}.000`;
+        } else {
+          // If milliseconds exist but are incomplete, pad to 3 digits
+          const [timePart, msPart] = normalizedTime.split('.');
+          if (msPart && msPart.length < 3) {
+            normalizedTime = `${timePart}.${msPart.padEnd(3, '0')}`;
+          } else if (!msPart) {
+            normalizedTime = `${timePart}.000`;
+          }
+        }
+      } else {
+        // If no colon, assume it's invalid
+        return null;
+      }
+
+      // Combine date and time: YYYY-MM-DDTHH:MM:SS.000
+      const dateTimeString = `${dateString}T${normalizedTime}`;
+      return new Date(dateTimeString);
     } catch {
-      return dateString;
+      return null;
     }
+  };
+
+  const formatDeliveryDateTime = (
+    dateString: string,
+    timeString: string
+  ): string => {
+    const dateTime = combineDateAndTime(dateString, timeString);
+    if (!dateTime) {
+      return `${dateString} ${timeString}`;
+    }
+
+    return dateTime.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   const formatTime = (timeString: string) => {
@@ -68,6 +120,21 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
       return time;
     } catch {
       return timeString;
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateString;
     }
   };
 
@@ -86,7 +153,7 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
             <Box key={window.id || index}>
               <Grid container spacing={2} alignItems="center">
                 {/* Date and Time Information */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Stack spacing={1}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <CalendarToday fontSize="small" color="action" />
@@ -98,7 +165,10 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
                         :
                       </Typography>
                       <Typography variant="body2" fontWeight="medium">
-                        {formatDate(window.preferred_date)}
+                        {formatDeliveryDateTime(
+                          window.preferred_date,
+                          window.time_slot_start
+                        )}
                       </Typography>
                     </Box>
 
@@ -130,7 +200,7 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
                 </Grid>
 
                 {/* Status and Confirmation */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Stack spacing={1} alignItems="flex-start">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {window.is_confirmed ? (
@@ -166,7 +236,7 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
                           'orders.deliveryTimeWindow.confirmedAt',
                           'Confirmed at'
                         )}
-                        : {new Date(window.confirmed_at).toLocaleString()}
+                        : {formatDateTime(window.confirmed_at)}
                       </Typography>
                     )}
 
