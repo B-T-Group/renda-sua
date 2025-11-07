@@ -320,74 +320,87 @@ export class OrderStatusService {
         return null;
       }
 
-    // Format delivery window details if available
-    let deliveryTimeWindow: string | undefined;
-    if (order.delivery_time_windows && order.delivery_time_windows.length > 0) {
-      const window = order.delivery_time_windows[0];
-      const windowDate = new Date(window.preferred_date);
-      const formattedDate = windowDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      const formatTime = (time: string) => {
-        const [hours, minutes] = time.split(':');
-        const hour = parseInt(hours, 10);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes} ${ampm}`;
-      };
-      const timeRange = `${formatTime(window.time_slot_start)} - ${formatTime(window.time_slot_end)}`;
-      const slotName = window.slot?.slot_name || '';
-      deliveryTimeWindow = `${formattedDate}, ${timeRange}${slotName ? ` (${slotName})` : ''}`;
-      if (window.special_instructions) {
-        deliveryTimeWindow += ` - ${window.special_instructions}`;
+      // Format delivery window details if available
+      let deliveryTimeWindow: string | undefined;
+      if (
+        order.delivery_time_windows &&
+        order.delivery_time_windows.length > 0
+      ) {
+        const window = order.delivery_time_windows[0];
+        const windowDate = new Date(window.preferred_date);
+        const formattedDate = windowDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+        const formatTime = (time: string) => {
+          const [hours, minutes] = time.split(':');
+          const hour = parseInt(hours, 10);
+          const ampm = hour >= 12 ? 'PM' : 'AM';
+          const hour12 = hour % 12 || 12;
+          return `${hour12}:${minutes} ${ampm}`;
+        };
+        const timeRange = `${formatTime(window.time_slot_start)} - ${formatTime(
+          window.time_slot_end
+        )}`;
+        const slotName = window.slot?.slot_name || '';
+        deliveryTimeWindow = `${formattedDate}, ${timeRange}${
+          slotName ? ` (${slotName})` : ''
+        }`;
+        if (window.special_instructions) {
+          deliveryTimeWindow += ` - ${window.special_instructions}`;
+        }
       }
-    }
 
-    // Safely extract client information with null checks
-    const clientName = order.client?.user
-      ? `${order.client.user.first_name || ''} ${order.client.user.last_name || ''}`.trim() || 'Unknown Client'
-      : 'Unknown Client';
-    const clientEmail = order.client?.user?.email || '';
+      // Safely extract client information with null checks
+      const clientName = order.client?.user
+        ? `${order.client.user.first_name || ''} ${
+            order.client.user.last_name || ''
+          }`.trim() || 'Unknown Client'
+        : 'Unknown Client';
+      const clientEmail = order.client?.user?.email || '';
 
-    // Safely extract business information with null checks
-    const businessName = order.business?.name || 'Unknown Business';
-    const businessEmail = order.business?.user?.email || '';
-    const businessVerified = order.business?.is_verified || false;
+      // Safely extract business information with null checks
+      const businessName = order.business?.name || 'Unknown Business';
+      const businessEmail = order.business?.user?.email || '';
+      const businessVerified = order.business?.is_verified || false;
 
-    // Safely extract agent information with null checks
-    const agentName = order.assigned_agent?.user
-      ? `${order.assigned_agent.user.first_name || ''} ${order.assigned_agent.user.last_name || ''}`.trim() || undefined
-      : undefined;
-    const agentEmail = order.assigned_agent?.user?.email;
+      // Safely extract agent information with null checks
+      const agentName = order.assigned_agent?.user
+        ? `${order.assigned_agent.user.first_name || ''} ${
+            order.assigned_agent.user.last_name || ''
+          }`.trim() || undefined
+        : undefined;
+      const agentEmail = order.assigned_agent?.user?.email;
 
-    return {
-      orderId: order.id,
-      orderNumber: order.order_number,
-      clientName,
-      clientEmail,
-      businessName,
-      businessEmail,
-      businessVerified,
-      agentName,
-      agentEmail,
-      orderStatus: order.current_status,
-      orderItems: (order.order_items || []).map((item: any) => ({
-        name: item.item_name || 'Unknown Item',
-        quantity: item.quantity || 0,
-        unitPrice: item.unit_price || 0,
-        totalPrice: item.total_price || 0,
-      })),
-      subtotal: order.subtotal || 0,
-      deliveryFee: (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
-      taxAmount: order.tax_amount || 0,
-      totalAmount: order.total_amount || 0,
-      currency: order.currency || 'USD',
-      deliveryAddress: this.formatAddress(order.delivery_address),
-      estimatedDeliveryTime: deliveryTimeWindow || order.estimated_delivery_time,
-      specialInstructions: order.special_instructions,
-    };
+      return {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        clientName,
+        clientEmail,
+        businessName,
+        businessEmail,
+        businessVerified,
+        agentName,
+        agentEmail,
+        orderStatus: order.current_status,
+        orderItems: (order.order_items || []).map((item: any) => ({
+          name: item.item_name || 'Unknown Item',
+          quantity: item.quantity || 0,
+          unitPrice: item.unit_price || 0,
+          totalPrice: item.total_price || 0,
+        })),
+        subtotal: order.subtotal || 0,
+        deliveryFee:
+          (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
+        taxAmount: order.tax_amount || 0,
+        totalAmount: order.total_amount || 0,
+        currency: order.currency || 'USD',
+        deliveryAddress: this.formatAddress(order.delivery_address),
+        estimatedDeliveryTime:
+          deliveryTimeWindow || order.estimated_delivery_time,
+        specialInstructions: order.special_instructions,
+      };
     } catch (error: any) {
       this.logger.error(
         `Failed to get order details for notification: ${orderId}`,

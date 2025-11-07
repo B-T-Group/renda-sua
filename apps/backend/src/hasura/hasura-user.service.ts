@@ -8,14 +8,10 @@ import {
   Agents,
   Businesses,
   Clients,
-  GetUserByIdentifierQuery,
   Users,
 } from '../generated/graphql';
 import { HasuraSystemService } from './hasura-system.service';
-import {
-  GET_USER_BY_IDENTIFIER,
-  GET_USER_BY_IDENTIFIER_WITH_RELATIONS,
-} from './hasura.queries';
+import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -743,7 +739,7 @@ export class HasuraUserService {
         error: error.message,
         stack: error.stack,
       });
-      
+
       // Re-throw with more context
       if (error.message.includes('User not found')) {
         throw error;
