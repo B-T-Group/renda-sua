@@ -4421,43 +4421,68 @@ export class OrdersService {
 
   /**
    * Update reserved quantities for business inventory items
+   * Optimized to batch reads and parallelize writes
    */
   private async updateReservedQuantities(
     orderItems: any[],
     operation: 'increment' | 'decrement'
   ): Promise<void> {
     try {
-      for (const item of orderItems) {
+      // Filter out items with missing data
+      const validItems = orderItems.filter(
+        (item) => item.business_inventory_id && item.quantity
+      );
+
+      if (validItems.length === 0) {
+        this.logger.warn('No valid items to update reserved quantities for');
+        return;
+      }
+
+      // Log warnings for invalid items
+      const invalidItems = orderItems.filter(
+        (item) => !item.business_inventory_id || !item.quantity
+      );
+      if (invalidItems.length > 0) {
+        this.logger.warn(
+          `Skipping ${
+            invalidItems.length
+          } items with missing data: ${JSON.stringify(invalidItems)}`
+        );
+      }
+
+      // Collect all business inventory IDs
+      const businessInventoryIds = validItems.map(
+        (item) => item.business_inventory_id
+      );
+
+      // Batch read: Get all current reserved quantities in a single query
+      const getCurrentQuantitiesQuery = `
+        query GetCurrentReservedQuantities($ids: [uuid!]!) {
+          business_inventory(where: { id: { _in: $ids } }) {
+            id
+            reserved_quantity
+            quantity
+          }
+        }
+      `;
+
+      const currentData = await this.hasuraSystemService.executeQuery(
+        getCurrentQuantitiesQuery,
+        { ids: businessInventoryIds }
+      );
+
+      // Create a map of current quantities for quick lookup
+      const quantityMap = new Map<string, number>();
+      (currentData.business_inventory || []).forEach((inv: any) => {
+        quantityMap.set(inv.id, inv.reserved_quantity || 0);
+      });
+
+      // Calculate all new reserved quantities
+      const updates = validItems.map((item) => {
         const businessInventoryId = item.business_inventory_id;
         const quantity = item.quantity;
-
-        if (!businessInventoryId || !quantity) {
-          this.logger.warn(
-            `Skipping reserved quantity update for item with missing data: ${JSON.stringify(
-              item
-            )}`
-          );
-          continue;
-        }
-
-        // First, get the current reserved quantity
-        const getCurrentQuantityQuery = `
-          query GetCurrentReservedQuantity($id: uuid!) {
-            business_inventory_by_pk(id: $id) {
-              id
-              reserved_quantity
-              quantity
-            }
-          }
-        `;
-
-        const currentData = await this.hasuraSystemService.executeQuery(
-          getCurrentQuantityQuery,
-          { id: businessInventoryId }
-        );
-
         const currentReservedQuantity =
-          currentData.business_inventory_by_pk?.reserved_quantity || 0;
+          quantityMap.get(businessInventoryId) || 0;
 
         // Calculate new reserved quantity
         const newReservedQuantity =
@@ -4468,7 +4493,16 @@ export class OrdersService {
         // Ensure reserved quantity doesn't go below 0
         const finalReservedQuantity = Math.max(0, newReservedQuantity);
 
-        // Update with the new reserved quantity
+        return {
+          id: businessInventoryId,
+          currentReservedQuantity,
+          finalReservedQuantity,
+          quantity,
+        };
+      });
+
+      // Batch update: Execute all updates in parallel
+      const updatePromises = updates.map((update) => {
         const updateMutation = `
           mutation UpdateReservedQuantity($id: uuid!, $reservedQuantity: Int!) {
             update_business_inventory_by_pk(
@@ -4482,15 +4516,20 @@ export class OrdersService {
           }
         `;
 
-        await this.hasuraSystemService.executeQuery(updateMutation, {
-          id: businessInventoryId,
-          reservedQuantity: finalReservedQuantity,
+        return this.hasuraSystemService.executeQuery(updateMutation, {
+          id: update.id,
+          reservedQuantity: update.finalReservedQuantity,
         });
+      });
 
+      await Promise.all(updatePromises);
+
+      // Log all updates
+      updates.forEach((update) => {
         this.logger.log(
-          `Updated reserved quantity for inventory ${businessInventoryId}: ${currentReservedQuantity} -> ${finalReservedQuantity} (${operation} ${quantity})`
+          `Updated reserved quantity for inventory ${update.id}: ${update.currentReservedQuantity} -> ${update.finalReservedQuantity} (${operation} ${update.quantity})`
         );
-      }
+      });
     } catch (error) {
       this.logger.error(
         `Failed to update reserved quantities: ${

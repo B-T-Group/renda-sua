@@ -243,83 +243,87 @@ export class OrderStatusService {
   private async getOrderDetailsForNotification(
     orderId: string
   ): Promise<NotificationData | null> {
-    // Fetch order with all related data for notifications
-    const query = `
-      query GetOrderForNotification($orderId: uuid!) {
-        orders_by_pk(id: $orderId) {
-          id
-          order_number
-          current_status
-          subtotal
-          base_delivery_fee
-          per_km_delivery_fee
-          tax_amount
-          total_amount
-          currency
-          estimated_delivery_time
-          special_instructions
-          delivery_time_window_id
-          client {
-            user {
-              first_name
-              last_name
-              email
-            }
-          }
-          business {
-            name
-            is_verified
-            user {
-              email
-            }
-          }
-          assigned_agent {
-            user {
-              first_name
-              last_name
-              email
-            }
-          }
-          delivery_address {
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-          }
-          order_items {
-            item_name
-            quantity
-            unit_price
-            total_price
-          }
-          delivery_time_window: delivery_time_windows(where: { is_confirmed: { _eq: true } }, limit: 1) {
+    try {
+      // Fetch order with all related data for notifications
+      const query = `
+        query GetOrderForNotification($orderId: uuid!) {
+          orders_by_pk(id: $orderId) {
             id
-            preferred_date
-            time_slot_start
-            time_slot_end
+            order_number
+            current_status
+            subtotal
+            base_delivery_fee
+            per_km_delivery_fee
+            tax_amount
+            total_amount
+            currency
+            estimated_delivery_time
             special_instructions
-            slot: delivery_time_slots {
-              slot_name
-              slot_type
+            delivery_time_window_id
+            client {
+              user {
+                first_name
+                last_name
+                email
+              }
+            }
+            business {
+              name
+              is_verified
+              user {
+                email
+              }
+            }
+            assigned_agent {
+              user {
+                first_name
+                last_name
+                email
+              }
+            }
+            delivery_address {
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
+            order_items {
+              item_name
+              quantity
+              unit_price
+              total_price
+            }
+            delivery_time_windows(where: { is_confirmed: { _eq: true } }, limit: 1, order_by: { created_at: desc }) {
+              id
+              preferred_date
+              time_slot_start
+              time_slot_end
+              special_instructions
+              slot {
+                slot_name
+                slot_type
+              }
             }
           }
         }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        orderId,
+      });
+      const order = result.orders_by_pk;
+
+      if (!order) {
+        this.logger.warn(`Order not found for notification: ${orderId}`);
+        return null;
       }
-    `;
-
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      orderId,
-    });
-    const order = result.orders_by_pk;
-
-    if (!order) return null;
 
     // Format delivery window details if available
     let deliveryTimeWindow: string | undefined;
-    if (order.delivery_time_window && order.delivery_time_window.length > 0) {
-      const window = order.delivery_time_window[0];
+    if (order.delivery_time_windows && order.delivery_time_windows.length > 0) {
+      const window = order.delivery_time_windows[0];
       const windowDate = new Date(window.preferred_date);
       const formattedDate = windowDate.toLocaleDateString('en-US', {
         year: 'numeric',
@@ -341,34 +345,57 @@ export class OrderStatusService {
       }
     }
 
+    // Safely extract client information with null checks
+    const clientName = order.client?.user
+      ? `${order.client.user.first_name || ''} ${order.client.user.last_name || ''}`.trim() || 'Unknown Client'
+      : 'Unknown Client';
+    const clientEmail = order.client?.user?.email || '';
+
+    // Safely extract business information with null checks
+    const businessName = order.business?.name || 'Unknown Business';
+    const businessEmail = order.business?.user?.email || '';
+    const businessVerified = order.business?.is_verified || false;
+
+    // Safely extract agent information with null checks
+    const agentName = order.assigned_agent?.user
+      ? `${order.assigned_agent.user.first_name || ''} ${order.assigned_agent.user.last_name || ''}`.trim() || undefined
+      : undefined;
+    const agentEmail = order.assigned_agent?.user?.email;
+
     return {
       orderId: order.id,
       orderNumber: order.order_number,
-      clientName: `${order.client.user.first_name} ${order.client.user.last_name}`,
-      clientEmail: order.client.user.email,
-      businessName: order.business.name,
-      businessEmail: order.business.user.email,
-      businessVerified: order.business.is_verified,
-      agentName: order.assigned_agent
-        ? `${order.assigned_agent.user.first_name} ${order.assigned_agent.user.last_name}`
-        : undefined,
-      agentEmail: order.assigned_agent?.user.email,
+      clientName,
+      clientEmail,
+      businessName,
+      businessEmail,
+      businessVerified,
+      agentName,
+      agentEmail,
       orderStatus: order.current_status,
-      orderItems: order.order_items.map((item: any) => ({
-        name: item.item_name,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        totalPrice: item.total_price,
+      orderItems: (order.order_items || []).map((item: any) => ({
+        name: item.item_name || 'Unknown Item',
+        quantity: item.quantity || 0,
+        unitPrice: item.unit_price || 0,
+        totalPrice: item.total_price || 0,
       })),
-      subtotal: order.subtotal,
-      deliveryFee: order.base_delivery_fee + order.per_km_delivery_fee,
-      taxAmount: order.tax_amount,
-      totalAmount: order.total_amount,
-      currency: order.currency,
+      subtotal: order.subtotal || 0,
+      deliveryFee: (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
+      taxAmount: order.tax_amount || 0,
+      totalAmount: order.total_amount || 0,
+      currency: order.currency || 'USD',
       deliveryAddress: this.formatAddress(order.delivery_address),
       estimatedDeliveryTime: deliveryTimeWindow || order.estimated_delivery_time,
       specialInstructions: order.special_instructions,
     };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to get order details for notification: ${orderId}`,
+        error.stack || error.message
+      );
+      // Return null instead of throwing to prevent breaking the order status update
+      return null;
+    }
   }
 
   /**

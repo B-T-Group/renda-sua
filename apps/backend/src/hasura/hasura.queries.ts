@@ -19,6 +19,93 @@ export const GET_USER_BY_IDENTIFIER = gql`
   }
 `;
 
+// Consolidated query for getting user by identifier with all related data (client/agent/business and addresses)
+export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
+  query GetUserByIdentifierWithRelations($identifier: String!) {
+    users(where: { identifier: { _eq: $identifier } }) {
+      id
+      identifier
+      email
+      first_name
+      last_name
+      phone_number
+      phone_number_verified
+      email_verified
+      user_type_id
+      created_at
+      updated_at
+      client {
+        id
+        user_id
+        client_addresses {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            created_at
+            updated_at
+          }
+        }
+        created_at
+        updated_at
+      }
+      agent {
+        id
+        user_id
+        vehicle_type_id
+        is_verified
+        agent_addresses {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            created_at
+            updated_at
+          }
+        }
+        created_at
+        updated_at
+      }
+      business {
+        id
+        user_id
+        name
+        is_admin
+        is_verified
+        business_addresses {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            created_at
+            updated_at
+          }
+        }
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
+
 // Query for getting user by ID
 export const GET_USER_BY_ID = gql`
   query GetUserById($userId: uuid!) {

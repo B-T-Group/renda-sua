@@ -1,4 +1,4 @@
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { REQUEST } from '@nestjs/core';
 import { GraphQLClient } from 'graphql-request';
@@ -12,7 +12,10 @@ import {
   Users,
 } from '../generated/graphql';
 import { HasuraSystemService } from './hasura-system.service';
-import { GET_USER_BY_IDENTIFIER } from './hasura.queries';
+import {
+  GET_USER_BY_IDENTIFIER,
+  GET_USER_BY_IDENTIFIER_WITH_RELATIONS,
+} from './hasura.queries';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -60,6 +63,7 @@ export interface OrderResult {
 
 @Injectable({ scope: Scope.REQUEST })
 export class HasuraUserService {
+  private readonly logger = new Logger(HasuraUserService.name);
   public identifier!: string;
   private readonly hasuraUrl: string;
   private _authToken: string | null = null;
@@ -629,65 +633,125 @@ export class HasuraUserService {
       addresses?: Addresses[];
     }
   > {
-    const userResult = await this.executeQuery<GetUserByIdentifierQuery>(
-      GET_USER_BY_IDENTIFIER,
-      {
+    // Validate identifier exists
+    if (!this.identifier) {
+      throw new Error('User identifier is missing from authentication token');
+    }
+
+    try {
+      // Use consolidated query to fetch user with all related data in one request
+      const userResult = await this.executeQuery<any>(
+        GET_USER_BY_IDENTIFIER_WITH_RELATIONS,
+        {
+          identifier: this.identifier,
+        }
+      );
+
+      if (!userResult.users || userResult.users.length === 0) {
+        throw new Error(`User not found with identifier: ${this.identifier}`);
+      }
+
+      const userData = userResult.users[0];
+
+      // Extract addresses from the appropriate junction table based on user type
+      let addresses: Addresses[] = [];
+      if (userData.client?.client_addresses) {
+        addresses = userData.client.client_addresses
+          .map((ca: any) => {
+            const address = ca.address;
+            if (!address) return null;
+
+            // Create formatted address
+            const addressParts = [
+              address.address_line_1,
+              address.address_line_2,
+              address.city,
+              address.state,
+              address.postal_code,
+              address.country,
+            ].filter((part) => part && part.trim() !== '');
+
+            return {
+              ...address,
+              formatted_address: addressParts.join(', '),
+            };
+          })
+          .filter(Boolean);
+      } else if (userData.agent?.agent_addresses) {
+        addresses = userData.agent.agent_addresses
+          .map((aa: any) => {
+            const address = aa.address;
+            if (!address) return null;
+
+            const addressParts = [
+              address.address_line_1,
+              address.address_line_2,
+              address.city,
+              address.state,
+              address.postal_code,
+              address.country,
+            ].filter((part) => part && part.trim() !== '');
+
+            return {
+              ...address,
+              formatted_address: addressParts.join(', '),
+            };
+          })
+          .filter(Boolean);
+      } else if (userData.business?.business_addresses) {
+        addresses = userData.business.business_addresses
+          .map((ba: any) => {
+            const address = ba.address;
+            if (!address) return null;
+
+            const addressParts = [
+              address.address_line_1,
+              address.address_line_2,
+              address.city,
+              address.state,
+              address.postal_code,
+              address.country,
+            ].filter((part) => part && part.trim() !== '');
+
+            return {
+              ...address,
+              formatted_address: addressParts.join(', '),
+            };
+          })
+          .filter(Boolean);
+      }
+
+      // Build the user object with all data
+      const user: Users & {
+        client?: Clients;
+        agent?: Agents;
+        business?: Businesses;
+        addresses?: Addresses[];
+      } = {
+        ...userData,
+        client: userData.client || undefined,
+        agent: userData.agent || undefined,
+        business: userData.business || undefined,
+        addresses: addresses as Addresses[],
+      };
+
+      return user;
+    } catch (error: any) {
+      // Log the error for debugging
+      this.logger.error('Error in getUser()', {
         identifier: this.identifier,
+        error: error.message,
+        stack: error.stack,
+      });
+      
+      // Re-throw with more context
+      if (error.message.includes('User not found')) {
+        throw error;
       }
-    );
-
-    if (!userResult.users || userResult.users.length === 0) {
-      throw new Error('User not found');
+      throw new Error(
+        `Failed to get user by identifier: ${error.message || 'Unknown error'}`
+      );
     }
-
-    const user: Users & {
-      client?: Clients;
-      agent?: Agents;
-      business?: Businesses;
-      addresses?: Addresses[];
-    } = userResult.users[0] as Users & {
-      client?: Clients;
-      agent?: Agents;
-      business?: Businesses;
-      addresses?: Addresses[];
-    };
-
-    // Get user type-specific data
-    switch (user.user_type_id) {
-      case 'client': {
-        const client = await this.hasuraSystemService.getUserClient(user.id);
-        user.client = client as Clients;
-        break;
-      }
-      case 'agent': {
-        const agent = await this.hasuraSystemService.getUserAgent(user.id);
-        user.agent = agent as Agents;
-        break;
-      }
-      case 'business': {
-        const business = await this.hasuraSystemService.getUserBusiness(
-          user.id
-        );
-        user.business = business as Businesses;
-        break;
-      }
-      default:
-        throw new Error('Invalid user type');
-    }
-
-    // Get user addresses
-    const addresses = await this.hasuraSystemService.getAllUserAddresses(
-      user.id,
-      user.user_type_id
-    );
-    user.addresses = addresses as Addresses[];
-
-    return user as Users & {
-      client?: Clients;
-      agent?: Agents;
-      business?: Businesses;
-      addresses?: Addresses[];
-    };
   }
 
   /**

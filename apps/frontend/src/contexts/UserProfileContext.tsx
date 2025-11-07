@@ -286,9 +286,11 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
 
   // GraphQL query for accounts
+  // Note: This query relies on Hasura RLS to filter by authenticated user
+  // The index on accounts.user_id ensures efficient filtering
   const GET_ACCOUNTS = `
     query GetAccounts {
-      accounts {
+      accounts(where: { is_active: { _eq: true } }, order_by: { created_at: desc }) {
         id
         user_id
         currency

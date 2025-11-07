@@ -35,17 +35,19 @@ export class DeliverySlotsService {
 
   /**
    * Get available delivery time slots for a specific location and date
+   * Optimized to batch capacity checks in a single query
    */
   async getAvailableSlots(
     countryCode: string,
     stateCode: string,
     date: string,
-    isFastDelivery: boolean = false
+    isFastDelivery = false
   ): Promise<AvailableSlot[]> {
     try {
       const slotType = isFastDelivery ? 'fast' : 'standard';
 
-      const query = `
+      // First, get all slots for the location
+      const slotsQuery = `
         query GetAvailableSlots($country_code: bpchar!, $state: String!, $slot_type: String!) {
           delivery_time_slots(
             where: {
@@ -70,25 +72,75 @@ export class DeliverySlotsService {
         }
       `;
 
-      const response = await this.hasuraSystemService.executeQuery(query, {
-        country_code: countryCode,
-        state: stateCode,
-        slot_type: slotType,
+      const slotsResponse = await this.hasuraSystemService.executeQuery(
+        slotsQuery,
+        {
+          country_code: countryCode,
+          state: stateCode,
+          slot_type: slotType,
+        }
+      );
+
+      const slots = slotsResponse.delivery_time_slots || [];
+
+      if (slots.length === 0) {
+        return [];
+      }
+
+      // Batch capacity check: Get booking counts for all slots in a single query
+      const slotIds = slots.map((slot: DeliveryTimeSlot) => slot.id);
+
+      const capacityQuery = `
+        query GetSlotCapacities($slot_ids: [uuid!]!, $date: date!) {
+          delivery_time_slots(where: { id: { _in: $slot_ids } }) {
+            id
+            max_orders_per_slot
+          }
+          delivery_time_windows(
+            where: {
+              slot_id: { _in: $slot_ids },
+              preferred_date: { _eq: $date }
+            }
+          ) {
+            slot_id
+          }
+        }
+      `;
+
+      const capacityResponse = await this.hasuraSystemService.executeQuery(
+        capacityQuery,
+        {
+          slot_ids: slotIds,
+          date: date,
+        }
+      );
+
+      // Create a map of slot capacities
+      const slotCapacityMap = new Map<string, number>();
+      (capacityResponse.delivery_time_slots || []).forEach((slot: any) => {
+        slotCapacityMap.set(slot.id, slot.max_orders_per_slot || 0);
       });
 
-      const slots = response.delivery_time_slots || [];
+      // Count bookings per slot
+      const bookingCountMap = new Map<string, number>();
+      (capacityResponse.delivery_time_windows || []).forEach((window: any) => {
+        const slotId = window.slot_id;
+        bookingCountMap.set(slotId, (bookingCountMap.get(slotId) || 0) + 1);
+      });
 
-      // Get capacity information for each slot
-      const slotsWithCapacity = await Promise.all(
-        slots.map(async (slot: DeliveryTimeSlot) => {
-          const capacity = await this.checkSlotCapacity(slot.id, date);
-          return {
-            ...slot,
-            available_capacity: capacity.available_capacity,
-            is_available: capacity.available_capacity > 0,
-          };
-        })
-      );
+      // Calculate available capacity for each slot
+      const slotsWithCapacity = slots.map((slot: DeliveryTimeSlot) => {
+        const totalCapacity =
+          slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
+        const bookedCount = bookingCountMap.get(slot.id) || 0;
+        const availableCapacity = Math.max(0, totalCapacity - bookedCount);
+
+        return {
+          ...slot,
+          available_capacity: availableCapacity,
+          is_available: availableCapacity > 0,
+        };
+      });
 
       return slotsWithCapacity;
     } catch (error) {
