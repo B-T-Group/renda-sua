@@ -17,6 +17,10 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  OrderMessage,
+  useOrderMessages,
+} from '../../hooks/useOrderMessages';
 import { UserMessage, useUserMessages } from '../../hooks/useUserMessages';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -47,47 +51,88 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const {
-    messages,
-    loading,
-    error,
-    createMessage,
-    getMessagesForEntity,
-    formatDate,
-  } = useUserMessages();
+  const isOrder = entityType === 'order';
+
+  // Use order-specific hook for orders, otherwise use general user messages hook
+  const orderMessagesHook = useOrderMessages();
+  const userMessagesHook = useUserMessages();
+
+  // Select the appropriate hook based on entity type
+  const messagesHook = isOrder ? orderMessagesHook : userMessagesHook;
 
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [viewAllDialog, setViewAllDialog] = useState(false);
 
-  // Get messages for this specific entity
-  const entityMessages = getMessagesForEntity(entityType, entityId);
+  // Get messages - for orders, use the messages directly; for others, filter by entity
+  const entityMessages = isOrder
+    ? (messagesHook.messages as OrderMessage[])
+    : (userMessagesHook.getMessagesForEntity(entityType, entityId) as UserMessage[]);
+
+  // Convert OrderMessage to UserMessage format for consistent display
+  const normalizedMessages: UserMessage[] = entityMessages.map((msg) => ({
+    id: msg.id,
+    user_id: msg.user_id,
+    entity_type: msg.entity_type,
+    entity_id: msg.entity_id,
+    message: msg.message,
+    created_at: msg.created_at,
+    updated_at: msg.updated_at,
+    user: {
+      id: msg.user.id,
+      first_name: msg.user.first_name,
+      last_name: msg.user.last_name,
+      email: msg.user.email,
+    },
+    entity_type_info: msg.entity_type_info,
+  }));
+
   const visibleMessages = expanded
-    ? entityMessages.slice(0, maxVisibleMessages)
+    ? normalizedMessages.slice(0, maxVisibleMessages)
     : [];
-  const hasMoreMessages = entityMessages.length > maxVisibleMessages;
+  const hasMoreMessages = normalizedMessages.length > maxVisibleMessages;
 
   // Fetch messages when component mounts or entity changes
   useEffect(() => {
-    // The hook should handle fetching, but we can trigger a refresh if needed
-  }, [entityType, entityId]);
+    if (isOrder && entityId) {
+      // For orders, explicitly fetch messages
+      orderMessagesHook.fetchMessages(entityId);
+    }
+    // For other entity types, the useUserMessages hook handles fetching automatically
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityType, entityId, isOrder]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || sending) return;
 
     setSending(true);
     try {
-      const success = await createMessage(
-        entityType,
-        entityId,
-        newMessage.trim()
-      );
+      let success = false;
+      if (isOrder) {
+        // Use order-specific message sending
+        success = await orderMessagesHook.sendMessage(
+          entityId,
+          newMessage.trim()
+        );
+      } else {
+        // Use general message sending
+        success = await userMessagesHook.createMessage(
+          entityType,
+          entityId,
+          newMessage.trim()
+        );
+      }
+
       if (success) {
         setNewMessage('');
         // Ensure messages section is expanded after sending
         if (!expanded) {
           setExpanded(true);
+        }
+        // Refresh messages for orders
+        if (isOrder) {
+          await orderMessagesHook.refetch(entityId);
         }
       }
     } catch (error) {
@@ -95,7 +140,16 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     } finally {
       setSending(false);
     }
-  }, [newMessage, entityType, entityId, createMessage, sending, expanded]);
+  }, [
+    newMessage,
+    entityType,
+    entityId,
+    isOrder,
+    orderMessagesHook,
+    userMessagesHook,
+    sending,
+    expanded,
+  ]);
 
   const handleToggleExpanded = () => {
     setExpanded(!expanded);
@@ -119,6 +173,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
       .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
       .replace(/\n/g, '<br>');
   };
+
+  // Use error from the appropriate hook
+  const error = messagesHook.error;
 
   if (error) {
     return (
@@ -155,9 +212,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                 >
                   {title || t('messages.title', 'Messages')}
                 </Typography>
-                {entityMessages.length > 0 && (
+                {normalizedMessages.length > 0 && (
                   <Chip
-                    label={entityMessages.length}
+                    label={normalizedMessages.length}
                     size="small"
                     color="primary"
                     variant="outlined"
@@ -182,7 +239,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                 {/* Messages List */}
                 {visibleMessages.length > 0 ? (
                   <Stack spacing={1} sx={{ mb: 2 }}>
-                    {visibleMessages.map((message: UserMessage) => (
+                    {visibleMessages.map((message) => (
                       <Box
                         key={message.id}
                         sx={{
@@ -205,7 +262,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                             {message.user?.first_name} {message.user?.last_name}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {formatDate(message.created_at)}
+                            {isOrder
+                              ? new Date(message.created_at).toLocaleString()
+                              : userMessagesHook.formatDate(message.created_at)}
                           </Typography>
                         </Box>
                         <Typography
@@ -253,7 +312,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                   <Box sx={{ textAlign: 'center', mb: 2 }}>
                     <Button size="small" variant="text" onClick={handleViewAll}>
                       {t('messages.viewAll', 'View All Messages')} (
-                      {entityMessages.length})
+                      {normalizedMessages.length})
                     </Button>
                   </Box>
                 )}
@@ -319,7 +378,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
           >
             <Typography variant="h6">
               {t('messages.allMessages', 'All Messages')} (
-              {entityMessages.length})
+              {normalizedMessages.length})
             </Typography>
             <IconButton onClick={handleCloseViewAll}>
               <Close />
@@ -327,9 +386,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
           </Box>
         </DialogTitle>
         <DialogContent>
-          {entityMessages.length > 0 ? (
+          {normalizedMessages.length > 0 ? (
             <Stack spacing={2}>
-              {entityMessages.map((message: UserMessage) => (
+              {normalizedMessages.map((message) => (
                 <Box
                   key={message.id}
                   sx={{
@@ -352,7 +411,9 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                       {message.user?.first_name} {message.user?.last_name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {formatDate(message.created_at)}
+                      {isOrder
+                        ? new Date(message.created_at).toLocaleString()
+                        : userMessagesHook.formatDate(message.created_at)}
                     </Typography>
                   </Box>
                   <Typography

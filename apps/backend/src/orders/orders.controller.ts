@@ -930,4 +930,212 @@ export class OrdersController {
       );
     }
   }
+
+  @Get(':orderId/messages')
+  @ApiOperation({ summary: 'Get all messages for a specific order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Messages retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        messages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              user_id: { type: 'string', format: 'uuid' },
+              entity_type: { type: 'string' },
+              entity_id: { type: 'string', format: 'uuid' },
+              message: { type: 'string' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  identifier: { type: 'string' },
+                  email: { type: 'string' },
+                  first_name: { type: 'string' },
+                  last_name: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Unauthorized to access messages for this order',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  async getOrderMessages(@Param('orderId') orderId: string) {
+    try {
+      const messages = await this.ordersService.getOrderMessages(orderId);
+      return {
+        success: true,
+        messages,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (errorMessage.includes('Unauthorized')) {
+        statusCode = HttpStatus.FORBIDDEN;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
+  }
+
+  @Post(':orderId/messages')
+  @ApiOperation({ summary: 'Create a new message for a specific order' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'The message content' },
+      },
+      required: ['message'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Message created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            user_id: { type: 'string', format: 'uuid' },
+            entity_type: { type: 'string' },
+            entity_id: { type: 'string', format: 'uuid' },
+            message: { type: 'string' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                identifier: { type: 'string' },
+                email: { type: 'string' },
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid data or empty message',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Unauthorized to post messages for this order',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  async createOrderMessage(
+    @Param('orderId') orderId: string,
+    @Body() body: { message: string }
+  ) {
+    try {
+      const createdMessage = await this.ordersService.createOrderMessage(
+        orderId,
+        body.message
+      );
+      return {
+        success: true,
+        message: createdMessage,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (errorMessage.includes('Unauthorized')) {
+        statusCode = HttpStatus.FORBIDDEN;
+      } else if (
+        errorMessage.includes('empty') ||
+        errorMessage.includes('required')
+      ) {
+        statusCode = HttpStatus.BAD_REQUEST;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
+  }
 }

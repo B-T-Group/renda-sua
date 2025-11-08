@@ -2452,6 +2452,188 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Get all messages for a specific order
+   * Accessible by:
+   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Client that made the order (order.client_id)
+   * - Agent assigned to the order (order.assigned_agent_id)
+   */
+  async getOrderMessages(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+
+    // First, get the order to check ownership
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Check access permissions (same logic as getOrderById)
+    let hasAccess = false;
+
+    if (user.business) {
+      // Business users can access if they own the order or are admin
+      if (order.business_id === user.business.id || user.business.is_admin) {
+        hasAccess = true;
+      }
+    } else if (user.client && order.client_id === user.client.id) {
+      // Client can access their own orders
+      hasAccess = true;
+    } else if (
+      user.agent &&
+      (order.assigned_agent_id === user.agent.id ||
+        order.assigned_agent_id === null)
+    ) {
+      // Agent can access orders assigned to them
+      hasAccess = true;
+    }
+
+    if (!hasAccess) {
+      throw new HttpException(
+        'Unauthorized to access messages for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Query messages for this order
+    const query = `
+      query GetOrderMessages($orderId: uuid!, $entityType: entity_types_enum!) {
+        user_messages(
+          where: {
+            entity_id: { _eq: $orderId }
+            entity_type: { _eq: $entityType }
+          }
+          order_by: { created_at: desc }
+        ) {
+          id
+          user_id
+          entity_type
+          entity_id
+          message
+          created_at
+          updated_at
+          user {
+            id
+            identifier
+            email
+            first_name
+            last_name
+          }
+          entity_type_info {
+            id
+            comment
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      orderId,
+      entityType: 'order',
+    });
+
+    return result.user_messages || [];
+  }
+
+  /**
+   * Create a new message for a specific order
+   * Accessible by:
+   * - Business that owns the order (order.business_id or business with is_admin=true)
+   * - Client that made the order (order.client_id)
+   * - Agent assigned to the order (order.assigned_agent_id)
+   */
+  async createOrderMessage(orderId: string, message: string) {
+    const user = await this.hasuraUserService.getUser();
+
+    // First, get the order to check ownership
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Check access permissions (same logic as getOrderById)
+    let hasAccess = false;
+
+    if (user.business) {
+      // Business users can access if they own the order or are admin
+      if (order.business_id === user.business.id || user.business.is_admin) {
+        hasAccess = true;
+      }
+    } else if (user.client && order.client_id === user.client.id) {
+      // Client can access their own orders
+      hasAccess = true;
+    } else if (
+      user.agent &&
+      (order.assigned_agent_id === user.agent.id ||
+        order.assigned_agent_id === null)
+    ) {
+      // Agent can access orders assigned to them
+      hasAccess = true;
+    }
+
+    if (!hasAccess) {
+      throw new HttpException(
+        'Unauthorized to post messages for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Validate message
+    if (!message || !message.trim()) {
+      throw new HttpException(
+        'Message cannot be empty',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Create the message
+    const mutation = `
+      mutation CreateOrderMessage($user_id: uuid!, $entity_type: entity_types_enum!, $entity_id: uuid!, $message: String!) {
+        insert_user_messages_one(object: {
+          user_id: $user_id,
+          entity_type: $entity_type,
+          entity_id: $entity_id,
+          message: $message
+        }) {
+          id
+          user_id
+          entity_type
+          entity_id
+          message
+          created_at
+          updated_at
+          user {
+            id
+            identifier
+            email
+            first_name
+            last_name
+          }
+          entity_type_info {
+            id
+            comment
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(mutation, {
+      user_id: user.id,
+      entity_type: 'order',
+      entity_id: orderId,
+      message: message.trim(),
+    });
+
+    if (!result.insert_user_messages_one) {
+      throw new HttpException(
+        'Failed to create message',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    return result.insert_user_messages_one;
+  }
+
   async dropOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent) {
