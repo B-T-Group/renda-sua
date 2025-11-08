@@ -1,21 +1,23 @@
 /**
  * Agent Location Tracker Hook
- * 
+ *
  * Tracks agent location coordinates and updates them periodically (every 15-30 minutes).
  * Works in the background using Service Worker and Background Sync API.
  */
 
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { environment } from '../config/environment';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
-import { useGraphQLRequest } from './useGraphQLRequest';
 import {
+  clearQueuedUpdates,
   getQueuedUpdates,
   isBackgroundSyncSupported,
+  QueuedLocationUpdate,
   queueLocationUpdate,
   registerBackgroundSync,
 } from '../utils/backgroundLocationSync';
-import { environment } from '../config/environment';
+import { useGraphQLRequest } from './useGraphQLRequest';
 
 // Default update interval: 20 minutes (1200000 ms)
 const DEFAULT_UPDATE_INTERVAL = 20 * 60 * 1000;
@@ -173,7 +175,9 @@ export const useAgentLocationTracker = (
 
         if (distance < MIN_DISTANCE_CHANGE) {
           console.log(
-            `Location change too small (${distance.toFixed(0)}m), skipping update`
+            `Location change too small (${distance.toFixed(
+              0
+            )}m), skipping update`
           );
           return;
         }
@@ -204,6 +208,9 @@ export const useAgentLocationTracker = (
             longitude: coordinates.longitude.toString(),
           },
         });
+
+        // Clear any queued updates since we just successfully updated directly
+        clearQueuedUpdates();
       }
 
       setLastUpdate(Date.now());
@@ -213,15 +220,20 @@ export const useAgentLocationTracker = (
         longitude: coordinates.longitude,
       });
     } catch (err: any) {
-      const errorMessage =
-        err.message || 'Failed to update agent location';
+      const errorMessage = err.message || 'Failed to update agent location';
       setError(errorMessage);
       console.error('Error updating location:', err);
       // Don't throw - this is a background operation
     } finally {
       isUpdatingRef.current = false;
     }
-  }, [isAgent, profile, getCurrentCoordinates, insertLocation, enableBackgroundSync]);
+  }, [
+    isAgent,
+    profile,
+    getCurrentCoordinates,
+    insertLocation,
+    enableBackgroundSync,
+  ]);
 
   /**
    * Start tracking
@@ -263,7 +275,13 @@ export const useAgentLocationTracker = (
     }, updateInterval);
 
     setIsTracking(true);
-  }, [isAgent, isAuthenticated, updateLocation, updateInterval, enableBackgroundSync]);
+  }, [
+    isAgent,
+    isAuthenticated,
+    updateLocation,
+    updateInterval,
+    enableBackgroundSync,
+  ]);
 
   /**
    * Stop tracking
@@ -309,7 +327,7 @@ export const useAgentLocationTracker = (
           try {
             const updates = getQueuedUpdates();
             const token = await getAccessTokenSilently();
-            
+
             // Send data to service worker
             const registration = await navigator.serviceWorker.ready;
             if (registration.active) {
@@ -323,6 +341,31 @@ export const useAgentLocationTracker = (
           } catch (error) {
             console.error('Error handling location sync request:', error);
           }
+        } else if (event.data.type === 'CLEAR_LOCATION_UPDATES') {
+          // Service worker is notifying us to clear successful updates
+          const { succeededIds } = event.data;
+          if (succeededIds && succeededIds.length > 0) {
+            const queue = getQueuedUpdates();
+            const remaining = queue.filter(
+              (update: QueuedLocationUpdate) =>
+                !succeededIds.includes(update.id)
+            );
+
+            if (remaining.length === 0) {
+              // Clear all if no remaining updates
+              clearQueuedUpdates();
+            } else {
+              // Update queue with only remaining updates
+              localStorage.setItem(
+                'agent_location_queue',
+                JSON.stringify(remaining)
+              );
+            }
+
+            console.log(
+              `Cleared ${succeededIds.length} successful location updates from queue`
+            );
+          }
         }
       };
 
@@ -332,6 +375,7 @@ export const useAgentLocationTracker = (
         navigator.serviceWorker.removeEventListener('message', handleMessage);
       };
     }
+    return undefined;
   }, [isAuthenticated, getAccessTokenSilently]);
 
   return {
@@ -343,4 +387,3 @@ export const useAgentLocationTracker = (
     stopTracking,
   };
 };
-

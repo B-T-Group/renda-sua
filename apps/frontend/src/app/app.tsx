@@ -8,11 +8,11 @@ import LoadingScreen from '../components/common/LoadingScreen';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
 import AboutUsPage from '../components/pages/AboutUsPage';
+import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
-import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import AppRedirect from '../components/pages/AppRedirect';
@@ -43,8 +43,8 @@ import SupportPage from '../components/pages/SupportPage';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
-import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
+import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth0();

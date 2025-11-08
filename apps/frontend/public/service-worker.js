@@ -1,6 +1,6 @@
 /**
  * Service Worker for Background Location Sync
- * 
+ *
  * Handles background sync events to update agent locations even when the app is closed.
  * This is a standalone JavaScript file (not TypeScript) because service workers
  * must be served as static files from the public directory.
@@ -143,16 +143,45 @@ async function handleLocationSync() {
 self.addEventListener('message', (event) => {
   if (event.data.type === 'LOCATION_SYNC_DATA') {
     const { updates, authToken, hasuraUrl } = event.data;
-    
+
+    console.log('Received location sync data:', {
+      updates,
+      authToken,
+      hasuraUrl,
+    });
+
     // Process all updates
     Promise.all(
-      updates.map((update) => executeLocationUpdate(update, authToken, hasuraUrl))
+      updates.map((update, index) =>
+        executeLocationUpdate(update, authToken, hasuraUrl).then((success) => ({
+          success,
+          updateId: update.id,
+          index,
+        }))
+      )
     ).then((results) => {
-      const succeeded = results.filter((r) => r === true).length;
-      const failed = results.filter((r) => r === false).length;
+      const succeeded = results.filter((r) => r.success === true);
+      const failed = results.filter((r) => r.success === false);
+      const succeededIds = succeeded.map((r) => r.updateId);
+
       console.log(
-        `Location sync complete: ${succeeded} succeeded, ${failed} failed`
+        `Location sync complete: ${succeeded.length} succeeded, ${failed.length} failed`
       );
+
+      // Notify client to clear successful updates from localStorage
+      if (succeededIds.length > 0) {
+        const clients = self.clients.matchAll({
+          includeUncontrolled: true,
+        });
+        clients.then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              type: 'CLEAR_LOCATION_UPDATES',
+              succeededIds,
+            });
+          });
+        });
+      }
     });
   } else if (event.data.type === 'AUTH_TOKEN_UPDATE') {
     // Store token in IndexedDB for service worker use
@@ -205,4 +234,3 @@ function openAuthDB() {
     }
   });
 }
-
