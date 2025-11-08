@@ -44,6 +44,7 @@ import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
 import { useAuthFlow } from '../hooks/useAuthFlow';
+import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth0();
@@ -51,6 +52,9 @@ function App() {
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const { userType } = useUserProfileContext();
   const location = useLocation();
+
+  // Initialize agent location tracking (runs automatically for agents)
+  useAgentLocationTracker();
 
   // Only show loading for auth flow when on /app route
   const shouldShowLoading = useMemo(() => {

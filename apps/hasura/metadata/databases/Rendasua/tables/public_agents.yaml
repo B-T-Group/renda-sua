@@ -45,6 +45,15 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: agent_locations
+    using:
+      manual_configuration:
+        column_mapping:
+          id: agent_id
+        insertion_order: null
+        remote_table:
+          name: agent_locations
+          schema: public
 insert_permissions:
   - role: agent
     permission:

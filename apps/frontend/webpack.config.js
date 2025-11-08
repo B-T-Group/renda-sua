@@ -13,6 +13,10 @@ module.exports = {
       disableDotRule: true,
       htmlAcceptHeaders: ['text/html', 'application/xhtml+xml'],
     },
+    static: {
+      directory: join(__dirname, 'public'),
+      publicPath: '/',
+    },
   },
   plugins: [
     new NxAppWebpackPlugin({
@@ -22,7 +26,7 @@ module.exports = {
       main: './src/main.tsx',
       index: './src/index.html',
       baseHref: '/',
-      assets: ['./src/favicon.ico', './src/assets'],
+      assets: ['./src/favicon.ico', './src/assets', './public'],
       styles: ['./src/styles.css'],
       outputHashing: process.env['NODE_ENV'] === 'production' ? 'all' : 'none',
       optimization: process.env['NODE_ENV'] === 'production',

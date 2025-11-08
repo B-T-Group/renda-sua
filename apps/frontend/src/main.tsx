@@ -15,6 +15,20 @@ import './i18n'; // Initialize i18n
 import ApolloProvider from './providers/ApolloProvider';
 import { theme } from './theme/theme';
 
+// Register service worker for background location tracking
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/service-worker.js')
+      .then((registration) => {
+        console.log('Service Worker registered:', registration.scope);
+      })
+      .catch((error) => {
+        console.error('Service Worker registration failed:', error);
+      });
+  });
+}
+
 // Create auth0 config from environment
 const auth0Config = {
   domain: environment.auth0.domain,

@@ -1,0 +1,52 @@
+table:
+  name: agent_locations
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      columns:
+        - agent_id
+        - latitude
+        - longitude
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - agent_id
+        - latitude
+        - longitude
+        - created_at
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - agent_id
+        - latitude
+        - longitude
+        - created_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - agent_id
+        - latitude
+        - longitude
+        - created_at
+      filter: {}
+
