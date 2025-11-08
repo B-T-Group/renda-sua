@@ -1,5 +1,12 @@
-import { Close, ExpandMore, Message, Send } from '@mui/icons-material';
 import {
+  Close,
+  ExpandMore,
+  Info,
+  Message,
+  Send,
+} from '@mui/icons-material';
+import {
+  Alert,
   Box,
   Button,
   Card,
@@ -298,13 +305,38 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                     ))}
                   </Stack>
                 ) : (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ textAlign: 'center', py: 2 }}
-                  >
-                    {t('messages.noMessages', 'No messages yet')}
-                  </Typography>
+                  <Box sx={{ py: 2 }}>
+                    <Alert
+                      icon={<Info />}
+                      severity="info"
+                      sx={{
+                        mb: 2,
+                        '& .MuiAlert-message': {
+                          width: '100%',
+                        },
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                        {t(
+                          'messages.startConversation',
+                          'Start a conversation'
+                        )}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'messages.conversationPrompt',
+                          'Use this messaging feature to communicate with other parties involved. Ask questions, provide updates, or share important information about this order.'
+                        )}
+                      </Typography>
+                    </Alert>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ textAlign: 'center' }}
+                    >
+                      {t('messages.noMessages', 'No messages yet')}
+                    </Typography>
+                  </Box>
                 )}
 
                 {/* View All Button */}
