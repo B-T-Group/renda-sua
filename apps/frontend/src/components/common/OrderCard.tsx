@@ -575,6 +575,12 @@ const OrderCard: React.FC<OrderCardProps> = ({
                     <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
                       {order.delivery_address.address_line_1},{' '}
                       {order.delivery_address.city}
+                      {profile?.agent?.id &&
+                        order.assigned_agent_id &&
+                        order.assigned_agent_id === profile.agent.id &&
+                        order.client?.user?.phone_number && (
+                          <> • 📞 {order.client.user.phone_number}</>
+                        )}
                     </Typography>
                   </Box>
                 </Box>

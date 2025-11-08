@@ -19,6 +19,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { Order } from '../../hooks/useOrders';
 import ConfirmationModal from './ConfirmationModal';
@@ -38,6 +39,7 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { profile } = useUserProfileContext();
   const { completeOrder } = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [completeConfirmationOpen, setCompleteConfirmationOpen] =
@@ -272,8 +274,15 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
             <strong>Business Location:</strong> {order.business_location?.name}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Client:</strong> {order.client?.user?.first_name}{' '}
-            {order.client?.user?.last_name}
+            <strong>Client:</strong> {order.client?.user?.first_name}
+            {profile?.agent?.id &&
+              order.assigned_agent_id &&
+              order.assigned_agent_id === profile.agent.id &&
+              order.client?.user &&
+              'phone_number' in order.client.user &&
+              order.client.user.phone_number && (
+                <> 📞 {order.client.user.phone_number}</>
+              )}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             <strong>Items:</strong> {order.order_items?.length || 0}
@@ -353,6 +362,14 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           </Typography>
           <Typography variant="body2" color="text.secondary">
             <strong>Delivery:</strong> {formatAddress(order.delivery_address)}
+            {profile?.agent?.id &&
+              order.assigned_agent_id &&
+              order.assigned_agent_id === profile.agent.id &&
+              order.client?.user &&
+              'phone_number' in order.client.user &&
+              order.client.user.phone_number && (
+                <> • 📞 {order.client.user.phone_number}</>
+              )}
           </Typography>
         </Box>
 

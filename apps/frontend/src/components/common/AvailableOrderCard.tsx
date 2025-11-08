@@ -350,7 +350,13 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               color="text.secondary"
               sx={{ fontSize: '0.75rem' }}
             >
-              {order.client?.user?.first_name} {order.client?.user?.last_name}
+              {order.client?.user?.first_name}
+              {profile?.agent?.id &&
+                order.assigned_agent_id &&
+                order.assigned_agent_id === profile.agent.id &&
+                order.client?.user?.phone_number && (
+                  <> 📞 {order.client.user.phone_number}</>
+                )}
             </Typography>
           </Box>
         </Box>
@@ -383,6 +389,12 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
             >
               <strong>{t('orders.deliveryAddress', 'Deliver')}:</strong>{' '}
               {formatAddress(order.delivery_address)}
+              {profile?.agent?.id &&
+                order.assigned_agent_id &&
+                order.assigned_agent_id === profile.agent.id &&
+                order.client?.user?.phone_number && (
+                  <> • 📞 {order.client.user.phone_number}</>
+                )}
             </Typography>
           </Box>
         </Box>

@@ -740,6 +740,71 @@ const ManageOrderPage: React.FC = () => {
                         </Paper>
                       </Box>
                     )}
+
+                    {/* Client Info */}
+                    {order.client && (
+                      <Box sx={{ mb: 4 }}>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom>
+                          {t('orders.clientInfo', 'Client Information')}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 56,
+                                height: 56,
+                                bgcolor: 'secondary.main',
+                              }}
+                            >
+                              <ShoppingBag />
+                            </Avatar>
+                            <Box>
+                              <Typography
+                                variant="subtitle1"
+                                fontWeight="medium"
+                              >
+                                {order.client.user.first_name}{' '}
+                                {order.client.user.last_name}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mt: 0.5 }}
+                              >
+                                {order.client.user.email}
+                              </Typography>
+                              {profile?.agent?.id &&
+                                order.assigned_agent_id &&
+                                order.assigned_agent_id === profile.agent.id &&
+                                order.client.user.phone_number && (
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 0.5,
+                                      mt: 0.5,
+                                    }}
+                                  >
+                                    <Phone fontSize="small" color="action" />
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {order.client.user.phone_number}
+                                    </Typography>
+                                  </Box>
+                                )}
+                            </Box>
+                          </Box>
+                        </Paper>
+                      </Box>
+                    )}
                   </CardContent>
                 )}
 
@@ -784,6 +849,28 @@ const ManageOrderPage: React.FC = () => {
                             <Box sx={{ flex: 1 }}>
                               <Typography variant="body1">
                                 {formatAddress(order.delivery_address)}
+                                {profile?.agent?.id &&
+                                  order.assigned_agent_id &&
+                                  order.assigned_agent_id ===
+                                    profile.agent.id &&
+                                  order.client?.user?.phone_number && (
+                                    <Box
+                                      sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        mt: 1,
+                                      }}
+                                    >
+                                      <Phone fontSize="small" color="action" />
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                      >
+                                        {order.client.user.phone_number}
+                                      </Typography>
+                                    </Box>
+                                  )}
                               </Typography>
                             </Box>
                           </Box>
