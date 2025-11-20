@@ -202,7 +202,9 @@ export class GoogleDistanceService {
   /**
    * Forward geocode (address -> lat/lng)
    */
-  async geocode(address: string): Promise<{ latitude: number; longitude: number } | null> {
+  async geocode(
+    address: string
+  ): Promise<{ latitude: number; longitude: number } | null> {
     if (!address || address.trim() === '') {
       return null;
     }
@@ -216,7 +218,11 @@ export class GoogleDistanceService {
     try {
       const response = await axios.get(url, { params });
 
-      if (response.data.status === 'OK' && response.data.results && response.data.results.length > 0) {
+      if (
+        response.data.status === 'OK' &&
+        response.data.results &&
+        response.data.results.length > 0
+      ) {
         const location = response.data.results[0].geometry.location;
         return {
           latitude: location.lat,
@@ -230,10 +236,14 @@ export class GoogleDistanceService {
       }
 
       // Log other statuses but return null
-      this.logger.warn(`Geocoding failed for address "${address}": ${response.data.status}`);
+      this.logger.warn(
+        `Geocoding failed for address "${address}": ${response.data.status}`
+      );
       return null;
     } catch (error: any) {
-      this.logger.error(`Error geocoding address "${address}": ${error.message}`);
+      this.logger.error(
+        `Error geocoding address "${address}": ${error.message}`
+      );
       return null;
     }
   }

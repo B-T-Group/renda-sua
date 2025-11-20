@@ -211,7 +211,9 @@ export class LocationsService {
 
         if (distance <= radiusKm) {
           this.logger.log(
-            `Agent ${agentLocation.agent_id} is ${distance.toFixed(2)}km away (within ${radiusKm}km)`
+            `Agent ${agentLocation.agent_id} is ${distance.toFixed(
+              2
+            )}km away (within ${radiusKm}km)`
           );
           agentsWithinRadius.push(agentLocation);
         }
@@ -341,7 +343,8 @@ export class LocationsService {
 
       // Send notifications to all agents within radius
       const notificationPromises = agentsWithinRadius.map((agentLocation) => {
-        const agentName = `${agentLocation.agent.user.first_name} ${agentLocation.agent.user.last_name}`.trim();
+        const agentName =
+          `${agentLocation.agent.user.first_name} ${agentLocation.agent.user.last_name}`.trim();
         return this.notificationsService.sendProximityOrderNotification(
           agentLocation.agent.user.email,
           agentName,
@@ -368,4 +371,3 @@ export class LocationsService {
     }
   }
 }
-
