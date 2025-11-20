@@ -1,10 +1,4 @@
-import {
-  Close,
-  ExpandMore,
-  Info,
-  Message,
-  Send,
-} from '@mui/icons-material';
+import { Close, ExpandMore, Info, Message, Send } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -24,10 +18,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  OrderMessage,
-  useOrderMessages,
-} from '../../hooks/useOrderMessages';
+import { OrderMessage, useOrderMessages } from '../../hooks/useOrderMessages';
 import { UserMessage, useUserMessages } from '../../hooks/useUserMessages';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -75,7 +66,10 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   // Get messages - for orders, use the messages directly; for others, filter by entity
   const entityMessages = isOrder
     ? (messagesHook.messages as OrderMessage[])
-    : (userMessagesHook.getMessagesForEntity(entityType, entityId) as UserMessage[]);
+    : (userMessagesHook.getMessagesForEntity(
+        entityType,
+        entityId
+      ) as UserMessage[]);
 
   // Convert OrderMessage to UserMessage format for consistent display
   const normalizedMessages: UserMessage[] = entityMessages.map((msg) => ({
@@ -87,10 +81,10 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     created_at: msg.created_at,
     updated_at: msg.updated_at,
     user: {
-      id: msg.user.id,
-      first_name: msg.user.first_name,
-      last_name: msg.user.last_name,
-      email: msg.user.email,
+      id: msg.user?.id || '',
+      first_name: msg.user?.first_name || '',
+      last_name: msg.user?.last_name || '',
+      email: msg.user?.email || '',
     },
     entity_type_info: msg.entity_type_info,
   }));
@@ -316,7 +310,10 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
                         },
                       }}
                     >
-                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ mb: 1, fontWeight: 'medium' }}
+                      >
                         {t(
                           'messages.startConversation',
                           'Start a conversation'
@@ -499,16 +496,3 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
 };
 
 export default UserMessagesComponent;
-
-
-
-
-
-
-
-
-
-
-
-
-

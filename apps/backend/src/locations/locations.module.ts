@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
+import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
-import { LocationsController } from './locations.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { LocationsService } from './locations.service';
 
 @Module({
-  imports: [HasuraModule, DeliveryConfigModule],
-  controllers: [LocationsController],
+  imports: [HasuraModule, GoogleModule, NotificationsModule],
+  providers: [LocationsService],
+  exports: [LocationsService],
 })
 export class LocationsModule {}

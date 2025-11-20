@@ -77,6 +77,7 @@ export class NotificationsService {
     agent_order_failed: 'd-9005ff04f9a64c6ca3c8601d59502ffd',
     client_order_refunded: 'd-5600d6a1da2b4b62a1b3f7322acde542',
     business_order_refunded: 'd-81c4d7b41bc7409c8d9bfe80ed8c7225',
+    agent_proximity_order: 'd-e587fec936c24711a5bfebe57ee15d1d', // Using agent_order_assigned template for now
   };
 
   constructor(private readonly configService: ConfigService<Configuration>) {
@@ -452,5 +453,53 @@ export class NotificationsService {
     }
 
     return recipients;
+  }
+
+  /**
+   * Send proximity order notification to agent
+   */
+  async sendProximityOrderNotification(
+    agentEmail: string,
+    agentName: string,
+    orderData: {
+      orderId: string;
+      orderNumber: string;
+      businessName: string;
+      businessAddress: string;
+    }
+  ): Promise<void> {
+    try {
+      if (!agentEmail) {
+        this.logger.warn('Agent email is required for proximity notification');
+        return;
+      }
+
+      const templateData = this.escapeHandlebarsContent({
+        recipientName: agentName,
+        orderNumber: orderData.orderNumber,
+        orderId: orderData.orderId,
+        businessName: orderData.businessName,
+        businessAddress: orderData.businessAddress,
+        message: `A new order (${orderData.orderNumber}) has been placed at ${orderData.businessName}, located at ${orderData.businessAddress}. You are within 10km of this location.`,
+        currentYear: new Date().getFullYear(),
+      });
+
+      await this.sendEmail({
+        to: agentEmail,
+        templateId: this.templateIds.agent_proximity_order,
+        dynamicTemplateData: templateData,
+      });
+
+      this.logger.log(
+        `Proximity notification sent to agent ${agentEmail} for order ${orderData.orderNumber}`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send proximity notification to ${agentEmail}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Don't throw - this runs in background
+    }
   }
 }

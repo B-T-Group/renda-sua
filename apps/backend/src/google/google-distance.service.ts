@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import type { DistanceMatrixResponse } from './distance-matrix.types';
@@ -14,6 +14,7 @@ export interface GeocodingResult {
 
 @Injectable()
 export class GoogleDistanceService {
+  private readonly logger = new Logger(GoogleDistanceService.name);
   private readonly apiKey;
   private readonly cacheEnabled: boolean;
   private readonly cacheTTL: number;
@@ -195,6 +196,45 @@ export class GoogleDistanceService {
         throw error;
       }
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Forward geocode (address -> lat/lng)
+   */
+  async geocode(address: string): Promise<{ latitude: number; longitude: number } | null> {
+    if (!address || address.trim() === '') {
+      return null;
+    }
+
+    const url = 'https://maps.googleapis.com/maps/api/geocode/json';
+    const params = {
+      address: address,
+      key: this.apiKey,
+    };
+
+    try {
+      const response = await axios.get(url, { params });
+
+      if (response.data.status === 'OK' && response.data.results && response.data.results.length > 0) {
+        const location = response.data.results[0].geometry.location;
+        return {
+          latitude: location.lat,
+          longitude: location.lng,
+        };
+      }
+
+      // Handle various error statuses
+      if (response.data.status === 'ZERO_RESULTS') {
+        return null;
+      }
+
+      // Log other statuses but return null
+      this.logger.warn(`Geocoding failed for address "${address}": ${response.data.status}`);
+      return null;
+    } catch (error: any) {
+      this.logger.error(`Error geocoding address "${address}": ${error.message}`);
+      return null;
     }
   }
 

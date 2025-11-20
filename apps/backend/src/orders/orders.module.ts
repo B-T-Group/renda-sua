@@ -5,6 +5,7 @@ import { CommissionsModule } from '../commissions/commissions.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
+import { LocationsModule } from '../locations/locations.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
@@ -23,6 +24,7 @@ import { OrdersService } from './orders.service';
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
+    LocationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderStatusService, ConfigurationsService],

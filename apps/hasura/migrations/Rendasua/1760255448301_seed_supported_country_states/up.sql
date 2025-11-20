@@ -80,3 +80,4 @@ INSERT INTO public.supported_country_states (
      'coming_soon', false,
      '{"enabled": false, "fee": 0, "minHours": 0, "maxHours": 0, "operatingHours": {}}'::jsonb,
      ARRAY['mtn', 'orange'], '2024-06-01');
+
