@@ -37,3 +37,4 @@ COMMENT ON COLUMN public.supported_country_states.service_status IS 'Service sta
 COMMENT ON COLUMN public.supported_country_states.delivery_enabled IS 'Whether standard delivery is enabled for this location';
 COMMENT ON COLUMN public.supported_country_states.supported_payment_methods IS 'Array of supported payment methods for this location';
 
+

@@ -2,3 +2,4 @@
 DELETE FROM public.supported_country_states 
 WHERE country_code IN ('GA', 'CM');
 
+

@@ -13,3 +13,4 @@ DROP INDEX IF EXISTS idx_supported_country_states_country_state;
 -- Drop table
 DROP TABLE IF EXISTS public.supported_country_states;
 
+
