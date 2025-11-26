@@ -26,6 +26,7 @@ select_permissions:
         - latitude
         - longitude
         - created_at
+        - updated_at
       filter:
         agent:
           user:
@@ -39,6 +40,7 @@ select_permissions:
         - latitude
         - longitude
         - created_at
+        - updated_at
       filter: {}
   - role: user
     permission:
@@ -48,5 +50,6 @@ select_permissions:
         - latitude
         - longitude
         - created_at
+        - updated_at
       filter: {}
 
