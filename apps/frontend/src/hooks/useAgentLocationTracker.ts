@@ -13,8 +13,8 @@ import {
   clearLastLocation,
   getLastLocation,
   isBackgroundSyncSupported,
-  storeLastLocation,
   registerBackgroundSync,
+  storeLastLocation,
 } from '../utils/backgroundLocationSync';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
@@ -209,7 +209,7 @@ export const useAgentLocationTracker = (
           },
           onConflict: {
             constraint: 'agent_locations_agent_id_key',
-            update_columns: ['updated_at', 'latitude', 'longitude'],
+            update_columns: ['latitude', 'longitude'],
           },
         });
 

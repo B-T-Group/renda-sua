@@ -17,3 +17,25 @@ ADD CONSTRAINT agent_locations_agent_id_key UNIQUE (agent_id);
 COMMENT ON COLUMN public.agent_locations.updated_at IS 
     'Timestamp when this location was last updated';
 
+-- Create or replace the updated_at trigger function (if it doesn't exist)
+CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()
+RETURNS TRIGGER AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
+  RETURN _new;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for updated_at column
+CREATE TRIGGER set_public_agent_locations_updated_at
+    BEFORE UPDATE ON public.agent_locations
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_current_timestamp_updated_at();
+
+-- Add comment to the trigger
+COMMENT ON TRIGGER set_public_agent_locations_updated_at ON public.agent_locations
+    IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+

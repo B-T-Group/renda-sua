@@ -69,7 +69,7 @@ async function executeLocationUpdate(location, authToken, hasuraUrl) {
       },
       onConflict: {
         constraint: 'agent_locations_agent_id_key',
-        update_columns: ['updated_at', 'latitude', 'longitude'],
+        update_columns: ['latitude', 'longitude'],
       },
     };
 
