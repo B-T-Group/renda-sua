@@ -52,4 +52,15 @@ select_permissions:
         - created_at
         - updated_at
       filter: {}
-
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - latitude
+        - longitude
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null
