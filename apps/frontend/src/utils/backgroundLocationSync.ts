@@ -3,18 +3,16 @@
  *
  * Handles background location updates using Service Worker and Background Sync API.
  * This allows location updates to continue even when the app is closed or in the background.
+ * Stores only the last known location per agent (single record, not a queue).
  */
 
 const SYNC_TAG = 'agent-location-update';
-const STORAGE_KEY = 'agent_location_queue';
+const STORAGE_KEY = 'agent_last_location';
 
-export interface QueuedLocationUpdate {
-  id: string;
+export interface LastAgentLocation {
   agentId: string;
   latitude: number;
   longitude: number;
-  timestamp: number;
-  retryCount: number;
 }
 
 /**
@@ -54,56 +52,42 @@ export const registerBackgroundSync = async (
 };
 
 /**
- * Queue a location update for background sync
+ * Store the last known location for background sync
  */
-export const queueLocationUpdate = async (
+export const storeLastLocation = async (
   agentId: string,
   latitude: number,
   longitude: number
 ): Promise<void> => {
-  const update: QueuedLocationUpdate = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const location: LastAgentLocation = {
     agentId,
     latitude,
     longitude,
-    timestamp: Date.now(),
-    retryCount: 0,
   };
 
-  // Store in localStorage for persistence
-  const queue = getQueuedUpdates();
-  queue.push(update);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
+  // Store in localStorage for persistence (overwrites previous location)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(location));
 
   // Register background sync
   await registerBackgroundSync();
 };
 
 /**
- * Get all queued location updates
+ * Get the last stored location
  */
-export const getQueuedUpdates = (): QueuedLocationUpdate[] => {
+export const getLastLocation = (): LastAgentLocation | null => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    return stored ? JSON.parse(stored) : null;
   } catch (error) {
-    console.error('Error reading queued updates:', error);
-    return [];
+    console.error('Error reading last location:', error);
+    return null;
   }
 };
 
 /**
- * Remove a queued update by ID
+ * Clear the stored last location
  */
-export const removeQueuedUpdate = (id: string): void => {
-  const queue = getQueuedUpdates();
-  const filtered = queue.filter((update) => update.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-};
-
-/**
- * Clear all queued updates
- */
-export const clearQueuedUpdates = (): void => {
+export const clearLastLocation = (): void => {
   localStorage.removeItem(STORAGE_KEY);
 };

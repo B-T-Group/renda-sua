@@ -7,7 +7,6 @@
  */
 
 const SYNC_TAG = 'agent-location-update';
-const STORAGE_KEY = 'agent_location_queue';
 const CACHE_NAME = 'rendasua-location-cache-v1';
 
 // Install event - cache resources
@@ -45,41 +44,32 @@ self.addEventListener('sync', (event) => {
 });
 
 /**
- * Get queued location updates from localStorage
+ * Execute location update via GraphQL upsert mutation
  */
-function getQueuedUpdates() {
-  try {
-    // Note: Service workers can't access localStorage directly
-    // We'll use IndexedDB or get data from the client
-    return [];
-  } catch (error) {
-    console.error('Error reading queued updates:', error);
-    return [];
-  }
-}
-
-/**
- * Execute location update via GraphQL mutation
- */
-async function executeLocationUpdate(update, authToken, hasuraUrl) {
+async function executeLocationUpdate(location, authToken, hasuraUrl) {
   try {
     const mutation = `
-      mutation InsertAgentLocation($locationData: agent_locations_insert_input!) {
-        insert_agent_locations_one(object: $locationData) {
+      mutation UpsertAgentLocation($locationData: agent_locations_insert_input!, $onConflict: agent_locations_on_conflict!) {
+        insert_agent_locations_one(object: $locationData, on_conflict: $onConflict) {
           id
           agent_id
           latitude
           longitude
           created_at
+          updated_at
         }
       }
     `;
 
     const variables = {
       locationData: {
-        agent_id: update.agentId,
-        latitude: update.latitude.toString(),
-        longitude: update.longitude.toString(),
+        agent_id: location.agentId,
+        latitude: location.latitude.toString(),
+        longitude: location.longitude.toString(),
+      },
+      onConflict: {
+        constraint: 'agent_locations_agent_id_key',
+        update_columns: ['updated_at', 'latitude', 'longitude'],
       },
     };
 
@@ -142,47 +132,26 @@ async function handleLocationSync() {
 // Handle messages from clients
 self.addEventListener('message', (event) => {
   if (event.data.type === 'LOCATION_SYNC_DATA') {
-    const { updates, authToken, hasuraUrl } = event.data;
+    const { location, authToken, hasuraUrl } = event.data;
 
     console.log('Received location sync data:', {
-      updates,
+      location,
       authToken,
       hasuraUrl,
     });
 
-    // Process all updates
-    Promise.all(
-      updates.map((update, index) =>
-        executeLocationUpdate(update, authToken, hasuraUrl).then((success) => ({
-          success,
-          updateId: update.id,
-          index,
-        }))
-      )
-    ).then((results) => {
-      const succeeded = results.filter((r) => r.success === true);
-      const failed = results.filter((r) => r.success === false);
-      const succeededIds = succeeded.map((r) => r.updateId);
-
-      console.log(
-        `Location sync complete: ${succeeded.length} succeeded, ${failed.length} failed`
-      );
-
-      // Notify client to clear successful updates from localStorage
-      if (succeededIds.length > 0) {
-        const clients = self.clients.matchAll({
-          includeUncontrolled: true,
-        });
-        clients.then((clientList) => {
-          clientList.forEach((client) => {
-            client.postMessage({
-              type: 'CLEAR_LOCATION_UPDATES',
-              succeededIds,
-            });
-          });
-        });
-      }
-    });
+    // Process single location update
+    executeLocationUpdate(location, authToken, hasuraUrl)
+      .then((success) => {
+        if (success) {
+          console.log('Location sync successful');
+        } else {
+          console.warn('Location sync failed');
+        }
+      })
+      .catch((error) => {
+        console.error('Error during location sync:', error);
+      });
   } else if (event.data.type === 'AUTH_TOKEN_UPDATE') {
     // Store token in IndexedDB for service worker use
     storeAuthToken(event.data.token);

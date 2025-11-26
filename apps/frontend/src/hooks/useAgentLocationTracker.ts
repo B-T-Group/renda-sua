@@ -10,11 +10,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { environment } from '../config/environment';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import {
-  clearQueuedUpdates,
-  getQueuedUpdates,
+  clearLastLocation,
+  getLastLocation,
   isBackgroundSyncSupported,
-  QueuedLocationUpdate,
-  queueLocationUpdate,
+  storeLastLocation,
   registerBackgroundSync,
 } from '../utils/backgroundLocationSync';
 import { useGraphQLRequest } from './useGraphQLRequest';
@@ -25,14 +24,15 @@ const DEFAULT_UPDATE_INTERVAL = 20 * 60 * 1000;
 // Minimum distance change to trigger update (in meters)
 const MIN_DISTANCE_CHANGE = 100; // 100 meters
 
-const INSERT_AGENT_LOCATION = `
-  mutation InsertAgentLocation($locationData: agent_locations_insert_input!) {
-    insert_agent_locations_one(object: $locationData) {
+const UPSERT_AGENT_LOCATION = `
+  mutation UpsertAgentLocation($locationData: agent_locations_insert_input!, $onConflict: agent_locations_on_conflict!) {
+    insert_agent_locations_one(object: $locationData, on_conflict: $onConflict) {
       id
       agent_id
       latitude
       longitude
       created_at
+      updated_at
     }
   }
 `;
@@ -92,7 +92,7 @@ export const useAgentLocationTracker = (
 
   const { isAuthenticated } = useAuth0();
   const { profile, userType } = useUserProfileContext();
-  const { execute: insertLocation } = useGraphQLRequest(INSERT_AGENT_LOCATION);
+  const { execute: upsertLocation } = useGraphQLRequest(UPSERT_AGENT_LOCATION);
 
   const [isTracking, setIsTracking] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
@@ -189,9 +189,9 @@ export const useAgentLocationTracker = (
         lng: coordinates.longitude,
       };
 
-      // If background sync is enabled and supported, queue the update
+      // If background sync is enabled and supported, store the location
       if (enableBackgroundSync && isBackgroundSyncSupported()) {
-        await queueLocationUpdate(
+        await storeLastLocation(
           profile.agent.id,
           coordinates.latitude,
           coordinates.longitude
@@ -200,17 +200,21 @@ export const useAgentLocationTracker = (
         // Also try to register background sync
         await registerBackgroundSync();
       } else {
-        // Direct update via GraphQL
-        await insertLocation({
+        // Direct update via GraphQL upsert
+        await upsertLocation({
           locationData: {
             agent_id: profile.agent.id,
             latitude: coordinates.latitude.toString(),
             longitude: coordinates.longitude.toString(),
           },
+          onConflict: {
+            constraint: 'agent_locations_agent_id_key',
+            update_columns: ['updated_at', 'latitude', 'longitude'],
+          },
         });
 
-        // Clear any queued updates since we just successfully updated directly
-        clearQueuedUpdates();
+        // Clear stored location since we just successfully updated directly
+        clearLastLocation();
       }
 
       setLastUpdate(Date.now());
@@ -231,7 +235,7 @@ export const useAgentLocationTracker = (
     isAgent,
     profile,
     getCurrentCoordinates,
-    insertLocation,
+    upsertLocation,
     enableBackgroundSync,
   ]);
 
@@ -323,9 +327,14 @@ export const useAgentLocationTracker = (
       const handleMessage = async (event: MessageEvent) => {
         if (event.data.type === 'REQUEST_LOCATION_SYNC') {
           // Service worker is requesting location sync data
-          // Send queued updates and auth token
+          // Send last stored location and auth token
           try {
-            const updates = getQueuedUpdates();
+            const location = getLastLocation();
+            if (!location) {
+              console.log('No location data to sync');
+              return;
+            }
+
             const token = await getAccessTokenSilently();
 
             // Send data to service worker
@@ -333,38 +342,13 @@ export const useAgentLocationTracker = (
             if (registration.active) {
               registration.active.postMessage({
                 type: 'LOCATION_SYNC_DATA',
-                updates,
+                location,
                 authToken: token,
                 hasuraUrl: environment.hasuraUrl,
               });
             }
           } catch (error) {
             console.error('Error handling location sync request:', error);
-          }
-        } else if (event.data.type === 'CLEAR_LOCATION_UPDATES') {
-          // Service worker is notifying us to clear successful updates
-          const { succeededIds } = event.data;
-          if (succeededIds && succeededIds.length > 0) {
-            const queue = getQueuedUpdates();
-            const remaining = queue.filter(
-              (update: QueuedLocationUpdate) =>
-                !succeededIds.includes(update.id)
-            );
-
-            if (remaining.length === 0) {
-              // Clear all if no remaining updates
-              clearQueuedUpdates();
-            } else {
-              // Update queue with only remaining updates
-              localStorage.setItem(
-                'agent_location_queue',
-                JSON.stringify(remaining)
-              );
-            }
-
-            console.log(
-              `Cleared ${succeededIds.length} successful location updates from queue`
-            );
           }
         }
       };
