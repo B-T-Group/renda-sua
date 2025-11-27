@@ -7,6 +7,19 @@ from models import AgentLocation, Order
 from secrets_manager import get_sendgrid_api_key
 
 
+def log_info(message: str, **kwargs):
+    """Log info message with optional context."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    print(f"[INFO] [notifications] {message}" + (f" | {context_str}" if context_str else ""))
+
+
+def log_error(message: str, error: Exception = None, **kwargs):
+    """Log error message with optional context and exception."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    error_str = f" | error={str(error)}" if error else ""
+    print(f"[ERROR] [notifications] {message}" + (f" | {context_str}" if context_str else "") + error_str)
+
+
 def send_proximity_notification(
     agent_location: AgentLocation,
     order: Order,
@@ -27,12 +40,20 @@ def send_proximity_notification(
     Returns:
         True if successful, False otherwise
     """
+    log_info(
+        "Preparing to send proximity notification",
+        agent_id=agent_location.agent_id,
+        order_id=order.id,
+        order_number=order.order_number,
+        distance_km=round(distance_km, 2),
+    )
+    
     if not sendgrid_api_key:
-        print("SendGrid API key not found")
+        log_error("SendGrid API key not found")
         return False
     
     if not template_id:
-        print("SendGrid template ID not configured")
+        log_error("SendGrid template ID not configured")
         return False
     
     try:
@@ -43,8 +64,15 @@ def send_proximity_notification(
         agent_last_name = agent_user.get("last_name", "")
         agent_name = f"{agent_first_name} {agent_last_name}".strip() or "Agent"
         
+        log_info(
+            "Agent details retrieved",
+            agent_id=agent_location.agent_id,
+            agent_email=agent_email,
+            agent_name=agent_name,
+        )
+        
         if not agent_email:
-            print(f"No email found for agent {agent_location.agent_id}")
+            log_error("No email found for agent", agent_id=agent_location.agent_id)
             return False
         
         # Format distance
@@ -80,18 +108,40 @@ def send_proximity_notification(
         message.dynamic_template_data = dynamic_template_data
         
         # Send email
+        log_info(
+            "Sending email via SendGrid",
+            to=agent_email,
+            template_id=template_id[:10] + "...",
+            order_number=order.order_number,
+        )
+        
         sg = SendGridAPIClient(sendgrid_api_key)
         response = sg.send(message)
         
         if response.status_code >= 200 and response.status_code < 300:
-            print(f"Sent notification to agent {agent_email} for order {order.order_number}")
+            log_info(
+                "Notification sent successfully",
+                agent_email=agent_email,
+                order_number=order.order_number,
+                status_code=response.status_code,
+            )
             return True
         else:
-            print(f"SendGrid API returned status {response.status_code}")
+            log_error(
+                "SendGrid API returned error status",
+                status_code=response.status_code,
+                agent_email=agent_email,
+                order_number=order.order_number,
+            )
             return False
             
     except Exception as e:
-        print(f"Error sending SendGrid notification: {str(e)}")
+        log_error(
+            "Error sending SendGrid notification",
+            error=e,
+            agent_email=agent_email,
+            order_number=order.order_number,
+        )
         return False
 
 
@@ -115,14 +165,27 @@ def send_notifications_to_nearby_agents(
     Returns:
         Number of successful notifications sent
     """
+    log_info(
+        "Starting batch notification sending",
+        total_agents=len(agent_locations),
+        order_id=order.id,
+        order_number=order.order_number,
+    )
+    
     sendgrid_api_key = get_sendgrid_api_key(environment)
     if not sendgrid_api_key:
-        print("SendGrid API key not available")
+        log_error("SendGrid API key not available", environment=environment)
         return 0
     
     success_count = 0
     
-    for agent_location, distance in zip(agent_locations, distances):
+    for idx, (agent_location, distance) in enumerate(zip(agent_locations, distances), 1):
+        log_info(
+            f"Sending notification {idx} of {len(agent_locations)}",
+            agent_id=agent_location.agent_id,
+            distance_km=round(distance, 2),
+        )
+        
         success = send_proximity_notification(
             agent_location,
             order,
@@ -132,6 +195,13 @@ def send_notifications_to_nearby_agents(
         )
         if success:
             success_count += 1
+    
+    log_info(
+        "Batch notification sending completed",
+        success_count=success_count,
+        total_count=len(agent_locations),
+        order_id=order.id,
+    )
     
     print(f"Sent {success_count} out of {len(agent_locations)} notifications")
     return success_count

@@ -9,13 +9,28 @@ from notifications import send_notifications_to_nearby_agents
 from secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
 
+def log_info(message: str, **kwargs):
+    """Log info message with optional context."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    print(f"[INFO] {message}" + (f" | {context_str}" if context_str else ""))
+
+
+def log_error(message: str, error: Exception = None, **kwargs):
+    """Log error message with optional context and exception."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    error_str = f" | error={str(error)}" if error else ""
+    print(f"[ERROR] {message}" + (f" | {context_str}" if context_str else "") + error_str)
+
+
 def extract_order_id_from_sqs_record(record: Dict[str, Any]) -> Optional[str]:
     """Extract order ID from SQS record."""
     try:
         body = json.loads(record.get("body", "{}"))
-        return body.get("orderId")
+        order_id = body.get("orderId")
+        log_info("Extracted order ID from SQS record", order_id=order_id)
+        return order_id
     except Exception as e:
-        print(f"Error extracting order ID from SQS record: {str(e)}")
+        log_error("Error extracting order ID from SQS record", error=e)
         return None
 
 
@@ -23,14 +38,21 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
     """Parse SQS event message from record."""
     try:
         body = json.loads(record.get("body", "{}"))
-        return SQSEventMessage(
+        message = SQSEventMessage(
             eventType=body.get("eventType"),
             orderId=body.get("orderId"),
             timestamp=body.get("timestamp"),
             status=body.get("status"),
         )
+        log_info(
+            "Parsed SQS event message",
+            event_type=message.eventType,
+            order_id=message.orderId,
+            status=message.status,
+        )
+        return message
     except Exception as e:
-        print(f"Error parsing SQS event message: {str(e)}")
+        log_error("Error parsing SQS event message", error=e, body=record.get("body", ""))
         return None
 
 
@@ -51,22 +73,48 @@ def process_order_event(
         Result dictionary with success status and details
     """
     try:
+        log_info(
+            "Starting order event processing",
+            order_id=order_id,
+            event_type=event_type,
+            environment=environment,
+        )
+        
         # Get configuration
         hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
         proximity_radius_km = float(os.environ.get("PROXIMITY_RADIUS_KM", "10"))
         template_id = os.environ.get("SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID", "")
         
+        log_info(
+            "Loaded configuration",
+            hasura_endpoint=hasura_endpoint,
+            proximity_radius_km=proximity_radius_km,
+            template_id=template_id[:10] + "..." if template_id else "not_set",
+        )
+        
         if not hasura_endpoint:
+            log_error("GRAPHQL_ENDPOINT not configured")
             return {
                 "success": False,
                 "error": "GRAPHQL_ENDPOINT not configured",
             }
         
         # Get secrets
+        log_info("Retrieving secrets from AWS Secrets Manager", environment=environment)
         hasura_admin_secret = get_hasura_admin_secret(environment)
         google_maps_api_key = get_google_maps_api_key(environment)
         
+        if not hasura_admin_secret:
+            log_error("Failed to retrieve Hasura admin secret")
+            return {
+                "success": False,
+                "error": "Failed to retrieve Hasura admin secret",
+            }
+        
+        log_info("Successfully retrieved secrets")
+        
         # Fetch order with location
+        log_info("Fetching order with location data", order_id=order_id)
         order = get_order_with_location(
             order_id,
             hasura_endpoint,
@@ -75,27 +123,50 @@ def process_order_event(
         )
         
         if not order:
+            log_error("Order not found", order_id=order_id)
             return {
                 "success": False,
                 "error": f"Order {order_id} not found",
             }
         
+        log_info(
+            "Order fetched successfully",
+            order_id=order.id,
+            order_number=order.order_number,
+            business_location=order.business_location.name,
+        )
+        
         # Check if business location has coordinates
         address = order.business_location.address
+        log_info(
+            "Checking business location coordinates",
+            order_id=order_id,
+            latitude=address.latitude,
+            longitude=address.longitude,
+        )
+        
         if address.latitude is None or address.longitude is None:
+            log_error(
+                "Business location coordinates not available",
+                order_id=order_id,
+                address=address.format_full_address(),
+            )
             return {
                 "success": False,
                 "error": f"Business location coordinates not available for order {order_id}",
             }
         
         # Fetch all agent locations
+        log_info("Fetching all agent locations")
         agent_locations = get_all_agent_locations(
             hasura_endpoint,
             hasura_admin_secret
         )
         
+        log_info("Agent locations fetched", count=len(agent_locations) if agent_locations else 0)
+        
         if not agent_locations:
-            print(f"No agent locations found")
+            log_info("No agent locations found - no notifications to send")
             return {
                 "success": True,
                 "message": "No agents available",
@@ -103,6 +174,12 @@ def process_order_event(
             }
         
         # Calculate distances and filter nearby agents
+        log_info(
+            "Calculating distances to agents",
+            total_agents=len(agent_locations),
+            proximity_radius_km=proximity_radius_km,
+        )
+        
         nearby_agents = []
         distances = []
         
@@ -114,15 +191,34 @@ def process_order_event(
                 agent_location.longitude
             )
             
+            log_info(
+                "Calculated distance to agent",
+                agent_id=agent_location.agent_id,
+                distance_km=round(distance, 2),
+                within_radius=distance <= proximity_radius_km,
+            )
+            
             if distance <= proximity_radius_km:
                 nearby_agents.append(agent_location)
                 distances.append(distance)
-                print(
-                    f"Agent {agent_location.agent_id} is {format_distance(distance)} away"
+                log_info(
+                    "Agent within proximity radius",
+                    agent_id=agent_location.agent_id,
+                    distance=format_distance(distance),
                 )
         
+        log_info(
+            "Distance calculation complete",
+            nearby_agents_count=len(nearby_agents),
+            total_agents_checked=len(agent_locations),
+        )
+        
         if not nearby_agents:
-            print(f"No agents within {proximity_radius_km}km of business location")
+            log_info(
+                "No agents within proximity radius",
+                proximity_radius_km=proximity_radius_km,
+                order_id=order_id,
+            )
             return {
                 "success": True,
                 "message": f"No agents within {proximity_radius_km}km",
@@ -130,12 +226,27 @@ def process_order_event(
             }
         
         # Send notifications to nearby agents
+        log_info(
+            "Sending notifications to nearby agents",
+            nearby_agents_count=len(nearby_agents),
+            order_id=order_id,
+            template_id=template_id[:10] + "..." if template_id else "not_set",
+        )
+        
         notifications_sent = send_notifications_to_nearby_agents(
             nearby_agents,
             order,
             distances,
             environment,
             template_id
+        )
+        
+        log_info(
+            "Order event processing completed successfully",
+            order_id=order_id,
+            event_type=event_type,
+            nearby_agents_count=len(nearby_agents),
+            notifications_sent=notifications_sent,
         )
         
         return {
@@ -147,7 +258,12 @@ def process_order_event(
         }
         
     except Exception as e:
-        print(f"Error processing order event: {str(e)}")
+        log_error(
+            "Error processing order event",
+            error=e,
+            order_id=order_id,
+            event_type=event_type,
+        )
         import traceback
         traceback.print_exc()
         return {
@@ -158,12 +274,13 @@ def process_order_event(
 
 def handle_order_created(event: Dict[str, Any]) -> Dict[str, Any]:
     """Handle order.created event."""
-    print("Handling order.created event")
+    log_info("Handling order.created event")
     
     record = event.get("Records", [{}])[0]
     message = parse_sqs_event_message(record)
     
     if not message:
+        log_error("Failed to parse event message in handle_order_created")
         return {"success": False, "error": "Failed to parse event message"}
     
     environment = os.environ.get("ENVIRONMENT", "development")
@@ -172,12 +289,13 @@ def handle_order_created(event: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
     """Handle order.completed event."""
-    print("Handling order.completed event")
+    log_info("Handling order.completed event")
     
     record = event.get("Records", [{}])[0]
     message = parse_sqs_event_message(record)
     
     if not message:
+        log_error("Failed to parse event message in handle_order_completed")
         return {"success": False, "error": "Failed to parse event message"}
     
     environment = os.environ.get("ENVIRONMENT", "development")
@@ -186,16 +304,18 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     """Handle order.status.updated event."""
-    print("Handling order.status.updated event")
+    log_info("Handling order.status.updated event")
     
     record = event.get("Records", [{}])[0]
     message = parse_sqs_event_message(record)
     
     if not message:
+        log_error("Failed to parse event message in handle_order_status_updated")
         return {"success": False, "error": "Failed to parse event message"}
     
     environment = os.environ.get("ENVIRONMENT", "development")
     event_type = f"order.status.updated.{message.status}" if message.status else "order.status.updated"
+    log_info("Processing status update event", status=message.status, event_type=event_type)
     return process_order_event(message.orderId, event_type, environment)
 
 
@@ -205,28 +325,43 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     Routes to appropriate handler based on event type in SQS message.
     """
-    print(f"Received event: {json.dumps(event)}")
+    log_info(
+        "Lambda handler invoked",
+        request_id=context.request_id if context else "unknown",
+        function_name=context.function_name if context else "unknown",
+        records_count=len(event.get("Records", [])),
+    )
     
     try:
         # Extract records from SQS event
         records = event.get("Records", [])
         
         if not records:
+            log_error("No records in event")
             return {
                 "success": False,
                 "error": "No records in event",
             }
         
+        log_info("Processing SQS records", records_count=len(records))
+        
         # Process each record (usually one for FIFO queue)
         results = []
-        for record in records:
+        for idx, record in enumerate(records):
+            log_info(f"Processing record {idx + 1} of {len(records)}")
+            
+            message_id = record.get("messageId", "unknown")
+            log_info("Processing SQS record", message_id=message_id, record_index=idx)
+            
             message = parse_sqs_event_message(record)
             
             if not message:
+                log_error("Failed to parse message", message_id=message_id, record_index=idx)
                 results.append({"success": False, "error": "Failed to parse message"})
                 continue
             
             event_type = message.eventType
+            log_info("Routing to event handler", event_type=event_type, order_id=message.orderId)
             
             # Route to appropriate handler
             if event_type == "order.created":
@@ -236,14 +371,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elif event_type == "order.status.updated":
                 result = handle_order_status_updated({"Records": [record]})
             else:
+                log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
                 result = {
                     "success": False,
                     "error": f"Unknown event type: {event_type}",
                 }
             
+            log_info(
+                "Record processing completed",
+                message_id=message_id,
+                success=result.get("success", False),
+                notifications_sent=result.get("notifications_sent", 0),
+            )
+            
             results.append(result)
         
         # Return results (for FIFO, typically one result)
+        log_info("All records processed", total_results=len(results))
+        
         if len(results) == 1:
             return results[0]
         
@@ -253,7 +398,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in Lambda handler: {str(e)}")
+        log_error("Unhandled error in Lambda handler", error=e)
         import traceback
         traceback.print_exc()
         return {

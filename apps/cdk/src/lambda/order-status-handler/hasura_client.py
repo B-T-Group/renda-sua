@@ -7,6 +7,19 @@ from geocoding import geocode_address, persist_coordinates_to_hasura
 from secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
 
+def log_info(message: str, **kwargs):
+    """Log info message with optional context."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    print(f"[INFO] [hasura_client] {message}" + (f" | {context_str}" if context_str else ""))
+
+
+def log_error(message: str, error: Exception = None, **kwargs):
+    """Log error message with optional context and exception."""
+    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+    error_str = f" | error={str(error)}" if error else ""
+    print(f"[ERROR] [hasura_client] {message}" + (f" | {context_str}" if context_str else "") + error_str)
+
+
 def get_order_with_location(
     order_id: str,
     hasura_endpoint: str,
@@ -60,6 +73,8 @@ def get_order_with_location(
         "variables": {"orderId": order_id},
     }
     
+    log_info("Fetching order from Hasura", order_id=order_id)
+    
     try:
         response = requests.post(
             hasura_endpoint,
@@ -71,23 +86,25 @@ def get_order_with_location(
         
         result = response.json()
         if "errors" in result:
-            print(f"Hasura query error: {result['errors']}")
+            log_error("Hasura query error", order_id=order_id, errors=result['errors'])
             return None
         
         order_data = result.get("data", {}).get("orders_by_pk")
         if not order_data:
-            print(f"Order {order_id} not found")
+            log_error("Order not found in Hasura", order_id=order_id)
             return None
+        
+        log_info("Order fetched successfully", order_id=order_id)
         
         # Parse business location and address
         business_location_data = order_data.get("business_location")
         if not business_location_data:
-            print(f"Business location not found for order {order_id}")
+            log_error("Business location not found for order", order_id=order_id)
             return None
         
         address_data = business_location_data.get("address")
         if not address_data:
-            print(f"Address not found for business location")
+            log_error("Address not found for business location", order_id=order_id)
             return None
         
         # Create address object
@@ -103,12 +120,25 @@ def get_order_with_location(
             longitude=address_data.get("longitude"),
         )
         
+        log_info(
+            "Address parsed from order",
+            address_id=address.id,
+            has_latitude=address.latitude is not None,
+            has_longitude=address.longitude is not None,
+        )
+        
         # If coordinates are missing, geocode and persist
         if (address.latitude is None or address.longitude is None) and google_maps_api_key:
-            print(f"Coordinates missing for address {address.id}, geocoding...")
+            log_info("Coordinates missing, starting geocoding", address_id=address.id)
             coordinates = geocode_address(address, google_maps_api_key)
             
             if coordinates:
+                log_info(
+                    "Geocoding successful",
+                    address_id=address.id,
+                    latitude=coordinates.latitude,
+                    longitude=coordinates.longitude,
+                )
                 # Update address object with new coordinates
                 address.latitude = coordinates.latitude
                 address.longitude = coordinates.longitude
@@ -121,7 +151,7 @@ def get_order_with_location(
                     hasura_admin_secret
                 )
             else:
-                print(f"Failed to geocode address {address.id}")
+                log_error("Failed to geocode address", address_id=address.id)
         
         business_location = BusinessLocation(
             id=business_location_data["id"],
@@ -135,13 +165,20 @@ def get_order_with_location(
             business_location=business_location,
         )
         
+        log_info(
+            "Order object created successfully",
+            order_id=order.id,
+            order_number=order.order_number,
+            business_location=order.business_location.name,
+        )
+        
         return order
         
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching order from Hasura: {str(e)}")
+        log_error("HTTP error fetching order from Hasura", error=e, order_id=order_id)
         return None
     except Exception as e:
-        print(f"Unexpected error fetching order: {str(e)}")
+        log_error("Unexpected error fetching order", error=e, order_id=order_id)
         return None
 
 
@@ -188,6 +225,8 @@ def get_all_agent_locations(
         "variables": {},
     }
     
+    log_info("Fetching all agent locations from Hasura")
+    
     try:
         response = requests.post(
             hasura_endpoint,
@@ -199,10 +238,12 @@ def get_all_agent_locations(
         
         result = response.json()
         if "errors" in result:
-            print(f"Hasura query error: {result['errors']}")
+            log_error("Hasura query error when fetching agent locations", errors=result['errors'])
             return []
         
         agent_locations_data = result.get("data", {}).get("agent_locations", [])
+        
+        log_info("Agent locations fetched from Hasura", count=len(agent_locations_data))
         
         # Each agent has one location entry, so no deduplication needed
         agent_locations = []
@@ -217,12 +258,14 @@ def get_all_agent_locations(
             )
             agent_locations.append(agent_location)
         
+        log_info("Agent locations parsed successfully", count=len(agent_locations))
+        
         return agent_locations
         
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching agent locations from Hasura: {str(e)}")
+        log_error("HTTP error fetching agent locations from Hasura", error=e)
         return []
     except Exception as e:
-        print(f"Unexpected error fetching agent locations: {str(e)}")
+        log_error("Unexpected error fetching agent locations", error=e)
         return []
 

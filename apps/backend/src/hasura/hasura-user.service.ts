@@ -745,7 +745,9 @@ export class HasuraUserService {
 
     // Handle anonymous identifier (no authenticated user)
     if (this.identifier === 'anonymous') {
-      throw new Error('No authenticated user. Please provide a valid authentication token.');
+      throw new Error(
+        'No authenticated user. Please provide a valid authentication token.'
+      );
     }
 
     try {
