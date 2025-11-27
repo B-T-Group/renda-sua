@@ -49,27 +49,24 @@ self.addEventListener('sync', (event) => {
 async function executeLocationUpdate(location, authToken, hasuraUrl) {
   try {
     const mutation = `
-      mutation UpsertAgentLocation($locationData: agent_locations_insert_input!, $onConflict: agent_locations_on_conflict!) {
-        insert_agent_locations_one(object: $locationData, on_conflict: $onConflict) {
-          id
+      mutation insert_agent_locations_one($object: agent_locations_insert_input = {}) {
+        insert_agent_locations_one(object: $object, on_conflict: {constraint: agent_locations_agent_id_key, update_columns: [latitude, longitude]}) {
           agent_id
+          id
           latitude
           longitude
-          created_at
           updated_at
+          created_at
         }
       }
+
     `;
 
     const variables = {
-      locationData: {
+      object: {
         agent_id: location.agentId,
         latitude: location.latitude.toString(),
         longitude: location.longitude.toString(),
-      },
-      onConflict: {
-        constraint: 'agent_locations_agent_id_key',
-        update_columns: ['latitude', 'longitude'],
       },
     };
 
