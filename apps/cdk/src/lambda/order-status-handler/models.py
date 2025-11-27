@@ -63,6 +63,80 @@ class Order:
 
 
 @dataclass
+class Client:
+    """Client model."""
+    user_id: str
+
+
+@dataclass
+class Business:
+    """Business model."""
+    user_id: str
+
+
+@dataclass
+class AssignedAgent:
+    """Assigned agent model."""
+    user_id: str
+
+
+@dataclass
+class CompleteOrder:
+    """Complete order model with all fields needed for payment processing."""
+    id: str
+    order_number: str
+    total_amount: float
+    currency: str
+    client_id: str
+    client: Client
+    business: Business
+    assigned_agent_id: Optional[str]
+    assigned_agent: Optional[AssignedAgent]
+
+
+@dataclass
+class OrderHold:
+    """Order hold model."""
+    id: str
+    order_id: str
+    client_id: str
+    agent_id: Optional[str]
+    client_hold_amount: float
+    agent_hold_amount: float
+    delivery_fees: float
+    currency: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class Account:
+    """Account model."""
+    id: str
+    user_id: str
+    currency: str
+    available_balance: float
+    withheld_balance: float
+    total_balance: float
+    is_active: bool
+
+
+@dataclass
+class BalanceUpdate:
+    """Balance update model."""
+    available: float
+    withheld: float
+
+
+@dataclass
+class TransactionInfo:
+    """Transaction info model."""
+    isCredit: bool
+    balanceUpdate: BalanceUpdate
+
+
+@dataclass
 class SQSEventMessage:
     """SQS event message format."""
     eventType: str  # order.created, order.completed, order.status.updated

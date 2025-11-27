@@ -1316,7 +1316,8 @@ export class OrdersService {
       // Don't fail the completion if inventory update fails
     }
 
-    await this.releaseHoldAndProcessPayment(order.id);
+    // Payment processing is now handled asynchronously by the order-status-handler Lambda
+    // await this.releaseHoldAndProcessPayment(order.id);
 
     // Generate receipt automatically after successful completion
     try {

@@ -29,7 +29,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         layerVersionName: `requests-layer-${environment}`,
         description: 'Lambda layer containing requests library',
         code: lambda.Code.fromAsset('src/lambda-layer/requests-layer.zip'),
-        compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
+        compatibleRuntimes: [
+          lambda.Runtime.PYTHON_3_9,
+          lambda.Runtime.PYTHON_3_11,
+        ],
       }
     );
 
@@ -41,7 +44,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         layerVersionName: `sendgrid-layer-${environment}`,
         description: 'Lambda layer containing SendGrid library',
         code: lambda.Code.fromAsset('src/lambda-layer/sendgrid-layer.zip'),
-        compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
+        compatibleRuntimes: [
+          lambda.Runtime.PYTHON_3_9,
+          lambda.Runtime.PYTHON_3_11,
+        ],
       }
     );
 
@@ -79,13 +85,13 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         ? 'https://rendasua-prod.hasura.app/v1/graphql'
         : 'https://healthy-mackerel-72.hasura.app/v1/graphql';
 
-    // Create Lambda function for order status notifications
-    const orderStatusNotificationsFunction = new lambda.Function(
+    // Create Lambda function for order status handler
+    const orderStatusHandlerFunction = new lambda.Function(
       this,
-      `OrderStatusNotifications-${environment}`,
+      `OrderStatusHandler-${environment}`,
       {
-        functionName: `order-status-notifications-${environment}`,
-        runtime: lambda.Runtime.PYTHON_3_9,
+        functionName: `order-status-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
         handler: 'handler.handler',
         code: lambda.Code.fromAsset('src/lambda/order-status-handler'),
         timeout: cdk.Duration.minutes(5),
@@ -94,7 +100,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
-          PROXIMITY_RADIUS_KM: '10',
+          PROXIMITY_RADIUS_KM: '20',
           SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
             'd-d3c3ea6dbe2b45c3ac5c0b9245a10b1b',
         },
@@ -102,10 +108,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     );
 
     // Add Secrets Manager permissions
-    orderStatusNotificationsFunction.addToRolePolicy(secretsManagerPolicy);
+    orderStatusHandlerFunction.addToRolePolicy(secretsManagerPolicy);
 
     // Add SQS permissions
-    orderStatusNotificationsFunction.addToRolePolicy(
+    orderStatusHandlerFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
@@ -119,7 +125,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
 
     // Connect Lambda to SQS as event source
     // Note: FIFO queues don't support maxBatchingWindow
-    orderStatusNotificationsFunction.addEventSource(
+    orderStatusHandlerFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(orderStatusQueue, {
         batchSize: 10,
       })
@@ -133,15 +139,11 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     });
 
     // Output Lambda function ARN
-    new cdk.CfnOutput(
-      this,
-      `OrderStatusNotificationsFunctionArn-${environment}`,
-      {
-        value: orderStatusNotificationsFunction.functionArn,
-        description: 'ARN of the order status notifications Lambda function',
-        exportName: `OrderStatusNotificationsFunctionArn-${environment}`,
-      }
-    );
+    new cdk.CfnOutput(this, `OrderStatusHandlerFunctionArn-${environment}`, {
+      value: orderStatusHandlerFunction.functionArn,
+      description: 'ARN of the order status handler Lambda function',
+      exportName: `OrderStatusHandlerFunctionArn-${environment}`,
+    });
 
     // Create the Airtel mobile payments key refresh Lambda function
     const refreshAirtelMobilePaymentsKeyFunction = new lambda.Function(
