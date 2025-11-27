@@ -15,21 +15,29 @@ export class OrderQueueService {
 
   constructor(private readonly configService: ConfigService<Configuration>) {
     const awsConfig = this.configService.get('aws');
-    this.sqsClient = new SQSClient({
-      region: awsConfig?.region || 'us-east-1',
-      credentials: {
-        accessKeyId: awsConfig?.accessKeyId || '',
-        secretAccessKey: awsConfig?.secretAccessKey || '',
-      },
-    });
+    this.sqsClient = new SQSClient({});
 
-    // Get queue URL from environment variable
-    this.queueUrl = process.env.ORDER_STATUS_QUEUE_URL;
+    // Build queue URL from template if not provided via environment variable
+    const explicitQueueUrl = process.env.ORDER_STATUS_QUEUE_URL;
+    if (explicitQueueUrl) {
+      this.queueUrl = explicitQueueUrl;
+    } else {
+      // Build from template: https://sqs.{region}.amazonaws.com/{accountId}/order-status-changes-{env}.fifo
+      const awsRegion = awsConfig?.region || 'ca-central-1';
+      const awsAccountId = process.env.AWS_ACCOUNT_ID || '235680477887';
+      const nodeEnv = process.env.NODE_ENV || 'development';
+      // Map NODE_ENV to CDK environment name (production -> production, else -> development)
+      const envName = nodeEnv === 'production' ? 'production' : 'development';
+
+      this.queueUrl = `https://sqs.${awsRegion}.amazonaws.com/${awsAccountId}/order-status-changes-${envName}.fifo`;
+    }
 
     if (!this.queueUrl) {
       this.logger.warn(
         'ORDER_STATUS_QUEUE_URL not configured. SQS messages will not be sent.'
       );
+    } else {
+      this.logger.log(`SQS Queue URL configured: ${this.queueUrl}`);
     }
   }
 
@@ -94,7 +102,7 @@ export class OrderQueueService {
   /**
    * Send message to SQS FIFO queue
    */
-  private async sendMessage(message: Record<string, any>): Promise<void> {
+  private async sendMessage(message: Record<string, unknown>): Promise<void> {
     if (!this.queueUrl) {
       return;
     }
@@ -115,11 +123,14 @@ export class OrderQueueService {
       this.logger.log(
         `Successfully sent ${message.eventType} message to SQS for order ${message.orderId}. MessageId: ${response.MessageId}`
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Log error but don't throw - SQS failures shouldn't break order operations
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `Failed to send ${message.eventType} message to SQS for order ${message.orderId}: ${error.message}`,
-        error.stack
+        `Failed to send ${message.eventType} message to SQS for order ${message.orderId}: ${errorMessage}`,
+        errorStack
       );
     }
   }
