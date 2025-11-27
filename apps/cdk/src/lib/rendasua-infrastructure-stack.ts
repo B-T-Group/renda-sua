@@ -117,10 +117,10 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     );
 
     // Connect Lambda to SQS as event source
+    // Note: FIFO queues don't support maxBatchingWindow
     orderStatusNotificationsFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(orderStatusQueue, {
         batchSize: 10,
-        maxBatchingWindow: cdk.Duration.seconds(5),
       })
     );
 

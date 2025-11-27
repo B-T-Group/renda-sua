@@ -26,8 +26,8 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
-import { OrderStatusService } from './order-status.service';
 import { OrderQueueService } from './order-queue.service';
+import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
