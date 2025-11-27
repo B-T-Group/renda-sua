@@ -107,29 +107,58 @@ def send_proximity_notification(
         message.template_id = template_id
         message.dynamic_template_data = dynamic_template_data
         
+        # Validate API key format (SendGrid API keys typically start with 'SG.')
+        if not sendgrid_api_key.startswith('SG.'):
+            log_error(
+                "Invalid SendGrid API key format",
+                agent_email=agent_email,
+                key_preview=sendgrid_api_key[:8] + "..." if len(sendgrid_api_key) > 8 else "***",
+            )
+            return False
+        
         # Send email
         log_info(
             "Sending email via SendGrid",
             to=agent_email,
             template_id=template_id[:10] + "...",
             order_number=order.order_number,
+            api_key_preview=sendgrid_api_key[:8] + "...",
         )
         
         sg = SendGridAPIClient(sendgrid_api_key)
-        response = sg.send(message)
         
-        if response.status_code >= 200 and response.status_code < 300:
-            log_info(
-                "Notification sent successfully",
-                agent_email=agent_email,
-                order_number=order.order_number,
-                status_code=response.status_code,
-            )
-            return True
-        else:
+        # Get response headers and body for better error debugging
+        try:
+            response = sg.send(message)
+            
+            if response.status_code >= 200 and response.status_code < 300:
+                log_info(
+                    "Notification sent successfully",
+                    agent_email=agent_email,
+                    order_number=order.order_number,
+                    status_code=response.status_code,
+                )
+                return True
+            else:
+                # Try to get response body for more details
+                response_body = ""
+                try:
+                    response_body = response.body.decode('utf-8') if response.body else ""
+                except:
+                    pass
+                
+                log_error(
+                    "SendGrid API returned error status",
+                    status_code=response.status_code,
+                    agent_email=agent_email,
+                    order_number=order.order_number,
+                    response_body=response_body[:200] if response_body else "no body",
+                )
+                return False
+        except Exception as send_error:
             log_error(
-                "SendGrid API returned error status",
-                status_code=response.status_code,
+                "Exception during SendGrid API call",
+                error=send_error,
                 agent_email=agent_email,
                 order_number=order.order_number,
             )
@@ -142,6 +171,8 @@ def send_proximity_notification(
             agent_email=agent_email,
             order_number=order.order_number,
         )
+        import traceback
+        traceback.print_exc()
         return False
 
 
