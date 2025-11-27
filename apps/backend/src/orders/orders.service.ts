@@ -18,7 +18,6 @@ import {
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
-import { LocationsService } from '../locations/locations.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import {
@@ -266,7 +265,6 @@ export class OrdersService {
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
     private readonly pdfService: PdfService,
-    private readonly locationsService: LocationsService,
     private readonly orderQueueService: OrderQueueService
   ) {}
 
@@ -3829,28 +3827,6 @@ export class OrdersService {
         // Don't fail the order creation if delivery window creation fails
         // The order can still be processed without a delivery window
       }
-    }
-
-    // Trigger background proximity check (fire and forget)
-    try {
-      this.locationsService
-        .checkProximityAndNotify(order.id, business_location_id)
-        .catch((error) => {
-          this.logger.error(
-            'Background proximity check failed:',
-            error instanceof Error ? error.message : String(error)
-          );
-        });
-      this.logger.log(
-        `Initiated background proximity check for order ${order.order_number}`
-      );
-    } catch (error) {
-      // Log but don't throw - order creation should succeed
-      this.logger.error(
-        `Failed to initiate proximity check: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
     }
 
     // Send order.created message to SQS queue
