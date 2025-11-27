@@ -16,12 +16,10 @@ def get_secret(secret_name: str) -> Dict[str, str]:
         Dictionary containing secret values
     """
     client = boto3.client('secretsmanager')
-    region = os.environ.get('AWS_REGION', 'us-east-1')
     
     try:
         response = client.get_secret_value(
             SecretId=secret_name,
-            RegionName=region
         )
         
         if 'SecretString' in response:
