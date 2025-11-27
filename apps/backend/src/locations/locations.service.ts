@@ -169,13 +169,10 @@ export class LocationsService {
     radiusKm: number
   ): Promise<AgentLocation[]> {
     try {
-      // Get latest agent location for each agent
+      // Get all agent locations (each agent has one location entry)
       const query = `
-        query GetLatestAgentLocations {
-          agent_locations(
-            distinct_on: agent_id
-            order_by: { agent_id: asc, created_at: desc }
-          ) {
+        query GetAgentLocations {
+          agent_locations {
             agent_id
             latitude
             longitude

@@ -160,11 +160,8 @@ def get_all_agent_locations(
         List of AgentLocation objects
     """
     query = """
-    query GetLatestAgentLocations {
-      agent_locations(
-        distinct_on: agent_id
-        order_by: { agent_id: asc, created_at: desc }
-      ) {
+    query GetAgentLocations {
+      agent_locations {
         agent_id
         latitude
         longitude
@@ -207,7 +204,9 @@ def get_all_agent_locations(
         
         agent_locations_data = result.get("data", {}).get("agent_locations", [])
         
+        # Each agent has one location entry, so no deduplication needed
         agent_locations = []
+        
         for loc_data in agent_locations_data:
             agent_location = AgentLocation(
                 agent_id=loc_data["agent_id"],

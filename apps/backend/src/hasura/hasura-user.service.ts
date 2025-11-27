@@ -743,6 +743,11 @@ export class HasuraUserService {
       throw new Error('User identifier is missing from authentication token');
     }
 
+    // Handle anonymous identifier (no authenticated user)
+    if (this.identifier === 'anonymous') {
+      throw new Error('No authenticated user. Please provide a valid authentication token.');
+    }
+
     try {
       // Use consolidated query to fetch user with all related data in one request
       const userResult = await this.executeQuery<any>(
