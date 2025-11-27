@@ -4138,9 +4138,7 @@ export class OrdersService {
     });
   }
 
-  private async releaseHoldAndProcessPayment(
-    referenceId: string
-  ): Promise<void> {
+  async releaseHoldAndProcessPayment(referenceId: string): Promise<void> {
     const order = await this.getOrderDetails(referenceId);
 
     if (
