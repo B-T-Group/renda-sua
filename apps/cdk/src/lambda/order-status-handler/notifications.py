@@ -56,6 +56,10 @@ def send_proximity_notification(
         # Format business address
         business_address = order.business_location.address.format_full_address()
         
+        # Get current year for template
+        from datetime import datetime
+        current_year = datetime.now().year
+        
         # Prepare dynamic template data
         dynamic_template_data = {
             "agent_name": agent_name,
@@ -64,6 +68,7 @@ def send_proximity_notification(
             "business_address": business_address,
             "distance": distance_str,
             "order_id": order.id,
+            "currentYear": current_year,
         }
         
         # Create email message

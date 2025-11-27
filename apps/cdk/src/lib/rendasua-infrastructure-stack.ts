@@ -95,7 +95,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '10',
-          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID: '',
+          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
+            'd-d3c3ea6dbe2b45c3ac5c0b9245a10b1b',
         },
       }
     );

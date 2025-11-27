@@ -154,6 +154,11 @@ TEMPLATES = [
         'filename': 'business_order_refunded.html',
         'key': 'business_order_refunded',
     },
+    {
+        'name': 'Agent Order Proximity',
+        'filename': 'agent_order_proximity.html',
+        'key': 'agent_order_proximity',
+    },
 ]
 
 
