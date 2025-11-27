@@ -27,6 +27,7 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { OrderStatusService } from './order-status.service';
+import { OrderQueueService } from './order-queue.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -265,7 +266,8 @@ export class OrdersService {
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
     private readonly pdfService: PdfService,
-    private readonly locationsService: LocationsService
+    private readonly locationsService: LocationsService,
+    private readonly orderQueueService: OrderQueueService
   ) {}
 
   /**
@@ -1325,6 +1327,18 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(`Failed to generate receipt: ${error.message}`);
       // Don't fail completion if receipt generation fails
+    }
+
+    // Send order.completed message to SQS queue
+    try {
+      await this.orderQueueService.sendOrderCompletedMessage(order.id);
+    } catch (error) {
+      // Log but don't throw - order completion should succeed
+      this.logger.error(
+        `Failed to send order.completed message to SQS: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
 
     return {
@@ -3834,6 +3848,18 @@ export class OrdersService {
       // Log but don't throw - order creation should succeed
       this.logger.error(
         `Failed to initiate proximity check: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    // Send order.created message to SQS queue
+    try {
+      await this.orderQueueService.sendOrderCreatedMessage(order.id);
+    } catch (error) {
+      // Log but don't throw - order creation should succeed
+      this.logger.error(
+        `Failed to send order.created message to SQS: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

@@ -10,6 +10,7 @@ import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module'
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { OrderStatusService } from './order-status.service';
+import { OrderQueueService } from './order-queue.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 
@@ -27,7 +28,7 @@ import { OrdersService } from './orders.service';
     LocationsModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, OrderStatusService, ConfigurationsService],
+  providers: [OrdersService, OrderStatusService, OrderQueueService, ConfigurationsService],
   exports: [OrdersService, OrderStatusService],
 })
 export class OrdersModule {}

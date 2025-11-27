@@ -3,6 +3,8 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
 export interface RendasuaInfrastructureStackProps extends cdk.StackProps {
@@ -28,6 +30,115 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         description: 'Lambda layer containing requests library',
         code: lambda.Code.fromAsset('src/lambda-layer/requests-layer.zip'),
         compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
+      }
+    );
+
+    // Create Lambda layer for SendGrid dependency
+    const sendgridLayer = new lambda.LayerVersion(
+      this,
+      `SendGridLayer-${environment}`,
+      {
+        layerVersionName: `sendgrid-layer-${environment}`,
+        description: 'Lambda layer containing SendGrid library',
+        code: lambda.Code.fromAsset('src/lambda-layer/sendgrid-layer.zip'),
+        compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
+      }
+    );
+
+    // Add permissions for Secrets Manager (used by multiple Lambda functions)
+    const secretsManagerPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:DescribeSecret',
+      ],
+      resources: [
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*-rendasua-backend-secrets*`,
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:development-rendasua-backend-secrets*`,
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:production-rendasua-backend-secrets*`,
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:staging-rendasua-backend-secrets*`,
+      ],
+    });
+
+    // Create FIFO SQS queue for order status changes
+    const orderStatusQueue = new sqs.Queue(
+      this,
+      `OrderStatusChangesQueue-${environment}`,
+      {
+        queueName: `order-status-changes-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(5),
+      }
+    );
+
+    // GraphQL endpoint based on environment
+    const graphqlEndpoint =
+      environment === 'production'
+        ? 'https://rendasua-prod.hasura.app/v1/graphql'
+        : 'https://healthy-mackerel-72.hasura.app/v1/graphql';
+
+    // Create Lambda function for order status notifications
+    const orderStatusNotificationsFunction = new lambda.Function(
+      this,
+      `OrderStatusNotifications-${environment}`,
+      {
+        functionName: `order-status-notifications-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/order-status-handler'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        layers: [requestsLayer, sendgridLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          GRAPHQL_ENDPOINT: graphqlEndpoint,
+          PROXIMITY_RADIUS_KM: '10',
+          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID: '',
+        },
+      }
+    );
+
+    // Add Secrets Manager permissions
+    orderStatusNotificationsFunction.addToRolePolicy(secretsManagerPolicy);
+
+    // Add SQS permissions
+    orderStatusNotificationsFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'sqs:ReceiveMessage',
+          'sqs:DeleteMessage',
+          'sqs:GetQueueAttributes',
+        ],
+        resources: [orderStatusQueue.queueArn],
+      })
+    );
+
+    // Connect Lambda to SQS as event source
+    orderStatusNotificationsFunction.addEventSource(
+      new lambdaEventSources.SqsEventSource(orderStatusQueue, {
+        batchSize: 10,
+        maxBatchingWindow: cdk.Duration.seconds(5),
+      })
+    );
+
+    // Output queue URL
+    new cdk.CfnOutput(this, `OrderStatusQueueUrl-${environment}`, {
+      value: orderStatusQueue.queueUrl,
+      description: 'SQS Queue URL for order status changes',
+      exportName: `OrderStatusQueueUrl-${environment}`,
+    });
+
+    // Output Lambda function ARN
+    new cdk.CfnOutput(
+      this,
+      `OrderStatusNotificationsFunctionArn-${environment}`,
+      {
+        value: orderStatusNotificationsFunction.functionArn,
+        description: 'ARN of the order status notifications Lambda function',
+        exportName: `OrderStatusNotificationsFunctionArn-${environment}`,
       }
     );
 
@@ -83,20 +194,6 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     }
 
     // Add permissions for Secrets Manager to both functions
-    const secretsManagerPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'secretsmanager:GetSecretValue',
-        'secretsmanager:DescribeSecret',
-      ],
-      resources: [
-        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*-rendasua-backend-secrets*`,
-        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:development-rendasua-backend-secrets*`,
-        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:production-rendasua-backend-secrets*`,
-        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:staging-rendasua-backend-secrets*`,
-      ],
-    });
-
     refreshAirtelMobilePaymentsKeyFunction.addToRolePolicy(
       secretsManagerPolicy
     );

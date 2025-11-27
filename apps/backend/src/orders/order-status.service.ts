@@ -7,6 +7,7 @@ import {
   NotificationData,
   NotificationsService,
 } from '../notifications/notifications.service';
+import { OrderQueueService } from './order-queue.service';
 
 @Injectable()
 export class OrderStatusService {
@@ -16,7 +17,8 @@ export class OrderStatusService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly notificationsService: NotificationsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly orderQueueService: OrderQueueService
   ) {}
 
   /**
@@ -192,6 +194,23 @@ export class OrderStatusService {
         }`
       );
       // Don't fail the status update if notifications fail
+    }
+
+    // Send order.status.updated message to SQS queue (except when changing to complete)
+    if (newStatus !== 'complete') {
+      try {
+        await this.orderQueueService.sendOrderStatusUpdatedMessage(
+          orderId,
+          newStatus
+        );
+      } catch (error) {
+        // Log but don't throw - status update should succeed
+        this.logger.error(
+          `Failed to send order.status.updated message to SQS: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
 
     return updateResult.update_orders_by_pk;
