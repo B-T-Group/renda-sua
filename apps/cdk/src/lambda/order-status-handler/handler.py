@@ -327,7 +327,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     log_info(
         "Lambda handler invoked",
-        request_id=context.request_id if context else "unknown",
+        request_id=context.aws_request_id if context else "unknown",
         function_name=context.function_name if context else "unknown",
         records_count=len(event.get("Records", [])),
     )
