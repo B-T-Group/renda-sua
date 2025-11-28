@@ -149,9 +149,12 @@ export class AddressesService {
       }
     `;
 
-    const userResult = await this.hasuraUserService.executeQuery(getUserQuery, {
-      identifier,
-    });
+    const userResult = await this.hasuraSystemService.executeQuery(
+      getUserQuery,
+      {
+        identifier,
+      }
+    );
 
     if (!userResult.users || userResult.users.length === 0) {
       throw new HttpException(
@@ -639,7 +642,7 @@ export class AddressesService {
       // Verify address belongs to user via junction tables
       let addressBelongsToUser = false;
       const checkOwnershipQuery = `
-        query CheckAddressOwnership($addressId: uuid!, $userId: uuid!, $userType: String!) {
+        query CheckAddressOwnership($addressId: uuid!, $userId: uuid!) {
           ${
             user.user_type_id === 'client'
               ? `
@@ -666,7 +669,7 @@ export class AddressesService {
 
       const ownershipResult = await this.hasuraSystemService.executeQuery(
         checkOwnershipQuery,
-        { addressId, userId: user.id, userType: user.user_type_id }
+        { addressId, userId: user.id }
       );
 
       if (user.user_type_id === 'client') {

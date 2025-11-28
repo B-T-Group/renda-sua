@@ -2,6 +2,10 @@
   "name": "@rendasua/source",
   "version": "0.0.0",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "build": "nx run-many --target=build --all",
     "build:frontend": "nx build frontend",

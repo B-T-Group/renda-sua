@@ -8,7 +8,9 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "target": "es2021",
-    "emitDeclarationOnly": false
+    "emitDeclarationOnly": false,
+    "sourceMap": true,
+    "inlineSourceMap": false
   },
   "include": ["src/**/*.ts"],
   "exclude": [

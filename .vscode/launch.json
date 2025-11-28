@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Backend (Nx Serve)",
+      "runtimeExecutable": "nx",
+      "runtimeArgs": ["serve", "backend"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist/apps/backend/**/*.js"],
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeVersion": "20"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Backend (ts-node)",
+      "runtimeExecutable": "nx",
+      "runtimeArgs": ["run", "backend:dev"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeVersion": "20"
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "Attach to Backend",
+      "port": 9229,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist/apps/backend/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
+
