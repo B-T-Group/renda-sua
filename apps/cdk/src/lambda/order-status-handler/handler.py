@@ -64,18 +64,173 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
         return None
 
 
+def ready_for_pickup_handler(
+    order: Order,
+    order_id: str,
+    event_type: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    environment: str,
+    proximity_radius_km: float,
+    template_id: str
+) -> Dict[str, Any]:
+    """
+    Handle ready_for_pickup status by sending notifications to nearby agents.
+    
+    Args:
+        order: Order object with location data
+        order_id: Order ID
+        event_type: Type of event
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        environment: Environment name
+        proximity_radius_km: Proximity radius in kilometers
+        template_id: SendGrid template ID
+        
+    Returns:
+        Result dictionary with success status and details
+    """
+    log_info(
+        "Processing ready_for_pickup status - sending notifications to nearby agents",
+        order_id=order_id,
+    )
+    
+    # Check if business location has coordinates
+    address = order.business_location.address
+    log_info(
+        "Checking business location coordinates",
+        order_id=order_id,
+        latitude=address.latitude,
+        longitude=address.longitude,
+    )
+    
+    if address.latitude is None or address.longitude is None:
+        log_error(
+            "Business location coordinates not available",
+            order_id=order_id,
+            address=address.format_full_address(),
+        )
+        return {
+            "success": False,
+            "error": f"Business location coordinates not available for order {order_id}",
+        }
+    
+    # Fetch all agent locations
+    log_info("Fetching all agent locations")
+    agent_locations = get_all_agent_locations(
+        hasura_endpoint,
+        hasura_admin_secret
+    )
+    
+    log_info("Agent locations fetched", count=len(agent_locations) if agent_locations else 0)
+    
+    if not agent_locations:
+        log_info("No agent locations found - no notifications to send")
+        return {
+            "success": True,
+            "message": "No agents available",
+            "notifications_sent": 0,
+        }
+    
+    # Calculate distances and filter nearby agents
+    log_info(
+        "Calculating distances to agents",
+        total_agents=len(agent_locations),
+        proximity_radius_km=proximity_radius_km,
+    )
+    
+    nearby_agents = []
+    distances = []
+    
+    for agent_location in agent_locations:
+        distance = calculate_haversine_distance(
+            address.latitude,
+            address.longitude,
+            agent_location.latitude,
+            agent_location.longitude
+        )
+        
+        log_info(
+            "Calculated distance to agent",
+            agent_id=agent_location.agent_id,
+            distance_km=round(distance, 2),
+            within_radius=distance <= proximity_radius_km,
+        )
+        
+        if distance <= proximity_radius_km:
+            nearby_agents.append(agent_location)
+            distances.append(distance)
+            log_info(
+                "Agent within proximity radius",
+                agent_id=agent_location.agent_id,
+                distance=format_distance(distance),
+            )
+    
+    log_info(
+        "Distance calculation complete",
+        nearby_agents_count=len(nearby_agents),
+        total_agents_checked=len(agent_locations),
+    )
+    
+    if not nearby_agents:
+        log_info(
+            "No agents within proximity radius",
+            proximity_radius_km=proximity_radius_km,
+            order_id=order_id,
+        )
+        return {
+            "success": True,
+            "message": f"No agents within {proximity_radius_km}km",
+            "notifications_sent": 0,
+        }
+    
+    # Send notifications to nearby agents
+    log_info(
+        "Sending notifications to nearby agents",
+        nearby_agents_count=len(nearby_agents),
+        order_id=order_id,
+        template_id=template_id[:10] + "..." if template_id else "not_set",
+    )
+    
+    notifications_sent = send_notifications_to_nearby_agents(
+        nearby_agents,
+        order,
+        distances,
+        environment,
+        template_id
+    )
+    
+    log_info(
+        "Ready for pickup handler completed successfully",
+        order_id=order_id,
+        event_type=event_type,
+        nearby_agents_count=len(nearby_agents),
+        notifications_sent=notifications_sent,
+    )
+    
+    return {
+        "success": True,
+        "message": f"Processed {event_type} event for ready_for_pickup status",
+        "order_id": order_id,
+        "nearby_agents_count": len(nearby_agents),
+        "notifications_sent": notifications_sent,
+    }
+
+
 def process_order_event(
     order_id: str,
     event_type: str,
-    environment: str
+    environment: str,
+    order_status: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Process order event and notify nearby agents.
+    Process order event and route to appropriate status handler.
     
     Args:
         order_id: Order ID to process
         event_type: Type of event (order.created, order.completed, order.status.updated)
         environment: Environment name (development or production)
+        order_status: Optional order status. If not provided, will be fetched from order.
         
     Returns:
         Result dictionary with success status and details
@@ -142,128 +297,46 @@ def process_order_event(
             order_id=order.id,
             order_number=order.order_number,
             business_location=order.business_location.name,
+            current_status=order.current_status,
         )
         
-        # Check if business location has coordinates
-        address = order.business_location.address
-        log_info(
-            "Checking business location coordinates",
-            order_id=order_id,
-            latitude=address.latitude,
-            longitude=address.longitude,
-        )
+        # Use provided status or fetch from order
+        status = order_status if order_status is not None else order.current_status
         
-        if address.latitude is None or address.longitude is None:
-            log_error(
-                "Business location coordinates not available",
-                order_id=order_id,
-                address=address.format_full_address(),
-            )
+        if not status:
+            log_error("Order status not available", order_id=order_id)
             return {
                 "success": False,
-                "error": f"Business location coordinates not available for order {order_id}",
+                "error": "Order status not available",
             }
         
-        # Fetch all agent locations
-        log_info("Fetching all agent locations")
-        agent_locations = get_all_agent_locations(
-            hasura_endpoint,
-            hasura_admin_secret
-        )
+        log_info("Routing to status handler", order_id=order_id, status=status)
         
-        log_info("Agent locations fetched", count=len(agent_locations) if agent_locations else 0)
-        
-        if not agent_locations:
-            log_info("No agent locations found - no notifications to send")
-            return {
-                "success": True,
-                "message": "No agents available",
-                "notifications_sent": 0,
-            }
-        
-        # Calculate distances and filter nearby agents
-        log_info(
-            "Calculating distances to agents",
-            total_agents=len(agent_locations),
-            proximity_radius_km=proximity_radius_km,
-        )
-        
-        nearby_agents = []
-        distances = []
-        
-        for agent_location in agent_locations:
-            distance = calculate_haversine_distance(
-                address.latitude,
-                address.longitude,
-                agent_location.latitude,
-                agent_location.longitude
+        # Route to appropriate handler based on status
+        if status == "ready_for_pickup":
+            return ready_for_pickup_handler(
+                order,
+                order_id,
+                event_type,
+                hasura_endpoint,
+                hasura_admin_secret,
+                environment,
+                proximity_radius_km,
+                template_id
             )
-            
+        else:
+            # No handler for this status - do nothing
             log_info(
-                "Calculated distance to agent",
-                agent_id=agent_location.agent_id,
-                distance_km=round(distance, 2),
-                within_radius=distance <= proximity_radius_km,
-            )
-            
-            if distance <= proximity_radius_km:
-                nearby_agents.append(agent_location)
-                distances.append(distance)
-                log_info(
-                    "Agent within proximity radius",
-                    agent_id=agent_location.agent_id,
-                    distance=format_distance(distance),
-                )
-        
-        log_info(
-            "Distance calculation complete",
-            nearby_agents_count=len(nearby_agents),
-            total_agents_checked=len(agent_locations),
-        )
-        
-        if not nearby_agents:
-            log_info(
-                "No agents within proximity radius",
-                proximity_radius_km=proximity_radius_km,
+                "No handler for status - doing nothing",
                 order_id=order_id,
+                status=status,
             )
             return {
                 "success": True,
-                "message": f"No agents within {proximity_radius_km}km",
+                "message": f"No action required for status: {status}",
                 "notifications_sent": 0,
+                "order_status": status,
             }
-        
-        # Send notifications to nearby agents
-        log_info(
-            "Sending notifications to nearby agents",
-            nearby_agents_count=len(nearby_agents),
-            order_id=order_id,
-            template_id=template_id[:10] + "..." if template_id else "not_set",
-        )
-        
-        notifications_sent = send_notifications_to_nearby_agents(
-            nearby_agents,
-            order,
-            distances,
-            environment,
-            template_id
-        )
-        
-        log_info(
-            "Order event processing completed successfully",
-            order_id=order_id,
-            event_type=event_type,
-            nearby_agents_count=len(nearby_agents),
-            notifications_sent=notifications_sent,
-        )
-        
-        return {
-            "success": True,
-            "message": f"Processed {event_type} event",
-            "order_id": order_id,
-            "nearby_agents_count": len(nearby_agents),
-            "notifications_sent": notifications_sent,
-        }
         
     except Exception as e:
         log_error(
@@ -292,7 +365,8 @@ def handle_order_created(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "Failed to parse event message"}
     
     environment = os.environ.get("ENVIRONMENT", "development")
-    return process_order_event(message.orderId, "order.created", environment)
+    # Order status will be fetched from the order in process_order_event
+    return process_order_event(message.orderId, "order.created", environment, order_status=None)
 
 
 def release_hold_and_process_payment(
@@ -501,7 +575,8 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
         # (for backward compatibility with existing notification logic)
     
     # Also process the order event for notifications (existing behavior)
-    notification_result = process_order_event(message.orderId, "order.completed", environment)
+    # Order status will be fetched from the order in process_order_event
+    notification_result = process_order_event(message.orderId, "order.completed", environment, order_status=None)
     
     # Return combined result
     return {
@@ -525,7 +600,8 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     environment = os.environ.get("ENVIRONMENT", "development")
     event_type = f"order.status.updated.{message.status}" if message.status else "order.status.updated"
     log_info("Processing status update event", status=message.status, event_type=event_type)
-    return process_order_event(message.orderId, event_type, environment)
+    # Pass the status from the message to process_order_event
+    return process_order_event(message.orderId, event_type, environment, order_status=message.status)
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

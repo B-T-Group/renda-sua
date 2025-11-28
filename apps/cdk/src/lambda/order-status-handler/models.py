@@ -60,6 +60,7 @@ class Order:
     id: str
     order_number: str
     business_location: BusinessLocation
+    current_status: Optional[str] = None
 
 
 @dataclass

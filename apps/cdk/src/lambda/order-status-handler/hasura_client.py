@@ -58,6 +58,7 @@ def get_order_with_location(
       orders_by_pk(id: $orderId) {
         id
         order_number
+        current_status
         business_location {
           id
           name
@@ -177,6 +178,7 @@ def get_order_with_location(
             id=order_data["id"],
             order_number=order_data["order_number"],
             business_location=business_location,
+            current_status=order_data.get("current_status"),
         )
         
         log_info(
