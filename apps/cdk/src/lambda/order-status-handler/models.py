@@ -141,8 +141,12 @@ class TransactionInfo:
 @dataclass
 class SQSEventMessage:
     """SQS event message format."""
-    eventType: str  # order.created, order.completed, order.status.updated
+    eventType: str  # order.created, order.completed, order.status.updated, order.cancelled
     orderId: str
     timestamp: str
     status: Optional[str] = None  # Only for order.status.updated
+    cancelledBy: Optional[str] = None  # Only for order.cancelled
+    cancellationReason: Optional[str] = None  # Only for order.cancelled
+    previousStatus: Optional[str] = None  # Only for order.cancelled
+    orderStatus: Optional[str] = None  # Only for order.cancelled
 

@@ -1414,6 +1414,14 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
 
+    // Client can only cancel when order is not yet assigned to an agent
+    if (isOrderOwner && order.assigned_agent_id) {
+      throw new HttpException(
+        'Cannot cancel order that has been assigned to a delivery agent',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Business can cancel orders in more statuses than clients
     let cancellableStatuses: string[];
     if (isBusinessOwner) {
@@ -1440,49 +1448,10 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Calculate cancellation fee for client cancellations after confirmation
-    let cancellationFee = 0;
-    let refundAmount = 0;
+    // Store previous status for async handler
+    const previousStatus = order.current_status;
 
-    if (
-      isOrderOwner &&
-      ['confirmed', 'preparing', 'ready_for_pickup'].includes(
-        order.current_status
-      )
-    ) {
-      try {
-        // Get cancellation fee configuration for the order's country
-        const cancellationConfig =
-          await this.configurationsService.getConfigurationByKey(
-            'cancellation_fee',
-            order.business_location?.address?.country || 'GA'
-          );
-
-        if (cancellationConfig && cancellationConfig.number_value) {
-          cancellationFee = cancellationConfig.number_value;
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Failed to get cancellation fee configuration: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-        // Continue without cancellation fee if config is not available
-      }
-    }
-
-    // Calculate refund amount for response
-    if (order.current_status !== 'pending_payment') {
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-      refundAmount = orderHold.client_hold_amount - cancellationFee;
-    }
-
-    // If order was assigned to agent, release the agent hold
-    // Skip releasing holds for pending_payment orders since no holds have been placed yet
-    if (order.current_status !== 'pending_payment') {
-      await this.releaseOrderHold(order, 'cancelled', cancellationFee);
-    }
-
+    // Update order status to cancelled
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'cancelled'
@@ -1516,12 +1485,27 @@ export class OrdersService {
       // Don't fail the cancellation if reserved quantity update fails
     }
 
+    // Send cancellation message to async FIFO queue
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        request.orderId,
+        cancelledBy,
+        request.notes,
+        previousStatus
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send order.cancelled message to SQS: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Don't fail the cancellation if SQS message fails
+    }
+
     return {
       success: true,
       order: updatedOrder,
       message: 'Order cancelled successfully',
-      cancellationFee: cancellationFee,
-      refundAmount: refundAmount,
     };
   }
 

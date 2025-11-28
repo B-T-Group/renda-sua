@@ -717,7 +717,7 @@ def determine_transaction_balance_update(
     Matches the logic from AccountsService.determineTransactionType in the backend.
     
     Args:
-        transaction_type: Type of transaction (release, payment, etc.)
+        transaction_type: Type of transaction (release, payment, fee, etc.)
         amount: Transaction amount (always positive)
         
     Returns:
@@ -738,6 +738,12 @@ def determine_transaction_balance_update(
         )
     elif transaction_type == "payment":
         # Payment: decreases available balance
+        return TransactionInfo(
+            isCredit=False,
+            balanceUpdate=BalanceUpdate(available=-amount, withheld=0),
+        )
+    elif transaction_type == "fee":
+        # Fee: decreases available balance (money removed from account)
         return TransactionInfo(
             isCredit=False,
             balanceUpdate=BalanceUpdate(available=-amount, withheld=0),
@@ -997,4 +1003,243 @@ def update_order_hold_status(
     except Exception as e:
         log_error("Unexpected error updating order hold", error=e, order_hold_id=order_hold_id)
         return False
+
+
+def get_cancellation_fee_config(
+    country_code: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[float]:
+    """
+    Get cancellation fee configuration for a country.
+    
+    Args:
+        country_code: Country code (e.g., 'GA', 'CM')
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Cancellation fee amount if found, None otherwise
+    """
+    query = """
+    query GetCancellationFee($countryCode: String!, $configKey: String!) {
+      application_configurations(
+        where: {
+          config_key: { _eq: $configKey }
+          country_code: { _eq: $countryCode }
+          status: { _eq: "active" }
+        }
+        limit: 1
+      ) {
+        id
+        number_value
+      }
+    }
+    """
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-hasura-admin-secret": hasura_admin_secret,
+    }
+    
+    payload = {
+        "query": query,
+        "variables": {"countryCode": country_code, "configKey": "cancellation_fee"},
+    }
+    
+    log_info("Fetching cancellation fee config", country_code=country_code)
+    
+    try:
+        response = requests.post(
+            hasura_endpoint,
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        if "errors" in result:
+            log_error("Hasura query error", country_code=country_code, errors=result['errors'])
+            return None
+        
+        configs = result.get("data", {}).get("application_configurations", [])
+        if not configs:
+            log_info("Cancellation fee config not found", country_code=country_code)
+            return None
+        
+        config = configs[0]
+        fee_value = config.get("number_value")
+        if fee_value is None:
+            log_info("Cancellation fee config has no number_value", country_code=country_code)
+            return None
+        
+        fee = float(fee_value)
+        log_info("Cancellation fee config found", country_code=country_code, fee=fee)
+        return fee
+        
+    except requests.exceptions.RequestException as e:
+        log_error("HTTP error fetching cancellation fee config", error=e, country_code=country_code)
+        return None
+    except Exception as e:
+        log_error("Unexpected error fetching cancellation fee config", error=e, country_code=country_code)
+        return None
+
+
+def get_order_business_location_country(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[str]:
+    """
+    Get the country code from the order's business location address.
+    
+    Args:
+        order_id: Order ID
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Country code if found, None otherwise
+    """
+    query = """
+    query GetOrderBusinessLocationCountry($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        business_location {
+          address {
+            country
+          }
+        }
+      }
+    }
+    """
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-hasura-admin-secret": hasura_admin_secret,
+    }
+    
+    payload = {
+        "query": query,
+        "variables": {"orderId": order_id},
+    }
+    
+    log_info("Fetching order business location country", order_id=order_id)
+    
+    try:
+        response = requests.post(
+            hasura_endpoint,
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        if "errors" in result:
+            log_error("Hasura query error", order_id=order_id, errors=result['errors'])
+            return None
+        
+        order_data = result.get("data", {}).get("orders_by_pk")
+        if not order_data:
+            log_error("Order not found", order_id=order_id)
+            return None
+        
+        business_location = order_data.get("business_location")
+        if not business_location:
+            log_error("Business location not found", order_id=order_id)
+            return None
+        
+        address = business_location.get("address")
+        if not address:
+            log_error("Address not found", order_id=order_id)
+            return None
+        
+        country = address.get("country")
+        log_info("Order business location country found", order_id=order_id, country=country)
+        return country
+        
+    except requests.exceptions.RequestException as e:
+        log_error("HTTP error fetching order business location country", error=e, order_id=order_id)
+        return None
+    except Exception as e:
+        log_error("Unexpected error fetching order business location country", error=e, order_id=order_id)
+        return None
+
+
+def register_cancellation_fee_transactions(
+    order_id: str,
+    order_number: str,
+    client_account_id: str,
+    business_account_id: str,
+    fee_amount: float,
+    currency: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Dict[str, Any]:
+    """
+    Register cancellation fee transactions: debit client, credit business.
+    
+    Args:
+        order_id: Order ID
+        order_number: Order number for memo
+        client_account_id: Client account ID (to debit)
+        business_account_id: Business account ID (to credit)
+        fee_amount: Cancellation fee amount
+        currency: Currency code
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Dictionary with success status and transaction IDs
+    """
+    log_info(
+        "Registering cancellation fee transactions",
+        order_id=order_id,
+        fee_amount=fee_amount,
+        client_account_id=client_account_id,
+        business_account_id=business_account_id,
+    )
+    
+    # Debit client account
+    client_debit_memo = f"Cancellation fee for order {order_number}"
+    client_transaction_id = register_account_transaction(
+        client_account_id,
+        fee_amount,
+        "fee",
+        client_debit_memo,
+        order_id,
+        hasura_endpoint,
+        hasura_admin_secret
+    )
+    
+    if not client_transaction_id:
+        log_error("Failed to register client cancellation fee transaction", order_id=order_id)
+        return {"success": False, "error": "Failed to debit client account"}
+    
+    log_info("Client cancellation fee transaction registered", order_id=order_id, transaction_id=client_transaction_id)
+    
+    # Credit business account
+    business_credit_memo = f"Cancellation fee received for order {order_number}"
+    business_transaction_id = register_account_transaction(
+        business_account_id,
+        fee_amount,
+        "deposit",
+        business_credit_memo,
+        order_id,
+        hasura_endpoint,
+        hasura_admin_secret
+    )
+    
+    if not business_transaction_id:
+        log_error("Failed to register business cancellation fee transaction", order_id=order_id)
+        return {"success": False, "error": "Failed to credit business account"}
+    
+    log_info("Business cancellation fee transaction registered", order_id=order_id, transaction_id=business_transaction_id)
+    
+    return {
+        "success": True,
+        "client_transaction_id": client_transaction_id,
+        "business_transaction_id": business_transaction_id,
+    }
 

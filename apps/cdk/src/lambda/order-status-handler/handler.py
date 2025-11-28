@@ -11,6 +11,9 @@ from hasura_client import (
     get_account_by_user_and_currency,
     register_account_transaction,
     update_order_hold_status,
+    get_cancellation_fee_config,
+    get_order_business_location_country,
+    register_cancellation_fee_transactions,
 )
 from distance import calculate_haversine_distance, format_distance
 from notifications import send_notifications_to_nearby_agents
@@ -51,12 +54,17 @@ def parse_sqs_event_message(record: Dict[str, Any]) -> Optional[SQSEventMessage]
             orderId=body.get("orderId"),
             timestamp=body.get("timestamp"),
             status=body.get("status"),
+            cancelledBy=body.get("cancelledBy"),
+            cancellationReason=body.get("cancellationReason"),
+            previousStatus=body.get("previousStatus"),
+            orderStatus=body.get("orderStatus"),
         )
         log_info(
             "Parsed SQS event message",
             event_type=message.eventType,
             order_id=message.orderId,
             status=message.status,
+            cancelled_by=message.cancelledBy,
         )
         return message
     except Exception as e:
@@ -623,6 +631,264 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     return process_order_event(message.orderId, event_type, environment, order_status=message.status)
 
 
+def process_cancellation_financials(
+    order_id: str,
+    cancelled_by: str,
+    previous_status: Optional[str],
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Dict[str, Any]:
+    """
+    Process financial transactions for order cancellation.
+    
+    Args:
+        order_id: Order ID
+        cancelled_by: Who cancelled ('client' or 'business')
+        previous_status: Order status before cancellation
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Result dictionary with success status
+    """
+    try:
+        log_info("Starting cancellation financial processing", order_id=order_id, cancelled_by=cancelled_by, previous_status=previous_status)
+        
+        # Get complete order details
+        order = get_complete_order_details(order_id, hasura_endpoint, hasura_admin_secret)
+        
+        if not order:
+            log_error("Order not found", order_id=order_id)
+            return {"success": False, "error": "Order not found"}
+        
+        if not order.business or not order.business.user_id:
+            log_error("Business user not found", order_id=order_id)
+            return {"success": False, "error": "Business user not found"}
+        
+        if not order.client_id or not order.client or not order.client.user_id:
+            log_error("Client not found", order_id=order_id)
+            return {"success": False, "error": "Client not found"}
+        
+        # Get or create order hold
+        order_hold = get_or_create_order_hold(order_id, order, hasura_endpoint, hasura_admin_secret)
+        
+        if not order_hold:
+            log_error("Failed to get or create order hold", order_id=order_id)
+            return {"success": False, "error": "Failed to get or create order hold"}
+        
+        log_info("Order hold retrieved", order_id=order_id, hold_id=order_hold.id)
+        
+        # Release agent hold if agent is assigned
+        if order.assigned_agent and order.assigned_agent.user_id:
+            agent_user_id = order.assigned_agent.user_id
+            agent_account = get_account_by_user_and_currency(
+                agent_user_id,
+                order.currency,
+                hasura_endpoint,
+                hasura_admin_secret
+            )
+            
+            if agent_account:
+                agent_hold_amount = order_hold.agent_hold_amount
+                if agent_hold_amount > 0:
+                    log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
+                    transaction_id = register_account_transaction(
+                        agent_account.id,
+                        agent_hold_amount,
+                        "release",
+                        f"Hold released for order {order.order_number}",
+                        order_id,
+                        hasura_endpoint,
+                        hasura_admin_secret
+                    )
+                    if transaction_id:
+                        log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
+                    else:
+                        log_error("Failed to release agent hold", order_id=order_id)
+            else:
+                log_error("Agent account not found", order_id=order_id, agent_user_id=agent_user_id)
+        
+        # Get client account
+        client_user_id = order.client.user_id
+        client_account = get_account_by_user_and_currency(
+            client_user_id,
+            order.currency,
+            hasura_endpoint,
+            hasura_admin_secret
+        )
+        
+        if not client_account:
+            log_error("Client account not found", order_id=order_id, client_user_id=client_user_id)
+            return {"success": False, "error": "Client account not found"}
+        
+        # Process cancellation fee
+        cancellation_fee = 0.0
+        if cancelled_by == "client" and previous_status and previous_status in ["confirmed", "preparing", "ready_for_pickup"]:
+            # Client cancelling after confirmation - fee applies
+            log_info("Client cancelled after confirmation, checking for cancellation fee", order_id=order_id, previous_status=previous_status)
+            
+            # Get country code from business location
+            country_code = get_order_business_location_country(order_id, hasura_endpoint, hasura_admin_secret)
+            if not country_code:
+                log_info("Country code not found, defaulting to GA", order_id=order_id)
+                country_code = "GA"
+            
+            # Get cancellation fee
+            cancellation_fee = get_cancellation_fee_config(country_code, hasura_endpoint, hasura_admin_secret)
+            if cancellation_fee is None:
+                log_info("Cancellation fee config not found, no fee will be charged", order_id=order_id, country_code=country_code)
+                cancellation_fee = 0.0
+            else:
+                log_info("Cancellation fee found", order_id=order_id, fee=cancellation_fee, country_code=country_code)
+                
+                # Get business account
+                business_user_id = order.business.user_id
+                business_account = get_account_by_user_and_currency(
+                    business_user_id,
+                    order.currency,
+                    hasura_endpoint,
+                    hasura_admin_secret
+                )
+                
+                if not business_account:
+                    log_error("Business account not found", order_id=order_id, business_user_id=business_user_id)
+                    return {"success": False, "error": "Business account not found"}
+                
+                # Register cancellation fee transactions
+                fee_result = register_cancellation_fee_transactions(
+                    order_id,
+                    order.order_number,
+                    client_account.id,
+                    business_account.id,
+                    cancellation_fee,
+                    order.currency,
+                    hasura_endpoint,
+                    hasura_admin_secret
+                )
+                
+                if not fee_result.get("success"):
+                    log_error("Failed to register cancellation fee transactions", order_id=order_id, error=fee_result.get("error"))
+                    return {"success": False, "error": "Failed to process cancellation fee"}
+                
+                log_info("Cancellation fee transactions registered successfully", order_id=order_id)
+        
+        elif cancelled_by == "business":
+            # Business cancelling - no fee to client
+            log_info("Business cancelled order, no cancellation fee", order_id=order_id)
+        
+        # Release client hold (minus cancellation fee if applicable)
+        client_hold_amount = order_hold.client_hold_amount
+        refund_amount = client_hold_amount - cancellation_fee
+        
+        if refund_amount > 0:
+            log_info("Releasing client hold", order_id=order_id, amount=refund_amount, cancellation_fee=cancellation_fee)
+            transaction_id = register_account_transaction(
+                client_account.id,
+                refund_amount,
+                "release",
+                f"Hold released for order {order.order_number}" + (f" (cancellation fee: {cancellation_fee} deducted)" if cancellation_fee > 0 else ""),
+                order_id,
+                hasura_endpoint,
+                hasura_admin_secret
+            )
+            if transaction_id:
+                log_info("Client hold released successfully", order_id=order_id, transaction_id=transaction_id)
+            else:
+                log_error("Failed to release client hold", order_id=order_id)
+        
+        # Release delivery fees hold
+        delivery_fees = order_hold.delivery_fees
+        if delivery_fees > 0:
+            log_info("Releasing delivery fees hold", order_id=order_id, amount=delivery_fees)
+            transaction_id = register_account_transaction(
+                client_account.id,
+                delivery_fees,
+                "release",
+                f"Hold released for order {order.order_number} delivery fee",
+                order_id,
+                hasura_endpoint,
+                hasura_admin_secret
+            )
+            if transaction_id:
+                log_info("Delivery fees hold released successfully", order_id=order_id, transaction_id=transaction_id)
+            else:
+                log_error("Failed to release delivery fees hold", order_id=order_id)
+        
+        # Update order hold status to cancelled
+        success = update_order_hold_status(
+            order_hold.id,
+            "cancelled",
+            hasura_endpoint,
+            hasura_admin_secret
+        )
+        
+        if not success:
+            log_error("Failed to update order hold status", order_id=order_id)
+            return {"success": False, "error": "Failed to update order hold status"}
+        
+        log_info("Cancellation financial processing completed successfully", order_id=order_id, cancellation_fee=cancellation_fee)
+        return {"success": True, "cancellation_fee": cancellation_fee}
+        
+    except Exception as e:
+        log_error("Error in cancellation financial processing", error=e, order_id=order_id)
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle order.cancelled event."""
+    log_info("Handling order.cancelled event")
+    
+    record = event.get("Records", [{}])[0]
+    message = parse_sqs_event_message(record)
+    
+    if not message:
+        log_error("Failed to parse event message in handle_order_cancelled")
+        return {"success": False, "error": "Failed to parse event message"}
+    
+    if not message.cancelledBy:
+        log_error("cancelledBy not found in cancellation message", order_id=message.orderId)
+        return {"success": False, "error": "cancelledBy not found in message"}
+    
+    environment = os.environ.get("ENVIRONMENT", "development")
+    hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+    
+    if not hasura_endpoint:
+        log_error("GRAPHQL_ENDPOINT not configured")
+        return {"success": False, "error": "GRAPHQL_ENDPOINT not configured"}
+    
+    # Get Hasura admin secret
+    hasura_admin_secret = get_hasura_admin_secret(environment)
+    if not hasura_admin_secret:
+        log_error("Failed to retrieve Hasura admin secret")
+        return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
+    
+    # Process cancellation financials
+    financial_result = process_cancellation_financials(
+        message.orderId,
+        message.cancelledBy,
+        message.previousStatus,
+        hasura_endpoint,
+        hasura_admin_secret
+    )
+    
+    if not financial_result.get("success"):
+        log_error("Cancellation financial processing failed", order_id=message.orderId, error=financial_result.get("error"))
+        # Continue even if financial processing fails - order is already cancelled
+    
+    # TODO: Send cancellation notifications
+    # Notification logic should be moved here from backend
+    # For now, we'll log that notifications should be sent
+    log_info("Cancellation notifications should be sent", order_id=message.orderId, cancelled_by=message.cancelledBy)
+    
+    return {
+        "success": financial_result.get("success", False),
+        "financial_processing": financial_result,
+        "cancellation_fee": financial_result.get("cancellation_fee", 0),
+    }
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Main Lambda handler entry point.
@@ -674,6 +940,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 result = handle_order_completed({"Records": [record]})
             elif event_type == "order.status.updated":
                 result = handle_order_status_updated({"Records": [record]})
+            elif event_type == "order.cancelled":
+                result = handle_order_cancelled({"Records": [record]})
             else:
                 log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
                 result = {

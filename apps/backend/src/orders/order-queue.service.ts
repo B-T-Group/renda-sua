@@ -100,6 +100,33 @@ export class OrderQueueService {
   }
 
   /**
+   * Send order.cancelled message to SQS queue
+   */
+  async sendOrderCancelledMessage(
+    orderId: string,
+    cancelledBy: 'client' | 'business',
+    cancellationReason?: string,
+    previousStatus?: string
+  ): Promise<void> {
+    if (!this.queueUrl) {
+      this.logger.debug('Skipping SQS message - queue URL not configured');
+      return;
+    }
+
+    const message = {
+      eventType: 'order.cancelled',
+      orderId,
+      timestamp: new Date().toISOString(),
+      cancelledBy,
+      cancellationReason,
+      previousStatus,
+      orderStatus: 'cancelled',
+    };
+
+    await this.sendMessage(message);
+  }
+
+  /**
    * Send message to SQS FIFO queue
    */
   private async sendMessage(message: Record<string, unknown>): Promise<void> {
