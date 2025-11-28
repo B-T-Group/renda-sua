@@ -151,7 +151,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       `RefreshAirtelMobilePaymentsKey-${environment}`,
       {
         functionName: `refresh-airtel-mobile-payments-key-${environment}`,
-        runtime: lambda.Runtime.PYTHON_3_9,
+        runtime: lambda.Runtime.PYTHON_3_11,
         handler: 'refresh-airtel-mobile-payments-key.handler',
         code: lambda.Code.fromAsset('src/lambda'),
         timeout: cdk.Duration.minutes(5),
