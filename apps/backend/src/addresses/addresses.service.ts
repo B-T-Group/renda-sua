@@ -272,7 +272,7 @@ export class AddressesService {
           return;
       }
 
-      const addressIdsResult = await this.hasuraUserService.executeQuery(
+      const addressIdsResult = await this.hasuraSystemService.executeQuery(
         addressIdsQuery,
         { userId }
       );
@@ -664,7 +664,7 @@ export class AddressesService {
         }
       `;
 
-      const ownershipResult = await this.hasuraUserService.executeQuery(
+      const ownershipResult = await this.hasuraSystemService.executeQuery(
         checkOwnershipQuery,
         { addressId, userId: user.id, userType: user.user_type_id }
       );
