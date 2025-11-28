@@ -1,7 +1,7 @@
 """Hasura GraphQL client and queries."""
 import os
 import requests
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from models import (
     Order,
     BusinessLocation,
@@ -1083,6 +1083,175 @@ def get_cancellation_fee_config(
         return None
     except Exception as e:
         log_error("Unexpected error fetching cancellation fee config", error=e, country_code=country_code)
+        return None
+
+
+def get_order_details_for_notification(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Get order details with all fields needed for notifications.
+    
+    Args:
+        order_id: Order ID
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Dictionary with order details for notifications, None if not found
+    """
+    query = """
+    query GetOrderForNotification($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        id
+        order_number
+        current_status
+        subtotal
+        base_delivery_fee
+        per_km_delivery_fee
+        tax_amount
+        total_amount
+        currency
+        estimated_delivery_time
+        special_instructions
+        client {
+          user {
+            first_name
+            last_name
+            email
+          }
+        }
+        business {
+          name
+          is_verified
+          user {
+            email
+          }
+        }
+        assigned_agent {
+          user {
+            first_name
+            last_name
+            email
+          }
+        }
+        delivery_address {
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+        }
+        order_items {
+          item_name
+          quantity
+          unit_price
+          total_price
+        }
+      }
+    }
+    """
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-hasura-admin-secret": hasura_admin_secret,
+    }
+    
+    payload = {
+        "query": query,
+        "variables": {"orderId": order_id},
+    }
+    
+    log_info("Fetching order details for notification", order_id=order_id)
+    
+    try:
+        response = requests.post(
+            hasura_endpoint,
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        if "errors" in result:
+            log_error("Hasura query error", order_id=order_id, errors=result['errors'])
+            return None
+        
+        order_data = result.get("data", {}).get("orders_by_pk")
+        if not order_data:
+            log_error("Order not found", order_id=order_id)
+            return None
+        
+        # Format delivery address
+        delivery_address_data = order_data.get("delivery_address", {})
+        delivery_address_parts = [
+            delivery_address_data.get("address_line_1", ""),
+            delivery_address_data.get("address_line_2", ""),
+            delivery_address_data.get("city", ""),
+            delivery_address_data.get("state", ""),
+            delivery_address_data.get("postal_code", ""),
+            delivery_address_data.get("country", ""),
+        ]
+        delivery_address = ", ".join(part for part in delivery_address_parts if part)
+        
+        # Format client name
+        client_data = order_data.get("client", {}).get("user", {})
+        client_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
+        
+        # Format agent name (if exists)
+        agent_name = None
+        agent_email = None
+        assigned_agent_data = order_data.get("assigned_agent")
+        if assigned_agent_data:
+            agent_user = assigned_agent_data.get("user", {})
+            agent_name = f"{agent_user.get('first_name', '')} {agent_user.get('last_name', '')}".strip()
+            agent_email = agent_user.get("email")
+        
+        # Format order items
+        order_items = []
+        for item in order_data.get("order_items", []):
+            order_items.append({
+                "name": item.get("item_name", "Unknown Item"),
+                "quantity": item.get("quantity", 0),
+                "unitPrice": float(item.get("unit_price", 0)),
+                "totalPrice": float(item.get("total_price", 0)),
+            })
+        
+        notification_data = {
+            "orderId": order_data["id"],
+            "orderNumber": order_data.get("order_number", "Unknown"),
+            "clientName": client_name,
+            "clientEmail": client_data.get("email"),
+            "businessName": order_data.get("business", {}).get("name", "Unknown Business"),
+            "businessEmail": order_data.get("business", {}).get("user", {}).get("email"),
+            "businessVerified": order_data.get("business", {}).get("is_verified", False),
+            "agentName": agent_name,
+            "agentEmail": agent_email,
+            "orderStatus": order_data.get("current_status", "Unknown"),
+            "orderItems": order_items,
+            "subtotal": float(order_data.get("subtotal", 0)),
+            "deliveryFee": float(order_data.get("base_delivery_fee", 0)),
+            "fastDeliveryFee": float(order_data.get("per_km_delivery_fee", 0)),
+            "taxAmount": float(order_data.get("tax_amount", 0)),
+            "totalAmount": float(order_data.get("total_amount", 0)),
+            "currency": order_data.get("currency", "USD"),
+            "deliveryAddress": delivery_address,
+            "estimatedDeliveryTime": order_data.get("estimated_delivery_time"),
+            "specialInstructions": order_data.get("special_instructions"),
+        }
+        
+        log_info("Order details for notification fetched successfully", order_id=order_id)
+        return notification_data
+        
+    except requests.exceptions.RequestException as e:
+        log_error("HTTP error fetching order details for notification", error=e, order_id=order_id)
+        return None
+    except Exception as e:
+        log_error("Unexpected error fetching order details for notification", error=e, order_id=order_id)
         return None
 
 
