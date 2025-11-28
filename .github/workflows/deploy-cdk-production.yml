@@ -52,6 +52,11 @@ jobs:
           cd apps/cdk
           cdk bootstrap --require-approval never || echo "CDK already bootstrapped"
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
       - name: Build Lambda layer
         run: |
           cd apps/cdk/src/lambda-layer
