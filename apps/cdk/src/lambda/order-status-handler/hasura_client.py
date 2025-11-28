@@ -723,7 +723,13 @@ def determine_transaction_balance_update(
     Returns:
         TransactionInfo object with isCredit and balanceUpdate
     """
-    if transaction_type == "release":
+    if transaction_type == "deposit":
+        # Deposit: increases available balance (money added to account)
+        return TransactionInfo(
+            isCredit=True,
+            balanceUpdate=BalanceUpdate(available=amount, withheld=0),
+        )
+    elif transaction_type == "release":
         # Release: increases withheld balance (money moves from available to withheld)
         # Note: This matches backend logic where release increases withheld_balance
         return TransactionInfo(
@@ -945,7 +951,7 @@ def update_order_hold_status(
         True if successful, False otherwise
     """
     mutation = """
-    mutation UpdateOrderHold($orderHoldId: uuid!, $status: String!) {
+    mutation UpdateOrderHold($orderHoldId: uuid!, $status: order_hold_status_enum!) {
       update_order_holds_by_pk(
         pk_columns: { id: $orderHoldId },
         _set: { status: $status }

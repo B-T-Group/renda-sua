@@ -511,10 +511,29 @@ def release_hold_and_process_payment(
         
         log_info("Payment transaction processed successfully", order_id=order_id, transaction_id=transaction_id)
         
-        # Note: Commission distribution is complex and involves multiple steps.
-        # For now, we'll skip it and log a warning. This should be handled separately
-        # via a backend API endpoint or by implementing the full commission logic.
-        log_info("Skipping commission distribution - to be handled separately", order_id=order_id)
+        # Distribute commissions
+        log_info("Starting commission distribution", order_id=order_id)
+        from commission_handler import distribute_commissions
+        
+        commission_result = distribute_commissions(
+            order_id=order_id,
+            hasura_endpoint=hasura_endpoint,
+            hasura_admin_secret=hasura_admin_secret
+        )
+        
+        if not commission_result.get("success"):
+            log_error(
+                "Commission distribution failed",
+                order_id=order_id,
+                error=commission_result.get("error"),
+            )
+            # Don't fail the entire process if commission distribution fails
+            # Log the error but continue with order hold status update
+        else:
+            log_info(
+                "Commission distribution completed successfully",
+                order_id=order_id,
+            )
         
         # Update order hold status to completed
         success = update_order_hold_status(

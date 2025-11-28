@@ -79,6 +79,7 @@ class Business:
 class AssignedAgent:
     """Assigned agent model."""
     user_id: str
+    is_verified: Optional[bool] = None
 
 
 @dataclass
