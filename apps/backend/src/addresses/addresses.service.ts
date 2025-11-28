@@ -614,8 +614,70 @@ export class AddressesService {
       const identifier = this.hasuraUserService.getIdentifier();
       const user = await this.getUserInfo(identifier);
 
-      // Get existing address
-      const existingAddress = await this.getAddress(addressId);
+      // Check if address exists
+      const address = await this.getAddressesByIds([addressId]);
+      if (address.length === 0) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Address not found',
+          },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      const existingAddress = address[0];
+
+      // Verify address belongs to user via junction tables
+      let addressBelongsToUser = false;
+      const checkOwnershipQuery = `
+        query CheckAddressOwnership($addressId: uuid!, $userId: uuid!, $userType: String!) {
+          ${
+            user.user_type_id === 'client'
+              ? `
+            client_addresses(where: {address_id: {_eq: $addressId}, client: {user_id: {_eq: $userId}}}) {
+              id
+            }
+          `
+              : user.user_type_id === 'agent'
+              ? `
+            agent_addresses(where: {address_id: {_eq: $addressId}, agent: {user_id: {_eq: $userId}}}) {
+              id
+            }
+          `
+              : user.user_type_id === 'business'
+              ? `
+            business_addresses(where: {address_id: {_eq: $addressId}, business: {user_id: {_eq: $userId}}}) {
+              id
+            }
+          `
+              : ''
+          }
+        }
+      `;
+
+      const ownershipResult = await this.hasuraUserService.executeQuery(
+        checkOwnershipQuery,
+        { addressId, userId: user.id, userType: user.user_type_id }
+      );
+
+      if (user.user_type_id === 'client') {
+        addressBelongsToUser = ownershipResult.client_addresses?.length > 0;
+      } else if (user.user_type_id === 'agent') {
+        addressBelongsToUser = ownershipResult.agent_addresses?.length > 0;
+      } else if (user.user_type_id === 'business') {
+        addressBelongsToUser = ownershipResult.business_addresses?.length > 0;
+      }
+
+      if (!addressBelongsToUser) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Unauthorized access to address',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
 
       // Check if address fields changed (for geocoding)
       const addressFieldsChanged =
