@@ -852,7 +852,7 @@ def register_account_transaction(
             "variables": {
                 "accountId": account_id,
                 "amount": amount,
-                "transactionType": transaction_type.upper(),
+                "transactionType": transaction_type.lower(),
                 "memo": memo,
                 "referenceId": reference_id,
             },
