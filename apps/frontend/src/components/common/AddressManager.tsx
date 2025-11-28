@@ -75,6 +75,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     loading,
     error,
     successMessage,
+    warning,
     addAddress,
     updateAddress,
     deleteAddress,
@@ -101,6 +102,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
   // Handle add address
   const handleAddAddress = () => {
+    clearMessages(); // Clear warnings when opening dialog
     setAddressForm({
       address_line_1: '',
       address_line_2: '',
@@ -117,6 +119,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
   // Handle edit address
   const handleEditAddress = (address: Address) => {
+    clearMessages(); // Clear warnings when opening dialog
     setAddressForm({
       address_line_1: address.address_line_1,
       address_line_2: address.address_line_2 || '',
@@ -282,6 +285,11 @@ const AddressManager: React.FC<AddressManagerProps> = ({
           {successMessage && (
             <Alert severity="success" sx={{ mb: 2 }} onClose={clearMessages}>
               {successMessage}
+            </Alert>
+          )}
+          {warning && (
+            <Alert severity="warning" sx={{ mb: 2 }} onClose={clearMessages}>
+              {warning}
             </Alert>
           )}
 

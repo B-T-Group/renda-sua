@@ -112,7 +112,15 @@
     "missingAddressTitle": "No Address Found",
     "noAddresses": "No addresses found",
     "primary": "Primary",
-    "title": "Addresses"
+    "title": "Addresses",
+    "warnings": {
+      "invalidAddress": "This address doesn't seem valid. Please verify the address details.",
+      "geocodingFailed": "Unable to calculate location coordinates for this address."
+    },
+    "messages": {
+      "updateSuccess": "Address updated successfully",
+      "deleteSuccess": "Address deleted successfully"
+    }
   },
   "admin": {
     "configurations": {

@@ -6,7 +6,7 @@ import LoadingPage from '../common/LoadingPage';
 import ErrorPage from '../pages/ErrorPage';
 
 const ProfileRouter: React.FC = () => {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, user } = useAuth0();
   const navigate = useNavigate();
   const { loading, error, userType, isProfileComplete, refetch } =
     useUserProfileContext();
@@ -31,6 +31,16 @@ const ProfileRouter: React.FC = () => {
       // Profile is complete, route based on user type
       switch (userType) {
         case 'client':
+          // Check if it's the first login
+          const firstLogin = user?.['https://groupe-bt.com/first_login'];
+          // If it's NOT the first login, redirect to items page
+          if (firstLogin === false || firstLogin === undefined) {
+            navigate('/items');
+          } else {
+            // First login, redirect to dashboard
+            navigate('/dashboard');
+          }
+          break;
         case 'agent':
         case 'business':
           navigate('/dashboard');
@@ -41,7 +51,7 @@ const ProfileRouter: React.FC = () => {
           break;
       }
     }
-  }, [isAuthenticated, loading, error, userType, isProfileComplete, navigate]);
+  }, [isAuthenticated, loading, error, userType, isProfileComplete, navigate, user]);
 
   // Show loading while checking profile
   if (loading) {

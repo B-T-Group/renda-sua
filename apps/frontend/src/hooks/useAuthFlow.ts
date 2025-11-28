@@ -39,7 +39,15 @@ export const useAuthFlow = () => {
         // User has a complete profile, redirect to appropriate page
         switch (userType) {
           case 'client':
-            navigate('/dashboard'); // Redirect clients to dashboard
+            // Check if it's the first login
+            const firstLogin = user?.['https://groupe-bt.com/first_login'];
+            // If it's NOT the first login, redirect to items page
+            if (firstLogin === false || firstLogin === undefined) {
+              navigate('/items');
+            } else {
+              // First login, redirect to dashboard
+              navigate('/dashboard');
+            }
             break;
           case 'agent':
             navigate('/dashboard'); // Redirect agents to their dashboard
@@ -72,6 +80,7 @@ export const useAuthFlow = () => {
     userType,
     isProfileComplete,
     location.pathname,
+    navigate,
   ]);
 
   return {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useGraphQLRequest } from './useGraphQLRequest';
+import { useApiClient } from './useApiClient';
 
 export interface BusinessLocation {
   id: string;
@@ -210,6 +211,8 @@ export const useBusinessLocations = (
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const apiClient = useApiClient();
 
   const { execute: executeQuery, refetch: refetchQuery } = useGraphQLRequest(
     GET_BUSINESS_LOCATIONS
@@ -324,6 +327,7 @@ export const useBusinessLocations = (
     ) => {
       setLoading(true);
       setError(null);
+      setWarning(null);
       try {
         // Extract address data if present
         const { address, ...locationData } = data;
@@ -331,10 +335,58 @@ export const useBusinessLocations = (
         // Update location data
         const result = await executeUpdateMutation({ id, data: locationData });
 
-        // If address data is provided, update the address as well
+        // If address data is provided, update the address using REST API
         if (address && result.update_business_locations_by_pk?.address?.id) {
-          const addressId = result.update_business_locations_by_pk.address.id;
-          await executeUpdateAddressMutation({ id: addressId, data: address });
+          if (!apiClient) {
+            throw new Error('API client not available');
+          }
+
+          // Prepare address update data
+          const addressUpdateData: any = {};
+          if (address.address_line_1 !== undefined) {
+            addressUpdateData.address_line_1 = address.address_line_1;
+          }
+          if (address.address_line_2 !== undefined) {
+            addressUpdateData.address_line_2 = address.address_line_2;
+          }
+          if (address.city !== undefined) {
+            addressUpdateData.city = address.city;
+          }
+          if (address.state !== undefined) {
+            addressUpdateData.state = address.state;
+          }
+          if (address.postal_code !== undefined) {
+            addressUpdateData.postal_code = address.postal_code;
+          }
+          if (address.country !== undefined) {
+            addressUpdateData.country = address.country;
+          }
+          if (address.address_type !== undefined) {
+            addressUpdateData.address_type = address.address_type;
+          }
+          if (address.latitude !== undefined) {
+            addressUpdateData.latitude = address.latitude;
+          }
+          if (address.longitude !== undefined) {
+            addressUpdateData.longitude = address.longitude;
+          }
+
+          // Use PATCH endpoint for business location address
+          const addressResponse = await apiClient.patch<{
+            success: boolean;
+            message: string;
+            data: {
+              address: any;
+              warning?: string;
+            };
+          }>(`/addresses/business-locations/${id}`, addressUpdateData);
+
+          if (addressResponse.data.success) {
+            // Set warning if present
+            if (addressResponse.data.data.warning) {
+              setWarning(addressResponse.data.data.warning);
+            }
+          }
 
           // Refetch locations to get updated data
           await fetchLocations();
@@ -350,19 +402,23 @@ export const useBusinessLocations = (
         }
 
         return result.update_business_locations_by_pk;
-      } catch (err) {
+      } catch (err: any) {
         console.error('useBusinessLocations: Error updating location:', err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to update business location'
-        );
+        
+        // Handle axios error response
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('Failed to update business location');
+        }
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [executeUpdateMutation, executeUpdateAddressMutation, fetchLocations]
+    [executeUpdateMutation, fetchLocations, apiClient]
   );
 
   const deleteLocation = useCallback(
@@ -403,6 +459,7 @@ export const useBusinessLocations = (
     locations,
     loading,
     error,
+    warning,
     fetchLocations,
     addLocation,
     updateLocation,

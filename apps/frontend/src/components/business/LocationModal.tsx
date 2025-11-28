@@ -36,6 +36,7 @@ interface LocationModalProps {
   location?: BusinessLocation | null;
   loading?: boolean;
   error?: string | null;
+  warning?: string | null;
 }
 
 const LocationModal: React.FC<LocationModalProps> = ({
@@ -45,6 +46,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
   location,
   loading = false,
   error = null,
+  warning = null,
 }) => {
   const { t } = useTranslation();
   const isEditing = !!location;
@@ -178,6 +180,11 @@ const LocationModal: React.FC<LocationModalProps> = ({
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
+            </Alert>
+          )}
+          {warning && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {warning}
             </Alert>
           )}
 

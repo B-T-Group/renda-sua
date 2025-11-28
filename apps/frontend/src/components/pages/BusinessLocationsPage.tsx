@@ -54,6 +54,7 @@ const BusinessLocationsPage: React.FC = () => {
     locations,
     loading: locationsLoading,
     error: locationsError,
+    warning: locationsWarning,
     addLocation,
     updateLocation,
     deleteLocation,
@@ -451,6 +452,7 @@ const BusinessLocationsPage: React.FC = () => {
         location={editingLocation}
         loading={locationsLoading}
         error={locationsError}
+        warning={locationsWarning}
       />
 
       {/* Delete Confirmation Dialog */}

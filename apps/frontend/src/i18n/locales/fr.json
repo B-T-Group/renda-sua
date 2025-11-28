@@ -112,7 +112,15 @@
     "missingAddressTitle": "Aucune Adresse Trouvée",
     "noAddresses": "Aucune adresse trouvée",
     "primary": "Principal",
-    "title": "Adresses"
+    "title": "Adresses",
+    "warnings": {
+      "invalidAddress": "Cette adresse ne semble pas valide. Veuillez vérifier les détails de l'adresse.",
+      "geocodingFailed": "Impossible de calculer les coordonnées de localisation pour cette adresse."
+    },
+    "messages": {
+      "updateSuccess": "Adresse mise à jour avec succès",
+      "deleteSuccess": "Adresse supprimée avec succès"
+    }
   },
   "admin": {
     "configurations": {

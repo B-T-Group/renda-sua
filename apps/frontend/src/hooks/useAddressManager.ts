@@ -50,7 +50,22 @@ export interface AddressApiResponse {
         updated_at: string;
       };
     };
+    warning?: string;
   };
+}
+
+export interface AddressUpdateResponse {
+  success: boolean;
+  message: string;
+  data: {
+    address: Address;
+    warning?: string;
+  };
+}
+
+export interface AddressDeleteResponse {
+  success: boolean;
+  message: string;
 }
 
 export type EntityType = 'agent' | 'client' | 'business';
@@ -182,6 +197,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [warning, setWarning] = useState<string | null>(null);
 
   // GraphQL hooks for fetching and other operations
   const { execute: executeAgentQuery } = useGraphQLRequest(GET_AGENT_ADDRESSES);
@@ -284,6 +300,13 @@ export const useAddressManager = (config: AddressManagerConfig) => {
 
         if (result.success) {
           setSuccessMessage(result.message);
+          
+          // Set warning if present
+          if (result.data.warning) {
+            setWarning(result.data.warning);
+          } else {
+            setWarning(null);
+          }
 
           // Refresh the addresses list
           await fetchAddresses();
@@ -293,7 +316,10 @@ export const useAddressManager = (config: AddressManagerConfig) => {
             onAccountCreated(result.data.accountCreated.account);
           }
 
-          return result.data.address;
+          return {
+            address: result.data.address,
+            warning: result.data.warning,
+          };
         } else {
           throw new Error(result.message || 'Failed to add address');
         }
@@ -317,71 +343,147 @@ export const useAddressManager = (config: AddressManagerConfig) => {
     [entityId, apiClient, fetchAddresses, onAccountCreated]
   );
 
-  // Update existing address
+  // Update existing address using REST API
   const updateAddressData = useCallback(
     async (addressId: string, addressData: AddressFormData) => {
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+
       setLoading(true);
       setError(null);
       setSuccessMessage('');
+      setWarning(null);
 
       try {
-        const result = await updateAddress({
-          id: addressId,
-          address: addressData,
-        });
-
-        if (result.update_addresses_by_pk) {
-          setSuccessMessage('Address updated successfully!');
-          await fetchAddresses(); // Refresh the list
-          return result.update_addresses_by_pk;
+        // Prepare the request data for the API
+        const requestData: Partial<AddressFormData> = {};
+        if (addressData.address_line_1 !== undefined) {
+          requestData.address_line_1 = addressData.address_line_1;
         }
-      } catch (err) {
-        console.error('Error updating address:', err);
-        setError(
-          err instanceof Error ? err.message : 'Failed to update address'
+        if (addressData.address_line_2 !== undefined) {
+          requestData.address_line_2 = addressData.address_line_2;
+        }
+        if (addressData.city !== undefined) {
+          requestData.city = addressData.city;
+        }
+        if (addressData.state !== undefined) {
+          requestData.state = addressData.state;
+        }
+        if (addressData.postal_code !== undefined) {
+          requestData.postal_code = addressData.postal_code;
+        }
+        if (addressData.country !== undefined) {
+          requestData.country = addressData.country;
+        }
+        if (addressData.is_primary !== undefined) {
+          requestData.is_primary = addressData.is_primary;
+        }
+        if (addressData.address_type !== undefined) {
+          requestData.address_type = addressData.address_type;
+        }
+        if (addressData.latitude !== undefined) {
+          requestData.latitude = addressData.latitude;
+        }
+        if (addressData.longitude !== undefined) {
+          requestData.longitude = addressData.longitude;
+        }
+
+        // Use PATCH for partial update
+        const response = await apiClient.patch<AddressUpdateResponse>(
+          `/addresses/${addressId}`,
+          requestData
         );
+
+        const result = response.data;
+
+        if (result.success) {
+          setSuccessMessage(result.message);
+          
+          // Set warning if present
+          if (result.data.warning) {
+            setWarning(result.data.warning);
+          } else {
+            setWarning(null);
+          }
+
+          await fetchAddresses(); // Refresh the list
+          return {
+            address: result.data.address,
+            warning: result.data.warning,
+          };
+        } else {
+          throw new Error(result.message || 'Failed to update address');
+        }
+      } catch (err: any) {
+        console.error('Error updating address:', err);
+        
+        // Handle axios error response
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else if (err.message) {
+          setError(err.message);
+        } else {
+          setError('Failed to update address');
+        }
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [updateAddress, fetchAddresses]
+    [apiClient, fetchAddresses]
   );
 
-  // Delete address
+  // Delete address using REST API
   const deleteAddressData = useCallback(
     async (addressId: string) => {
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+
       setLoading(true);
       setError(null);
       setSuccessMessage('');
+      setWarning(null);
 
       try {
-        const result = await deleteAddress({
-          id: addressId,
-        });
-
-        if (result.delete_addresses_by_pk) {
-          setSuccessMessage('Address deleted successfully!');
-          await fetchAddresses(); // Refresh the list
-          return result.delete_addresses_by_pk;
-        }
-      } catch (err) {
-        console.error('Error deleting address:', err);
-        setError(
-          err instanceof Error ? err.message : 'Failed to delete address'
+        const response = await apiClient.delete<AddressDeleteResponse>(
+          `/addresses/${addressId}`
         );
+
+        const result = response.data;
+
+        if (result.success) {
+          setSuccessMessage(result.message);
+          await fetchAddresses(); // Refresh the list
+          return { success: true };
+        } else {
+          throw new Error(result.message || 'Failed to delete address');
+        }
+      } catch (err: any) {
+        console.error('Error deleting address:', err);
+        
+        // Handle axios error response
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else if (err.message) {
+          setError(err.message);
+        } else {
+          setError('Failed to delete address');
+        }
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [deleteAddress, fetchAddresses]
+    [apiClient, fetchAddresses]
   );
 
   // Clear messages
   const clearMessages = useCallback(() => {
     setSuccessMessage('');
     setError(null);
+    setWarning(null);
   }, []);
 
   // Auto-fetch addresses when component mounts or entityId changes
@@ -399,6 +501,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
     loading,
     error,
     successMessage,
+    warning,
 
     // Actions
     fetchAddresses,
