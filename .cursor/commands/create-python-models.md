@@ -1,34 +1,61 @@
-You have access to the hasura-mcp tool.
+You are using the hasura-mcp.  
+Write a script that:
 
-Your tasks:
+1. Uses the hasura-mcp introspection to fetch:
 
-1. Use the hasura-mcp tool to fetch all tables and their columns from the connected Hasura instance.
+   - All tables
+   - Columns for each table
+   - Column types
+   - Primary keys
+   - Foreign keys / relationships
+   - Enums defined in Hasura metadata
 
-   - Get every table name
-   - Get the columns for each table (name + type)
-   - Convert table names to singular (e.g., "orders" → "Order", "users" → "User", "agent_locations" → "AgentLocation")
+2. For every table:
 
-2. For each table, generate a Python model file in:
-   apps/cdk/src/lambda-layer/models/
+   - Create a singular Python model name (e.g., users → User, order_items → OrderItem).
+   - Create a Python Pydantic model for each table.
+   - Include fields for every column with correct Python typing.
+   - Convert Hasura enum types into Python Enums in the same file:
+     - Use Python's `enum.Enum`
+     - Reference the enum in the Pydantic model
 
-   Model requirements:
+3. Relationships:
 
-   - Use Pydantic BaseModel
-   - Fields should match the Hasura column names
-   - Infer Python types from Hasura column types
-   - All models must be camelCase class names based on the singular table name (e.g., orders → Order)
-   - File name should match the model in snake_case (e.g., order.py)
+   - For object relationships:
+     - Add an optional field named after the related table’s singular model.
+   - For array relationships:
+     - Add a List[] field referencing the related type.
+   - These relationship fields must be optional and default to None.
 
-3. After generating all model files, update the CDK layer configuration so that a Lambda Layer is created for these models.
+4. Output directory:
+   - Write all generated models to:
+     apps/cdk/src/lambda-layer/models/
+     One file per model:
+     <model_name>.py
+5. Add an **init**.py file exporting all models.
 
-   - The layer should bundle everything under apps/cdk/src/lambda-layer/models
-   - Update CDK to export this layer
-   - Ensure Lambda functions can import these models via the layer (e.g., `from models.order import Order`)
+6. Lambda Layer:
 
-4. Print:
-   - The summary of tables found
-   - All generated file paths
-   - Any CDK changes you made
+   - Create a new Lambda Layer in the CDK project for these models.
+   - The layer should include:
+     - The generated models folder
+     - Pydantic (add it to requirements)
+   - Update the CDK stack so that Lambda functions can import from:
+     layer/models
+     Example import:
+     from models.User import User
 
-Do NOT guess columns—always fetch them using the hasura-mcp tool first.
-Make sure all Python code generated is syntactically correct and fully functional.
+7. Ensure:
+   - All models are Pydantic BaseModel subclasses
+   - Enum values come directly from Hasura enum definitions
+   - Correct typing: Optional, List, int, float, str, datetime, bool, etc.
+   - Foreign key references use the singular model name.
+
+Finally:
+Generate all the code, including:
+
+- The Python generator script
+- The generated models
+- The Lambda layer folder structure
+- The CDK modifications needed to include the layer
+- Requirements file for the layer with pydantic
