@@ -19,6 +19,15 @@ END $$;
 ALTER TABLE public.orders 
 DROP CONSTRAINT IF EXISTS orders_delivery_time_window_id_fkey;
 
+-- Clean up orphaned references: set NULL for any delivery_time_window_id 
+-- values that don't exist in the delivery_time_windows table
+UPDATE public.orders 
+SET delivery_time_window_id = NULL 
+WHERE delivery_time_window_id IS NOT NULL 
+AND delivery_time_window_id NOT IN (
+    SELECT id FROM public.delivery_time_windows
+);
+
 -- Add the foreign key constraint with explicit name
 ALTER TABLE public.orders 
 ADD CONSTRAINT orders_delivery_time_window_id_fkey 
