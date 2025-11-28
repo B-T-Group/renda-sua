@@ -9,6 +9,8 @@
 - Remove unused private methods and properties
 - Remove unused interface properties
 - Remove unused constants and enums
+- Remove unused constructor parameters and their corresponding imports
+- Remove unused service dependencies from NestJS modules if not used anywhere in the module
 
 ### Code Cleanup Guidelines
 

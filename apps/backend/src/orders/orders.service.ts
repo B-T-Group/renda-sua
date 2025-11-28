@@ -2,7 +2,6 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
-import { ConfigurationsService } from '../admin/configurations.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -260,7 +259,6 @@ export class OrdersService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
-    private readonly configurationsService: ConfigurationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
