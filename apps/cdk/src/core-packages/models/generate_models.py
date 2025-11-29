@@ -157,14 +157,21 @@ def _python_type_for_field(
     relationships: List[str],
 ) -> Tuple[str, Optional[str]]:
     base = info.base_name
+    if not base or not base.strip():
+        return "str", None  # Default to str for unknown types
+    
     if base in enums:
         enum_name = _to_class_name(base)
         return enum_name, enum_name
     if info.base_kind == "SCALAR":
         return _python_type_for_scalar(base), None
-    rel_class = _to_class_name(base)
-    relationships.append(rel_class)
-    return rel_class, rel_class
+    if info.base_kind == "OBJECT":
+        rel_class = _to_class_name(base)
+        if rel_class:
+            relationships.append(rel_class)
+            return rel_class, rel_class
+    # Fallback for unknown types
+    return "str", None
 
 
 def _render_field(
@@ -173,6 +180,7 @@ def _render_field(
     info: FieldTypeInfo,
     is_relationship: bool,
 ) -> str:
+    # type_str should already be validated before calling this function
     prefix = "Optional[" if not is_relationship else "Optional["
     if info.is_list:
         py_type = f"List[{type_str}]"
@@ -184,18 +192,47 @@ def _render_field(
 def _split_fields(
     type_def: Dict[str, Any],
     enums: Dict[str, List[str]],
+    valid_object_names: set[str] | None = None,
 ) -> Tuple[List[Tuple[str, str, bool]], List[str], List[Tuple[str, List[str]]]]:
     fields_meta: List[Tuple[str, str, bool]] = []
     enum_defs: List[Tuple[str, List[str]]] = []
     relationships: List[str] = []
     for field in type_def.get("fields") or []:
         name = field["name"]
+        if not name or name.startswith("__"):
+            continue
+        # Skip aggregate fields
+        if name.endswith("_aggregate"):
+            continue
+        
         info = _unwrap_type(field["type"])
         type_name = info.base_name
+        
+        # Skip fields with missing or invalid type names
+        if not type_name or not type_name.strip():
+            continue
+        
+        # Skip fields that reference aggregate types
+        if type_name.endswith("_aggregate"):
+            continue
+        
+        # Skip fields that reference types we're not tracking (for relationships)
+        if info.base_kind == "OBJECT":
+            if valid_object_names and type_name not in valid_object_names:
+                continue
+        
         is_enum = type_name in enums
         is_scalar = info.base_kind == "SCALAR"
         is_rel = not is_scalar
+        
         py_type, enum_name = _python_type_for_field(info, enums, relationships)
+        
+        # Skip if we couldn't determine a valid Python type or got empty string
+        if not py_type or not py_type.strip() or py_type == "str":
+            # If it's a relationship (not scalar) and we got "str", skip it
+            if is_rel:
+                continue
+        
         if is_enum and enum_name:
             enum_defs.append((enum_name, enums[type_name]))
         field_line = _render_field(name, py_type, info, is_rel)
@@ -225,8 +262,11 @@ def _render_model(
         "from pydantic import BaseModel",
     ]
     if relationships:
-        rel_imports = ", ".join(sorted(set(relationships)))
-        imports.append(f"if TYPE_CHECKING:\n    from . import {rel_imports}")
+        # Filter out empty strings and get unique sorted relationship names
+        rel_names = sorted(set(r for r in relationships if r and r.strip()))
+        if rel_names:
+            rel_imports = ", ".join(rel_names)
+            imports.append(f"if TYPE_CHECKING:\n    from . import {rel_imports}")
     header = "\n".join(imports) + "\n\n"
     enum_blocks = [
         _render_enum(name, values) for name, values in enum_defs
@@ -246,11 +286,12 @@ def _generate_for_type(
     type_name: str,
     type_def: Dict[str, Any],
     enums: Dict[str, List[str]],
+    valid_object_names: set[str] | None = None,
 ) -> None:
     target = _model_file_path(models_dir, type_name)
     if target.exists():
         return
-    fields, relationships, enum_defs = _split_fields(type_def, enums)
+    fields, relationships, enum_defs = _split_fields(type_def, enums, valid_object_names)
     code = _render_model(type_name, fields, enum_defs, relationships)
     target.write_text(code, encoding="utf-8")
     print(f"[generate_models] Created model: {target.name}")
@@ -262,10 +303,11 @@ def main() -> None:
         admin_secret = _get_env("HASURA_ADMIN_SECRET")
         schema = _load_schema(endpoint, admin_secret)
         objects, enums = _collect_types(schema)
+        valid_object_names = set(objects.keys())
         base_dir = Path(__file__).resolve().parent
         models_dir = base_dir
         for type_name, type_def in objects.items():
-            _generate_for_type(models_dir, type_name, type_def, enums)
+            _generate_for_type(models_dir, type_name, type_def, enums, valid_object_names)
     except Exception as exc:  # noqa: BLE001
         print(f"[generate_models] Error: {exc}", file=sys.stderr)
         sys.exit(1)
