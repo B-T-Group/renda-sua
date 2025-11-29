@@ -41,7 +41,12 @@
     "cdk:destroy": "cd apps/cdk && cdk destroy",
     "cdk:diff": "cd apps/cdk && cdk diff",
     "cdk:synth": "cd apps/cdk && cdk synth",
-    "cdk:bootstrap": "cd apps/cdk && cdk bootstrap"
+    "cdk:bootstrap": "cd apps/cdk && cdk bootstrap",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report"
   },
   "private": true,
   "dependencies": {
@@ -86,6 +91,7 @@
     "@nx/web": "21.2.1",
     "@nx/webpack": "21.2.1",
     "@nx/workspace": "21.2.1",
+    "@playwright/test": "^1.57.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
     "@svgr/webpack": "^8.0.1",
     "@swc-node/register": "~1.9.1",
@@ -112,6 +118,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "jest-environment-node": "^29.7.0",
     "nx": "21.2.1",
+    "playwright": "^1.57.0",
     "prettier": "^2.6.2",
     "react-refresh": "^0.10.0",
     "ts-jest": "^29.1.0",
