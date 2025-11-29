@@ -151,72 +151,95 @@ const AccountManager = forwardRef<AccountManagerRef, AccountManagerProps>(
     };
 
     // Get transaction type color based on type and amount
+    // Matches backend determineTransactionType logic
     const getTransactionTypeColor = (type: string, amount: number) => {
-      // Hold and release transactions are neither credit nor debit - show gray
+      // Hold and release affect withheld balance only - show gray (neutral)
       if (type === 'hold' || type === 'release') return 'default';
       
-      // Fee and payment are debits (payment from account) - show red
-      if (type === 'fee' || type === 'payment') return 'error';
+      // Credits (affect available balance): deposit, refund, exchange
+      if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success';
       
-      // Deposit is a credit - show green
-      if (type === 'deposit') return 'success';
+      // Debits (affect available balance): withdrawal, payment, fee, transfer
+      if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') return 'error';
       
-      // For other types, use amount-based logic
-      if (amount > 0) return 'success';
-      if (amount < 0) return 'error';
-      return 'default';
+      // Adjustment depends on amount sign
+      if (type === 'adjustment') {
+        return amount > 0 ? 'success' : 'error';
+      }
+      
+      // Default fallback
+      return amount > 0 ? 'success' : amount < 0 ? 'error' : 'default';
     };
 
     // Get transaction type icon based on type and amount
+    // Matches backend determineTransactionType logic
     const getTransactionTypeIcon = (type: string, amount: number) => {
-      // Hold and release transactions show history icon (neutral)
+      // Hold and release affect withheld balance only - show history icon (neutral)
       if (type === 'hold' || type === 'release') return <HistoryIcon fontSize="small" />;
       
-      // Fee and payment show down icon (debit)
-      if (type === 'fee' || type === 'payment') return <TrendingDownIcon fontSize="small" />;
+      // Credits (affect available balance): deposit, refund, exchange
+      if (type === 'deposit' || type === 'refund' || type === 'exchange') return <TrendingUpIcon fontSize="small" />;
       
-      // Deposit shows up icon (credit)
-      if (type === 'deposit') return <TrendingUpIcon fontSize="small" />;
+      // Debits (affect available balance): withdrawal, payment, fee, transfer
+      if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') return <TrendingDownIcon fontSize="small" />;
       
-      // For other types, use amount-based logic
+      // Adjustment depends on amount sign
+      if (type === 'adjustment') {
+        return amount > 0 ? <TrendingUpIcon fontSize="small" /> : <TrendingDownIcon fontSize="small" />;
+      }
+      
+      // Default fallback
       if (amount > 0) return <TrendingUpIcon fontSize="small" />;
       if (amount < 0) return <TrendingDownIcon fontSize="small" />;
       return <HistoryIcon fontSize="small" />;
     };
 
     // Get transaction amount display color
+    // Matches backend determineTransactionType logic
     const getTransactionAmountColor = (type: string, amount: number) => {
-      // Hold and release transactions should be gray (neither credit nor debit)
+      // Hold and release affect withheld balance only - show gray (neutral)
       if (type === 'hold' || type === 'release') return 'text.secondary';
       
-      // Fee and payment are debits - show red
-      if (type === 'fee' || type === 'payment') return 'error.main';
+      // Credits (affect available balance): deposit, refund, exchange
+      if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success.main';
       
-      // Deposit is a credit - show green
-      if (type === 'deposit') return 'success.main';
+      // Debits (affect available balance): withdrawal, payment, fee, transfer
+      if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') return 'error.main';
       
-      // For other types, use amount-based logic
+      // Adjustment depends on amount sign
+      if (type === 'adjustment') {
+        return amount > 0 ? 'success.main' : 'error.main';
+      }
+      
+      // Default fallback
       return amount >= 0 ? 'success.main' : 'error.main';
     };
 
     // Format transaction amount with appropriate sign
+    // Matches backend determineTransactionType logic
     const formatTransactionAmount = (type: string, amount: number, currency: string) => {
-      // Hold and release transactions show amount without sign (neutral)
+      // Hold and release affect withheld balance only - show amount without sign (neutral)
       if (type === 'hold' || type === 'release') {
         return formatCurrency(Math.abs(amount), currency);
       }
       
-      // Fee and payment are debits - show as negative
-      if (type === 'fee' || type === 'payment') {
-        return '-' + formatCurrency(Math.abs(amount), currency);
-      }
-      
-      // Deposit is a credit - show as positive
-      if (type === 'deposit') {
+      // Credits (affect available balance): deposit, refund, exchange - show as positive
+      if (type === 'deposit' || type === 'refund' || type === 'exchange') {
         return '+' + formatCurrency(Math.abs(amount), currency);
       }
       
-      // For other types, use amount-based logic
+      // Debits (affect available balance): withdrawal, payment, fee, transfer - show as negative
+      if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') {
+        return '-' + formatCurrency(Math.abs(amount), currency);
+      }
+      
+      // Adjustment depends on amount sign
+      if (type === 'adjustment') {
+        const sign = amount > 0 ? '+' : '-';
+        return sign + formatCurrency(Math.abs(amount), currency);
+      }
+      
+      // Default fallback
       const sign = amount >= 0 ? '+' : '';
       return sign + formatCurrency(amount, currency);
     };

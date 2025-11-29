@@ -89,59 +89,78 @@ const AdminCommissionAccounts: React.FC = () => {
   };
 
   // Get transaction type color based on type and amount
+  // Matches backend determineTransactionType logic
   const getTransactionTypeColor = (type: string, amount: number) => {
-    // Hold and release transactions are neither credit nor debit - show gray
+    const parsedAmount = parseFloat(String(amount));
+    
+    // Hold and release affect withheld balance only - show gray (neutral)
     if (type === 'hold' || type === 'release') return 'default';
     
-    // Fee and payment are debits (payment from account) - show red
-    if (type === 'fee' || type === 'payment') return 'error';
+    // Credits (affect available balance): deposit, refund, exchange
+    if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success';
     
-    // Deposit is a credit - show green
-    if (type === 'deposit') return 'success';
+    // Debits (affect available balance): withdrawal, payment, fee, transfer
+    if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') return 'error';
     
-    // For other types, use amount-based logic
-    const parsedAmount = parseFloat(String(amount));
-    if (parsedAmount > 0) return 'success';
-    if (parsedAmount < 0) return 'error';
-    return 'default';
+    // Adjustment depends on amount sign
+    if (type === 'adjustment') {
+      return parsedAmount > 0 ? 'success' : 'error';
+    }
+    
+    // Default fallback
+    return parsedAmount > 0 ? 'success' : parsedAmount < 0 ? 'error' : 'default';
   };
 
   // Get transaction amount display color
+  // Matches backend determineTransactionType logic
   const getTransactionAmountColor = (type: string, amount: number) => {
-    // Hold and release transactions should be gray (neither credit nor debit)
+    const parsedAmount = parseFloat(String(amount));
+    
+    // Hold and release affect withheld balance only - show gray (neutral)
     if (type === 'hold' || type === 'release') return 'text.secondary';
     
-    // Fee and payment are debits - show red
-    if (type === 'fee' || type === 'payment') return 'error.main';
+    // Credits (affect available balance): deposit, refund, exchange
+    if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success.main';
     
-    // Deposit is a credit - show green
-    if (type === 'deposit') return 'success.main';
+    // Debits (affect available balance): withdrawal, payment, fee, transfer
+    if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') return 'error.main';
     
-    // For other types, use amount-based logic
-    const parsedAmount = parseFloat(String(amount));
+    // Adjustment depends on amount sign
+    if (type === 'adjustment') {
+      return parsedAmount > 0 ? 'success.main' : 'error.main';
+    }
+    
+    // Default fallback
     return parsedAmount >= 0 ? 'success.main' : 'error.main';
   };
 
   // Format transaction amount with appropriate sign
+  // Matches backend determineTransactionType logic
   const formatTransactionAmount = (type: string, amount: number, currency: string) => {
     const parsedAmount = parseFloat(String(amount));
     
-    // Hold and release transactions show amount without sign (neutral)
+    // Hold and release affect withheld balance only - show amount without sign (neutral)
     if (type === 'hold' || type === 'release') {
       return formatCurrency(Math.abs(parsedAmount), currency);
     }
     
-    // Fee and payment are debits - show as negative
-    if (type === 'fee' || type === 'payment') {
-      return '-' + formatCurrency(Math.abs(parsedAmount), currency);
-    }
-    
-    // Deposit is a credit - show as positive
-    if (type === 'deposit') {
+    // Credits (affect available balance): deposit, refund, exchange - show as positive
+    if (type === 'deposit' || type === 'refund' || type === 'exchange') {
       return '+' + formatCurrency(Math.abs(parsedAmount), currency);
     }
     
-    // For other types, use amount-based logic
+    // Debits (affect available balance): withdrawal, payment, fee, transfer - show as negative
+    if (type === 'withdrawal' || type === 'payment' || type === 'fee' || type === 'transfer') {
+      return '-' + formatCurrency(Math.abs(parsedAmount), currency);
+    }
+    
+    // Adjustment depends on amount sign
+    if (type === 'adjustment') {
+      const sign = parsedAmount > 0 ? '+' : '-';
+      return sign + formatCurrency(Math.abs(parsedAmount), currency);
+    }
+    
+    // Default fallback
     const sign = parsedAmount >= 0 ? '+' : '';
     return sign + formatCurrency(parsedAmount, currency);
   };
