@@ -51,6 +51,22 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
+    // Core shared layer for models, handlers, Hasura client, and deps
+    const corePackagesLayer = new lambda.LayerVersion(
+      this,
+      `CorePackagesLayer-${environment}`,
+      {
+        layerVersionName: `core-packages-layer-${environment}`,
+        description:
+          'Core Python packages (models, commission/notification handlers, secrets manager, hasura_client, requests, sendgrid, pydantic)',
+        code: lambda.Code.fromAsset('src/lambda-layer/core-packages-layer.zip'),
+        compatibleRuntimes: [
+          lambda.Runtime.PYTHON_3_9,
+          lambda.Runtime.PYTHON_3_11,
+        ],
+      }
+    );
+
     // Add permissions for Secrets Manager (used by multiple Lambda functions)
     const secretsManagerPolicy = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -96,7 +112,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/order-status-handler'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
-        layers: [requestsLayer, sendgridLayer],
+        layers: [requestsLayer, sendgridLayer, corePackagesLayer],
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
@@ -156,7 +172,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 256,
-        layers: [requestsLayer],
+        layers: [requestsLayer, corePackagesLayer],
         environment: {
           ENVIRONMENT: environment,
           AIRTEL_OPERATION_ACCOUNT_CODE:
@@ -185,7 +201,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           code: lambda.Code.fromAsset('src/lambda'),
           timeout: cdk.Duration.minutes(5),
           memorySize: 256,
-          layers: [requestsLayer],
+          layers: [requestsLayer, corePackagesLayer],
           environment: {
             ENVIRONMENT: environment,
             MOOV_OPERATION_ACCOUNT_CODE: 'ACC_68F90896204C1',

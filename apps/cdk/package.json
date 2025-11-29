@@ -11,7 +11,10 @@
     "deploy": "cdk deploy",
     "destroy": "cdk destroy",
     "diff": "cdk diff",
-    "synth": "cdk synth"
+    "synth": "cdk synth",
+    "generate:models": "cd src/core-packages/models && python3 generate_models.py",
+    "build:layer": "cd src/lambda-layer && bash build-core-packages-layer.sh",
+    "build:all-layers": "cd src/lambda-layer && bash build-all.sh"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.0.0",

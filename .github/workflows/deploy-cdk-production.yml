@@ -57,6 +57,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Build core-packages layer
+        run: |
+          cd apps/cdk/src/lambda-layer
+          bash build-core-packages-layer.sh
+
       - name: Build Lambda layer
         run: |
           cd apps/cdk/src/lambda-layer
