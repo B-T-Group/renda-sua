@@ -88,6 +88,64 @@ const AdminCommissionAccounts: React.FC = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Get transaction type color based on type and amount
+  const getTransactionTypeColor = (type: string, amount: number) => {
+    // Hold and release transactions are neither credit nor debit - show gray
+    if (type === 'hold' || type === 'release') return 'default';
+    
+    // Fee and payment are debits (payment from account) - show red
+    if (type === 'fee' || type === 'payment') return 'error';
+    
+    // Deposit is a credit - show green
+    if (type === 'deposit') return 'success';
+    
+    // For other types, use amount-based logic
+    const parsedAmount = parseFloat(String(amount));
+    if (parsedAmount > 0) return 'success';
+    if (parsedAmount < 0) return 'error';
+    return 'default';
+  };
+
+  // Get transaction amount display color
+  const getTransactionAmountColor = (type: string, amount: number) => {
+    // Hold and release transactions should be gray (neither credit nor debit)
+    if (type === 'hold' || type === 'release') return 'text.secondary';
+    
+    // Fee and payment are debits - show red
+    if (type === 'fee' || type === 'payment') return 'error.main';
+    
+    // Deposit is a credit - show green
+    if (type === 'deposit') return 'success.main';
+    
+    // For other types, use amount-based logic
+    const parsedAmount = parseFloat(String(amount));
+    return parsedAmount >= 0 ? 'success.main' : 'error.main';
+  };
+
+  // Format transaction amount with appropriate sign
+  const formatTransactionAmount = (type: string, amount: number, currency: string) => {
+    const parsedAmount = parseFloat(String(amount));
+    
+    // Hold and release transactions show amount without sign (neutral)
+    if (type === 'hold' || type === 'release') {
+      return formatCurrency(Math.abs(parsedAmount), currency);
+    }
+    
+    // Fee and payment are debits - show as negative
+    if (type === 'fee' || type === 'payment') {
+      return '-' + formatCurrency(Math.abs(parsedAmount), currency);
+    }
+    
+    // Deposit is a credit - show as positive
+    if (type === 'deposit') {
+      return '+' + formatCurrency(Math.abs(parsedAmount), currency);
+    }
+    
+    // For other types, use amount-based logic
+    const sign = parsedAmount >= 0 ? '+' : '';
+    return sign + formatCurrency(parsedAmount, currency);
+  };
+
   const renderAccountCard = (
     user: any,
     isCompanyAccount: boolean = false
@@ -368,23 +426,23 @@ const AdminCommissionAccounts: React.FC = () => {
                           <Chip
                             label={transaction.transaction_type}
                             size="small"
-                            color={
-                              parseFloat(String(transaction.amount)) >= 0
-                                ? 'success'
-                                : 'error'
-                            }
+                            color={getTransactionTypeColor(
+                              transaction.transaction_type,
+                              parseFloat(String(transaction.amount))
+                            )}
                           />
                         </TableCell>
                         <TableCell
                           sx={{
-                            color:
-                              parseFloat(String(transaction.amount)) >= 0
-                                ? 'success.main'
-                                : 'error.main',
+                            color: getTransactionAmountColor(
+                              transaction.transaction_type,
+                              parseFloat(String(transaction.amount))
+                            ),
                             fontWeight: 'bold',
                           }}
                         >
-                          {formatCurrency(
+                          {formatTransactionAmount(
+                            transaction.transaction_type,
                             parseFloat(String(transaction.amount)),
                             transaction.account.currency
                           )}

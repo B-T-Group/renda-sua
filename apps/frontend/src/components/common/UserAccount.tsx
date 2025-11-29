@@ -163,6 +163,60 @@ const UserAccount: React.FC<UserAccountProps> = ({
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Get transaction type color based on type and amount
+  const getTransactionTypeColor = (type: string, amount: number) => {
+    // Hold and release transactions are neither credit nor debit - show gray
+    if (type === 'hold' || type === 'release') return 'default';
+    
+    // Fee and payment are debits (payment from account) - show red
+    if (type === 'fee' || type === 'payment') return 'error';
+    
+    // Deposit is a credit - show green
+    if (type === 'deposit') return 'success';
+    
+    // For other types, use amount-based logic
+    if (amount > 0) return 'success';
+    if (amount < 0) return 'error';
+    return 'default';
+  };
+
+  // Get transaction amount display color
+  const getTransactionAmountColor = (type: string, amount: number) => {
+    // Hold and release transactions should be gray (neither credit nor debit)
+    if (type === 'hold' || type === 'release') return 'text.secondary';
+    
+    // Fee and payment are debits - show red
+    if (type === 'fee' || type === 'payment') return 'error.main';
+    
+    // Deposit is a credit - show green
+    if (type === 'deposit') return 'success.main';
+    
+    // For other types, use amount-based logic
+    return amount >= 0 ? 'success.main' : 'error.main';
+  };
+
+  // Format transaction amount with appropriate sign
+  const formatTransactionAmount = (type: string, amount: number, currency: string) => {
+    // Hold and release transactions show amount without sign (neutral)
+    if (type === 'hold' || type === 'release') {
+      return formatCurrency(Math.abs(amount), currency);
+    }
+    
+    // Fee and payment are debits - show as negative
+    if (type === 'fee' || type === 'payment') {
+      return '-' + formatCurrency(Math.abs(amount), currency);
+    }
+    
+    // Deposit is a credit - show as positive
+    if (type === 'deposit') {
+      return '+' + formatCurrency(Math.abs(amount), currency);
+    }
+    
+    // For other types, use amount-based logic
+    const sign = amount >= 0 ? '+' : '';
+    return sign + formatCurrency(amount, currency);
+  };
+
   const fetchAccountTransactions = async (limit = 10) => {
     setTransactionsLoading(true);
 
@@ -548,7 +602,10 @@ const UserAccount: React.FC<UserAccountProps> = ({
                         <Chip
                           label={transaction.transaction_type}
                           size="small"
-                          color={transaction.amount >= 0 ? 'success' : 'error'}
+                          color={getTransactionTypeColor(
+                            transaction.transaction_type,
+                            transaction.amount
+                          )}
                         />
                       </TableCell>
                       <TableCell>
@@ -561,15 +618,14 @@ const UserAccount: React.FC<UserAccountProps> = ({
                       <TableCell align="right">
                         <Typography
                           variant="body2"
-                          color={
-                            transaction.amount >= 0
-                              ? 'success.main'
-                              : 'error.main'
-                          }
+                          color={getTransactionAmountColor(
+                            transaction.transaction_type,
+                            transaction.amount
+                          )}
                           fontWeight="medium"
                         >
-                          {transaction.amount >= 0 ? '+' : ''}
-                          {formatCurrency(
+                          {formatTransactionAmount(
+                            transaction.transaction_type,
                             transaction.amount,
                             transaction.account.currency
                           )}
