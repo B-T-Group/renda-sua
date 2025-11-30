@@ -30,6 +30,7 @@ import { OrderStatusService } from './order-status.service';
 export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
+  failure_reason_id?: string; // Required for fail_delivery endpoint
 }
 
 export interface ConfirmOrderRequest {
@@ -1352,6 +1353,14 @@ export class OrdersService {
         'Only agent users can mark deliveries as failed',
         HttpStatus.FORBIDDEN
       );
+
+    if (!request.failure_reason_id) {
+      throw new HttpException(
+        'failure_reason_id is required when marking a delivery as failed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -1366,21 +1375,79 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Release the hold since delivery failed
-    await this.releaseOrderHold(order, 'failed');
+    // Validate failure reason exists and is active
+    const validateFailureReasonQuery = `
+      query ValidateFailureReason($reasonId: uuid!) {
+        delivery_failure_reasons_by_pk(id: $reasonId) {
+          id
+          is_active
+        }
+      }
+    `;
 
+    const reasonResult = await this.hasuraSystemService.executeQuery(
+      validateFailureReasonQuery,
+      { reasonId: request.failure_reason_id }
+    );
+
+    if (!reasonResult.delivery_failure_reasons_by_pk) {
+      throw new HttpException(
+        'Invalid failure reason ID',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (!reasonResult.delivery_failure_reasons_by_pk.is_active) {
+      throw new HttpException(
+        'The selected failure reason is not active',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Mark order status as 'failed'
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'failed'
     );
+
+    // Create entry in failed_deliveries table with status 'pending'
+    const createFailedDeliveryMutation = `
+      mutation CreateFailedDelivery($failedDelivery: failed_deliveries_insert_input!) {
+        insert_failed_deliveries_one(object: $failedDelivery) {
+          id
+          order_id
+          failure_reason_id
+          notes
+          status
+          created_at
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(
+      createFailedDeliveryMutation,
+      {
+        failedDelivery: {
+          order_id: request.orderId,
+          failure_reason_id: request.failure_reason_id,
+          notes: request.notes || null,
+          status: 'pending',
+        },
+      }
+    );
+
+    // Create status history entry
     await this.createStatusHistoryEntry(
       request.orderId,
       'failed',
-      'Delivery failed - customer not available or other issue',
+      'Delivery failed',
       'agent',
       user.id,
       request.notes
     );
+
+    // Note: Hold release is now handled in the resolution workflow, not here
+
     return {
       success: true,
       order: updatedOrder,
@@ -4612,7 +4679,7 @@ export class OrdersService {
    * Update reserved quantities for business inventory items
    * Optimized to batch reads and parallelize writes
    */
-  private async updateReservedQuantities(
+  async updateReservedQuantities(
     orderItems: any[],
     operation: 'increment' | 'decrement'
   ): Promise<void> {

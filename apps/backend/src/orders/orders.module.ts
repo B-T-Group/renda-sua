@@ -9,6 +9,8 @@ import { LocationsModule } from '../locations/locations.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { FailedDeliveriesController } from './failed-deliveries.controller';
+import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersController } from './orders.controller';
@@ -27,12 +29,13 @@ import { OrdersService } from './orders.service';
     PdfModule,
     LocationsModule,
   ],
-  controllers: [OrdersController],
+  controllers: [OrdersController, FailedDeliveriesController],
   providers: [
     OrdersService,
     OrderStatusService,
     OrderQueueService,
     ConfigurationsService,
+    FailedDeliveriesService,
   ],
   exports: [OrdersService, OrderStatusService],
 })
