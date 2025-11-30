@@ -5,11 +5,12 @@ These are intentionally stateless and side-effect free so they can be
 reused safely from multiple Lambdas.
 """
 
-from typing import List
+from typing import List, Protocol
+
+from rendasua_core_packages.models import Partner
 
 from .types import (
     CommissionConfig,
-    Partner,
     CommissionOrder,
     CommissionBreakdown,
     BaseDeliveryFeeBreakdown,
@@ -19,7 +20,7 @@ from .types import (
 )
 
 
-def _sum_partner_commission(amount: float, partners: List[Partner], attr: str) -> float:
+def _sum_partner_commission(amount: float, partners: List[Partner], attr: str) -> float:  # type: ignore
     value = 0.0
     for partner in partners:
         percentage = getattr(partner, attr, 0.0)
