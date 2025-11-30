@@ -81,7 +81,6 @@ jobs:
           cd apps/cdk
           cdk deploy --context environment=${{ env.CDK_ENVIRONMENT }} --require-approval never
         env:
-          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: Verify deployment
