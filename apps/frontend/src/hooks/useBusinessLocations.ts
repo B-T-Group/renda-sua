@@ -220,14 +220,12 @@ export const useBusinessLocations = (
   const { execute: executeAddMutation } = useGraphQLRequest(
     ADD_BUSINESS_LOCATION
   );
-  const { execute: executeUpdateMutation } = useGraphQLRequest(
-    UPDATE_BUSINESS_LOCATION
-  );
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
   );
-  const { execute: executeUpdateAddressMutation } =
-    useGraphQLRequest(UPDATE_ADDRESS);
+  const { execute: executeUpdateMutation } = useGraphQLRequest(
+    UPDATE_BUSINESS_LOCATION
+  );
 
   const { execute: executeAddNestedMutation } = useGraphQLRequest(
     ADD_BUSINESS_LOCATION_NESTED
@@ -329,18 +327,24 @@ export const useBusinessLocations = (
       setError(null);
       setWarning(null);
       try {
+        if (!apiClient) {
+          throw new Error('API client not available');
+        }
+
         // Extract address data if present
         const { address, ...locationData } = data;
 
-        // Update location data
-        const result = await executeUpdateMutation({ id, data: locationData });
+        // Update location fields using GraphQL if there are any location fields to update
+        // Note: The addresses/business-locations API only handles address updates,
+        // so we use GraphQL for location fields (name, phone, email, etc.)
+        let locationUpdateResult = null;
+        if (Object.keys(locationData).length > 0) {
+          const result = await executeUpdateMutation({ id, data: locationData });
+          locationUpdateResult = result.update_business_locations_by_pk;
+        }
 
         // If address data is provided, update the address using REST API
-        if (address && result.update_business_locations_by_pk?.address?.id) {
-          if (!apiClient) {
-            throw new Error('API client not available');
-          }
-
+        if (address) {
           // Prepare address update data
           const addressUpdateData: any = {};
           if (address.address_line_1 !== undefined) {
@@ -387,21 +391,12 @@ export const useBusinessLocations = (
               setWarning(addressResponse.data.data.warning);
             }
           }
-
-          // Refetch locations to get updated data
-          await fetchLocations();
-        } else if (result.update_business_locations_by_pk) {
-          // Update local state if no address update was needed
-          setLocations((prev) =>
-            prev.map((location) =>
-              location.id === id
-                ? result.update_business_locations_by_pk
-                : location
-            )
-          );
         }
 
-        return result.update_business_locations_by_pk;
+        // Refetch locations to get updated data
+        await fetchLocations();
+
+        return locationUpdateResult || { id };
       } catch (err: any) {
         console.error('useBusinessLocations: Error updating location:', err);
         
@@ -418,7 +413,7 @@ export const useBusinessLocations = (
         setLoading(false);
       }
     },
-    [executeUpdateMutation, fetchLocations, apiClient]
+    [fetchLocations, apiClient, executeUpdateMutation]
   );
 
   const deleteLocation = useCallback(
