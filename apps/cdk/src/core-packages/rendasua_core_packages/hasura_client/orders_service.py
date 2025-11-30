@@ -1,7 +1,8 @@
 """Order-related Hasura operations."""
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import datetime
-from rendasua_core_packages.models import Order, BusinessLocation, Address, Client, Business, Agent
+from datetime import timezone
+from rendasua_core_packages.models import Order, BusinessLocation, Address, Client, Business, Agent, OrderAgentNotification
 from rendasua_core_packages.utilities.geocoding import geocode_address, persist_coordinates_to_hasura
 from rendasua_core_packages.utilities import parse_datetime
 from .base import HasuraClient, HasuraClientConfig
@@ -516,4 +517,253 @@ def get_order_business_location_country(
     except Exception as e:
         log_error("Error fetching order business location country", error=e, order_id=order_id)
         return None
+
+
+def create_pending_agent_notification(
+    order_id: str,
+    notification_type: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[str]:
+    """
+    Create a pending agent notification record.
+    
+    Args:
+        order_id: Order ID
+        notification_type: Type of notification (e.g., 'order_proximity')
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        Notification ID if created successfully, None otherwise
+    """
+    mutation = """
+    mutation CreatePendingAgentNotification($orderId: uuid!, $notificationType: notification_type!) {
+      insert_order_agent_notifications_one(
+        object: {
+          order_id: $orderId
+          notification_type: $notificationType
+          status: pending
+        }
+        on_conflict: {
+          constraint: order_agent_notifications_order_type_unique
+          update_columns: []
+        }
+      ) {
+        id
+      }
+    }
+    """
+    
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    log_info("Creating pending agent notification", order_id=order_id, notification_type=notification_type)
+    
+    try:
+        data = client.execute(mutation, {
+            "orderId": order_id,
+            "notificationType": notification_type
+        })
+        notification_data = data.get("insert_order_agent_notifications_one")
+        
+        if not notification_data:
+            log_info("Notification record already exists or was not created", order_id=order_id)
+            return None
+        
+        notification_id = notification_data.get("id")
+        log_info("Pending agent notification created", order_id=order_id, notification_id=notification_id)
+        return notification_id
+        
+    except Exception as e:
+        log_error("Error creating pending agent notification", error=e, order_id=order_id)
+        return None
+
+
+def get_pending_agent_notifications(
+    notification_type: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> List[OrderAgentNotification]:
+    """
+    Fetch all pending agent notifications of a specific type.
+    
+    Args:
+        notification_type: Type of notification to fetch (e.g., 'order_proximity')
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        List of OrderAgentNotification objects with order details
+    """
+    query = """
+    query GetPendingAgentNotifications($notificationType: notification_type!) {
+      order_agent_notifications(
+        where: {
+          status: { _eq: pending }
+          notification_type: { _eq: $notificationType }
+        }
+      ) {
+        id
+        order_id
+        notification_type
+        status
+        error_message
+        created_at
+        updated_at
+        processed_at
+        order {
+          id
+          order_number
+          current_status
+          business_location {
+            id
+            name
+            address {
+              id
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+    """
+    
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    log_info("Fetching pending agent notifications", notification_type=notification_type)
+    
+    try:
+        data = client.execute(query, {"notificationType": notification_type})
+        notifications_data = data.get("order_agent_notifications", [])
+        log_info("Fetched pending notifications", count=len(notifications_data), notification_type=notification_type)
+        
+        # Convert dicts to OrderAgentNotification objects
+        notifications = []
+        for notification_data in notifications_data:
+            try:
+                # Parse order data if present
+                order_data = notification_data.get("order")
+                order = None
+                if order_data:
+                    # Create a minimal Order object with available fields
+                    # Use model_construct to allow partial data
+                    business_location_data = order_data.get("business_location")
+                    business_location = None
+                    if business_location_data:
+                        address_data = business_location_data.get("address")
+                        address = None
+                        if address_data:
+                            address = Address.model_construct(
+                                id=address_data.get("id", ""),
+                                latitude=address_data.get("latitude"),
+                                longitude=address_data.get("longitude"),
+                            )
+                        business_location = BusinessLocation.model_construct(
+                            id=business_location_data.get("id", ""),
+                            name=business_location_data.get("name", ""),
+                            address=address,
+                        )
+                    
+                    order = Order.model_construct(
+                        id=order_data.get("id", ""),
+                        order_number=order_data.get("order_number", ""),
+                        current_status=order_data.get("current_status", ""),
+                        business_location=business_location,
+                        
+                    )
+                
+                # Create OrderAgentNotification object
+                notification = OrderAgentNotification.model_construct(
+                    id=notification_data.get("id", ""),
+                    order_id=notification_data.get("order_id", ""),
+                    notification_type=notification_data.get("notification_type", ""),
+                    status=notification_data.get("status", ""),
+                    error_message=notification_data.get("error_message"),
+                    created_at=parse_datetime(notification_data.get("created_at")),
+                    updated_at=parse_datetime(notification_data.get("updated_at")),
+                    processed_at=parse_datetime(notification_data.get("processed_at")),
+                    order=order,
+                )
+                notifications.append(notification)
+            except Exception as e:
+                log_error(
+                    "Error parsing notification data",
+                    error=e,
+                    notification_id=notification_data.get("id"),
+                )
+                # Continue processing other notifications
+                continue
+        
+        log_info("Parsed notifications into objects", count=len(notifications), notification_type=notification_type)
+        return notifications
+        
+    except Exception as e:
+        log_error("Error fetching pending agent notifications", error=e, notification_type=notification_type)
+        return []
+
+
+def update_notification_status(
+    notification_id: str,
+    status: str,
+    error_message: Optional[str],
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> bool:
+    """
+    Update the status of an agent notification.
+    
+    Args:
+        notification_id: Notification ID
+        status: New status ('complete', 'failed', 'skipped')
+        error_message: Optional error message
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    mutation = """
+    mutation UpdateNotificationStatus(
+      $id: uuid!
+      $status: notification_status!
+      $errorMessage: String
+      $processedAt: timestamptz
+    ) {
+      update_order_agent_notifications_by_pk(
+        pk_columns: { id: $id }
+        _set: {
+          status: $status
+          error_message: $errorMessage
+          processed_at: $processedAt
+        }
+      ) {
+        id
+      }
+    }
+    """
+    
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    log_info("Updating notification status", notification_id=notification_id, status=status)
+    
+    try:
+        # Get current timestamp in ISO format
+        processed_at = datetime.datetime.now(timezone.utc).isoformat()
+        variables = {
+            "id": notification_id,
+            "status": status,
+            "errorMessage": error_message,
+            "processedAt": processed_at
+        }
+        data = client.execute(mutation, variables)
+        updated = data.get("update_order_agent_notifications_by_pk")
+        
+        if not updated:
+            log_error("Notification not found for update", notification_id=notification_id)
+            return False
+        
+        log_info("Notification status updated", notification_id=notification_id, status=status)
+        return True
+        
+    except Exception as e:
+        log_error("Error updating notification status", error=e, notification_id=notification_id)
+        return False
 

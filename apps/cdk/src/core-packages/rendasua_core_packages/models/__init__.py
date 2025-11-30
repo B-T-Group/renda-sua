@@ -60,6 +60,7 @@ from .UserMessage import UserMessage
 from .UserType import UserType
 from .UserUpload import UserUpload
 from .VehicleType import VehicleType
+from .OrderAgentNotification import OrderAgentNotification
 
 # Rebuild models with forward references
 # This resolves forward references after all models are imported
@@ -89,6 +90,7 @@ Order.model_rebuild()
 OrderHold.model_rebuild()
 OrderItem.model_rebuild()
 OrderStatuHistory.model_rebuild()
+OrderAgentNotification.model_rebuild()
 Partner.model_rebuild()
 PaymentCallback.model_rebuild()
 Rating.model_rebuild()
@@ -148,4 +150,5 @@ __all__: list[str] = [
     "UserUpload",
     "VehicleType",
     "TransactionInfo",
+    "OrderAgentNotification",
 ]
