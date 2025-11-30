@@ -12,7 +12,7 @@ from rendasua_core_packages.hasura_client.orders_service import (
 )
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
-from notifications import send_notifications_to_nearby_agents
+from notifications import send_aggregated_notifications_to_agents, send_notifications_to_nearby_agents
 from rendasua_core_packages.models import Order, OrderAgentNotification
 
 
@@ -27,6 +27,299 @@ def log_error(message: str, error: Exception | None = None, **kwargs):
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     error_str = f" | error={str(error)}" if error else ""
     print(f"[ERROR] {message}" + (f" | {context_str}" if context_str else "") + error_str)
+
+
+def process_all_notifications_aggregated(
+    pending_notifications: List[OrderAgentNotification],
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    environment: str,
+    proximity_radius_km: float,
+    template_id: str,
+    google_maps_api_key: Optional[str]
+) -> Dict[str, Any]:
+    """
+    Process all pending notifications by aggregating orders per agent.
+    
+    Args:
+        pending_notifications: List of pending OrderAgentNotification objects
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+        environment: Environment name
+        proximity_radius_km: Proximity radius in kilometers
+        template_id: SendGrid template ID
+        google_maps_api_key: Google Maps API key
+        
+    Returns:
+        Result dictionary with processing status
+    """
+    log_info(
+        "Starting aggregated notification processing",
+        total_notifications=len(pending_notifications),
+        proximity_radius_km=proximity_radius_km,
+    )
+    
+    # Step 1: Extract unique orders from notifications
+    # Deduplicate by order_id and filter for ready_for_pickup status
+    unique_orders: Dict[str, Order] = {}
+    notification_ids_by_order: Dict[str, List[str]] = {}
+    
+    for notification in pending_notifications:
+        order_from_notification = notification.order
+        if not order_from_notification:
+            continue
+            
+        current_status = order_from_notification.current_status
+        order_id = notification.order_id
+        
+        # Skip if order status changed
+        if current_status and current_status != "ready_for_pickup":
+            log_info(
+                "Order status changed, skipping",
+                order_id=order_id,
+                current_status=current_status,
+            )
+            update_notification_status(
+                notification_id=notification.id,
+                status="skipped",
+                error_message=f"Order status changed to {current_status}",
+                hasura_endpoint=hasura_endpoint,
+                hasura_admin_secret=hasura_admin_secret
+            )
+            continue
+        
+        # Track notification IDs for this order
+        if order_id not in notification_ids_by_order:
+            notification_ids_by_order[order_id] = []
+        notification_ids_by_order[order_id].append(notification.id)
+        
+        # Add order if not already added (deduplication)
+        if order_id not in unique_orders:
+            unique_orders[order_id] = order_from_notification
+    
+    log_info(
+        "Extracted unique orders",
+        unique_orders_count=len(unique_orders),
+        total_notifications=len(pending_notifications),
+    )
+    
+    if not unique_orders:
+        log_info("No valid orders to process")
+        return {
+            "success": True,
+            "status": "complete",
+            "message": "No valid orders to process",
+            "notifications_sent": 0,
+        }
+    
+    # Step 2: Fetch complete order data with locations for orders missing coordinates
+    valid_orders: List[Order] = []
+    for order_id, order in unique_orders.items():
+        # Check if order has complete location data
+        if not order.business_location or not order.business_location.address or \
+           order.business_location.address.latitude is None or \
+           order.business_location.address.longitude is None:
+            log_info("Fetching order with location", order_id=order_id)
+            fetched_order = get_order_with_location(
+                order_id=order_id,
+                hasura_endpoint=hasura_endpoint,
+                hasura_admin_secret=hasura_admin_secret,
+                google_maps_api_key=google_maps_api_key
+            )
+            if fetched_order:
+                valid_orders.append(fetched_order)
+            else:
+                log_error("Order not found or missing location", order_id=order_id)
+                # Mark related notifications as failed
+                for notif_id in notification_ids_by_order.get(order_id, []):
+                    update_notification_status(
+                        notification_id=notif_id,
+                        status="failed",
+                        error_message="Order not found or missing location",
+                        hasura_endpoint=hasura_endpoint,
+                        hasura_admin_secret=hasura_admin_secret
+                    )
+        else:
+            valid_orders.append(order)
+    
+    if not valid_orders:
+        log_error("No orders with valid locations")
+        return {
+            "success": False,
+            "status": "failed",
+            "message": "No orders with valid locations",
+            "notifications_sent": 0,
+        }
+    
+    log_info(
+        "Valid orders with locations",
+        valid_orders_count=len(valid_orders),
+    )
+    
+    # Step 3: Fetch all agent locations
+    log_info("Fetching all agent locations")
+    agent_locations = get_all_agent_locations(
+        hasura_endpoint,
+        hasura_admin_secret
+    )
+    
+    if not agent_locations:
+        log_info("No agent locations found")
+        # Mark all notifications as complete (no agents available)
+        for order_id, notif_ids in notification_ids_by_order.items():
+            for notif_id in notif_ids:
+                update_notification_status(
+                    notification_id=notif_id,
+                    status="complete",
+                    error_message="No agents available",
+                    hasura_endpoint=hasura_endpoint,
+                    hasura_admin_secret=hasura_admin_secret
+                )
+        return {
+            "success": True,
+            "status": "complete",
+            "message": "No agents available",
+            "notifications_sent": 0,
+        }
+    
+    # Step 4: For each agent, find all nearby orders
+    # Structure: agent_id -> list of order_ids
+    agent_nearby_orders: Dict[str, List[str]] = {}
+    
+    log_info(
+        "Calculating distances for all agent-order pairs",
+        total_agents=len(agent_locations),
+        total_orders=len(valid_orders),
+    )
+    
+    for agent_location in agent_locations:
+        agent_id = agent_location.agent_id
+        nearby_order_ids = []
+        
+        for order in valid_orders:
+            order_address = order.business_location.address
+            if not order_address or order_address.latitude is None or order_address.longitude is None:
+                continue
+            
+            distance = calculate_haversine_distance(
+                order_address.latitude,
+                order_address.longitude,
+                agent_location.latitude,
+                agent_location.longitude
+            )
+            
+            if distance <= proximity_radius_km:
+                nearby_order_ids.append(order.id)
+        
+        if nearby_order_ids:
+            agent_nearby_orders[agent_id] = nearby_order_ids
+    
+    log_info(
+        "Distance calculation complete",
+        agents_with_nearby_orders=len(agent_nearby_orders),
+        total_agents_checked=len(agent_locations),
+    )
+    
+    if not agent_nearby_orders:
+        log_info(
+            "No agents within proximity radius for any orders",
+            proximity_radius_km=proximity_radius_km,
+        )
+        # Mark all notifications as complete
+        for order_id, notif_ids in notification_ids_by_order.items():
+            for notif_id in notif_ids:
+                update_notification_status(
+                    notification_id=notif_id,
+                    status="complete",
+                    error_message=f"No agents within {proximity_radius_km}km",
+                    hasura_endpoint=hasura_endpoint,
+                    hasura_admin_secret=hasura_admin_secret
+                )
+        return {
+            "success": True,
+            "status": "complete",
+            "message": f"No agents within {proximity_radius_km}km",
+            "notifications_sent": 0,
+        }
+    
+    # Step 5: Send aggregated notifications (one per agent)
+    log_info(
+        "Sending aggregated notifications to agents",
+        agents_to_notify=len(agent_nearby_orders),
+    )
+    
+    try:
+        # Create mapping of agent_id to order_count
+        agent_order_counts: Dict[str, int] = {
+            agent_id: len(order_ids) 
+            for agent_id, order_ids in agent_nearby_orders.items()
+        }
+        
+        # Get agent locations for agents that need notifications
+        agents_to_notify = [
+            loc for loc in agent_locations 
+            if loc.agent_id in agent_nearby_orders
+        ]
+        
+        notifications_sent = send_aggregated_notifications_to_agents(
+            agents_to_notify,
+            agent_order_counts,
+            proximity_radius_km,
+            environment,
+            template_id
+        )
+        
+        log_info(
+            "Aggregated notifications sent successfully",
+            notifications_sent=notifications_sent,
+            agents_notified=len(agents_to_notify),
+        )
+        
+        # Step 6: Mark all related notifications as complete
+        # For each order that was included in any agent's notification, mark its notifications as complete
+        notified_order_ids = set()
+        for order_ids in agent_nearby_orders.values():
+            notified_order_ids.update(order_ids)
+        
+        for order_id in notified_order_ids:
+            for notif_id in notification_ids_by_order.get(order_id, []):
+                update_notification_status(
+                    notification_id=notif_id,
+                    status="complete",
+                    error_message=None,
+                    hasura_endpoint=hasura_endpoint,
+                    hasura_admin_secret=hasura_admin_secret
+                )
+        
+        return {
+            "success": True,
+            "status": "complete",
+            "message": "Aggregated notifications sent successfully",
+            "notifications_sent": notifications_sent,
+            "agents_notified": len(agents_to_notify),
+            "orders_included": len(notified_order_ids),
+        }
+        
+    except Exception as e:
+        log_error(
+            "Error sending aggregated notifications",
+            error=e,
+        )
+        # Mark all notifications as failed
+        for order_id, notif_ids in notification_ids_by_order.items():
+            for notif_id in notif_ids:
+                update_notification_status(
+                    notification_id=notif_id,
+                    status="failed",
+                    error_message=str(e),
+                    hasura_endpoint=hasura_endpoint,
+                    hasura_admin_secret=hasura_admin_secret
+                )
+        return {
+            "success": False,
+            "status": "failed",
+            "message": f"Error sending aggregated notifications: {str(e)}",
+        }
 
 
 def process_notification(
@@ -337,44 +630,33 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "processed_count": 0,
             }
         
-        # Process each notification
-        results = []
-        for notification in pending_notifications:
-            result = process_notification(
-                notification=notification,
-                hasura_endpoint=hasura_endpoint,
-                hasura_admin_secret=hasura_admin_secret,
-                environment=environment,
-                proximity_radius_km=proximity_radius_km,
-                template_id=template_id,
-                google_maps_api_key=google_maps_api_key
-            )
-            results.append(result)
-        
-        # Count results by status
-        completed = sum(1 for r in results if r.get("status") == "complete")
-        failed = sum(1 for r in results if r.get("status") == "failed")
-        skipped = sum(1 for r in results if r.get("status") == "skipped")
-        total_notifications_sent = sum(r.get("notifications_sent", 0) for r in results)
+        # Process all notifications in aggregated mode
+        result = process_all_notifications_aggregated(
+            pending_notifications=pending_notifications,
+            hasura_endpoint=hasura_endpoint,
+            hasura_admin_secret=hasura_admin_secret,
+            environment=environment,
+            proximity_radius_km=proximity_radius_km,
+            template_id=template_id,
+            google_maps_api_key=google_maps_api_key
+        )
         
         log_info(
             "Processing complete",
-            total_processed=len(results),
-            completed=completed,
-            failed=failed,
-            skipped=skipped,
-            total_notifications_sent=total_notifications_sent,
+            status=result.get("status"),
+            notifications_sent=result.get("notifications_sent", 0),
+            agents_notified=result.get("agents_notified", 0),
+            orders_included=result.get("orders_included", 0),
         )
         
         return {
-            "success": True,
-            "message": "Processing complete",
-            "processed_count": len(results),
-            "completed": completed,
-            "failed": failed,
-            "skipped": skipped,
-            "total_notifications_sent": total_notifications_sent,
-            "results": results,
+            "success": result.get("success", False),
+            "message": result.get("message", "Processing complete"),
+            "processed_count": len(pending_notifications),
+            "notifications_sent": result.get("notifications_sent", 0),
+            "agents_notified": result.get("agents_notified", 0),
+            "orders_included": result.get("orders_included", 0),
+            "status": result.get("status"),
         }
         
     except Exception as e:

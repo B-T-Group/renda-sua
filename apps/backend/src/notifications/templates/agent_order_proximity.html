@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>New Order Nearby - Rendasua</title>
+    <title>Available Orders Nearby - Rendasua</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -33,23 +33,17 @@
         margin: 20px 0;
         text-align: center;
       }
-      .distance-badge {
-        font-size: 2em;
+      .order-count-badge {
+        font-size: 3em;
         font-weight: bold;
         margin: 10px 0;
       }
-      .order-details {
+      .order-summary {
         background: white;
         padding: 20px;
         border-radius: 8px;
         margin: 20px 0;
-      }
-      .pickup-location {
-        background: #e8f5e9;
-        padding: 15px;
-        border-radius: 5px;
-        border-left: 4px solid #4caf50;
-        margin: 15px 0;
+        text-align: center;
       }
       .cta-button {
         background: #3498db;
@@ -71,8 +65,8 @@
   </head>
   <body>
     <div class="header">
-      <h1>📍 New Order Nearby!</h1>
-      <p>Pickup Opportunity</p>
+      <h1>📍 Available Orders Nearby!</h1>
+      <p>Pickup Opportunities</p>
     </div>
 
     <div class="content">
@@ -80,38 +74,38 @@
 
       <div class="proximity-alert">
         <p style="margin: 0; font-size: 1.2em">
-          <strong>📦 There's a new order near you!</strong>
+          <strong
+            >📦 There are {{order_count}} available orders for pickup close to
+            you!</strong
+          >
         </p>
-        <div class="distance-badge">{{distance}} away</div>
-        <p style="margin: 0">You're close to a pickup location</p>
+        <div class="order-count-badge">{{order_count}}</div>
+        <p style="margin: 0">
+          Orders within {{proximity_radius}} of your location
+        </p>
       </div>
 
-      <div class="order-details">
-        <h3>Order Information</h3>
-        <p><strong>Order Number:</strong> {{order_number}}</p>
-        <p><strong>Business:</strong> {{{business_name}}}</p>
-      </div>
-
-      <div class="pickup-location">
-        <h3 style="margin-top: 0">📍 Pickup Location</h3>
-        <p style="margin: 0; font-size: 1.1em; line-height: 1.8">
-          {{{business_address}}}
+      <div class="order-summary">
+        <h3 style="margin-top: 0">What's Next?</h3>
+        <p style="font-size: 1.1em; line-height: 1.8">
+          Please go to the app to view these orders and accept delivery
+          assignments if you're available.
         </p>
       </div>
 
       <div style="text-align: center">
-        <a href="#" class="cta-button">View Order Details</a>
+        <a href="#" class="cta-button">View Available Orders</a>
       </div>
 
       <p>
-        <strong>💡 Why this matters:</strong> You're in close proximity to this
-        order's pickup location. If you're available, you can accept this
-        delivery assignment in the Rendasua app.
+        <strong>💡 Why this matters:</strong> You're in close proximity to
+        multiple pickup locations. If you're available, you can accept delivery
+        assignments in the Rendasua app.
       </p>
 
       <p>
-        <strong>Note:</strong> This order has not been assigned to you yet. Log
-        into the app to accept it if you're interested.
+        <strong>Note:</strong> These orders have not been assigned to you yet.
+        Log into the app to view details and accept them if you're interested.
       </p>
 
       <p>Best regards,<br />The Rendasua Team</p>

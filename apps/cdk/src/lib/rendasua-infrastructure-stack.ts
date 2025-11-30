@@ -178,7 +178,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '20',
           SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
-            'd-d3c3ea6dbe2b45c3ac5c0b9245a10b1b',
+            'd-43d66ccd1de74a72b8d5aaf205c45c1a',
         },
       }
     );
@@ -191,9 +191,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       ruleName: `notify-agents-rule-${environment}`,
       description: 'Triggers agent notification processing every hour',
       schedule: events.Schedule.rate(cdk.Duration.hours(1)),
-      targets: [
-        new targets.LambdaFunction(notifyAgentsFunction),
-      ],
+      targets: [new targets.LambdaFunction(notifyAgentsFunction)],
     });
 
     // Output notify-agents function details
