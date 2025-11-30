@@ -1,12 +1,6 @@
 """Commission distribution and payment functions."""
 from typing import Optional, List, Literal
-import sys
-import os
-
-# Add parent directory to path to import from hasura_client
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from hasura_client import (
+from rendasua_core_packages.hasura_client import (
     log_info,
     log_error,
     get_account_by_user_and_currency,
@@ -87,6 +81,14 @@ def pay_commission(
         
         # Create account transaction (deposit)
         memo = f"Commission payment for order {order.order_number} ({commission_type})"
+        if not account.id:
+            log_error(
+                "Account ID is missing for commission payment",
+                recipient_user_id=recipient_user_id,
+                amount=amount,
+                order_id=order.id,
+            )
+            return None
         transaction_id = register_account_transaction(
             account_id=account.id,
             amount=amount,

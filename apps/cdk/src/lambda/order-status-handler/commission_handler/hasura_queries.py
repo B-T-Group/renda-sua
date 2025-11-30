@@ -1,13 +1,7 @@
 """Hasura GraphQL queries for commission data."""
 from typing import Optional, List
 import requests
-import sys
-import os
-
-# Add parent directory to path to import from hasura_client
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from hasura_client import log_info, log_error
+from rendasua_core_packages.hasura_client import log_info, log_error
 from .models import (
     Partner,
     CommissionConfig,

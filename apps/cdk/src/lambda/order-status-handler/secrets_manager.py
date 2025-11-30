@@ -11,7 +11,7 @@ def log_info(message: str, **kwargs):
     print(f"[INFO] [secrets_manager] {message}" + (f" | {context_str}" if context_str else ""))
 
 
-def log_error(message: str, error: Exception = None, **kwargs):
+def log_error(message: str, error: Exception | None = None, **kwargs):
     """Log error message with optional context and exception."""
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     error_str = f" | error={str(error)}" if error else ""
@@ -62,7 +62,11 @@ def get_hasura_admin_secret(environment: str) -> str:
     """
     secret_name = f"{environment}-rendasua-backend-secrets"
     secrets = get_secret(secret_name)
-    return secrets.get('HASURA_GRAPHQL_ADMIN_SECRET')
+    admin_secret = secrets.get('HASURA_GRAPHQL_ADMIN_SECRET')
+    if not admin_secret:
+        log_error("Hasura admin secret not found in secrets", environment=environment, secret_name=secret_name)
+        raise ValueError(f"Hasura admin secret not found in secrets {secret_name}")
+    return admin_secret
 
 
 def get_google_maps_api_key(environment: str) -> Optional[str]:

@@ -1,9 +1,11 @@
 """Main Lambda handler for order status notifications."""
 import json
 import os
+from dataclasses import dataclass
+from rendasua_core_packages.models import Order
+from rendasua_core_packages.utilities import format_full_address
 from typing import Dict, Any, Optional
-from models import Order, AgentLocation, SQSEventMessage
-from hasura_client import (
+from rendasua_core_packages.hasura_client import (
     get_order_with_location,
     get_all_agent_locations,
     get_complete_order_details,
@@ -19,8 +21,19 @@ from hasura_client import (
 from order_notifications import send_cancellation_notifications
 from distance import calculate_haversine_distance, format_distance
 from notifications import send_notifications_to_nearby_agents
-from secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
+from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
+@dataclass
+class SQSEventMessage:
+    """SQS event message format."""
+    eventType: str  # order.created, order.completed, order.status.updated, order.cancelled
+    orderId: str
+    timestamp: str
+    status: Optional[str] = None  # Only for order.status.updated
+    cancelledBy: Optional[str] = None  # Only for order.cancelled
+    cancellationReason: Optional[str] = None  # Only for order.cancelled
+    previousStatus: Optional[str] = None  # Only for order.cancelled
+    orderStatus: Optional[str] = None  # Only for order.cancelled
 
 def log_info(message: str, **kwargs):
     """Log info message with optional context."""
@@ -28,7 +41,7 @@ def log_info(message: str, **kwargs):
     print(f"[INFO] {message}" + (f" | {context_str}" if context_str else ""))
 
 
-def log_error(message: str, error: Exception = None, **kwargs):
+def log_error(message: str, error: Exception | None = None, **kwargs):
     """Log error message with optional context and exception."""
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     error_str = f" | error={str(error)}" if error else ""
@@ -118,7 +131,7 @@ def ready_for_pickup_handler(
         log_error(
             "Business location coordinates not available",
             order_id=order_id,
-            address=address.format_full_address(),
+            address=format_full_address(address) if address else "NA",
         )
         return {
             "success": False,
@@ -435,21 +448,20 @@ def release_hold_and_process_payment(
             
             if agent_account:
                 agent_hold_amount = order_hold.agent_hold_amount
-                if agent_hold_amount > 0:
-                    log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
-                    transaction_id = register_account_transaction(
-                        agent_account.id,
-                        agent_hold_amount,
-                        "release",
-                        f"Hold released for order {order.order_number}",
-                        order_id,
-                        hasura_endpoint,
-                        hasura_admin_secret
-                    )
-                    if transaction_id:
-                        log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
-                    else:
-                        log_error("Failed to release agent hold", order_id=order_id)
+                log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
+                transaction_id = register_account_transaction(
+                    agent_account.id,
+                    agent_hold_amount,
+                    "release",
+                    f"Hold released for order {order.order_number}",
+                    order_id,
+                    hasura_endpoint,
+                    hasura_admin_secret
+                )
+                if transaction_id:
+                    log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
+                else:
+                    log_error("Failed to release agent hold", order_id=order_id)
             else:
                 log_error("Agent account not found", order_id=order_id, agent_user_id=agent_user_id)
         

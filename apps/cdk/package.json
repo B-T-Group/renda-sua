@@ -12,7 +12,7 @@
     "destroy": "cdk destroy",
     "diff": "cdk diff",
     "synth": "cdk synth",
-    "generate:models": "cd src/core-packages/models && python3 generate_models.py",
+    "generate:models": "cd src/core-packages/rendasua_core_packages/models && python3 generate_models.py",
     "build:layer": "cd src/lambda-layer && bash build-core-packages-layer.sh",
     "build:all-layers": "cd src/lambda-layer && bash build-all.sh"
   },

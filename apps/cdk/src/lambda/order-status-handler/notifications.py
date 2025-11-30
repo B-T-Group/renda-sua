@@ -3,8 +3,9 @@ import os
 from typing import List
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
-from models import AgentLocation, Order
-from secrets_manager import get_sendgrid_api_key
+from rendasua_core_packages.models import AgentLocation, Order
+from rendasua_core_packages.secrets_manager import get_sendgrid_api_key
+from rendasua_core_packages.utilities import format_full_address
 
 
 def log_info(message: str, **kwargs):
@@ -13,7 +14,7 @@ def log_info(message: str, **kwargs):
     print(f"[INFO] [notifications] {message}" + (f" | {context_str}" if context_str else ""))
 
 
-def log_error(message: str, error: Exception = None, **kwargs):
+def log_error(message: str, error: Exception | None = None, **kwargs):
     """Log error message with optional context and exception."""
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     error_str = f" | error={str(error)}" if error else ""
@@ -58,10 +59,10 @@ def send_proximity_notification(
     
     try:
         # Get agent email and name
-        agent_user = agent_location.agent.get("user", {})
-        agent_email = agent_user.get("email")
-        agent_first_name = agent_user.get("first_name", "")
-        agent_last_name = agent_user.get("last_name", "")
+        agent_user = agent_location.agent.user
+        agent_email = agent_user.email
+        agent_first_name = agent_user.first_name
+        agent_last_name = agent_user.last_name
         agent_name = f"{agent_first_name} {agent_last_name}".strip() or "Agent"
         
         log_info(
@@ -81,8 +82,11 @@ def send_proximity_notification(
         else:
             distance_str = f"{distance_km:.1f} km"
         
-        # Format business address
-        business_address = order.business_location.address.format_full_address()
+        # Format business address (return "NA" if not available)
+        if order.business_location and order.business_location.address:
+            business_address = format_full_address(order.business_location.address)
+        else:
+            business_address = "NA"
         
         # Get current year for template
         from datetime import datetime

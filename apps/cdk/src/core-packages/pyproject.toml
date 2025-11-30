@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rendasua-core-packages"
+version = "0.1.1"
+description = "Core packages for Rendasua Lambda functions"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31.0",
+    "sendgrid>=6.10.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "datamodel-code-generator>=0.25.0",
+    "graphql-core>=3.2.0",
+]
+
+[tool.setuptools]
+# Packages will be auto-discovered by setuptools.find_packages()
+# This includes: rendasua_core_packages and its subpackages:
+# - rendasua_core_packages.commission_handler
+# - rendasua_core_packages.models
+# - rendasua_core_packages.hasura_client
+# - rendasua_core_packages.notification_handler
+# - rendasua_core_packages.secrets_manager
+
+[tool.setuptools.package-data]
+"*" = ["*.py", "*.txt", "*.md"]

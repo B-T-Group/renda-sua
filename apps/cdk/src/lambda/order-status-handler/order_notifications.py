@@ -3,7 +3,7 @@ import os
 from typing import Optional, Dict, Any, List
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
-from secrets_manager import get_sendgrid_api_key
+from rendasua_core_packages.secrets_manager import get_sendgrid_api_key
 
 
 def log_info(message: str, **kwargs):
@@ -12,7 +12,7 @@ def log_info(message: str, **kwargs):
     print(f"[INFO] [order_notifications] {message}" + (f" | {context_str}" if context_str else ""))
 
 
-def log_error(message: str, error: Exception = None, **kwargs):
+def log_error(message: str, error: Exception | None = None, **kwargs):
     """Log error message with optional context and exception."""
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     error_str = f" | error={str(error)}" if error else ""
