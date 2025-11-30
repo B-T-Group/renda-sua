@@ -404,7 +404,7 @@
       "resolutionDescription": {
         "agent_fault": "Le client sera remboursé. La retenue de l'agent sera libérée et déposée sur votre compte d'entreprise.",
         "item_fault": "Le client et l'agent seront remboursés. L'inventaire peut être restauré en option.",
-        "client_fault": "Le client et l'agent seront remboursés. Le client sera facturé 2x les frais d'annulation (divisés 50/50 entre l'agent et l'entreprise)."
+        "client_fault": "Le client et l'agent seront remboursés. Le client sera facturé des frais de livraison échouée (divisés 50/50 entre l'agent et l'entreprise)."
       },
       "pending": "Résolutions en attente",
       "completed": "Livraisons résolues",
@@ -937,7 +937,7 @@
     "failedDeliveries": {
       "title": "Gestion des livraisons échouées",
       "q": "Comment les livraisons échouées sont-elles gérées ?",
-      "a": "Lorsqu'une livraison échoue, l'agent la marque avec une raison d'échec spécifique. Le propriétaire de l'entreprise peut ensuite résoudre la livraison échouée en utilisant l'une des trois options de résolution : 1) Faute de l'agent - Le client est remboursé, la retenue de l'agent va à l'entreprise ; 2) Problème d'article - Le client et l'agent sont remboursés, l'inventaire peut être restauré en option ; 3) Faute du client - Les deux sont remboursés, mais le client est facturé 2x les frais d'annulation (divisés 50/50 entre l'agent et l'entreprise). Toutes les résolutions sont suivies et peuvent être consultées dans la section Livraisons échouées du tableau de bord de l'entreprise."
+      "a": "Lorsqu'une livraison échoue, l'agent la marque avec une raison d'échec spécifique. Le propriétaire de l'entreprise peut ensuite résoudre la livraison échouée en utilisant l'une des trois options de résolution : 1) Faute de l'agent - Le client est remboursé, la retenue de l'agent va à l'entreprise ; 2) Problème d'article - Le client et l'agent sont remboursés, l'inventaire peut être restauré en option ; 3) Faute du client - Les deux sont remboursés, mais le client est facturé des frais de livraison échouée (divisés 50/50 entre l'agent et l'entreprise). Toutes les résolutions sont suivies et peuvent être consultées dans la section Livraisons échouées du tableau de bord de l'entreprise."
     },
     "subtitle": "Trouvez des réponses aux questions courantes",
     "title": "Questions fréquemment posées"

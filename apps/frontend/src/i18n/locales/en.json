@@ -402,7 +402,7 @@
       "resolutionDescription": {
         "agent_fault": "Client will be refunded. Agent hold will be released and deposited to your business account.",
         "item_fault": "Both client and agent will be refunded. Inventory can optionally be restored.",
-        "client_fault": "Both client and agent will be refunded. Client will be charged 2x cancellation fee (split 50/50 between agent and business)."
+        "client_fault": "Both client and agent will be refunded. Client will be charged a failed delivery fee (split 50/50 between agent and business)."
       },
       "pending": "Pending Resolutions",
       "completed": "Resolved Deliveries",
@@ -936,7 +936,7 @@
     "failedDeliveries": {
       "title": "Failed Deliveries Management",
       "q": "How are failed deliveries managed?",
-      "a": "When a delivery fails, the agent marks it with a specific failure reason. The business owner can then resolve the failed delivery using one of three resolution options: 1) Agent Fault - Client is refunded, agent hold goes to business; 2) Item Fault - Both client and agent are refunded, inventory can optionally be restored; 3) Client Fault - Both are refunded, but client is charged 2x cancellation fee (split 50/50 between agent and business). All resolutions are tracked and can be viewed in the Failed Deliveries section of the business dashboard."
+      "a": "When a delivery fails, the agent marks it with a specific failure reason. The business owner can then resolve the failed delivery using one of three resolution options: 1) Agent Fault - Client is refunded, agent hold goes to business; 2) Item Fault - Both client and agent are refunded, inventory can optionally be restored; 3) Client Fault - Both are refunded, but client is charged a failed delivery fee (split 50/50 between agent and business). All resolutions are tracked and can be viewed in the Failed Deliveries section of the business dashboard."
     },
     "subtitle": "Find answers to common questions",
     "title": "Frequently Asked Questions"

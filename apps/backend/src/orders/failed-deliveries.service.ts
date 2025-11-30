@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
-import { ConfigurationsService } from '../admin/configurations.service';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from './orders.service';
@@ -20,7 +20,7 @@ export class FailedDeliveriesService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly accountsService: AccountsService,
     private readonly ordersService: OrdersService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly deliveryConfigService: DeliveryConfigService
   ) {}
 
   /**
@@ -76,7 +76,9 @@ export class FailedDeliveriesService {
     }
 
     const variables: any = { businessId };
-    const whereConditions: string[] = [`order: {business_id: {_eq: $businessId}}`];
+    const whereConditions: string[] = [
+      `order: {business_id: {_eq: $businessId}}`,
+    ];
 
     if (filters?.status) {
       whereConditions.push(`status: {_eq: $status}`);
@@ -147,7 +149,10 @@ export class FailedDeliveriesService {
       }
     `;
 
-    const result = await this.hasuraSystemService.executeQuery(query, variables);
+    const result = await this.hasuraSystemService.executeQuery(
+      query,
+      variables
+    );
     return result.failed_deliveries || [];
   }
 
@@ -249,10 +254,7 @@ export class FailedDeliveriesService {
   /**
    * Resolve a failed delivery
    */
-  async resolveFailedDelivery(
-    orderId: string,
-    resolution: ResolutionRequest
-  ) {
+  async resolveFailedDelivery(orderId: string, resolution: ResolutionRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business) {
       throw new HttpException(
@@ -291,14 +293,8 @@ export class FailedDeliveriesService {
       { orderId }
     );
 
-    if (
-      !holdResult.order_holds ||
-      holdResult.order_holds.length === 0
-    ) {
-      throw new HttpException(
-        'Order hold not found',
-        HttpStatus.NOT_FOUND
-      );
+    if (!holdResult.order_holds || holdResult.order_holds.length === 0) {
+      throw new HttpException('Order hold not found', HttpStatus.NOT_FOUND);
     }
 
     const orderHold = holdResult.order_holds[0];
@@ -306,29 +302,17 @@ export class FailedDeliveriesService {
     // Process resolution based on type
     switch (resolution.resolution_type) {
       case 'agent_fault':
-        await this.resolveAgentFault(
-          order,
-          orderHold,
-          resolution.outcome,
-          user.id
-        );
+        await this.resolveAgentFault(order, orderHold);
         break;
       case 'item_fault':
         await this.resolveItemFault(
           order,
           orderHold,
-          resolution.outcome,
-          resolution.restore_inventory ?? true,
-          user.id
+          resolution.restore_inventory ?? true
         );
         break;
       case 'client_fault':
-        await this.resolveClientFault(
-          order,
-          orderHold,
-          resolution.outcome,
-          user.id
-        );
+        await this.resolveClientFault(order, orderHold);
         break;
       default:
         throw new HttpException(
@@ -371,12 +355,7 @@ export class FailedDeliveriesService {
   /**
    * Resolve agent fault: Refund client, release agent hold, deposit agent hold to business
    */
-  private async resolveAgentFault(
-    order: any,
-    orderHold: any,
-    outcome: string,
-    resolvedBy: string
-  ) {
+  private async resolveAgentFault(order: any, orderHold: any) {
     // Release client hold
     if (orderHold.client_hold_amount > 0) {
       const clientAccount = await this.hasuraSystemService.getAccount(
@@ -450,9 +429,7 @@ export class FailedDeliveriesService {
   private async resolveItemFault(
     order: any,
     orderHold: any,
-    outcome: string,
-    restoreInventory: boolean,
-    resolvedBy: string
+    restoreInventory: boolean
   ) {
     // Release client hold
     if (orderHold.client_hold_amount > 0) {
@@ -519,14 +496,9 @@ export class FailedDeliveriesService {
   }
 
   /**
-   * Resolve client fault: Refund both, charge client 2x cancellation fee (negative balance), split fee 50/50 to agent and business
+   * Resolve client fault: Refund both, charge client failed delivery fee (negative balance), split fee 50/50 to agent and business
    */
-  private async resolveClientFault(
-    order: any,
-    orderHold: any,
-    outcome: string,
-    resolvedBy: string
-  ) {
+  private async resolveClientFault(order: any, orderHold: any) {
     // Release client hold
     if (orderHold.client_hold_amount > 0) {
       const clientAccount = await this.hasuraSystemService.getAccount(
@@ -575,25 +547,23 @@ export class FailedDeliveriesService {
       });
     }
 
-    // Get cancellation fee configuration
+    // Get failed delivery fee configuration
     // Use delivery address country or default to GA
-    const country =
-      order.delivery_address?.country || 'GA';
-    const cancellationFeeConfig =
-      await this.configurationsService.getConfigurationByKey(
-        'cancellation_fee',
-        country
+    const country = order.delivery_address?.country || 'GA';
+    const failedDeliveryFee =
+      await this.deliveryConfigService.getDeliveryConfig(
+        country,
+        'failed_delivery_fees'
       );
 
-    if (!cancellationFeeConfig) {
+    if (failedDeliveryFee === null || typeof failedDeliveryFee !== 'number') {
       throw new HttpException(
-        'Cancellation fee configuration not found',
+        'Failed delivery fee configuration not found',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
 
-    const cancellationFee = cancellationFeeConfig.number_value || 0;
-    const failureFee = cancellationFee * 2; // 2x cancellation fee
+    const failureFee = failedDeliveryFee;
     const splitAmount = failureFee / 2; // 50/50 split
 
     // Charge client (create negative balance via withdrawal)
@@ -607,7 +577,7 @@ export class FailedDeliveriesService {
       accountId: clientAccount.id,
       amount: failureFee,
       transactionType: 'withdrawal',
-      memo: `Failed delivery fee (2x cancellation fee) - order ${order.order_number} (client fault)`,
+      memo: `Failed delivery fee - order ${order.order_number} (client fault)`,
       referenceId: order.id,
     });
 
@@ -645,4 +615,3 @@ export class FailedDeliveriesService {
     }
   }
 }
-
