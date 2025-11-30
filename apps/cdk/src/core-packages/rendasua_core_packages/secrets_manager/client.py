@@ -50,9 +50,29 @@ def get_secret(secret_name: str) -> Dict[str, str]:
 
 
 def get_hasura_admin_secret(environment: str) -> str:
+    """
+    Get Hasura admin secret from Secrets Manager.
+    
+    Args:
+        environment: Environment name (development or production)
+        
+    Returns:
+        Hasura admin secret string
+        
+    Raises:
+        ValueError: If the secret is not found in the secrets dictionary
+    """
     secret_name = f"{environment}-rendasua-backend-secrets"
     secrets = get_secret(secret_name)
-    return secrets.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
+    admin_secret = secrets.get("HASURA_GRAPHQL_ADMIN_SECRET")
+    if not admin_secret:
+        _log_error(
+            "Hasura admin secret not found in secrets",
+            environment=environment,
+            secret_name=secret_name,
+        )
+        raise ValueError(f"Hasura admin secret not found in secrets {secret_name}")
+    return admin_secret
 
 
 def get_google_maps_api_key(environment: str) -> Optional[str]:

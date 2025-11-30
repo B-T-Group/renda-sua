@@ -45,6 +45,15 @@ from .location_service import (
     get_all_agent_locations,
 )
 
+# Commission-related functions
+from .commission_service import (
+    get_commission_configs,
+    get_active_partners,
+    get_rendasua_hq_user,
+    get_commission_order,
+    audit_commission_payout,
+)
+
 __all__ = [
     # Base client
     "HasuraClient",
@@ -70,6 +79,12 @@ __all__ = [
     "get_cancellation_fee_config",
     # Locations
     "get_all_agent_locations",
+    # Commissions
+    "get_commission_configs",
+    "get_active_partners",
+    "get_rendasua_hq_user",
+    "get_commission_order",
+    "audit_commission_payout",
 ]
 
 

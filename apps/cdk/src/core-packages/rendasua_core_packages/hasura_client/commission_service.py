@@ -1,26 +1,38 @@
-"""Hasura GraphQL queries for commission data."""
+"""
+Commission-related Hasura operations.
+
+This module provides functions for fetching commission-related data from Hasura,
+including commission configurations, partners, HQ user, and commission orders.
+"""
+
 from typing import Optional, List
-import requests
-from rendasua_core_packages.hasura_client import log_info, log_error
-from .models import (
-    Partner,
+import datetime
+from rendasua_core_packages.models import Partner, User, Order, CommissionPayout
+from .base import HasuraClient
+from .logging import log_info, log_error
+from rendasua_core_packages.commission_handler.types import (
     CommissionConfig,
-    RendasuaHQUser,
-    CommissionOrder,
-    CommissionAssignedAgent,
+    CommissionOrder as CommissionOrderType,
+    AssignedAgent,
 )
 
 
-def get_commission_configs(
-    hasura_endpoint: str,
-    hasura_admin_secret: str
-) -> CommissionConfig:
+def parse_datetime(dt_str: Optional[str]) -> datetime.datetime:
+    """Parse datetime string to datetime object."""
+    if not dt_str:
+        return datetime.datetime.now()
+    try:
+        return datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+    except:
+        return datetime.datetime.now()
+
+
+def get_commission_configs(client: HasuraClient) -> CommissionConfig:
     """
     Fetch commission configurations from application_configurations table.
     
     Args:
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
+        client: HasuraClient instance
         
     Returns:
         CommissionConfig with values from database or defaults
@@ -44,33 +56,11 @@ def get_commission_configs(
     }
     """
     
-    headers = {
-        "Content-Type": "application/json",
-        "x-hasura-admin-secret": hasura_admin_secret,
-    }
-    
-    payload = {
-        "query": query,
-    }
-    
     log_info("Fetching commission configurations")
     
     try:
-        response = requests.post(
-            hasura_endpoint,
-            json=payload,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        if "errors" in result:
-            log_error("Hasura query error fetching commission configs", errors=result['errors'])
-            # Return defaults on error
-            return _get_default_commission_config()
-        
-        configs_data = result.get("data", {}).get("application_configurations", [])
+        data = client.execute(query)
+        configs_data = data.get("application_configurations", [])
         
         # Build config map
         config_map = {}
@@ -96,35 +86,24 @@ def get_commission_configs(
             ),
         )
         
-    except requests.exceptions.RequestException as e:
-        log_error("HTTP error fetching commission configs", error=e)
-        return _get_default_commission_config()
     except Exception as e:
-        log_error("Unexpected error fetching commission configs", error=e)
-        return _get_default_commission_config()
+        log_error("Error fetching commission configs", error=e)
+        # Return defaults on error
+        return CommissionConfig(
+            rendasua_item_commission_percentage=5.0,
+            unverified_agent_base_delivery_commission=50.0,
+            verified_agent_base_delivery_commission=0.0,
+            unverified_agent_per_km_delivery_commission=80.0,
+            verified_agent_per_km_delivery_commission=20.0,
+        )
 
 
-def _get_default_commission_config() -> CommissionConfig:
-    """Get default commission configuration."""
-    return CommissionConfig(
-        rendasua_item_commission_percentage=5.0,
-        unverified_agent_base_delivery_commission=50.0,
-        verified_agent_base_delivery_commission=0.0,
-        unverified_agent_per_km_delivery_commission=80.0,
-        verified_agent_per_km_delivery_commission=20.0,
-    )
-
-
-def get_active_partners(
-    hasura_endpoint: str,
-    hasura_admin_secret: str
-) -> List[Partner]:
+def get_active_partners(client: HasuraClient) -> List[Partner]:
     """
     Fetch active partners from partners table.
     
     Args:
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
+        client: HasuraClient instance
         
     Returns:
         List of active Partner objects
@@ -145,32 +124,11 @@ def get_active_partners(
     }
     """
     
-    headers = {
-        "Content-Type": "application/json",
-        "x-hasura-admin-secret": hasura_admin_secret,
-    }
-    
-    payload = {
-        "query": query,
-    }
-    
     log_info("Fetching active partners")
     
     try:
-        response = requests.post(
-            hasura_endpoint,
-            json=payload,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        if "errors" in result:
-            log_error("Hasura query error fetching partners", errors=result['errors'])
-            return []
-        
-        partners_data = result.get("data", {}).get("partners", [])
+        data = client.execute(query)
+        partners_data = data.get("partners", [])
         
         partners = []
         for partner_data in partners_data:
@@ -181,36 +139,29 @@ def get_active_partners(
                 base_delivery_fee_commission=float(partner_data["base_delivery_fee_commission"]),
                 per_km_delivery_fee_commission=float(partner_data["per_km_delivery_fee_commission"]),
                 item_commission=float(partner_data["item_commission"]),
-                is_active=partner_data["is_active"],
-                created_at=partner_data["created_at"],
-                updated_at=partner_data["updated_at"],
+                is_active=partner_data.get("is_active", True),
+                created_at=parse_datetime(partner_data.get("created_at")),
+                updated_at=parse_datetime(partner_data.get("updated_at")),
             )
             partners.append(partner)
         
         log_info("Active partners fetched", count=len(partners))
         return partners
         
-    except requests.exceptions.RequestException as e:
-        log_error("HTTP error fetching partners", error=e)
-        return []
     except Exception as e:
-        log_error("Unexpected error fetching partners", error=e)
+        log_error("Error fetching partners", error=e)
         return []
 
 
-def get_rendasua_hq_user(
-    hasura_endpoint: str,
-    hasura_admin_secret: str
-) -> Optional[RendasuaHQUser]:
+def get_rendasua_hq_user(client: HasuraClient) -> Optional[User]:
     """
     Fetch RendaSua HQ user by email.
     
     Args:
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
+        client: HasuraClient instance
         
     Returns:
-        RendasuaHQUser if found, None otherwise
+        User if found, None otherwise
     """
     query = """
     query GetRendasuaHQUser {
@@ -222,78 +173,53 @@ def get_rendasua_hq_user(
         last_name
         email
         phone_number
+        created_at
+        updated_at
       }
     }
     """
     
-    headers = {
-        "Content-Type": "application/json",
-        "x-hasura-admin-secret": hasura_admin_secret,
-    }
-    
-    payload = {
-        "query": query,
-    }
-    
     log_info("Fetching RendaSua HQ user")
     
     try:
-        response = requests.post(
-            hasura_endpoint,
-            json=payload,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        if "errors" in result:
-            log_error("Hasura query error fetching HQ user", errors=result['errors'])
-            return None
-        
-        users_data = result.get("data", {}).get("users", [])
+        data = client.execute(query)
+        users_data = data.get("users", [])
         
         if not users_data:
             log_error("RendaSua HQ user not found")
             return None
         
         user_data = users_data[0]
-        hq_user = RendasuaHQUser(
+        hq_user = User(
             id=user_data["id"],
-            user_type_id=user_data["user_type_id"],
+            user_type_id=user_data.get("user_type_id"),
             identifier=user_data["identifier"],
             first_name=user_data["first_name"],
             last_name=user_data["last_name"],
             email=user_data["email"],
-            phone_number=user_data["phone_number"],
+            phone_number=user_data.get("phone_number"),
+            created_at=parse_datetime(user_data.get("created_at")),
+            updated_at=parse_datetime(user_data.get("updated_at")),
         )
         
         log_info("RendaSua HQ user fetched", user_id=hq_user.id)
         return hq_user
         
-    except requests.exceptions.RequestException as e:
-        log_error("HTTP error fetching HQ user", error=e)
-        return None
     except Exception as e:
-        log_error("Unexpected error fetching HQ user", error=e)
+        log_error("Error fetching HQ user", error=e)
         return None
 
 
-def get_commission_order(
-    order_id: str,
-    hasura_endpoint: str,
-    hasura_admin_secret: str
-) -> Optional[CommissionOrder]:
+def get_commission_order(client: HasuraClient, order_id: str) -> Optional[CommissionOrderType]:
     """
     Fetch order with all commission-related fields.
     
     Args:
+        client: HasuraClient instance
         order_id: Order ID to fetch
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
         
     Returns:
-        CommissionOrder if found, None otherwise
+        CommissionOrderType if found, None otherwise
     """
     query = """
     query GetCommissionOrder($orderId: uuid!) {
@@ -316,33 +242,12 @@ def get_commission_order(
     }
     """
     
-    headers = {
-        "Content-Type": "application/json",
-        "x-hasura-admin-secret": hasura_admin_secret,
-    }
-    
-    payload = {
-        "query": query,
-        "variables": {"orderId": order_id},
-    }
-    
     log_info("Fetching commission order", order_id=order_id)
     
     try:
-        response = requests.post(
-            hasura_endpoint,
-            json=payload,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
+        data = client.execute(query, {"orderId": order_id})
+        order_data = data.get("orders_by_pk")
         
-        result = response.json()
-        if "errors" in result:
-            log_error("Hasura query error fetching commission order", order_id=order_id, errors=result['errors'])
-            return None
-        
-        order_data = result.get("data", {}).get("orders_by_pk")
         if not order_data:
             log_error("Commission order not found", order_id=order_id)
             return None
@@ -351,7 +256,7 @@ def get_commission_order(
         assigned_agent = None
         if order_data.get("assigned_agent"):
             agent_data = order_data["assigned_agent"]
-            assigned_agent = CommissionAssignedAgent(
+            assigned_agent = AssignedAgent(
                 user_id=agent_data["user_id"],
                 is_verified=agent_data.get("is_verified", False),
             )
@@ -362,7 +267,8 @@ def get_commission_order(
             log_error("Business user_id not found in order", order_id=order_id)
             return None
         
-        commission_order = CommissionOrder(
+        # Create CommissionOrderType
+        commission_order = CommissionOrderType(
             id=order_data["id"],
             order_number=order_data["order_number"],
             base_delivery_fee=float(order_data["base_delivery_fee"]),
@@ -377,15 +283,13 @@ def get_commission_order(
         log_info("Commission order fetched", order_id=order_id, order_number=commission_order.order_number)
         return commission_order
         
-    except requests.exceptions.RequestException as e:
-        log_error("HTTP error fetching commission order", order_id=order_id, error=e)
-        return None
     except Exception as e:
-        log_error("Unexpected error fetching commission order", order_id=order_id, error=e)
+        log_error("Error fetching commission order", error=e, order_id=order_id)
         return None
 
 
 def audit_commission_payout(
+    client: HasuraClient,
     order_id: str,
     recipient_user_id: str,
     recipient_type: str,
@@ -393,14 +297,13 @@ def audit_commission_payout(
     amount: float,
     currency: str,
     account_transaction_id: str,
-    commission_percentage: Optional[float],
-    hasura_endpoint: str,
-    hasura_admin_secret: str
+    commission_percentage: Optional[float] = None
 ) -> Optional[str]:
     """
     Insert commission payout record in commission_payouts table.
     
     Args:
+        client: HasuraClient instance
         order_id: Order ID
         recipient_user_id: Recipient user ID
         recipient_type: Type of recipient (partner, rendasua, agent, business)
@@ -409,8 +312,6 @@ def audit_commission_payout(
         currency: Currency code
         account_transaction_id: Account transaction ID
         commission_percentage: Optional commission percentage
-        hasura_endpoint: Hasura GraphQL endpoint
-        hasura_admin_secret: Hasura admin secret
         
     Returns:
         Commission payout ID if successful, None otherwise
@@ -422,11 +323,6 @@ def audit_commission_payout(
       }
     }
     """
-    
-    headers = {
-        "Content-Type": "application/json",
-        "x-hasura-admin-secret": hasura_admin_secret,
-    }
     
     payout_input = {
         "order_id": order_id,
@@ -441,11 +337,6 @@ def audit_commission_payout(
     if commission_percentage is not None:
         payout_input["commission_percentage"] = commission_percentage
     
-    payload = {
-        "query": mutation,
-        "variables": {"payout": payout_input},
-    }
-    
     log_info(
         "Auditing commission payout",
         order_id=order_id,
@@ -456,20 +347,9 @@ def audit_commission_payout(
     )
     
     try:
-        response = requests.post(
-            hasura_endpoint,
-            json=payload,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
+        data = client.execute(mutation, {"payout": payout_input})
+        payout_data = data.get("insert_commission_payouts_one")
         
-        result = response.json()
-        if "errors" in result:
-            log_error("Hasura mutation error inserting commission payout", order_id=order_id, errors=result['errors'])
-            return None
-        
-        payout_data = result.get("data", {}).get("insert_commission_payouts_one")
         if not payout_data:
             log_error("Failed to insert commission payout", order_id=order_id)
             return None
@@ -478,10 +358,7 @@ def audit_commission_payout(
         log_info("Commission payout audited", payout_id=payout_id, order_id=order_id)
         return payout_id
         
-    except requests.exceptions.RequestException as e:
-        log_error("HTTP error auditing commission payout", order_id=order_id, error=e)
-        return None
     except Exception as e:
-        log_error("Unexpected error auditing commission payout", order_id=order_id, error=e)
+        log_error("Error auditing commission payout", error=e, order_id=order_id)
         return None
 

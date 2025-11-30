@@ -6,6 +6,8 @@ from rendasua_core_packages.models import Order
 from rendasua_core_packages.utilities import format_full_address
 from typing import Dict, Any, Optional
 from rendasua_core_packages.hasura_client import (
+    HasuraClient,
+    HasuraClientConfig,
     get_order_with_location,
     get_all_agent_locations,
     get_complete_order_details,
@@ -18,8 +20,9 @@ from rendasua_core_packages.hasura_client import (
     register_cancellation_fee_transactions,
     get_order_details_for_notification,
 )
+from rendasua_core_packages.commission_handler import distribute_commissions
 from order_notifications import send_cancellation_notifications
-from distance import calculate_haversine_distance, format_distance
+from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from notifications import send_notifications_to_nearby_agents
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
@@ -287,15 +290,15 @@ def process_order_event(
         
         # Get secrets
         log_info("Retrieving secrets from AWS Secrets Manager", environment=environment)
-        hasura_admin_secret = get_hasura_admin_secret(environment)
-        google_maps_api_key = get_google_maps_api_key(environment)
-        
-        if not hasura_admin_secret:
-            log_error("Failed to retrieve Hasura admin secret")
+        try:
+            hasura_admin_secret = get_hasura_admin_secret(environment)
+        except ValueError as e:
+            log_error("Failed to retrieve Hasura admin secret", error=e)
             return {
                 "success": False,
                 "error": "Failed to retrieve Hasura admin secret",
             }
+        google_maps_api_key = get_google_maps_api_key(environment)
         
         log_info("Successfully retrieved secrets")
         
@@ -535,12 +538,15 @@ def release_hold_and_process_payment(
         
         # Distribute commissions
         log_info("Starting commission distribution", order_id=order_id)
-        from commission_handler import distribute_commissions
+        
+        # Create HasuraClient instance for commission distribution
+        hasura_client = HasuraClient(
+            HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+        )
         
         commission_result = distribute_commissions(
-            order_id=order_id,
-            hasura_endpoint=hasura_endpoint,
-            hasura_admin_secret=hasura_admin_secret
+            client=hasura_client,
+            order_id=order_id
         )
         
         if not commission_result.get("success"):
@@ -598,9 +604,10 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "GRAPHQL_ENDPOINT not configured"}
     
     # Get Hasura admin secret
-    hasura_admin_secret = get_hasura_admin_secret(environment)
-    if not hasura_admin_secret:
-        log_error("Failed to retrieve Hasura admin secret")
+    try:
+        hasura_admin_secret = get_hasura_admin_secret(environment)
+    except ValueError as e:
+        log_error("Failed to retrieve Hasura admin secret", error=e)
         return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
     
     # Process payment and release holds
@@ -873,9 +880,10 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "GRAPHQL_ENDPOINT not configured"}
     
     # Get Hasura admin secret
-    hasura_admin_secret = get_hasura_admin_secret(environment)
-    if not hasura_admin_secret:
-        log_error("Failed to retrieve Hasura admin secret")
+    try:
+        hasura_admin_secret = get_hasura_admin_secret(environment)
+    except ValueError as e:
+        log_error("Failed to retrieve Hasura admin secret", error=e)
         return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
     
     # Process cancellation financials

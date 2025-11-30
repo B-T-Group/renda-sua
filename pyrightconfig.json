@@ -2,9 +2,7 @@
   "typeCheckingMode": "basic",
   "venvPath": "./.venv",
   "venv": "myenv",
-  "extraPaths": [
-    "./apps/cdk/src/core-packages"
-  ],
+  "extraPaths": ["./apps/cdk/src/core-packages"],
   "reportMissingImports": true,
   "reportOptionalMemberAccess": false
 }

@@ -13,6 +13,7 @@ from .types import (
     CommissionBreakdown,
 )
 from .calculator import calculate_commissions
+from .distributor import distribute_commissions
 
 __all__ = [
     "CommissionConfig",
@@ -20,6 +21,7 @@ __all__ = [
     "CommissionOrder",
     "CommissionBreakdown",
     "calculate_commissions",
+    "distribute_commissions",
 ]
 
 

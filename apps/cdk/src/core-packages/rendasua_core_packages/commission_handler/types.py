@@ -18,14 +18,20 @@ class Partner(BaseModel):
 
 
 class AssignedAgent(BaseModel):
+    user_id: str
     is_verified: bool = False
 
 
 class CommissionOrder(BaseModel):
+    id: str
+    order_number: str
     base_delivery_fee: float
     per_km_delivery_fee: float
     subtotal: float
+    currency: str
+    assigned_agent_id: Optional[str] = None
     assigned_agent: Optional[AssignedAgent] = None
+    business_user_id: str
 
 
 class CommissionConfig(BaseModel):
