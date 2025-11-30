@@ -161,6 +161,54 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       exportName: `OrderStatusHandlerFunctionArn-${environment}`,
     });
 
+    // Create Lambda function for notify-agents (scheduled)
+    const notifyAgentsFunction = new lambda.Function(
+      this,
+      `NotifyAgents-${environment}`,
+      {
+        functionName: `notify-agents-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/notify-agents'),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 512,
+        layers: [requestsLayer, sendgridLayer, corePackagesLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          GRAPHQL_ENDPOINT: graphqlEndpoint,
+          PROXIMITY_RADIUS_KM: '20',
+          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
+            'd-d3c3ea6dbe2b45c3ac5c0b9245a10b1b',
+        },
+      }
+    );
+
+    // Add Secrets Manager permissions
+    notifyAgentsFunction.addToRolePolicy(secretsManagerPolicy);
+
+    // Create EventBridge rule to trigger Lambda every hour
+    new events.Rule(this, `NotifyAgentsRule-${environment}`, {
+      ruleName: `notify-agents-rule-${environment}`,
+      description: 'Triggers agent notification processing every hour',
+      schedule: events.Schedule.rate(cdk.Duration.hours(1)),
+      targets: [
+        new targets.LambdaFunction(notifyAgentsFunction),
+      ],
+    });
+
+    // Output notify-agents function details
+    new cdk.CfnOutput(this, `NotifyAgentsFunctionArn-${environment}`, {
+      value: notifyAgentsFunction.functionArn,
+      description: 'ARN of the notify-agents Lambda function',
+      exportName: `NotifyAgentsFunctionArn-${environment}`,
+    });
+
+    new cdk.CfnOutput(this, `NotifyAgentsFunctionName-${environment}`, {
+      value: notifyAgentsFunction.functionName,
+      description: 'Name of the notify-agents Lambda function',
+      exportName: `NotifyAgentsFunctionName-${environment}`,
+    });
+
     // Create the Airtel mobile payments key refresh Lambda function
     const refreshAirtelMobilePaymentsKeyFunction = new lambda.Function(
       this,

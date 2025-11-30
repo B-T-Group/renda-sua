@@ -1,0 +1,2 @@
+# This Lambda reuses the core packages layer, so no additional dependencies needed here
+

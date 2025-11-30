@@ -20,6 +20,7 @@ from rendasua_core_packages.hasura_client import (
     register_cancellation_fee_transactions,
     get_order_details_for_notification,
 )
+from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
 from rendasua_core_packages.commission_handler import distribute_commissions
 from order_notifications import send_cancellation_notifications
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
@@ -101,7 +102,8 @@ def ready_for_pickup_handler(
     template_id: str
 ) -> Dict[str, Any]:
     """
-    Handle ready_for_pickup status by sending notifications to nearby agents.
+    Handle ready_for_pickup status by creating a pending notification record.
+    Notifications will be processed by the scheduled notify-agents Lambda.
     
     Args:
         order: Order object with location data
@@ -110,14 +112,14 @@ def ready_for_pickup_handler(
         hasura_endpoint: Hasura GraphQL endpoint
         hasura_admin_secret: Hasura admin secret
         environment: Environment name
-        proximity_radius_km: Proximity radius in kilometers
-        template_id: SendGrid template ID
+        proximity_radius_km: Proximity radius in kilometers (not used here, kept for compatibility)
+        template_id: SendGrid template ID (not used here, kept for compatibility)
         
     Returns:
         Result dictionary with success status and details
     """
     log_info(
-        "Processing ready_for_pickup status - sending notifications to nearby agents",
+        "Processing ready_for_pickup status - creating pending notification record",
         order_id=order_id,
     )
     
@@ -141,106 +143,37 @@ def ready_for_pickup_handler(
             "error": f"Business location coordinates not available for order {order_id}",
         }
     
-    # Fetch all agent locations
-    log_info("Fetching all agent locations")
-    agent_locations = get_all_agent_locations(
-        hasura_endpoint,
-        hasura_admin_secret
+    # Create pending notification record
+    notification_id = create_pending_agent_notification(
+        order_id=order_id,
+        notification_type="order_proximity",
+        hasura_endpoint=hasura_endpoint,
+        hasura_admin_secret=hasura_admin_secret
     )
     
-    log_info("Agent locations fetched", count=len(agent_locations) if agent_locations else 0)
-    
-    if not agent_locations:
-        log_info("No agent locations found - no notifications to send")
+    if notification_id:
+        log_info(
+            "Pending notification record created successfully",
+            order_id=order_id,
+            notification_id=notification_id,
+        )
         return {
             "success": True,
-            "message": "No agents available",
-            "notifications_sent": 0,
+            "message": f"Created pending notification for {event_type} event",
+            "order_id": order_id,
+            "notification_id": notification_id,
         }
-    
-    # Calculate distances and filter nearby agents
-    log_info(
-        "Calculating distances to agents",
-        total_agents=len(agent_locations),
-        proximity_radius_km=proximity_radius_km,
-    )
-    
-    nearby_agents = []
-    distances = []
-    
-    for agent_location in agent_locations:
-        distance = calculate_haversine_distance(
-            address.latitude,
-            address.longitude,
-            agent_location.latitude,
-            agent_location.longitude
-        )
-        
+    else:
+        # Notification record may already exist (duplicate event) or creation failed
         log_info(
-            "Calculated distance to agent",
-            agent_id=agent_location.agent_id,
-            distance_km=round(distance, 2),
-            within_radius=distance <= proximity_radius_km,
-        )
-        
-        if distance <= proximity_radius_km:
-            nearby_agents.append(agent_location)
-            distances.append(distance)
-            log_info(
-                "Agent within proximity radius",
-                agent_id=agent_location.agent_id,
-                distance=format_distance(distance),
-            )
-    
-    log_info(
-        "Distance calculation complete",
-        nearby_agents_count=len(nearby_agents),
-        total_agents_checked=len(agent_locations),
-    )
-    
-    if not nearby_agents:
-        log_info(
-            "No agents within proximity radius",
-            proximity_radius_km=proximity_radius_km,
+            "Notification record already exists or creation failed",
             order_id=order_id,
         )
         return {
             "success": True,
-            "message": f"No agents within {proximity_radius_km}km",
-            "notifications_sent": 0,
+            "message": f"Notification record already exists for order {order_id}",
+            "order_id": order_id,
         }
-    
-    # Send notifications to nearby agents
-    log_info(
-        "Sending notifications to nearby agents",
-        nearby_agents_count=len(nearby_agents),
-        order_id=order_id,
-        template_id=template_id[:10] + "..." if template_id else "not_set",
-    )
-    
-    notifications_sent = send_notifications_to_nearby_agents(
-        nearby_agents,
-        order,
-        distances,
-        environment,
-        template_id
-    )
-    
-    log_info(
-        "Ready for pickup handler completed successfully",
-        order_id=order_id,
-        event_type=event_type,
-        nearby_agents_count=len(nearby_agents),
-        notifications_sent=notifications_sent,
-    )
-    
-    return {
-        "success": True,
-        "message": f"Processed {event_type} event for ready_for_pickup status",
-        "order_id": order_id,
-        "nearby_agents_count": len(nearby_agents),
-        "notifications_sent": notifications_sent,
-    }
 
 
 def process_order_event(
