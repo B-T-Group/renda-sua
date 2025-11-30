@@ -4,6 +4,8 @@ import os
 import json
 import requests
 import sys
+from datetime import datetime, date
+from typing import Optional
 
 # Template mapping - All notification templates
 TEMPLATES = [
@@ -159,10 +161,161 @@ TEMPLATES = [
         'filename': 'agent_order_proximity.html',
         'key': 'agent_order_proximity',
     },
+    # French versions
+    {
+        'name': 'Agent Order Assigned (FR)',
+        'filename': 'agent_order_assigned_fr.html',
+        'key': 'agent_order_assigned_fr',
+    },
+    {
+        'name': 'Agent Order Cancelled (FR)',
+        'filename': 'agent_order_cancelled_fr.html',
+        'key': 'agent_order_cancelled_fr',
+    },
+    {
+        'name': 'Agent Order Delivered (FR)',
+        'filename': 'agent_order_delivered_fr.html',
+        'key': 'agent_order_delivered_fr',
+    },
+    {
+        'name': 'Agent Order Failed (FR)',
+        'filename': 'agent_order_failed_fr.html',
+        'key': 'agent_order_failed_fr',
+    },
+    {
+        'name': 'Agent Order In Transit (FR)',
+        'filename': 'agent_order_in_transit_fr.html',
+        'key': 'agent_order_in_transit_fr',
+    },
+    {
+        'name': 'Agent Order Out for Delivery (FR)',
+        'filename': 'agent_order_out_for_delivery_fr.html',
+        'key': 'agent_order_out_for_delivery_fr',
+    },
+    {
+        'name': 'Agent Order Picked Up (FR)',
+        'filename': 'agent_order_picked_up_fr.html',
+        'key': 'agent_order_picked_up_fr',
+    },
+    {
+        'name': 'Agent Order Proximity (FR)',
+        'filename': 'agent_order_proximity_fr.html',
+        'key': 'agent_order_proximity_fr',
+    },
+    {
+        'name': 'Business Order Cancelled (FR)',
+        'filename': 'business_order_cancelled_fr.html',
+        'key': 'business_order_cancelled_fr',
+    },
+    {
+        'name': 'Business Order Confirmed (FR)',
+        'filename': 'business_order_confirmed_fr.html',
+        'key': 'business_order_confirmed_fr',
+    },
+    {
+        'name': 'Business Order Created (FR)',
+        'filename': 'business_order_created_fr.html',
+        'key': 'business_order_created_fr',
+    },
+    {
+        'name': 'Business Order Delivered (FR)',
+        'filename': 'business_order_delivered_fr.html',
+        'key': 'business_order_delivered_fr',
+    },
+    {
+        'name': 'Business Order Failed (FR)',
+        'filename': 'business_order_failed_fr.html',
+        'key': 'business_order_failed_fr',
+    },
+    {
+        'name': 'Business Order In Transit (FR)',
+        'filename': 'business_order_in_transit_fr.html',
+        'key': 'business_order_in_transit_fr',
+    },
+    {
+        'name': 'Business Order Out for Delivery (FR)',
+        'filename': 'business_order_out_for_delivery_fr.html',
+        'key': 'business_order_out_for_delivery_fr',
+    },
+    {
+        'name': 'Business Order Picked Up (FR)',
+        'filename': 'business_order_picked_up_fr.html',
+        'key': 'business_order_picked_up_fr',
+    },
+    {
+        'name': 'Business Order Preparing (FR)',
+        'filename': 'business_order_preparing_fr.html',
+        'key': 'business_order_preparing_fr',
+    },
+    {
+        'name': 'Business Order Ready for Pickup (FR)',
+        'filename': 'business_order_ready_for_pickup_fr.html',
+        'key': 'business_order_ready_for_pickup_fr',
+    },
+    {
+        'name': 'Business Order Refunded (FR)',
+        'filename': 'business_order_refunded_fr.html',
+        'key': 'business_order_refunded_fr',
+    },
+    {
+        'name': 'Client Order Cancelled (FR)',
+        'filename': 'client_order_cancelled_fr.html',
+        'key': 'client_order_cancelled_fr',
+    },
+    {
+        'name': 'Client Order Confirmed (FR)',
+        'filename': 'client_order_confirmed_fr.html',
+        'key': 'client_order_confirmed_fr',
+    },
+    {
+        'name': 'Client Order Created (FR)',
+        'filename': 'client_order_created_fr.html',
+        'key': 'client_order_created_fr',
+    },
+    {
+        'name': 'Client Order Delivered (FR)',
+        'filename': 'client_order_delivered_fr.html',
+        'key': 'client_order_delivered_fr',
+    },
+    {
+        'name': 'Client Order Failed (FR)',
+        'filename': 'client_order_failed_fr.html',
+        'key': 'client_order_failed_fr',
+    },
+    {
+        'name': 'Client Order In Transit (FR)',
+        'filename': 'client_order_in_transit_fr.html',
+        'key': 'client_order_in_transit_fr',
+    },
+    {
+        'name': 'Client Order Out for Delivery (FR)',
+        'filename': 'client_order_out_for_delivery_fr.html',
+        'key': 'client_order_out_for_delivery_fr',
+    },
+    {
+        'name': 'Client Order Picked Up (FR)',
+        'filename': 'client_order_picked_up_fr.html',
+        'key': 'client_order_picked_up_fr',
+    },
+    {
+        'name': 'Client Order Preparing (FR)',
+        'filename': 'client_order_preparing_fr.html',
+        'key': 'client_order_preparing_fr',
+    },
+    {
+        'name': 'Client Order Ready for Pickup (FR)',
+        'filename': 'client_order_ready_for_pickup_fr.html',
+        'key': 'client_order_ready_for_pickup_fr',
+    },
+    {
+        'name': 'Client Order Refunded (FR)',
+        'filename': 'client_order_refunded_fr.html',
+        'key': 'client_order_refunded_fr',
+    },
 ]
 
 
-def get_existing_templates(api_key):
+def get_existing_templates(api_key, include_metadata=False):
     """Get all existing templates from SendGrid"""
     headers = {
         'Authorization': f'Bearer {api_key}',
@@ -170,9 +323,11 @@ def get_existing_templates(api_key):
     }
     
     try:
-        response = requests.get('https://api.sendgrid.com/v3/templates', headers=headers)
+        response = requests.get('https://api.sendgrid.com/v3/templates?generations=dynamic', headers=headers)
         if response.status_code == 200:
             templates = response.json().get('templates', [])
+            if include_metadata:
+                return templates
             return {template['name']: template['id'] for template in templates}
         else:
             print(f'⚠️ Warning: Could not fetch existing templates: {response.text}')
@@ -329,5 +484,143 @@ def create_sendgrid_templates():
         print('❌ No templates were successfully processed')
 
 
+def delete_templates_before_date(
+    api_key: str,
+    before_date: Optional[date] = None,
+    dry_run: bool = False
+) -> dict:
+    """
+    Delete all dynamic templates created before a certain date.
+    
+    Args:
+        api_key: SendGrid API key
+        before_date: Date to delete templates before (default: November 29, 2025)
+        dry_run: If True, only show what would be deleted without actually deleting
+        
+    Returns:
+        Dictionary with deletion results
+    """
+    if before_date is None:
+        before_date = date(2025, 11, 29)
+    
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    print(f'🗑️  Deleting templates created before {before_date.isoformat()}')
+    if dry_run:
+        print('🔍 DRY RUN MODE - No templates will be deleted\n')
+    
+    # Get all templates with metadata
+    try:
+        response = requests.get('https://api.sendgrid.com/v3/templates?generations=dynamic', headers=headers)
+        if response.status_code != 200:
+            print(f'❌ Failed to fetch templates: {response.text}')
+            return {'success': False, 'error': response.text}
+        
+        all_templates = response.json().get('templates', [])
+        print(f'📋 Found {len(all_templates)} total templates\n')
+        
+        deleted_count = 0
+        skipped_count = 0
+        error_count = 0
+        deleted_templates = []
+        
+        for template in all_templates:
+            template_id = template.get('id')
+            template_name = template.get('name', 'Unknown')
+            generation = template.get('generation', '')
+            
+            # Only process dynamic templates
+            if generation != 'dynamic':
+                skipped_count += 1
+                continue
+            
+            # Check creation date
+            # SendGrid API returns 'updated_at' and 'created_at' in ISO format
+            created_at_str = template.get('updated_at') or template.get('created_at')
+            
+            if created_at_str:
+                try:
+                    # Parse ISO format datetime (e.g., "2025-11-28T10:30:00Z")
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    created_date = created_at.date()
+                    
+                    if created_date < before_date:
+                        deleted_templates.append({
+                            'id': template_id,
+                            'name': template_name,
+                            'created_date': created_date.isoformat()
+                        })
+                        
+                        if not dry_run:
+                            # Delete the template
+                            delete_response = requests.delete(
+                                f'https://api.sendgrid.com/v3/templates/{template_id}',
+                                headers=headers
+                            )
+                            
+                            if delete_response.status_code == 204:
+                                deleted_count += 1
+                                print(f'✅ Deleted: {template_name} (ID: {template_id}, Created: {created_date.isoformat()})')
+                            else:
+                                error_count += 1
+                                print(f'❌ Failed to delete {template_name}: {delete_response.text}')
+                        else:
+                            deleted_count += 1
+                            print(f'🔍 Would delete: {template_name} (ID: {template_id}, Created: {created_date.isoformat()})')
+                    else:
+                        skipped_count += 1
+                except (ValueError, AttributeError) as e:
+                    error_count += 1
+                    print(f'⚠️  Could not parse date for {template_name}: {created_at_str} - {str(e)}')
+                    continue
+            else:
+                # If no date available, skip it to be safe
+                skipped_count += 1
+                print(f'⚠️  No creation date found for {template_name}, skipping')
+        
+        print(f'\n📊 Summary:')
+        print(f'   Deleted: {deleted_count}')
+        print(f'   Skipped: {skipped_count}')
+        print(f'   Errors: {error_count}')
+        
+        return {
+            'success': True,
+            'deleted_count': deleted_count,
+            'skipped_count': skipped_count,
+            'error_count': error_count,
+            'deleted_templates': deleted_templates,
+            'dry_run': dry_run
+        }
+        
+    except Exception as e:
+        print(f'❌ Error deleting templates: {str(e)}')
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == '__main__':
-    create_sendgrid_templates()
+    if len(sys.argv) > 1 and sys.argv[1] == 'delete':
+        # Delete templates mode
+        api_key = os.getenv('SENDGRID_API_KEY')
+        if not api_key:
+            print("❌ SENDGRID_API_KEY environment variable is required")
+            sys.exit(1)
+        
+        # Parse optional date argument (format: YYYY-MM-DD)
+        before_date = None
+        if len(sys.argv) > 2:
+            try:
+                before_date = datetime.strptime(sys.argv[2], '%Y-%m-%d').date()
+            except ValueError:
+                print(f'❌ Invalid date format: {sys.argv[2]}. Use YYYY-MM-DD format.')
+                sys.exit(1)
+        
+        # Check for dry-run flag
+        dry_run = '--dry-run' in sys.argv or '-n' in sys.argv
+        
+        delete_templates_before_date(api_key, before_date, dry_run)
+    else:
+        # Default: create/update templates
+        create_sendgrid_templates()

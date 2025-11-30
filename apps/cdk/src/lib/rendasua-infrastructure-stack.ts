@@ -118,7 +118,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '20',
           SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
-            'd-d3c3ea6dbe2b45c3ac5c0b9245a10b1b',
+            'd-3c3d59c19cfa4da2b8d1e072f416a06a', // French version
         },
       }
     );
@@ -178,7 +178,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '20',
           SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
-            'd-43d66ccd1de74a72b8d5aaf205c45c1a',
+            'd-3c3d59c19cfa4da2b8d1e072f416a06a', // French version
         },
       }
     );

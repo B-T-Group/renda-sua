@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commandes Disponibles à Proximité - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #3498db;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .proximity-alert {
+        background: #3498db;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .order-count-badge {
+        font-size: 3em;
+        font-weight: bold;
+        margin: 10px 0;
+      }
+      .order-summary {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .cta-button {
+        background: #3498db;
+        color: white;
+        padding: 15px 30px;
+        text-decoration: none;
+        border-radius: 5px;
+        display: inline-block;
+        margin: 20px 0;
+        font-weight: bold;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>📍 Commandes Disponibles à Proximité !</h1>
+      <p>Opportunités de Collecte</p>
+    </div>
+
+    <div class="content">
+      <h2>Bonjour {{{agent_name}}},</h2>
+
+      <div class="proximity-alert">
+        <p style="margin: 0; font-size: 1.2em">
+          <strong
+            >📦 Il y a {{order_count}} commandes disponibles pour la collecte près de
+            vous !</strong
+          >
+        </p>
+        <div class="order-count-badge">{{order_count}}</div>
+        <p style="margin: 0">
+          Commandes dans un rayon de {{proximity_radius}} de votre emplacement
+        </p>
+      </div>
+
+      <div class="order-summary">
+        <h3 style="margin-top: 0">Prochaines Étapes ?</h3>
+        <p style="font-size: 1.1em; line-height: 1.8">
+          Veuillez aller dans l'application pour voir ces commandes et accepter les
+          missions de livraison si vous êtes disponible.
+        </p>
+      </div>
+
+      <div style="text-align: center">
+        <a href="#" class="cta-button">Voir les Commandes Disponibles</a>
+      </div>
+
+      <p>
+        <strong>💡 Pourquoi c'est important :</strong> Vous êtes à proximité de
+        plusieurs points de collecte. Si vous êtes disponible, vous pouvez accepter des
+        missions de livraison dans l'application Rendasua.
+      </p>
+
+      <p>
+        <strong>Note :</strong> Ces commandes ne vous ont pas encore été assignées.
+        Connectez-vous à l'application pour voir les détails et les accepter si vous êtes
+        intéressé.
+      </p>
+
+      <p>Meilleures salutations,<br />L'Équipe Rendasua</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. Tous droits réservés.</p>
+      <p>
+        Ceci est une notification de proximité automatisée. Veuillez ne pas répondre à
+        cet e-mail.
+      </p>
+    </div>
+  </body>
+</html>
+

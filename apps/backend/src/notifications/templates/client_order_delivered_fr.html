@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commande Livrée - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #27ae60;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .status-badge {
+        background: #27ae60;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .rating-section {
+        background: #fff3cd;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border-left: 4px solid #ffc107;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🎉 Commande Livrée !</h1>
+      <p>Merci d'avoir choisi Rendasua</p>
+    </div>
+
+    <div class="content">
+      <h2>Bonjour {{{recipientName}}},</h2>
+
+      <p>Excellente nouvelle ! Votre commande a été livrée avec succès.</p>
+
+      <div class="order-details">
+        <h3>Confirmation de Livraison</h3>
+        <p><strong>Numéro de Commande :</strong> {{orderNumber}}</p>
+        <p>
+          <strong>Statut :</strong>
+          <span class="status-badge">{{orderStatus}}</span>
+        </p>
+        <p><strong>Entreprise :</strong> {{{businessName}}}</p>
+        {{#agentName}}
+        <p><strong>Livré par :</strong> {{agentName}}</p>
+        {{/agentName}}
+        <p><strong>Adresse de Livraison :</strong> {{{deliveryAddress}}}</p>
+      </div>
+
+      <div class="rating-section">
+        <h3>⭐ Comment était votre expérience ?</h3>
+        <p>
+          Nous aimerions connaître votre expérience ! Veuillez prendre un moment pour
+          évaluer votre commande et nous aider à améliorer notre service.
+        </p>
+        <p>
+          <strong
+            >Évaluez votre commande dans l'application Rendasua pour aider les autres
+            clients à prendre des décisions éclairées.</strong
+          >
+        </p>
+      </div>
+
+      <p>
+        Merci d'avoir choisi Rendasua pour vos besoins de livraison. Nous espérons
+        que vous avez apprécié votre expérience !
+      </p>
+
+      <p>Meilleures salutations,<br />L'Équipe Rendasua</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. Tous droits réservés.</p>
+    </div>
+  </body>
+</html>
+

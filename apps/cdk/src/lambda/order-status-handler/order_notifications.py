@@ -19,11 +19,11 @@ def log_error(message: str, error: Exception | None = None, **kwargs):
     print(f"[ERROR] [order_notifications] {message}" + (f" | {context_str}" if context_str else "") + error_str)
 
 
-# Email template IDs - SendGrid dynamic templates
+# Email template IDs - SendGrid dynamic templates (French versions)
 TEMPLATE_IDS = {
-    'client_order_cancelled': 'd-e3667da3f8054529a3dfc5b5ee4f95f1',
-    'business_order_cancelled': 'd-5603e973e3ea4c4380faa1e6a59fd5df',
-    'agent_order_cancelled': 'd-8d76f4c918694eadbab9aaf6d7c751b3',
+    'client_order_cancelled': 'd-9daf143cf57c4976bc9ab294305e4ee1',  # French version
+    'business_order_cancelled': 'd-cd12b86e97eb4d57b8d0e1112e55149a',  # French version
+    'agent_order_cancelled': 'd-f4c2934d86ac4b0181b0ab20837714ce',  # French version
 }
 
 

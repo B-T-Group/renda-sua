@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commande Prête pour la Collecte - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #e67e22;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .status-badge {
+        background: #e67e22;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>📦 Commande Prête pour la Collecte !</h1>
+      <p>Prête pour l'agent de livraison</p>
+    </div>
+
+    <div class="content">
+      <h2>Bonjour {{{recipientName}}},</h2>
+
+      <p>
+        Excellent travail ! La commande de {{{clientName}}} est maintenant prête pour
+        la collecte et attend un agent de livraison.
+      </p>
+
+      <div class="order-details">
+        <h3>Mise à Jour de la Commande</h3>
+        <p><strong>Numéro de Commande :</strong> {{orderNumber}}</p>
+        <p>
+          <strong>Statut :</strong>
+          <span class="status-badge">{{orderStatus}}</span>
+        </p>
+        <p><strong>Client :</strong> {{{clientName}}}</p>
+        {{#estimatedDeliveryTime}}
+        <p><strong>Livraison Estimée :</strong> {{{estimatedDeliveryTime}}}</p>
+        {{/estimatedDeliveryTime}}
+      </div>
+
+      <p><strong>Prochaines Étapes :</strong></p>
+      <ul>
+        <li>Gardez la commande prête pour la collecte</li>
+        <li>Un agent de livraison sera assigné sous peu</li>
+        <li>Assurez-vous que la commande est correctement emballée</li>
+      </ul>
+
+      <p>Merci d'utiliser Rendasua !</p>
+
+      <p>Meilleures salutations,<br />L'Équipe Rendasua</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} Rendasua. Tous droits réservés.</p>
+    </div>
+  </body>
+</html>
+
