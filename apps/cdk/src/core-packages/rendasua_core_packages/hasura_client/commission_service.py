@@ -7,7 +7,8 @@ including commission configurations, partners, HQ user, and commission orders.
 
 from typing import Optional, List
 import datetime
-from rendasua_core_packages.models import Partner, User, Order, CommissionPayout
+from rendasua_core_packages.models import Partner, User, Order, CommissionPayout, Agent, Business
+from rendasua_core_packages.utilities import parse_datetime
 from .base import HasuraClient
 from .logging import log_info, log_error
 from rendasua_core_packages.commission_handler.types import (
@@ -15,16 +16,6 @@ from rendasua_core_packages.commission_handler.types import (
     CommissionOrder as CommissionOrderType,
     AssignedAgent,
 )
-
-
-def parse_datetime(dt_str: Optional[str]) -> datetime.datetime:
-    """Parse datetime string to datetime object."""
-    if not dt_str:
-        return datetime.datetime.now()
-    try:
-        return datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-    except:
-        return datetime.datetime.now()
 
 
 def get_commission_configs(client: HasuraClient) -> CommissionConfig:
@@ -232,11 +223,18 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
         currency
         assigned_agent_id
         assigned_agent {
+          id
           user_id
           is_verified
+          created_at
+          updated_at
         }
         business {
+          id
           user_id
+          name
+          created_at
+          updated_at
         }
       }
     }
@@ -252,17 +250,40 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
             log_error("Commission order not found", order_id=order_id)
             return None
         
-        # Parse assigned agent
+        # Construct Pydantic Agent model from assigned_agent relation
+        agent_model = None
         assigned_agent = None
         if order_data.get("assigned_agent"):
             agent_data = order_data["assigned_agent"]
-            assigned_agent = AssignedAgent(
+            # Create full Pydantic Agent model
+            agent_model = Agent.model_construct(
+                id=agent_data["id"],
                 user_id=agent_data["user_id"],
-                is_verified=agent_data.get("is_verified", False),
+                is_verified=agent_data.get("is_verified"),
+                created_at=parse_datetime(agent_data.get("created_at")),
+                updated_at=parse_datetime(agent_data.get("updated_at")),
+            )
+            # Extract fields for lightweight AssignedAgent type used by CommissionOrderType
+            assigned_agent = AssignedAgent(
+                user_id=agent_model.user_id,
+                is_verified=agent_model.is_verified or False,
             )
         
-        # Parse business user_id
-        business_user_id = order_data.get("business", {}).get("user_id", "")
+        # Construct Pydantic Business model from business relation
+        business_model = None
+        business_user_id = ""
+        if order_data.get("business"):
+            business_data = order_data["business"]
+            # Create full Pydantic Business model
+            business_model = Business.model_construct(
+                id=business_data["id"],
+                user_id=business_data["user_id"],
+                name=business_data.get("name", ""),
+                created_at=parse_datetime(business_data.get("created_at")),
+                updated_at=parse_datetime(business_data.get("updated_at")),
+            )
+            business_user_id = business_model.user_id
+        
         if not business_user_id:
             log_error("Business user_id not found in order", order_id=order_id)
             return None

@@ -2,18 +2,9 @@
 from typing import Optional
 import datetime
 from rendasua_core_packages.models import Order, OrderHold
+from rendasua_core_packages.utilities import parse_datetime
 from .base import HasuraClient, HasuraClientConfig
 from .logging import log_info, log_error
-
-
-def parse_datetime(dt_str: Optional[str]) -> datetime.datetime:
-    """Parse datetime string to datetime object."""
-    if not dt_str:
-        return datetime.datetime.now()
-    try:
-        return datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-    except:
-        return datetime.datetime.now()
 
 
 def get_or_create_order_hold(

@@ -1,8 +1,9 @@
 """Order-related Hasura operations."""
 from typing import Optional, Dict, Any
 import datetime
-from rendasua_core_packages.models import Order, BusinessLocation, Address
+from rendasua_core_packages.models import Order, BusinessLocation, Address, Client, Business, Agent
 from rendasua_core_packages.utilities.geocoding import geocode_address, persist_coordinates_to_hasura
+from rendasua_core_packages.utilities import parse_datetime
 from .base import HasuraClient, HasuraClientConfig
 from .logging import log_info, log_error
 
@@ -140,15 +141,6 @@ def get_order_with_location(
             else:
                 log_error("Failed to geocode address", address_id=address.id)
         
-        # Parse datetime fields
-        def parse_datetime(dt_str: Optional[str]) -> datetime.datetime:
-            if not dt_str:
-                return datetime.datetime.now()
-            try:
-                return datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-            except:
-                return datetime.datetime.now()
-        
         address_created_at = parse_datetime(address_data.get("created_at"))
         address_updated_at = parse_datetime(address_data.get("updated_at"))
         location_created_at = parse_datetime(business_location_data.get("created_at"))
@@ -220,15 +212,26 @@ def get_complete_order_details(
         total_amount
         currency
         client_id
+        business_id
         client {
+          id
           user_id
+          created_at
+          updated_at
         }
         business {
+          id
           user_id
+          name
+          created_at
+          updated_at
         }
         assigned_agent_id
         assigned_agent {
+          id
           user_id
+          created_at
+          updated_at
         }
       }
     }
@@ -244,6 +247,41 @@ def get_complete_order_details(
         if not order_data:
             log_error("Order not found", order_id=order_id)
             return None
+
+        client_data = order_data.get("client")
+        business_data = order_data.get("business")
+        assigned_agent_data = order_data.get("assigned_agent")
+
+        # Construct Client model with required fields
+        client = None
+        if client_data:
+            client = Client.model_construct(
+                id=client_data["id"],
+                user_id=client_data["user_id"],
+                created_at=parse_datetime(client_data.get("created_at")),
+                updated_at=parse_datetime(client_data.get("updated_at")),
+            )
+
+        # Construct Business model with required fields
+        business = None
+        if business_data:
+            business = Business.model_construct(
+                id=business_data["id"],
+                user_id=business_data["user_id"],
+                name=business_data.get("name", ""),
+                created_at=parse_datetime(business_data.get("created_at")),
+                updated_at=parse_datetime(business_data.get("updated_at")),
+            )
+
+        # Construct Agent model with required fields
+        assigned_agent = None
+        if assigned_agent_data:
+            assigned_agent = Agent.model_construct(
+                id=assigned_agent_data["id"],
+                user_id=assigned_agent_data["user_id"],
+                created_at=parse_datetime(assigned_agent_data.get("created_at")),
+                updated_at=parse_datetime(assigned_agent_data.get("updated_at")),
+            )
         
         # Create a minimal Order object with required fields
         # Note: This function returns a simplified Order for payment processing
@@ -253,10 +291,13 @@ def get_complete_order_details(
             total_amount=float(order_data["total_amount"]),
             currency=order_data["currency"],
             client_id=order_data["client_id"],
+            business_id=order_data.get("business_id", ""),
             assigned_agent_id=order_data.get("assigned_agent_id"),
+            assigned_agent=assigned_agent,
+            client=client,
+            business=business,
             current_status="",  # Not fetched in this query
             business_location_id="",  # Not fetched in this query
-            business_id="",  # Not fetched in this query
             delivery_address_id="",  # Not fetched in this query
             subtotal=0.0,
             base_delivery_fee=0.0,
