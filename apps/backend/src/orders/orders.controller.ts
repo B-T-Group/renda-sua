@@ -243,58 +243,6 @@ export class OrdersController {
     return this.ordersService.completeOrder(request);
   }
 
-  @Post('fail_delivery')
-  @ApiOperation({
-    summary: 'Mark delivery as failed',
-    description:
-      'Marks an order delivery as failed. Only the assigned agent can mark their own delivery as failed. Requires a failure reason ID.',
-  })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['orderId', 'failure_reason_id'],
-      properties: {
-        orderId: { type: 'string', format: 'uuid', description: 'Order ID' },
-        failure_reason_id: {
-          type: 'string',
-          format: 'uuid',
-          description: 'ID of the delivery failure reason',
-        },
-        notes: {
-          type: 'string',
-          description: 'Optional notes about the failure',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Delivery marked as failed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        order: { type: 'object' },
-        message: { type: 'string' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Invalid data or missing failure_reason_id',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Only assigned agent can mark delivery as failed',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Order not found or invalid failure reason',
-  })
-  async failDelivery(@Body() request: OrderStatusChangeRequest) {
-    return this.ordersService.failDelivery(request);
-  }
-
   @Post('cancel')
   @ApiOperation({
     summary: 'Cancel an order',
