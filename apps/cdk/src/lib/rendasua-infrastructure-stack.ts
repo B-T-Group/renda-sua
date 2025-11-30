@@ -186,11 +186,11 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     // Add Secrets Manager permissions
     notifyAgentsFunction.addToRolePolicy(secretsManagerPolicy);
 
-    // Create EventBridge rule to trigger Lambda every hour
+    // Create EventBridge rule to trigger Lambda every hour at the top of the hour (00:00)
     new events.Rule(this, `NotifyAgentsRule-${environment}`, {
       ruleName: `notify-agents-rule-${environment}`,
-      description: 'Triggers agent notification processing every hour',
-      schedule: events.Schedule.rate(cdk.Duration.hours(1)),
+      description: 'Triggers agent notification processing every hour at 00:00',
+      schedule: events.Schedule.cron({ minute: '0' }),
       targets: [new targets.LambdaFunction(notifyAgentsFunction)],
     });
 
