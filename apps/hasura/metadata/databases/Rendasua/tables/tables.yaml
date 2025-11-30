@@ -21,6 +21,7 @@
 - '!include public_delivery_time_windows.yaml'
 - '!include public_document_types.yaml'
 - '!include public_entity_types.yaml'
+- '!include public_failed_deliveries.yaml'
 - '!include public_google_distance_cache.yaml'
 - '!include public_google_geocode_cache.yaml'
 - '!include public_item_categories.yaml'

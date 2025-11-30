@@ -73,6 +73,15 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: failed_delivery
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: failed_deliveries
+          schema: public
 insert_permissions:
   - role: client
     permission:
