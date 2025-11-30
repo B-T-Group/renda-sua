@@ -61,6 +61,42 @@ from .UserType import UserType
 from .UserUpload import UserUpload
 from .VehicleType import VehicleType
 
+# Rebuild models with forward references
+# This resolves forward references after all models are imported
+# Models are rebuilt in dependency order to ensure all referenced models are available
+Account.model_rebuild()
+AccountTransaction.model_rebuild()
+Address.model_rebuild()
+Agent.model_rebuild()
+AgentAddress.model_rebuild()
+AgentLocation.model_rebuild()
+AirtelMoneyPayment.model_rebuild()
+Business.model_rebuild()
+BusinessAddress.model_rebuild()
+BusinessInventory.model_rebuild()
+BusinessLocation.model_rebuild()
+Client.model_rebuild()
+ClientAddress.model_rebuild()
+CommissionPayout.model_rebuild()
+CountryDeliveryConfig.model_rebuild()
+DeliveryTimeWindow.model_rebuild()
+Item.model_rebuild()
+ItemImage.model_rebuild()
+ItemSubCategory.model_rebuild()
+MobilePaymentTransaction.model_rebuild()
+MtnMomoPaymentRequest.model_rebuild()
+Order.model_rebuild()
+OrderHold.model_rebuild()
+OrderItem.model_rebuild()
+OrderStatuHistory.model_rebuild()
+Partner.model_rebuild()
+PaymentCallback.model_rebuild()
+Rating.model_rebuild()
+TransactionInfo.model_rebuild()
+User.model_rebuild()
+UserUpload.model_rebuild()
+VehicleType.model_rebuild()
+
 # Explicit __all__ list
 __all__: list[str] = [
     "Account",
