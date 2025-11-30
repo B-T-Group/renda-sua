@@ -18,7 +18,8 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { FailedDeliveriesService, ResolutionRequest } from './failed-deliveries.service';
+import { FailedDeliveriesService } from './failed-deliveries.service';
+import type { ResolutionRequest } from './failed-deliveries.service';
 
 @ApiTags('Failed Deliveries')
 @Controller('orders/failed-deliveries')
