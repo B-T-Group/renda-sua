@@ -84,7 +84,21 @@ def send_proximity_notification(
         
         # Format business address (return "NA" if not available)
         if order.business_location and order.business_location.address:
-            business_address = format_full_address(order.business_location.address)
+            address = order.business_location.address
+            # Check if address has required fields for formatting
+            if hasattr(address, 'address_line_1') and address.address_line_1:
+                try:
+                    business_address = format_full_address(address)
+                except (AttributeError, KeyError) as e:
+                    # Fallback if address object is missing required fields
+                    log_error(
+                        "Error formatting address, using fallback",
+                        error=e,
+                        order_number=order.order_number,
+                    )
+                    business_address = "NA"
+            else:
+                business_address = "NA"
         else:
             business_address = "NA"
         

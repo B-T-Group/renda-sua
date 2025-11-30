@@ -619,6 +619,12 @@ def get_pending_agent_notifications(
             name
             address {
               id
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
               latitude
               longitude
             }
@@ -654,6 +660,12 @@ def get_pending_agent_notifications(
                         if address_data:
                             address = Address.model_construct(
                                 id=address_data.get("id", ""),
+                                address_line_1=address_data.get("address_line_1", ""),
+                                address_line_2=address_data.get("address_line_2"),
+                                city=address_data.get("city", ""),
+                                state=address_data.get("state", ""),
+                                postal_code=address_data.get("postal_code", ""),
+                                country=address_data.get("country", ""),
                                 latitude=address_data.get("latitude"),
                                 longitude=address_data.get("longitude"),
                             )
