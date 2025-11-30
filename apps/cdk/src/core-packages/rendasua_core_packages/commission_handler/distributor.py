@@ -6,9 +6,6 @@ from rendasua_core_packages.hasura_client import (
     get_account_by_user_and_currency,
     register_account_transaction,
 )
-from rendasua_core_packages.hasura_client.commission_service import (
-    audit_commission_payout,
-)
 from .types import (
     CommissionOrder,
     CommissionBreakdown,
@@ -110,6 +107,10 @@ def pay_commission(
             return None
         
         # Audit commission payout
+        # Import here to avoid circular imports
+        from rendasua_core_packages.hasura_client.commission_service import (
+            audit_commission_payout,
+        )
         audit_commission_payout(
             client=client,
             order_id=order.id,
