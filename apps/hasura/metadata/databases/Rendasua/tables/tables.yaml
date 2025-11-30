@@ -16,6 +16,7 @@
 - '!include public_commission_payouts.yaml'
 - '!include public_country_delivery_configs.yaml'
 - '!include public_delivery_configs.yaml'
+- '!include public_delivery_failure_reasons.yaml'
 - '!include public_delivery_time_slots.yaml'
 - '!include public_delivery_time_windows.yaml'
 - '!include public_document_types.yaml'

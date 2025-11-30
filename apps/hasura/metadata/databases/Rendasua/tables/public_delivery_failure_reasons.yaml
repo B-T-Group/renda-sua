@@ -1,0 +1,64 @@
+table:
+  name: delivery_failure_reasons
+  schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - reason_key
+        - reason_en
+        - reason_fr
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - reason_key
+        - reason_en
+        - reason_fr
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - reason_key
+        - reason_en
+        - reason_fr
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - reason_key
+        - reason_en
+        - reason_fr
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - reason_key
+        - reason_en
+        - reason_fr
+        - is_active
+        - sort_order
+        - created_at
+        - updated_at
+      filter: {}
