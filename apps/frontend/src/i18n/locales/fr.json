@@ -377,7 +377,55 @@
       "manageCommissionAccountsDescription": "Voir le compte entreprise et les comptes partenaires avec les transactions de commission",
       "noBusinessProfile": "Aucun profil d'entreprise trouvé",
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
-      "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets."
+      "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
+      "failedDeliveries": "Livraisons échouées",
+      "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise"
+    },
+    "failedDeliveries": {
+      "title": "Livraisons échouées",
+      "pageTitle": "Gestion des livraisons échouées",
+      "description": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "orderNumber": "Commande #{{orderNumber}}",
+      "failureReason": "Raison de l'échec : {{reason}}",
+      "notes": "Notes",
+      "amount": "Montant",
+      "client": "Client",
+      "createdAt": "Échoué le",
+      "resolvedAt": "Résolu le",
+      "status": {
+        "pending": "En attente",
+        "completed": "Terminé"
+      },
+      "resolutionType": {
+        "agent_fault": "Faute de l'agent",
+        "client_fault": "Faute du client",
+        "item_fault": "Problème d'article"
+      },
+      "resolutionDescription": {
+        "agent_fault": "Le client sera remboursé. La retenue de l'agent sera libérée et déposée sur votre compte d'entreprise.",
+        "item_fault": "Le client et l'agent seront remboursés. L'inventaire peut être restauré en option.",
+        "client_fault": "Le client et l'agent seront remboursés. Le client sera facturé 2x les frais d'annulation (divisés 50/50 entre l'agent et l'entreprise)."
+      },
+      "pending": "Résolutions en attente",
+      "completed": "Livraisons résolues",
+      "resolve": "Résoudre la livraison échouée",
+      "noFailedDeliveries": "Aucune livraison échouée trouvée",
+      "fetchError": "Échec de la récupération des livraisons échouées",
+      "resolveSuccess": "Livraison échouée résolue avec succès",
+      "resolveError": "Échec de la résolution de la livraison",
+      "loadError": "Échec du chargement des détails de la livraison",
+      "validationError": "Veuillez sélectionner un type de résolution et fournir une description du résultat",
+      "filterStatus": "Statut",
+      "filterResolutionType": "Type de résolution",
+      "orderInfo": "Informations sur la commande",
+      "selectResolutionType": "Sélectionner le type de résolution",
+      "restoreInventory": "Restaurer les quantités d'inventaire",
+      "outcome": "Résultat",
+      "outcomeLabel": "Résultat de la résolution (requis)",
+      "outcomePlaceholder": "Décrivez comment cette livraison échouée a été résolue...",
+      "resolveDialog": {
+        "title": "Résoudre la livraison échouée"
+      }
     },
     "inventory": {
       "active": "Actif",
@@ -886,6 +934,11 @@
         "q": "Quand les règlements sont-ils libérés ?"
       }
     },
+    "failedDeliveries": {
+      "title": "Gestion des livraisons échouées",
+      "q": "Comment les livraisons échouées sont-elles gérées ?",
+      "a": "Lorsqu'une livraison échoue, l'agent la marque avec une raison d'échec spécifique. Le propriétaire de l'entreprise peut ensuite résoudre la livraison échouée en utilisant l'une des trois options de résolution : 1) Faute de l'agent - Le client est remboursé, la retenue de l'agent va à l'entreprise ; 2) Problème d'article - Le client et l'agent sont remboursés, l'inventaire peut être restauré en option ; 3) Faute du client - Les deux sont remboursés, mais le client est facturé 2x les frais d'annulation (divisés 50/50 entre l'agent et l'entreprise). Toutes les résolutions sont suivies et peuvent être consultées dans la section Livraisons échouées du tableau de bord de l'entreprise."
+    },
     "subtitle": "Trouvez des réponses aux questions courantes",
     "title": "Questions fréquemment posées"
   },
@@ -1105,6 +1158,7 @@
     "completedAndCancelled": "Commandes Terminées et Annulées",
     "confirmAction": "Confirmer l'Action",
     "amountBreakdown": "Répartition des Montants",
+    "claimOrderHoldAmountInfo": "Veuillez noter : {{holdAmount}} sera retenu de votre compte à titre de garantie. Ce montant sera libéré après une livraison réussie.",
     "confirmClaimOrder": "Confirmer la Réclamation de Commande",
     "confirmClaimOrderMessage": "Êtes-vous sûr de vouloir réclamer la commande #{{orderNumber}} ? Cette action ne peut pas être annulée.",
     "confirmOrder": "Confirmer la Commande",
@@ -1197,7 +1251,24 @@
       "summary": "Résumé de la livraison",
       "withInstructions": "Avec instructions spéciales",
       "confirmed": "Confirmé",
-      "pending": "En attente de confirmation"
+      "pending": "En attente de confirmation",
+      "timeSlot": "Créneau horaire",
+      "slotName": "Créneau",
+      "confirmedAt": "Confirmé à"
+    },
+    "failDelivery": {
+      "title": "Marquer la livraison comme échouée",
+      "orderInfo": "Informations sur la commande",
+      "orderNumber": "Commande #{{orderNumber}}",
+      "selectReason": "Sélectionner la raison de l'échec",
+      "notesLabel": "Notes supplémentaires (optionnel)",
+      "notesPlaceholder": "Ajoutez des détails supplémentaires sur la raison de l'échec de la livraison...",
+      "info": "Cette action marquera la livraison comme échouée. L'entreprise sera notifiée et devra résoudre cette livraison échouée.",
+      "confirm": "Marquer comme échoué",
+      "marking": "Marquage comme échoué...",
+      "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
+      "loadReasonsError": "Échec du chargement des raisons d'échec",
+      "noReasonsAvailable": "Aucune raison d'échec disponible. Veuillez réessayer plus tard."
     },
     "filters": {
       "allStatuses": "Tous les Statuts",

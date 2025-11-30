@@ -139,4 +139,3 @@ update_permissions:
             user:
               identifier:
                 _eq: X-Hasura-User-Id
-

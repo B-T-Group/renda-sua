@@ -375,7 +375,55 @@
       "manageCommissionAccountsDescription": "View company account and partner accounts with commission transactions",
       "noBusinessProfile": "No business profile found",
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
-      "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools."
+      "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
+      "failedDeliveries": "Failed Deliveries",
+      "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business"
+    },
+    "failedDeliveries": {
+      "title": "Failed Deliveries",
+      "pageTitle": "Failed Deliveries Management",
+      "description": "Manage and resolve failed deliveries for your business",
+      "orderNumber": "Order #{{orderNumber}}",
+      "failureReason": "Failure Reason: {{reason}}",
+      "notes": "Notes",
+      "amount": "Amount",
+      "client": "Client",
+      "createdAt": "Failed On",
+      "resolvedAt": "Resolved On",
+      "status": {
+        "pending": "Pending",
+        "completed": "Completed"
+      },
+      "resolutionType": {
+        "agent_fault": "Agent Fault",
+        "client_fault": "Client Fault",
+        "item_fault": "Item Fault"
+      },
+      "resolutionDescription": {
+        "agent_fault": "Client will be refunded. Agent hold will be released and deposited to your business account.",
+        "item_fault": "Both client and agent will be refunded. Inventory can optionally be restored.",
+        "client_fault": "Both client and agent will be refunded. Client will be charged 2x cancellation fee (split 50/50 between agent and business)."
+      },
+      "pending": "Pending Resolutions",
+      "completed": "Resolved Deliveries",
+      "resolve": "Resolve Failed Delivery",
+      "noFailedDeliveries": "No failed deliveries found",
+      "fetchError": "Failed to fetch failed deliveries",
+      "resolveSuccess": "Failed delivery resolved successfully",
+      "resolveError": "Failed to resolve delivery",
+      "loadError": "Failed to load delivery details",
+      "validationError": "Please select a resolution type and provide an outcome description",
+      "filterStatus": "Status",
+      "filterResolutionType": "Resolution Type",
+      "orderInfo": "Order Information",
+      "selectResolutionType": "Select Resolution Type",
+      "restoreInventory": "Restore inventory quantities",
+      "outcome": "Outcome",
+      "outcomeLabel": "Resolution Outcome (Required)",
+      "outcomePlaceholder": "Describe how this failed delivery was resolved...",
+      "resolveDialog": {
+        "title": "Resolve Failed Delivery"
+      }
     },
     "inventory": {
       "active": "Active",
@@ -679,6 +727,7 @@
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",
       "assignedToAgentNotice": "An agent has been assigned to collect this order from your location.",
       "cancelledNotice": "❌ Order cancelled. Potential revenue of {{revenue}} lost. Review cancellation reason and process refund if payment was received.",
+      "claimOrderHoldAmountInfo": "Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.",
       "completeNotice": "Order is complete. Thank you for using our platform!",
       "confirmTitle": "Confirm Status Update",
       "confirmedNotice": "✅ Order confirmed! Begin preparation immediately. Quality preparation ensures customer satisfaction and positive reviews.",
@@ -883,6 +932,11 @@
         "a": "Settlements are released within 24-48 hours after order completion, depending on your payment method.",
         "q": "When are settlements released?"
       }
+    },
+    "failedDeliveries": {
+      "title": "Failed Deliveries Management",
+      "q": "How are failed deliveries managed?",
+      "a": "When a delivery fails, the agent marks it with a specific failure reason. The business owner can then resolve the failed delivery using one of three resolution options: 1) Agent Fault - Client is refunded, agent hold goes to business; 2) Item Fault - Both client and agent are refunded, inventory can optionally be restored; 3) Client Fault - Both are refunded, but client is charged 2x cancellation fee (split 50/50 between agent and business). All resolutions are tracked and can be viewed in the Failed Deliveries section of the business dashboard."
     },
     "subtitle": "Find answers to common questions",
     "title": "Frequently Asked Questions"
@@ -1102,6 +1156,7 @@
     "completeYourOrder": "Complete Your Order",
     "completedAndCancelled": "Completed & Cancelled Orders",
     "confirmAction": "Confirm Action",
+    "claimOrderHoldAmountInfo": "Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.",
     "confirmClaimOrder": "Confirm Claim Order",
     "confirmClaimOrderMessage": "Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.",
     "confirmOrder": "Confirm Order",
@@ -1190,7 +1245,24 @@
       "summary": "Delivery Summary",
       "withInstructions": "With special instructions",
       "confirmed": "Confirmed",
-      "pending": "Pending confirmation"
+      "pending": "Pending confirmation",
+      "timeSlot": "Time Slot",
+      "slotName": "Slot",
+      "confirmedAt": "Confirmed at"
+    },
+    "failDelivery": {
+      "title": "Mark Delivery as Failed",
+      "orderInfo": "Order Information",
+      "orderNumber": "Order #{{orderNumber}}",
+      "selectReason": "Select Failure Reason",
+      "notesLabel": "Additional Notes (Optional)",
+      "notesPlaceholder": "Add any additional details about why the delivery failed...",
+      "info": "This action will mark the delivery as failed. The business will be notified and will need to resolve this failed delivery.",
+      "confirm": "Mark as Failed",
+      "marking": "Marking as Failed...",
+      "selectReasonRequired": "Please select a failure reason",
+      "loadReasonsError": "Failed to load failure reasons",
+      "noReasonsAvailable": "No failure reasons available. Please try again later."
     },
     "filters": {
       "allStatuses": "All Statuses",

@@ -39,6 +39,11 @@ const FAQ: React.FC = () => {
       q: t('faq.settlement.release.q'),
       a: t('faq.settlement.release.a'),
     },
+    {
+      key: 'failedDeliveries',
+      q: t('faq.failedDeliveries.q'),
+      a: t('faq.failedDeliveries.a'),
+    },
   ];
 
   return (

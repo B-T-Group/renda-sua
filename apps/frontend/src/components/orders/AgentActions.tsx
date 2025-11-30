@@ -14,6 +14,7 @@ import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ClaimOrderDialog from './ClaimOrderDialog';
+import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
 
 interface AgentActionsProps {
   order: OrderData;
@@ -45,6 +46,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     color: 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
+  const [showFailDeliveryDialog, setShowFailDeliveryDialog] = useState(false);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -218,7 +220,13 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    // Set up confirmation modal
+    // Special handling for failed status - show failure reason dialog
+    if (newStatus === 'failed') {
+      setShowFailDeliveryDialog(true);
+      return;
+    }
+
+    // Set up confirmation modal for other statuses
     const statusLabels: Record<string, string> = {
       in_transit: t('orderActions.markAsInTransit', 'Mark as In Transit'),
       out_for_delivery: t(
@@ -271,6 +279,46 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       setLoading(false);
       setConfirmationOpen(false);
       setPendingAction(null);
+    }
+  };
+
+  const handleConfirmFailDelivery = async (
+    failureReasonId: string,
+    notes?: string
+  ) => {
+    if (!profile?.id) {
+      onShowNotification?.(
+        t('messages.agentProfileNotFound', 'Agent profile not found'),
+        'error'
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await agentOrders.updateOrderStatusAction(
+        order.id,
+        'failed',
+        notes,
+        failureReasonId
+      );
+      onShowNotification?.(
+        t(
+          'messages.orderStatusUpdated',
+          'Order marked as failed successfully'
+        ),
+        'success'
+      );
+      setShowFailDeliveryDialog(false);
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderStatusUpdateError', 'Failed to mark delivery as failed'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -483,6 +531,14 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onConfirm={handleConfirmStatusUpdate}
         onCancel={handleCancelStatusUpdate}
         confirmColor={pendingAction?.color || 'primary'}
+        loading={loading}
+      />
+
+      <MarkDeliveryAsFailedDialog
+        open={showFailDeliveryDialog}
+        order={order}
+        onClose={() => setShowFailDeliveryDialog(false)}
+        onConfirm={handleConfirmFailDelivery}
         loading={loading}
       />
     </>

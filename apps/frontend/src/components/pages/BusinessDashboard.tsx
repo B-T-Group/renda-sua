@@ -6,6 +6,7 @@ import {
   Label as BrandIcon,
   Category as CategoryIcon,
   Description as DocumentsIcon,
+  Error as ErrorIcon,
   Inventory2 as ItemsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
@@ -14,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Card,
@@ -31,6 +33,7 @@ import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useBusinessOrders } from '../../hooks/useBusinessOrders';
+import { useFailedDeliveries } from '../../hooks/useFailedDeliveries';
 import { useItems } from '../../hooks/useItems';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
@@ -53,9 +56,32 @@ const BusinessDashboard: React.FC = () => {
     profile?.business?.id
   );
   const { items, loading: itemsLoading } = useItems(profile?.business?.id);
+  const {
+    getFailedDeliveries,
+    loading: failedDeliveriesLoading,
+  } = useFailedDeliveries();
+
+  const [pendingFailedDeliveriesCount, setPendingFailedDeliveriesCount] =
+    React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (profile?.business?.id) {
+      getFailedDeliveries({ status: 'pending' })
+        .then((deliveries) => {
+          setPendingFailedDeliveriesCount(deliveries.length);
+        })
+        .catch(() => {
+          setPendingFailedDeliveriesCount(0);
+        });
+    }
+  }, [profile?.business?.id, getFailedDeliveries]);
 
   const isLoading =
-    ordersLoading || inventoryLoading || locationsLoading || itemsLoading;
+    ordersLoading ||
+    inventoryLoading ||
+    locationsLoading ||
+    itemsLoading ||
+    failedDeliveriesLoading;
 
   // Debug logging
   console.log('Business Dashboard Data:', {
@@ -92,6 +118,15 @@ const BusinessDashboard: React.FC = () => {
       count: locations.length,
       color: '#f57c00',
       path: '/business/locations',
+    },
+    {
+      title: t('business.dashboard.failedDeliveries'),
+      description: t('business.dashboard.failedDeliveriesDescription'),
+      icon: <ErrorIcon sx={{ fontSize: 40 }} />,
+      count: pendingFailedDeliveriesCount,
+      color: '#d32f2f',
+      path: '/business/failed-deliveries',
+      showBadge: pendingFailedDeliveriesCount !== null && pendingFailedDeliveriesCount > 0,
     },
     {
       title: t('business.dashboard.documents'),
@@ -207,23 +242,29 @@ const BusinessDashboard: React.FC = () => {
             {card.description}
           </Typography>
           {card.count !== null && (
-            <Typography
-              variant="h4"
-              component="div"
-              color="primary"
-              sx={{ mb: 1 }}
+            <Badge
+              badgeContent={card.showBadge ? card.count : 0}
+              color="error"
+              invisible={!card.showBadge}
             >
-              {isLoading ? (
-                <Skeleton
-                  variant="text"
-                  width={60}
-                  height={40}
-                  sx={{ mx: 'auto' }}
-                />
-              ) : (
-                card.count
-              )}
-            </Typography>
+              <Typography
+                variant="h4"
+                component="div"
+                color="primary"
+                sx={{ mb: 1 }}
+              >
+                {isLoading ? (
+                  <Skeleton
+                    variant="text"
+                    width={60}
+                    height={40}
+                    sx={{ mx: 'auto' }}
+                  />
+                ) : (
+                  card.count
+                )}
+              </Typography>
+            </Badge>
           )}
         </CardContent>
         <CardActions sx={{ justifyContent: 'center', pb: 2 }}>

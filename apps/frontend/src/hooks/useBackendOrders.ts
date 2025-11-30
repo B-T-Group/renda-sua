@@ -42,6 +42,7 @@ export interface UpdateOrderStatusResponse {
 export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
+  failure_reason_id?: string; // Required for fail_delivery endpoint
 }
 
 export interface ConfirmOrderData {
@@ -494,7 +495,7 @@ export const useBackendOrders = () => {
     return callWithLoading(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/fail_delivery',
+          '/failed-deliveries/fail',
           request
         );
 

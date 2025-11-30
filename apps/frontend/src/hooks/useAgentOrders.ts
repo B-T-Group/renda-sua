@@ -331,7 +331,12 @@ export const useAgentOrders = () => {
   );
 
   const updateOrderStatusAction = useCallback(
-    async (orderId: string, status: string, notes?: string) => {
+    async (
+      orderId: string,
+      status: string,
+      notes?: string,
+      failure_reason_id?: string
+    ) => {
       try {
         let response;
 
@@ -346,7 +351,11 @@ export const useAgentOrders = () => {
             response = await deliverOrder({ orderId, notes });
             break;
           case 'failed':
-            response = await failDelivery({ orderId, notes });
+            response = await failDelivery({
+              orderId,
+              notes,
+              failure_reason_id,
+            });
             break;
           default:
             throw new Error(`Unsupported status transition: ${status}`);

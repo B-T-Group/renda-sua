@@ -19,6 +19,7 @@ import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
+import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import CartPage from '../components/pages/CartPage';
 import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
 import CheckoutPage from '../components/pages/CheckoutPage';
@@ -295,6 +296,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessItemsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/failed-deliveries"
+              element={
+                <ProtectedRoute>
+                  <FailedDeliveriesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/failed-deliveries"
+              element={
+                <ProtectedRoute>
+                  <FailedDeliveriesPage />
                 </ProtectedRoute>
               }
             />
