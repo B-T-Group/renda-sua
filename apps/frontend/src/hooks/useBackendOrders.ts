@@ -67,6 +67,26 @@ export interface OrderStatusChangeResponse {
   holdAmount?: number; // For agent operations
 }
 
+export interface BatchOrderStatusChangeRequest {
+  orderIds: string[];
+  notes?: string;
+  failure_reason_id?: string;
+}
+
+export interface BatchOrderStatusChangeItemResult {
+  orderId: string;
+  success: boolean;
+  message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order?: any;
+}
+
+export interface BatchOrderStatusChangeResponse {
+  success: boolean;
+  results: BatchOrderStatusChangeItemResult[];
+  message?: string;
+}
+
 export interface OrderDetails {
   id: string;
   order_number: string;
@@ -234,6 +254,40 @@ export const useBackendOrders = () => {
     }, 'orders.startingPreparation');
   };
 
+  const startPreparingBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/start_preparing',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message || 'Failed to start preparing orders'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to start preparing orders';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.startingPreparation');
+  };
+
   const completePreparation = async (
     request: OrderStatusChangeRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -266,6 +320,40 @@ export const useBackendOrders = () => {
         throw new Error(errorMessage);
       }
     }, 'orders.completingPreparation');
+  };
+
+  const completePreparationBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/complete_preparation',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message || 'Failed to complete order preparation'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to complete order preparation';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.completingPreparation');
   };
 
   const cancelOrder = async (
@@ -389,6 +477,40 @@ export const useBackendOrders = () => {
     }, 'orders.pickingUp');
   };
 
+  const pickUpOrderBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/pick_up',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message || 'Failed to pick up orders'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to pick up orders';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.pickingUp');
+  };
+
   const startTransit = async (
     request: OrderStatusChangeRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -417,6 +539,40 @@ export const useBackendOrders = () => {
         throw new Error(errorMessage);
       }
     }, 'orders.startingTransit');
+  };
+
+  const startTransitBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/start_transit',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message || 'Failed to start transit for orders'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to start transit for orders';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.startingTransit');
   };
 
   const outForDelivery = async (
@@ -453,6 +609,41 @@ export const useBackendOrders = () => {
     }, 'orders.outForDelivery');
   };
 
+  const outForDeliveryBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/out_for_delivery',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message ||
+              'Failed to mark orders as out for delivery'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to mark orders as out for delivery';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.outForDelivery');
+  };
+
   const deliverOrder = async (
     request: OrderStatusChangeRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -481,6 +672,40 @@ export const useBackendOrders = () => {
         throw new Error(errorMessage);
       }
     }, 'orders.delivering');
+  };
+
+  const deliverOrderBatch = async (
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
+          '/orders/batch/deliver',
+          request
+        );
+
+        if (!response.data.success && !response.data.results?.length) {
+          throw new Error(
+            response.data.message || 'Failed to deliver orders'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to deliver orders';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.batch.delivering');
   };
 
   const failDelivery = async (
@@ -557,16 +782,22 @@ export const useBackendOrders = () => {
     // Business methods
     confirmOrder,
     startPreparing,
+    startPreparingBatch,
     completePreparation,
+    completePreparationBatch,
     cancelOrder,
     refundOrder,
 
     // Agent methods
     getOrder,
     pickUpOrder,
+    pickUpOrderBatch,
     startTransit,
+    startTransitBatch,
     outForDelivery,
+    outForDeliveryBatch,
     deliverOrder,
+    deliverOrderBatch,
     failDelivery,
 
     // Client methods

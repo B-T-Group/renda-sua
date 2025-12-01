@@ -29,7 +29,6 @@ import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
-import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
 import ItemsPage from '../components/pages/ItemsPage';
@@ -42,6 +41,7 @@ import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import SupportPage from '../components/pages/SupportPage';
+import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
@@ -49,10 +49,9 @@ import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
-  const { isLoading, isAuthenticated } = useAuth0();
+  const { isLoading } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
-  const { userType } = useUserProfileContext();
   const location = useLocation();
 
   // Initialize agent location tracking (runs automatically for agents)
@@ -257,6 +256,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <SmartOrders />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Batch orders route */}
+            <Route
+              path="/orders/batch"
+              element={
+                <ProtectedRoute>
+                  <SmartBatchOrders />
                 </ProtectedRoute>
               }
             />

@@ -1435,7 +1435,40 @@
     "viewAndTakeAction": "View & Take Action",
     "viewDetails": "View Details",
     "viewMyOrders": "View My Orders",
-    "viewOrderDetails": "View Order Details"
+    "viewOrderDetails": "View Order Details",
+    "batch": {
+      "title": "Batch process orders",
+      "businessTitle": "Batch process business orders",
+      "agentTitle": "Batch process delivery orders",
+      "subtitle": "Select multiple orders and apply status changes in one step.",
+      "businessSubtitle": "Select multiple orders to update their preparation status at once.",
+      "agentSubtitle": "Select multiple orders to update their delivery status at once.",
+      "button": "Batch processing",
+      "selectAction": "Select batch action",
+      "applyToSelected": "Apply to selected",
+      "selectAll": "Select all",
+      "clearSelection": "Clear selection",
+      "selectionSummary": "{{selected}} of {{total}} orders selected for this action.",
+      "loading": "Loading orders for batch processing…",
+      "noOrders": "No orders are currently eligible for the selected action.",
+      "successSummary": "{{success}} orders updated successfully.",
+      "errorSummary": "{{failed}} orders failed to update.",
+      "summary": "{{success}} orders updated successfully, {{failed}} failed.",
+      "success": "Updated",
+      "failed": "Failed",
+      "orderSummary": "Status: {{status}} • Created: {{date}}",
+      "notSupported": "Batch processing is only available for business and agent accounts.",
+      "loadError": "Failed to load orders.",
+      "genericError": "Failed to apply batch action. Please try again.",
+      "actions": {
+        "startPreparing": "Start preparing (confirmed → preparing)",
+        "completePreparation": "Complete preparation (preparing → ready for pickup)",
+        "pickUp": "Pick up (assigned → picked up)",
+        "startTransit": "Start transit (picked up → in transit)",
+        "outForDelivery": "Out for delivery (picked up / in transit → out for delivery)",
+        "deliver": "Deliver (out for delivery → delivered)"
+      }
+    }
   },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",

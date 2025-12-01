@@ -1442,7 +1442,40 @@
     "viewAndTakeAction": "Voir et Agir",
     "viewDetails": "Voir les Détails",
     "viewMyOrders": "Voir Mes Commandes",
-    "viewOrderDetails": "Voir les Détails de la Commande"
+    "viewOrderDetails": "Voir les Détails de la Commande",
+    "batch": {
+      "title": "Traitement par lot des commandes",
+      "businessTitle": "Traitement par lot des commandes d'entreprise",
+      "agentTitle": "Traitement par lot des livraisons",
+      "subtitle": "Sélectionnez plusieurs commandes et appliquez des changements de statut en une seule étape.",
+      "businessSubtitle": "Sélectionnez plusieurs commandes pour mettre à jour leur statut de préparation en une seule fois.",
+      "agentSubtitle": "Sélectionnez plusieurs commandes pour mettre à jour leur statut de livraison en une seule fois.",
+      "button": "Traitement par lot",
+      "selectAction": "Sélectionner une action par lot",
+      "applyToSelected": "Appliquer à la sélection",
+      "selectAll": "Tout sélectionner",
+      "clearSelection": "Effacer la sélection",
+      "selectionSummary": "{{selected}} sur {{total}} commandes sélectionnées pour cette action.",
+      "loading": "Chargement des commandes pour le traitement par lot…",
+      "noOrders": "Aucune commande n'est actuellement éligible pour l'action sélectionnée.",
+      "successSummary": "{{success}} commandes mises à jour avec succès.",
+      "errorSummary": "{{failed}} commandes n'ont pas pu être mises à jour.",
+      "summary": "{{success}} commandes mises à jour avec succès, {{failed}} ont échoué.",
+      "success": "Mis à jour",
+      "failed": "Échec",
+      "orderSummary": "Statut : {{status}} • Créée le : {{date}}",
+      "notSupported": "Le traitement par lot est uniquement disponible pour les comptes entreprise et agent.",
+      "loadError": "Échec du chargement des commandes.",
+      "genericError": "Échec de l'application de l'action par lot. Veuillez réessayer.",
+      "actions": {
+        "startPreparing": "Commencer la préparation (confirmée → en préparation)",
+        "completePreparation": "Terminer la préparation (en préparation → prête pour enlèvement)",
+        "pickUp": "Récupérer (assignée → récupérée)",
+        "startTransit": "Démarrer le transit (récupérée → en transit)",
+        "outForDelivery": "En livraison (récupérée / en transit → en livraison)",
+        "deliver": "Livrer (en livraison → livrée)"
+      }
+    }
   },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",

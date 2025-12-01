@@ -393,20 +393,35 @@ const OrdersPage: React.FC = () => {
                 {getPageSubtitle()}
               </Typography>
             </Box>
-            <Button
-              variant="outlined"
-              onClick={() => refreshOrders()}
-              startIcon={<Refresh />}
-              sx={{ display: { xs: 'none', sm: 'flex' } }}
-            >
-              {t('common.refresh', 'Refresh')}
-            </Button>
-            <IconButton
-              onClick={() => refreshOrders()}
-              sx={{ display: { xs: 'flex', sm: 'none' } }}
-            >
-              <Refresh />
-            </IconButton>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {(profile?.business || profile?.agent) && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  href="/orders/batch"
+                  sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+                >
+                  {t(
+                    'orders.batch.button',
+                    'Batch processing'
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                onClick={() => refreshOrders()}
+                startIcon={<Refresh />}
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
+              >
+                {t('common.refresh', 'Refresh')}
+              </Button>
+              <IconButton
+                onClick={() => refreshOrders()}
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+              >
+                <Refresh />
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Address Alert - Only for clients */}

@@ -102,6 +102,17 @@ const BusinessDashboard: React.FC = () => {
       path: '/orders',
     },
     {
+      title: t('business.dashboard.batchOrdersTitle', 'Batch process orders'),
+      description: t(
+        'business.dashboard.batchOrdersDescription',
+        'Quickly update the status of multiple orders at once'
+      ),
+      icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#1565c0',
+      path: '/orders/batch',
+    },
+    {
       title: t('common.items'),
       description: t('business.dashboard.itemsDescription'),
       icon: <ItemsIcon sx={{ fontSize: 40 }} />,
