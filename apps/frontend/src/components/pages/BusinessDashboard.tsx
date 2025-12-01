@@ -196,6 +196,17 @@ const BusinessDashboard: React.FC = () => {
       path: '/admin/configurations',
     },
     {
+      title: t('business.dashboard.applicationSetup'),
+      description: t(
+        'business.dashboard.applicationSetupDescription',
+        'Configure delivery and application settings for your country'
+      ),
+      icon: <SettingsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00695c',
+      path: '/admin/application-setup',
+    },
+    {
       title: t('business.dashboard.manageCommissionAccounts'),
       description: t('business.dashboard.manageCommissionAccountsDescription'),
       icon: <AccountBalanceIcon sx={{ fontSize: 40 }} />,
