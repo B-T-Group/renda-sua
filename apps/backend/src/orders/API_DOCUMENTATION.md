@@ -26,6 +26,50 @@ components:
       bearerFormat: JWT
 
   schemas:
+    BatchOrderStatusChangeRequest:
+      type: object
+      required:
+        - orderIds
+      properties:
+        orderIds:
+          type: array
+          description: List of order IDs to update
+          items:
+            type: string
+            format: uuid
+        notes:
+          type: string
+          description: Optional notes applied to all status changes
+          maxLength: 500
+        failure_reason_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional failure reason (reserved for failed deliveries, not used in batch APIs yet)
+
+    BatchOrderStatusChangeItemResult:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        message:
+          type: string
+        order:
+          $ref: '#/components/schemas/Order'
+
+    BatchOrderStatusChangeResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if at least one order was updated successfully
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchOrderStatusChangeItemResult'
     OrderStatusChangeRequest:
       type: object
       required:
@@ -225,6 +269,283 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /orders/complete_preparation:
+  /orders/batch/start_preparing:
+    post:
+      summary: Start preparing multiple orders
+      description: >
+        Business users can transition multiple confirmed orders to preparing
+        status in a single operation. Partial success is supported; each order
+        is validated individually and the response includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch start preparing'
+      responses:
+        '200':
+          description: Batch start preparing completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/batch/complete_preparation:
+    post:
+      summary: Complete preparation for multiple orders
+      description: >
+        Business users can transition multiple preparing orders to
+        ready_for_pickup status in a single operation. Partial success is
+        supported; each order is validated individually and the response
+        includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch complete preparation'
+      responses:
+        '200':
+          description: Batch complete preparation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/batch/pick_up:
+    post:
+      summary: Pick up multiple orders
+      description: >
+        Agents can mark multiple assigned_to_agent orders as picked_up in a
+        single operation. Partial success is supported; each order is validated
+        individually and the response includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch pick up'
+      responses:
+        '200':
+          description: Batch pick up completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/batch/start_transit:
+    post:
+      summary: Start transit for multiple orders
+      description: >
+        Agents can transition multiple picked_up orders to in_transit status in
+        a single operation. Partial success is supported; each order is
+        validated individually and the response includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch start transit'
+      responses:
+        '200':
+          description: Batch start transit completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/batch/out_for_delivery:
+    post:
+      summary: Mark multiple orders as out for delivery
+      description: >
+        Agents can transition multiple in_transit or picked_up orders to
+        out_for_delivery status in a single operation. Partial success is
+        supported; each order is validated individually and the response
+        includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch out for delivery'
+      responses:
+        '200':
+          description: Batch out for delivery completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/batch/deliver:
+    post:
+      summary: Deliver multiple orders
+      description: >
+        Agents can transition multiple out_for_delivery orders to delivered
+        status in a single operation. Partial success is supported; each order
+        is validated individually and the response includes per-order results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
+            example:
+              orderIds:
+                - '550e8400-e29b-41d4-a716-446655440000'
+                - '550e8400-e29b-41d4-a716-446655440001'
+              notes: 'Batch deliver'
+      responses:
+        '200':
+          description: Batch deliver completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more orders not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Complete order preparation
       description: Transitions an order from preparing to ready_for_pickup status.

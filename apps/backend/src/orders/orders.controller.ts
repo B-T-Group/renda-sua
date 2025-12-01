@@ -22,6 +22,8 @@ import { DeliveryConfigService } from '../delivery-configs/delivery-configs.serv
 import type { CreateOrderRequest } from '../hasura/hasura-user.service';
 import { OrderStatusService } from './order-status.service';
 import type {
+  BatchOrderStatusChangeRequest,
+  BatchOrderStatusChangeResult,
   ConfirmOrderRequest,
   GetOrderRequest,
   OrderStatusChangeRequest,
@@ -218,9 +220,72 @@ export class OrdersController {
     return this.ordersService.completePreparation(request);
   }
 
+  @Post('batch/start_preparing')
+  @ApiOperation({
+    summary: 'Start preparing multiple orders',
+    description:
+      'Business users can transition multiple confirmed orders to preparing status in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch start preparing request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch start preparing completed with per-order results',
+    type: Object,
+  })
+  async startPreparingBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.startPreparingBatch(request);
+  }
+
+  @Post('batch/complete_preparation')
+  @ApiOperation({
+    summary: 'Complete preparation for multiple orders',
+    description:
+      'Business users can mark multiple preparing orders as ready_for_pickup in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch complete preparation request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch complete preparation completed with per-order results',
+    type: Object,
+  })
+  async completePreparationBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.completePreparationBatch(request);
+  }
+
   @Post('pick_up')
   async pickUpOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.pickUpOrder(request);
+  }
+
+  @Post('batch/pick_up')
+  @ApiOperation({
+    summary: 'Pick up multiple orders',
+    description:
+      'Assigned agents can mark multiple assigned_to_agent orders as picked_up in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch pick up request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch pick up completed with per-order results',
+    type: Object,
+  })
+  async pickUpOrderBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.pickUpOrderBatch(request);
   }
 
   @Post('start_transit')
@@ -228,14 +293,77 @@ export class OrdersController {
     return this.ordersService.startTransit(request);
   }
 
+  @Post('batch/start_transit')
+  @ApiOperation({
+    summary: 'Start transit for multiple orders',
+    description:
+      'Assigned agents can transition multiple picked_up orders to in_transit in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch start transit request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch start transit completed with per-order results',
+    type: Object,
+  })
+  async startTransitBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.startTransitBatch(request);
+  }
+
   @Post('out_for_delivery')
   async outForDelivery(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.outForDelivery(request);
   }
 
+  @Post('batch/out_for_delivery')
+  @ApiOperation({
+    summary: 'Mark multiple orders as out for delivery',
+    description:
+      'Assigned agents can transition multiple in_transit or picked_up orders to out_for_delivery in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch out for delivery request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch out for delivery completed with per-order results',
+    type: Object,
+  })
+  async outForDeliveryBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.outForDeliveryBatch(request);
+  }
+
   @Post('deliver')
   async deliverOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.deliverOrder(request);
+  }
+
+  @Post('batch/deliver')
+  @ApiOperation({
+    summary: 'Deliver multiple orders',
+    description:
+      'Assigned agents can transition multiple out_for_delivery orders to delivered in a single operation.',
+  })
+  @ApiBody({
+    description: 'Batch deliver request',
+    type: Object,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch deliver completed with per-order results',
+    type: Object,
+  })
+  async deliverOrderBatch(
+    @Body() request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.ordersService.deliverOrderBatch(request);
   }
 
   @Post('complete')

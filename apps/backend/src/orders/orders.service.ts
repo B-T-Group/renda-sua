@@ -33,6 +33,26 @@ export interface OrderStatusChangeRequest {
   failure_reason_id?: string; // Required for fail_delivery endpoint
 }
 
+export interface BatchOrderStatusChangeRequest {
+  orderIds: string[];
+  notes?: string;
+  failure_reason_id?: string;
+}
+
+export interface BatchOrderStatusChangeItemResult {
+  orderId: string;
+  success: boolean;
+  message: string;
+  // The updated order object (shape depends on the underlying operation)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  order?: any;
+}
+
+export interface BatchOrderStatusChangeResult {
+  success: boolean;
+  results: BatchOrderStatusChangeItemResult[];
+}
+
 export interface ConfirmOrderRequest {
   orderId: string;
   notes?: string;
@@ -266,6 +286,42 @@ export class OrdersService {
     private readonly pdfService: PdfService,
     private readonly orderQueueService: OrderQueueService
   ) {}
+
+  private async processBatch(
+    request: BatchOrderStatusChangeRequest,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    handler: (orderId: string) => Promise<{ order: any; message: string }>
+  ): Promise<BatchOrderStatusChangeResult> {
+    if (!request.orderIds?.length) {
+      throw new HttpException(
+        'At least one orderId is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const results: BatchOrderStatusChangeItemResult[] = [];
+
+    for (const orderId of request.orderIds) {
+      try {
+        const response = await handler(orderId);
+        results.push({
+          orderId,
+          success: true,
+          message: response.message,
+          order: response.order,
+        });
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error || error.message || 'Unknown error';
+        results.push({ orderId, success: false, message });
+      }
+    }
+
+    return {
+      success: results.some((result) => result.success),
+      results,
+    };
+  }
 
   /**
    * Get agent hold percentage from configuration
@@ -837,6 +893,14 @@ export class OrdersService {
     };
   }
 
+  async startPreparingBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.startPreparing({ orderId, notes: request.notes })
+    );
+  }
+
   async completePreparation(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business)
@@ -874,6 +938,14 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order preparation completed successfully',
     };
+  }
+
+  async completePreparationBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.completePreparation({ orderId, notes: request.notes })
+    );
   }
 
   async claimOrder(request: GetOrderRequest) {
@@ -1146,6 +1218,14 @@ export class OrdersService {
     };
   }
 
+  async pickUpOrderBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.pickUpOrder({ orderId, notes: request.notes })
+    );
+  }
+
   async startTransit(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent)
@@ -1183,6 +1263,14 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order transit started successfully',
     };
+  }
+
+  async startTransitBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.startTransit({ orderId, notes: request.notes })
+    );
   }
 
   async outForDelivery(request: OrderStatusChangeRequest) {
@@ -1227,6 +1315,14 @@ export class OrdersService {
     };
   }
 
+  async outForDeliveryBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.outForDelivery({ orderId, notes: request.notes })
+    );
+  }
+
   async deliverOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent)
@@ -1265,6 +1361,14 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order delivered successfully',
     };
+  }
+
+  async deliverOrderBatch(
+    request: BatchOrderStatusChangeRequest
+  ): Promise<BatchOrderStatusChangeResult> {
+    return this.processBatch(request, (orderId) =>
+      this.deliverOrder({ orderId, notes: request.notes })
+    );
   }
 
   async completeOrder(request: OrderStatusChangeRequest) {
