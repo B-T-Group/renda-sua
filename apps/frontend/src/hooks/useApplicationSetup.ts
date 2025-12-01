@@ -111,5 +111,3 @@ export const useApplicationSetup = (): UseApplicationSetupResult => {
     fetchSetup,
   };
 };
-
-

@@ -158,6 +158,7 @@
       "fastAfternoon": "Après-midi Rapide",
       "fastEvening": "Soirée Rapide",
       "allStates": "Tous les États / Provinces",
+      "filterSummary": "Configuration : {{country}} · {{state}}",
       "tabCountryConfigs": "Configs de livraison par pays",
       "tabAppConfigs": "Configurations de l'application",
       "tabTimeSlots": "Créneaux de livraison",

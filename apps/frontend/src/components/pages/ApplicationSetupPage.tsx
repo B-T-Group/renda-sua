@@ -1,4 +1,15 @@
-import { Alert, Box, Container, Tab, Tabs, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material';
 import { Country } from 'country-state-city';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +30,10 @@ const ApplicationSetupPage: React.FC = () => {
   } = useUserProfileContext();
   const { setup, loading, error, fetchSetup } = useApplicationSetup();
   const [countryCode, setCountryCode] = useState<string>('GA');
-  const [tab, setTab] = useState(0);
+  const [section, setSection] = useState<'country' | 'app' | 'slots'>(
+    'country'
+  );
+  const [stateFilter, setStateFilter] = useState<string>('all');
 
   const isBusinessAdmin =
     !!profile?.business && profile.business.is_admin === true;
@@ -37,6 +51,31 @@ const ApplicationSetupPage: React.FC = () => {
         name: country.name,
       }));
   }, []);
+
+  const states = useMemo(() => {
+    if (!setup) return [];
+    const raw = setup.delivery_time_slots
+      .map((slot) => slot.state)
+      .filter((state): state is string => !!state && state.trim() !== '');
+    return Array.from(new Set(raw));
+  }, [setup]);
+
+  useEffect(() => {
+    if (!states.length) {
+      setStateFilter('all');
+    } else if (stateFilter !== 'all' && !states.includes(stateFilter)) {
+      setStateFilter('all');
+    }
+  }, [states, stateFilter]);
+
+  const selectedCountry = countries.find(
+    (country) => country.code === countryCode
+  );
+
+  const summaryStateLabel =
+    stateFilter === 'all'
+      ? t('admin.applicationSetup.allStates', 'All states / provinces')
+      : stateFilter;
 
   if (profileLoading) {
     return <LoadingScreen open />;
@@ -66,6 +105,12 @@ const ApplicationSetupPage: React.FC = () => {
   }
 
   const cancellationConfig = setup?.application_configurations?.[0] || null;
+  const filteredSlots =
+    setup && stateFilter !== 'all'
+      ? setup.delivery_time_slots.filter(
+          (slot) => (slot.state || '') === stateFilter
+        )
+      : setup?.delivery_time_slots || [];
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -93,26 +138,72 @@ const ApplicationSetupPage: React.FC = () => {
         </Typography>
       </Box>
 
-      <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Box sx={{ minWidth: 260 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {t('admin.applicationSetup.countryLabel', 'Country')}
-          </Typography>
-          <Tabs
-            value={countryCode}
-            onChange={(_, code) => setCountryCode(code)}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            {countries.map((country) => (
-              <Tab
-                key={country.code}
-                value={country.code}
-                label={country.name}
-              />
-            ))}
-          </Tabs>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          gap: 2,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>
+              {t('admin.applicationSetup.countryLabel', 'Country')}
+            </InputLabel>
+            <Select
+              label={t('admin.applicationSetup.countryLabel', 'Country')}
+              value={countryCode}
+              onChange={(event) => setCountryCode(event.target.value as string)}
+            >
+              {countries.map((country) => (
+                <MenuItem key={country.code} value={country.code}>
+                  {country.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {states.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel>
+                {t('admin.applicationSetup.state', 'State/Province')}
+              </InputLabel>
+              <Select
+                label={t('admin.applicationSetup.state', 'State/Province')}
+                value={stateFilter}
+                onChange={(event) =>
+                  setStateFilter(event.target.value as string)
+                }
+              >
+                <MenuItem value="all">
+                  {t(
+                    'admin.applicationSetup.allStates',
+                    'All states / provinces'
+                  )}
+                </MenuItem>
+                {states.map((state) => (
+                  <MenuItem key={state} value={state}>
+                    {state}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </Box>
+
+        <Typography variant="body2" color="text.secondary">
+          {t(
+            'admin.applicationSetup.filterSummary',
+            'Configuring: {{country}} · {{state}}',
+            {
+              country: selectedCountry?.name || countryCode,
+              state: summaryStateLabel,
+            }
+          )}
+        </Typography>
       </Box>
 
       {loading && <LoadingScreen open />}
@@ -124,44 +215,74 @@ const ApplicationSetupPage: React.FC = () => {
       )}
 
       {setup && (
-        <Box>
-          <Tabs value={tab} onChange={(_, next) => setTab(next)} sx={{ mb: 2 }}>
-            <Tab
-              label={t(
-                'admin.applicationSetup.tabCountryConfigs',
-                'Country delivery configs'
-              )}
-            />
-            <Tab
-              label={t(
-                'admin.applicationSetup.tabAppConfigs',
-                'Application configurations'
-              )}
-            />
-            <Tab
-              label={t(
-                'admin.applicationSetup.tabTimeSlots',
-                'Delivery time slots'
-              )}
-            />
-          </Tabs>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            gap: 3,
+          }}
+        >
+          <Box sx={{ width: { xs: '100%', md: 260 } }}>
+            <Tabs
+              orientation="vertical"
+              value={section}
+              onChange={(_, next) => setSection(next)}
+              variant="scrollable"
+            >
+              <Tab
+                value="country"
+                label={t(
+                  'admin.applicationSetup.tabCountryConfigs',
+                  'Country delivery configs'
+                )}
+              />
+              <Tab
+                value="app"
+                label={t(
+                  'admin.applicationSetup.tabAppConfigs',
+                  'Application configurations'
+                )}
+              />
+              <Tab
+                value="slots"
+                label={t(
+                  'admin.applicationSetup.tabTimeSlots',
+                  'Delivery time slots'
+                )}
+              />
+            </Tabs>
+          </Box>
 
-          {tab === 0 && (
-            <CountryDeliveryConfigsSection
-              countryCode={countryCode}
-              countryConfigs={setup.country_delivery_configs}
-              deliveryConfigs={setup.delivery_configs}
-              cancellationConfig={cancellationConfig}
-            />
-          )}
+          <Box sx={{ flex: 1 }}>
+            {section === 'country' && (
+              <CountryDeliveryConfigsSection
+                countryCode={countryCode}
+                countryConfigs={setup.country_delivery_configs}
+                deliveryConfigs={setup.delivery_configs}
+                cancellationConfig={cancellationConfig}
+              />
+            )}
 
-          {tab === 1 && (
-            <ApplicationConfigurationsSection config={cancellationConfig} />
-          )}
+            {section === 'app' && (
+              <ApplicationConfigurationsSection config={cancellationConfig} />
+            )}
 
-          {tab === 2 && (
-            <DeliveryTimeSlotsSection slots={setup.delivery_time_slots} />
-          )}
+            {section === 'slots' && (
+              <DeliveryTimeSlotsSection
+                slots={filteredSlots}
+                stateFilter={stateFilter}
+              />
+            )}
+          </Box>
+
+          <Box
+            sx={{
+              width: { xs: '100%', md: 280 },
+              display: { xs: 'none', md: 'block' },
+            }}
+          >
+            {/* Summary card placeholder for future enhancements */}
+          </Box>
         </Box>
       )}
     </Container>

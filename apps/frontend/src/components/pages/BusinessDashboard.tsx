@@ -56,10 +56,8 @@ const BusinessDashboard: React.FC = () => {
     profile?.business?.id
   );
   const { items, loading: itemsLoading } = useItems(profile?.business?.id);
-  const {
-    getFailedDeliveries,
-    loading: failedDeliveriesLoading,
-  } = useFailedDeliveries();
+  const { getFailedDeliveries, loading: failedDeliveriesLoading } =
+    useFailedDeliveries();
 
   const [pendingFailedDeliveriesCount, setPendingFailedDeliveriesCount] =
     React.useState<number | null>(null);
@@ -126,7 +124,9 @@ const BusinessDashboard: React.FC = () => {
       count: pendingFailedDeliveriesCount,
       color: '#d32f2f',
       path: '/business/failed-deliveries',
-      showBadge: pendingFailedDeliveriesCount !== null && pendingFailedDeliveriesCount > 0,
+      showBadge:
+        pendingFailedDeliveriesCount !== null &&
+        pendingFailedDeliveriesCount > 0,
     },
     {
       title: t('business.dashboard.documents'),

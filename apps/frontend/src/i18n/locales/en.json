@@ -158,6 +158,7 @@
       "fastAfternoon": "Afternoon Fast",
       "fastEvening": "Evening Fast",
       "allStates": "All states / provinces",
+      "filterSummary": "Configuring: {{country}} · {{state}}",
       "tabCountryConfigs": "Country delivery configs",
       "tabAppConfigs": "Application configurations",
       "tabTimeSlots": "Delivery time slots",

@@ -3,10 +3,6 @@ import {
   Card,
   CardContent,
   Chip,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Table,
   TableBody,
@@ -44,36 +40,14 @@ const renderTimeRange = (slot: DeliveryTimeSlotRow, t: (k: string, d: string) =>
 
 interface DeliveryTimeSlotsSectionProps {
   slots: DeliveryTimeSlotRow[];
+  stateFilter?: string;
 }
 
 export const DeliveryTimeSlotsSection: React.FC<
   DeliveryTimeSlotsSectionProps
-> = ({ slots }) => {
+> = ({ slots, stateFilter }) => {
   const { t } = useTranslation();
-
-  const uniqueStates = React.useMemo(
-    () =>
-      Array.from(
-        new Set(
-          slots
-            .map((slot) => slot.state)
-            .filter((state): state is string => !!state && state.trim() !== '')
-        )
-      ),
-    [slots]
-  );
-
-  const [stateFilter, setStateFilter] = React.useState<string>(
-    uniqueStates[0] || ''
-  );
-
-  const filteredSlots = React.useMemo(
-    () =>
-      !stateFilter
-        ? slots
-        : slots.filter((slot) => (slot.state || '') === stateFilter),
-    [slots, stateFilter]
-  );
+  const showStateColumn = !stateFilter || stateFilter === 'all';
 
   if (!slots.length) {
     return (
@@ -97,32 +71,6 @@ export const DeliveryTimeSlotsSection: React.FC<
 
       <Card>
         <CardContent>
-          {uniqueStates.length > 0 && (
-            <Box sx={{ mb: 2, maxWidth: 320 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>
-                  {t('admin.applicationSetup.state', 'State/Province')}
-                </InputLabel>
-                <Select
-                  label={t(
-                    'admin.applicationSetup.state',
-                    'State/Province'
-                  )}
-                  value={stateFilter}
-                  onChange={(event) =>
-                    setStateFilter(event.target.value as string)
-                  }
-                >
-                  {uniqueStates.map((state) => (
-                    <MenuItem key={state} value={state}>
-                      {state}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          )}
-
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -132,9 +80,11 @@ export const DeliveryTimeSlotsSection: React.FC<
                 <TableCell>
                   {t('admin.applicationSetup.slotType', 'Type')}
                 </TableCell>
-                <TableCell>
-                  {t('admin.applicationSetup.state', 'State/Province')}
-                </TableCell>
+                {showStateColumn && (
+                  <TableCell>
+                    {t('admin.applicationSetup.state', 'State/Province')}
+                  </TableCell>
+                )}
                 <TableCell>
                   {t('admin.applicationSetup.timeRange', 'Time range')}
                 </TableCell>
@@ -150,7 +100,7 @@ export const DeliveryTimeSlotsSection: React.FC<
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredSlots.map((slot) => (
+              {slots.map((slot) => (
                 <TableRow key={slot.id}>
                   <TableCell>{slot.slot_name}</TableCell>
                   <TableCell>
@@ -170,7 +120,9 @@ export const DeliveryTimeSlotsSection: React.FC<
                       color={slot.slot_type === 'fast' ? 'primary' : 'default'}
                     />
                   </TableCell>
-                  <TableCell>{slot.state || '-'}</TableCell>
+                  {showStateColumn && (
+                    <TableCell>{slot.state || '-'}</TableCell>
+                  )}
                   <TableCell>{renderTimeRange(slot, t)}</TableCell>
                   <TableCell>{slot.max_orders_per_slot ?? '-'}</TableCell>
                   <TableCell>{slot.display_order ?? '-'}</TableCell>
