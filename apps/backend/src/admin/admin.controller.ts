@@ -18,8 +18,10 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from './admin-auth.guard';
+import { ApplicationSetupService } from './application-setup.service';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
+import { ApplicationSetupResponse } from './dto/application-setup.dto';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -44,7 +46,8 @@ export interface AdminMessageResponse {
 export class AdminController {
   constructor(
     private readonly adminMessageService: AdminMessageService,
-    private readonly adminService: AdminService
+    private readonly adminService: AdminService,
+    private readonly applicationSetupService: ApplicationSetupService
   ) {}
 
   @Post('message')
@@ -365,6 +368,54 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch account transactions',
+      };
+    }
+  }
+
+  @Get('application-setup')
+  @ApiOperation({
+    summary: 'Get application setup for a country',
+    description:
+      'Returns delivery configs, country delivery configs, cancellation fee configuration, and delivery time slots for the given country.',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: true,
+    type: String,
+    description: 'ISO 3166-1 alpha-2 country code (e.g. GA, CM)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application setup data for the country',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing or invalid country code',
+  })
+  async getApplicationSetup(
+    @Query('countryCode') countryCode?: string
+  ): Promise<{
+    success: boolean;
+    data?: ApplicationSetupResponse;
+    error?: string;
+  }> {
+    if (!countryCode || countryCode.length !== 2) {
+      return {
+        success: false,
+        error: 'countryCode is required and must be a 2-letter ISO code',
+      };
+    }
+
+    try {
+      const data = await this.applicationSetupService.getApplicationSetup(
+        countryCode
+      );
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('Error fetching application setup:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch application setup',
       };
     }
   }
