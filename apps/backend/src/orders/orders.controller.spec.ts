@@ -13,11 +13,17 @@ describe('OrdersController', () => {
       confirmOrder: jest.fn(),
       startPreparing: jest.fn(),
       completePreparation: jest.fn(),
+      startPreparingBatch: jest.fn(),
+      completePreparationBatch: jest.fn(),
       getOrder: jest.fn(),
       pickUpOrder: jest.fn(),
       startTransit: jest.fn(),
       outForDelivery: jest.fn(),
       deliverOrder: jest.fn(),
+      pickUpOrderBatch: jest.fn(),
+      startTransitBatch: jest.fn(),
+      outForDeliveryBatch: jest.fn(),
+      deliverOrderBatch: jest.fn(),
       failDelivery: jest.fn(),
       cancelOrder: jest.fn(),
       refundOrder: jest.fn(),
@@ -139,6 +145,60 @@ describe('OrdersController', () => {
     });
   });
 
+  describe('startPreparingBatch', () => {
+    it('should start preparing multiple orders successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch start preparing',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order preparation started successfully',
+          },
+        ],
+      };
+
+      ordersService.startPreparingBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.startPreparingBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.startPreparingBatch).toHaveBeenCalledWith(request);
+    });
+  });
+
+  describe('completePreparationBatch', () => {
+    it('should complete preparation for multiple orders successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch complete preparation',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order preparation completed successfully',
+          },
+        ],
+      };
+
+      ordersService.completePreparationBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.completePreparationBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.completePreparationBatch).toHaveBeenCalledWith(
+        request
+      );
+    });
+  });
+
   describe('getOrder', () => {
     it('should assign order to agent successfully', async () => {
       const request = { orderId: 'order-123' };
@@ -179,6 +239,32 @@ describe('OrdersController', () => {
     });
   });
 
+  describe('pickUpOrderBatch', () => {
+    it('should pick up multiple orders successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch pick up',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order picked up successfully',
+          },
+        ],
+      };
+
+      ordersService.pickUpOrderBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.pickUpOrderBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.pickUpOrderBatch).toHaveBeenCalledWith(request);
+    });
+  });
+
   describe('startTransit', () => {
     it('should start transit successfully', async () => {
       const request = { orderId: 'order-123', notes: 'Started transit' };
@@ -194,6 +280,32 @@ describe('OrdersController', () => {
 
       expect(result).toEqual(expectedResult);
       expect(ordersService.startTransit).toHaveBeenCalledWith(request);
+    });
+  });
+
+  describe('startTransitBatch', () => {
+    it('should start transit for multiple orders successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch start transit',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order transit started successfully',
+          },
+        ],
+      };
+
+      ordersService.startTransitBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.startTransitBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.startTransitBatch).toHaveBeenCalledWith(request);
     });
   });
 
@@ -215,6 +327,32 @@ describe('OrdersController', () => {
     });
   });
 
+  describe('outForDeliveryBatch', () => {
+    it('should mark multiple orders as out for delivery successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch out for delivery',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order marked as out for delivery successfully',
+          },
+        ],
+      };
+
+      ordersService.outForDeliveryBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.outForDeliveryBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.outForDeliveryBatch).toHaveBeenCalledWith(request);
+    });
+  });
+
   describe('deliverOrder', () => {
     it('should deliver order successfully', async () => {
       const request = { orderId: 'order-123', notes: 'Delivered to customer' };
@@ -230,6 +368,32 @@ describe('OrdersController', () => {
 
       expect(result).toEqual(expectedResult);
       expect(ordersService.deliverOrder).toHaveBeenCalledWith(request);
+    });
+  });
+
+  describe('deliverOrderBatch', () => {
+    it('should deliver multiple orders successfully', async () => {
+      const request = {
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch deliver',
+      };
+      const expectedResult = {
+        success: true,
+        results: [
+          {
+            orderId: 'order-123',
+            success: true,
+            message: 'Order delivered successfully',
+          },
+        ],
+      };
+
+      ordersService.deliverOrderBatch.mockResolvedValue(expectedResult);
+
+      const result = await controller.deliverOrderBatch(request);
+
+      expect(result).toEqual(expectedResult);
+      expect(ordersService.deliverOrderBatch).toHaveBeenCalledWith(request);
     });
   });
 

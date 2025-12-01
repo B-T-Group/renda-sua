@@ -244,6 +244,55 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('startPreparingBatch', () => {
+    it('should start preparing multiple orders successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'preparing',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.startPreparingBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch start preparing',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
+    });
+
+    it('should return partial success when some orders fail', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: { ...mockOrder, current_status: 'pending' },
+        });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'preparing',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.startPreparingBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch start preparing',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.filter((r) => r.success)).toHaveLength(1);
+      expect(result.results.filter((r) => !r.success)).toHaveLength(1);
+    });
+  });
+
   describe('completePreparation', () => {
     it('should complete preparation successfully', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
@@ -263,6 +312,55 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('ready_for_pickup');
+    });
+  });
+
+  describe('completePreparationBatch', () => {
+    it('should complete preparation for multiple orders successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'preparing' },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'ready_for_pickup',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.completePreparationBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch complete preparation',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
+    });
+
+    it('should return partial success when some orders fail', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: { ...mockOrder, current_status: 'preparing' },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+        });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'ready_for_pickup',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.completePreparationBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch complete preparation',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.filter((r) => r.success)).toHaveLength(1);
+      expect(result.results.filter((r) => !r.success)).toHaveLength(1);
     });
   });
 
@@ -416,6 +514,67 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('pickUpOrderBatch', () => {
+    it('should pick up multiple orders successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...mockOrder,
+          current_status: 'assigned_to_agent',
+          assigned_agent_id: 'agent-123',
+        },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'picked_up',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.pickUpOrderBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch pick up',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
+    });
+
+    it('should return partial success when some orders fail', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraUserService.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            ...mockOrder,
+            current_status: 'assigned_to_agent',
+            assigned_agent_id: 'agent-123',
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            ...mockOrder,
+            current_status: 'assigned_to_agent',
+            assigned_agent_id: 'different-agent',
+          },
+        });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'picked_up',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.pickUpOrderBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch pick up',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.filter((r) => r.success)).toHaveLength(1);
+      expect(result.results.filter((r) => !r.success)).toHaveLength(1);
+    });
+  });
+
   describe('startTransit', () => {
     it('should start transit successfully', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
@@ -442,6 +601,33 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('startTransitBatch', () => {
+    it('should start transit for multiple orders successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...mockOrder,
+          current_status: 'picked_up',
+          assigned_agent_id: 'agent-123',
+        },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'in_transit',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.startTransitBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch start transit',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
+    });
+  });
+
   describe('outForDelivery', () => {
     it('should mark as out for delivery successfully', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
@@ -465,6 +651,33 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('out_for_delivery');
+    });
+  });
+
+  describe('outForDeliveryBatch', () => {
+    it('should mark multiple orders as out for delivery successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...mockOrder,
+          current_status: 'in_transit',
+          assigned_agent_id: 'agent-123',
+        },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'out_for_delivery',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.outForDeliveryBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch out for delivery',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
     });
   });
 
@@ -497,6 +710,39 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.order.current_status).toBe('delivered');
+    });
+  });
+
+  describe('deliverOrderBatch', () => {
+    it('should deliver multiple orders successfully', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...mockOrder,
+          current_status: 'out_for_delivery',
+          assigned_agent_id: 'agent-123',
+        },
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        accounts: [mockAgentAccount],
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        affected_rows: 1,
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'delivered',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.deliverOrderBatch({
+        orderIds: ['order-123', 'order-456'],
+        notes: 'Batch deliver',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      expect(result.results.every((r) => r.success)).toBe(true);
     });
   });
 
