@@ -51,5 +51,3 @@ interface ApplicationSetupQueryResult {
 }
 
 export type ApplicationSetupQueryRawResponse = ApplicationSetupQueryResult;
-
-

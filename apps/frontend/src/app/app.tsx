@@ -15,6 +15,7 @@ import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
+import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
@@ -191,6 +192,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminConfigurationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/application-setup"
+              element={
+                <ProtectedRoute>
+                  <ApplicationSetupPage />
                 </ProtectedRoute>
               }
             />

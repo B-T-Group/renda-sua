@@ -13,8 +13,13 @@ export class ApplicationSetupService {
 
   private buildQuery(): string {
     return `
-      query GetApplicationSetup($country_code: bpchar!) {
-        country_delivery_configs(where: { country_code: { _eq: $country_code } }) {
+      query GetApplicationSetup(
+        $country_code_bp: bpchar!
+        $country_code_str: String!
+      ) {
+        country_delivery_configs(
+          where: { country_code: { _eq: $country_code_bp } }
+        ) {
           id
           country_code
           config_key
@@ -31,7 +36,7 @@ export class ApplicationSetupService {
         }
         application_configurations(
           where: {
-            country_code: { _eq: $country_code }
+            country_code: { _eq: $country_code_str }
             config_key: { _eq: "cancellation_fee" }
           }
         ) {
@@ -42,7 +47,7 @@ export class ApplicationSetupService {
           country_code
         }
         delivery_time_slots(
-          where: { country_code: { _eq: $country_code } }
+          where: { country_code: { _eq: $country_code_bp } }
           order_by: { display_order: asc }
         ) {
           id
@@ -65,7 +70,10 @@ export class ApplicationSetupService {
   ): Promise<ApplicationSetupResponse> {
     try {
       const query = this.buildQuery();
-      const variables = { country_code: countryCode };
+      const variables = {
+        country_code_bp: countryCode,
+        country_code_str: countryCode,
+      };
       const result =
         await this.hasuraService.executeQuery<ApplicationSetupQueryRawResponse>(
           query,
@@ -87,5 +95,3 @@ export class ApplicationSetupService {
     }
   }
 }
-
-
