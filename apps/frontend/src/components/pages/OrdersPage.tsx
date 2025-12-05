@@ -31,6 +31,8 @@ import {
   Select,
   Skeleton,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   useMediaQuery,
@@ -107,6 +109,7 @@ const OrdersPage: React.FC = () => {
   });
   const [showCompletedOrders, setShowCompletedOrders] = useState(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<string>('all');
 
   // Use unified orders hook that handles user type on backend
   const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
@@ -213,6 +216,155 @@ const OrdersPage: React.FC = () => {
       return count + (groupedByStatus[status]?.length || 0);
     }, 0);
   }, [completedStatuses, groupedByStatus]);
+
+  // Define tab groups for order statuses
+  const tabGroups = useMemo(
+    () => ({
+      all: {
+        label: t('orders.tabs.all', 'All Orders'),
+        statuses: statusOrder,
+      },
+      pending: {
+        label: t('orders.tabs.pending', 'Pending'),
+        statuses: ['pending', 'pending_payment'],
+      },
+      active: {
+        label: t('orders.tabs.active', 'Active'),
+        statuses: [
+          'confirmed',
+          'preparing',
+          'ready_for_pickup',
+          'assigned_to_agent',
+          'picked_up',
+          'in_transit',
+          'out_for_delivery',
+        ],
+      },
+      delivered: {
+        label: t('orders.tabs.delivered', 'Delivered'),
+        statuses: ['delivered', 'complete'],
+      },
+      cancelled: {
+        label: t('orders.tabs.cancelled', 'Cancelled'),
+        statuses: ['cancelled', 'failed', 'refunded'],
+      },
+    }),
+    [statusOrder, t]
+  );
+
+  // Filter orders based on selected tab
+  const filteredOrdersByTab = useMemo(() => {
+    if (selectedTab === 'all') {
+      return orders || [];
+    }
+
+    const tabStatuses =
+      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
+    return (orders || []).filter((order) =>
+      tabStatuses.includes(order.current_status || '')
+    );
+  }, [orders, selectedTab, tabGroups]);
+
+  // Group filtered orders by status
+  const filteredGroupedByStatus = useMemo(() => {
+    const buckets: Record<string, typeof orders> = {};
+    filteredOrdersByTab.forEach((o) => {
+      const s = o.current_status || 'unknown';
+      if (!buckets[s]) buckets[s] = [];
+      buckets[s].push(o);
+    });
+
+    // Sort orders within each status bucket to prioritize fast delivery orders
+    Object.keys(buckets).forEach((status) => {
+      buckets[status].sort((a, b) => {
+        // Fast delivery orders first
+        if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
+        if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
+
+        // If both have same fast delivery status, sort by creation date (newest first)
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+    });
+
+    return buckets;
+  }, [filteredOrdersByTab]);
+
+  // Get statuses for the selected tab
+  const tabActiveStatuses = useMemo(() => {
+    if (selectedTab === 'all') {
+      return activeStatuses;
+    }
+
+    const tabStatuses =
+      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
+    const seen = Array.from(
+      new Set(filteredOrdersByTab.map((o) => o.current_status || 'unknown'))
+    );
+
+    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
+    const active = seen.filter(
+      (status) =>
+        !completedStatusTypes.includes(status) && tabStatuses.includes(status)
+    );
+
+    return active.sort((a, b) => {
+      const ia = statusOrder.indexOf(a);
+      const ib = statusOrder.indexOf(b);
+      const va = ia === -1 ? 999 : ia;
+      const vb = ib === -1 ? 999 : ib;
+      return va - vb;
+    });
+  }, [
+    selectedTab,
+    filteredOrdersByTab,
+    tabGroups,
+    activeStatuses,
+    statusOrder,
+  ]);
+
+  const tabCompletedStatuses = useMemo(() => {
+    if (selectedTab === 'all') {
+      return completedStatuses;
+    }
+
+    const tabStatuses =
+      tabGroups[selectedTab as keyof typeof tabGroups]?.statuses || [];
+    const seen = Array.from(
+      new Set(filteredOrdersByTab.map((o) => o.current_status || 'unknown'))
+    );
+
+    const completedStatusTypes = ['complete', 'cancelled', 'refunded'];
+    const completed = seen.filter(
+      (status) =>
+        completedStatusTypes.includes(status) && tabStatuses.includes(status)
+    );
+
+    return completed.sort((a, b) => {
+      const ia = statusOrder.indexOf(a);
+      const ib = statusOrder.indexOf(b);
+      const va = ia === -1 ? 999 : ia;
+      const vb = ib === -1 ? 999 : ib;
+      return va - vb;
+    });
+  }, [
+    selectedTab,
+    filteredOrdersByTab,
+    tabGroups,
+    completedStatuses,
+    statusOrder,
+  ]);
+
+  const tabCompletedOrdersCount = useMemo(() => {
+    return tabCompletedStatuses.reduce((count, status) => {
+      return count + (filteredGroupedByStatus[status]?.length || 0);
+    }, 0);
+  }, [tabCompletedStatuses, filteredGroupedByStatus]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
+    setSelectedTab(newValue);
+  };
 
   // Determine page titles and content based on user type
   const getPageTitle = () => {
@@ -401,10 +553,7 @@ const OrdersPage: React.FC = () => {
                   href="/orders/batch"
                   sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                 >
-                  {t(
-                    'orders.batch.button',
-                    'Batch processing'
-                  )}
+                  {t('orders.batch.button', 'Batch processing')}
                 </Button>
               )}
               <Button
@@ -650,6 +799,56 @@ const OrdersPage: React.FC = () => {
           </Box>
         </Drawer>
 
+        {/* Status Tabs */}
+        <Paper sx={{ mb: 3, display: 'flex', flexDirection: 'column' }}>
+          <Tabs
+            value={selectedTab}
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              borderBottom: 1,
+              borderColor: 'divider',
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 500,
+                minHeight: 48,
+              },
+            }}
+          >
+            {Object.entries(tabGroups).map(([key, group]) => {
+              const count =
+                key === 'all'
+                  ? orders.length
+                  : (orders || []).filter((order) =>
+                      group.statuses.includes(order.current_status || '')
+                    ).length;
+
+              return (
+                <Tab
+                  key={key}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {group.label}
+                      <Chip
+                        label={count}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.75rem',
+                          minWidth: 20,
+                        }}
+                      />
+                    </Box>
+                  }
+                  value={key}
+                />
+              );
+            })}
+          </Tabs>
+        </Paper>
+
         {/* Error Display */}
         {error && (
           <Alert
@@ -676,7 +875,7 @@ const OrdersPage: React.FC = () => {
               <OrderCardSkeleton key={i} />
             ))}
           </Box>
-        ) : orders.length === 0 ? (
+        ) : filteredOrdersByTab.length === 0 ? (
           <Paper
             sx={{
               p: 6,
@@ -691,23 +890,34 @@ const OrdersPage: React.FC = () => {
               {t('orders.noOrdersFound', 'No Orders Yet')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              {t(
-                'orders.noOrdersMessage',
-                'When you place an order, it will appear here'
-              )}
+              {selectedTab === 'all'
+                ? t(
+                    'orders.noOrdersMessage',
+                    'When you place an order, it will appear here'
+                  )
+                : t(
+                    'orders.noOrdersInTab',
+                    `No orders found in ${
+                      tabGroups[selectedTab as keyof typeof tabGroups]?.label ||
+                      'this category'
+                    }`
+                  )}
             </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => (window.location.href = '/items')}
-            >
-              {t('orders.browseItems', 'Browse Items')}
-            </Button>
+            {selectedTab !== 'all' && (
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={() => setSelectedTab('all')}
+                sx={{ mt: 2 }}
+              >
+                {t('orders.viewAllOrders', 'View All Orders')}
+              </Button>
+            )}
           </Paper>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Active Orders */}
-            {activeStatuses.map((statusKey) => (
+            {tabActiveStatuses.map((statusKey) => (
               <Box key={statusKey} sx={{ width: '100%' }}>
                 <Paper
                   sx={{
@@ -719,9 +929,9 @@ const OrdersPage: React.FC = () => {
                   }}
                 >
                   <Typography variant="h6" fontWeight="bold" color="primary">
-                    {t(`common.orderStatus.${statusKey}`)}
+                    {t(`common.orderStatus.${statusKey}`, statusKey)}
                     <Chip
-                      label={groupedByStatus[statusKey]?.length || 0}
+                      label={filteredGroupedByStatus[statusKey]?.length || 0}
                       size="small"
                       color="primary"
                       sx={{ ml: 1 }}
@@ -729,7 +939,7 @@ const OrdersPage: React.FC = () => {
                   </Typography>
                 </Paper>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {(groupedByStatus[statusKey] || []).map((order) => (
+                  {(filteredGroupedByStatus[statusKey] || []).map((order) => (
                     <OrderCard
                       key={order.id}
                       order={order}
@@ -741,7 +951,7 @@ const OrdersPage: React.FC = () => {
             ))}
 
             {/* Completed/Cancelled Orders - Collapsible */}
-            {completedOrdersCount > 0 && (
+            {tabCompletedOrdersCount > 0 && (
               <Paper
                 sx={{
                   mt: 2,
@@ -775,7 +985,7 @@ const OrdersPage: React.FC = () => {
                       )}
                     </Typography>
                     <Chip
-                      label={completedOrdersCount}
+                      label={tabCompletedOrdersCount}
                       size="small"
                       color="default"
                     />
@@ -783,7 +993,7 @@ const OrdersPage: React.FC = () => {
                 </Button>
                 <Collapse in={showCompletedOrders}>
                   <Box sx={{ p: 3 }}>
-                    {completedStatuses.map((statusKey) => (
+                    {tabCompletedStatuses.map((statusKey) => (
                       <Box key={statusKey} sx={{ width: '100%', mb: 3 }}>
                         <Paper
                           variant="outlined"
@@ -794,9 +1004,11 @@ const OrdersPage: React.FC = () => {
                           }}
                         >
                           <Typography variant="subtitle1" fontWeight="medium">
-                            {t(`common.orderStatus.${statusKey}`)}
+                            {t(`common.orderStatus.${statusKey}`, statusKey)}
                             <Chip
-                              label={groupedByStatus[statusKey]?.length || 0}
+                              label={
+                                filteredGroupedByStatus[statusKey]?.length || 0
+                              }
                               size="small"
                               sx={{ ml: 1 }}
                             />
@@ -809,13 +1021,15 @@ const OrdersPage: React.FC = () => {
                             gap: 2,
                           }}
                         >
-                          {(groupedByStatus[statusKey] || []).map((order) => (
-                            <OrderCard
-                              key={order.id}
-                              order={order}
-                              onActionComplete={refreshOrders}
-                            />
-                          ))}
+                          {(filteredGroupedByStatus[statusKey] || []).map(
+                            (order) => (
+                              <OrderCard
+                                key={order.id}
+                                order={order}
+                                onActionComplete={refreshOrders}
+                              />
+                            )
+                          )}
                         </Box>
                       </Box>
                     ))}
