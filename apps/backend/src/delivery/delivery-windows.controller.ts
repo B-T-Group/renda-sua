@@ -99,7 +99,7 @@ export class DeliveryWindowsController {
     @Query('countryCode') countryCode: string,
     @Query('stateCode') stateCode: string,
     @Query('date') date: string,
-    @Query('isFastDelivery') isFastDelivery?: boolean
+    @Query('isFastDelivery') isFastDelivery?: string
   ) {
     try {
       if (!countryCode || !stateCode || !date) {
@@ -118,11 +118,18 @@ export class DeliveryWindowsController {
         );
       }
 
+      // Parse isFastDelivery from query string (query params come as strings)
+      // "true" -> true, "false" -> false, undefined -> false
+      const isFastDeliveryBool =
+        isFastDelivery === undefined
+          ? false
+          : isFastDelivery.toLowerCase() === 'true';
+
       const slots = await this.deliverySlotsService.getAvailableSlots(
         countryCode,
         stateCode,
         date,
-        isFastDelivery || false
+        isFastDeliveryBool
       );
 
       return {
