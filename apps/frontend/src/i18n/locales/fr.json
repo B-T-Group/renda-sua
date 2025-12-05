@@ -1324,6 +1324,15 @@
       "status": "Statut",
       "title": "Filtres"
     },
+    "tabs": {
+      "all": "Toutes les Commandes",
+      "pending": "En Attente",
+      "active": "Actives",
+      "delivered": "Livrées",
+      "cancelled": "Annulées"
+    },
+    "noOrdersInTab": "Aucune commande trouvée dans {{category}}",
+    "viewAllOrders": "Voir Toutes les Commandes",
     "financialDetails": "Détails Financiers",
     "from": "De",
     "holdStatus": "Statut de Retenue",

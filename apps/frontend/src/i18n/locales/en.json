@@ -1318,6 +1318,15 @@
       "status": "Status",
       "title": "Filters"
     },
+    "tabs": {
+      "all": "All Orders",
+      "pending": "Pending",
+      "active": "Active",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
+    },
+    "noOrdersInTab": "No orders found in {{category}}",
+    "viewAllOrders": "View All Orders",
     "financialDetails": "Financial Details",
     "from": "From",
     "holdStatus": "Hold Status",
