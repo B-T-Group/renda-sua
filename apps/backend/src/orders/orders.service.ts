@@ -1793,7 +1793,19 @@ export class OrdersService {
       const { status, ...rest } = filters;
       return {
         ...rest,
-        current_status: status,
+        current_status: typeof status === 'string' ? { _eq: status } : status,
+      };
+    }
+
+    // Convert 'current_status' string to Hasura format if needed
+    if (
+      'current_status' in filters &&
+      typeof filters.current_status === 'string'
+    ) {
+      const { current_status, ...rest } = filters;
+      return {
+        ...rest,
+        current_status: { _eq: current_status },
       };
     }
 
