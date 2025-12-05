@@ -1764,6 +1764,57 @@ export class OrdersService {
   }
 
   /**
+   * Normalize filters to convert 'status' field to 'current_status'
+   * This handles cases where filters are passed with the incorrect field name
+   */
+  private normalizeFilters(filters: any): any {
+    if (!filters || typeof filters !== 'object') {
+      return filters;
+    }
+
+    // Handle _and array
+    if (Array.isArray(filters._and)) {
+      return {
+        ...filters,
+        _and: filters._and.map((filter: any) => this.normalizeFilters(filter)),
+      };
+    }
+
+    // Handle _or array
+    if (Array.isArray(filters._or)) {
+      return {
+        ...filters,
+        _or: filters._or.map((filter: any) => this.normalizeFilters(filter)),
+      };
+    }
+
+    // Convert 'status' to 'current_status' if present
+    if ('status' in filters && !('current_status' in filters)) {
+      const { status, ...rest } = filters;
+      return {
+        ...rest,
+        current_status: status,
+      };
+    }
+
+    // Recursively normalize nested objects
+    const normalized: any = {};
+    for (const [key, value] of Object.entries(filters)) {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        normalized[key] = this.normalizeFilters(value);
+      } else {
+        normalized[key] = value;
+      }
+    }
+
+    return normalized;
+  }
+
+  /**
    * Fetch orders for the current user (client, agent, or business) with optional filters
    */
   async getOrders(filters?: any): Promise<Orders[]> {
@@ -1782,8 +1833,15 @@ export class OrdersService {
       );
     }
 
+    // Normalize filters to convert 'status' to 'current_status'
+    const normalizedFilters = filters
+      ? this.normalizeFilters(filters)
+      : undefined;
+
     // Merge persona filter with any additional filters
-    const where = filters ? { _and: [personaFilter, filters] } : personaFilter;
+    const where = normalizedFilters
+      ? { _and: [personaFilter, normalizedFilters] }
+      : personaFilter;
 
     const query = `
       query GetBusinessOrders($filters: orders_bool_exp) {
