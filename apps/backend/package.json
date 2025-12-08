@@ -27,6 +27,7 @@
     "graphql-request": "^5.2.0",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.2.0",
+    "luxon": "^3.7.2",
     "mustache": "^4.2.0",
     "nest-winston": "^1.10.2",
     "reflect-metadata": "^0.1.13",

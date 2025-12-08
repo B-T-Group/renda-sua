@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DateTime } from 'luxon';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { CommissionsService } from '../commissions/commissions.service';
@@ -2971,13 +2972,44 @@ export class OrdersService {
   }
 
   /**
-   * Get current time as a Date object (UTC, represents current moment)
-   * @param _timezone - IANA timezone identifier (unused, kept for API consistency)
-   * @returns Date object representing current moment in time (UTC)
+   * Get current time converted to the specified timezone and return as Date object
+   * @param timezone - IANA timezone identifier (e.g., 'Africa/Libreville')
+   * @returns Date object representing the current moment in the specified timezone (converted to UTC for Date compatibility)
    */
-  private getCurrentTimeInTimezone(_timezone: string): Date {
-    // Date objects are always stored in UTC internally
-    return new Date();
+  private getCurrentTimeInTimezone(timezone: string): Date {
+    try {
+      if (!timezone || typeof timezone !== 'string') {
+        this.logger.warn(
+          `Invalid timezone provided: ${timezone}, defaulting to UTC`
+        );
+        return new Date();
+      }
+
+      // Get current time in the specified timezone using Luxon
+      const nowInTimezone = DateTime.now().setZone(timezone);
+
+      if (!nowInTimezone.isValid) {
+        this.logger.warn(
+          `Invalid timezone ${timezone}: ${nowInTimezone.invalidReason}, using UTC time`
+        );
+        return new Date();
+      }
+
+      // Convert to UTC and return as Date object
+      // This represents the current moment as it appears in the specified timezone
+      const utcDate = nowInTimezone.toUTC().toJSDate();
+
+      this.logger.debug(
+        `Current time in ${timezone}: ${nowInTimezone.toISO()} (UTC: ${utcDate.toISOString()})`
+      );
+
+      return utcDate;
+    } catch (error: any) {
+      this.logger.warn(
+        `Error getting current time in timezone ${timezone}: ${error.message}, using UTC time`
+      );
+      return new Date();
+    }
   }
 
   /**
@@ -2994,54 +3026,47 @@ export class OrdersService {
     minutes: number,
     timezone: string
   ): Date {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
+    try {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // Luxon uses 1-based months
+      const day = date.getDate();
 
-    // Use a reference UTC date to calculate the timezone offset
-    // Create a UTC date with the same date/time values
-    const utcReference = new Date(
-      Date.UTC(year, month, day, hours, minutes, 0)
-    );
+      // Create a DateTime in the specified timezone with the given date and time
+      const dateTimeInTimezone = DateTime.fromObject(
+        {
+          year,
+          month,
+          day,
+          hour: hours,
+          minute: minutes,
+          second: 0,
+        },
+        { zone: timezone }
+      );
 
-    // Get what this UTC time looks like when formatted in the target timezone
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
+      if (!dateTimeInTimezone.isValid) {
+        this.logger.error(
+          `Invalid datetime created in timezone ${timezone}: ${dateTimeInTimezone.invalidReason}`
+        );
+        throw new Error(
+          `Invalid datetime: ${dateTimeInTimezone.invalidReason}`
+        );
+      }
 
-    // Format the UTC reference date in the target timezone to see the offset
-    const tzParts = formatter.formatToParts(utcReference);
-    const tzYear = parseInt(
-      tzParts.find((p) => p.type === 'year')?.value || '0'
-    );
-    const tzMonth =
-      parseInt(tzParts.find((p) => p.type === 'month')?.value || '0') - 1;
-    const tzDay = parseInt(tzParts.find((p) => p.type === 'day')?.value || '0');
-    const tzHour = parseInt(
-      tzParts.find((p) => p.type === 'hour')?.value || '0'
-    );
-    const tzMinute = parseInt(
-      tzParts.find((p) => p.type === 'minute')?.value || '0'
-    );
+      // Convert to UTC and return as Date object
+      const utcDate = dateTimeInTimezone.toUTC().toJSDate();
 
-    // Calculate the difference: if utcReference represents (year, month, day, hours, minutes) in UTC,
-    // but we want it to represent that same date/time in the timezone, we need to adjust
-    // The offset is the difference between what utcReference shows in timezone vs what we want
-    const tzTime = new Date(
-      Date.UTC(tzYear, tzMonth, tzDay, tzHour, tzMinute, 0)
-    );
-    const offset = utcReference.getTime() - tzTime.getTime();
+      this.logger.debug(
+        `Created datetime in ${timezone}: ${dateTimeInTimezone.toISO()} (UTC: ${utcDate.toISOString()})`
+      );
 
-    // Create the correct UTC date: start with UTC date, then adjust by offset
-    // This gives us a UTC date that, when viewed in the timezone, shows our desired time
-    return new Date(utcReference.getTime() + offset);
+      return utcDate;
+    } catch (error: any) {
+      this.logger.error(
+        `Error creating datetime in timezone ${timezone}: ${error.message}`
+      );
+      throw error;
+    }
   }
 
   private async getOrderDetails(orderId: string): Promise<Orders | null> {
