@@ -2972,44 +2972,13 @@ export class OrdersService {
   }
 
   /**
-   * Get current time converted to the specified timezone and return as Date object
-   * @param timezone - IANA timezone identifier (e.g., 'Africa/Libreville')
-   * @returns Date object representing the current moment in the specified timezone (converted to UTC for Date compatibility)
+   * Get current time in UTC
+   * @param _timezone - IANA timezone identifier (unused, kept for API consistency)
+   * @returns Date object representing the current moment in UTC
    */
-  private getCurrentTimeInTimezone(timezone: string): Date {
-    try {
-      if (!timezone || typeof timezone !== 'string') {
-        this.logger.warn(
-          `Invalid timezone provided: ${timezone}, defaulting to UTC`
-        );
-        return new Date();
-      }
-
-      // Get current time in the specified timezone using Luxon
-      const nowInTimezone = DateTime.now().setZone(timezone);
-
-      if (!nowInTimezone.isValid) {
-        this.logger.warn(
-          `Invalid timezone ${timezone}: ${nowInTimezone.invalidReason}, using UTC time`
-        );
-        return new Date();
-      }
-
-      // Convert to UTC and return as Date object
-      // This represents the current moment as it appears in the specified timezone
-      const utcDate = nowInTimezone.toUTC().toJSDate();
-
-      this.logger.debug(
-        `Current time in ${timezone}: ${nowInTimezone.toISO()} (UTC: ${utcDate.toISOString()})`
-      );
-
-      return utcDate;
-    } catch (error: any) {
-      this.logger.warn(
-        `Error getting current time in timezone ${timezone}: ${error.message}, using UTC time`
-      );
-      return new Date();
-    }
+  private getCurrentTimeInTimezone(_timezone: string): Date {
+    // Simply return current time in UTC
+    return new Date();
   }
 
   /**
