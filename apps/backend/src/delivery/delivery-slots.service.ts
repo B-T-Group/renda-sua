@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DateTime } from 'luxon';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface DeliveryTimeSlot {
@@ -31,7 +33,10 @@ export interface SlotCapacity {
 export class DeliverySlotsService {
   private readonly logger = new Logger(DeliverySlotsService.name);
 
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly deliveryConfigService: DeliveryConfigService
+  ) {}
 
   /**
    * Get available delivery time slots for a specific location and date
@@ -128,19 +133,43 @@ export class DeliverySlotsService {
         bookingCountMap.set(slotId, (bookingCountMap.get(slotId) || 0) + 1);
       });
 
-      // Calculate available capacity for each slot
-      const slotsWithCapacity = slots.map((slot: DeliveryTimeSlot) => {
-        const totalCapacity =
-          slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
-        const bookedCount = bookingCountMap.get(slot.id) || 0;
-        const availableCapacity = Math.max(0, totalCapacity - bookedCount);
+      // Get timezone for the country
+      const timezone =
+        (await this.deliveryConfigService.getTimezone(countryCode)) ||
+        'Africa/Libreville';
 
-        return {
-          ...slot,
-          available_capacity: availableCapacity,
-          is_available: availableCapacity > 0,
-        };
-      });
+      // Get current time + 2 hours in UTC for comparison
+      const twoHoursFromNow = DateTime.now()
+        .plus({ hours: 2 })
+        .toUTC()
+        .toJSDate();
+
+      // Calculate available capacity and time-based availability for each slot
+      const slotsWithCapacity = await Promise.all(
+        slots.map(async (slot: DeliveryTimeSlot) => {
+          const totalCapacity =
+            slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
+          const bookedCount = bookingCountMap.get(slot.id) || 0;
+          const availableCapacity = Math.max(0, totalCapacity - bookedCount);
+
+          // Check if slot is at least 2 hours in the future
+          const isSlotInFuture = await this.isSlotAtLeast2HoursInFuture(
+            date,
+            slot.start_time,
+            timezone,
+            twoHoursFromNow
+          );
+
+          // Slot is available if there's capacity AND it's at least 2 hours in the future
+          const isAvailable = availableCapacity > 0 && isSlotInFuture;
+
+          return {
+            ...slot,
+            available_capacity: availableCapacity,
+            is_available: isAvailable,
+          };
+        })
+      );
 
       return slotsWithCapacity;
     } catch (error) {
@@ -286,6 +315,62 @@ export class DeliverySlotsService {
     } catch (error) {
       this.logger.error('Failed to get next available day:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Create a date-time in the specified timezone and convert it to UTC for comparison
+   * @param date - Date string (YYYY-MM-DD)
+   * @param time - Time string (HH:MM:SS or HH:MM)
+   * @param timezone - IANA timezone identifier (e.g., 'Africa/Libreville')
+   * @param twoHoursFromNow - Date object representing current time + 2 hours in UTC
+   * @returns true if the slot is at least 2 hours in the future
+   */
+  private async isSlotAtLeast2HoursInFuture(
+    date: string,
+    time: string,
+    timezone: string,
+    twoHoursFromNow: Date
+  ): Promise<boolean> {
+    try {
+      // Parse date string (YYYY-MM-DD)
+      const [year, month, day] = date.split('-').map(Number);
+
+      // Parse time string (HH:MM:SS or HH:MM)
+      const timeParts = time.split(':');
+      const hours = parseInt(timeParts[0], 10);
+      const minutes = parseInt(timeParts[1], 10);
+
+      // Create a DateTime in the specified timezone with the given date and time
+      const dateTimeInTimezone = DateTime.fromObject(
+        {
+          year,
+          month,
+          day,
+          hour: hours,
+          minute: minutes,
+          second: 0,
+        },
+        { zone: timezone }
+      );
+
+      if (!dateTimeInTimezone.isValid) {
+        this.logger.warn(
+          `Invalid datetime created in timezone ${timezone}: ${dateTimeInTimezone.invalidReason}`
+        );
+        return false;
+      }
+
+      // Convert to UTC and compare with twoHoursFromNow
+      const slotDateTimeUTC = dateTimeInTimezone.toUTC().toJSDate();
+
+      // Slot is available if it's at least 2 hours in the future
+      return slotDateTimeUTC >= twoHoursFromNow;
+    } catch (error: any) {
+      this.logger.error(
+        `Error checking if slot is in future: ${error.message}`
+      );
+      return false;
     }
   }
 }
