@@ -674,7 +674,10 @@ export class OrdersService {
 
     if (windowDateTime < now) {
       throw new HttpException(
-        'Delivery time window is in the past. Please select a time that is at least 2 hours from now.',
+        'Delivery time window is in the past. Please select a time that is at least 2 hours from now. Current time is ' +
+          now.toISOString() +
+          ' and window time is ' +
+          windowDateTime.toISOString(),
         HttpStatus.BAD_REQUEST
       );
     }
@@ -682,7 +685,10 @@ export class OrdersService {
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     if (windowDateTime < twoHoursFromNow) {
       throw new HttpException(
-        'Delivery time window must be at least 2 hours from now. Please select a later time.',
+        'Delivery time window must be at least 2 hours from now. Please select a later time. Current time is ' +
+          now.toISOString() +
+          ' and window time is ' +
+          windowDateTime.toISOString(),
         HttpStatus.BAD_REQUEST
       );
     }
