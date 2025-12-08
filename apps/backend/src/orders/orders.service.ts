@@ -553,7 +553,7 @@ export class OrdersService {
     // Get timezone for the country (default to UTC if not found)
     const timezone = countryCode
       ? await this.deliveryConfigService.getTimezone(countryCode)
-      : 'UTC';
+      : 'Africa/Libreville';
 
     // Validate that the window is at least 2 hours in the future
     // Get current time in the specified timezone
@@ -571,7 +571,10 @@ export class OrdersService {
 
     if (windowDateTime < now) {
       throw new HttpException(
-        'Delivery time window is in the past. Please create a new time window.',
+        'Delivery time window is in the past. Please create a new time window. Current time is ' +
+          now.toISOString() +
+          ' and window time is ' +
+          windowDateTime.toISOString(),
         HttpStatus.BAD_REQUEST
       );
     }
@@ -579,7 +582,10 @@ export class OrdersService {
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     if (windowDateTime < twoHoursFromNow) {
       throw new HttpException(
-        'Delivery time window must be at least 2 hours from now. Please create a new time window.',
+        'Delivery time window must be at least 2 hours from now. Please create a new time window. Current time is ' +
+          now.toISOString() +
+          ' and window time is ' +
+          windowDateTime.toISOString(),
         HttpStatus.BAD_REQUEST
       );
     }
