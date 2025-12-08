@@ -240,4 +240,70 @@ export class DeliverySlotsService {
       throw error;
     }
   }
+
+  /**
+   * Get the next available delivery slot (tries current day, then next day)
+   * Returns the first available slot with the date, or null if none found
+   */
+  async getNextAvailableSlot(
+    countryCode: string,
+    stateCode: string,
+    isFastDelivery = false
+  ): Promise<{ date: string; slot: AvailableSlot } | null> {
+    try {
+      // Get current date in YYYY-MM-DD format
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      // Try current day first
+      const todaySlots = await this.getAvailableSlots(
+        countryCode,
+        stateCode,
+        todayStr,
+        isFastDelivery
+      );
+
+      // Find first available slot (is_available === true and available_capacity > 0)
+      const availableSlot = todaySlots.find(
+        (slot) => slot.is_available && slot.available_capacity > 0
+      );
+
+      if (availableSlot) {
+        return {
+          date: todayStr,
+          slot: availableSlot,
+        };
+      }
+
+      // If no slots available today, try next day
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+      const tomorrowSlots = await this.getAvailableSlots(
+        countryCode,
+        stateCode,
+        tomorrowStr,
+        isFastDelivery
+      );
+
+      // Find first available slot for tomorrow
+      const availableSlotTomorrow = tomorrowSlots.find(
+        (slot) => slot.is_available && slot.available_capacity > 0
+      );
+
+      if (availableSlotTomorrow) {
+        return {
+          date: tomorrowStr,
+          slot: availableSlotTomorrow,
+        };
+      }
+
+      // No available slots found
+      return null;
+    } catch (error) {
+      this.logger.error('Failed to get next available slot:', error);
+      throw error;
+    }
+  }
 }

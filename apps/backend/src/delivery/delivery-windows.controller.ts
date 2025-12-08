@@ -153,6 +153,128 @@ export class DeliveryWindowsController {
     }
   }
 
+  @Public()
+  @Get('next-available-slot')
+  @ApiOperation({
+    summary: 'Get next available delivery slot',
+    description:
+      'Retrieves the next available delivery slot by trying current day first, then next day. Returns the first available slot with the date.',
+  })
+  @ApiQuery({
+    name: 'countryCode',
+    required: true,
+    type: String,
+    description: 'Country code (ISO 3166-1 alpha-2)',
+    example: 'GA',
+  })
+  @ApiQuery({
+    name: 'stateCode',
+    required: true,
+    type: String,
+    description: 'State/province code',
+    example: 'Estuaire',
+  })
+  @ApiQuery({
+    name: 'isFastDelivery',
+    required: false,
+    type: Boolean,
+    description:
+      'Whether to get fast delivery slots (2-4h) or standard delivery slots (24-48h)',
+    example: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Next available slot retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        date: { type: 'string', example: '2024-01-15' },
+        slot: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'uuid' },
+            slot_name: { type: 'string', example: 'Morning' },
+            slot_type: { type: 'string', example: 'standard' },
+            start_time: { type: 'string', example: '08:00' },
+            end_time: { type: 'string', example: '12:00' },
+            available_capacity: { type: 'number', example: 5 },
+            is_available: { type: 'boolean', example: true },
+          },
+        },
+        message: {
+          type: 'string',
+          example: 'Next available slot retrieved successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No available slots found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: { type: 'string', example: 'No available slots found' },
+      },
+    },
+  })
+  async getNextAvailableSlot(
+    @Query('countryCode') countryCode: string,
+    @Query('stateCode') stateCode: string,
+    @Query('isFastDelivery') isFastDelivery?: string
+  ) {
+    try {
+      if (!countryCode || !stateCode) {
+        throw new HttpException(
+          'Country code and state code are required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Parse isFastDelivery from query string (query params come as strings)
+      // "true" -> true, "false" -> false, undefined -> false
+      const isFastDeliveryBool =
+        isFastDelivery === undefined
+          ? false
+          : isFastDelivery.toLowerCase() === 'true';
+
+      const result = await this.deliverySlotsService.getNextAvailableSlot(
+        countryCode,
+        stateCode,
+        isFastDeliveryBool
+      );
+
+      if (!result) {
+        return {
+          success: false,
+          message: 'No available slots found',
+        };
+      }
+
+      return {
+        success: true,
+        date: result.date,
+        slot: result.slot,
+        message: 'Next available slot retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Failed to get next available slot';
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Post()
   @ApiOperation({
     summary: 'Create delivery time window',
