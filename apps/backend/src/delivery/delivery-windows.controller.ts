@@ -156,9 +156,9 @@ export class DeliveryWindowsController {
   @Public()
   @Get('next-available-slot')
   @ApiOperation({
-    summary: 'Get next available delivery slot',
+    summary: 'Get next available delivery slots',
     description:
-      'Retrieves the next available delivery slot by trying current day first, then next day. Returns the first available slot with the date.',
+      'Retrieves all available delivery slots for the next available day by trying current day first, then next day. Returns all available slots for the first day that has slots.',
   })
   @ApiQuery({
     name: 'countryCode',
@@ -184,27 +184,30 @@ export class DeliveryWindowsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Next available slot retrieved successfully',
+    description: 'Next available slots retrieved successfully',
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
         date: { type: 'string', example: '2024-01-15' },
-        slot: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', example: 'uuid' },
-            slot_name: { type: 'string', example: 'Morning' },
-            slot_type: { type: 'string', example: 'standard' },
-            start_time: { type: 'string', example: '08:00' },
-            end_time: { type: 'string', example: '12:00' },
-            available_capacity: { type: 'number', example: 5 },
-            is_available: { type: 'boolean', example: true },
+        slots: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: 'uuid' },
+              slot_name: { type: 'string', example: 'Morning' },
+              slot_type: { type: 'string', example: 'standard' },
+              start_time: { type: 'string', example: '08:00' },
+              end_time: { type: 'string', example: '12:00' },
+              available_capacity: { type: 'number', example: 5 },
+              is_available: { type: 'boolean', example: true },
+            },
           },
         },
         message: {
           type: 'string',
-          example: 'Next available slot retrieved successfully',
+          example: 'Next available slots retrieved successfully',
         },
       },
     },
@@ -256,8 +259,8 @@ export class DeliveryWindowsController {
       return {
         success: true,
         date: result.date,
-        slot: result.slot,
-        message: 'Next available slot retrieved successfully',
+        slots: result.slots,
+        message: 'Next available slots retrieved successfully',
       };
     } catch (error: any) {
       if (error instanceof HttpException) {

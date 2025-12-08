@@ -242,14 +242,14 @@ export class DeliverySlotsService {
   }
 
   /**
-   * Get the next available delivery slot (tries current day, then next day)
-   * Returns the first available slot with the date, or null if none found
+   * Get the next available delivery slots (tries current day, then next day)
+   * Returns all available slots for the first day that has available slots, or null if none found
    */
   async getNextAvailableSlot(
     countryCode: string,
     stateCode: string,
     isFastDelivery = false
-  ): Promise<{ date: string; slot: AvailableSlot } | null> {
+  ): Promise<{ date: string; slots: AvailableSlot[] } | null> {
     try {
       // Get current date in YYYY-MM-DD format
       const today = new Date();
@@ -263,15 +263,15 @@ export class DeliverySlotsService {
         isFastDelivery
       );
 
-      // Find first available slot (is_available === true and available_capacity > 0)
-      const availableSlot = todaySlots.find(
+      // Filter to only available slots (is_available === true and available_capacity > 0)
+      const availableSlotsToday = todaySlots.filter(
         (slot) => slot.is_available && slot.available_capacity > 0
       );
 
-      if (availableSlot) {
+      if (availableSlotsToday.length > 0) {
         return {
           date: todayStr,
-          slot: availableSlot,
+          slots: availableSlotsToday,
         };
       }
 
@@ -287,15 +287,15 @@ export class DeliverySlotsService {
         isFastDelivery
       );
 
-      // Find first available slot for tomorrow
-      const availableSlotTomorrow = tomorrowSlots.find(
+      // Filter to only available slots for tomorrow
+      const availableSlotsTomorrow = tomorrowSlots.filter(
         (slot) => slot.is_available && slot.available_capacity > 0
       );
 
-      if (availableSlotTomorrow) {
+      if (availableSlotsTomorrow.length > 0) {
         return {
           date: tomorrowStr,
-          slot: availableSlotTomorrow,
+          slots: availableSlotsTomorrow,
         };
       }
 
