@@ -61,11 +61,12 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     value?.special_instructions || ''
   );
 
-  // Calculate minimum date (tomorrow for standard delivery, today for fast delivery)
-  const minDate = new Date();
-  if (!isFastDelivery) {
-    minDate.setDate(minDate.getDate() + 1);
-  }
+  // Calculate maximum date (30 days from now)
+  const maxDate = useMemo(() => {
+    const date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    date.setHours(23, 59, 59, 999);
+    return date;
+  }, []);
 
   const {
     slots,
@@ -77,6 +78,58 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     selectedDate?.toISOString().split('T')[0],
     isFastDelivery
   );
+
+  // Memoize value properties for stable comparison
+  const valueDate = useMemo(
+    () => value?.preferred_date || null,
+    [value?.preferred_date]
+  );
+  const valueSlotId = useMemo(() => value?.slot_id || null, [value?.slot_id]);
+  const valueInstructions = useMemo(
+    () => value?.special_instructions,
+    [value?.special_instructions]
+  );
+
+  // Sync internal state when value prop changes
+  useEffect(() => {
+    if (value) {
+      if (valueDate) {
+        const newDate = new Date(valueDate);
+        const currentDateStr = selectedDate?.toISOString().split('T')[0];
+        if (currentDateStr !== valueDate) {
+          setSelectedDate(newDate);
+        }
+      } else if (selectedDate) {
+        setSelectedDate(null);
+      }
+
+      if (valueSlotId && valueSlotId !== selectedSlotId) {
+        setSelectedSlotId(valueSlotId);
+      } else if (!valueSlotId && selectedSlotId) {
+        setSelectedSlotId('');
+      }
+
+      if (
+        valueInstructions !== undefined &&
+        valueInstructions !== specialInstructions
+      ) {
+        setSpecialInstructions(valueInstructions || '');
+      }
+    } else {
+      if (selectedDate || selectedSlotId) {
+        setSelectedDate(null);
+        setSelectedSlotId('');
+      }
+    }
+  }, [
+    valueDate,
+    valueSlotId,
+    valueInstructions,
+    selectedDate,
+    selectedSlotId,
+    specialInstructions,
+    value,
+  ]);
 
   // Update parent component when form values change
   useEffect(() => {
@@ -165,7 +218,9 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
         }
 
         // Check if slot is at least 2 hours in the future
-        const twoHoursFromNow = new Date(currentTime.getTime() + 2 * 60 * 60 * 1000);
+        const twoHoursFromNow = new Date(
+          currentTime.getTime() + 2 * 60 * 60 * 1000
+        );
         return slotStartTime >= twoHoursFromNow;
       } catch (error) {
         console.warn('Failed to parse time slot:', slot.start_time, error);
@@ -209,8 +264,7 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
           <DatePicker
             value={selectedDate}
             onChange={handleDateChange}
-            minDate={minDate}
-            maxDate={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)} // 30 days from now
+            maxDate={maxDate}
             disabled={disabled}
             slotProps={{
               textField: {

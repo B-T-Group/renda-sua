@@ -22,9 +22,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmOrderData } from '../../hooks/useBackendOrders';
+import { useNextAvailableDaySlots } from '../../hooks/useNextAvailableDaySlots';
 import type { OrderData } from '../../hooks/useOrderById';
 import DeliveryTimeWindowSelector from '../common/DeliveryTimeWindowSelector';
 
@@ -66,6 +67,77 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [error, setError] = useState<string>('');
 
+  // Calculate existing windows using optional chaining
+  const allExistingWindows: DeliveryWindowOption[] =
+    order?.delivery_time_windows || [];
+
+  // Show all windows, even if expired or in the past
+  const existingWindows = allExistingWindows;
+  const hasExistingWindows = existingWindows.length > 0;
+
+  // Hook to fetch next available day slots
+  const {
+    date: nextAvailableDate,
+    slots: nextAvailableSlots,
+    loading: loadingNextDay,
+    fetchNextDay,
+  } = useNextAvailableDaySlots(
+    order?.delivery_address?.country,
+    order?.delivery_address?.state,
+    order?.requires_fast_delivery
+  );
+
+  // Check if newWindowData has a valid future date
+  const hasValidNewWindowData = useMemo(() => {
+    if (!newWindowData || !newWindowData.preferred_date) return false;
+    const valueDate = new Date(newWindowData.preferred_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    valueDate.setHours(0, 0, 0, 0);
+    return valueDate >= today;
+  }, [newWindowData]);
+
+  // Determine initial value for DeliveryTimeWindowSelector
+  // Use newWindowData if valid, otherwise use next available day results
+  const initialWindowValue = useMemo(() => {
+    if (hasValidNewWindowData && newWindowData) {
+      return newWindowData;
+    }
+    if (
+      nextAvailableDate &&
+      Array.isArray(nextAvailableSlots) &&
+      nextAvailableSlots.length > 0
+    ) {
+      // Find the first evening slot with availability
+      const eveningSlot = nextAvailableSlots.find(
+        (slot) =>
+          slot.is_available &&
+          slot.available_capacity > 0 &&
+          slot.slot_name.toLowerCase().includes('evening')
+      );
+
+      // If evening slot found, use it; otherwise fall back to first available slot
+      const selectedSlot =
+        eveningSlot ||
+        nextAvailableSlots.find(
+          (slot) => slot.is_available && slot.available_capacity > 0
+        );
+
+      if (selectedSlot && selectedSlot.id) {
+        return {
+          slot_id: selectedSlot.id,
+          preferred_date: nextAvailableDate,
+        };
+      }
+    }
+    return null;
+  }, [
+    hasValidNewWindowData,
+    newWindowData,
+    nextAvailableDate,
+    nextAvailableSlots,
+  ]);
+
   // Reset state when modal opens/closes
   useEffect(() => {
     if (open) {
@@ -74,8 +146,13 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       setNewWindowData(null);
       setNotes('');
       setError('');
+
+      // Fetch next available day when modal opens and no existing windows
+      if (!hasExistingWindows && order) {
+        fetchNextDay();
+      }
     }
-  }, [open]);
+  }, [open, hasExistingWindows, order, fetchNextDay]);
 
   const handleWindowSelection = useCallback(
     (windowId: string) => {
@@ -132,14 +209,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       hour12: true,
     });
   }, []);
-
-  // Calculate existing windows using optional chaining
-  const allExistingWindows: DeliveryWindowOption[] =
-    order?.delivery_time_windows || [];
-
-  // Show all windows, even if expired or in the past
-  const existingWindows = allExistingWindows;
-  const hasExistingWindows = existingWindows.length > 0;
 
   const handleConfirm = useCallback(async () => {
     setError('');
@@ -428,10 +497,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   <DeliveryTimeWindowSelector
                     countryCode={order.delivery_address.country}
                     stateCode={order.delivery_address.state}
-                    value={newWindowData}
+                    value={initialWindowValue}
                     onChange={handleNewWindowChange}
                     isFastDelivery={order.requires_fast_delivery}
-                    disabled={loading}
+                    disabled={loading || loadingNextDay}
                   />
                 </Box>
               )}
