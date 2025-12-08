@@ -218,6 +218,14 @@ export class DeliveryConfigService {
   }
 
   /**
+   * Get timezone for delivery operations
+   */
+  async getTimezone(countryCode: string): Promise<string> {
+    const value = await this.getDeliveryConfig(countryCode, 'timezone');
+    return typeof value === 'string' ? value : 'Africa/Libreville'; // Default fallback to UTC
+  }
+
+  /**
    * Parse configuration value based on data type
    */
   private parseConfigValue(

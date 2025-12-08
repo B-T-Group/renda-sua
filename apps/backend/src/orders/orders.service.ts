@@ -506,7 +506,8 @@ export class OrdersService {
   private async confirmExistingDeliveryWindow(
     windowId: string,
     orderId: string,
-    confirmedBy: string
+    confirmedBy: string,
+    countryCode?: string
   ): Promise<string> {
     // Verify the delivery window exists and belongs to this order
     const query = `
@@ -548,14 +549,24 @@ export class OrdersService {
       );
     }
 
+    // Get timezone for the country (default to UTC if not found)
+    const timezone = countryCode
+      ? await this.deliveryConfigService.getTimezone(countryCode)
+      : 'UTC';
+
     // Validate that the window is at least 2 hours in the future
-    const now = new Date();
+    // Get current time in the specified timezone
+    const now = this.getCurrentTimeInTimezone(timezone);
     const windowDate = new Date(window.preferred_date);
     const [startHours, startMinutes] = window.time_slot_start
       .split(':')
       .map(Number);
-    const windowDateTime = new Date(windowDate);
-    windowDateTime.setHours(startHours, startMinutes, 0, 0);
+    const windowDateTime = this.createDateTimeInTimezone(
+      windowDate,
+      startHours,
+      startMinutes,
+      timezone
+    );
 
     if (windowDateTime < now) {
       throw new HttpException(
@@ -603,7 +614,8 @@ export class OrdersService {
       special_instructions?: string;
     },
     orderId: string,
-    confirmedBy: string
+    confirmedBy: string,
+    countryCode?: string
   ): Promise<string> {
     // First, get the slot details to extract time_slot_start and time_slot_end
     const slotQuery = `
@@ -636,12 +648,22 @@ export class OrdersService {
       );
     }
 
+    // Get timezone for the country (default to UTC if not found)
+    const timezone = countryCode
+      ? await this.deliveryConfigService.getTimezone(countryCode)
+      : 'UTC';
+
     // Validate that the window is at least 2 hours in the future
-    const now = new Date();
+    // Get current time in the specified timezone
+    const now = this.getCurrentTimeInTimezone(timezone);
     const windowDate = new Date(details.preferred_date);
     const [startHours, startMinutes] = slot.start_time.split(':').map(Number);
-    const windowDateTime = new Date(windowDate);
-    windowDateTime.setHours(startHours, startMinutes, 0, 0);
+    const windowDateTime = this.createDateTimeInTimezone(
+      windowDate,
+      startHours,
+      startMinutes,
+      timezone
+    );
 
     if (windowDateTime < now) {
       throw new HttpException(
@@ -809,19 +831,24 @@ export class OrdersService {
 
     let confirmedWindowId: string;
 
+    // Get country code from order's delivery address
+    const countryCode = order.delivery_address?.country || 'GA';
+
     if (request.delivery_time_window_id) {
       // Confirm existing delivery window
       confirmedWindowId = await this.confirmExistingDeliveryWindow(
         request.delivery_time_window_id,
         request.orderId,
-        user.id
+        user.id,
+        countryCode
       );
     } else if (request.delivery_window_details) {
       // Create new confirmed delivery window
       confirmedWindowId = await this.createConfirmedDeliveryWindow(
         request.delivery_window_details,
         request.orderId,
-        user.id
+        user.id,
+        countryCode
       );
     } else {
       throw new HttpException(
@@ -2943,6 +2970,80 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Get current time as a Date object (UTC, represents current moment)
+   * @param _timezone - IANA timezone identifier (unused, kept for API consistency)
+   * @returns Date object representing current moment in time (UTC)
+   */
+  private getCurrentTimeInTimezone(_timezone: string): Date {
+    // Date objects are always stored in UTC internally
+    return new Date();
+  }
+
+  /**
+   * Create a date-time in the specified timezone and convert it to UTC for comparison
+   * @param date - Date object (date part only)
+   * @param hours - Hours (0-23) in the timezone
+   * @param minutes - Minutes (0-59) in the timezone
+   * @param timezone - IANA timezone identifier (e.g., 'Africa/Libreville')
+   * @returns Date object in UTC representing the specified date-time in the timezone
+   */
+  private createDateTimeInTimezone(
+    date: Date,
+    hours: number,
+    minutes: number,
+    timezone: string
+  ): Date {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+
+    // Use a reference UTC date to calculate the timezone offset
+    // Create a UTC date with the same date/time values
+    const utcReference = new Date(
+      Date.UTC(year, month, day, hours, minutes, 0)
+    );
+
+    // Get what this UTC time looks like when formatted in the target timezone
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    // Format the UTC reference date in the target timezone to see the offset
+    const tzParts = formatter.formatToParts(utcReference);
+    const tzYear = parseInt(
+      tzParts.find((p) => p.type === 'year')?.value || '0'
+    );
+    const tzMonth =
+      parseInt(tzParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const tzDay = parseInt(tzParts.find((p) => p.type === 'day')?.value || '0');
+    const tzHour = parseInt(
+      tzParts.find((p) => p.type === 'hour')?.value || '0'
+    );
+    const tzMinute = parseInt(
+      tzParts.find((p) => p.type === 'minute')?.value || '0'
+    );
+
+    // Calculate the difference: if utcReference represents (year, month, day, hours, minutes) in UTC,
+    // but we want it to represent that same date/time in the timezone, we need to adjust
+    // The offset is the difference between what utcReference shows in timezone vs what we want
+    const tzTime = new Date(
+      Date.UTC(tzYear, tzMonth, tzDay, tzHour, tzMinute, 0)
+    );
+    const offset = utcReference.getTime() - tzTime.getTime();
+
+    // Create the correct UTC date: start with UTC date, then adjust by offset
+    // This gives us a UTC date that, when viewed in the timezone, shows our desired time
+    return new Date(utcReference.getTime() + offset);
+  }
+
   private async getOrderDetails(orderId: string): Promise<Orders | null> {
     const query = `
       query GetOrder($orderId: uuid!) {
@@ -2967,6 +3068,9 @@ export class OrdersService {
           }
           business_location {
             address_id
+          }
+          delivery_address {
+            country
           }
           assigned_agent_id
           assigned_agent {
