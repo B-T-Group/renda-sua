@@ -154,11 +154,11 @@ export class DeliveryWindowsController {
   }
 
   @Public()
-  @Get('next-available-slot')
+  @Get('next-available-day')
   @ApiOperation({
-    summary: 'Get next available delivery slots',
+    summary: 'Get next available delivery day',
     description:
-      'Retrieves all available delivery slots for the next available day by trying current day first, then next day. Returns all available slots for the first day that has slots.',
+      'Retrieves all available delivery slots for the next available day (today or in the future). Returns all available slots for the first day that has available slots.',
   })
   @ApiQuery({
     name: 'countryCode',
@@ -184,7 +184,7 @@ export class DeliveryWindowsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Next available slots retrieved successfully',
+    description: 'Next available day retrieved successfully',
     schema: {
       type: 'object',
       properties: {
@@ -207,7 +207,7 @@ export class DeliveryWindowsController {
         },
         message: {
           type: 'string',
-          example: 'Next available slots retrieved successfully',
+          example: 'Next available day retrieved successfully',
         },
       },
     },
@@ -223,7 +223,7 @@ export class DeliveryWindowsController {
       },
     },
   })
-  async getNextAvailableSlot(
+  async getNextAvailableDay(
     @Query('countryCode') countryCode: string,
     @Query('stateCode') stateCode: string,
     @Query('isFastDelivery') isFastDelivery?: string
@@ -243,7 +243,7 @@ export class DeliveryWindowsController {
           ? false
           : isFastDelivery.toLowerCase() === 'true';
 
-      const result = await this.deliverySlotsService.getNextAvailableSlot(
+      const result = await this.deliverySlotsService.getNextAvailableDay(
         countryCode,
         stateCode,
         isFastDeliveryBool
@@ -260,14 +260,14 @@ export class DeliveryWindowsController {
         success: true,
         date: result.date,
         slots: result.slots,
-        message: 'Next available slots retrieved successfully',
+        message: 'Next available day retrieved successfully',
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
       }
 
-      const errorMessage = error.message || 'Failed to get next available slot';
+      const errorMessage = error.message || 'Failed to get next available day';
       throw new HttpException(
         {
           success: false,
