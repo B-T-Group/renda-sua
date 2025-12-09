@@ -65,16 +65,12 @@ test.describe('Order Lifecycle E2E Tests', () => {
 
     await signInClient(page);
     await clientCompleteOrder(page);
-    // Wait for the success modal to appear with congratulatory message
-    const successModal = page.getByRole('dialog');
-    await successModal.waitFor({ state: 'visible', timeout: 10000 });
-    // Check for congratulatory text in the modal
-    await expect(
-      successModal.getByText(
-        /order.*successfully completed|congratulations|thank you for choosing/i
-      )
-    ).toBeVisible({
-      timeout: 10000,
-    });
+    // The success modal is already verified in clientCompleteOrder helper
+    // Optionally close the modal to complete the test
+    const closeButton = page.getByRole('button', { name: /close/i });
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click();
+      await page.waitForLoadState('networkidle');
+    }
   });
 });

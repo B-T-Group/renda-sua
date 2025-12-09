@@ -1,6 +1,8 @@
 import {
   Assignment,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   FlashOn,
   Info,
   Warning,
@@ -14,15 +16,16 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  IconButton,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { Order } from '../../hooks/useOrders';
 import ConfirmationModal from './ConfirmationModal';
+import OrderCompletionSuccessDialog from './OrderCompletionSuccessDialog';
 
 interface OrderActionCardProps {
   order: Order;
@@ -39,11 +42,12 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { profile } = useUserProfileContext();
   const { completeOrder } = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [completeConfirmationOpen, setCompleteConfirmationOpen] =
     useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const getActionRequiredInfo = () => {
     const status = order.current_status;
@@ -182,18 +186,28 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
     }
   };
 
-  const formatAddress = (address: any) => {
-    if (!address) return '';
-    const parts = [
-      address.address_line_1,
-      address.address_line_2,
-      address.city,
-      address.state,
-      address.postal_code,
-      address.country,
-    ].filter(Boolean);
-    return parts.join(', ');
+  // Get unique item images from order items
+  const getOrderImages = () => {
+    if (!order.order_items || order.order_items.length === 0) return [];
+
+    const images: string[] = [];
+    order.order_items.forEach((item) => {
+      const imageUrl = item.item?.item_images?.[0]?.image_url;
+      if (imageUrl && !images.includes(imageUrl)) {
+        images.push(imageUrl);
+      }
+    });
+    return images;
   };
+
+  const orderImages = getOrderImages();
+
+  // Reset image index when order images change
+  useEffect(() => {
+    if (currentImageIndex >= orderImages.length && orderImages.length > 0) {
+      setCurrentImageIndex(0);
+    }
+  }, [orderImages.length, currentImageIndex]);
 
   const handleCompleteOrderClick = () => {
     setCompleteConfirmationOpen(true);
@@ -204,7 +218,8 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
     try {
       await completeOrder({ orderId: order.id });
       setCompleteConfirmationOpen(false);
-      onActionComplete?.();
+      setSuccessModalOpen(true);
+      // Don't call onActionComplete yet - wait until user closes the success modal
     } catch (error) {
       console.error('Failed to complete order:', error);
       // Error is handled by the hook, but we still close the modal
@@ -214,8 +229,26 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
     }
   };
 
+  const handleCloseSuccessModal = () => {
+    setSuccessModalOpen(false);
+    // Call onActionComplete after modal is closed to trigger parent refresh
+    onActionComplete?.();
+  };
+
   const handleCancelCompleteOrder = () => {
     setCompleteConfirmationOpen(false);
+  };
+
+  const handlePreviousImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? orderImages.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === orderImages.length - 1 ? 0 : prev + 1
+    );
   };
 
   const actionInfo = getActionRequiredInfo();
@@ -268,117 +301,164 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
           </Alert>
         )}
 
-        {/* Order Details */}
+        {/* Number of Items */}
         <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Business Location:</strong> {order.business_location?.name}
+          <Typography variant="body1" color="text.secondary">
+            <strong>{t('orders.items', 'Items')}:</strong>{' '}
+            {order.order_items?.length || 0}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Client:</strong> {order.client?.user?.first_name}
-            {profile?.agent?.id &&
-              order.assigned_agent_id &&
-              order.assigned_agent_id === profile.agent.id &&
-              order.client?.user &&
-              'phone_number' in order.client.user &&
-              order.client.user.phone_number && (
-                <> 📞 {order.client.user.phone_number}</>
-              )}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Items:</strong> {order.order_items?.length || 0}
-          </Typography>
-          <Box sx={{ mb: 1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-              {userType === 'agent' ? (
-                <strong>
-                  {t('orders.deliveryCommission', 'Delivery Commission')}:
-                </strong>
-              ) : (
-                <strong>
-                  {t('orders.amountBreakdown', 'Amount Breakdown')}:
-                </strong>
-              )}
+        </Box>
+
+        {/* Order Images Carousel */}
+        {orderImages.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>{t('orders.orderImages', 'Order Images')}</strong>
             </Typography>
-            <Box sx={{ pl: 1 }}>
-              {userType === 'agent' ? (
-                // Agent view: Show only delivery commission
-                (order as any).delivery_commission !== undefined && (
-                  <Typography variant="body2" fontWeight="bold" color="primary">
-                    {t('orders.earnings', 'Your Earnings')}:{' '}
-                    {formatCurrency(
-                      (order as any).delivery_commission,
-                      order.currency
-                    )}
-                  </Typography>
-                )
-              ) : (
-                // Business/Client view: Show full breakdown
-                <>
-                  {order.subtotal !== undefined && (
-                    <Typography variant="body2" color="text.secondary">
-                      {t('orders.subtotal', 'Subtotal')}:{' '}
-                      {formatCurrency(order.subtotal, order.currency)}
-                    </Typography>
-                  )}
-                  {(order.base_delivery_fee || 0) +
-                    (order.per_km_delivery_fee || 0) >
-                    0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {t('orders.deliveryFee', 'Delivery')}:{' '}
-                      {formatCurrency(
-                        (order.base_delivery_fee || 0) +
-                          (order.per_km_delivery_fee || 0),
-                        order.currency
-                      )}
-                    </Typography>
-                  )}
-                  {order.tax_amount > 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {t('orders.tax', 'Tax')}:{' '}
-                      {formatCurrency(order.tax_amount, order.currency)}
-                    </Typography>
-                  )}
-                  {order.total_amount !== undefined && (
-                    <Typography
-                      variant="body2"
-                      fontWeight="bold"
-                      color="primary"
+            <Box
+              sx={{
+                position: 'relative',
+                width: '100%',
+                borderRadius: 1,
+                overflow: 'hidden',
+                bgcolor: 'grey.100',
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              {/* Main Image */}
+              <Box
+                sx={{
+                  position: 'relative',
+                  width: '100%',
+                  paddingTop: '56.25%', // 16:9 aspect ratio
+                  overflow: 'hidden',
+                  bgcolor: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <img
+                  src={orderImages[currentImageIndex]}
+                  alt={t('orders.orderImage', 'Order item')}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                  }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div style="
+                          position: absolute;
+                          top: 0;
+                          left: 0;
+                          width: 100%;
+                          height: 100%;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          font-size: 2rem;
+                          color: #999;
+                        ">
+                          <span role="img" aria-label="package">📦</span>
+                        </div>
+                      `;
+                    }
+                  }}
+                />
+
+                {/* Navigation Buttons - Only show if multiple images */}
+                {orderImages.length > 1 && (
+                  <>
+                    <IconButton
+                      onClick={handlePreviousImage}
+                      sx={{
+                        position: 'absolute',
+                        left: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        bgcolor: 'rgba(0, 0, 0, 0.5)',
+                        color: 'white',
+                        '&:hover': {
+                          bgcolor: 'rgba(0, 0, 0, 0.7)',
+                        },
+                      }}
+                      aria-label={t('common.previous', 'Previous')}
                     >
-                      {t('orders.total', 'Total')}:{' '}
-                      {formatCurrency(order.total_amount, order.currency)}
-                    </Typography>
-                  )}
-                </>
-              )}
+                      <ChevronLeft />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleNextImage}
+                      sx={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        bgcolor: 'rgba(0, 0, 0, 0.5)',
+                        color: 'white',
+                        '&:hover': {
+                          bgcolor: 'rgba(0, 0, 0, 0.7)',
+                        },
+                      }}
+                      aria-label={t('common.next', 'Next')}
+                    >
+                      <ChevronRight />
+                    </IconButton>
+                  </>
+                )}
+
+                {/* Image Counter - Only show if multiple images */}
+                {orderImages.length > 1 && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      bottom: 8,
+                      right: 8,
+                      bgcolor: 'rgba(0, 0, 0, 0.5)',
+                      color: 'white',
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {currentImageIndex + 1} / {orderImages.length}
+                  </Box>
+                )}
+              </Box>
             </Box>
           </Box>
-        </Box>
+        )}
 
-        {/* Addresses */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-            <strong>Pickup:</strong>{' '}
-            {formatAddress(order.business_location?.address)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            <strong>Delivery:</strong> {formatAddress(order.delivery_address)}
-            {profile?.agent?.id &&
-              order.assigned_agent_id &&
-              order.assigned_agent_id === profile.agent.id &&
-              order.client?.user &&
-              'phone_number' in order.client.user &&
-              order.client.user.phone_number && (
-                <> • 📞 {order.client.user.phone_number}</>
-              )}
-          </Typography>
-        </Box>
-
-        {/* Special Instructions */}
-        {order.special_instructions && (
-          <Box sx={{ mb: 2 }}>
+        {/* Fallback when no images */}
+        {orderImages.length === 0 && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 120,
+              bgcolor: 'grey.50',
+              borderRadius: 1,
+              mb: 2,
+            }}
+          >
             <Typography variant="body2" color="text.secondary">
-              <strong>Special Instructions:</strong>{' '}
-              {order.special_instructions}
+              <span
+                role="img"
+                aria-label="package"
+                style={{ fontSize: '2rem' }}
+              >
+                📦
+              </span>
             </Typography>
           </Box>
         )}
@@ -435,20 +515,29 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
 
       {/* Order Completion Confirmation Modal */}
       {userType === 'client' && (
-        <ConfirmationModal
-          open={completeConfirmationOpen}
-          title={t('orders.confirmOrderCompletion', 'Confirm Order Completion')}
-          message={t('orders.confirmOrderCompletionMessage', {
-            orderNumber: order.order_number,
-            defaultValue: `Are you sure you want to complete order #${order.order_number}? This action cannot be undone.`,
-          })}
-          confirmText={t('common.confirm', 'Confirm')}
-          cancelText={t('common.cancel', 'Cancel')}
-          onConfirm={handleConfirmCompleteOrder}
-          onCancel={handleCancelCompleteOrder}
-          confirmColor="success"
-          loading={loading}
-        />
+        <>
+          <ConfirmationModal
+            open={completeConfirmationOpen}
+            title={t(
+              'orders.confirmOrderCompletion',
+              'Confirm Order Completion'
+            )}
+            message={t('orders.confirmOrderCompletionMessage', {
+              orderNumber: order.order_number,
+              defaultValue: `Are you sure you want to complete order #${order.order_number}? This action cannot be undone.`,
+            })}
+            confirmText={t('common.confirm', 'Confirm')}
+            cancelText={t('common.cancel', 'Cancel')}
+            onConfirm={handleConfirmCompleteOrder}
+            onCancel={handleCancelCompleteOrder}
+            confirmColor="success"
+            loading={loading}
+          />
+          <OrderCompletionSuccessDialog
+            open={successModalOpen}
+            onClose={handleCloseSuccessModal}
+          />
+        </>
       )}
     </Card>
   );

@@ -9,12 +9,13 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { APP_FEATURES } from '../../constants/appFeatures';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
-import ClaimOrderDialog from './ClaimOrderDialog';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
+import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
   order: OrderData;
@@ -211,6 +212,44 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     }
   };
 
+  const handleStatusUpdateDirect = async (newStatus: string) => {
+    if (!profile?.id) {
+      onShowNotification?.(
+        t('messages.agentProfileNotFound', 'Agent profile not found'),
+        'error'
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await agentOrders.updateOrderStatusAction(order.id, newStatus);
+      const statusLabels: Record<string, string> = {
+        out_for_delivery: t(
+          'orderActions.markAsOutForDelivery',
+          'Mark as Out for Delivery'
+        ),
+        delivered: t('orderActions.markAsDelivered', 'Mark as Delivered'),
+      };
+      onShowNotification?.(
+        t(
+          'messages.orderStatusUpdated',
+          `Order status updated to ${statusLabels[newStatus] || newStatus}`
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderStatusUpdateError', 'Failed to update order status'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStatusUpdate = async (newStatus: string) => {
     if (!profile?.id) {
       onShowNotification?.(
@@ -223,6 +262,12 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     // Special handling for failed status - show failure reason dialog
     if (newStatus === 'failed') {
       setShowFailDeliveryDialog(true);
+      return;
+    }
+
+    // Direct update for out_for_delivery and delivered (no confirmation)
+    if (newStatus === 'out_for_delivery' || newStatus === 'delivered') {
+      await handleStatusUpdateDirect(newStatus);
       return;
     }
 
@@ -303,10 +348,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         failureReasonId
       );
       onShowNotification?.(
-        t(
-          'messages.orderStatusUpdated',
-          'Order marked as failed successfully'
-        ),
+        t('messages.orderStatusUpdated', 'Order marked as failed successfully'),
         'success'
       );
       setShowFailDeliveryDialog(false);
@@ -314,7 +356,10 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     } catch (error: any) {
       onShowNotification?.(
         error.message ||
-          t('messages.orderStatusUpdateError', 'Failed to mark delivery as failed'),
+          t(
+            'messages.orderStatusUpdateError',
+            'Failed to mark delivery as failed'
+          ),
         'error'
       );
     } finally {
@@ -358,12 +403,15 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         break;
 
       case 'picked_up':
-        actions.push({
-          label: t('orderActions.markAsInTransit', 'Mark as In Transit'),
-          action: () => handleStatusUpdate('in_transit'),
-          color: 'primary' as const,
-          icon: <LocalShipping />,
-        });
+        // Only show "Mark as In Transit" if feature flag is enabled
+        if (APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT) {
+          actions.push({
+            label: t('orderActions.markAsInTransit', 'Mark as In Transit'),
+            action: () => handleStatusUpdate('in_transit'),
+            color: 'primary' as const,
+            icon: <LocalShipping />,
+          });
+        }
         actions.push({
           label: t(
             'orderActions.markAsOutForDelivery',

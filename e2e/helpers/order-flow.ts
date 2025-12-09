@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 
 const CLIENT_EMAIL = 'besongsamueloru+test@gmail.com';
 const CLIENT_PASSWORD = '{Shaddy12}';
@@ -133,8 +133,7 @@ async function businessConfirmOrder(page: Page): Promise<void> {
 
   // Click the "Confirm Order" button in the modal
   await confirmButton.click({ timeout: 10000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 }
 
 export async function businessConfirmAndPrepareOrder(
@@ -155,8 +154,7 @@ export async function businessConfirmAndPrepareOrder(
   // Wait up to 20 seconds for the button to appear (order confirmation might take time)
   await startPreparingButton.waitFor({ state: 'visible', timeout: 20000 });
   await startPreparingButton.click({ timeout: 10000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   // Wait for the order status to update to "preparing" by checking for the "Complete Preparation" button
   // This button only appears when status is "preparing"
@@ -167,30 +165,11 @@ export async function businessConfirmAndPrepareOrder(
   // Wait up to 20 seconds for the button to appear (status update might take time)
   await completePrepButton.waitFor({ state: 'visible', timeout: 20000 });
   await completePrepButton.click({ timeout: 10000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
   // Navigate to home page
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
-}
-
-async function confirmStatusChange(page: Page): Promise<void> {
-  // Wait for the confirmation modal to appear
-  const confirmationModal = page.getByRole('dialog');
-  await confirmationModal.waitFor({ state: 'visible', timeout: 10000 });
-  await page.waitForTimeout(500);
-
-  // Click "Confirm" button in the confirmation modal
-  const confirmButton = confirmationModal.getByRole('button', {
-    name: /confirm/i,
-  });
-  await confirmButton.waitFor({ state: 'visible', timeout: 10000 });
-  await confirmButton.click({ timeout: 10000 });
-
-  // Wait for the modal to close and page to update
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(1000);
 }
 
 export async function agentDeliverOrder(page: Page): Promise<void> {
@@ -212,8 +191,7 @@ export async function agentDeliverOrder(page: Page): Promise<void> {
   await confirmClaimButton.click({ timeout: 10000 });
 
   // Wait for the modal to close and page to update
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   // Navigate to the order details page after claiming
   const orderLink = page
@@ -230,28 +208,21 @@ export async function agentDeliverOrder(page: Page): Promise<void> {
     .getByRole('button', { name: /pick up/i })
     .first()
     .click({ timeout: 15000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
-  // Click "Start delivery" or "In transit" button
+  // Click "Out for delivery" button (no confirmation modal)
   await page
     .getByRole('button', { name: /out for delivery/i })
     .first()
     .click({ timeout: 15000 });
-  // Confirm the status change in the modal
-  await confirmStatusChange(page);
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
-  // Click "Deliver" button
+  // Click "Mark as Delivered" button (no confirmation modal)
   await page
     .getByRole('button', { name: /mark as delivered/i })
     .first()
     .click({ timeout: 15000 });
-  // Confirm the status change in the modal
-  await confirmStatusChange(page);
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 }
 
 export async function clientCompleteOrder(page: Page): Promise<void> {
@@ -260,6 +231,18 @@ export async function clientCompleteOrder(page: Page): Promise<void> {
     .getByRole('button', { name: 'Confirm' })
     .or(page.getByRole('button', { name: /confirm/i }))
     .click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
+
+  // Wait for the success modal to appear
+  const successModal = page.getByRole('dialog');
+  await successModal.waitFor({ state: 'visible', timeout: 10000 });
+  // Verify the success modal contains the congratulatory message
+  // Use .first() since DialogTitle wrapper and Typography both create headings
+  await expect(
+    successModal
+      .getByRole('heading', {
+        name: /order.*successfully completed/i,
+      })
+      .first()
+  ).toBeVisible({ timeout: 10000 });
 }
