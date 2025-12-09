@@ -1,9 +1,7 @@
 import {
   AccessTime,
-  CalendarToday,
   CheckCircle,
   Error as ErrorIcon,
-  Schedule,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -14,7 +12,6 @@ import {
   Grid,
   Skeleton,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -26,6 +23,7 @@ import {
   DeliveryTimeSlot,
   useDeliveryTimeSlots,
 } from '../../hooks/useDeliveryTimeSlots';
+import { useNextAvailableDaySlots } from '../../hooks/useNextAvailableDaySlots';
 
 export interface DeliveryWindowData {
   slot_id: string;
@@ -36,29 +34,95 @@ export interface DeliveryWindowData {
 interface DeliveryTimeWindowSelectorProps {
   countryCode: string;
   stateCode?: string;
-  value: DeliveryWindowData | null;
   onChange: (data: DeliveryWindowData | null) => void;
   isFastDelivery?: boolean;
-  disabled?: boolean;
+  loading?: boolean;
+  validDeliveryWindow?: DeliveryWindowData | null;
+  shouldFetchNextAvailable?: boolean;
 }
 
 const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
   countryCode,
   stateCode,
-  value,
   onChange,
   isFastDelivery = false,
-  disabled = false,
+  loading = false,
+  validDeliveryWindow,
+  shouldFetchNextAvailable = false,
 }) => {
   const { t } = useTranslation();
+
+  // Hook to fetch next available day slots
+  const {
+    date: nextAvailableDate,
+    slots: nextAvailableSlots,
+    loading: loadingNextDay,
+    fetchNextDay,
+  } = useNextAvailableDaySlots(countryCode, stateCode, isFastDelivery);
+
+  // Find next available slot
+  const nextAvailableSlot = useMemo(() => {
+    if (!nextAvailableSlots || nextAvailableSlots.length === 0) {
+      return null;
+    }
+    // Find the first evening slot with availability, or first available slot
+    const eveningSlot = nextAvailableSlots.find(
+      (slot) =>
+        slot.is_available &&
+        slot.available_capacity > 0 &&
+        slot.slot_name.toLowerCase().includes('evening')
+    );
+    return (
+      eveningSlot ||
+      nextAvailableSlots.find(
+        (slot) => slot.is_available && slot.available_capacity > 0
+      ) ||
+      null
+    );
+  }, [nextAvailableSlots]);
+
+  // Fetch next available day when shouldFetchNextAvailable is true and no validDeliveryWindow
+  useEffect(() => {
+    if (
+      shouldFetchNextAvailable &&
+      !validDeliveryWindow &&
+      countryCode &&
+      stateCode
+    ) {
+      fetchNextDay();
+    }
+  }, [
+    shouldFetchNextAvailable,
+    validDeliveryWindow,
+    countryCode,
+    stateCode,
+    fetchNextDay,
+  ]);
+
+  // Initialize with valid delivery window if available, otherwise use next available day/slot
+  const getInitialValue = useCallback(() => {
+    if (validDeliveryWindow?.preferred_date && validDeliveryWindow?.slot_id) {
+      return {
+        date: new Date(validDeliveryWindow.preferred_date),
+        slotId: validDeliveryWindow.slot_id,
+      };
+    }
+    if (nextAvailableDate && nextAvailableSlot?.id) {
+      return {
+        date: new Date(`${nextAvailableDate}T00:00:00`),
+        slotId: nextAvailableSlot.id,
+      };
+    }
+    return null;
+  }, [validDeliveryWindow, nextAvailableDate, nextAvailableSlot]);
+
+  const initialValue = getInitialValue();
+
   const [selectedDate, setSelectedDate] = useState<Date | null>(
-    value?.preferred_date ? new Date(value.preferred_date) : null
+    initialValue?.date || null
   );
   const [selectedSlotId, setSelectedSlotId] = useState<string>(
-    value?.slot_id || ''
-  );
-  const [specialInstructions, setSpecialInstructions] = useState<string>(
-    value?.special_instructions || ''
+    initialValue?.slotId || ''
   );
 
   // Calculate maximum date (30 days from now)
@@ -69,67 +133,53 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
   }, []);
 
   const {
-    slots,
+    slots: fetchedSlots,
     loading: slotsLoading,
     error: slotsError,
-  } = useDeliveryTimeSlots(
-    countryCode,
-    stateCode,
-    selectedDate?.toISOString().split('T')[0],
-    isFastDelivery
-  );
+    fetchSlots,
+  } = useDeliveryTimeSlots();
 
-  // Memoize value properties for stable comparison
-  const valueDate = useMemo(
-    () => value?.preferred_date || null,
-    [value?.preferred_date]
-  );
-  const valueSlotId = useMemo(() => value?.slot_id || null, [value?.slot_id]);
-  const valueInstructions = useMemo(
-    () => value?.special_instructions,
-    [value?.special_instructions]
-  );
+  // Determine which slots to use: from nextAvailableDaySlots if date matches, otherwise fetched slots
+  const selectedDateString = selectedDate?.toISOString().split('T')[0];
+  const useNextAvailableSlots =
+    nextAvailableDate &&
+    selectedDateString &&
+    nextAvailableDate === selectedDateString;
 
-  // Sync internal state when value prop changes
+  const slots = useMemo(() => {
+    if (useNextAvailableSlots) {
+      return nextAvailableSlots;
+    }
+    return fetchedSlots;
+  }, [useNextAvailableSlots, nextAvailableSlots, fetchedSlots]);
+
+  // Fetch slots when date changes and it doesn't match nextAvailableDate
   useEffect(() => {
-    if (value) {
-      if (valueDate) {
-        const newDate = new Date(valueDate);
-        const currentDateStr = selectedDate?.toISOString().split('T')[0];
-        if (currentDateStr !== valueDate) {
-          setSelectedDate(newDate);
-        }
-      } else if (selectedDate) {
-        setSelectedDate(null);
-      }
-
-      if (valueSlotId && valueSlotId !== selectedSlotId) {
-        setSelectedSlotId(valueSlotId);
-      } else if (!valueSlotId && selectedSlotId) {
-        setSelectedSlotId('');
-      }
-
-      if (
-        valueInstructions !== undefined &&
-        valueInstructions !== specialInstructions
-      ) {
-        setSpecialInstructions(valueInstructions || '');
-      }
-    } else {
-      if (selectedDate || selectedSlotId) {
-        setSelectedDate(null);
-        setSelectedSlotId('');
-      }
+    if (
+      selectedDateString &&
+      countryCode &&
+      stateCode &&
+      !useNextAvailableSlots
+    ) {
+      fetchSlots(countryCode, stateCode, selectedDateString, isFastDelivery);
     }
   }, [
-    valueDate,
-    valueSlotId,
-    valueInstructions,
-    selectedDate,
-    selectedSlotId,
-    specialInstructions,
-    value,
+    selectedDateString,
+    countryCode,
+    stateCode,
+    isFastDelivery,
+    useNextAvailableSlots,
+    fetchSlots,
   ]);
+
+  // Sync with validDeliveryWindow or nextAvailableDay/nextAvailableSlot changes
+  useEffect(() => {
+    const initial = getInitialValue();
+    if (initial) {
+      setSelectedDate(initial.date);
+      setSelectedSlotId(initial.slotId);
+    }
+  }, [getInitialValue]);
 
   // Update parent component when form values change
   useEffect(() => {
@@ -137,12 +187,11 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
       onChange({
         slot_id: selectedSlotId,
         preferred_date: selectedDate.toISOString().split('T')[0],
-        special_instructions: specialInstructions || undefined,
       });
     } else {
       onChange(null);
     }
-  }, [selectedDate, selectedSlotId, specialInstructions, onChange]);
+  }, [selectedDate, selectedSlotId, onChange]);
 
   const handleDateChange = useCallback((date: Date | null) => {
     setSelectedDate(date);
@@ -152,11 +201,6 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
 
   const handleSlotChange = useCallback((slotId: string) => {
     setSelectedSlotId(slotId);
-  }, []);
-
-  const formatTimeSlot = useCallback((slot: DeliveryTimeSlot | undefined) => {
-    if (!slot) return '';
-    return `${slot.slot_name} (${slot.start_time} - ${slot.end_time})`;
   }, []);
 
   const getSlotAvailabilityColor = useCallback((slot: DeliveryTimeSlot) => {
@@ -237,22 +281,33 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     return slots.filter((slot) => isTimeSlotValid(slot));
   }, [slots, selectedDate, isTimeSlotValid]);
 
-  if (disabled) {
+  if (loading || loadingNextDay || slotsLoading) {
     return (
-      <Box>
-        <Typography variant="body2" color="text.secondary">
-          {t(
-            'orders.deliveryTimeWindow.disabled',
-            'Delivery time selection is disabled'
-          )}
-        </Typography>
-      </Box>
+      <Stack spacing={3}>
+        {/* Date Selection Skeleton */}
+        <Box>
+          <Skeleton variant="text" width={200} height={24} sx={{ mb: 1 }} />
+          <Skeleton variant="rectangular" height={56} />
+        </Box>
+
+        {/* Time Slot Selection Skeleton */}
+        <Box>
+          <Skeleton variant="text" width={150} height={24} sx={{ mb: 1 }} />
+          <Grid container spacing={2}>
+            {[1, 2, 3].map((i) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
+                <Skeleton variant="rectangular" height={120} />
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      </Stack>
     );
   }
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Stack spacing={3}>
+      <Stack spacing={2}>
         {/* Date Selection */}
         <Box>
           <Typography variant="subtitle1" gutterBottom>
@@ -265,7 +320,6 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
             value={selectedDate}
             onChange={handleDateChange}
             maxDate={maxDate}
-            disabled={disabled}
             slotProps={{
               textField: {
                 fullWidth: true,
@@ -398,76 +452,6 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
               </Grid>
             )}
           </Box>
-        )}
-
-        {/* Special Instructions */}
-        {selectedDate && selectedSlotId && (
-          <Box>
-            <Typography variant="subtitle1" gutterBottom>
-              {t(
-                'orders.deliveryTimeWindow.specialInstructions',
-                'Special delivery instructions'
-              )}
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              variant="outlined"
-              placeholder={t(
-                'orders.deliveryTimeWindow.instructionsPlaceholder',
-                'Any special instructions for delivery...'
-              )}
-              value={specialInstructions}
-              onChange={(e) => setSpecialInstructions(e.target.value)}
-              disabled={disabled}
-            />
-          </Box>
-        )}
-
-        {/* Summary */}
-        {selectedDate && selectedSlotId && (
-          <Card
-            sx={{
-              bgcolor: 'primary.50',
-              border: 1,
-              borderColor: 'primary.200',
-            }}
-          >
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom color="primary">
-                {t('orders.deliveryTimeWindow.summary', 'Delivery Summary')}
-              </Typography>
-              <Stack spacing={1}>
-                <Box display="flex" alignItems="center">
-                  <CalendarToday
-                    sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }}
-                  />
-                  <Typography variant="body2">
-                    {selectedDate.toLocaleDateString()}
-                  </Typography>
-                </Box>
-                <Box display="flex" alignItems="center">
-                  <Schedule
-                    sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }}
-                  />
-                  <Typography variant="body2">
-                    {formatTimeSlot(
-                      filteredSlots.find((s) => s.id === selectedSlotId)
-                    )}
-                  </Typography>
-                </Box>
-                {specialInstructions && (
-                  <Typography variant="body2" color="text.secondary">
-                    {t(
-                      'orders.deliveryTimeWindow.withInstructions',
-                      'With special instructions'
-                    )}
-                  </Typography>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
         )}
       </Stack>
     </LocalizationProvider>

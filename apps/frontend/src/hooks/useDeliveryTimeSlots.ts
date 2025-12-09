@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
 export interface DeliveryTimeSlot {
@@ -15,69 +15,71 @@ export interface UseDeliveryTimeSlotsResult {
   slots: DeliveryTimeSlot[];
   loading: boolean;
   error: string | null;
-  refreshSlots: () => Promise<void>;
+  fetchSlots: (
+    countryCode: string,
+    stateCode: string,
+    date: string,
+    isFastDelivery?: boolean
+  ) => Promise<void>;
 }
 
-export const useDeliveryTimeSlots = (
-  countryCode?: string,
-  stateCode?: string,
-  date?: string,
-  isFastDelivery?: boolean
-): UseDeliveryTimeSlotsResult => {
+export const useDeliveryTimeSlots = (): UseDeliveryTimeSlotsResult => {
   const apiClient = useApiClient();
   const [slots, setSlots] = useState<DeliveryTimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshSlots = useCallback(async () => {
-    if (!countryCode || !stateCode || !date) {
-      setSlots([]);
-      return;
-    }
+  const fetchSlots = useCallback(
+    async (
+      countryCode: string,
+      stateCode: string,
+      date: string,
+      isFastDelivery?: boolean
+    ) => {
+      setLoading(true);
+      setError(null);
 
-    setLoading(true);
-    setError(null);
+      try {
+        const params = new URLSearchParams({
+          countryCode,
+          stateCode,
+          date,
+          ...(isFastDelivery !== undefined && {
+            isFastDelivery: isFastDelivery.toString(),
+          }),
+        });
 
-    try {
-      const params = new URLSearchParams({
-        countryCode,
-        stateCode,
-        date,
-        ...(isFastDelivery !== undefined && {
-          isFastDelivery: isFastDelivery.toString(),
-        }),
-      });
-
-      const response = await apiClient.get(`/delivery-windows/slots?${params}`);
-
-      if (response.data.success) {
-        setSlots(response.data.slots);
-      } else {
-        throw new Error(
-          response.data.error || 'Failed to fetch delivery slots'
+        const response = await apiClient.get(
+          `/delivery-windows/slots?${params}`
         );
-      }
-    } catch (err: unknown) {
-      const errorMessage =
-        (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error ||
-        (err as Error)?.message ||
-        'Failed to fetch delivery time slots';
-      setError(errorMessage);
-      console.error('Failed to fetch delivery slots:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [countryCode, stateCode, date, isFastDelivery, apiClient]);
 
-  useEffect(() => {
-    refreshSlots();
-  }, [refreshSlots]);
+        if (response.data.success) {
+          setSlots(response.data.slots);
+        } else {
+          throw new Error(
+            response.data.error || 'Failed to fetch delivery slots'
+          );
+        }
+      } catch (err: unknown) {
+        const errorMessage =
+          (err as { response?: { data?: { error?: string } } })?.response?.data
+            ?.error ||
+          (err as Error)?.message ||
+          'Failed to fetch delivery time slots';
+        setError(errorMessage);
+        setSlots([]);
+        console.error('Failed to fetch delivery slots:', err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiClient]
+  );
 
   return {
     slots,
     loading,
     error,
-    refreshSlots,
+    fetchSlots,
   };
 };

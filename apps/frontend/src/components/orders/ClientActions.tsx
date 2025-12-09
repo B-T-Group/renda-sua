@@ -1,5 +1,15 @@
-import { Cancel, CheckCircle } from '@mui/icons-material';
-import { Box, Button, CircularProgress } from '@mui/material';
+import { Cancel, Celebration, CheckCircle } from '@mui/icons-material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+} from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
@@ -29,6 +39,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [completeConfirmationOpen, setCompleteConfirmationOpen] =
     useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -54,11 +65,16 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     setLoading(true);
     try {
       await completeOrder({ orderId: order.id });
+      setCompleteConfirmationOpen(false);
+      setSuccessModalOpen(true);
       onShowNotification?.(
         t('messages.orderCompleteSuccess', 'Order completed successfully'),
         'success'
       );
-      onActionComplete?.();
+      // Delay onActionComplete to ensure modal is visible first
+      setTimeout(() => {
+        onActionComplete?.();
+      }, 100);
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -67,7 +83,6 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
-      setCompleteConfirmationOpen(false);
     }
   };
 
@@ -111,40 +126,43 @@ const ClientActions: React.FC<ClientActionsProps> = ({
 
   const availableActions = getAvailableActions();
 
-  if (availableActions.length === 0) {
+  // Don't return null if success modal is open - keep it visible even after status change
+  if (availableActions.length === 0 && !successModalOpen) {
     return null;
   }
 
   return (
     <>
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        {availableActions.map((action, index) => (
-          <Button
-            key={index}
-            variant="outlined"
-            color={action.color}
-            onClick={action.action}
-            disabled={loading && action.action === handleCompleteOrderClick}
-            startIcon={
-              loading && action.action === handleCompleteOrderClick ? (
-                <CircularProgress size={16} />
-              ) : (
-                action.icon
-              )
-            }
-            sx={{ minWidth: 120 }}
-          >
-            {action.label}
-          </Button>
-        ))}
-      </Box>
+      {availableActions.length > 0 && (
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+          }}
+        >
+          {availableActions.map((action, index) => (
+            <Button
+              key={index}
+              variant="outlined"
+              color={action.color}
+              onClick={action.action}
+              disabled={loading && action.action === handleCompleteOrderClick}
+              startIcon={
+                loading && action.action === handleCompleteOrderClick ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  action.icon
+                )
+              }
+              sx={{ minWidth: 120 }}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </Box>
+      )}
 
       {/* Cancellation Reason Modal */}
       <CancellationReasonModal
@@ -170,6 +188,73 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         confirmColor="success"
         loading={loading}
       />
+
+      {/* Order Completion Success Modal */}
+      <Dialog
+        open={successModalOpen}
+        onClose={() => setSuccessModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            textAlign: 'center',
+          },
+        }}
+      >
+        <DialogTitle>
+          <Stack spacing={2} alignItems="center">
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                bgcolor: 'success.light',
+                color: 'success.main',
+                mx: 'auto',
+              }}
+            >
+              <Celebration sx={{ fontSize: 40 }} />
+            </Box>
+            <Typography variant="h5" fontWeight="bold" color="success.main">
+              {t(
+                'orders.orderCompletionSuccessTitle',
+                '🎉 Order Successfully Completed!'
+              )}
+            </Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} alignItems="center">
+            <Typography variant="body1" color="text.secondary">
+              {t(
+                'orders.orderCompletionSuccessMessage',
+                'Congratulations! Your order has been successfully completed. We hope you enjoyed your purchase and look forward to serving you again soon!'
+              )}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {t(
+                'orders.orderCompletionThankYou',
+                'Thank you for choosing our service!'
+              )}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+          <Button
+            onClick={() => setSuccessModalOpen(false)}
+            variant="contained"
+            color="success"
+            size="large"
+            sx={{ minWidth: 150 }}
+          >
+            {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

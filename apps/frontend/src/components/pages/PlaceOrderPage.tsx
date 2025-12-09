@@ -209,7 +209,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Typography>
           </Box>
 
-
           <Divider sx={{ my: 1.5 }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
@@ -1127,10 +1126,9 @@ const PlaceOrderPage: React.FC = () => {
                     <DeliveryTimeWindowSelector
                       countryCode={selectedAddress.country}
                       stateCode={selectedAddress.state}
-                      value={deliveryWindow}
                       onChange={handleDeliveryWindowChange}
                       isFastDelivery={requiresFastDelivery}
-                      disabled={loading}
+                      loading={loading}
                     />
                   </CardContent>
                 </Card>

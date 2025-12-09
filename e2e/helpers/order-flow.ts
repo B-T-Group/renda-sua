@@ -175,39 +175,81 @@ export async function businessConfirmAndPrepareOrder(
   await page.waitForTimeout(2000);
 }
 
-async function waitAndReload(page: Page): Promise<void> {
+async function confirmStatusChange(page: Page): Promise<void> {
+  // Wait for the confirmation modal to appear
+  const confirmationModal = page.getByRole('dialog');
+  await confirmationModal.waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(500);
+
+  // Click "Confirm" button in the confirmation modal
+  const confirmButton = confirmationModal.getByRole('button', {
+    name: /confirm/i,
+  });
+  await confirmButton.waitFor({ state: 'visible', timeout: 10000 });
+  await confirmButton.click({ timeout: 10000 });
+
+  // Wait for the modal to close and page to update
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(3000);
-  await page.reload();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1000);
 }
 
 export async function agentDeliverOrder(page: Page): Promise<void> {
+  // Click the "Claim Order" button
   await page.getByRole('button', { name: /claim/i }).first().click();
   await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1000);
+
+  // Wait for the confirmation modal to appear
+  const confirmationModal = page.getByRole('dialog');
+  await confirmationModal.waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(500);
+
+  // Click "Claim Order" button in the confirmation modal
+  const confirmClaimButton = confirmationModal.getByRole('button', {
+    name: /claim order/i,
+  });
+  await confirmClaimButton.waitFor({ state: 'visible', timeout: 10000 });
+  await confirmClaimButton.click({ timeout: 10000 });
+
+  // Wait for the modal to close and page to update
+  await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(3000);
+
+  // Navigate to the order details page after claiming
   const orderLink = page
     .getByRole('link', { name: /details|view/i })
     .or(page.locator('a[href*="/orders/"]'))
     .first();
+  await orderLink.waitFor({ state: 'visible', timeout: 10000 });
   await orderLink.click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
+
+  // Click "Pick up" button (no confirmation modal for pick up)
   await page
     .getByRole('button', { name: /pick up/i })
     .first()
     .click({ timeout: 15000 });
-  await waitAndReload(page);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+
+  // Click "Start delivery" or "In transit" button
   await page
-    .getByRole('button', { name: /start delivery|in transit/i })
+    .getByRole('button', { name: /out for delivery/i })
     .first()
     .click({ timeout: 15000 });
-  await waitAndReload(page);
+  // Confirm the status change in the modal
+  await confirmStatusChange(page);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+
+  // Click "Deliver" button
   await page
-    .getByRole('button', { name: /deliver/i })
+    .getByRole('button', { name: /mark as delivered/i })
     .first()
     .click({ timeout: 15000 });
+  // Confirm the status change in the modal
+  await confirmStatusChange(page);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
 }

@@ -19,13 +19,11 @@ import {
   Radio,
   RadioGroup,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmOrderData } from '../../hooks/useBackendOrders';
-import { useNextAvailableDaySlots } from '../../hooks/useNextAvailableDaySlots';
 import type { OrderData } from '../../hooks/useOrderById';
 import DeliveryTimeWindowSelector from '../common/DeliveryTimeWindowSelector';
 
@@ -64,7 +62,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     preferred_date: string;
     special_instructions?: string;
   } | null>(null);
-  const [notes, setNotes] = useState<string>('');
   const [error, setError] = useState<string>('');
 
   // Calculate existing windows using optional chaining
@@ -75,68 +72,35 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const existingWindows = allExistingWindows;
   const hasExistingWindows = existingWindows.length > 0;
 
-  // Hook to fetch next available day slots
-  const {
-    date: nextAvailableDate,
-    slots: nextAvailableSlots,
-    loading: loadingNextDay,
-    fetchNextDay,
-  } = useNextAvailableDaySlots(
-    order?.delivery_address?.country,
-    order?.delivery_address?.state,
-    order?.requires_fast_delivery
-  );
-
-  // Check if newWindowData has a valid future date
-  const hasValidNewWindowData = useMemo(() => {
-    if (!newWindowData || !newWindowData.preferred_date) return false;
-    const valueDate = new Date(newWindowData.preferred_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    valueDate.setHours(0, 0, 0, 0);
-    return valueDate >= today;
-  }, [newWindowData]);
-
-  // Determine initial value for DeliveryTimeWindowSelector
-  // Use newWindowData if valid, otherwise use next available day results
-  const initialWindowValue = useMemo(() => {
-    if (hasValidNewWindowData && newWindowData) {
-      return newWindowData;
-    }
+  // Find valid delivery window from order (first valid one)
+  const validDeliveryWindow = useMemo(() => {
     if (
-      nextAvailableDate &&
-      Array.isArray(nextAvailableSlots) &&
-      nextAvailableSlots.length > 0
+      !order?.delivery_time_windows ||
+      order.delivery_time_windows.length === 0
     ) {
-      // Find the first evening slot with availability
-      const eveningSlot = nextAvailableSlots.find(
-        (slot) =>
-          slot.is_available &&
-          slot.available_capacity > 0 &&
-          slot.slot_name.toLowerCase().includes('evening')
-      );
+      return null;
+    }
+    // Find first valid window (not expired, not in the past)
+    const now = new Date();
+    const validWindow = order.delivery_time_windows.find((window) => {
+      const windowDate = new Date(window.preferred_date);
+      windowDate.setHours(23, 59, 59, 999);
+      return windowDate >= now;
+    });
 
-      // If evening slot found, use it; otherwise fall back to first available slot
-      const selectedSlot =
-        eveningSlot ||
-        nextAvailableSlots.find(
-          (slot) => slot.is_available && slot.available_capacity > 0
-        );
-
-      if (selectedSlot && selectedSlot.id) {
+    if (validWindow) {
+      const windowWithSlotId = validWindow as DeliveryWindowOption & {
+        slot_id?: string;
+      };
+      if (windowWithSlotId.slot_id) {
         return {
-          slot_id: selectedSlot.id,
-          preferred_date: nextAvailableDate,
+          slot_id: windowWithSlotId.slot_id,
+          preferred_date: validWindow.preferred_date,
         };
       }
     }
     return null;
-  }, [
-    hasValidNewWindowData,
-    newWindowData,
-    nextAvailableDate,
-    nextAvailableSlots,
-  ]);
+  }, [order]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -144,36 +108,15 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       setSelectedWindowId('');
       setCreateNewWindow(false);
       setNewWindowData(null);
-      setNotes('');
       setError('');
-
-      // Fetch next available day when modal opens and no existing windows
-      if (!hasExistingWindows && order) {
-        fetchNextDay();
-      }
     }
-  }, [open, hasExistingWindows, order, fetchNextDay]);
+  }, [open]);
 
-  const handleWindowSelection = useCallback(
-    (windowId: string) => {
-      setSelectedWindowId(windowId);
-      setCreateNewWindow(false);
-      setNewWindowData(null);
-
-      // Prefill delivery instructions from the selected window's special_instructions
-      if (order) {
-        const selectedWindow = order.delivery_time_windows?.find(
-          (w) => w.id === windowId
-        );
-        if (selectedWindow?.special_instructions) {
-          setNotes(selectedWindow.special_instructions);
-        } else {
-          setNotes('');
-        }
-      }
-    },
-    [order]
-  );
+  const handleWindowSelection = useCallback((windowId: string) => {
+    setSelectedWindowId(windowId);
+    setCreateNewWindow(false);
+    setNewWindowData(null);
+  }, []);
 
   const handleCreateNewWindow = useCallback(() => {
     setCreateNewWindow(true);
@@ -245,20 +188,9 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       }
     }
 
-    // Validate new window if creating new one
-    if (newWindowData) {
-      const now = new Date();
-      const windowDate = new Date(newWindowData.preferred_date);
-      // Backend will handle time validation
-      if (windowDate.toDateString() === now.toDateString()) {
-        // Backend will validate if it's today
-      }
-    }
-
     try {
       const confirmData: ConfirmOrderData = {
         orderId: order.id,
-        notes: notes.trim() || undefined,
       };
 
       if (selectedWindowId) {
@@ -278,7 +210,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   }, [
     selectedWindowId,
     newWindowData,
-    notes,
     order,
     onConfirm,
     onClose,
@@ -296,7 +227,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
       maxWidth="md"
       fullWidth
       PaperProps={{
-        sx: { minHeight: '600px' },
+        sx: { maxHeight: '90vh' },
       }}
     >
       <DialogTitle>
@@ -317,16 +248,13 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent>
-        <Stack spacing={3}>
+      <DialogContent sx={{ pb: 2 }}>
+        <Stack spacing={2}>
           {/* Order Summary */}
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t('orders.confirmModal.orderSummary', 'Order Summary')}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Box sx={{ flex: '1 1 200px' }}>
+            <CardContent sx={{ py: 2 }}>
+              <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                <Box>
                   <Typography variant="body2" color="text.secondary">
                     {t('orders.confirmModal.totalAmount', 'Total Amount')}
                   </Typography>
@@ -342,7 +270,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     )}
                   </Typography>
                 </Box>
-                <Box sx={{ flex: '1 1 200px' }}>
+                <Box>
                   <Typography variant="body2" color="text.secondary">
                     {t('orders.confirmModal.items', 'Items')}
                   </Typography>
@@ -360,7 +288,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
 
           {/* Delivery Window Selection */}
           <Card>
-            <CardContent>
+            <CardContent sx={{ py: 2 }}>
               <Typography variant="h6" gutterBottom>
                 {t(
                   'orders.confirmModal.deliveryWindow',
@@ -386,7 +314,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                     onChange={(e) => handleWindowSelection(e.target.value)}
                   >
                     {existingWindows.map((window) => (
-                      <Card key={window.id} sx={{ mb: 2, p: 2 }}>
+                      <Card key={window.id} sx={{ mb: 1.5, p: 1.5 }}>
                         <FormControlLabel
                           value={window.id}
                           control={<Radio />}
@@ -497,40 +425,20 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   <DeliveryTimeWindowSelector
                     countryCode={order.delivery_address.country}
                     stateCode={order.delivery_address.state}
-                    value={initialWindowValue}
                     onChange={handleNewWindowChange}
                     isFastDelivery={order.requires_fast_delivery}
-                    disabled={loading || loadingNextDay}
+                    loading={loading}
+                    validDeliveryWindow={validDeliveryWindow}
+                    shouldFetchNextAvailable={!hasExistingWindows}
                   />
                 </Box>
               )}
             </CardContent>
           </Card>
-
-          {/* Notes Field */}
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t('orders.confirmModal.notes', 'Confirmation Notes')}
-              </Typography>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t(
-                  'orders.confirmModal.notesPlaceholder',
-                  'Add any notes about this confirmation...'
-                )}
-                disabled={loading}
-              />
-            </CardContent>
-          </Card>
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3 }}>
+      <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose} disabled={loading}>
           {t('common.cancel', 'Cancel')}
         </Button>

@@ -1208,6 +1208,9 @@
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
+    "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",
+    "orderCompletionSuccessMessage": "Congratulations! Your order has been successfully completed. We hope you enjoyed your purchase and look forward to serving you again soon!",
+    "orderCompletionThankYou": "Thank you for choosing our service!",
     "confirmModal": {
       "title": "Confirm Order",
       "orderSummary": "Order Summary",
@@ -1249,6 +1252,7 @@
     "deliveryCommission": "Delivery Commission",
     "earnings": "Your Earnings",
     "fastDeliveryFee": "Fast Delivery Fee",
+    "standardDelivery": "Standard",
     "deliveryFees": "Delivery Fees",
     "deliveryTo": "Delivery to",
     "details": "Details",

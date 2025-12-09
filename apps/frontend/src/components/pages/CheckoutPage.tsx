@@ -479,10 +479,9 @@ const CheckoutPage: React.FC = () => {
               <DeliveryTimeWindowSelector
                 countryCode={selectedAddress?.country || 'GA'}
                 stateCode={selectedAddress?.state}
-                value={deliveryWindow}
                 onChange={handleDeliveryWindowChange}
                 isFastDelivery={requiresFastDelivery}
-                disabled={checkoutLoading}
+                loading={checkoutLoading}
               />
             </CardContent>
           </Card>

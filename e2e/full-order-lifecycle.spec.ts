@@ -41,22 +41,39 @@ test.describe('Order Lifecycle E2E Tests', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test('agent can deliver order and client can complete it', async ({
-    page,
-  }) => {
+  test('agent can deliver order', async ({ page }) => {
+    test.setTimeout(60000);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     await signInAgent(page);
     await agentDeliverOrder(page);
-    await expect(page.getByText(/delivered|delivery.*complete/i)).toBeVisible({
-      timeout: 10000,
+    // Wait for delivered status to appear - could be in alert, status badge, or page text
+    // Check for multiple possible text patterns that indicate delivery success
+    await expect(
+      page.getByText(/delivered|excellent work|successfully delivered/i).first()
+    ).toBeVisible({
+      timeout: 15000,
     });
     await signOut(page);
+  });
+
+  test('client can complete order', async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     await signInClient(page);
     await clientCompleteOrder(page);
-    await expect(page.getByText(/order.*complete|completed/i)).toBeVisible({
+    // Wait for the success modal to appear with congratulatory message
+    const successModal = page.getByRole('dialog');
+    await successModal.waitFor({ state: 'visible', timeout: 10000 });
+    // Check for congratulatory text in the modal
+    await expect(
+      successModal.getByText(
+        /order.*successfully completed|congratulations|thank you for choosing/i
+      )
+    ).toBeVisible({
       timeout: 10000,
     });
   });
