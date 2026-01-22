@@ -151,7 +151,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               'agent.orders.inTransitByYou',
               `Order in transit. You're almost there! Complete the delivery to earn ${formatCurrency(
                 getDeliveryFee()
-              )}. Update the customer on your ETA.`
+              )}. Update the customer on your ETA.`,
+              {
+                deliveryFee: formatCurrency(getDeliveryFee()),
+              }
             ),
           });
         } else {
@@ -173,7 +176,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               'agent.orders.outForDeliveryByYou',
               `Final step! You're out for delivery. Complete this delivery to earn ${formatCurrency(
                 getDeliveryFee()
-              )}. Make sure to get confirmation from the customer.`
+              )}. Make sure to get confirmation from the customer.`,
+              {
+                deliveryFee: formatCurrency(getDeliveryFee()),
+              }
             ),
           });
         } else {
@@ -220,7 +226,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               'agent.orders.completedByYou',
               `✅ Order completed! Your ${formatCurrency(
                 getDeliveryFee()
-              )} delivery payment has been processed. Thank you for your excellent service!`
+              )} delivery payment has been processed. Thank you for your excellent service!`,
+              {
+                deliveryFee: formatCurrency(getDeliveryFee()),
+              }
             ),
           });
         } else {
