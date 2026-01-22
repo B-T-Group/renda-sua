@@ -1298,7 +1298,8 @@
       "pending": "Pending confirmation",
       "timeSlot": "Time Slot",
       "slotName": "Slot",
-      "confirmedAt": "Confirmed at"
+      "confirmedAt": "Confirmed at",
+      "confirmedBy": "Confirmed by"
     },
     "failDelivery": {
       "title": "Mark Delivery as Failed",

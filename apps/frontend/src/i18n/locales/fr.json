@@ -1304,7 +1304,8 @@
       "pending": "En attente de confirmation",
       "timeSlot": "Créneau horaire",
       "slotName": "Créneau",
-      "confirmedAt": "Confirmé à"
+      "confirmedAt": "Confirmé à",
+      "confirmedBy": "Confirmé par"
     },
     "failDelivery": {
       "title": "Marquer la livraison comme échouée",

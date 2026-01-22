@@ -126,7 +126,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               'agent.orders.pickedUpByYou',
               `You've picked up this order. Deliver it promptly to earn your ${formatCurrency(
                 getDeliveryFee()
-              )} delivery fee. Keep the customer informed of your progress.`
+              )} delivery fee. Keep the customer informed of your progress.`,
+              {
+                deliveryFee: formatCurrency(getDeliveryFee()),
+              }
             ),
           });
         } else {
@@ -192,7 +195,10 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
               'agent.orders.deliveredByYou',
               `🎉 Excellent work! You've successfully delivered this order and earned ${formatCurrency(
                 getDeliveryFee()
-              )}. Payment will be processed shortly.`
+              )}. Payment will be processed shortly.`,
+              {
+                deliveryFee: formatCurrency(getDeliveryFee()),
+              }
             ),
           });
         } else {
