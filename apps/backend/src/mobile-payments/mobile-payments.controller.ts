@@ -115,11 +115,8 @@ export class MobilePaymentsController {
   @Post('initiate')
   async initiatePayment(@Body() paymentRequest: InitiatePaymentDto) {
     try {
-      // Validate account balance for GIVE_CHANGE transactions
-      if (
-        paymentRequest.transactionType === 'GIVE_CHANGE' &&
-        paymentRequest.accountId
-      ) {
+      // Validate account balance if accountId is provided
+      if (paymentRequest.accountId) {
         const accountBalance = await this.accountsService.getAccountBalance(
           paymentRequest.accountId
         );
@@ -135,20 +132,39 @@ export class MobilePaymentsController {
           );
         }
 
-        if (accountBalance.availableBalance < paymentRequest.amount) {
+        // Explicitly check for negative balance (applies to all transaction types)
+        if (Number(accountBalance.availableBalance) < 0) {
           throw new HttpException(
             {
               success: false,
-              message: 'Insufficient funds',
-              error: 'INSUFFICIENT_FUNDS',
+              message: 'Account balance is negative. Please top up your account before initiating payments.',
+              error: 'NEGATIVE_BALANCE',
               data: {
-                required: paymentRequest.amount,
-                available: accountBalance.availableBalance,
-                currency: paymentRequest.currency,
+                currentBalance: accountBalance.availableBalance,
+                currency: accountBalance.currency,
               },
             },
             HttpStatus.BAD_REQUEST
           );
+        }
+
+        // Validate sufficient funds for GIVE_CHANGE transactions
+        if (paymentRequest.transactionType === 'GIVE_CHANGE') {
+          if (accountBalance.availableBalance < paymentRequest.amount) {
+            throw new HttpException(
+              {
+                success: false,
+                message: 'Insufficient funds',
+                error: 'INSUFFICIENT_FUNDS',
+                data: {
+                  required: paymentRequest.amount,
+                  available: accountBalance.availableBalance,
+                  currency: paymentRequest.currency,
+                },
+              },
+              HttpStatus.BAD_REQUEST
+            );
+          }
         }
       }
 
