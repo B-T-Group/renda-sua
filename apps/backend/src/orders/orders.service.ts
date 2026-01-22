@@ -1022,7 +1022,17 @@ export class OrdersService {
         `No account found for currency ${order.currency}`,
         HttpStatus.BAD_REQUEST
       );
-    if (agentAccount.available_balance < holdAmount)
+    
+    // Explicitly check for negative balance
+    if (Number(agentAccount.available_balance) < 0) {
+      throw new HttpException(
+        `Account balance is negative. Please top up your account before claiming orders. Current balance: ${agentAccount.available_balance} ${order.currency}`,
+        HttpStatus.FORBIDDEN
+      );
+    }
+    
+    // Check if available balance is sufficient for hold amount
+    if (Number(agentAccount.available_balance) < holdAmount)
       throw new HttpException(
         `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
         HttpStatus.FORBIDDEN
@@ -3322,50 +3332,50 @@ export class OrdersService {
           this.configService.get('notification').orderStatusChangeEnabled;
 
         if (notificationsEnabled) {
-          // Validate required data before creating notification data
-          if (!order.business_location?.business?.name) {
-            throw new Error('Business name is undefined');
-          }
-          if (!order.business_location?.business?.user?.email) {
-            throw new Error('Business email is undefined');
-          }
-          if (!order.delivery_address) {
-            throw new Error('Delivery address is undefined');
-          }
+        // Validate required data before creating notification data
+        if (!order.business_location?.business?.name) {
+          throw new Error('Business name is undefined');
+        }
+        if (!order.business_location?.business?.user?.email) {
+          throw new Error('Business email is undefined');
+        }
+        if (!order.delivery_address) {
+          throw new Error('Delivery address is undefined');
+        }
 
-          const notificationData: NotificationData = {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            clientName: `${order.client?.user?.first_name || ''} ${
-              order.client?.user?.last_name || ''
-            }`.trim(),
-            clientEmail: order.client?.user?.email,
-            businessName: order.business_location.business.name,
-            businessEmail: order.business_location.business.user.email,
+        const notificationData: NotificationData = {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          clientName: `${order.client?.user?.first_name || ''} ${
+            order.client?.user?.last_name || ''
+          }`.trim(),
+          clientEmail: order.client?.user?.email,
+          businessName: order.business_location.business.name,
+          businessEmail: order.business_location.business.user.email,
             businessVerified:
               order.business_location.business.is_verified || false,
-            orderStatus: order.current_status,
-            orderItems:
-              order.order_items?.map((item: any) => ({
-                name: item.item_name || 'Unknown Item',
-                quantity: item.quantity || 0,
-                unitPrice: item.unit_price || 0,
-                totalPrice: item.total_price || 0,
-              })) || [],
-            subtotal: order.subtotal || 0,
+          orderStatus: order.current_status,
+          orderItems:
+            order.order_items?.map((item: any) => ({
+              name: item.item_name || 'Unknown Item',
+              quantity: item.quantity || 0,
+              unitPrice: item.unit_price || 0,
+              totalPrice: item.total_price || 0,
+            })) || [],
+          subtotal: order.subtotal || 0,
             deliveryFee: order.base_delivery_fee || 0,
             fastDeliveryFee: order.per_km_delivery_fee || 0,
-            taxAmount: order.tax_amount || 0,
-            totalAmount: order.total_amount || 0,
-            currency: order.currency || 'USD',
-            deliveryAddress: this.formatAddress(order.delivery_address),
+          taxAmount: order.tax_amount || 0,
+          totalAmount: order.total_amount || 0,
+          currency: order.currency || 'USD',
+          deliveryAddress: this.formatAddress(order.delivery_address),
             estimatedDeliveryTime: order.estimated_delivery_time || undefined,
             specialInstructions: order.special_instructions || undefined,
-          };
+        };
 
-          await this.notificationsService.sendOrderCreatedNotifications(
-            notificationData
-          );
+        await this.notificationsService.sendOrderCreatedNotifications(
+          notificationData
+        );
         } else {
           this.logger.log(
             `Order creation notifications disabled for order ${order.order_number}`
@@ -3794,14 +3804,14 @@ export class OrdersService {
         );
       }
 
-      if (!businessInventory.is_active) {
-        throw new Error(
-          `Item ${businessInventory.item.name} is not currently available`
-        );
-      }
+    if (!businessInventory.is_active) {
+      throw new Error(
+        `Item ${businessInventory.item.name} is not currently available`
+      );
+    }
 
       if (item.quantity > businessInventory.computed_available_quantity) {
-        throw new Error(
+      throw new Error(
           `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${item.quantity}`
         );
       }
@@ -4419,18 +4429,18 @@ export class OrdersService {
 
     // Release holds first
     if (order.assigned_agent) {
-      const agentAccount = await this.hasuraSystemService.getAccount(
-        order.assigned_agent.user_id,
-        order.currency
-      );
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      order.assigned_agent.user_id,
+      order.currency
+    );
 
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: orderHold.agent_hold_amount,
-        transactionType: 'release',
-        memo: `Hold released for order ${order.order_number}`,
-        referenceId: referenceId,
-      });
+    await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: orderHold.agent_hold_amount,
+      transactionType: 'release',
+      memo: `Hold released for order ${order.order_number}`,
+      referenceId: referenceId,
+    });
     }
 
     const clientAccount = await this.hasuraSystemService.getAccount(
@@ -4799,7 +4809,7 @@ export class OrdersService {
           ? this.deliveryConfigService.getFastDeliveryBaseFee(countryCode)
           : this.deliveryConfigService.getNormalDeliveryBaseFee(countryCode),
         this.deliveryConfigService.getPerKmDeliveryFee(countryCode),
-      ]);
+        ]);
 
       // Use fallback values if configurations are not found
       const finalBaseFee = baseFee || (requiresFastDelivery ? 1500 : 1000);
@@ -4915,7 +4925,7 @@ export class OrdersService {
         (item) => !item.business_inventory_id || !item.quantity
       );
       if (invalidItems.length > 0) {
-        this.logger.warn(
+          this.logger.warn(
           `Skipping ${
             invalidItems.length
           } items with missing data: ${JSON.stringify(invalidItems)}`
@@ -4931,14 +4941,14 @@ export class OrdersService {
       const getCurrentQuantitiesQuery = `
         query GetCurrentReservedQuantities($ids: [uuid!]!) {
           business_inventory(where: { id: { _in: $ids } }) {
-            id
-            reserved_quantity
-            quantity
+              id
+              reserved_quantity
+              quantity
+            }
           }
-        }
-      `;
+        `;
 
-      const currentData = await this.hasuraSystemService.executeQuery(
+        const currentData = await this.hasuraSystemService.executeQuery(
         getCurrentQuantitiesQuery,
         { ids: businessInventoryIds }
       );
