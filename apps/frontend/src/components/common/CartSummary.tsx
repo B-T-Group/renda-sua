@@ -38,10 +38,13 @@ const CartSummary: React.FC<CartSummaryProps> = ({
   const cartTotal = getCartTotal();
   const cartByBusiness = getCartByBusiness();
 
-  const formatCurrency = (amount: number, currency = 'USD') => {
+  // Get currency from cart items (all items should have the same currency)
+  const currency = cartItems.length > 0 ? cartItems[0].itemData.currency : 'USD';
+
+  const formatCurrency = (amount: number, currencyCode: string = currency) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency,
+      currency: currencyCode,
     }).format(amount);
   };
 

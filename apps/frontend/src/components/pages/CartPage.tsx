@@ -235,7 +235,7 @@ const CartPage: React.FC = () => {
                   {t('cart.subtotal', 'Subtotal')} ({t('cart.itemCount', '{{count}} item(s)', { count: cartItems.length })})
                 </Typography>
                 <Typography variant="body2">
-                  {formatCurrency(Number(cartTotal) || 0)}
+                  {formatCurrency(Number(cartTotal) || 0, cartItems[0].itemData.currency)}
                 </Typography>
               </Box>
 
@@ -258,7 +258,7 @@ const CartPage: React.FC = () => {
             >
               <Typography variant="h6">{t('cart.total', 'Total')}</Typography>
               <Typography variant="h6" color="primary">
-                {formatCurrency(Number(cartTotal) || 0)}
+                {formatCurrency(Number(cartTotal) || 0, cartItems[0].itemData.currency)}
               </Typography>
             </Box>
 

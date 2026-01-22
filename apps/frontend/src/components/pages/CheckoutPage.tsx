@@ -86,6 +86,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     0
   );
   const total = subtotal + (deliveryFee || 0) + fastDeliveryFee;
+  
+  // Get currency from cart items (all items should have the same currency)
+  const currency = cartItems.length > 0 ? cartItems[0].itemData.currency : 'USD';
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -145,7 +148,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             {t('checkout.subtotal', 'Subtotal')} (
             {t('cart.itemCount', 'items', { count: cartItems.length })})
           </Typography>
-          <Typography variant="body2">{formatCurrency(subtotal)}</Typography>
+          <Typography variant="body2">{formatCurrency(subtotal, currency)}</Typography>
         </Box>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -160,7 +163,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 {t('checkout.deliveryFeeError', 'Error calculating')}
               </Typography>
             ) : (
-              formatCurrency(deliveryFee || 0)
+              formatCurrency(deliveryFee || 0, currency)
             )}
           </Typography>
         </Box>
@@ -171,7 +174,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {t('checkout.fastDeliveryFee', 'Fast Delivery Fee')}
             </Typography>
             <Typography variant="body2">
-              {formatCurrency(fastDeliveryFee)}
+              {formatCurrency(fastDeliveryFee, currency)}
             </Typography>
           </Box>
         )}
@@ -182,7 +185,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
         <Typography variant="h6">{t('checkout.total', 'Total')}</Typography>
         <Typography variant="h6" color="primary">
-          {formatCurrency(total)}
+          {formatCurrency(total, currency)}
         </Typography>
       </Box>
 
@@ -290,7 +293,10 @@ const CheckoutPage: React.FC = () => {
     }
   }, [cartItems.length, navigate, isCheckoutInProgress]);
 
-  const formatCurrency = (amount: number, currency = 'USD') => {
+  // Get currency from cart items (all items should have the same currency)
+  const cartCurrency = cartItems.length > 0 ? cartItems[0].itemData.currency : 'USD';
+  
+  const formatCurrency = (amount: number, currency: string = cartCurrency) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
