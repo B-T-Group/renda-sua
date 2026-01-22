@@ -847,7 +847,7 @@ const ManageOrderPage: React.FC = () => {
                           <Box sx={{ display: 'flex', gap: 2 }}>
                             <LocationOn color="secondary" />
                             <Box sx={{ flex: 1 }}>
-                              <Typography variant="body1">
+                              <Typography variant="body1" component="div">
                                 {formatAddress(order.delivery_address)}
                                 {profile?.agent?.id &&
                                   order.assigned_agent_id &&
