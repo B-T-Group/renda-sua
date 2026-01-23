@@ -198,18 +198,25 @@ export class AccountsService {
     transactionType: string
   ): boolean {
     // For hold transactions, check available balance
+    // Hold: { available: -amount, withheld: amount }
     if (transactionType === 'hold') {
-      return account.available_balance >= amount;
+      return account.available_balance >= Math.abs(balanceUpdate.available);
     }
 
-    // For other debit transactions, check available balance
+    // For release transactions, check withheld balance
+    // Release: { available: amount, withheld: -amount }
+    if (transactionType === 'release') {
+      return account.withheld_balance >= Math.abs(balanceUpdate.withheld);
+    }
+
+    // For other debit transactions that decrease available balance, check available balance
     if (balanceUpdate.available < 0) {
-      return account.available_balance >= balanceUpdate.available * -1;
+      return account.available_balance >= Math.abs(balanceUpdate.available);
     }
 
-    // For withheld balance decreases, check withheld balance
+    // For other transactions that decrease withheld balance, check withheld balance
     if (balanceUpdate.withheld < 0) {
-      return account.withheld_balance >= balanceUpdate.withheld * -1;
+      return account.withheld_balance >= Math.abs(balanceUpdate.withheld);
     }
 
     return true;
