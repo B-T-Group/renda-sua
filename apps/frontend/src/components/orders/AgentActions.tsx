@@ -4,6 +4,11 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
   Tooltip,
   Typography,
 } from '@mui/material';

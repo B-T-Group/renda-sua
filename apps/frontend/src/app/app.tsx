@@ -1,12 +1,14 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Box, Container } from '@mui/material';
+import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
+import AgentBottomNav from '../components/layout/AgentBottomNav';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
@@ -53,6 +55,12 @@ function App() {
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
+  const { userType } = useUserProfileContext();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Determine if agent bottom nav should be visible
+  const showAgentBottomNav = userType === 'agent' && isMobile;
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -91,7 +99,14 @@ function App() {
     >
       <Header />
 
-      <Box sx={{ flex: 1, py: 4 }}>
+      <Box
+        sx={{
+          flex: 1,
+          py: 4,
+          // Add bottom padding when agent bottom nav is visible to prevent content overlap
+          paddingBottom: showAgentBottomNav ? { xs: '80px', md: 4 } : 4,
+        }}
+      >
         <Container maxWidth="xl">
           <Routes>
             <Route path="/" element={<LandingPage />} />
@@ -401,6 +416,9 @@ function App() {
       </Box>
 
       <Footer />
+
+      {/* Agent Bottom Navigation - Only visible for agents on mobile */}
+      <AgentBottomNav />
 
       {/* Global API Loading Screen */}
       <LoadingScreen open={isApiLoading} message={loadingMessage} />
