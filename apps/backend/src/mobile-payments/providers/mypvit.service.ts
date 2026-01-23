@@ -206,14 +206,14 @@ export class MyPVitService {
           status_code: response.data.status_code,
         };
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logger.error('Failed to initiate payment:', error);
       return {
         success: false,
-        message: 'Failed to initiate payment',
-        errorCode: 'INITIATION_FAILED',
+        message: error.response?.data?.message || 'Failed to initiate payment',
+        errorCode: error.response?.data?.error || 'INITIATION_FAILED',
         status: 'FAILED',
-        status_code: '500',
+        status_code: error.status ??'500',
       };
     }
   }

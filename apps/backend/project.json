@@ -57,7 +57,7 @@
     "dev": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "ts-node --watch src/main.ts",
+        "command": "ts-node src/main.ts",
         "cwd": "apps/backend"
       }
     },
