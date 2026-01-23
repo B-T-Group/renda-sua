@@ -212,8 +212,12 @@ export const useBackendOrders = () => {
 
         return response.data;
       } catch (err: any) {
+        // Extract error message from response - check message first, then error, then data.message
         const errorMessage =
-          err.response?.data?.error || err.message || 'Failed to confirm order';
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to confirm order';
         setError(errorMessage);
         throw new Error(errorMessage);
       }

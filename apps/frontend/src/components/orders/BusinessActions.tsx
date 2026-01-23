@@ -71,12 +71,11 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         'success'
       );
       onActionComplete?.();
+      setConfirmModalOpen(false);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t('messages.orderConfirmError', 'Failed to confirm order');
-      onShowNotification?.(errorMessage, 'error');
+      // Re-throw error so it can be caught and displayed in the modal
+      // The modal will handle displaying the error message
+      throw error;
     } finally {
       setLoading(false);
     }

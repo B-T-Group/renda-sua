@@ -283,9 +283,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
             </CardContent>
           </Card>
 
-          {/* Error Display */}
-          {error && <Alert severity="error">{error}</Alert>}
-
           {/* Delivery Window Selection */}
           <Card>
             <CardContent sx={{ py: 2 }}>
@@ -438,20 +435,28 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} disabled={loading}>
-          {t('common.cancel', 'Cancel')}
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleConfirm}
-          disabled={loading || (!selectedWindowId && !newWindowData)}
-          startIcon={<CheckCircle />}
-        >
-          {loading
-            ? t('orders.confirmModal.confirming', 'Confirming...')
-            : t('orders.confirmModal.confirm', 'Confirm Order')}
-        </Button>
+      <DialogActions sx={{ p: 2, flexDirection: 'column', alignItems: 'stretch' }}>
+        {/* Error Display - shown next to confirm button */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, width: '100%' }}>
+            {error}
+          </Alert>
+        )}
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', width: '100%' }}>
+          <Button onClick={onClose} disabled={loading}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirm}
+            disabled={loading || (!selectedWindowId && !newWindowData)}
+            startIcon={<CheckCircle />}
+          >
+            {loading
+              ? t('orders.confirmModal.confirming', 'Confirming...')
+              : t('orders.confirmModal.confirm', 'Confirm Order')}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );
