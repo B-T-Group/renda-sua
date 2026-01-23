@@ -3878,7 +3878,7 @@ export class OrdersService {
         amount: total_amount,
         currency: currency,
         description: `Order ${orderNumber}`,
-        customerPhone: user.phone_number || '',
+        customerPhone: phoneNumber,
         provider: provider,
         ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
