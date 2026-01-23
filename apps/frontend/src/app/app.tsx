@@ -6,6 +6,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
+import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
@@ -61,6 +62,7 @@ function App() {
 
   // Determine if agent bottom nav should be visible
   const showAgentBottomNav = userType === 'agent' && isMobile;
+  const showClientBottomNav = userType === 'client' && isMobile;
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -104,7 +106,10 @@ function App() {
           flex: 1,
           py: 4,
           // Add bottom padding when agent bottom nav is visible to prevent content overlap
-          paddingBottom: showAgentBottomNav ? { xs: '80px', md: 4 } : 4,
+          paddingBottom:
+            showAgentBottomNav || showClientBottomNav
+              ? { xs: '80px', md: 4 }
+              : 4,
         }}
       >
         <Container maxWidth="xl">
@@ -419,6 +424,9 @@ function App() {
 
       {/* Agent Bottom Navigation - Only visible for agents on mobile */}
       <AgentBottomNav />
+
+      {/* Client Bottom Navigation - Only visible for clients on mobile */}
+      <ClientBottomNav />
 
       {/* Global API Loading Screen */}
       <LoadingScreen open={isApiLoading} message={loadingMessage} />
