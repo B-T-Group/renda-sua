@@ -1207,6 +1207,7 @@
     "claimOrderHoldAmountInfo": "Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.",
     "confirmClaimOrder": "Confirm Claim Order",
     "confirmClaimOrderMessage": "Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.",
+    "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",

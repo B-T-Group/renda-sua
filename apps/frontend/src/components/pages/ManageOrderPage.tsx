@@ -1347,12 +1347,24 @@ const ManageOrderPage: React.FC = () => {
                   <Stack spacing={2}>
                     {/* Persona-specific actions */}
                     {profile?.agent && (
-                      <AgentActions
-                        order={order}
-                        agentAccounts={accounts}
-                        onActionComplete={() => refetch()}
-                        onShowNotification={handleShowNotification}
-                      />
+                      <>
+                        {order.current_status === 'ready_for_pickup' && (
+                          <Alert severity="info" icon={<RefreshIcon />}>
+                            <Typography variant="body2">
+                              {t(
+                                'orders.refreshAfterHoldPayment',
+                                'If you have confirmed the hold payment, please refresh the page using the refresh button at the top to update your account balance.'
+                              )}
+                            </Typography>
+                          </Alert>
+                        )}
+                        <AgentActions
+                          order={order}
+                          agentAccounts={accounts}
+                          onActionComplete={() => refetch()}
+                          onShowNotification={handleShowNotification}
+                        />
+                      </>
                     )}
                     {profile?.business && (
                       <BusinessActions

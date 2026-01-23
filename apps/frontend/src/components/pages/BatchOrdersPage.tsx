@@ -68,7 +68,7 @@ const canApplyActionToOrder = (order: Order, action: BatchAction | '') => {
 const BatchOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
-  const { orders, loading, error } = useOrders();
+  const { orders, loading, error, refreshOrders } = useOrders();
   const {
     batchStartPreparing,
     batchCompletePreparation,
@@ -170,6 +170,16 @@ const BatchOrdersPage: React.FC = () => {
 
       setResults(perOrder);
       setSummary({ success: successCount, failed: failedCount });
+
+      // Refresh the orders list to reflect status changes
+      // The hook already calls refreshOrders, but we ensure it completes
+      // and clear selection so updated orders are visible
+      await refreshOrders();
+      
+      // Clear selection after successful batch processing to show updated list
+      if (successCount > 0) {
+        setSelection({});
+      }
     } catch (err: any) {
       setActionError(
         err?.message ||

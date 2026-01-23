@@ -1209,6 +1209,7 @@
     "claimOrderHoldAmountInfo": "Veuillez noter : {{holdAmount}} sera retenu de votre compte à titre de garantie. Ce montant sera libéré après une livraison réussie.",
     "confirmClaimOrder": "Confirmer la Réclamation de Commande",
     "confirmClaimOrderMessage": "Êtes-vous sûr de vouloir réclamer la commande #{{orderNumber}} ? Cette action ne peut pas être annulée.",
+    "refreshAfterHoldPayment": "Si vous avez confirmé le paiement de retenue, veuillez cliquer sur le bouton d'actualisation en haut pour mettre à jour le statut de la commande et le solde de votre compte.",
     "confirmOrder": "Confirmer la Commande",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
