@@ -103,6 +103,7 @@ interface OrderSummaryProps {
   loading: boolean;
   disabled: boolean;
   isMobile: boolean;
+  error?: string | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -118,6 +119,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   loading,
   disabled,
   isMobile,
+  error,
 }) => {
   const { t } = useTranslation();
   const subtotal = selectedItem.selling_price * quantity;
@@ -228,6 +230,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             {t('orders.securePayment', 'Secure Payment')}
           </Typography>
         </Stack>
+
+        {/* Error Display - shown next to place order button */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* CTA Button */}
         <Button
@@ -406,7 +415,7 @@ const PlaceOrderPage: React.FC = () => {
     } catch (error: unknown) {
       console.error('Error creating order:', error);
 
-      // Set user-friendly error message
+      // Extract error message from API response - check message first, then error, then data.message
       let errorMessage = t(
         'orders.createOrderError',
         'An error occurred while creating your order. Please try again.'
@@ -416,6 +425,14 @@ const PlaceOrderPage: React.FC = () => {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;
+      } else if ((error as any)?.response?.data) {
+        // Check for API response error structure
+        const apiError = (error as any).response.data;
+        errorMessage =
+          apiError.message ||
+          apiError.error ||
+          apiError.data?.error ||
+          errorMessage;
       }
 
       setError(errorMessage);
@@ -624,13 +641,6 @@ const PlaceOrderPage: React.FC = () => {
             )}
           </Typography>
         </Box>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
 
         {/* Main Content Grid */}
         <Grid container spacing={3}>
@@ -1321,6 +1331,7 @@ const PlaceOrderPage: React.FC = () => {
               loading={loading}
               disabled={!canPlaceOrder}
               isMobile={isMobile}
+              error={error}
             />
           </Grid>
         </Grid>
