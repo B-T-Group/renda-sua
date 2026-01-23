@@ -140,15 +140,18 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         p: 3,
         position: isMobile ? 'fixed' : 'sticky',
         top: isMobile ? 'auto' : 100,
-        bottom: isMobile ? 0 : 'auto',
+        // Position above bottom nav (64px) with extra padding (16px) for better visibility
+        bottom: isMobile ? '80px' : 'auto',
         left: isMobile ? 0 : 'auto',
         right: isMobile ? 0 : 'auto',
-        zIndex: isMobile ? 1000 : 'auto',
+        zIndex: isMobile ? 999 : 'auto', // Below bottom nav (1000) but above content
         bgcolor: 'background.paper',
         borderRadius: isMobile ? 0 : 2,
         borderTop: isMobile ? 1 : 0,
         borderColor: 'divider',
         boxShadow: isMobile ? '0 -4px 12px rgba(0,0,0,0.1)' : 2,
+        // Safe area padding for devices with notches
+        paddingBottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom, 0))' : 3,
       }}
     >
       <Typography variant="h6" gutterBottom fontWeight="bold">
@@ -614,7 +617,20 @@ const PlaceOrderPage: React.FC = () => {
       : profile?.phone_number && phoneValidation.isValid);
 
   return (
-    <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: isMobile ? 20 : 4 }}>
+    <Box
+      sx={{
+        bgcolor: 'grey.50',
+        minHeight: '100vh',
+        // Add extra bottom padding on mobile to account for fixed OrderSummary + bottom nav
+        // OrderSummary is ~300-400px tall, bottom nav is 64px, plus some spacing
+        pb:
+          isMobile && profile?.client
+            ? { xs: '480px', md: 4 } // Enough space for OrderSummary + bottom nav + spacing
+            : isMobile
+              ? { xs: '400px', md: 4 } // For non-clients, just OrderSummary + spacing
+              : 4,
+      }}
+    >
       <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
         {/* Header with Progress */}
         <Box sx={{ mb: 4 }}>

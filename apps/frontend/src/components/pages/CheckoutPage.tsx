@@ -20,6 +20,8 @@ import {
   Skeleton,
   Switch,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -256,6 +258,8 @@ const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const { cartItems } = useCart();
   const { profile } = useUserProfileContext();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // State
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -526,9 +530,22 @@ const CheckoutPage: React.FC = () => {
     : 0;
 
   return (
-    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+    <Box
+      sx={{
+        bgcolor: 'grey.50',
+        minHeight: '100vh',
+        // Add extra bottom padding on mobile for clients to account for bottom nav (64px) + button space + extra spacing
+        pb:
+          isMobile && profile?.client
+            ? { xs: '180px', md: 4 } // Increased to ensure button is fully visible
+            : isMobile
+              ? { xs: 20, md: 4 }
+              : 4,
+      }}
+    >
+      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
         <IconButton onClick={handleBack} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
@@ -806,7 +823,11 @@ const CheckoutPage: React.FC = () => {
             size="large"
             onClick={handleSubmit}
             disabled={!selectedAddressId || checkoutLoading}
-            sx={{ mt: 3 }}
+            sx={{
+              mt: 3,
+              // Add extra bottom margin on mobile for clients to ensure visibility above bottom nav
+              mb: isMobile && profile?.client ? 4 : 0,
+            }}
           >
             {checkoutLoading ? (
               <CircularProgress size={24} color="inherit" />
@@ -831,7 +852,8 @@ const CheckoutPage: React.FC = () => {
         addressData={addressFormData}
         onAddressChange={setAddressFormData}
       />
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

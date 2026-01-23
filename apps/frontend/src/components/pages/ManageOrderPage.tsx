@@ -443,9 +443,13 @@ const ManageOrderPage: React.FC = () => {
           minHeight: '100vh',
           pb: 4,
           // Add bottom padding on mobile for agents to account for sticky action bar + bottom nav
-          paddingBottom: profile?.agent && isMobile
-            ? { xs: '200px', md: 4 }
-            : 4,
+          // Add bottom padding on mobile for clients to account for bottom nav (64px) + action buttons
+          paddingBottom:
+            profile?.agent && isMobile
+              ? { xs: '200px', md: 4 }
+              : profile?.client && isMobile
+                ? { xs: '140px', md: 4 }
+                : 4,
         }}
       >
         <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
