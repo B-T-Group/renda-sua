@@ -141,13 +141,13 @@ export class AccountsService {
       case 'hold':
         return {
           isCredit: false,
-          balanceUpdate: { available: 0, withheld: -amount },
+          balanceUpdate: { available: -amount, withheld: amount },
         };
 
       case 'release':
         return {
           isCredit: true,
-          balanceUpdate: { available: 0, withheld: amount },
+          balanceUpdate: { available: amount, withheld: -amount },
         };
 
       case 'transfer':
@@ -199,7 +199,7 @@ export class AccountsService {
   ): boolean {
     // For hold transactions, check available balance
     if (transactionType === 'hold') {
-      return account.available_balance >= balanceUpdate.available * -1;
+      return account.available_balance >= amount;
     }
 
     // For other debit transactions, check available balance

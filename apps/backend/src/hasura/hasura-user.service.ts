@@ -68,6 +68,7 @@ export class HasuraUserService {
     private readonly configService: ConfigService<Configuration>
   ) {
     const hasuraConfig = this.configService.get('hasura');
+    console.log('hasuraConfig', hasuraConfig);
     this.hasuraUrl =
       hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();

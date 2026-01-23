@@ -35,6 +35,8 @@ export class HasuraSystemService {
   constructor(private readonly configService: ConfigService) {
     const config = this.configService.get('hasura');
 
+    console.log('config', config);
+
     this.hasuraUrl = config.endpoint || 'http://localhost:8080/v1/graphql';
     this.adminSecret = config.adminSecret || 'myadminsecretkey';
 

@@ -149,12 +149,17 @@ def determine_transaction_balance_update(
             isCredit=True,
             balanceUpdate=BalanceUpdate(available=amount, withheld=0),
         )
+    elif transaction_type == "hold":
+        # Hold: decreases available balance, increases withheld balance
+        return TransactionInfo(
+            isCredit=False,
+            balanceUpdate=BalanceUpdate(available=-amount, withheld=amount),
+        )
     elif transaction_type == "release":
-        # Release: increases withheld balance (money moves from available to withheld)
-        # Note: This matches backend logic where release increases withheld_balance
+        # Release: increases available balance, decreases withheld balance
         return TransactionInfo(
             isCredit=True,
-            balanceUpdate=BalanceUpdate(available=0, withheld=amount),
+            balanceUpdate=BalanceUpdate(available=amount, withheld=-amount),
         )
     elif transaction_type == "payment":
         # Payment: decreases available balance
