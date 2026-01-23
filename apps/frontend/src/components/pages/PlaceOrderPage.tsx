@@ -421,11 +421,7 @@ const PlaceOrderPage: React.FC = () => {
         'An error occurred while creating your order. Please try again.'
       );
 
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if ((error as any)?.response?.data) {
+       if ((error as any)?.response?.data) {
         // Check for API response error structure
         const apiError = (error as any).response.data;
         errorMessage =
@@ -433,6 +429,12 @@ const PlaceOrderPage: React.FC = () => {
           apiError.error ||
           apiError.data?.error ||
           errorMessage;
+      }
+      else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      else if (typeof error === 'string') {
+        errorMessage = error;
       }
 
       setError(errorMessage);
