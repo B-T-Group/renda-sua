@@ -1429,31 +1429,25 @@ const ManageOrderPage: React.FC = () => {
 
         {/* Mobile Sticky Action Bar for Agents */}
         {profile?.agent && isMobile && (
-          <Paper
-            elevation={8}
+          <Box
             sx={{
               position: 'fixed',
               bottom: 64, // Position above bottom nav (64px height)
               left: 0,
               right: 0,
               zIndex: 1100, // Above bottom nav (1000) but below modals
-              borderTop: '1px solid',
-              borderColor: 'divider',
-              backgroundColor: 'background.paper',
               display: { xs: 'block', md: 'none' },
               maxHeight: '50vh',
               overflowY: 'auto',
+              pointerEvents: 'none', // Allow clicks to pass through container
             }}
           >
-            <Box sx={{ p: 2 }}>
-              <Typography
-                variant="subtitle2"
-                fontWeight="bold"
-                color="text.secondary"
-                sx={{ mb: 1.5, textTransform: 'uppercase', fontSize: '0.75rem' }}
-              >
-                {t('common.actions', 'Actions')}
-              </Typography>
+            <Box
+              sx={{
+                p: 2,
+                pointerEvents: 'auto', // Re-enable clicks on content
+              }}
+            >
               <AgentActions
                 order={order}
                 agentAccounts={accounts}
@@ -1462,7 +1456,7 @@ const ManageOrderPage: React.FC = () => {
                 mobileView={true}
               />
             </Box>
-          </Paper>
+          </Box>
         )}
       </Box>
 

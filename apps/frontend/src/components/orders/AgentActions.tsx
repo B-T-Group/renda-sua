@@ -487,7 +487,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           const button = (
             <Button
               key={index}
-              variant={isClaimAction ? 'contained' : 'outlined'}
+              variant={mobileView ? 'contained' : isClaimAction ? 'contained' : 'outlined'}
               color={action.color}
               onClick={action.action}
               disabled={loading || action.disabled}
@@ -504,13 +504,24 @@ const AgentActions: React.FC<AgentActionsProps> = ({
                 fontWeight: isClaimAction ? 700 : 500,
                 py: mobileView ? 1.5 : isClaimAction ? 1.5 : 1,
                 px: mobileView ? 2 : isClaimAction ? 3 : 2,
-                boxShadow: isClaimAction
+                boxShadow: mobileView
+                  ? isClaimAction
+                    ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
+                    : '0 2px 8px 0 rgba(0, 0, 0, 0.15)'
+                  : isClaimAction
                   ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
                   : 'none',
                 '&:hover': isClaimAction
                   ? {
-                      boxShadow: '0 6px 20px 0 rgba(25, 118, 210, 0.5)',
+                      boxShadow: mobileView
+                        ? '0 6px 20px 0 rgba(25, 118, 210, 0.5)'
+                        : '0 6px 20px 0 rgba(25, 118, 210, 0.5)',
                       transform: 'translateY(-2px)',
+                    }
+                  : mobileView
+                  ? {
+                      boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.2)',
+                      transform: 'translateY(-1px)',
                     }
                   : {},
                 transition: 'all 0.3s ease-in-out',
