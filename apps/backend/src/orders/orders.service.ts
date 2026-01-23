@@ -3904,8 +3904,8 @@ export class OrdersService {
         throw new HttpException(
           {
             success: false,
-            message: 'Failed to initiate payment',
-            error: 'PAYMENT_INITIATION_FAILED',
+            message: paymentTransaction.message || 'Failed to initiate payment',
+            error: paymentTransaction.errorCode || 'PAYMENT_INITIATION_FAILED',
             data: {
               orderNumber,
               error: paymentTransaction.message,
@@ -3929,20 +3929,23 @@ export class OrdersService {
       this.logger.log(
         `Payment initiated successfully for order ${orderNumber}, transaction ID: ${paymentTransaction.transactionId}`
       );
-    } catch (paymentError) {
+    } catch (paymentError: any) {
       this.logger.error(
         `Failed to initiate payment for order ${orderNumber}:`,
         paymentError
       );
 
-      // Update transaction status to failed if transaction was created
-      if (transaction) {
+      // Only update transaction if it hasn't been updated yet
+      // (i.e., if this is an unexpected error, not the HttpException we threw above)
+      if (transaction && !(paymentError instanceof HttpException)) {
         try {
           await this.mobilePaymentsDatabaseService.updateTransaction(
             transaction.id,
             {
               status: 'failed',
-              error_message: 'Payment initiation error',
+              error_message: paymentError instanceof Error 
+                ? paymentError.message 
+                : String(paymentError),
               error_code: 'PAYMENT_INITIATION_ERROR',
             }
           );
@@ -3954,6 +3957,12 @@ export class OrdersService {
         }
       }
 
+      // Re-throw HttpException as-is to preserve error details
+      if (paymentError instanceof HttpException) {
+        throw paymentError;
+      }
+
+      // For unexpected errors, throw a generic error
       throw new HttpException(
         {
           success: false,
