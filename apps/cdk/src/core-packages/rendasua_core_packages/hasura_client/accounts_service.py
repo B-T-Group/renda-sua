@@ -247,6 +247,51 @@ def register_account_transaction(
         new_withheld = current_withheld + balance_update.withheld
         new_total = new_available + new_withheld
         
+        # Validate sufficient funds before processing transaction
+        # For hold transactions, check available balance
+        if transaction_type == "hold":
+            if current_available < abs(balance_update.available):
+                log_error(
+                    "Insufficient available balance for hold transaction",
+                    account_id=account_id,
+                    available_balance=current_available,
+                    required_amount=abs(balance_update.available),
+                )
+                return None
+        
+        # For release transactions, check withheld balance
+        elif transaction_type == "release":
+            if current_withheld < abs(balance_update.withheld):
+                log_error(
+                    "Insufficient withheld balance for release transaction",
+                    account_id=account_id,
+                    withheld_balance=current_withheld,
+                    required_amount=abs(balance_update.withheld),
+                )
+                return None
+        
+        # For other debit transactions that decrease available balance, check available balance
+        elif balance_update.available < 0:
+            if current_available < abs(balance_update.available):
+                log_error(
+                    "Insufficient available balance for transaction",
+                    account_id=account_id,
+                    available_balance=current_available,
+                    required_amount=abs(balance_update.available),
+                )
+                return None
+        
+        # For other transactions that decrease withheld balance, check withheld balance
+        elif balance_update.withheld < 0:
+            if current_withheld < abs(balance_update.withheld):
+                log_error(
+                    "Insufficient withheld balance for transaction",
+                    account_id=account_id,
+                    withheld_balance=current_withheld,
+                    required_amount=abs(balance_update.withheld),
+                )
+                return None
+        
         # Insert transaction
         mutation = """
         mutation InsertTransaction(
