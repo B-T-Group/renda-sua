@@ -437,7 +437,17 @@ const ManageOrderPage: React.FC = () => {
           'View and manage order details'
         )}
       />
-      <Box sx={{ bgcolor: 'grey.50', minHeight: '100vh', pb: 4 }}>
+      <Box
+        sx={{
+          bgcolor: 'grey.50',
+          minHeight: '100vh',
+          pb: 4,
+          // Add bottom padding on mobile for agents to account for sticky action bar + bottom nav
+          paddingBottom: profile?.agent && isMobile
+            ? { xs: '200px', md: 4 }
+            : 4,
+        }}
+      >
         <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
           {/* Header */}
           <Box sx={{ mb: 3 }}>
@@ -1358,12 +1368,15 @@ const ManageOrderPage: React.FC = () => {
                             </Typography>
                           </Alert>
                         )}
-                        <AgentActions
-                          order={order}
-                          agentAccounts={accounts}
-                          onActionComplete={() => refetch()}
-                          onShowNotification={handleShowNotification}
-                        />
+                        {/* Hide agent actions on mobile - they're shown in sticky bottom bar */}
+                        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                          <AgentActions
+                            order={order}
+                            agentAccounts={accounts}
+                            onActionComplete={() => refetch()}
+                            onShowNotification={handleShowNotification}
+                          />
+                        </Box>
                       </>
                     )}
                     {profile?.business && (
@@ -1413,6 +1426,44 @@ const ManageOrderPage: React.FC = () => {
             </Grid>
           </Grid>
         </Container>
+
+        {/* Mobile Sticky Action Bar for Agents */}
+        {profile?.agent && isMobile && (
+          <Paper
+            elevation={8}
+            sx={{
+              position: 'fixed',
+              bottom: 64, // Position above bottom nav (64px height)
+              left: 0,
+              right: 0,
+              zIndex: 1100, // Above bottom nav (1000) but below modals
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              backgroundColor: 'background.paper',
+              display: { xs: 'block', md: 'none' },
+              maxHeight: '50vh',
+              overflowY: 'auto',
+            }}
+          >
+            <Box sx={{ p: 2 }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight="bold"
+                color="text.secondary"
+                sx={{ mb: 1.5, textTransform: 'uppercase', fontSize: '0.75rem' }}
+              >
+                {t('common.actions', 'Actions')}
+              </Typography>
+              <AgentActions
+                order={order}
+                agentAccounts={accounts}
+                onActionComplete={() => refetch()}
+                onShowNotification={handleShowNotification}
+                mobileView={true}
+              />
+            </Box>
+          </Paper>
+        )}
       </Box>
 
       {/* Confirmation Modal */}

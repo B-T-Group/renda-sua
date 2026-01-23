@@ -30,6 +30,7 @@ interface AgentActionsProps {
     message: string,
     severity: 'success' | 'error' | 'warning' | 'info'
   ) => void;
+  mobileView?: boolean;
 }
 
 const AgentActions: React.FC<AgentActionsProps> = ({
@@ -37,6 +38,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   agentAccounts = [],
   onActionComplete,
   onShowNotification,
+  mobileView = false,
 }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
@@ -474,9 +476,10 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       <Box
         sx={{
           display: 'flex',
-          gap: 2,
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
+          gap: mobileView ? 1 : 2,
+          flexDirection: mobileView ? 'column' : 'row',
+          flexWrap: mobileView ? 'nowrap' : 'wrap',
+          justifyContent: mobileView ? 'stretch' : 'flex-end',
         }}
       >
         {availableActions.map((action, index) => {
@@ -489,13 +492,18 @@ const AgentActions: React.FC<AgentActionsProps> = ({
               onClick={action.action}
               disabled={loading || action.disabled}
               startIcon={loading ? <CircularProgress size={16} /> : action.icon}
-              size={isClaimAction ? 'large' : 'medium'}
+              size={mobileView ? 'large' : isClaimAction ? 'large' : 'medium'}
+              fullWidth={mobileView}
               sx={{
-                minWidth: isClaimAction ? 180 : 120,
-                fontSize: isClaimAction ? '1rem' : '0.875rem',
+                minWidth: mobileView ? 'auto' : isClaimAction ? 180 : 120,
+                fontSize: mobileView
+                  ? '0.9rem'
+                  : isClaimAction
+                  ? '1rem'
+                  : '0.875rem',
                 fontWeight: isClaimAction ? 700 : 500,
-                py: isClaimAction ? 1.5 : 1,
-                px: isClaimAction ? 3 : 2,
+                py: mobileView ? 1.5 : isClaimAction ? 1.5 : 1,
+                px: mobileView ? 2 : isClaimAction ? 3 : 2,
                 boxShadow: isClaimAction
                   ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
                   : 'none',
