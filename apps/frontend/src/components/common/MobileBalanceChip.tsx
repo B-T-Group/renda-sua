@@ -12,9 +12,10 @@ import {
   MenuItem,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
+import { useAccountSubscription } from '../../hooks/useAccountSubscription';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -72,8 +73,34 @@ const MobileBalanceChip: React.FC = () => {
   const [transactionsDrawerOpen, setTransactionsDrawerOpen] = useState(false);
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [liveXafAccount, setLiveXafAccount] = useState<{
+    id: string;
+    currency: string;
+    available_balance: number;
+    withheld_balance: number;
+    total_balance: number;
+  } | null>(null);
 
   const xafAccount = accounts.find((a) => a.currency === XAF_CURRENCY);
+  const displayAccount = liveXafAccount ?? xafAccount ?? null;
+
+  useAccountSubscription({
+    accountId: xafAccount?.id ?? '',
+    enabled: !!xafAccount?.id,
+    onAccountUpdate: (account) => {
+      setLiveXafAccount({
+        id: account.id,
+        currency: account.currency,
+        available_balance: account.available_balance,
+        withheld_balance: account.withheld_balance,
+        total_balance: account.total_balance,
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!xafAccount) setLiveXafAccount(null);
+  }, [xafAccount]);
 
   const formatBalance = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -238,7 +265,7 @@ const MobileBalanceChip: React.FC = () => {
           </Typography>
         ) : (
           <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
-            {formatBalance(xafAccount!.total_balance)}
+            {formatBalance(displayAccount!.available_balance)}
           </Box>
         )}
       </Button>
@@ -261,7 +288,7 @@ const MobileBalanceChip: React.FC = () => {
         <MenuItem onClick={handleViewTransactions} sx={{ py: 1.5 }}>
           {t('accounts.viewTransactions')}
         </MenuItem>
-        {xafAccount && xafAccount.available_balance > 0 && (
+        {displayAccount && displayAccount.available_balance > 0 && (
           <MenuItem onClick={handleWithdrawClick} sx={{ py: 1.5 }}>
             {t('accounts.withdraw')}
           </MenuItem>
@@ -275,7 +302,7 @@ const MobileBalanceChip: React.FC = () => {
           onConfirm={handleWithdrawConfirm}
           userPhoneNumber={profile?.phone_number || ''}
           currency={xafAccount.currency}
-          availableBalance={xafAccount.available_balance}
+          availableBalance={displayAccount?.available_balance ?? xafAccount.available_balance}
           loading={withdrawLoading}
         />
       )}
@@ -317,7 +344,7 @@ const MobileBalanceChip: React.FC = () => {
               {t('accounts.viewTransactions')}
             </Typography>
             <Chip
-              label={`${xafAccount?.currency ?? XAF_CURRENCY} ${t('accounts.account')}`}
+              label={`${displayAccount?.currency ?? xafAccount?.currency ?? XAF_CURRENCY} ${t('accounts.account')}`}
               size="small"
               color="primary"
               variant="outlined"

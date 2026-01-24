@@ -3,6 +3,7 @@ import {
   Assignment,
   Dashboard,
   Description,
+  Logout,
   Menu,
   MoreVert,
   Person,
@@ -46,7 +47,7 @@ import MobileBalanceChip from '../common/MobileBalanceChip';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 
 const Header: React.FC = () => {
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user, logout } = useAuth0();
   const { userType, profile } = useUserProfileContext();
   const { getCartItemCount } = useCart();
   const { t } = useTranslation();
@@ -360,7 +361,18 @@ const Header: React.FC = () => {
               </ListItemButton>
             </ListItem>
             <ListItem disablePadding>
-              <LogoutButton />
+              <ListItemButton
+                onClick={() => {
+                  handleDrawerToggle();
+                  logout({ logoutParams: { returnTo: window.location.origin } });
+                }}
+                sx={{ borderRadius: 1, mx: 1 }}
+              >
+                <ListItemIcon>
+                  <Logout />
+                </ListItemIcon>
+                <ListItemText primary={t('auth.logout')} />
+              </ListItemButton>
             </ListItem>
           </>
         )}
@@ -450,22 +462,22 @@ const Header: React.FC = () => {
                 <HeaderSearch />
               </Box>
 
-              {/* User Balance - Only show when authenticated */}
-              {isAuthenticated && (
-                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                  <UserBalanceSummary compact={true} showIcon={false} />
-                </Box>
-              )}
-
-              {/* Language Switcher - desktop only; mobile: in hamburger menu */}
-              {!isMobile && <LanguageSwitcher />}
-
-              {/* Mobile balance (XAF) - client/agent only; replaces language switcher slot on mobile */}
-              {isMobile &&
-                isAuthenticated &&
+              {/* XAF balance (view transactions, withdraw) - client/agent only; mobile + desktop */}
+              {isAuthenticated &&
                 (userType === 'client' || userType === 'agent') && (
                   <MobileBalanceChip />
                 )}
+
+              {/* User Balance - business only, desktop; navigates to profile */}
+              {isAuthenticated &&
+                userType === 'business' && (
+                  <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                    <UserBalanceSummary compact={true} showIcon={false} />
+                  </Box>
+                )}
+
+              {/* Language Switcher - desktop only; mobile: in hamburger menu */}
+              {!isMobile && <LanguageSwitcher />}
 
               {/* Cart Icon - Only show for clients */}
               {isAuthenticated && userType === 'client' && (
