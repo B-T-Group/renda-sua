@@ -19,7 +19,8 @@ export function useShippingLabels() {
           `/pdf/shipping-labels/${orderId}`,
           { responseType: 'blob' }
         );
-        return data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' });
+        const raw = data instanceof Blob ? data : new Blob([data as BlobPart]);
+        return new Blob([raw], { type: 'application/pdf' });
       } catch (err: unknown) {
         const msg =
           err && typeof err === 'object' && 'response' in err

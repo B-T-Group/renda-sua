@@ -85,7 +85,7 @@ export interface ReceiptTemplateData {
 }
 
 export interface PdfGenerationOptions {
-  format: 'A4' | 'Letter' | '4x6';
+  format: 'A4' | 'A6' | 'Letter' | '4x6';
   margin: {
     top: string;
     right: string;

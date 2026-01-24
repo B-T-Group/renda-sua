@@ -343,10 +343,11 @@ export class PdfController {
         }
       }
 
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${filename}"`,
-      });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${filename.replace(/"/g, '')}"`
+      );
       res.end(buffer);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;

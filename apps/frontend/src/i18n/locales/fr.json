@@ -1468,7 +1468,8 @@
       "modalTitle": "Imprimer l'étiquette d'expédition",
       "iframeTitle": "PDF de l'étiquette d'expédition",
       "preview": "Aperçu",
-      "print": "Imprimer"
+      "print": "Imprimer",
+      "popupBlockedFallback": "Fenêtre bloquée. L'étiquette a été téléchargée — ouvrez le fichier et imprimez depuis votre lecteur PDF."
     },
     "batch": {
       "title": "Traitement par lot des commandes",

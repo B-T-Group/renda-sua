@@ -387,6 +387,9 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           setLabelPrintBlob(null);
         }}
         pdfBlob={labelPrintBlob}
+        onPrintFallback={(msg) =>
+          onShowNotification?.(msg, 'warning')
+        }
       />
     </>
   );

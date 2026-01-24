@@ -446,8 +446,8 @@ export class PdfService {
   }
 
   /**
-   * Convert label HTML to PDF (4×6 layout). Uses @page { size: 4in 6in; margin: 0 } in HTML.
-   * PDFEndpoint page_width/page_height (https://pdfendpoint.com/docs) set to 4in × 6in, zero margin.
+   * Convert label HTML to PDF (A6 layout). Uses @page { size: A6; margin: 0 } in HTML.
+   * PDFEndpoint format A6, zero margin; content fills the page.
    */
   private async convertHtmlToPdfForLabel(html: string): Promise<Buffer> {
     try {
@@ -462,7 +462,7 @@ export class PdfService {
         html,
         sandbox: pdfConfig.sandbox,
         options: {
-          format: 'A4',
+          format: 'A6',
           margin: {
             top: '0',
             right: '0',
@@ -470,8 +470,6 @@ export class PdfService {
             left: '0',
           },
           orientation: 'portrait',
-          page_width: '4in',
-          page_height: '6in',
         },
       };
       return this.callPdfEndpoint(requestData);
@@ -505,6 +503,7 @@ export class PdfService {
 
   /**
    * Convert label HTML to PDF and return the PDF URL (no buffer fetch).
+   * Uses A6 format, zero margin; content fills the page.
    */
   private async convertHtmlToPdfForLabelUrl(html: string): Promise<string> {
     try {
@@ -519,7 +518,7 @@ export class PdfService {
         html,
         sandbox: pdfConfig.sandbox,
         options: {
-          format: 'A4',
+          format: 'A6',
           margin: {
             top: '0',
             right: '0',
@@ -527,8 +526,6 @@ export class PdfService {
             left: '0',
           },
           orientation: 'portrait',
-          page_width: '4in',
-          page_height: '6in',
         },
       };
       return this.callPdfEndpointForUrl(requestData);

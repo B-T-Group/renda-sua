@@ -5,32 +5,35 @@
     <title>Shipping Label - {{orderNumber}}</title>
     <style>
       @page {
-        size: 4in 6in;
+        size: 105mm 148mm;
         margin: 0;
       }
       * {
         box-sizing: border-box;
       }
+      html, body {
+        width: 105mm;
+        min-height: 148mm;
+        margin: 0;
+        padding: 0;
+      }
       body {
         font-family: Arial, sans-serif;
-        font-size: 10px;
-        line-height: 1.25;
+        font-size: 3.2mm;
+        line-height: 1.3;
         color: #111;
-        margin: 0;
-        padding: 0.15in;
-        width: 3.7in;
-        min-height: 5.7in;
+        padding: 4mm;
       }
       .label-header {
         font-weight: bold;
-        font-size: 9px;
+        font-size: 2.8mm;
         color: #666;
         text-transform: uppercase;
-        margin-bottom: 2px;
+        margin-bottom: 0.5mm;
       }
       .section {
-        margin-bottom: 8px;
-        padding-bottom: 6px;
+        margin-bottom: 2mm;
+        padding-bottom: 1.5mm;
         border-bottom: 1px dashed #ccc;
       }
       .section:last-of-type {
@@ -38,28 +41,28 @@
       }
       .ship-from,
       .ship-to {
-        font-size: 10px;
+        font-size: 3.2mm;
       }
       .order-number {
-        font-size: 16px;
+        font-size: 5mm;
         font-weight: bold;
-        margin: 4px 0 6px 0;
+        margin: 1mm 0 1.5mm 0;
         letter-spacing: 0.5px;
       }
       .fast-delivery {
         display: inline-block;
         background: #e74c3c;
         color: white;
-        font-size: 9px;
+        font-size: 2.8mm;
         font-weight: bold;
-        padding: 2px 6px;
-        border-radius: 3px;
-        margin-left: 6px;
+        padding: 0.5mm 1.5mm;
+        border-radius: 1mm;
+        margin-left: 1.5mm;
         vertical-align: middle;
       }
       .delivery-time {
         font-weight: 600;
-        margin: 4px 0;
+        margin: 1mm 0;
       }
       .items-list {
         margin: 0;
@@ -67,36 +70,36 @@
         list-style: none;
       }
       .items-list li {
-        padding: 2px 0;
+        padding: 0.5mm 0;
         display: flex;
         justify-content: space-between;
-        gap: 8px;
+        gap: 2mm;
       }
       .item-name {
         flex: 1;
       }
       .item-meta {
-        font-size: 9px;
+        font-size: 2.8mm;
         color: #555;
       }
       .special-instructions {
         background: #fff3cd;
-        padding: 4px 6px;
-        font-size: 9px;
-        border-radius: 3px;
-        margin-top: 4px;
+        padding: 1mm 1.5mm;
+        font-size: 2.8mm;
+        border-radius: 1mm;
+        margin-top: 1mm;
       }
       .barcode-wrap {
         text-align: center;
-        margin-top: 10px;
-        padding-top: 8px;
+        margin-top: 3mm;
+        padding-top: 2mm;
         border-top: 1px solid #333;
       }
       .barcode-wrap img {
         max-width: 100%;
         height: auto;
         display: block;
-        margin: 0 auto 4px auto;
+        margin: 0 auto 1mm auto;
       }
     </style>
   </head>

@@ -1461,7 +1461,8 @@
       "modalTitle": "Print shipping label",
       "iframeTitle": "Shipping label PDF",
       "preview": "Preview",
-      "print": "Print"
+      "print": "Print",
+      "popupBlockedFallback": "Popup blocked. Label downloaded — open the file and print from your PDF viewer."
     },
     "batch": {
       "title": "Batch process orders",
