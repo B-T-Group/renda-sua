@@ -15,7 +15,6 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
-import ShippingLabelPrintModal from '../dialogs/ShippingLabelPrintModal';
 
 const PRINT_LABEL_STATUSES = [
   'confirmed',
@@ -53,26 +52,30 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     refundOrder,
     completeOrder,
   } = useBackendOrders();
-  const { printLabel, loading: printLabelLoading } = useShippingLabels();
+  const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [labelPrintModalOpen, setLabelPrintModalOpen] = useState(false);
-  const [labelPrintBlob, setLabelPrintBlob] = useState<Blob | null>(null);
 
   const handlePrintLabel = async () => {
     try {
-      const blob = await printLabel(order.id);
-      if (blob) {
-        setLabelPrintBlob(blob);
-        setLabelPrintModalOpen(true);
-        onShowNotification?.(
-          t('orders.shippingLabel.printSuccess', 'Shipping label ready to print'),
-          'success'
-        );
-      }
+      await printLabelAndPrint(order.id, {
+        onSuccess: () =>
+          onShowNotification?.(
+            t('orders.shippingLabel.printSuccess', 'Shipping label ready to print'),
+            'success'
+          ),
+        onFallback: (msg) => onShowNotification?.(msg, 'warning'),
+        fallbackMessage: t(
+          'orders.shippingLabel.popupBlockedFallback',
+          'Popup blocked. Label downloaded — open the file and print from your PDF viewer.'
+        ),
+      });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : t('orders.shippingLabel.printError', 'Could not generate shipping label');
+      const msg =
+        e instanceof Error
+          ? e.message
+          : t('orders.shippingLabel.printError', 'Could not generate shipping label');
       onShowNotification?.(msg, 'error');
     }
   };
@@ -379,18 +382,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         loading={loading}
       />
 
-      {/* Shipping Label Print Modal */}
-      <ShippingLabelPrintModal
-        open={labelPrintModalOpen}
-        onClose={() => {
-          setLabelPrintModalOpen(false);
-          setLabelPrintBlob(null);
-        }}
-        pdfBlob={labelPrintBlob}
-        onPrintFallback={(msg) =>
-          onShowNotification?.(msg, 'warning')
-        }
-      />
     </>
   );
 };

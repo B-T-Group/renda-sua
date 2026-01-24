@@ -37,6 +37,7 @@ import {
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 
 interface OrderItem {
@@ -70,9 +71,22 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const { confirmOrder, startPreparing, completePreparation, completeOrder } =
     useBackendOrders();
+  const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [showItems, setShowItems] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  const PRINT_LABEL_STATUSES = [
+    'confirmed',
+    'preparing',
+    'ready_for_pickup',
+    'assigned_to_agent',
+    'picked_up',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+    'complete',
+  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -287,6 +301,29 @@ const OrderCard: React.FC<OrderCardProps> = ({
     }
   };
 
+  const handlePrintLabel = async () => {
+    try {
+      await printLabelAndPrint(order.id, {
+        onSuccess: () =>
+          enqueueSnackbar(
+            t('orders.shippingLabel.printSuccess', 'Shipping label ready to print'),
+            { variant: 'success' }
+          ),
+        onFallback: (msg) => enqueueSnackbar(msg, { variant: 'warning' }),
+        fallbackMessage: t(
+          'orders.shippingLabel.popupBlockedFallback',
+          'Popup blocked. Label downloaded — open the file and print from your PDF viewer.'
+        ),
+      });
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : t('orders.shippingLabel.printError', 'Could not generate shipping label');
+      enqueueSnackbar(msg, { variant: 'error' });
+    }
+  };
+
   // Get available quick actions based on status and user type
   const getAvailableActions = () => {
     const actions: Array<{
@@ -294,6 +331,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
       onClick: () => void;
       color: 'primary' | 'success';
       loading: boolean;
+      icon?: React.ReactNode;
     }> = [];
 
     if (userType === 'business') {
@@ -324,6 +362,15 @@ const OrderCard: React.FC<OrderCardProps> = ({
           onClick: handleCompleteOrder,
           color: 'success',
           loading: loadingAction === 'completeOrder',
+        });
+      }
+      if (PRINT_LABEL_STATUSES.includes(currentStatus)) {
+        actions.push({
+          label: t('orderActions.printLabel', 'Print label'),
+          onClick: handlePrintLabel,
+          color: 'primary',
+          loading: printLabelLoading,
+          icon: <LocalShippingIcon />,
         });
       }
     } else if (userType === 'client') {
@@ -723,12 +770,14 @@ const OrderCard: React.FC<OrderCardProps> = ({
                   variant="outlined"
                   color={action.color}
                   onClick={action.onClick}
-                  disabled={action.loading || !!loadingAction}
+                  disabled={
+                    action.loading || !!loadingAction || printLabelLoading
+                  }
                   startIcon={
                     action.loading ? (
                       <CircularProgress size={16} />
                     ) : (
-                      <CheckCircle />
+                      action.icon ?? <CheckCircle />
                     )
                   }
                   sx={{
