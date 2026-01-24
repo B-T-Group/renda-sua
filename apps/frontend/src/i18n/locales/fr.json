@@ -1461,6 +1461,15 @@
     "viewDetails": "Voir les Détails",
     "viewMyOrders": "Voir Mes Commandes",
     "viewOrderDetails": "Voir les Détails de la Commande",
+    "shippingLabel": {
+      "printSuccess": "Étiquette prête à imprimer",
+      "printError": "Impossible de générer l'étiquette d'expédition",
+      "generating": "Génération des étiquettes…",
+      "modalTitle": "Imprimer l'étiquette d'expédition",
+      "iframeTitle": "PDF de l'étiquette d'expédition",
+      "preview": "Aperçu",
+      "print": "Imprimer"
+    },
     "batch": {
       "title": "Traitement par lot des commandes",
       "businessTitle": "Traitement par lot des commandes d'entreprise",
@@ -1488,7 +1497,6 @@
       "actions": {
         "startPreparing": "Commencer la préparation (confirmée → en préparation)",
         "completePreparation": "Terminer la préparation (en préparation → prête pour enlèvement)",
-        "printLabels": "Imprimer les étiquettes",
         "pickUp": "Récupérer (assignée → récupérée)",
         "startTransit": "Démarrer le transit (récupérée → en transit)",
         "outForDelivery": "En livraison (récupérée / en transit → en livraison)",

@@ -66,10 +66,13 @@ export const useApiClient = (): AxiosInstance => {
       }
 
       // Show loading for API calls (except for specific endpoints that don't need loading)
-      const skipLoadingEndpoints = ['/users/me']; // Add endpoints that shouldn't show loading
+      const skipLoadingEndpoints = [
+        '/users/me',
+        '/pdf/shipping-labels',
+      ];
       if (
         showLoading &&
-        !skipLoadingEndpoints.some((endpoint) => config.url?.includes(endpoint))
+        !skipLoadingEndpoints.some((e) => config.url?.includes(e))
       ) {
         showLoading();
       }

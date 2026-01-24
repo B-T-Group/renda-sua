@@ -211,6 +211,56 @@ export class PdfService {
   }
 
   /**
+   * Call PDFEndpoint /v1/convert and return the PDF URL only (no fetch).
+   * Use for shipping labels so the frontend can load and print via URL.
+   */
+  private async callPdfEndpointForUrl(
+    requestData: PdfEndpointRequest
+  ): Promise<string> {
+    const pdfConfig = this.configService.get('pdfEndpoint');
+    if (!pdfConfig?.apiToken) {
+      throw new HttpException(
+        'PDFEndpoint API token not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    const response = await axios.post<PdfEndpointResponse>(
+      'https://api.pdfendpoint.com/v1/convert',
+      requestData,
+      {
+        headers: {
+          Authorization: `Bearer ${pdfConfig.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+    const { success, data: resData, error } = response.data;
+    if (!success) {
+      throw new HttpException(
+        `PDF generation failed: ${error || 'Unknown error'}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    if (resData?.url) return resData.url;
+    throw new HttpException(
+      'PDF generation failed: no URL in response',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+
+  /**
+   * Fetch PDF from a URL (e.g. stored label URL or PDFEndpoint) and return as Buffer.
+   */
+  async fetchPdfFromUrl(url: string): Promise<Buffer> {
+    const res = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+    });
+    return Buffer.from(res.data);
+  }
+
+  /**
    * Convert HTML to PDF using PDFEndpoint API
    * @param html HTML string
    * @returns Promise with PDF buffer
@@ -396,8 +446,8 @@ export class PdfService {
   }
 
   /**
-   * Convert label HTML to PDF (4×6 layout). Uses @page { size: 4in 6in } in HTML.
-   * PDFEndpoint may respect it; otherwise A4 with minimal margins.
+   * Convert label HTML to PDF (4×6 layout). Uses @page { size: 4in 6in; margin: 0 } in HTML.
+   * PDFEndpoint page_width/page_height (https://pdfendpoint.com/docs) set to 4in × 6in, zero margin.
    */
   private async convertHtmlToPdfForLabel(html: string): Promise<Buffer> {
     try {
@@ -414,12 +464,14 @@ export class PdfService {
         options: {
           format: 'A4',
           margin: {
-            top: '5mm',
-            right: '5mm',
-            bottom: '5mm',
-            left: '5mm',
+            top: '0',
+            right: '0',
+            bottom: '0',
+            left: '0',
           },
           orientation: 'portrait',
+          page_width: '4in',
+          page_height: '6in',
         },
       };
       return this.callPdfEndpoint(requestData);
@@ -452,6 +504,63 @@ export class PdfService {
   }
 
   /**
+   * Convert label HTML to PDF and return the PDF URL (no buffer fetch).
+   */
+  private async convertHtmlToPdfForLabelUrl(html: string): Promise<string> {
+    try {
+      const pdfConfig = this.configService.get('pdfEndpoint');
+      if (!pdfConfig?.apiToken) {
+        throw new HttpException(
+          'PDFEndpoint API token not configured',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      const requestData: PdfEndpointRequest = {
+        html,
+        sandbox: pdfConfig.sandbox,
+        options: {
+          format: 'A4',
+          margin: {
+            top: '0',
+            right: '0',
+            bottom: '0',
+            left: '0',
+          },
+          orientation: 'portrait',
+          page_width: '4in',
+          page_height: '6in',
+        },
+      };
+      return this.callPdfEndpointForUrl(requestData);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) {
+        this.logger.error(
+          `PDFEndpoint API error (label URL): ${error.response.status} - ${JSON.stringify(error.response.data)}`
+        );
+        throw new HttpException(
+          `PDF generation service error: ${
+            error.response?.data?.error || error.message
+          }`,
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      if (error.code === 'ECONNABORTED') {
+        this.logger.error('PDFEndpoint API timeout');
+        throw new HttpException(
+          'PDF generation timeout',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      this.logger.error(`PDF conversion error (label URL): ${error.message}`);
+      throw new HttpException(
+        'PDF generation failed',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
    * Generate a shipping label PDF for a single order (4×6).
    * @param orderId Order ID
    * @param layout Label layout; only 4x6 supported (a4-2up/a4-4up rejected by controller)
@@ -473,6 +582,29 @@ export class PdfService {
     const templateData = await this.buildLabelTemplateData(order);
     const html = await this.generateShippingLabelHtml(templateData);
     return this.convertHtmlToPdfForLabel(html);
+  }
+
+  /**
+   * Generate a shipping label PDF URL for a single order (4×6).
+   * Returns the PDFEndpoint URL for frontend print.
+   */
+  async generateShippingLabelUrl(
+    orderId: string,
+    layout: '4x6' | 'a4-2up' | 'a4-4up' = '4x6'
+  ): Promise<string> {
+    if (layout !== '4x6') {
+      throw new HttpException(
+        `Unsupported layout "${layout}". Only 4x6 is supported.`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const order = await this.getOrderDetailsForShippingLabel(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    const templateData = await this.buildLabelTemplateData(order);
+    const html = await this.generateShippingLabelHtml(templateData);
+    return this.convertHtmlToPdfForLabelUrl(html);
   }
 
   /**
@@ -516,46 +648,4 @@ export class PdfService {
     };
   }
 
-  /**
-   * Generate a single PDF containing one 4×6 label per order (batch).
-   * @param layout Label layout; only 4x6 supported (a4-2up/a4-4up rejected by controller)
-   */
-  async generateShippingLabels(
-    orderIds: string[],
-    layout: '4x6' | 'a4-2up' | 'a4-4up' = '4x6'
-  ): Promise<Buffer> {
-    if (layout !== '4x6') {
-      throw new HttpException(
-        `Unsupported layout "${layout}". Only 4x6 is supported.`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    const labels: ShippingLabelTemplateData[] = [];
-    for (const orderId of orderIds) {
-      const order = await this.getOrderDetailsForShippingLabel(orderId);
-      if (!order) {
-        throw new HttpException(
-          `Order not found: ${orderId}`,
-          HttpStatus.NOT_FOUND
-        );
-      }
-      labels.push(await this.buildLabelTemplateData(order));
-    }
-    const bodyPath = path.join(
-      __dirname,
-      'templates',
-      'shipping-label-body.html'
-    );
-    const batchPath = path.join(
-      __dirname,
-      'templates',
-      'shipping-label-batch.html'
-    );
-    const bodyTemplate = fs.readFileSync(bodyPath, 'utf8');
-    const batchTemplate = fs.readFileSync(batchPath, 'utf8');
-    const html = Mustache.render(batchTemplate, { labels }, {
-      labelBody: bodyTemplate,
-    });
-    return this.convertHtmlToPdfForLabel(html);
-  }
 }

@@ -15,6 +15,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import ShippingLabelPrintModal from '../dialogs/ShippingLabelPrintModal';
 
 const PRINT_LABEL_STATUSES = [
   'confirmed',
@@ -56,14 +57,20 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [labelPrintModalOpen, setLabelPrintModalOpen] = useState(false);
+  const [labelPrintBlob, setLabelPrintBlob] = useState<Blob | null>(null);
 
   const handlePrintLabel = async () => {
     try {
-      await printLabel(order.id);
-      onShowNotification?.(
-        t('orders.shippingLabel.printSuccess', 'Shipping label opened for printing'),
-        'success'
-      );
+      const blob = await printLabel(order.id);
+      if (blob) {
+        setLabelPrintBlob(blob);
+        setLabelPrintModalOpen(true);
+        onShowNotification?.(
+          t('orders.shippingLabel.printSuccess', 'Shipping label ready to print'),
+          'success'
+        );
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : t('orders.shippingLabel.printError', 'Could not generate shipping label');
       onShowNotification?.(msg, 'error');
@@ -102,10 +109,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       );
       onActionComplete?.();
       setConfirmModalOpen(false);
-    } catch (error) {
-      // Re-throw error so it can be caught and displayed in the modal
-      // The modal will handle displaying the error message
-      throw error;
     } finally {
       setLoading(false);
     }
@@ -374,6 +377,16 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         onClose={() => setConfirmModalOpen(false)}
         onConfirm={handleConfirmOrderSuccess}
         loading={loading}
+      />
+
+      {/* Shipping Label Print Modal */}
+      <ShippingLabelPrintModal
+        open={labelPrintModalOpen}
+        onClose={() => {
+          setLabelPrintModalOpen(false);
+          setLabelPrintBlob(null);
+        }}
+        pdfBlob={labelPrintBlob}
       />
     </>
   );

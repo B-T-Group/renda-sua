@@ -21,6 +21,7 @@ insert_permissions:
         - order_id
         - printed_at
         - printed_by_user_id
+        - pdf_url
       backend_only: true
 select_permissions:
   - role: business
@@ -30,9 +31,24 @@ select_permissions:
         - order_id
         - printed_at
         - printed_by_user_id
+        - pdf_url
       filter:
         order:
           business:
             user:
               identifier:
                 _eq: X-Hasura-User-Id
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - printed_at
+        - printed_by_user_id
+        - pdf_url
+      filter:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      backend_only: true

@@ -1455,9 +1455,13 @@
     "viewMyOrders": "View My Orders",
     "viewOrderDetails": "View Order Details",
     "shippingLabel": {
-      "printSuccess": "Shipping label opened for printing",
+      "printSuccess": "Shipping label ready to print",
       "printError": "Could not generate shipping label",
-      "generating": "Generating labels…"
+      "generating": "Generating labels…",
+      "modalTitle": "Print shipping label",
+      "iframeTitle": "Shipping label PDF",
+      "preview": "Preview",
+      "print": "Print"
     },
     "batch": {
       "title": "Batch process orders",
@@ -1486,7 +1490,6 @@
       "actions": {
         "startPreparing": "Start preparing (confirmed → preparing)",
         "completePreparation": "Complete preparation (preparing → ready for pickup)",
-        "printLabels": "Print labels",
         "pickUp": "Pick up (assigned → picked up)",
         "startTransit": "Start transit (picked up → in transit)",
         "outForDelivery": "Out for delivery (picked up / in transit → out for delivery)",

@@ -85,7 +85,7 @@ export interface ReceiptTemplateData {
 }
 
 export interface PdfGenerationOptions {
-  format: 'A4' | 'Letter';
+  format: 'A4' | 'Letter' | '4x6';
   margin: {
     top: string;
     right: string;
@@ -93,6 +93,9 @@ export interface PdfGenerationOptions {
     left: string;
   };
   orientation: 'portrait' | 'landscape';
+  /** Custom page size (e.g. '4in', '6in'). See https://pdfendpoint.com/docs */
+  page_width?: string;
+  page_height?: string;
 }
 
 export interface PdfEndpointRequest {

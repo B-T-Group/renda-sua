@@ -866,18 +866,52 @@ export const GET_ORDER_FOR_SHIPPING_LABEL = gql`
   }
 `;
 
+export const GET_ORDER_LABEL_PRINT_BY_ORDER = gql`
+  query GetOrderLabelPrintByOrder($orderId: uuid!) {
+    order_label_prints(
+      where: { order_id: { _eq: $orderId } }
+      limit: 1
+    ) {
+      id
+      pdf_url
+    }
+  }
+`;
+
 export const INSERT_ORDER_LABEL_PRINT = gql`
   mutation InsertOrderLabelPrint(
     $orderId: uuid!
     $printedByUserId: uuid!
+    $pdfUrl: String
   ) {
     insert_order_label_prints_one(
       object: {
         order_id: $orderId
         printed_by_user_id: $printedByUserId
+        pdf_url: $pdfUrl
       }
     ) {
       id
+    }
+  }
+`;
+
+export const UPDATE_ORDER_LABEL_PRINT = gql`
+  mutation UpdateOrderLabelPrint(
+    $orderId: uuid!
+    $printedByUserId: uuid!
+    $printedAt: timestamptz!
+    $pdfUrl: String
+  ) {
+    update_order_label_prints(
+      where: { order_id: { _eq: $orderId } }
+      _set: {
+        printed_at: $printedAt
+        printed_by_user_id: $printedByUserId
+        pdf_url: $pdfUrl
+      }
+    ) {
+      affected_rows
     }
   }
 `;

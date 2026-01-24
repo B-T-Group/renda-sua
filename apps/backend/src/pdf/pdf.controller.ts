@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Get,
   HttpException,
@@ -13,7 +12,6 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -24,7 +22,11 @@ import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { INSERT_ORDER_LABEL_PRINT } from '../orders/orders.queries';
+import {
+  GET_ORDER_LABEL_PRINT_BY_ORDER,
+  INSERT_ORDER_LABEL_PRINT,
+  UPDATE_ORDER_LABEL_PRINT,
+} from '../orders/orders.queries';
 import { PdfService } from './pdf.service';
 
 const SHIPPING_LABEL_ALLOWED_STATUSES = [
@@ -246,7 +248,7 @@ export class PdfController {
     enum: ['4x6', 'a4-2up', 'a4-4up'],
     description: 'Label layout (default 4x6)',
   })
-  @ApiResponse({ status: 200, description: 'PDF file' })
+  @ApiResponse({ status: 200, description: 'Shipping label PDF file' })
   @ApiResponse({ status: 400, description: 'Order not eligible for label' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Order not found' })
@@ -255,42 +257,92 @@ export class PdfController {
     @Query('layout') layout: '4x6' | 'a4-2up' | 'a4-4up' = '4x6',
     @Res({ passthrough: false }) res: Response
   ): Promise<void> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
+    if (
+      !SHIPPING_LABEL_SUPPORTED_LAYOUTS.includes(layout as SupportedLayout)
+    ) {
+      throw new HttpException(
+        `Unsupported layout "${layout}". Only 4x6 is supported.`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const validation = await this.validateShippingLabelPermission(
+      orderId,
+      user.id
+    );
+    if (!validation.allowed) {
+      throw new HttpException(
+        validation.reason ??
+          'You do not have permission to print a label for this order',
+        validation.status ?? HttpStatus.FORBIDDEN
+      );
+    }
     try {
-      const user = await this.hasuraUserService.getUser();
-      if (!user) {
-        throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
-      }
-      if (
-        !SHIPPING_LABEL_SUPPORTED_LAYOUTS.includes(
-          layout as SupportedLayout
-        )
-      ) {
-        throw new HttpException(
-          `Unsupported layout "${layout}". Only 4x6 is supported.`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      const validation = await this.validateShippingLabelPermission(
-        orderId,
-        user.id
-      );
-      if (!validation.allowed) {
-        throw new HttpException(
-          validation.reason ??
-            'You do not have permission to print a label for this order',
-          validation.status ?? HttpStatus.FORBIDDEN
-        );
-      }
-      const buffer = await this.pdfService.generateShippingLabel(
-        orderId,
-        layout as SupportedLayout
-      );
-      await this.hasuraSystemService.executeQuery(INSERT_ORDER_LABEL_PRINT, {
-        orderId,
-        printedByUserId: user.id,
-      });
       const orderNumber = validation.orderNumber ?? 'label';
       const filename = `shipping-label-${orderNumber}.pdf`;
+      const printedAt = new Date().toISOString();
+
+      const existing = await this.hasuraUserService.executeQuery<{
+        order_label_prints: { id: string; pdf_url: string | null }[];
+      }>(GET_ORDER_LABEL_PRINT_BY_ORDER, { orderId });
+      const row = existing?.order_label_prints?.[0];
+      const storedUrl = row?.pdf_url ?? null;
+      const hasRow = !!row;
+
+      let buffer: Buffer;
+
+      if (storedUrl) {
+        try {
+          buffer = await this.pdfService.fetchPdfFromUrl(storedUrl);
+          await this.hasuraSystemService.executeQuery(UPDATE_ORDER_LABEL_PRINT, {
+            orderId,
+            printedByUserId: user.id,
+            printedAt,
+          });
+        } catch (fetchErr: any) {
+          this.logger.warn(
+            `Stored label URL failed for ${orderId}, regenerating: ${fetchErr.message}`
+          );
+          const newUrl = await this.pdfService.generateShippingLabelUrl(
+            orderId,
+            layout as SupportedLayout
+          );
+          buffer = await this.pdfService.fetchPdfFromUrl(newUrl);
+          await this.hasuraSystemService.executeQuery(UPDATE_ORDER_LABEL_PRINT, {
+            orderId,
+            printedByUserId: user.id,
+            printedAt,
+            pdfUrl: newUrl,
+          });
+        }
+      } else {
+        const url = await this.pdfService.generateShippingLabelUrl(
+          orderId,
+          layout as SupportedLayout
+        );
+        buffer = await this.pdfService.fetchPdfFromUrl(url);
+        if (hasRow) {
+          await this.hasuraSystemService.executeQuery(UPDATE_ORDER_LABEL_PRINT, {
+            orderId,
+            printedByUserId: user.id,
+            printedAt,
+            pdfUrl: url,
+          });
+        } else {
+          await this.hasuraSystemService.executeQuery(
+            INSERT_ORDER_LABEL_PRINT,
+            {
+              orderId,
+              printedByUserId: user.id,
+              pdfUrl: url,
+            }
+          );
+        }
+      }
+
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${filename}"`,
@@ -362,86 +414,4 @@ export class PdfController {
     }
   }
 
-  @Post('shipping-labels/batch')
-  @ApiOperation({ summary: 'Generate shipping label PDFs for multiple orders' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        orderIds: {
-          type: 'array',
-          items: { type: 'string', format: 'uuid' },
-        },
-        layout: { type: 'string', enum: ['4x6', 'a4-2up', 'a4-4up'] },
-      },
-      required: ['orderIds'],
-    },
-  })
-  @ApiResponse({ status: 200, description: 'PDF file' })
-  @ApiResponse({ status: 400, description: 'Invalid request or order not eligible' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
-  async batchShippingLabels(
-    @Body() body: { orderIds: string[]; layout?: '4x6' | 'a4-2up' | 'a4-4up' },
-    @Res({ passthrough: false }) res: Response
-  ): Promise<void> {
-    try {
-      const user = await this.hasuraUserService.getUser();
-      if (!user) {
-        throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
-      }
-      const orderIds = body?.orderIds;
-      if (!Array.isArray(orderIds) || !orderIds.length) {
-        throw new HttpException(
-          'orderIds must be a non-empty array',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      const layout = (body.layout ?? '4x6') as string;
-      if (
-        !SHIPPING_LABEL_SUPPORTED_LAYOUTS.includes(layout as SupportedLayout)
-      ) {
-        throw new HttpException(
-          `Unsupported layout "${layout}". Only 4x6 is supported.`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      for (const orderId of orderIds) {
-        const validation = await this.validateShippingLabelPermission(
-          orderId,
-          user.id
-        );
-        if (!validation.allowed) {
-          throw new HttpException(
-            validation.reason ??
-              `Order ${orderId}: permission denied or not eligible for labels`,
-            validation.status ?? HttpStatus.FORBIDDEN
-          );
-        }
-      }
-      const buffer = await this.pdfService.generateShippingLabels(
-        orderIds,
-        layout as SupportedLayout
-      );
-      for (const orderId of orderIds) {
-        await this.hasuraSystemService.executeQuery(INSERT_ORDER_LABEL_PRINT, {
-          orderId,
-          printedByUserId: user.id,
-        });
-      }
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'inline; filename="shipping-labels.pdf"',
-      });
-      res.end(buffer);
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      this.logger.error(
-        `Batch shipping labels failed: ${error.message}`
-      );
-      throw new HttpException(
-        'Failed to generate shipping labels',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
 }
