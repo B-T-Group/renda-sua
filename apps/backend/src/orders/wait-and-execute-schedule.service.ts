@@ -19,7 +19,12 @@ export class WaitAndExecuteScheduleService {
   private stateMachineArn: string | undefined;
 
   constructor(private readonly configService: ConfigService<Configuration>) {
-    this.sfnClient = new SFNClient({});
+    const awsConfig = this.configService.get<Configuration['aws']>('aws');
+    const region =
+      awsConfig?.region ||
+      process.env.AWS_REGION ||
+      'ca-central-1';
+    this.sfnClient = new SFNClient({ region });
     this.stateMachineArn =
       process.env.WAIT_EXECUTE_STATE_MACHINE_ARN ??
       process.env.PAYMENT_TIMEOUT_STATE_MACHINE_ARN;

@@ -15,7 +15,11 @@ export class OrderQueueService {
 
   constructor(private readonly configService: ConfigService<Configuration>) {
     const awsConfig = this.configService.get('aws');
-    this.sqsClient = new SQSClient({});
+    const region =
+      awsConfig?.region ||
+      process.env.AWS_REGION ||
+      'ca-central-1';
+    this.sqsClient = new SQSClient({ region });
 
     // Build queue URL from template if not provided via environment variable
     const explicitQueueUrl = process.env.ORDER_STATUS_QUEUE_URL;
