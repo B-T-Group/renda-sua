@@ -42,6 +42,7 @@ import LogoutButton from '../auth/LogoutButton';
 import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
+import MobileBalanceChip from '../common/MobileBalanceChip';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 
 const Header: React.FC = () => {
@@ -456,8 +457,15 @@ const Header: React.FC = () => {
                 </Box>
               )}
 
-              {/* Language Switcher */}
-              <LanguageSwitcher />
+              {/* Language Switcher - desktop only; mobile: in hamburger menu */}
+              {!isMobile && <LanguageSwitcher />}
+
+              {/* Mobile balance (XAF) - client/agent only; replaces language switcher slot on mobile */}
+              {isMobile &&
+                isAuthenticated &&
+                (userType === 'client' || userType === 'agent') && (
+                  <MobileBalanceChip />
+                )}
 
               {/* Cart Icon - Only show for clients */}
               {isAuthenticated && userType === 'client' && (
