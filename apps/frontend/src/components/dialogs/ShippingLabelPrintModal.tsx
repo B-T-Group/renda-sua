@@ -9,8 +9,8 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import { useTranslation } from 'react-i18next';
+import { Document, Page, pdfjs } from 'react-pdf';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -34,7 +34,7 @@ const FILENAME = 'shipping-label.pdf';
  * window.open('') followed by location assign.
  */
 function openBlobInNewWindow(url: string): Window | null {
-  const w = window.open('', '_blank', 'noopener,noreferrer');
+  const w = window.open('', '_blank',);
   if (!w) return null;
   w.location.href = url;
   return w;
