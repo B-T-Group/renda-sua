@@ -15,6 +15,7 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 @Global()
 @Module({
@@ -34,6 +35,7 @@ import { OrdersService } from './orders.service';
     OrdersService,
     OrderStatusService,
     OrderQueueService,
+    WaitAndExecuteScheduleService,
     ConfigurationsService,
     FailedDeliveriesService,
   ],

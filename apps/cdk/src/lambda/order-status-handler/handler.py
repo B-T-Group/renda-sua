@@ -597,7 +597,7 @@ def process_cancellation_financials(
     
     Args:
         order_id: Order ID
-        cancelled_by: Who cancelled ('client' or 'business')
+        cancelled_by: Who cancelled ('client', 'business', or 'system')
         previous_status: Order status before cancellation
         hasura_endpoint: Hasura GraphQL endpoint
         hasura_admin_secret: Hasura admin secret
@@ -614,6 +614,14 @@ def process_cancellation_financials(
         if not order:
             log_error("Order not found", order_id=order_id)
             return {"success": False, "error": "Order not found"}
+        
+        # System cancellation (e.g. payment timeout): pending_payment orders have no holds to release
+        if cancelled_by == "system" and previous_status == "pending_payment":
+            log_info(
+                "System cancellation (payment timeout), no holds to release",
+                order_id=order_id,
+            )
+            return {"success": True, "cancellation_fee": 0.0}
         
         if not order.business or not order.business.user_id:
             log_error("Business user not found", order_id=order_id)

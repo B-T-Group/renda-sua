@@ -461,6 +461,172 @@ def get_order_details_for_notification(
         return None
 
 
+def get_order_items_for_reserved_restore(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> List[Dict[str, Any]]:
+    """
+    Fetch order items with business_inventory_id and quantity for reserved-quantity restore.
+
+    Returns:
+        List of {"business_inventory_id": str, "quantity": int}. Empty if order not found.
+    """
+    query = """
+    query GetOrderItemsForRestore($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        order_items {
+          business_inventory_id
+          quantity
+        }
+      }
+    }
+    """
+    client = HasuraClient(
+        HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+    )
+    try:
+        data = client.execute(query, {"orderId": order_id})
+        order = data.get("orders_by_pk")
+        if not order:
+            log_error("Order not found for reserved restore", order_id=order_id)
+            return []
+        items = order.get("order_items", [])
+        result = [
+            {"business_inventory_id": i["business_inventory_id"], "quantity": i["quantity"]}
+            for i in items
+            if i.get("business_inventory_id") and i.get("quantity") is not None
+        ]
+        log_info(
+            "Fetched order items for reserved restore",
+            order_id=order_id,
+            item_count=len(result),
+        )
+        return result
+    except Exception as e:
+        log_error(
+            "Error fetching order items for reserved restore",
+            error=e,
+            order_id=order_id,
+        )
+        raise
+
+
+def cancel_order(
+    order_id: str,
+    notes: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> Dict[str, Any]:
+    """
+    Cancel an order (e.g. payment timeout): update status, insert history, restore reserved quantities.
+    Does not send SQS; caller handles that if needed.
+
+    Args:
+        order_id: Order ID to cancel
+        notes: Notes for status history (e.g. "Order cancelled due to payment timeout")
+        hasura_endpoint: Hasura GraphQL endpoint
+        hasura_admin_secret: Hasura admin secret
+
+    Returns:
+        {"success": True} on success, {"success": False, "error": str} on failure.
+    """
+    client = HasuraClient(
+        HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+    )
+    try:
+        # 1. Update order to cancelled
+        update_mutation = """
+        mutation UpdateOrderCancelled($orderId: uuid!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: { current_status: "cancelled", payment_status: "cancelled" }
+          ) {
+            id
+            current_status
+          }
+        }
+        """
+        data = client.execute(update_mutation, {"orderId": order_id})
+        if not data.get("update_orders_by_pk"):
+            log_error("Update order to cancelled returned no row", order_id=order_id)
+            return {"success": False, "error": "Failed to update order to cancelled"}
+
+        log_info("Updated order to cancelled", order_id=order_id)
+
+        # 2. Insert status history (changed_by_type 'system')
+        history_mutation = """
+        mutation InsertStatusHistorySystem($orderId: uuid!, $notes: String!, $changedByType: String!) {
+          insert_order_status_history_one(
+            object: {
+              order_id: $orderId
+              status: cancelled
+              notes: $notes
+              changed_by_type: $changedByType
+            }
+          ) {
+            id
+          }
+        }
+        """
+        client.execute(
+            history_mutation,
+            {"orderId": order_id, "notes": notes, "changedByType": "system"},
+        )
+        log_info("Inserted status history (system)", order_id=order_id)
+
+        # 3. Restore reserved quantities
+        items = get_order_items_for_reserved_restore(
+            order_id, hasura_endpoint, hasura_admin_secret
+        )
+        if not items:
+            log_info("No order items to restore", order_id=order_id)
+            return {"success": True}
+
+        ids = [it["business_inventory_id"] for it in items]
+        fetch_query = """
+        query GetReservedQuantities($ids: [uuid!]!) {
+          business_inventory(where: { id: { _in: $ids } }) {
+            id
+            reserved_quantity
+          }
+        }
+        """
+        fetch_data = client.execute(fetch_query, {"ids": ids})
+        rows = {r["id"]: r for r in fetch_data.get("business_inventory", [])}
+
+        for it in items:
+            bi_id = it["business_inventory_id"]
+            qty = it["quantity"]
+            curr = rows.get(bi_id, {}).get("reserved_quantity", 0)
+            new_val = max(0, curr - qty)
+            update_mut = """
+            mutation UpdateReserved($id: uuid!, $reserved: Int!) {
+              update_business_inventory_by_pk(
+                pk_columns: { id: $id }
+                _set: { reserved_quantity: $reserved }
+              ) {
+                id
+                reserved_quantity
+              }
+            }
+            """
+            client.execute(update_mut, {"id": bi_id, "reserved": new_val})
+            log_info(
+                "Decremented reserved quantity",
+                order_id=order_id,
+                business_inventory_id=bi_id,
+                quantity=qty,
+                previous=curr,
+                new=new_val,
+            )
+
+        return {"success": True}
+    except Exception as e:
+        log_error("cancel_order failed", error=e, order_id=order_id)
+        return {"success": False, "error": str(e)}
+
+
 def get_order_business_location_country(
     order_id: str,
     hasura_endpoint: str,

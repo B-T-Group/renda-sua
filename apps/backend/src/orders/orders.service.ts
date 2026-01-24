@@ -26,6 +26,7 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { OrderQueueService } from './order-queue.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { OrderStatusService } from './order-status.service';
 
 export interface OrderStatusChangeRequest {
@@ -285,7 +286,8 @@ export class OrdersService {
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
     private readonly pdfService: PdfService,
-    private readonly orderQueueService: OrderQueueService
+    private readonly orderQueueService: OrderQueueService,
+    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService
   ) {}
 
   private async processBatch(
@@ -1191,6 +1193,18 @@ export class OrdersService {
       this.logger.log(
         `Payment initiated successfully for claim order ${order.order_number}, transaction ID: ${paymentTransaction.transactionId}`
       );
+
+      // Schedule payment timeout (wait-and-execute state machine)
+      try {
+        await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+          'order.claim_initiated',
+          { order_id: order.id, transaction_id: transaction.id }
+        );
+      } catch (scheduleError: any) {
+        this.logger.error(
+          `Failed to schedule payment timeout for claim order ${order.order_number}: ${scheduleError?.message ?? scheduleError}`
+        );
+      }
 
       return {
         success: true,
@@ -4189,6 +4203,20 @@ export class OrdersService {
       // Log but don't throw - order creation should succeed
       this.logger.error(
         `Failed to send order.created message to SQS: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    // Schedule payment timeout (wait-and-execute state machine)
+    try {
+      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+        'order.created',
+        { order_id: order.id, transaction_id: transaction.id }
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to schedule payment timeout for order ${order.id}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

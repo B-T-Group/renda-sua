@@ -5,6 +5,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 
 export interface RendasuaInfrastructureStackProps extends cdk.StackProps {
@@ -159,6 +161,66 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       value: orderStatusHandlerFunction.functionArn,
       description: 'ARN of the order status handler Lambda function',
       exportName: `OrderStatusHandlerFunctionArn-${environment}`,
+    });
+
+    // Wait-handler Lambda (generic: payment timeout, etc.)
+    const waitHandlerFunction = new lambda.Function(
+      this,
+      `WaitHandler-${environment}`,
+      {
+        functionName: `wait-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/wait-handler'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        layers: [requestsLayer, corePackagesLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          GRAPHQL_ENDPOINT: graphqlEndpoint,
+          ORDER_STATUS_QUEUE_URL: orderStatusQueue.queueUrl,
+        },
+      }
+    );
+    waitHandlerFunction.addToRolePolicy(secretsManagerPolicy);
+    waitHandlerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sqs:SendMessage'],
+        resources: [orderStatusQueue.queueArn],
+      })
+    );
+
+    // Generic wait-and-execute state machine: Wait until run_at -> Invoke wait-handler
+    const waitState = new sfn.Wait(this, `WaitUntilRunAt-${environment}`, {
+      time: sfn.WaitTime.timestampPath('$.run_at'),
+    });
+    const invokeWaitHandler = new tasks.LambdaInvoke(
+      this,
+      `InvokeWaitHandler-${environment}`,
+      {
+        lambdaFunction: waitHandlerFunction,
+        payload: sfn.TaskInput.fromObject({
+          'event_type.$': '$.event_type',
+          'payload.$': '$.payload',
+          'run_at.$': '$.run_at',
+        }),
+      }
+    );
+    const definition = waitState.next(invokeWaitHandler);
+    const waitExecuteStateMachine = new sfn.StateMachine(
+      this,
+      `WaitExecuteStateMachine-${environment}`,
+      {
+        stateMachineName: `wait-execute-${environment}`,
+        definitionBody: sfn.DefinitionBody.fromChainable(definition),
+      }
+    );
+
+    new cdk.CfnOutput(this, `WaitExecuteStateMachineArn-${environment}`, {
+      value: waitExecuteStateMachine.stateMachineArn,
+      description: 'ARN of the wait-and-execute Step Functions state machine',
+      exportName: `WaitExecuteStateMachineArn-${environment}`,
     });
 
     // Create Lambda function for notify-agents (scheduled)
