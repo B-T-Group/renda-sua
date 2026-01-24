@@ -136,7 +136,10 @@ const OpenOrdersPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Box
           display="flex"
           justifyContent="center"
@@ -151,7 +154,10 @@ const OpenOrdersPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Alert severity="error" sx={{ mb: 2 }}>
           Error loading data:{' '}
           {typeof error === 'string' ? error : (error as any)?.message}
@@ -163,7 +169,10 @@ const OpenOrdersPage: React.FC = () => {
   return (
     <>
       <SEOHead title={getPageTitle()} description={getPageSubtitle()} />
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>

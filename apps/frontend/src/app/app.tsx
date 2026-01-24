@@ -112,7 +112,10 @@ function App() {
               : 4,
         }}
       >
-        <Container maxWidth="xl">
+        <Container
+          maxWidth="xl"
+          sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}
+        >
           <Routes>
             <Route path="/" element={<LandingPage />} />
 

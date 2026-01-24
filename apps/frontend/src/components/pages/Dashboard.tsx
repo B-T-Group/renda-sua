@@ -150,7 +150,10 @@ const Dashboard: React.FC = () => {
 
   if (inventoryLoading || deliveryFeesLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ py: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Box
           display="flex"
           justifyContent="center"
@@ -165,7 +168,10 @@ const Dashboard: React.FC = () => {
 
   if (inventoryError || deliveryFeesError) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ py: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Alert severity="error">
           Error loading data. Please try refreshing the page.
         </Alert>
@@ -174,7 +180,10 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
+    <Container
+      maxWidth="lg"
+      sx={{ py: { xs: 2, sm: 4 }, px: { xs: 0, sm: 2 } }}
+    >
       {/* Error Alert */}
       {orderError && (
         <Alert severity="error" sx={{ mb: 3 }}>

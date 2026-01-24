@@ -212,7 +212,10 @@ const BatchOrdersPage: React.FC = () => {
 
   if (!isBusiness && !isAgent) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      >
         <SEOHead title={getPageTitle()} description={getPageSubtitle()} />
         <Alert severity="info">
           {t(
@@ -284,7 +287,10 @@ const BatchOrdersPage: React.FC = () => {
   return (
     <>
       <SEOHead title={pageTitle} description={pageSubtitle} />
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
         <Box sx={{ mb: 4 }}>
           <Typography
             variant="h4"

@@ -141,7 +141,10 @@ function ColorlibStepIcon(props: StepIconProps) {
 
 // Loading Skeleton Component
 const OrderDetailSkeleton: React.FC = () => (
-  <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+  <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
     <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
       <Skeleton variant="circular" width={40} height={40} />
       <Skeleton variant="text" width={200} height={40} />
@@ -398,7 +401,10 @@ const ManageOrderPage: React.FC = () => {
   // Show error state
   if (error || !order) {
     return (
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
           <IconButton onClick={handleBack}>
             <ArrowBackIcon />
@@ -452,7 +458,10 @@ const ManageOrderPage: React.FC = () => {
                 : 4,
         }}
       >
-        <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+        <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
           {/* Header */}
           <Box sx={{ mb: 3 }}>
             <Box

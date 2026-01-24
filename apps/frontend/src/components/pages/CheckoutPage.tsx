@@ -41,7 +41,10 @@ import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 // Loading Skeleton Component
 const CheckoutPageSkeleton: React.FC = () => (
-  <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+  <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
     <Skeleton variant="text" width={200} height={40} sx={{ mb: 3 }} />
     <Grid container spacing={3}>
       <Grid size={{ xs: 12, lg: 8 }}>
@@ -543,7 +546,10 @@ const CheckoutPage: React.FC = () => {
               : 4,
       }}
     >
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
         <IconButton onClick={handleBack} sx={{ mr: 2 }}>

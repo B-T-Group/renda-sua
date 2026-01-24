@@ -520,7 +520,10 @@ const OrdersPage: React.FC = () => {
   return (
     <>
       <SEOHead title={getPageTitle()} description={getPageSubtitle()} />
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container
+        maxWidth="xl"
+        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
+      >
         {/* Header Section */}
         <Box sx={{ mb: 4 }}>
           <Box

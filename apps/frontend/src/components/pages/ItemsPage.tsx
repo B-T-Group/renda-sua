@@ -223,14 +223,20 @@ const ItemsPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Alert severity="error">{t('common.errorLoadingData')}</Alert>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container
+      maxWidth="lg"
+      sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+    >
       <SEOHead
         title={t('seo.public-items.title')}
         description={t('seo.public-items.description')}

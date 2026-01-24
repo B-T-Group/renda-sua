@@ -53,7 +53,10 @@ const CartPage: React.FC = () => {
 
   if (cartItems.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container
+        maxWidth="lg"
+        sx={{ py: 4, px: { xs: 0, sm: 2 } }}
+      >
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <ShoppingCart sx={{ fontSize: 80, color: 'grey.400', mb: 2 }} />
           <Typography variant="h4" gutterBottom>
@@ -75,7 +78,10 @@ const CartPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container
+      maxWidth="lg"
+      sx={{ py: 4, px: { xs: 0, sm: 2 } }}
+    >
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
         <IconButton onClick={() => navigate(-1)} sx={{ mr: 2 }}>
