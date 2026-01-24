@@ -17,7 +17,8 @@
         "assets": [
           "apps/backend/src/**/*.json",
           "apps/backend/src/**/*.yaml",
-          "apps/backend/src/**/*.yml"
+          "apps/backend/src/**/*.yml",
+          "apps/backend/src/pdf/templates/**/*.html"
         ]
       },
       "configurations": {

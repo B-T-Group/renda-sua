@@ -103,6 +103,15 @@ export interface PdfEndpointRequest {
 
 export interface PdfEndpointResponse {
   success: boolean;
-  pdf: string; // Base64 encoded PDF
+  /** Legacy: base64 PDF (when API returns inline pdf) */
+  pdf?: string;
+  /** Current API: PDF stored at URL */
+  data?: {
+    url: string;
+    file_size: number;
+    page_count: number;
+    expires_after: string;
+    filename: string;
+  };
   error?: string;
 }

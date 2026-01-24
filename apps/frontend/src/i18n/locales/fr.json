@@ -1126,6 +1126,7 @@
     "markAsInTransit": "Marquer comme En Transit",
     "markAsOutForDelivery": "Marquer comme En Livraison",
     "pickUp": "Récupérer",
+    "printLabel": "Imprimer l'étiquette",
     "refundOrder": "Rembourser la Commande",
     "startPreparing": "Commencer la Préparation"
   },
@@ -1487,6 +1488,7 @@
       "actions": {
         "startPreparing": "Commencer la préparation (confirmée → en préparation)",
         "completePreparation": "Terminer la préparation (en préparation → prête pour enlèvement)",
+        "printLabels": "Imprimer les étiquettes",
         "pickUp": "Récupérer (assignée → récupérée)",
         "startTransit": "Démarrer le transit (récupérée → en transit)",
         "outForDelivery": "En livraison (récupérée / en transit → en livraison)",

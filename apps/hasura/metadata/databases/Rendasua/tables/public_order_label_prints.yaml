@@ -1,0 +1,38 @@
+table:
+  name: order_label_prints
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: printed_by_user
+    using:
+      foreign_key_constraint_on: printed_by_user_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - order_id
+        - printed_at
+        - printed_by_user_id
+      backend_only: true
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - printed_at
+        - printed_by_user_id
+      filter:
+        order:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id

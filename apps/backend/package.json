@@ -20,6 +20,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "auth0": "^4.28.0",
     "axios": "^1.10.0",
+    "bwip-js": "^4.8.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "country-currency-map": "^2.1.7",

@@ -2,6 +2,7 @@ import {
   Cancel,
   CheckCircle,
   AttachMoney as RefundIcon,
+  LocalShipping,
 } from '@mui/icons-material';
 import { Box, Button, CircularProgress } from '@mui/material';
 import React, { useState } from 'react';
@@ -11,8 +12,21 @@ import {
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
+import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+
+const PRINT_LABEL_STATUSES = [
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'complete',
+];
 
 interface BusinessActionsProps {
   order: OrderData;
@@ -38,9 +52,25 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     refundOrder,
     completeOrder,
   } = useBackendOrders();
+  const { printLabel, loading: printLabelLoading } = useShippingLabels();
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  const handlePrintLabel = async () => {
+    try {
+      await printLabel(order.id);
+      onShowNotification?.(
+        t('orders.shippingLabel.printSuccess', 'Shipping label opened for printing'),
+        'success'
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t('orders.shippingLabel.printError', 'Could not generate shipping label');
+      onShowNotification?.(msg, 'error');
+    }
+  };
+
+  const canPrintLabel = PRINT_LABEL_STATUSES.includes(order.current_status || '');
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -179,6 +209,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       action: () => void | Promise<void>;
       color: 'success' | 'primary' | 'error' | 'warning';
       icon: JSX.Element;
+      isPrintLabel?: boolean;
     }> = [];
 
     switch (order.current_status) {
@@ -275,6 +306,16 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
     }
 
+    if (canPrintLabel) {
+      actions.push({
+        label: t('orderActions.printLabel', 'Print label'),
+        action: handlePrintLabel,
+        color: 'primary' as const,
+        icon: <LocalShipping />,
+        isPrintLabel: true,
+      });
+    }
+
     return actions;
   };
 
@@ -295,8 +336,9 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         }}
       >
         {availableActions.map((action, index) => {
-          const isLoadingAction =
-            loading && action.action !== handleCancelClick;
+          const isLoadingAction = action.isPrintLabel
+            ? printLabelLoading
+            : loading && action.action !== handleCancelClick;
           return (
             <Button
               key={index}

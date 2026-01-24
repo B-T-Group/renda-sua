@@ -14,6 +14,7 @@ export { useGraphQLRequest } from './useGraphQLRequest';
 // Data hooks
 export { useBackendOrders } from './useBackendOrders';
 export { useBatchOrderActions } from './useBatchOrderActions';
+export { useShippingLabels } from './useShippingLabels';
 export { useCancellationFee } from './useCancellationFee';
 export { useClients } from './useClients';
 export { useCreateOrder } from './useCreateOrder';

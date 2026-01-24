@@ -798,3 +798,86 @@ export const GET_ORDER_FOR_RECEIPT = gql`
     }
   }
 `;
+
+// Query for fetching order data for shipping label generation
+export const GET_ORDER_FOR_SHIPPING_LABEL = gql`
+  query GetOrderForShippingLabel($orderId: uuid!) {
+    orders_by_pk(id: $orderId) {
+      id
+      order_number
+      current_status
+      requires_fast_delivery
+      preferred_delivery_time
+      estimated_delivery_time
+      special_instructions
+      client {
+        user_id
+        user {
+          first_name
+          last_name
+          email
+          phone_number
+        }
+      }
+      business {
+        user_id
+        name
+      }
+      business_location {
+        id
+        name
+        address {
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+        }
+      }
+      delivery_address {
+        address_line_1
+        address_line_2
+        city
+        state
+        postal_code
+        country
+      }
+      delivery_time_windows(limit: 5, order_by: { preferred_date: asc }) {
+        id
+        preferred_date
+        time_slot_start
+        time_slot_end
+        is_confirmed
+        slot {
+          slot_name
+          slot_type
+        }
+      }
+      order_items {
+        id
+        item_name
+        quantity
+        weight
+        weight_unit
+        dimensions
+      }
+    }
+  }
+`;
+
+export const INSERT_ORDER_LABEL_PRINT = gql`
+  mutation InsertOrderLabelPrint(
+    $orderId: uuid!
+    $printedByUserId: uuid!
+  ) {
+    insert_order_label_prints_one(
+      object: {
+        order_id: $orderId
+        printed_by_user_id: $printedByUserId
+      }
+    ) {
+      id
+    }
+  }
+`;

@@ -17,13 +17,26 @@ import {
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useBatchOrderActions, useOrders } from '../../hooks';
+import { useBatchOrderActions, useOrders, useShippingLabels } from '../../hooks';
 import type { Order } from '../../hooks';
 import SEOHead from '../seo/SEOHead';
+
+const PRINT_LABELS_STATUSES = [
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'complete',
+];
 
 type BatchAction =
   | 'start_preparing'
   | 'complete_preparation'
+  | 'print_labels'
   | 'pick_up'
   | 'start_transit'
   | 'out_for_delivery'
@@ -41,7 +54,9 @@ interface PerOrderResult {
 }
 
 const isBusinessAction = (action: BatchAction | '') =>
-  action === 'start_preparing' || action === 'complete_preparation';
+  action === 'start_preparing' ||
+  action === 'complete_preparation' ||
+  action === 'print_labels';
 
 const isAgentAction = (action: BatchAction | '') =>
   action === 'pick_up' ||
@@ -52,6 +67,7 @@ const isAgentAction = (action: BatchAction | '') =>
 const getValidStatusesForAction = (action: BatchAction | ''): string[] => {
   if (action === 'start_preparing') return ['confirmed'];
   if (action === 'complete_preparation') return ['preparing'];
+  if (action === 'print_labels') return PRINT_LABELS_STATUSES;
   if (action === 'pick_up') return ['assigned_to_agent'];
   if (action === 'start_transit') return ['picked_up'];
   if (action === 'out_for_delivery') return ['picked_up', 'in_transit'];
@@ -77,6 +93,7 @@ const BatchOrdersPage: React.FC = () => {
     batchOutForDelivery,
     batchDeliver,
   } = useBatchOrderActions();
+  const { printLabels, loading: printLabelsLoading } = useShippingLabels();
 
   const [selectedAction, setSelectedAction] = useState<BatchAction | ''>('');
   const [notes, setNotes] = useState('');
@@ -136,6 +153,25 @@ const BatchOrdersPage: React.FC = () => {
     setResults({});
     setSummary(undefined);
 
+    if (selectedAction === 'print_labels') {
+      try {
+        await printLabels(selectedOrderIds);
+        setSummary({
+          success: selectedOrderIds.length,
+          failed: 0,
+        });
+      } catch (err: any) {
+        setActionError(
+          err?.message ||
+            t(
+              'orders.shippingLabel.printError',
+              'Could not generate shipping labels.'
+            )
+        );
+      }
+      return;
+    }
+
     try {
       let response;
 
@@ -171,12 +207,8 @@ const BatchOrdersPage: React.FC = () => {
       setResults(perOrder);
       setSummary({ success: successCount, failed: failedCount });
 
-      // Refresh the orders list to reflect status changes
-      // The hook already calls refreshOrders, but we ensure it completes
-      // and clear selection so updated orders are visible
       await refreshOrders();
-      
-      // Clear selection after successful batch processing to show updated list
+
       if (successCount > 0) {
         setSelection({});
       }
@@ -254,6 +286,10 @@ const BatchOrdersPage: React.FC = () => {
           'orders.batch.actions.completePreparation',
           'Complete preparation (preparing → ready for pickup)'
         ),
+      },
+      {
+        value: 'print_labels',
+        label: t('orders.batch.actions.printLabels', 'Print labels'),
       }
     );
   }
@@ -344,17 +380,19 @@ const BatchOrdersPage: React.FC = () => {
               </Select>
             </FormControl>
 
-            <TextField
-              size="small"
-              label={t('orders.notes', 'Notes')}
-              placeholder={t(
-                'orders.notesPlaceholder',
-                'Add any additional notes about this status change...'
-              )}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              fullWidth
-            />
+            {selectedAction !== 'print_labels' && (
+              <TextField
+                size="small"
+                label={t('orders.notes', 'Notes')}
+                placeholder={t(
+                  'orders.notesPlaceholder',
+                  'Add any additional notes about this status change...'
+                )}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                fullWidth
+              />
+            )}
 
             <Stack
               direction="row"
@@ -382,10 +420,15 @@ const BatchOrdersPage: React.FC = () => {
                 color="primary"
                 onClick={applyBatchAction}
                 disabled={
-                  loading || !selectedAction || !selectedOrderIds.length
+                  loading ||
+                  (selectedAction === 'print_labels' && printLabelsLoading) ||
+                  !selectedAction ||
+                  !selectedOrderIds.length
                 }
               >
-                {t('orders.batch.applyToSelected', 'Apply to selected')}
+                {selectedAction === 'print_labels' && printLabelsLoading
+                  ? t('orders.shippingLabel.generating', 'Generating labels…')
+                  : t('orders.batch.applyToSelected', 'Apply to selected')}
               </Button>
             </Stack>
           </Stack>
