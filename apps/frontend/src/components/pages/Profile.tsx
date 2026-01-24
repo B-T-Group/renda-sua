@@ -198,6 +198,7 @@ const Profile: React.FC = () => {
                   label={t('profile.phoneNumber')}
                   helperText={t('profile.phoneNumberHelper')}
                   margin="normal"
+                  useDevPhoneDropdown
                 />
                 <Box mt={2}>
                   <Button

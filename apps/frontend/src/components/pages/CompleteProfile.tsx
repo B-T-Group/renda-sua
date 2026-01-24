@@ -304,6 +304,7 @@ const CompleteProfile: React.FC = () => {
               label="Phone Number"
               helperText="This phone number should be your mobile money phone number and will be used for payments associated with your account."
               required
+              useDevPhoneDropdown
             />
 
             {profileData.user_type_id === 'agent' && (
