@@ -87,9 +87,6 @@ export interface ActiveOrder {
     unit_price: number;
     quantity: number;
     total_price: number;
-    weight?: number;
-    weight_unit?: string;
-    dimensions?: string;
     special_instructions?: string;
   }>;
 }
@@ -205,9 +202,6 @@ export class AgentsController {
               item_name
               item_description
               quantity
-              weight
-              weight_unit
-              dimensions
               special_instructions
             }
           }

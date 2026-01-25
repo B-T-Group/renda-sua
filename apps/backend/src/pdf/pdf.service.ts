@@ -627,14 +627,15 @@ export class PdfService {
       specialInstructions: order.special_instructions ?? undefined,
       orderItems: order.order_items.map((item) => {
         const parts: string[] = [];
-        if (item.weight != null) {
+        const it = item.item;
+        if (it?.weight != null) {
           parts.push(
-            item.weight_unit
-              ? `${item.weight} ${item.weight_unit}`
-              : String(item.weight)
+            it.weight_unit
+              ? `${it.weight} ${it.weight_unit}`
+              : String(it.weight)
           );
         }
-        if (item.dimensions) parts.push(item.dimensions);
+        if (it?.dimensions) parts.push(it.dimensions);
         return {
           itemName: item.item_name,
           quantity: item.quantity,

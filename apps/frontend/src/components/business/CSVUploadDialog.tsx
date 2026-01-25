@@ -50,6 +50,7 @@ interface CSVItemWithInventory {
   sku?: string;
   weight?: number;
   weight_unit?: string;
+  dimensions?: string;
   color?: string;
   model?: string;
   is_fragile?: boolean;
@@ -99,6 +100,7 @@ interface CreateItemData {
   sku?: string;
   weight?: number;
   weight_unit?: string;
+  dimensions?: string;
   color?: string;
   model?: string;
   is_fragile?: boolean;
@@ -119,6 +121,7 @@ interface UpdateItemData {
   sku?: string;
   weight?: number;
   weight_unit?: string;
+  dimensions?: string;
   color?: string;
   model?: string;
   is_fragile?: boolean;
@@ -328,6 +331,7 @@ export default function CSVUploadDialog({
               : {}),
             weight: row.weight,
             weight_unit: row.weight_unit,
+            dimensions: row.dimensions?.trim() || undefined,
             color: row.color,
             model: row.model,
             is_fragile: row.is_fragile,
@@ -367,6 +371,7 @@ export default function CSVUploadDialog({
             sku: row.sku,
             weight: row.weight,
             weight_unit: row.weight_unit,
+            dimensions: row.dimensions?.trim() || undefined,
             color: row.color,
             model: row.model,
             is_fragile: row.is_fragile,
@@ -483,6 +488,7 @@ export default function CSVUploadDialog({
       'sku',
       'weight',
       'weight_unit',
+      'dimensions',
       'color',
       'model',
       'is_fragile',
@@ -513,6 +519,7 @@ export default function CSVUploadDialog({
       'SAMPLE-001',
       '10',
       '500',
+      '10 x 20 x 5 cm',
       'Red',
       'Model-X',
       'false',

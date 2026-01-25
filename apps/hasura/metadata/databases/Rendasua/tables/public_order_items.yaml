@@ -22,13 +22,10 @@ insert_permissions:
                 _eq: X-Hasura-User-Id
       columns:
         - id
-        - dimensions
         - item_name
-        - weight_unit
         - quantity
         - total_price
         - unit_price
-        - weight
         - item_description
         - special_instructions
         - created_at
@@ -47,9 +44,6 @@ select_permissions:
         - item_name
         - item_description
         - quantity
-        - weight
-        - weight_unit
-        - dimensions
         - special_instructions
         - created_at
         - updated_at
@@ -71,9 +65,6 @@ select_permissions:
         - unit_price
         - quantity
         - total_price
-        - weight
-        - weight_unit
-        - dimensions
         - special_instructions
         - created_at
         - updated_at
@@ -95,9 +86,6 @@ select_permissions:
         - unit_price
         - quantity
         - total_price
-        - weight
-        - weight_unit
-        - dimensions
         - special_instructions
         - created_at
         - updated_at

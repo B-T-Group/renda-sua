@@ -391,6 +391,15 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
                         {item.weight_unit}
                       </Typography>
                     )}
+                    {item.dimensions && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                      >
+                        {t('business.items.dimensions')}: {item.dimensions}
+                      </Typography>
+                    )}
                     {item.color && (
                       <Typography
                         variant="caption"

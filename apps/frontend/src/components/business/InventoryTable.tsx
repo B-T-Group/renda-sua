@@ -79,6 +79,9 @@ export default function InventoryTable({
     if (item.weight) {
       properties.push(`${item.weight}${item.weight_unit || ''}`);
     }
+    if (item.dimensions) {
+      properties.push(item.dimensions);
+    }
     if (item.color) {
       properties.push(item.color);
     }

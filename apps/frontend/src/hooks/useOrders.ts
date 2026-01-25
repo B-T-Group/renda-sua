@@ -8,17 +8,15 @@ export interface OrderItem {
   unit_price: number;
   quantity: number;
   total_price: number;
-  weight: number;
-  weight_unit: string;
-  dimensions: string;
   special_instructions: string;
   item: {
     sku: string;
     currency: string;
     model: string;
     color: string;
-    weight: number;
-    weight_unit: string;
+    weight?: number;
+    weight_unit?: string;
+    dimensions?: string;
     brand: {
       id: string;
       name: string;

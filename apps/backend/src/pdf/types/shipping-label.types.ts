@@ -54,9 +54,11 @@ export interface OrderShippingLabelData {
     id: string;
     item_name: string;
     quantity: number;
-    weight?: number;
-    weight_unit?: string;
-    dimensions?: string;
+    item?: {
+      weight?: number;
+      weight_unit?: string;
+      dimensions?: string;
+    };
   }>;
 }
 

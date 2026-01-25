@@ -19,6 +19,7 @@ export interface InventoryItem {
     currency: string;
     weight: number;
     weight_unit: string;
+    dimensions?: string | null;
     item_sub_category_id: number;
     sku: string;
     brand: {

@@ -132,9 +132,6 @@ export const CREATE_ORDER_ITEMS = gql`
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
       }
     }

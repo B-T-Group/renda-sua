@@ -74,10 +74,12 @@ export interface BusinessOrder {
     unit_price: number;
     quantity: number;
     total_price: number;
-    weight: number | null;
-    weight_unit: string | null;
-    dimensions: string | null;
     special_instructions: string | null;
+    item?: {
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+    };
   }>;
   delivery_time_windows?: Array<{
     id: string;
@@ -184,10 +186,12 @@ const GET_BUSINESS_ORDERS = `
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
+        item {
+          weight
+          weight_unit
+          dimensions
+        }
       }
     }
   }

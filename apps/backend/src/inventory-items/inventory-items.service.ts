@@ -10,15 +10,16 @@ export interface InventoryItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  item: {
-    id: string;
-    name: string;
-    description: string;
-    price: number;
-    currency: string;
-    weight: number;
-    weight_unit: string;
-    item_sub_category_id: number;
+    item: {
+      id: string;
+      name: string;
+      description: string;
+      price: number;
+      currency: string;
+      weight: number;
+      weight_unit: string;
+      dimensions?: string | null;
+      item_sub_category_id: number;
     sku: string;
     brand: {
       id: string;
@@ -263,6 +264,7 @@ export class InventoryItemsService {
             currency
             weight
             weight_unit
+            dimensions
             item_sub_category_id
             sku
             brand {
@@ -378,6 +380,7 @@ export class InventoryItemsService {
             currency
             weight
             weight_unit
+            dimensions
             item_sub_category_id
             sku
             brand {

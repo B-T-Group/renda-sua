@@ -75,7 +75,7 @@ export const GET_ORDERS = gql`
         unit_price
         quantity
         total_price
-        weight
+        special_instructions
         item {
           sku
           currency
@@ -83,6 +83,7 @@ export const GET_ORDERS = gql`
           color
           weight
           weight_unit
+          dimensions
           brand {
             id
             name
@@ -100,9 +101,6 @@ export const GET_ORDERS = gql`
             image_url
           }
         }
-        weight_unit
-        dimensions
-        special_instructions
       }
       order_status_history {
         changed_by_type
@@ -261,9 +259,6 @@ export const GET_ORDER_BY_ID = gql`
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
         item {
           id
@@ -275,6 +270,7 @@ export const GET_ORDER_BY_ID = gql`
           color
           weight
           weight_unit
+          dimensions
           brand {
             id
             name
@@ -450,9 +446,6 @@ export const GET_ORDER_BY_NUMBER = gql`
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
         item {
           id
@@ -464,6 +457,7 @@ export const GET_ORDER_BY_NUMBER = gql`
           color
           weight
           weight_unit
+          dimensions
           brand {
             id
             name
@@ -604,9 +598,6 @@ export const GET_ORDER_WITH_ITEMS = gql`
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
         item {
           id
@@ -618,6 +609,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
           color
           weight
           weight_unit
+          dimensions
           brand {
             id
             name
@@ -690,9 +682,6 @@ export const GET_OPEN_ORDERS = gql`
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
         item {
           sku
@@ -701,6 +690,7 @@ export const GET_OPEN_ORDERS = gql`
           color
           weight
           weight_unit
+          dimensions
           brand {
             id
             name
@@ -858,9 +848,11 @@ export const GET_ORDER_FOR_SHIPPING_LABEL = gql`
         id
         item_name
         quantity
-        weight
-        weight_unit
-        dimensions
+        item {
+          weight
+          weight_unit
+          dimensions
+        }
       }
     }
   }

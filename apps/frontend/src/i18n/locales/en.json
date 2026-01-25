@@ -731,7 +731,8 @@
       "uploadImages": "Upload Images",
       "viewItem": "View Item",
       "weight": "Weight",
-      "weightUnit": "Weight Unit"
+      "weightUnit": "Weight Unit",
+      "dimensions": "Dimensions (Optional)"
     },
     "locations": {
       "activate": "Activate",

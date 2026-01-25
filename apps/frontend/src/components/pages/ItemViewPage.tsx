@@ -566,6 +566,15 @@ export default function ItemViewPage() {
                     </Box>
                   )}
 
+                  {item.dimensions && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('business.items.dimensions', 'Dimensions')}
+                      </Typography>
+                      <Typography variant="body2">{item.dimensions}</Typography>
+                    </Box>
+                  )}
+
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       {t('business.items.orderLimits', 'Order Limits')}

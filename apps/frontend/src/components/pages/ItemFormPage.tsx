@@ -85,6 +85,7 @@ interface ItemFormData {
   sku: string;
   weight: number | null;
   weight_unit: string;
+  dimensions: string;
   brand_id: string | null;
   model: string;
   color: string;
@@ -120,6 +121,7 @@ const ItemFormPage: React.FC = () => {
     sku: '',
     weight: null,
     weight_unit: 'g',
+    dimensions: '',
     brand_id: null,
     model: '',
     color: '',
@@ -219,6 +221,7 @@ const ItemFormPage: React.FC = () => {
               sku: foundItem.sku || '',
               weight: foundItem.weight || null,
               weight_unit: foundItem.weight_unit || 'g',
+              dimensions: foundItem.dimensions || '',
               brand_id: foundItem.brand_id || null,
               model: foundItem.model || '',
               color: foundItem.color || '',
@@ -352,6 +355,7 @@ const ItemFormPage: React.FC = () => {
           brand_id: formData.brand_id ?? undefined,
           max_order_quantity: formData.max_order_quantity ?? undefined,
           color: formData.color || undefined,
+          dimensions: formData.dimensions?.trim() || undefined,
           item_sub_category_id: (formData.item_sub_category_id ??
             categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
         };
@@ -373,6 +377,7 @@ const ItemFormPage: React.FC = () => {
           brand_id: formData.brand_id ?? undefined,
           max_order_quantity: formData.max_order_quantity ?? undefined,
           color: formData.color || undefined,
+          dimensions: formData.dimensions?.trim() || undefined,
           item_sub_category_id: (formData.item_sub_category_id ??
             categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
         };
@@ -1137,6 +1142,17 @@ const ItemFormPage: React.FC = () => {
                     </FormControl>
                   </Grid>
                 </Grid>
+
+                <TextField
+                  fullWidth
+                  label={t('business.items.dimensions', 'Dimensions (Optional)')}
+                  value={formData.dimensions}
+                  onChange={(e) =>
+                    handleInputChange('dimensions', e.target.value)
+                  }
+                  disabled={loading}
+                  placeholder="e.g. 10 x 20 x 5 cm"
+                />
 
                 <TextField
                   fullWidth

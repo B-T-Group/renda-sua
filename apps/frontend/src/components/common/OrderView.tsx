@@ -592,13 +592,20 @@ const OrderView: React.FC<OrderViewProps> = ({
                           {item.quantity} x{' '}
                           {formatCurrency(item.unit_price, order.currency)}
                         </Typography>
-                        {item.weight && (
+                        {((item.item?.weight != null) || item.item?.dimensions) && (
                           <Typography
                             variant="caption"
                             color="text.secondary"
                             display="block"
                           >
-                            {item.weight} {item.weight_unit}
+                            {[
+                              item.item?.weight != null
+                                ? `${item.item.weight} ${item.item.weight_unit ?? ''}`.trim()
+                                : null,
+                              item.item?.dimensions || null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </Typography>
                         )}
                       </Box>

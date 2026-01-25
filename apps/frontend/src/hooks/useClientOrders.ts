@@ -74,10 +74,12 @@ export interface ClientOrder {
     unit_price: number;
     quantity: number;
     total_price: number;
-    weight: number | null;
-    weight_unit: string | null;
-    dimensions: string | null;
     special_instructions: string | null;
+    item?: {
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+    };
   }>;
   order_status_history?: Array<{
     id: string;
@@ -195,10 +197,12 @@ const GET_CLIENT_ORDERS = `
         unit_price
         quantity
         total_price
-        weight
-        weight_unit
-        dimensions
         special_instructions
+        item {
+          weight
+          weight_unit
+          dimensions
+        }
       }
     }
   }

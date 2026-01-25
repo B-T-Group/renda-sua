@@ -62,6 +62,7 @@ insert_permissions:
         - item_sub_category_id
         - weight
         - weight_unit
+        - dimensions
         - price
         - currency
         - sku
@@ -88,6 +89,7 @@ select_permissions:
         - currency
         - weight
         - weight_unit
+        - dimensions
         - item_sub_category_id
         - business_id
         - brand_id
@@ -115,6 +117,7 @@ select_permissions:
         - currency
         - weight
         - weight_unit
+        - dimensions
         - item_sub_category_id
         - business_id
         - brand_id
@@ -142,6 +145,7 @@ select_permissions:
         - currency
         - weight
         - weight_unit
+        - dimensions
         - item_sub_category_id
         - business_id
         - brand_id
@@ -173,6 +177,7 @@ select_permissions:
         - currency
         - weight
         - weight_unit
+        - dimensions
         - item_sub_category_id
         - business_id
         - brand_id
@@ -200,6 +205,7 @@ select_permissions:
         - currency
         - weight
         - weight_unit
+        - dimensions
         - item_sub_category_id
         - business_id
         - brand_id
@@ -226,6 +232,7 @@ update_permissions:
         - item_sub_category_id
         - weight
         - weight_unit
+        - dimensions
         - price
         - currency
         - sku

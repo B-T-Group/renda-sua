@@ -173,9 +173,6 @@ export interface OrderWithDetails {
     unit_price: number;
     quantity: number;
     total_price: number;
-    weight?: number;
-    weight_unit?: string;
-    dimensions?: string;
     special_instructions?: string;
     item?: {
       id: string;
@@ -187,6 +184,7 @@ export interface OrderWithDetails {
       color?: string;
       weight?: number;
       weight_unit?: string;
+      dimensions?: string;
       brand?: {
         id: string;
         name: string;
@@ -2025,7 +2023,7 @@ export class OrdersService {
             unit_price
             quantity
             total_price
-            weight
+            special_instructions
             item {
               sku
               currency
@@ -2033,6 +2031,7 @@ export class OrdersService {
               color
               weight
               weight_unit
+              dimensions
               brand {
                 id
                 name
@@ -2050,9 +2049,6 @@ export class OrdersService {
                 image_url
               }
             }
-            weight_unit
-            dimensions
-            special_instructions
           }
           order_status_history {
             changed_by_type
@@ -2637,9 +2633,6 @@ export class OrdersService {
             unit_price
             quantity
             total_price
-            weight
-            weight_unit
-            dimensions
             special_instructions
             item {
               id
@@ -2651,6 +2644,7 @@ export class OrdersService {
               color
               weight
               weight_unit
+              dimensions
               brand {
                 id
                 name

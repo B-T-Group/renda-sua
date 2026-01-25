@@ -11,11 +11,13 @@ export interface OrderItem {
   unit_price?: number; // Optional for agents
   quantity: number;
   total_price?: number; // Optional for agents
-  weight?: number;
-  weight_unit?: string;
-  dimensions?: string;
   special_instructions?: string;
-  item?: any; // Add this line to support nested item details
+  item?: {
+    weight?: number;
+    weight_unit?: string;
+    dimensions?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface Client {

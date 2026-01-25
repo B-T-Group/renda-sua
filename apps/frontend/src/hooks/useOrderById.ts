@@ -103,9 +103,6 @@ export interface OrderData {
     unit_price?: number; // Optional for agents
     quantity: number;
     total_price?: number; // Optional for agents
-    weight?: number;
-    weight_unit?: string;
-    dimensions?: string;
     special_instructions?: string;
     item: {
       id: string;
@@ -117,6 +114,7 @@ export interface OrderData {
       color?: string;
       weight?: number;
       weight_unit?: string;
+      dimensions?: string;
       brand?: {
         id: string;
         name: string;

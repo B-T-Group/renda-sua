@@ -79,6 +79,7 @@ export default function EditItemDialog({
         item_sub_category_id: item.item_sub_category_id,
         weight: item.weight,
         weight_unit: item.weight_unit,
+        dimensions: item.dimensions ?? undefined,
         price: item.price,
         currency: item.currency,
         sku: item.sku,
@@ -174,6 +175,7 @@ export default function EditItemDialog({
         ...formData,
         weight: formData.weight ?? undefined,
         weight_unit: formData.weight_unit ?? undefined,
+        dimensions: (formData as { dimensions?: string }).dimensions?.trim() || undefined,
         sku: formData.sku ?? undefined,
         brand_id: formData.brand_id ?? undefined,
         model: formData.model ?? undefined,
@@ -397,6 +399,17 @@ export default function EditItemDialog({
                   </Select>
                 </FormControl>
               </Stack>
+
+              <TextField
+                fullWidth
+                label={t('business.items.dimensions', 'Dimensions (Optional)')}
+                value={(formData as { dimensions?: string }).dimensions || ''}
+                onChange={(e) =>
+                  handleInputChange('dimensions' as keyof Item, e.target.value)
+                }
+                placeholder="e.g. 10 x 20 x 5 cm"
+                sx={{ mt: 2 }}
+              />
 
               <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
                 <TextField

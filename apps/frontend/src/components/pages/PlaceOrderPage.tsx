@@ -832,7 +832,7 @@ const PlaceOrderPage: React.FC = () => {
                               {t('common.inStock', 'in stock')}
                             </Typography>
                           </Box>
-                          {selectedItem.item.weight && (
+                          {(selectedItem.item.weight != null || selectedItem.item.dimensions) && (
                             <Box
                               sx={{
                                 display: 'flex',
@@ -843,11 +843,26 @@ const PlaceOrderPage: React.FC = () => {
                                 variant="caption"
                                 color="text.secondary"
                               >
-                                {t('common.weight', 'Weight')}
+                                {[
+                                  selectedItem.item.weight != null
+                                    ? t('common.weight', 'Weight')
+                                    : null,
+                                  selectedItem.item.dimensions
+                                    ? t('business.items.dimensions', 'Dimensions')
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
                               </Typography>
                               <Typography variant="caption" fontWeight="medium">
-                                {selectedItem.item.weight}{' '}
-                                {selectedItem.item.weight_unit}
+                                {[
+                                  selectedItem.item.weight != null
+                                    ? `${selectedItem.item.weight} ${selectedItem.item.weight_unit ?? ''}`.trim()
+                                    : null,
+                                  selectedItem.item.dimensions ?? null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
                               </Typography>
                             </Box>
                           )}

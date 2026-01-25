@@ -733,7 +733,8 @@
       "uploadImages": "Upload Images",
       "viewItem": "Voir l'article",
       "weight": "Poids",
-      "weightUnit": "Unité de poids"
+      "weightUnit": "Unité de poids",
+      "dimensions": "Dimensions (optionnel)"
     },
     "locations": {
       "activate": "Activer",

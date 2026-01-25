@@ -692,6 +692,21 @@ const ManageOrderPage: React.FC = () => {
                                   {t('orders.quantity', 'Quantity')}:{' '}
                                   {item.quantity}
                                 </Typography>
+                                {(item.item?.weight != null || item.item?.dimensions) && (
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {[
+                                      item.item?.weight != null
+                                        ? `${item.item.weight} ${item.item.weight_unit ?? ''}`.trim()
+                                        : null,
+                                      item.item?.dimensions || null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </Typography>
+                                )}
                                 <Typography
                                   variant="h6"
                                   color="primary"

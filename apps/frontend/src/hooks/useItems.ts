@@ -10,6 +10,7 @@ export interface Item {
   item_sub_category_id: number;
   weight: number | null;
   weight_unit: string | null;
+  dimensions?: string | null;
   price: number;
   currency: string;
   sku: string | null;
@@ -84,6 +85,7 @@ export interface CreateItemData {
   item_sub_category_id: number;
   weight?: number;
   weight_unit?: string;
+  dimensions?: string;
   price: number;
   currency: string;
   sku?: string;
@@ -118,6 +120,7 @@ const GET_ITEMS = `
       item_sub_category_id
       weight
       weight_unit
+      dimensions
       price
       currency
       sku
@@ -219,6 +222,7 @@ const GET_SINGLE_ITEM = `
       item_sub_category_id
       weight
       weight_unit
+      dimensions
       price
       currency
       sku
@@ -316,6 +320,7 @@ export const useItems = (businessId?: string) => {
         item_sub_category_id
         weight
         weight_unit
+        dimensions
         price
         currency
         sku
@@ -379,6 +384,7 @@ export const useItems = (businessId?: string) => {
         item_sub_category_id
         weight
         weight_unit
+        dimensions
         price
         currency
         sku
