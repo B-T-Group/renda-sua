@@ -128,9 +128,10 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         <Box
           sx={{
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            flexWrap: { sm: 'wrap' },
             gap: 2,
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
+            justifyContent: { xs: 'stretch', sm: 'flex-end' },
           }}
         >
           {availableActions.map((action, index) => (
@@ -147,7 +148,10 @@ const ClientActions: React.FC<ClientActionsProps> = ({
                   action.icon
                 )
               }
-              sx={{ minWidth: 120 }}
+              sx={{
+                minWidth: { xs: 0, sm: 120 },
+                width: { xs: '100%', sm: 'auto' },
+              }}
             >
               {action.label}
             </Button>

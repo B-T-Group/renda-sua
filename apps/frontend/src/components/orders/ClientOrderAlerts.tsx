@@ -17,8 +17,13 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
     }).format(amount);
   };
 
-  const getOrderTotal = () => {
-    return order.total_amount || 0;
+  const getOrderTotal = (): number => {
+    const fromTotal = order.total_amount;
+    if (typeof fromTotal === 'number' && fromTotal > 0) return fromTotal;
+    const subtotal = order.subtotal ?? 0;
+    const base = order.base_delivery_fee ?? 0;
+    const perKm = order.per_km_delivery_fee ?? 0;
+    return subtotal + base + perKm;
   };
 
   const getAlertsForStatus = () => {
@@ -134,7 +139,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           message: t('client.orders.cancelledNotice', {
             orderTotal: formatCurrency(orderTotal),
             defaultValue:
-              '❌ Your order has been cancelled. Any payment of {{orderTotal}} will be refunded within 3-5 business days. Contact support if you have questions.',
+              '❌ Your order has been cancelled. Any payment of {{orderTotal}} is refunded immediately to your Rendasua account. Tap your account balance in the header, then Withdraw, to access it. Contact support if you have questions.',
           }),
         });
         break;

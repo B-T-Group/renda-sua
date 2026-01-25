@@ -95,7 +95,7 @@ const ClientBottomNav: React.FC = () => {
               lineHeight: 1.2,
             }}
           >
-            {t('common.items', 'Items')}
+            {t('common.browseItems', 'Browse Items')}
           </Box>
         </Box>
 

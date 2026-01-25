@@ -818,7 +818,7 @@
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
       "assignedToAgentNotice": "An agent has been assigned to your order and will pick it up soon.",
-      "cancelledNotice": "❌ Your order has been cancelled. Any payment of {{orderTotal}} will be refunded within 3-5 business days. Contact support if you have questions.",
+      "cancelledNotice": "❌ Your order has been cancelled. Any payment of {{orderTotal}} is refunded immediately to your Rendasua account. Tap your account balance in the header, then Withdraw, to access it. Contact support if you have questions.",
       "completeNotice": "✅ Order complete! We hope you enjoyed your purchase. Please consider leaving a review to help other customers!",
       "confirmation": {
         "continueShopping": "Continue Shopping",

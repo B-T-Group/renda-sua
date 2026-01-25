@@ -774,23 +774,34 @@ const ManageOrderPage: React.FC = () => {
                           <Box
                             sx={{
                               display: 'flex',
-                              alignItems: 'center',
+                              flexDirection: { xs: 'column', sm: 'row' },
+                              alignItems: { xs: 'stretch', sm: 'center' },
                               gap: 2,
                             }}
                           >
                             <Avatar
                               sx={{
-                                width: 56,
-                                height: 56,
+                                width: { xs: 40, sm: 56 },
+                                height: { xs: 40, sm: 56 },
                                 bgcolor: 'secondary.main',
+                                alignSelf: { xs: 'flex-start', sm: 'center' },
                               }}
                             >
                               <ShoppingBag />
                             </Avatar>
-                            <Box>
+                            <Box
+                              sx={{
+                                minWidth: 0,
+                                flex: 1,
+                              }}
+                            >
                               <Typography
                                 variant="subtitle1"
                                 fontWeight="medium"
+                                sx={{
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'anywhere',
+                                }}
                               >
                                 {order.client.user.first_name}{' '}
                                 {order.client.user.last_name}
@@ -798,7 +809,12 @@ const ManageOrderPage: React.FC = () => {
                               <Typography
                                 variant="body2"
                                 color="text.secondary"
-                                sx={{ mt: 0.5 }}
+                                sx={{
+                                  mt: 0.5,
+                                  fontSize: { xs: '0.8125rem', sm: 'inherit' },
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'anywhere',
+                                }}
                               >
                                 {order.client.user.email}
                               </Typography>
@@ -818,6 +834,10 @@ const ManageOrderPage: React.FC = () => {
                                     <Typography
                                       variant="body2"
                                       color="text.secondary"
+                                      sx={{
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'anywhere',
+                                      }}
                                     >
                                       {order.client.user.phone_number}
                                     </Typography>
