@@ -1,6 +1,16 @@
 table:
   name: delivery_configs
   schema: public
+array_relationships:
+  - name: country_delivery_configs
+    using:
+      manual_configuration:
+        column_mapping:
+          config_key: config_key
+        insertion_order: null
+        remote_table:
+          name: country_delivery_configs
+          schema: public
 select_permissions:
   - role: agent
     permission:
@@ -52,13 +62,3 @@ select_permissions:
         - updated_at
       filter: {}
       allow_aggregations: true
-array_relationships:
-  - name: country_delivery_configs
-    using:
-      manual_configuration:
-        column_mapping:
-          config_key: config_key
-        insertion_order: null
-        remote_table:
-          name: country_delivery_configs
-          schema: public

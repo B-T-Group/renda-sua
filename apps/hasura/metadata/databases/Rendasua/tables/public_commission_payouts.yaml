@@ -2,15 +2,15 @@ table:
   name: commission_payouts
   schema: public
 object_relationships:
+  - name: account_transaction
+    using:
+      foreign_key_constraint_on: account_transaction_id
   - name: order
     using:
       foreign_key_constraint_on: order_id
   - name: recipient_user
     using:
       foreign_key_constraint_on: recipient_user_id
-  - name: account_transaction
-    using:
-      foreign_key_constraint_on: account_transaction_id
 select_permissions:
   - role: agent
     permission:

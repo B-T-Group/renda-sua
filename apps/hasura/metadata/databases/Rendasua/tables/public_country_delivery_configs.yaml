@@ -1,6 +1,10 @@
 table:
   name: country_delivery_configs
   schema: public
+object_relationships:
+  - name: delivery_config
+    using:
+      foreign_key_constraint_on: config_key
 select_permissions:
   - role: agent
     permission:
@@ -62,7 +66,3 @@ select_permissions:
         - updated_at
       filter: {}
       allow_aggregations: true
-object_relationships:
-  - name: delivery_config
-    using:
-      foreign_key_constraint_on: config_key

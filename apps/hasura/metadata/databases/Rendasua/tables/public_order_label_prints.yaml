@@ -51,4 +51,5 @@ update_permissions:
             user:
               identifier:
                 _eq: X-Hasura-User-Id
+      check: null
       backend_only: true

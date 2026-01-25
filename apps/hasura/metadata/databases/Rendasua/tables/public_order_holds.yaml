@@ -53,4 +53,3 @@ select_permissions:
             identifier:
               _eq: X-Hasura-User-Id
       allow_aggregations: true
-update_permissions:

@@ -2,15 +2,29 @@ table:
   name: failed_deliveries
   schema: public
 object_relationships:
-  - name: order
-    using:
-      foreign_key_constraint_on: order_id
   - name: failure_reason
     using:
       foreign_key_constraint_on: failure_reason_id
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
   - name: resolved_by_user
     using:
       foreign_key_constraint_on: resolved_by
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        order:
+          assigned_agent:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - order_id
+        - failure_reason_id
+        - notes
+        - status
 select_permissions:
   - role: agent
     permission:
@@ -103,21 +117,6 @@ select_permissions:
                 user:
                   identifier:
                     _eq: X-Hasura-User-Id
-insert_permissions:
-  - role: agent
-    permission:
-      check:
-        order:
-          assigned_agent:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
-      columns:
-        - order_id
-        - failure_reason_id
-        - notes
-        - status
-      backend_only: false
 update_permissions:
   - role: business
     permission:
