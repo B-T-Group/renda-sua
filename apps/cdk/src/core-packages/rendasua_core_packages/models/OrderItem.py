@@ -10,7 +10,6 @@ class OrderItem(BaseModel):
     business_inventory: Optional[BusinessInventory] | None = None
     business_inventory_id: str
     created_at: Optional[datetime.datetime] | None = None
-    dimensions: Optional[str] | None = None
     id: str
     item: Optional[Item] | None = None
     item_description: Optional[str] | None = None
@@ -23,5 +22,3 @@ class OrderItem(BaseModel):
     total_price: float
     unit_price: float
     updated_at: Optional[datetime.datetime] | None = None
-    weight: Optional[float] | None = None
-    weight_unit: Optional[str] | None = None

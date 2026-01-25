@@ -33,3 +33,4 @@ class Item(BaseModel):
     updated_at: datetime.datetime
     weight: Optional[float] | None = None
     weight_unit: Optional[str] | None = None
+    dimensions: Optional[str] | None = None
