@@ -244,6 +244,78 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
+   * Get order_number (entity_id) values for orders that have a pending claim_order
+   * mobile payment. Used to exclude such orders from GET /orders/open.
+   */
+  async getOrderNumbersWithPendingClaimOrder(): Promise<string[]> {
+    try {
+      const query = `
+        query GetOrderNumbersWithPendingClaimOrder {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              entity_id: { _is_null: false }
+            }
+          ) {
+            entity_id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: Array<{ entity_id: string | null }>;
+      }>(query);
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows
+        .map((r) => r.entity_id)
+        .filter((id): id is string => id != null && id !== '');
+    } catch (error) {
+      this.logger.error(
+        'Failed to get order numbers with pending claim order:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Check if there is a pending claim_order mobile payment for the given order
+   * number. Used to block claimOrder / claimOrderWithTopup when another agent
+   * has already initiated claim-with-topup.
+   */
+  async hasPendingClaimOrderForOrderNumber(
+    orderNumber: string
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query HasPendingClaimOrderForOrderNumber($orderNumber: String!) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              entity_id: { _eq: $orderNumber }
+            }
+            limit: 1
+          ) {
+            id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: Array<{ id: string }>;
+      }>(query, { orderNumber });
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows.length > 0;
+    } catch (error) {
+      this.logger.error(
+        'Failed to check pending claim order for order number:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get mobile payment transactions with filters
    */
   async getTransactions(filters?: {

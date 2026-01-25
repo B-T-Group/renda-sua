@@ -50,7 +50,7 @@ async function executeLocationUpdate(location, authToken, hasuraUrl) {
   try {
     const mutation = `
       mutation insert_agent_locations_one($object: agent_locations_insert_input = {}) {
-        insert_agent_locations_one(object: $object, on_conflict: {constraint: agent_locations_agent_id_key, update_columns: [latitude, longitude]}) {
+        insert_agent_locations_one(object: $object, on_conflict: {constraint: idx_agent_locations_agent_id_unique, update_columns: [latitude, longitude]}) {
           agent_id
           id
           latitude

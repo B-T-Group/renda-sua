@@ -208,7 +208,7 @@ export const useAgentLocationTracker = (
             longitude: coordinates.longitude.toString(),
           },
           onConflict: {
-            constraint: 'agent_locations_agent_id_key',
+            constraint: 'idx_agent_locations_agent_id_unique',
             update_columns: ['latitude', 'longitude'],
           },
         });

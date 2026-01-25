@@ -1040,6 +1040,22 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
 
+    // Block if another agent has a pending claim (claim-with-topup) on this order
+    const hasPendingClaim =
+      await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
+        order.order_number
+      );
+    if (hasPendingClaim) {
+      throw new HttpException(
+        {
+          message:
+            'This order has a pending claim. Another agent may be completing payment. Please choose another order.',
+          error: 'PENDING_CLAIM',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
     const orderHold = await this.getOrCreateOrderHold(order.id);
 
     await this.updateOrderHold(orderHold.id, {
@@ -1101,6 +1117,22 @@ export class OrdersService {
       throw new HttpException(
         'This order requires a verified agent. Please contact support to get your account verified.',
         HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Block if another agent has a pending claim (claim-with-topup) on this order
+    const hasPendingClaim =
+      await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
+        order.order_number
+      );
+    if (hasPendingClaim) {
+      throw new HttpException(
+        {
+          message:
+            'This order has a pending claim. Another agent may be completing payment. Please choose another order.',
+          error: 'PENDING_CLAIM',
+        },
+        HttpStatus.CONFLICT
       );
     }
 
@@ -2205,8 +2237,15 @@ export class OrdersService {
 
     const result = await this.hasuraSystemService.executeQuery(query);
 
+    // Exclude orders with a pending claim_order mobile payment (another agent may be completing topup)
+    const pendingClaimOrderNumbers =
+      await this.mobilePaymentsDatabaseService.getOrderNumbersWithPendingClaimOrder();
+    const ordersExcludingPendingClaim = (result.orders as any[]).filter(
+      (o) => !pendingClaimOrderNumbers.includes(o.order_number)
+    );
+
     // Filter orders based on agent's location matching business location
-    const filteredOrders = result.orders.filter((order: any) => {
+    const filteredOrders = ordersExcludingPendingClaim.filter((order: any) => {
       const businessLocation = order.business_location;
       if (!businessLocation || !businessLocation.address) {
         return false;
