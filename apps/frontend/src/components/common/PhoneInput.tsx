@@ -45,7 +45,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   disabled,
   required,
   fullWidth = true,
-  placeholder = 'Enter phone number',
+  placeholder = '',
   defaultCountry = 'US',
   margin = 'normal',
   onlyCountries,
@@ -70,10 +70,13 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           required={required}
           margin={margin}
           disabled={disabled}
-          SelectProps={{ displayEmpty: true, renderValue: (v) => v || placeholder }}
+          SelectProps={{
+            displayEmpty: true,
+            renderValue: (v) => v || '',
+          }}
         >
           <MenuItem value="">
-            {placeholder}
+            {' '}
           </MenuItem>
           {DEV_PHONE_NUMBERS.map((num) => (
             <MenuItem key={num} value={num}>

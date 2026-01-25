@@ -90,12 +90,14 @@
       "longitude": "Longitude (Optionnel)",
       "postalCode": "Code postal",
       "primaryAddress": "Adresse principale",
+      "requiredFields": "Veuillez remplir tous les champs obligatoires (adresse, ville, état, pays).",
       "save": "Enregistrer",
       "saving": "Enregistrement...",
       "stateProvince": "État/Province",
       "yes": "Oui",
       "no": "Non"
     },
+    "saveError": "Échec de l'enregistrement de l'adresse. Veuillez réessayer.",
     "addressTypes": {
       "billing": "Facturation",
       "delivery": "Livraison",

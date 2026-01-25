@@ -44,6 +44,8 @@ interface AddressDialogProps {
   showIsPrimary?: boolean;
   showCoordinates?: boolean;
   addressTypeOptions?: Array<{ value: string; label: string }>;
+  /** Use full-screen dialog on small viewports (e.g. mobile) for better UX */
+  fullScreen?: boolean;
   onClose: () => void;
   onSave: () => void;
   onAddressChange: (address: AddressFormData) => void;
@@ -58,6 +60,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   showIsPrimary = true,
   showCoordinates = true,
   addressTypeOptions,
+  fullScreen = false,
   onClose,
   onSave,
   onAddressChange,
@@ -480,7 +483,13 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="md"
+      fullWidth
+      fullScreen={fullScreen}
+    >
       <DialogTitle>{dialogTitle}</DialogTitle>
       <DialogContent>
         {/* Get Current Location Button */}

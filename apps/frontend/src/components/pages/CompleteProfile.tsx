@@ -23,6 +23,8 @@ import {
   Stepper,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -50,27 +52,29 @@ const personaOptions = [
   {
     id: 'client',
     title: 'Client',
-    description: 'I want to book transportation services',
+    description: 'I order items',
     icon: <Person sx={{ fontSize: 40 }} />,
     color: '#1976d2',
   },
   {
     id: 'agent',
     title: 'Agent',
-    description: 'I provide transportation services',
+    description: 'I deliver items',
     icon: <LocalShipping sx={{ fontSize: 40 }} />,
     color: '#388e3c',
   },
   {
     id: 'business',
     title: 'Business',
-    description: 'I manage a transportation business',
+    description: 'I manage items and orders',
     icon: <Business sx={{ fontSize: 40 }} />,
     color: '#f57c00',
   },
 ];
 
 const CompleteProfile: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   const apiClient = useApiClient();
@@ -220,7 +224,13 @@ const CompleteProfile: React.FC = () => {
     switch (step) {
       case 0:
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: { xs: 2, sm: 3 },
+            }}
+          >
             <Typography variant="h6" gutterBottom>
               Choose Your Persona
             </Typography>
@@ -232,7 +242,7 @@ const CompleteProfile: React.FC = () => {
               sx={{
                 display: 'flex',
                 flexDirection: { xs: 'column', md: 'row' },
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
               }}
             >
               {personaOptions.map((persona) => (
@@ -272,7 +282,13 @@ const CompleteProfile: React.FC = () => {
 
       case 1:
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: { xs: 2, sm: 3 },
+            }}
+          >
             <Typography variant="h6" gutterBottom>
               Personal Information
             </Typography>
@@ -340,17 +356,38 @@ const CompleteProfile: React.FC = () => {
       case 2: {
         const selectedPersona = getSelectedPersona();
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: { xs: 2, sm: 3 },
+            }}
+          >
             <Typography variant="h6" gutterBottom>
               Review Your Information
             </Typography>
 
-            <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+            <Paper sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'grey.50' }}>
               <Typography variant="body2" gutterBottom>
                 <strong>Name:</strong> {profileData.first_name}{' '}
                 {profileData.last_name}
               </Typography>
-              <Typography variant="body2" gutterBottom>
+              <Typography
+                variant="body2"
+                gutterBottom
+                sx={{
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                <strong>Email:</strong>{' '}
+                {profileData.email || 'Not provided'}
+              </Typography>
+              <Typography
+                variant="body2"
+                gutterBottom
+                sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+              >
                 <strong>Phone Number:</strong>{' '}
                 {profileData.phone_number || 'Not provided'}
               </Typography>
@@ -393,11 +430,12 @@ const CompleteProfile: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'background.default',
+          p: { xs: 1, sm: 2 },
         }}
       >
         <Paper
           sx={{
-            p: 6,
+            p: { xs: 3, sm: 6 },
             textAlign: 'center',
             maxWidth: 500,
             width: '90%',
@@ -423,11 +461,12 @@ const CompleteProfile: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'background.default',
+          p: { xs: 1, sm: 2 },
         }}
       >
         <Paper
           sx={{
-            p: 6,
+            p: { xs: 3, sm: 6 },
             textAlign: 'center',
             maxWidth: 500,
             width: '90%',
@@ -457,18 +496,18 @@ const CompleteProfile: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: 'background.default',
-        p: 2,
+        p: { xs: 1, sm: 2 },
       }}
     >
       <Paper
         sx={{
-          p: 4,
+          p: { xs: 2, sm: 4 },
           maxWidth: 800,
           width: '100%',
         }}
       >
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Box sx={{ mb: 2 }}>
+        <Box sx={{ textAlign: 'center', mb: { xs: 2, sm: 4 } }}>
+          <Box sx={{ mb: { xs: 1, sm: 2 } }}>
             <Logo variant="default" size="large" />
           </Box>
           <Typography variant="h4" component="h1" gutterBottom>
@@ -492,7 +531,20 @@ const CompleteProfile: React.FC = () => {
           </Box>
         )}
 
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+        <Stepper
+          activeStep={activeStep}
+          orientation={isMobile ? 'vertical' : 'horizontal'}
+          sx={{
+            mb: { xs: 2, sm: 4 },
+            overflow: 'auto',
+            ...(isMobile && {
+              '& .MuiStepLabel-label': {
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+              },
+            }),
+          }}
+        >
           {steps.map((label) => (
             <Step key={label}>
               <StepLabel>{label}</StepLabel>
@@ -500,7 +552,7 @@ const CompleteProfile: React.FC = () => {
           ))}
         </Stepper>
 
-        <Box sx={{ mb: 4 }}>{renderStepContent(activeStep)}</Box>
+        <Box sx={{ mb: { xs: 2, sm: 4 } }}>{renderStepContent(activeStep)}</Box>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Button disabled={activeStep === 0} onClick={handleBack}>

@@ -294,11 +294,19 @@ const Header: React.FC = () => {
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
+                    flexWrap: 'wrap',
                     gap: 1,
                     mb: 0.5,
                   }}
                 >
-                  <Typography variant="subtitle2" fontWeight={600}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={600}
+                    sx={{
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
                     {getUserDisplayName()}
                   </Typography>
                   {userType === 'business' && profile?.business && (

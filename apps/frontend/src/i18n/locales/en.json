@@ -90,12 +90,14 @@
       "longitude": "Longitude (Optional)",
       "postalCode": "Postal Code",
       "primaryAddress": "Primary Address",
+      "requiredFields": "Please fill in all required fields (address, city, state, country).",
       "save": "Save",
       "saving": "Saving...",
       "stateProvince": "State/Province",
       "yes": "Yes",
       "no": "No"
     },
+    "saveError": "Failed to save address. Please try again.",
     "addressTypes": {
       "billing": "Billing",
       "delivery": "Delivery",
