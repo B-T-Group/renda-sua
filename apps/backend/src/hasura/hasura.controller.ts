@@ -31,11 +31,12 @@ export class HasuraController {
     }
   ) {
     try {
-      const user = await this.hasuraUserService.createUser(userData);
+      const identifier = this.hasuraUserService.getIdentifier();
+      const user = await this.hasuraSystemService.createUser(identifier, userData);
       return {
         success: true,
         user,
-        identifier: this.hasuraUserService.getIdentifier(),
+        identifier: identifier,
       };
     } catch (error: any) {
       return {
@@ -56,14 +57,16 @@ export class HasuraController {
     }
   ) {
     try {
-      const result = await this.hasuraUserService.createUserWithClient(
+      const identifier = this.hasuraUserService.getIdentifier();
+      const result = await this.hasuraSystemService.createUserWithClient(
+        identifier,
         userData
       );
       return {
         success: true,
         user: result.user,
         client: result.client,
-        identifier: this.hasuraUserService.getIdentifier(),
+        identifier: identifier,
       };
     } catch (error: any) {
       return {
@@ -89,7 +92,9 @@ export class HasuraController {
     }
   ) {
     try {
-      const result = await this.hasuraUserService.createUserWithAgent(
+      const identifier = this.hasuraUserService.getIdentifier();
+      const result = await this.hasuraSystemService.createUserWithAgent(
+        identifier,
         data.user,
         data.agent
       );
@@ -97,7 +102,7 @@ export class HasuraController {
         success: true,
         user: result.user,
         agent: result.agent,
-        identifier: this.hasuraUserService.getIdentifier(),
+        identifier: identifier,
       };
     } catch (error: any) {
       return {
@@ -123,7 +128,9 @@ export class HasuraController {
     }
   ) {
     try {
-      const result = await this.hasuraUserService.createUserWithBusiness(
+      const identifier = this.hasuraUserService.getIdentifier();
+      const result = await this.hasuraSystemService.createUserWithBusiness(
+        identifier,
         data.user,
         data.business
       );
@@ -131,7 +138,7 @@ export class HasuraController {
         success: true,
         user: result.user,
         business: result.business,
-        identifier: this.hasuraUserService.getIdentifier(),
+        identifier: identifier,
       };
     } catch (error: any) {
       return {

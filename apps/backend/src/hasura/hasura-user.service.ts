@@ -11,6 +11,7 @@ import {
   Users,
 } from '../generated/graphql';
 import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
+import { HasuraSystemService } from './hasura-system.service';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -65,7 +66,8 @@ export class HasuraUserService {
   private readonly client: GraphQLClient;
   constructor(
     @Inject(REQUEST) private readonly request: any,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly hasuraSystemService: HasuraSystemService
   ) {
     const hasuraConfig = this.configService.get('hasura');
     console.log('hasuraConfig', hasuraConfig);
@@ -227,12 +229,6 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          client {
-            id
-            user_id
-            created_at
-            updated_at
-          }
         }
       }
     `;
@@ -247,7 +243,29 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const client = user.client; // Get the first (and only) client
+    
+    // Query the client separately using system service (admin privileges)
+    // since we can't select it in the mutation return due to permission restrictions
+    const clientQuery = `
+      query GetClientByUserId($userId: uuid!) {
+        clients(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          user_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+    
+    const clientResult = await this.hasuraSystemService.executeQuery(clientQuery, {
+      userId: user.id,
+    });
+    
+    const client = clientResult.clients?.[0];
+    
+    if (!client) {
+      throw new Error('Client was not created successfully');
+    }
 
     return {
       user: {
@@ -319,14 +337,6 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          agent {
-            id
-            user_id
-            vehicle_type_id
-            is_verified
-            created_at
-            updated_at
-          }
         }
       }
     `;
@@ -342,7 +352,31 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const agent = user.agent; // Get the first (and only) agent
+    
+    // Query the agent separately using system service (admin privileges)
+    // since we can't select it in the mutation return due to permission restrictions
+    const agentQuery = `
+      query GetAgentByUserId($userId: uuid!) {
+        agents(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          user_id
+          vehicle_type_id
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+    
+    const agentResult = await this.hasuraSystemService.executeQuery(agentQuery, {
+      userId: user.id,
+    });
+    
+    const agent = agentResult.agents?.[0];
+    
+    if (!agent) {
+      throw new Error('Agent was not created successfully');
+    }
 
     return {
       user: {
@@ -432,8 +466,8 @@ export class HasuraUserService {
 
     const user = result.insert_users_one;
     
-    // Query the business separately since we can't select it in the mutation return
-    // due to permission restrictions on relationship selection
+    // Query the business separately using system service (admin privileges)
+    // since we can't select it in the mutation return due to permission restrictions
     const businessQuery = `
       query GetBusinessByUserId($userId: uuid!) {
         businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
@@ -448,7 +482,7 @@ export class HasuraUserService {
       }
     `;
     
-    const businessResult = await this.executeQuery(businessQuery, {
+    const businessResult = await this.hasuraSystemService.executeQuery(businessQuery, {
       userId: user.id,
     });
     

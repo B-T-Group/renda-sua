@@ -183,13 +183,16 @@ export class UsersController {
 
       switch (userTypeId) {
         case 'client':
-          result = await this.hasuraUserService.createUserWithClient({
-            email: profileData.email,
-            first_name: profileData.firstName,
-            last_name: profileData.lastName,
-            phone_number: profileData.phone,
-            user_type_id: userTypeId,
-          });
+          result = await this.hasuraSystemService.createUserWithClient(
+            identifier,
+            {
+              email: profileData.email,
+              first_name: profileData.firstName,
+              last_name: profileData.lastName,
+              phone_number: profileData.phone,
+              user_type_id: userTypeId,
+            }
+          );
           return {
             success: true,
             user: result.user,
@@ -198,7 +201,8 @@ export class UsersController {
           };
 
         case 'agent':
-          result = await this.hasuraUserService.createUserWithAgent(
+          result = await this.hasuraSystemService.createUserWithAgent(
+            identifier,
             {
               email: profileData.email,
               first_name: profileData.firstName,
@@ -221,7 +225,8 @@ export class UsersController {
           if (!profileData.businessName) {
             throw new Error('Business name is required for business users');
           }
-          result = await this.hasuraUserService.createUserWithBusiness(
+          result = await this.hasuraSystemService.createUserWithBusiness(
+            identifier,
             {
               email: profileData.email,
               first_name: profileData.firstName,
@@ -297,13 +302,16 @@ export class UsersController {
 
       switch (userData.user_type_id) {
         case 'client':
-          result = await this.hasuraUserService.createUserWithClient({
-            email: userData.email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            phone_number: userData.phone_number,
-            user_type_id: userData.user_type_id,
-          });
+          result = await this.hasuraSystemService.createUserWithClient(
+            identifier,
+            {
+              email: userData.email,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              phone_number: userData.phone_number,
+              user_type_id: userData.user_type_id,
+            }
+          );
           return {
             success: true,
             user: result.user,
@@ -315,7 +323,8 @@ export class UsersController {
           if (!userData.profile.vehicle_type_id) {
             throw new Error('vehicle_type_id is required for agent users');
           }
-          result = await this.hasuraUserService.createUserWithAgent(
+          result = await this.hasuraSystemService.createUserWithAgent(
+            identifier,
             {
               email: userData.email,
               first_name: userData.first_name,
@@ -338,7 +347,8 @@ export class UsersController {
           if (!userData.profile.name) {
             throw new Error('business name is required for business users');
           }
-          result = await this.hasuraUserService.createUserWithBusiness(
+          result = await this.hasuraSystemService.createUserWithBusiness(
+            identifier,
             {
               email: userData.email,
               first_name: userData.first_name,
@@ -359,7 +369,7 @@ export class UsersController {
 
         default: {
           // For any other user type, just create the user without related records
-          const user = await this.hasuraUserService.createUser({
+          const user = await this.hasuraSystemService.createUser(identifier, {
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,

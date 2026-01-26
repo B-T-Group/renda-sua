@@ -505,4 +505,348 @@ export class HasuraSystemService {
     );
     return response.insert_commission_payouts_one;
   }
+
+  /**
+   * Create a new user record
+   */
+  async createUser(
+    identifier: string,
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      phone_number?: string;
+      user_type_id: string;
+    }
+  ): Promise<any> {
+    const mutation = `
+      mutation CreateUser(
+        $identifier: String!, 
+        $email: String!, 
+        $first_name: String!, 
+        $last_name: String!, 
+        $phone_number: String,
+        $user_type_id: user_types_enum!
+      ) {
+        insert_users_one(object: {
+          identifier: $identifier,
+          email: $email,
+          first_name: $first_name,
+          last_name: $last_name,
+          phone_number: $phone_number,
+          user_type_id: $user_type_id
+        }) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          phone_number_verified
+          email_verified
+          user_type_id
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const result = await this.executeMutation(mutation, {
+      identifier,
+      email: userData.email,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone_number: userData.phone_number,
+      user_type_id: userData.user_type_id,
+    });
+
+    return result.insert_users_one;
+  }
+
+  /**
+   * Create a new user with client record using nested query
+   */
+  async createUserWithClient(
+    identifier: string,
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      phone_number?: string;
+      user_type_id: string;
+    }
+  ): Promise<{ user: any; client: any }> {
+    const mutation = `
+      mutation CreateUserWithClient(
+        $identifier: String!, 
+        $email: String!, 
+        $first_name: String!, 
+        $last_name: String!, 
+        $phone_number: String,
+        $user_type_id: user_types_enum!
+      ) {
+        insert_users_one(object: {
+          identifier: $identifier,
+          email: $email,
+          first_name: $first_name,
+          last_name: $last_name,
+          phone_number: $phone_number,
+          user_type_id: $user_type_id,
+          client: {
+            data: {}
+          }
+        }) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          phone_number_verified
+          email_verified
+          user_type_id
+          created_at
+          updated_at
+          client {
+            id
+            user_id
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.executeMutation(mutation, {
+      identifier,
+      email: userData.email,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone_number: userData.phone_number,
+      user_type_id: userData.user_type_id,
+    });
+
+    const user = result.insert_users_one;
+    const client = user.client;
+
+    return {
+      user: {
+        id: user.id,
+        identifier: user.identifier,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
+        user_type_id: user.user_type_id,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      },
+      client: {
+        id: client.id,
+        user_id: client.user_id,
+        created_at: client.created_at,
+        updated_at: client.updated_at,
+      },
+    };
+  }
+
+  /**
+   * Create a new user with agent record using nested query
+   */
+  async createUserWithAgent(
+    identifier: string,
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      phone_number?: string;
+      user_type_id: string;
+    },
+    agentData: { vehicle_type_id: string }
+  ): Promise<{ user: any; agent: any }> {
+    const mutation = `
+      mutation CreateUserWithAgent(
+        $identifier: String!, 
+        $email: String!, 
+        $first_name: String!, 
+        $last_name: String!, 
+        $phone_number: String,
+        $user_type_id: user_types_enum!,
+        $vehicle_type_id: vehicle_types_enum!
+      ) {
+        insert_users_one(object: {
+          identifier: $identifier,
+          email: $email,
+          first_name: $first_name,
+          last_name: $last_name,
+          phone_number: $phone_number,
+          user_type_id: $user_type_id,
+          agent: {
+            data: {
+              vehicle_type_id: $vehicle_type_id
+            }
+          }
+        }) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          phone_number_verified
+          email_verified
+          user_type_id
+          created_at
+          updated_at
+          agent {
+            id
+            user_id
+            vehicle_type_id
+            is_verified
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.executeMutation(mutation, {
+      identifier,
+      email: userData.email,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone_number: userData.phone_number,
+      user_type_id: userData.user_type_id,
+      vehicle_type_id: agentData.vehicle_type_id,
+    });
+
+    const user = result.insert_users_one;
+    const agent = user.agent;
+
+    return {
+      user: {
+        id: user.id,
+        identifier: user.identifier,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
+        user_type_id: user.user_type_id,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      },
+      agent: {
+        id: agent.id,
+        user_id: agent.user_id,
+        vehicle_type_id: agent.vehicle_type_id,
+        is_verified: agent.is_verified,
+        created_at: agent.created_at,
+        updated_at: agent.updated_at,
+      },
+    };
+  }
+
+  /**
+   * Create a new user with business record using nested query
+   */
+  async createUserWithBusiness(
+    identifier: string,
+    userData: {
+      email: string;
+      first_name: string;
+      last_name: string;
+      phone_number?: string;
+      user_type_id: string;
+    },
+    businessData: { name: string }
+  ): Promise<{ user: any; business: any }> {
+    const mutation = `
+      mutation CreateUserWithBusiness(
+        $identifier: String!, 
+        $email: String!, 
+        $first_name: String!, 
+        $last_name: String!, 
+        $phone_number: String,
+        $user_type_id: user_types_enum!,
+        $business_name: String!
+      ) {
+        insert_users_one(object: {
+          identifier: $identifier,
+          email: $email,
+          first_name: $first_name,
+          last_name: $last_name,
+          phone_number: $phone_number,
+          user_type_id: $user_type_id,
+          business: {
+            data: {
+              name: $business_name
+            }
+          }
+        }) {
+          id
+          identifier
+          email
+          first_name
+          last_name
+          phone_number
+          phone_number_verified
+          email_verified
+          user_type_id
+          created_at
+          updated_at
+          business {
+            id
+            user_id
+            name
+            is_admin
+            is_verified
+            created_at
+            updated_at
+          }
+        }
+      }
+    `;
+
+    const result = await this.executeMutation(mutation, {
+      identifier,
+      email: userData.email,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone_number: userData.phone_number,
+      user_type_id: userData.user_type_id,
+      business_name: businessData.name,
+    });
+
+    const user = result.insert_users_one;
+    const business = user.business;
+
+    return {
+      user: {
+        id: user.id,
+        identifier: user.identifier,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone_number: user.phone_number,
+        phone_number_verified: user.phone_number_verified,
+        email_verified: user.email_verified,
+        user_type_id: user.user_type_id,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      },
+      business: {
+        id: business.id,
+        user_id: business.user_id,
+        name: business.name,
+        is_admin: business.is_admin,
+        is_verified: business.is_verified,
+        created_at: business.created_at,
+        updated_at: business.updated_at,
+      },
+    };
+  }
 }
