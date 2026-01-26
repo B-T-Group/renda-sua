@@ -106,7 +106,9 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     if (filters.categoryFilter !== 'all') {
       chips.push({
         label: `${t('business.items.category', 'Category')}: ${
-          filters.categoryFilter
+          filters.categoryFilter === '_no_category'
+            ? t('business.items.filters.noCategory', 'No category')
+            : filters.categoryFilter
         }`,
         onDelete: () => handleFilterChange('categoryFilter', 'all'),
       });
@@ -114,7 +116,11 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
 
     if (filters.brandFilter !== 'all') {
       chips.push({
-        label: `${t('business.items.brand', 'Brand')}: ${filters.brandFilter}`,
+        label: `${t('business.items.brand', 'Brand')}: ${
+          filters.brandFilter === '_no_brand'
+            ? t('business.items.filters.noBrand', 'No brand')
+            : filters.brandFilter
+        }`,
         onDelete: () => handleFilterChange('brandFilter', 'all'),
       });
     }
@@ -209,7 +215,10 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           label={t('business.items.category', 'Category')}
         >
           <MenuItem value="all">
-            {t('common.allCategories', 'All Categories')}
+            {t('business.items.filters.allCategories', 'All Categories')}
+          </MenuItem>
+          <MenuItem value="_no_category">
+            {t('business.items.filters.noCategory', 'No category')}
           </MenuItem>
           {categories.map((category) => (
             <MenuItem key={category} value={category}>
@@ -227,7 +236,12 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           onChange={(e) => handleFilterChange('brandFilter', e.target.value)}
           label={t('business.items.brand', 'Brand')}
         >
-          <MenuItem value="all">{t('common.allBrands', 'All Brands')}</MenuItem>
+          <MenuItem value="all">
+            {t('common.allBrands', 'All Brands')}
+          </MenuItem>
+          <MenuItem value="_no_brand">
+            {t('business.items.filters.noBrand', 'No brand')}
+          </MenuItem>
           {brands.map((brand) => (
             <MenuItem key={brand} value={brand}>
               {brand}
@@ -341,7 +355,10 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                   label={t('business.items.category', 'Category')}
                 >
                   <MenuItem value="all">
-                    {t('common.allCategories', 'All Categories')}
+                    {t('business.items.filters.allCategories', 'All Categories')}
+                  </MenuItem>
+                  <MenuItem value="_no_category">
+                    {t('business.items.filters.noCategory', 'No category')}
                   </MenuItem>
                   {categories.map((category) => (
                     <MenuItem key={category} value={category}>
@@ -362,6 +379,9 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 >
                   <MenuItem value="all">
                     {t('common.allBrands', 'All Brands')}
+                  </MenuItem>
+                  <MenuItem value="_no_brand">
+                    {t('business.items.filters.noBrand', 'No brand')}
                   </MenuItem>
                   {brands.map((brand) => (
                     <MenuItem key={brand} value={brand}>

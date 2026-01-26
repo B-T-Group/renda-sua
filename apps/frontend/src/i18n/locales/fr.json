@@ -678,6 +678,8 @@
         "allCategories": "Toutes les catégories",
         "allStatuses": "Tous les Statuts",
         "brand": "Marque",
+        "noCategory": "Sans catégorie",
+        "noBrand": "Sans marque",
         "category": "Catégorie",
         "search": "Rechercher des articles...",
         "showing": "Affichage",

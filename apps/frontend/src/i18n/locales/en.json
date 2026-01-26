@@ -677,6 +677,8 @@
         "allStatuses": "All Statuses",
         "brand": "Brand",
         "category": "Category",
+        "noCategory": "No category",
+        "noBrand": "No brand",
         "search": "Search items...",
         "showing": "Showing",
         "status": "Status"

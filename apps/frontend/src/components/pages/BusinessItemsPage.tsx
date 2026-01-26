@@ -5,7 +5,6 @@ import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
-  EditAttributes as EditAttributesIcon,
   Inventory as InventoryIcon,
   LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
@@ -82,6 +81,8 @@ type InlineDraft = {
   price: number;
   item_sub_category_id: number;
 };
+
+type EditableField = 'name' | 'sku' | 'brand' | 'price' | 'category';
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
@@ -268,8 +269,11 @@ const BusinessItemsPage: React.FC = () => {
     updateItem,
   } = useItems(profile?.business?.id);
 
-  // Inline-edit state (Table View)
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  // Inline-edit state (Table View) – per-field, triggered by cell click
+  const [editingCell, setEditingCell] = useState<{
+    rowId: string;
+    field: EditableField;
+  } | null>(null);
   const [draftValues, setDraftValues] = useState<InlineDraft | null>(null);
   const [inlineUpdateLoading, setInlineUpdateLoading] = useState(false);
 
@@ -381,8 +385,8 @@ const BusinessItemsPage: React.FC = () => {
     }
   };
 
-  const startInlineEdit = (row: Item) => {
-    setEditingRowId(row.id);
+  const startInlineEdit = (row: Item, field: EditableField) => {
+    setEditingCell({ rowId: row.id, field });
     setDraftValues({
       name: row.name,
       sku: row.sku ?? '',
@@ -393,39 +397,48 @@ const BusinessItemsPage: React.FC = () => {
   };
 
   const cancelInlineEdit = () => {
-    setEditingRowId(null);
+    setEditingCell(null);
     setDraftValues(null);
   };
 
   const applyInlineEdit = async () => {
-    if (!editingRowId || !draftValues) return;
-    const trimmedName = draftValues.name.trim();
-    if (!trimmedName) {
-      enqueueSnackbar(t('business.items.nameRequired'), {
-        variant: 'warning',
-      });
-      return;
+    if (!editingCell || !draftValues) return;
+    const { rowId, field } = editingCell;
+
+    if (field === 'name') {
+      const trimmed = draftValues.name.trim();
+      if (!trimmed) {
+        enqueueSnackbar(t('business.items.nameRequired'), {
+          variant: 'warning',
+        });
+        return;
+      }
     }
-    if (draftValues.price < 0) {
+    if (field === 'price' && draftValues.price < 0) {
       enqueueSnackbar(t('business.items.price', 'Price') + ' must be ≥ 0', {
         variant: 'warning',
       });
       return;
     }
+
+    const payload: Record<string, unknown> = {};
+    if (field === 'name') payload.name = draftValues.name.trim();
+    else if (field === 'sku')
+      payload.sku = draftValues.sku?.trim() || undefined;
+    else if (field === 'brand')
+      payload.brand_id =
+        draftValues.brand_id === null
+          ? null
+          : (draftValues.brand_id || undefined);
+    else if (field === 'price') payload.price = draftValues.price;
+    else if (field === 'category')
+      payload.item_sub_category_id = draftValues.item_sub_category_id;
+
     setInlineUpdateLoading(true);
     try {
       await updateItem(
-        editingRowId,
-        {
-          name: trimmedName,
-          sku: draftValues.sku?.trim() || undefined,
-          brand_id:
-            draftValues.brand_id === null
-              ? null
-              : (draftValues.brand_id || undefined),
-          price: draftValues.price,
-          item_sub_category_id: draftValues.item_sub_category_id,
-        } as Parameters<typeof updateItem>[1],
+        rowId,
+        payload as Parameters<typeof updateItem>[1],
         { skipRefetch: true }
       );
       enqueueSnackbar(t('business.items.itemUpdated'), { variant: 'success' });
@@ -590,7 +603,10 @@ const BusinessItemsPage: React.FC = () => {
       width: 320,
       flex: 1,
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing =
+          editingCell?.rowId === params.row.id &&
+          editingCell?.field === 'name' &&
+          draftValues;
         if (isEditing) {
           return (
             <TextField
@@ -606,7 +622,27 @@ const BusinessItemsPage: React.FC = () => {
             />
           );
         }
-        return params.row.name;
+        return (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(params.row, 'name');
+            }}
+            sx={{
+              cursor: 'pointer',
+              width: '100%',
+              minHeight: 24,
+              display: 'flex',
+              alignItems: 'center',
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 0.5,
+              px: 0.5,
+              mx: -0.5,
+            }}
+          >
+            {params.row.name}
+          </Box>
+        );
       },
     },
     {
@@ -614,7 +650,10 @@ const BusinessItemsPage: React.FC = () => {
       headerName: t('business.items.sku'),
       width: 120,
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing =
+          editingCell?.rowId === params.row.id &&
+          editingCell?.field === 'sku' &&
+          draftValues;
         if (isEditing) {
           return (
             <TextField
@@ -630,7 +669,27 @@ const BusinessItemsPage: React.FC = () => {
             />
           );
         }
-        return params.row.sku ?? '';
+        return (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(params.row, 'sku');
+            }}
+            sx={{
+              cursor: 'pointer',
+              width: '100%',
+              minHeight: 24,
+              display: 'flex',
+              alignItems: 'center',
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 0.5,
+              px: 0.5,
+              mx: -0.5,
+            }}
+          >
+            {params.row.sku ?? ''}
+          </Box>
+        );
       },
     },
     {
@@ -639,7 +698,10 @@ const BusinessItemsPage: React.FC = () => {
       width: 150,
       valueGetter: (value, row) => row.brand?.name || '',
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing =
+          editingCell?.rowId === params.row.id &&
+          editingCell?.field === 'brand' &&
+          draftValues;
         if (isEditing) {
           return (
             <FormControl size="small" sx={{ minWidth: 120 }} fullWidth>
@@ -666,7 +728,27 @@ const BusinessItemsPage: React.FC = () => {
             </FormControl>
           );
         }
-        return params.row.brand?.name || t('business.inventory.noBrand');
+        return (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(params.row, 'brand');
+            }}
+            sx={{
+              cursor: 'pointer',
+              width: '100%',
+              minHeight: 24,
+              display: 'flex',
+              alignItems: 'center',
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 0.5,
+              px: 0.5,
+              mx: -0.5,
+            }}
+          >
+            {params.row.brand?.name || t('business.inventory.noBrand')}
+          </Box>
+        );
       },
     },
     {
@@ -675,7 +757,10 @@ const BusinessItemsPage: React.FC = () => {
       width: 150,
       valueGetter: (value, row) => row.item_sub_category?.name || '',
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing =
+          editingCell?.rowId === params.row.id &&
+          editingCell?.field === 'category' &&
+          draftValues;
         if (isEditing) {
           return (
             <FormControl size="small" sx={{ minWidth: 140 }} fullWidth>
@@ -695,17 +780,43 @@ const BusinessItemsPage: React.FC = () => {
                     {t('business.inventory.noCategoriesFound')}
                   </MenuItem>
                 ) : (
-                  itemSubCategories.map((sc: { id: number; name: string; item_category: { name: string } }) => (
-                    <MenuItem key={sc.id} value={sc.id}>
-                      {sc.item_category?.name} - {sc.name}
-                    </MenuItem>
-                  ))
+                  itemSubCategories.map(
+                    (sc: {
+                      id: number;
+                      name: string;
+                      item_category: { name: string };
+                    }) => (
+                      <MenuItem key={sc.id} value={sc.id}>
+                        {sc.item_category?.name} - {sc.name}
+                      </MenuItem>
+                    )
+                  )
                 )}
               </Select>
             </FormControl>
           );
         }
-        return params.row.item_sub_category?.name || '';
+        return (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(params.row, 'category');
+            }}
+            sx={{
+              cursor: 'pointer',
+              width: '100%',
+              minHeight: 24,
+              display: 'flex',
+              alignItems: 'center',
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 0.5,
+              px: 0.5,
+              mx: -0.5,
+            }}
+          >
+            {params.row.item_sub_category?.name || ''}
+          </Box>
+        );
       },
     },
     {
@@ -714,7 +825,10 @@ const BusinessItemsPage: React.FC = () => {
       width: 120,
       type: 'number',
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing =
+          editingCell?.rowId === params.row.id &&
+          editingCell?.field === 'price' &&
+          draftValues;
         if (isEditing) {
           return (
             <TextField
@@ -733,7 +847,27 @@ const BusinessItemsPage: React.FC = () => {
             />
           );
         }
-        return formatCurrency(params.row.price, params.row.currency);
+        return (
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(params.row, 'price');
+            }}
+            sx={{
+              cursor: 'pointer',
+              width: '100%',
+              minHeight: 24,
+              display: 'flex',
+              alignItems: 'center',
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 0.5,
+              px: 0.5,
+              mx: -0.5,
+            }}
+          >
+            {formatCurrency(params.row.price, params.row.currency)}
+          </Box>
+        );
       },
     },
     {
@@ -791,9 +925,9 @@ const BusinessItemsPage: React.FC = () => {
     {
       field: 'actions',
       headerName: t('common.actions'),
-      width: 220,
+      width: 180,
       renderCell: (params: GridRenderCellParams) => {
-        const isEditing = editingRowId === params.row.id && draftValues;
+        const isEditing = editingCell?.rowId === params.row.id && draftValues;
         if (isEditing) {
           return (
             <Stack direction="row" spacing={1}>
@@ -828,15 +962,6 @@ const BusinessItemsPage: React.FC = () => {
         }
         return (
           <Stack direction="row" spacing={1}>
-            <Tooltip title={t('business.items.inlineEdit')}>
-              <IconButton
-                size="small"
-                onClick={() => startInlineEdit(params.row)}
-                sx={{ color: theme.palette.secondary.main }}
-              >
-                <EditAttributesIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title={t('business.items.viewItem')}>
               <IconButton
                 size="small"
@@ -914,10 +1039,12 @@ const BusinessItemsPage: React.FC = () => {
 
       const matchesCategory =
         filters.categoryFilter === 'all' ||
+        (filters.categoryFilter === '_no_category' && !item.item_sub_category) ||
         item.item_sub_category?.name === filters.categoryFilter;
 
       const matchesBrand =
         filters.brandFilter === 'all' ||
+        (filters.brandFilter === '_no_brand' && !item.brand) ||
         item.brand?.name === filters.brandFilter;
 
       const matchesStock =
