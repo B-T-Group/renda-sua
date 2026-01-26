@@ -2421,9 +2421,6 @@ export class OrdersService {
             item_name
             item_description
             quantity
-            weight
-            weight_unit
-            dimensions
             special_instructions
             item {
               id
@@ -2435,6 +2432,7 @@ export class OrdersService {
               color
               weight
               weight_unit
+              dimensions
               brand {
                 id
                 name

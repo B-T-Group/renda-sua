@@ -126,9 +126,6 @@ export class UsersController {
               unit_price
               quantity
               total_price
-              weight
-              weight_unit
-              dimensions
               special_instructions
             }
           }

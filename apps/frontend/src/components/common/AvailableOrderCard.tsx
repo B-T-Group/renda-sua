@@ -617,7 +617,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         title={t('orders.confirmClaimOrder', 'Confirm Claim Order')}
         message={t(
           'orders.confirmClaimOrderMessage',
-          'Are you sure you want to claim order #{{orderNumber}}? This action cannot be undone.',
+          'Are you sure you want to claim order #{{orderNumber}}? Claiming an order can be undone.',
           { orderNumber: order.order_number }
         )}
         confirmText={t('orderActions.claimOrder', 'Claim Order')}

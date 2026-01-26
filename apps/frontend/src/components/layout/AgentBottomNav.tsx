@@ -39,6 +39,7 @@ const AgentBottomNav: React.FC = () => {
         left: 0,
         right: 0,
         zIndex: 1000,
+        borderRadius: 0,
         borderTop: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',
