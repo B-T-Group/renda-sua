@@ -126,15 +126,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 }) => {
   const { t } = useTranslation();
   const subtotal = selectedItem.selling_price * quantity;
-  // Delivery fee computation:
-  // - Normal delivery: subtotal + API delivery fee
-  // - Fast delivery: API delivery fee only (no subtotal added)
-  const computedDeliveryFee = requiresFastDelivery
-    ? deliveryFee || 0
-    : subtotal + (deliveryFee || 0);
-  const total = requiresFastDelivery
-    ? subtotal + computedDeliveryFee
-    : computedDeliveryFee;
+  // Delivery fee is the API delivery fee (already includes fast delivery base fee if applicable)
+  const computedDeliveryFee = deliveryFee || 0;
+  // Total = subtotal + delivery fee + fast delivery fee (if applicable)
+  const total = subtotal + computedDeliveryFee + (requiresFastDelivery ? fastDeliveryFee : 0);
 
   return (
     <Paper
@@ -216,6 +211,17 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Typography>
           </Box>
+
+          {requiresFastDelivery && fastDeliveryFee > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('checkout.fastDeliveryFee', 'Fast Delivery Fee')}
+              </Typography>
+              <Typography variant="body2" fontWeight="medium">
+                {formatCurrency(fastDeliveryFee, selectedItem.item.currency)}
+              </Typography>
+            </Box>
+          )}
 
           <Divider sx={{ my: 1.5 }} />
 
