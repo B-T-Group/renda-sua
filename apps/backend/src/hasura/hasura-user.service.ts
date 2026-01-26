@@ -416,15 +416,6 @@ export class HasuraUserService {
           user_type_id
           created_at
           updated_at
-          business {
-            id
-            user_id
-            name
-            is_admin
-            is_verified
-            created_at
-            updated_at
-          }
         }
       }
     `;
@@ -440,7 +431,32 @@ export class HasuraUserService {
     });
 
     const user = result.insert_users_one;
-    const business = user.business; // Get the first (and only) business
+    
+    // Query the business separately since we can't select it in the mutation return
+    // due to permission restrictions on relationship selection
+    const businessQuery = `
+      query GetBusinessByUserId($userId: uuid!) {
+        businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
+          id
+          user_id
+          name
+          is_admin
+          is_verified
+          created_at
+          updated_at
+        }
+      }
+    `;
+    
+    const businessResult = await this.executeQuery(businessQuery, {
+      userId: user.id,
+    });
+    
+    const business = businessResult.businesses?.[0];
+    
+    if (!business) {
+      throw new Error('Business was not created successfully');
+    }
 
     return {
       user: {
