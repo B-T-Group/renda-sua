@@ -566,14 +566,26 @@ export const useItems = (businessId?: string) => {
   );
 
   const updateItem = useCallback(
-    async (id: string, itemData: Partial<CreateItemData>) => {
+    async (
+      id: string,
+      itemData: Partial<CreateItemData>,
+      options?: { skipRefetch?: boolean }
+    ) => {
       try {
         const result = await executeUpdateItem({ id, itemData });
+        const updated = result.update_items_by_pk;
 
-        // Refresh items after updating
+        if (options?.skipRefetch && updated) {
+          setItems((prev) =>
+            prev.map((it) =>
+              it.id === id ? { ...it, ...updated } : it
+            )
+          );
+          return updated;
+        }
+
         await fetchItems();
-
-        return result.update_items_by_pk;
+        return updated;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update item');
         throw err;

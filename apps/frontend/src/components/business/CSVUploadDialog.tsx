@@ -34,6 +34,7 @@ import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItemImages } from '../../hooks/useItemImages';
 import { useItems } from '../../hooks/useItems';
 import { ItemImage } from '../../types/image';
+import { CSV_ITEMS_TEMPLATE_HEADERS } from './csvItemsTemplate';
 
 interface CSVUploadDialogProps {
   open: boolean;
@@ -480,36 +481,7 @@ export default function CSVUploadDialog({
   };
 
   const downloadTemplate = () => {
-    const headers = [
-      'name',
-      'description',
-      'price',
-      'currency',
-      'sku',
-      'weight',
-      'weight_unit',
-      'dimensions',
-      'color',
-      'model',
-      'is_fragile',
-      'is_perishable',
-      'requires_special_handling',
-      'min_order_quantity',
-      'max_order_quantity',
-      'is_active',
-      'item_sub_category_id',
-      'brand_id',
-      'business_location_name',
-      'quantity',
-      'reserved_quantity',
-      'reorder_point',
-      'reorder_quantity',
-      'unit_cost',
-      'selling_price',
-      'image_url',
-      'image_alt_text',
-      'image_caption',
-    ];
+    const headers = [...CSV_ITEMS_TEMPLATE_HEADERS];
 
     const sampleData = [
       'Sample Item',
@@ -517,8 +489,8 @@ export default function CSVUploadDialog({
       '29.99',
       'USD',
       'SAMPLE-001',
-      '10',
-      '500',
+      '1.5',
+      'kg',
       '10 x 20 x 5 cm',
       'Red',
       'Model-X',
@@ -532,10 +504,9 @@ export default function CSVUploadDialog({
       '',
       'Main Warehouse',
       '100',
-      '95',
       '5',
+      '10',
       '20',
-      '50',
       '15.00',
       '29.99',
       'https://example.com/images/sample-item.jpg',

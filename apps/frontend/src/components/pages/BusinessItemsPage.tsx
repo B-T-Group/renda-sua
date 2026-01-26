@@ -1,8 +1,11 @@
 import {
   Add as AddIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
+  EditAttributes as EditAttributesIcon,
   Inventory as InventoryIcon,
   LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
@@ -24,8 +27,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Skeleton,
   Stack,
   Tab,
@@ -36,6 +43,7 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -52,9 +60,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
-import { useItems } from '../../hooks/useItems';
+import { useItems, type Item } from '../../hooks/useItems';
 import AddItemDialog from '../business/AddItemDialog';
 import BusinessItemCardView from '../business/BusinessItemCardView';
+import { CSV_ITEMS_TEMPLATE_HEADERS } from '../business/csvItemsTemplate';
 import CSVUploadDialog from '../business/CSVUploadDialog';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
@@ -65,6 +74,14 @@ interface TabPanelProps {
   index: number;
   value: number;
 }
+
+type InlineDraft = {
+  name: string;
+  sku: string | null;
+  brand_id: string | null;
+  price: number;
+  item_sub_category_id: number;
+};
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
@@ -77,7 +94,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`items-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ p: 0 }}>{children}</Box>}
     </div>
   );
 }
@@ -224,6 +241,11 @@ const BusinessItemsPage: React.FC = () => {
   const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [downloadLocationDialogOpen, setDownloadLocationDialogOpen] =
+    useState(false);
+  const [selectedDownloadLocationId, setSelectedDownloadLocationId] = useState<
+    string | null
+  >(null);
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -243,7 +265,13 @@ const BusinessItemsPage: React.FC = () => {
     fetchItems,
     fetchBrands,
     fetchItemSubCategories,
+    updateItem,
   } = useItems(profile?.business?.id);
+
+  // Inline-edit state (Table View)
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [draftValues, setDraftValues] = useState<InlineDraft | null>(null);
+  const [inlineUpdateLoading, setInlineUpdateLoading] = useState(false);
 
   const {
     businessLocations,
@@ -353,7 +381,72 @@ const BusinessItemsPage: React.FC = () => {
     }
   };
 
-  const downloadItemsCSV = () => {
+  const startInlineEdit = (row: Item) => {
+    setEditingRowId(row.id);
+    setDraftValues({
+      name: row.name,
+      sku: row.sku ?? '',
+      brand_id: row.brand_id ?? null,
+      price: row.price,
+      item_sub_category_id: row.item_sub_category_id,
+    });
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingRowId(null);
+    setDraftValues(null);
+  };
+
+  const applyInlineEdit = async () => {
+    if (!editingRowId || !draftValues) return;
+    const trimmedName = draftValues.name.trim();
+    if (!trimmedName) {
+      enqueueSnackbar(t('business.items.nameRequired'), {
+        variant: 'warning',
+      });
+      return;
+    }
+    if (draftValues.price < 0) {
+      enqueueSnackbar(t('business.items.price', 'Price') + ' must be ≥ 0', {
+        variant: 'warning',
+      });
+      return;
+    }
+    setInlineUpdateLoading(true);
+    try {
+      await updateItem(
+        editingRowId,
+        {
+          name: trimmedName,
+          sku: draftValues.sku?.trim() || undefined,
+          brand_id:
+            draftValues.brand_id === null
+              ? null
+              : (draftValues.brand_id || undefined),
+          price: draftValues.price,
+          item_sub_category_id: draftValues.item_sub_category_id,
+        } as Parameters<typeof updateItem>[1],
+        { skipRefetch: true }
+      );
+      enqueueSnackbar(t('business.items.itemUpdated'), { variant: 'success' });
+      cancelInlineEdit();
+    } catch (err) {
+      enqueueSnackbar(
+        err instanceof Error ? err.message : t('business.items.updateItem') + ' failed',
+        { variant: 'error' }
+      );
+    } finally {
+      setInlineUpdateLoading(false);
+    }
+  };
+
+  const escapeCsvValue = (v: string | number | boolean | undefined | null): string => {
+    const s = String(v ?? '');
+    if (/[,\n"]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const downloadItemsCSV = (locationId: string | null) => {
     if (!items || items.length === 0) {
       enqueueSnackbar(t('business.items.noItemsToDownload'), {
         variant: 'warning',
@@ -361,99 +454,97 @@ const BusinessItemsPage: React.FC = () => {
       return;
     }
 
-    // Define headers in the same order as the upload template
-    const headers = [
-      'name',
-      'description',
-      'price',
-      'currency',
-      'sku',
-      'weight',
-      'weight_unit',
-      'dimensions',
-      'color',
-      'model',
-      'is_fragile',
-      'is_perishable',
-      'requires_special_handling',
-      'min_order_quantity',
-      'max_order_quantity',
-      'is_active',
-      'item_sub_category_id',
-      'brand_id',
-      'business_location_name',
-      'quantity',
-      'computed_available_quantity',
-      'reserved_quantity',
-      'reorder_point',
-      'reorder_quantity',
-      'unit_cost',
-      'selling_price',
-      'image_url',
-      'image_alt_text',
-      'image_caption',
-    ];
+    const headers = [...CSV_ITEMS_TEMPLATE_HEADERS];
+    const rows: string[][] = [];
 
-    // Convert items to CSV rows
-    const csvRows = items.map((item) => {
-      // Get the main image URL if available
-      const mainImage = item.item_images?.find(
-        (img) => img.image_type === 'main'
-      );
+    for (const item of items) {
+      let invs = item.business_inventories ?? [];
+      if (locationId) {
+        invs = invs.filter((inv) => inv.business_location_id === locationId);
+        if (invs.length === 0) continue;
+      }
 
-      return [
-        item.name || '',
-        item.description || '',
-        item.price?.toString() || '',
-        item.currency || 'USD',
-        item.sku || '',
-        item.weight?.toString() || '',
-        item.weight_unit || '',
-        item.dimensions || '',
-        item.color || '',
-        item.model || '',
-        item.is_fragile?.toString() || 'false',
-        item.is_perishable?.toString() || 'false',
-        item.requires_special_handling?.toString() || 'false',
-        item.min_order_quantity?.toString() || '1',
-        item.max_order_quantity?.toString() || '',
-        item.is_active?.toString() || 'true',
-        item.item_sub_category_id?.toString() || '',
-        item.brand_id || '',
-        '', // business_location_name - will be empty for items without inventory
-        '', // quantity
-        '', // computed_available_quantity
-        '', // reserved_quantity
-        '', // reorder_point
-        '', // reorder_quantity
-        '', // unit_cost
-        '', // selling_price
-        mainImage?.image_url || '',
-        mainImage?.alt_text || '',
-        mainImage?.caption || '',
-      ];
-    });
+      const mainImage = item.item_images?.find((img) => img.image_type === 'main');
 
-    // Create CSV content
-    const csvContent = [
-      headers.join(','),
-      ...csvRows.map((row) => row.join(',')),
-    ].join('\n');
+      if (invs.length === 0) {
+        rows.push([
+          escapeCsvValue(item.name ?? ''),
+          escapeCsvValue(item.description ?? ''),
+          escapeCsvValue(item.price ?? ''),
+          escapeCsvValue(item.currency ?? 'USD'),
+          escapeCsvValue(item.sku ?? ''),
+          escapeCsvValue(item.weight ?? ''),
+          escapeCsvValue(item.weight_unit ?? ''),
+          escapeCsvValue(item.dimensions ?? ''),
+          escapeCsvValue(item.color ?? ''),
+          escapeCsvValue(item.model ?? ''),
+          escapeCsvValue(item.is_fragile ?? false),
+          escapeCsvValue(item.is_perishable ?? false),
+          escapeCsvValue(item.requires_special_handling ?? false),
+          escapeCsvValue(item.min_order_quantity ?? 1),
+          escapeCsvValue(item.max_order_quantity ?? ''),
+          escapeCsvValue(item.is_active ?? true),
+          escapeCsvValue(item.item_sub_category_id ?? ''),
+          escapeCsvValue(item.brand_id ?? ''),
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          escapeCsvValue(mainImage?.image_url ?? ''),
+          escapeCsvValue(mainImage?.alt_text ?? ''),
+          '',
+        ]);
+        continue;
+      }
 
-    // Create and download the file
+      for (const inv of invs) {
+        const loc = inv.business_location;
+        rows.push([
+          escapeCsvValue(item.name ?? ''),
+          escapeCsvValue(item.description ?? ''),
+          escapeCsvValue(item.price ?? ''),
+          escapeCsvValue(item.currency ?? 'USD'),
+          escapeCsvValue(item.sku ?? ''),
+          escapeCsvValue(item.weight ?? ''),
+          escapeCsvValue(item.weight_unit ?? ''),
+          escapeCsvValue(item.dimensions ?? ''),
+          escapeCsvValue(item.color ?? ''),
+          escapeCsvValue(item.model ?? ''),
+          escapeCsvValue(item.is_fragile ?? false),
+          escapeCsvValue(item.is_perishable ?? false),
+          escapeCsvValue(item.requires_special_handling ?? false),
+          escapeCsvValue(item.min_order_quantity ?? 1),
+          escapeCsvValue(item.max_order_quantity ?? ''),
+          escapeCsvValue(item.is_active ?? true),
+          escapeCsvValue(item.item_sub_category_id ?? ''),
+          escapeCsvValue(item.brand_id ?? ''),
+          escapeCsvValue(loc?.name ?? ''),
+          escapeCsvValue(inv.quantity ?? ''),
+          escapeCsvValue(inv.reserved_quantity ?? ''),
+          escapeCsvValue(inv.reorder_point ?? ''),
+          escapeCsvValue(inv.reorder_quantity ?? ''),
+          escapeCsvValue(inv.unit_cost ?? ''),
+          escapeCsvValue(inv.selling_price ?? ''),
+          escapeCsvValue(mainImage?.image_url ?? ''),
+          escapeCsvValue(mainImage?.alt_text ?? ''),
+          escapeCsvValue(''),
+        ]);
+      }
+    }
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `items_export_${
-      new Date().toISOString().split('T')[0]
-    }.csv`;
+    link.download = `items_export_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
 
-    enqueueSnackbar(t('business.items.downloadSuccess'), {
-      variant: 'success',
-    });
+    enqueueSnackbar(t('business.items.downloadSuccess'), { variant: 'success' });
   };
 
   const getStockStatus = (quantity: number, reorderPoint: number) => {
@@ -496,33 +587,154 @@ const BusinessItemsPage: React.FC = () => {
     {
       field: 'name',
       headerName: t('business.items.name'),
-      width: 200,
+      width: 320,
       flex: 1,
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <TextField
+              size="small"
+              value={draftValues.name}
+              onChange={(e) =>
+                setDraftValues({ ...draftValues, name: e.target.value })
+              }
+              onClick={(e) => e.stopPropagation()}
+              fullWidth
+              variant="outlined"
+              sx={{ minWidth: 140 }}
+            />
+          );
+        }
+        return params.row.name;
+      },
     },
     {
       field: 'sku',
       headerName: t('business.items.sku'),
       width: 120,
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <TextField
+              size="small"
+              value={draftValues.sku ?? ''}
+              onChange={(e) =>
+                setDraftValues({ ...draftValues, sku: e.target.value || null })
+              }
+              onClick={(e) => e.stopPropagation()}
+              fullWidth
+              variant="outlined"
+              sx={{ minWidth: 100 }}
+            />
+          );
+        }
+        return params.row.sku ?? '';
+      },
     },
     {
       field: 'brand',
       headerName: t('business.items.brand'),
       width: 150,
       valueGetter: (value, row) => row.brand?.name || '',
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <FormControl size="small" sx={{ minWidth: 120 }} fullWidth>
+              <Select
+                value={draftValues.brand_id ?? ''}
+                onChange={(e) =>
+                  setDraftValues({
+                    ...draftValues,
+                    brand_id: e.target.value || null,
+                  })
+                }
+                onClick={(e) => e.stopPropagation()}
+                displayEmpty
+              >
+                <MenuItem value="">
+                  {t('business.inventory.noBrand')}
+                </MenuItem>
+                {brands.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          );
+        }
+        return params.row.brand?.name || t('business.inventory.noBrand');
+      },
     },
     {
       field: 'category',
       headerName: t('business.items.category'),
       width: 150,
       valueGetter: (value, row) => row.item_sub_category?.name || '',
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <FormControl size="small" sx={{ minWidth: 140 }} fullWidth>
+              <Select
+                value={draftValues.item_sub_category_id ?? ''}
+                onChange={(e) =>
+                  setDraftValues({
+                    ...draftValues,
+                    item_sub_category_id: Number(e.target.value) || 0,
+                  })
+                }
+                onClick={(e) => e.stopPropagation()}
+                displayEmpty
+              >
+                {itemSubCategories.length === 0 ? (
+                  <MenuItem disabled>
+                    {t('business.inventory.noCategoriesFound')}
+                  </MenuItem>
+                ) : (
+                  itemSubCategories.map((sc: { id: number; name: string; item_category: { name: string } }) => (
+                    <MenuItem key={sc.id} value={sc.id}>
+                      {sc.item_category?.name} - {sc.name}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
+          );
+        }
+        return params.row.item_sub_category?.name || '';
+      },
     },
     {
       field: 'price',
       headerName: t('business.items.price'),
       width: 120,
       type: 'number',
-      renderCell: (params: GridRenderCellParams) =>
-        formatCurrency(params.row.price, params.row.currency),
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <TextField
+              size="small"
+              type="number"
+              value={draftValues.price}
+              onChange={(e) =>
+                setDraftValues({
+                  ...draftValues,
+                  price: parseFloat(e.target.value) || 0,
+                })
+              }
+              onClick={(e) => e.stopPropagation()}
+              inputProps={{ min: 0, step: 0.01 }}
+              sx={{ minWidth: 90 }}
+            />
+          );
+        }
+        return formatCurrency(params.row.price, params.row.currency);
+      },
     },
     {
       field: 'inventory',
@@ -579,49 +791,93 @@ const BusinessItemsPage: React.FC = () => {
     {
       field: 'actions',
       headerName: t('common.actions'),
-      width: 200,
-      renderCell: (params: GridRenderCellParams) => (
-        <Stack direction="row" spacing={1}>
-          <Tooltip title={t('business.items.viewItem')}>
-            <IconButton
-              size="small"
-              onClick={() => handleViewItem(params.row)}
-              sx={{ color: theme.palette.info.main }}
-            >
-              <ViewIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('business.items.editItem')}>
-            <IconButton
-              size="small"
-              onClick={() => handleEditItem(params.row)}
-              sx={{ color: theme.palette.primary.main }}
-            >
-              <EditIcon />
-            </IconButton>
-          </Tooltip>
-          {params.row.business_inventories?.[0] && (
-            <Tooltip title={t('business.inventory.restock')}>
+      width: 220,
+      renderCell: (params: GridRenderCellParams) => {
+        const isEditing = editingRowId === params.row.id && draftValues;
+        if (isEditing) {
+          return (
+            <Stack direction="row" spacing={1}>
+              <Tooltip title={t('business.items.accept')}>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={applyInlineEdit}
+                    disabled={inlineUpdateLoading}
+                    sx={{ color: theme.palette.success.main }}
+                  >
+                    {inlineUpdateLoading ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <CheckIcon />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('business.items.cancel')}>
+                <IconButton
+                  size="small"
+                  onClick={cancelInlineEdit}
+                  disabled={inlineUpdateLoading}
+                  sx={{ color: theme.palette.grey[600] }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          );
+        }
+        return (
+          <Stack direction="row" spacing={1}>
+            <Tooltip title={t('business.items.inlineEdit')}>
               <IconButton
                 size="small"
-                onClick={() => handleRestockInventoryItem(params.row)}
-                sx={{ color: theme.palette.warning.main }}
+                onClick={() => startInlineEdit(params.row)}
+                sx={{ color: theme.palette.secondary.main }}
               >
-                <InventoryIcon />
+                <EditAttributesIcon />
               </IconButton>
             </Tooltip>
-          )}
-          <Tooltip title={t('business.items.deleteItem')}>
-            <IconButton
-              size="small"
-              onClick={() => handleDeleteItem(params.row)}
-              sx={{ color: theme.palette.error.main }}
-            >
-              <DeleteIcon />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
+            <Tooltip title={t('business.items.viewItem')}>
+              <IconButton
+                size="small"
+                onClick={() => handleViewItem(params.row)}
+                sx={{ color: theme.palette.info.main }}
+              >
+                <ViewIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('business.items.editItem')}>
+              <IconButton
+                size="small"
+                onClick={() => handleEditItem(params.row)}
+                sx={{ color: theme.palette.primary.main }}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+            {params.row.business_inventories?.[0] && (
+              <Tooltip title={t('business.inventory.restock')}>
+                <IconButton
+                  size="small"
+                  onClick={() => handleRestockInventoryItem(params.row)}
+                  sx={{ color: theme.palette.warning.main }}
+                >
+                  <InventoryIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title={t('business.items.deleteItem')}>
+              <IconButton
+                size="small"
+                onClick={() => handleDeleteItem(params.row)}
+                sx={{ color: theme.palette.error.main }}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        );
+      },
       sortable: false,
       filterable: false,
     },
@@ -695,7 +951,7 @@ const BusinessItemsPage: React.FC = () => {
 
   if (profileLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth={false} disableGutters sx={{ mt: 0, mb: 0, px: 1 }}>
         <Box
           sx={{
             display: 'flex',
@@ -717,7 +973,7 @@ const BusinessItemsPage: React.FC = () => {
 
   if (profileError) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth={false} disableGutters sx={{ mt: 0, mb: 0, px: 1 }}>
         <Alert severity="error">
           <Typography variant="h6" gutterBottom>
             {t('common.errorLoadingData')}
@@ -730,7 +986,7 @@ const BusinessItemsPage: React.FC = () => {
 
   if (!profile?.business) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth={false} disableGutters sx={{ mt: 0, mb: 0, px: 1 }}>
         <Alert severity="error">
           {t('business.dashboard.noBusinessProfile')}
         </Alert>
@@ -739,47 +995,51 @@ const BusinessItemsPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth={false} disableGutters sx={{ mt: 0, mb: 0, px: 1 }}>
       <SEOHead
         title={t('seo.business-items.title')}
         description={t('seo.business-items.description')}
         keywords={t('seo.business-items.keywords')}
       />
 
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" sx={{ mb: 0.5 }}>
         {t('business.items.title')}
       </Typography>
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
+      <Paper sx={{ width: '100%', mb: 0.5 }} elevation={0}>
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           indicatorColor="primary"
           textColor="primary"
           aria-label="items tabs"
+          sx={{ px: 0, minHeight: 40 }}
         >
-          <Tab label={t('business.items.cardsView')} />
           <Tab label={t('business.items.tableView')} />
+          <Tab label={t('business.items.cardsView')} />
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          {/* Cards View */}
-          <Box sx={{ mb: 3 }}>
+          {/* Table View */}
+          <Box sx={{ mb: 0.5 }}>
             <Box
               display="flex"
               justifyContent="space-between"
               alignItems="center"
-              mb={2}
+              mb={0.5}
             >
               <Typography variant="h6">
-                {t('business.items.cardsView')}
+                {t('business.items.tableView')}
               </Typography>
               <Stack direction="row" spacing={1}>
                 <Tooltip title={t('business.items.downloadTemplate')}>
                   <Button
                     variant="outlined"
                     startIcon={<DownloadIcon />}
-                    onClick={downloadItemsCSV}
+                    onClick={() => {
+                      setSelectedDownloadLocationId(null);
+                      setDownloadLocationDialogOpen(true);
+                    }}
                     disabled={itemsLoading || !items || items.length === 0}
                   >
                     {t('business.items.download')}
@@ -814,7 +1074,125 @@ const BusinessItemsPage: React.FC = () => {
                         );
                         return;
                       }
-                      // Navigate to add item page
+                      refreshBusinessLocations();
+                      setShowAddItemDialog(true);
+                    }}
+                    disabled={businessLocations.length === 0}
+                  >
+                    {t('business.items.addItem')}
+                  </Button>
+                </span>
+              </Stack>
+            </Box>
+
+            {/* Filters */}
+            <ItemsFilterBar
+              filters={filters}
+              onFiltersChange={setFilters}
+              categories={categories}
+              brands={brandsInItems}
+              totalItems={items?.length || 0}
+              filteredItemsCount={filteredItems.length}
+            />
+
+            {/* DataGrid */}
+            {itemsLoading ? (
+              <ItemsTableSkeleton />
+            ) : itemsError ? (
+              <Alert severity="error">{itemsError}</Alert>
+            ) : (
+              <div style={{ height: 'calc(100vh - 200px)', minHeight: 400, width: '100%' }}>
+                <DataGrid
+                  rows={filteredItems}
+                  columns={columns}
+                  pageSizeOptions={[10, 25, 50, 100]}
+                  initialState={{
+                    pagination: {
+                      paginationModel: {
+                        pageSize: 25,
+                      },
+                    },
+                  }}
+                  disableRowSelectionOnClick
+                  slots={{
+                    toolbar: GridToolbar,
+                  }}
+                  slotProps={{
+                    toolbar: {
+                      showQuickFilter: true,
+                      quickFilterProps: { debounceMs: 500 },
+                    },
+                  }}
+                  sx={{
+                    '& .MuiDataGrid-cell': {
+                      display: 'flex',
+                      alignItems: 'center',
+                    },
+                    '& .MuiDataGrid-row:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+              </div>
+            )}
+          </Box>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={1}>
+          {/* Cards View */}
+          <Box sx={{ mb: 3 }}>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
+            >
+              <Typography variant="h6">
+                {t('business.items.cardsView')}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Tooltip title={t('business.items.downloadTemplate')}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => {
+                      setSelectedDownloadLocationId(null);
+                      setDownloadLocationDialogOpen(true);
+                    }}
+                    disabled={itemsLoading || !items || items.length === 0}
+                  >
+                    {t('business.items.download')}
+                  </Button>
+                </Tooltip>
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadIcon />}
+                  onClick={() => setShowCSVUploadDialog(true)}
+                >
+                  {t('business.items.csvUpload')}
+                </Button>
+                <Tooltip title={t('business.locations.refreshLocations')}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<RefreshIcon />}
+                    onClick={handleRefreshLocations}
+                    disabled={inventoryLoading}
+                  >
+                    {t('business.locations.refresh')}
+                  </Button>
+                </Tooltip>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (businessLocations.length === 0) {
+                        enqueueSnackbar(
+                          t('business.inventory.noLocationsError'),
+                          { variant: 'error' }
+                        );
+                        return;
+                      }
                       navigate('/business/items/add');
                     }}
                     disabled={businessLocations.length === 0}
@@ -877,123 +1255,6 @@ const BusinessItemsPage: React.FC = () => {
             )}
           </Box>
         </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          {/* Table View */}
-          <Box sx={{ mb: 3 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">
-                {t('business.items.tableView')}
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Tooltip title={t('business.items.downloadTemplate')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={downloadItemsCSV}
-                    disabled={itemsLoading || !items || items.length === 0}
-                  >
-                    {t('business.items.download')}
-                  </Button>
-                </Tooltip>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                  onClick={() => setShowCSVUploadDialog(true)}
-                >
-                  {t('business.items.csvUpload')}
-                </Button>
-                <Tooltip title={t('business.locations.refreshLocations')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={handleRefreshLocations}
-                    disabled={inventoryLoading}
-                  >
-                    {t('business.locations.refresh')}
-                  </Button>
-                </Tooltip>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (businessLocations.length === 0) {
-                        enqueueSnackbar(
-                          t('business.inventory.noLocationsError'),
-                          { variant: 'error' }
-                        );
-                        return;
-                      }
-                      // Refresh business locations before opening dialog
-                      refreshBusinessLocations();
-                      setShowAddItemDialog(true);
-                    }}
-                    disabled={businessLocations.length === 0}
-                  >
-                    {t('business.items.addItem')}
-                  </Button>
-                </span>
-              </Stack>
-            </Box>
-
-            {/* Filters */}
-            <ItemsFilterBar
-              filters={filters}
-              onFiltersChange={setFilters}
-              categories={categories}
-              brands={brandsInItems}
-              totalItems={items?.length || 0}
-              filteredItemsCount={filteredItems.length}
-            />
-
-            {/* DataGrid */}
-            {itemsLoading ? (
-              <ItemsTableSkeleton />
-            ) : itemsError ? (
-              <Alert severity="error">{itemsError}</Alert>
-            ) : (
-              <div style={{ height: 600, width: '100%' }}>
-                <DataGrid
-                  rows={filteredItems}
-                  columns={columns}
-                  pageSizeOptions={[10, 25, 50, 100]}
-                  initialState={{
-                    pagination: {
-                      paginationModel: {
-                        pageSize: 25,
-                      },
-                    },
-                  }}
-                  disableRowSelectionOnClick
-                  slots={{
-                    toolbar: GridToolbar,
-                  }}
-                  slotProps={{
-                    toolbar: {
-                      showQuickFilter: true,
-                      quickFilterProps: { debounceMs: 500 },
-                    },
-                  }}
-                  sx={{
-                    '& .MuiDataGrid-cell': {
-                      display: 'flex',
-                      alignItems: 'center',
-                    },
-                    '& .MuiDataGrid-row:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                    },
-                  }}
-                />
-              </div>
-            )}
-          </Box>
-        </TabPanel>
       </Paper>
 
       {/* Dialogs */}
@@ -1028,6 +1289,56 @@ const BusinessItemsPage: React.FC = () => {
         onClose={() => setShowCSVUploadDialog(false)}
         businessId={profile.business.id}
       />
+
+      {/* Download CSV – location select */}
+      <Dialog
+        open={downloadLocationDialogOpen}
+        onClose={() => setDownloadLocationDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('business.items.downloadSelectLocation')}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {t('business.items.downloadSelectLocationDescription')}
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel>{t('business.locations.location', 'Location')}</InputLabel>
+            <Select
+              value={selectedDownloadLocationId ?? ''}
+              label={t('business.locations.location', 'Location')}
+              onChange={(e) =>
+                setSelectedDownloadLocationId(
+                  e.target.value === '' ? null : (e.target.value as string)
+                )
+              }
+            >
+              <MenuItem value="">
+                {t('business.items.allLocations')}
+              </MenuItem>
+              {businessLocations.map((loc: { id: string; name: string }) => (
+                <MenuItem key={loc.id} value={loc.id}>
+                  {loc.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDownloadLocationDialogOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              downloadItemsCSV(selectedDownloadLocationId ?? null);
+              setDownloadLocationDialogOpen(false);
+            }}
+          >
+            {t('business.items.download')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog
