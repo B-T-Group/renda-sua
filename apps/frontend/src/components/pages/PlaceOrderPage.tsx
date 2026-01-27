@@ -1,10 +1,13 @@
 import {
+  AccessTime,
   Add,
   ArrowBack,
+  CalendarToday,
   CheckCircle,
   LocalShipping,
   LocationOn,
   Phone,
+  Schedule,
   Security,
   ShoppingCart,
   Verified,
@@ -29,6 +32,9 @@ import {
   Select,
   Skeleton,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
   Switch,
   Typography,
   useMediaQuery,
@@ -51,6 +57,7 @@ import DeliveryTimeWindowSelector, {
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 
 // Loading Skeleton Component
 const OrderPageSkeleton: React.FC = () => {
@@ -99,7 +106,6 @@ interface OrderSummaryProps {
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
-  fastDeliveryFee: number;
   requiresFastDelivery: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
   onSubmit: () => void;
@@ -115,7 +121,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
-  fastDeliveryFee,
   requiresFastDelivery,
   formatCurrency,
   onSubmit,
@@ -126,10 +131,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 }) => {
   const { t } = useTranslation();
   const subtotal = selectedItem.selling_price * quantity;
-  // Delivery fee is the API delivery fee (already includes fast delivery base fee if applicable)
+  // Delivery fee is the API delivery fee (already includes fast delivery charge if applicable)
   const computedDeliveryFee = deliveryFee || 0;
-  // Total = subtotal + delivery fee + fast delivery fee (if applicable)
-  const total = subtotal + computedDeliveryFee + (requiresFastDelivery ? fastDeliveryFee : 0);
+  // Total = subtotal + delivery fee (fast delivery already included in deliveryFee from API)
+  const total = subtotal + computedDeliveryFee;
 
   return (
     <Paper
@@ -212,16 +217,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Typography>
           </Box>
 
-          {requiresFastDelivery && fastDeliveryFee > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                {t('checkout.fastDeliveryFee', 'Fast Delivery Fee')}
-              </Typography>
-              <Typography variant="body2" fontWeight="medium">
-                {formatCurrency(fastDeliveryFee, selectedItem.item.currency)}
-              </Typography>
-            </Box>
-          )}
 
           <Divider sx={{ my: 1.5 }} />
 
@@ -306,6 +301,15 @@ const PlaceOrderPage: React.FC = () => {
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
+  
+  // Wizard step state (for mobile only)
+  const [activeStep, setActiveStep] = useState(0);
+  const steps = [
+    t('orders.step.deliveryOptions', 'Delivery Options'),
+    t('orders.step.quantity', 'Quantity'),
+    t('orders.step.address', 'Delivery Address'),
+    t('orders.step.review', 'Review & Place Order'),
+  ];
 
   const handleDeliveryWindowChange = useCallback(
     (data: DeliveryWindowData | null) => {
@@ -361,6 +365,41 @@ const PlaceOrderPage: React.FC = () => {
 
   const { config: fastDeliveryConfig, isEnabledForLocation } =
     useFastDeliveryConfig(userCountry, userState);
+
+  // Fetch delivery time slot details for summary display
+  const {
+    slots: deliverySlots,
+    loading: slotsLoading,
+    fetchSlots: fetchDeliverySlots,
+  } = useDeliveryTimeSlots();
+
+  // Fetch slot details when delivery window is set and we have address
+  useEffect(() => {
+    if (
+      deliveryWindow?.slot_id &&
+      deliveryWindow?.preferred_date &&
+      selectedAddress
+    ) {
+      fetchDeliverySlots(
+        selectedAddress.country,
+        selectedAddress.state,
+        deliveryWindow.preferred_date,
+        requiresFastDelivery
+      );
+    }
+  }, [
+    deliveryWindow?.slot_id,
+    deliveryWindow?.preferred_date,
+    selectedAddress,
+    requiresFastDelivery,
+    fetchDeliverySlots,
+  ]);
+
+  // Find the selected slot
+  const selectedSlot = useMemo(() => {
+    if (!deliveryWindow?.slot_id || !deliverySlots.length) return null;
+    return deliverySlots.find((slot) => slot.id === deliveryWindow.slot_id);
+  }, [deliveryWindow?.slot_id, deliverySlots]);
 
   // Set default address when addresses load
   useEffect(() => {
@@ -455,7 +494,7 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
-  const handleBack = () => {
+  const handlePageBack = () => {
     navigate(-1);
   };
 
@@ -601,7 +640,7 @@ const PlaceOrderPage: React.FC = () => {
             )}
           </Typography>
           <Button
-            onClick={handleBack}
+            onClick={handlePageBack}
             variant="contained"
             startIcon={<ArrowBack />}
             size="large"
@@ -625,29 +664,783 @@ const PlaceOrderPage: React.FC = () => {
       ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
       : profile?.phone_number && phoneValidation.isValid);
 
+  // Step validation function
+  const isStepValid = (step: number): boolean => {
+    switch (step) {
+      case 0: // Delivery Options
+        return true; // Optional fields
+      case 1: // Quantity
+        return quantity >= 1;
+      case 2: // Delivery Address
+        return !!selectedAddressId && addresses.length > 0;
+      case 3: // Review & Place Order
+        return !!canPlaceOrder;
+      default:
+        return false;
+    }
+  };
+
+  // Wizard navigation handlers
+  const handleNext = () => {
+    if (isStepValid(activeStep) && activeStep < steps.length - 1) {
+      setActiveStep((prevStep) => prevStep + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (activeStep > 0) {
+      setActiveStep((prevStep) => prevStep - 1);
+    } else {
+      navigate(-1);
+    }
+  };
+
+  const handleStepClick = (step: number) => {
+    // Allow jumping to completed steps only
+    if (step < activeStep || (step === activeStep + 1 && isStepValid(activeStep))) {
+      setActiveStep(step);
+    }
+  };
+
+  // Render step content for mobile wizard
+  const renderStepContent = (step: number) => {
+    switch (step) {
+      case 0: // Delivery Options
+        return (
+          <Stack spacing={3}>
+            {fastDeliveryConfig &&
+              isEnabledForLocation(userCountry, userState) && (
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <FastDeliveryOption
+                      config={fastDeliveryConfig}
+                      selected={requiresFastDelivery}
+                      onToggle={setRequiresFastDelivery}
+                      formatCurrency={(amount) =>
+                        formatCurrency(amount, selectedItem?.item.currency)
+                      }
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+            {selectedAddress && (
+              <Card>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {t(
+                      'orders.deliveryTimeWindow.title',
+                      'When will you be available?'
+                    )}
+                  </Typography>
+                  <DeliveryTimeWindowSelector
+                    countryCode={selectedAddress.country}
+                    stateCode={selectedAddress.state}
+                    onChange={handleDeliveryWindowChange}
+                    isFastDelivery={requiresFastDelivery}
+                    loading={loading}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </Stack>
+        );
+
+      case 1: // Quantity
+        return (
+          <Card>
+            <CardContent sx={{ p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 3,
+                }}
+              >
+                <ShoppingCart color="primary" />
+                <Typography variant="h6" fontWeight="bold">
+                  {t('orders.productDetails', 'Product Details')}
+                </Typography>
+              </Box>
+
+              <Grid container spacing={3} sx={{ mb: 3 }}>
+                <Grid size={{ xs: 12 }}>
+                  {selectedItem.item.item_images?.[0] ? (
+                    <CardMedia
+                      component="img"
+                      image={selectedItem.item.item_images[0].image_url}
+                      alt={selectedItem.item.name}
+                      sx={{
+                        borderRadius: 2,
+                        width: '100%',
+                        height: 250,
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        borderRadius: 2,
+                        width: '100%',
+                        height: 250,
+                        bgcolor: 'grey.200',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography color="text.secondary">
+                        {t('common.noImage', 'No Image')}
+                      </Typography>
+                    </Box>
+                  )}
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="h5" fontWeight="bold" gutterBottom>
+                    {selectedItem.item.name}
+                  </Typography>
+                  {selectedItem.item.description && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 2 }}
+                    >
+                      {selectedItem.item.description}
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                gutterBottom
+              >
+                {t('orders.orderConfiguration', 'Order Configuration')}
+              </Typography>
+
+              <FormControl fullWidth>
+                <InputLabel>
+                  {t('orders.quantity', 'Quantity')}
+                </InputLabel>
+                <Select
+                  value={quantity}
+                  label={t('orders.quantity', 'Quantity')}
+                  onChange={(e) =>
+                    setQuantity(e.target.value as number)
+                  }
+                  disabled={loading}
+                >
+                  {Array.from(
+                    {
+                      length: Math.min(
+                        selectedItem.computed_available_quantity,
+                        10
+                      ),
+                    },
+                    (_, i) => i + 1
+                  ).map((num) => (
+                    <MenuItem key={num} value={num}>
+                      {num} {num === 1 ? 'unit' : 'units'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </CardContent>
+          </Card>
+        );
+
+      case 2: // Delivery Address
+        return (
+          <Card>
+            <CardContent sx={{ p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 3,
+                }}
+              >
+                <LocationOn color="primary" />
+                <Typography variant="h6" fontWeight="bold">
+                  {t('orders.deliveryAddress', 'Delivery Address')}
+                </Typography>
+              </Box>
+
+              {addressesLoading ? (
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', py: 3 }}
+                >
+                  <CircularProgress />
+                </Box>
+              ) : addresses.length === 0 ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}
+                >
+                  <LocationOn
+                    sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
+                  />
+                  <Typography variant="subtitle1" gutterBottom>
+                    {t('orders.noAddresses', 'No delivery address found')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2 }}
+                  >
+                    {t(
+                      'orders.noAddressesMessage',
+                      'Please add a delivery address to continue with your order'
+                    )}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenAddressDialog}
+                    startIcon={<Add />}
+                  >
+                    {t('orders.addAddress', 'Add Delivery Address')}
+                  </Button>
+                </Paper>
+              ) : (
+                <>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>
+                      {t('orders.selectAddress', 'Select Delivery Address')}
+                    </InputLabel>
+                    <Select
+                      value={selectedAddressId}
+                      label={t(
+                        'orders.selectAddress',
+                        'Select Delivery Address'
+                      )}
+                      onChange={(e) => setSelectedAddressId(e.target.value)}
+                      disabled={loading}
+                    >
+                      {addresses.map((addressWrapper) => {
+                        const address = addressWrapper.address;
+                        return (
+                          <MenuItem key={address.id} value={address.id}>
+                            <Box>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                }}
+                              >
+                                <Typography variant="body2">
+                                  {address.address_line_1}, {address.city}
+                                </Typography>
+                                {address.is_primary && (
+                                  <Chip
+                                    label="Primary"
+                                    size="small"
+                                    color="primary"
+                                  />
+                                )}
+                              </Box>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {address.address_type}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </FormControl>
+
+                  {selectedAddressId &&
+                    (() => {
+                      const selectedAddressWrapper = addresses.find(
+                        (addr) => addr.address.id === selectedAddressId
+                      );
+                      if (!selectedAddressWrapper) return null;
+                      const address = selectedAddressWrapper.address;
+                      return (
+                        <Paper
+                          variant="outlined"
+                          sx={{ p: 2, bgcolor: 'grey.50' }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              mb: 1,
+                            }}
+                          >
+                            <CheckCircle color="success" fontSize="small" />
+                            <Typography
+                              variant="subtitle2"
+                              fontWeight="bold"
+                            >
+                              {t('orders.deliveryTo', 'Delivery to')}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            {address.address_line_1}
+                            {address.address_line_2 &&
+                              `, ${address.address_line_2}`}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                          >
+                            {address.city}, {address.state}{' '}
+                            {address.postal_code}
+                          </Typography>
+                        </Paper>
+                      );
+                    })()}
+
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    onClick={handleOpenAddressDialog}
+                    startIcon={<Add />}
+                    sx={{ mt: 2 }}
+                  >
+                    {t('orders.addAnotherAddress', 'Add Another Address')}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      case 3: // Review & Place Order
+        return (
+          <Stack spacing={3}>
+            <Card>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                  {t('orders.orderSummary', 'Order Summary')}
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                <Stack spacing={2}>
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    {selectedItem.item.item_images?.[0] && (
+                      <Box
+                        component="img"
+                        src={selectedItem.item.item_images[0].image_url}
+                        alt={selectedItem.item.name}
+                        sx={{
+                          width: 60,
+                          height: 60,
+                          borderRadius: 1,
+                          objectFit: 'cover',
+                        }}
+                      />
+                    )}
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" noWrap>
+                        {selectedItem.item.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('orders.quantity', 'Quantity')}: {quantity}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.subtotal', 'Subtotal')}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {formatCurrency(
+                          selectedItem.selling_price * quantity,
+                          selectedItem.item.currency
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {t('orders.deliveryFee', 'Delivery Fee')}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {deliveryFeeLoading ? (
+                          <CircularProgress size={14} />
+                        ) : deliveryFeeError ? (
+                          <span style={{ color: 'error.main' }}>
+                            {t('common.error', 'Error')}
+                          </span>
+                        ) : (
+                          formatCurrency(
+                            deliveryFee?.deliveryFee || 0,
+                            selectedItem.item.currency
+                          )
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Divider sx={{ my: 1.5 }} />
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 2,
+                      }}
+                    >
+                      <Typography variant="h6" fontWeight="bold">
+                        {t('orders.total', 'Total')}
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        color="primary"
+                      >
+                        {formatCurrency(
+                          selectedItem.selling_price * quantity +
+                            (deliveryFee?.deliveryFee || 0),
+                          selectedItem.item.currency
+                        )}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* Delivery Time Window Details */}
+            {deliveryWindow && selectedAddress && (
+              <Card>
+                <CardContent sx={{ p: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: 2,
+                    }}
+                  >
+                    <Schedule color="primary" />
+                    <Typography variant="h6" fontWeight="bold">
+                      {t(
+                        'orders.deliveryTimeWindow.title',
+                        'Delivery Time Window'
+                      )}
+                    </Typography>
+                  </Box>
+
+                  {slotsLoading ? (
+                    <Box
+                      sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
+                    >
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : selectedSlot ? (
+                    <Stack spacing={2}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
+                        <CalendarToday fontSize="small" color="action" />
+                        <Typography variant="body2" color="text.secondary">
+                          {t(
+                            'orders.deliveryTimeWindow.preferredDate',
+                            'Preferred Date'
+                          )}
+                          :
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {new Date(
+                            deliveryWindow.preferred_date
+                          ).toLocaleDateString(undefined, {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
+                        <AccessTime fontSize="small" color="action" />
+                        <Typography variant="body2" color="text.secondary">
+                          {t('orders.deliveryTimeWindow.timeSlot', 'Time Slot')}
+                          :
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {selectedSlot.start_time} - {selectedSlot.end_time}
+                        </Typography>
+                      </Box>
+
+                      {selectedSlot.slot_name && (
+                        <Box>
+                          <Chip
+                            label={selectedSlot.slot_name}
+                            color="primary"
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Box>
+                      )}
+
+                      {deliveryWindow.special_instructions && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            gutterBottom
+                          >
+                            {t(
+                              'orders.deliveryTimeWindow.specialInstructions',
+                              'Special Instructions'
+                            )}
+                            :
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                            {deliveryWindow.special_instructions}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'orders.deliveryTimeWindow.loading',
+                        'Loading delivery slot details...'
+                      )}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardContent sx={{ p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 3,
+                  }}
+                >
+                  <Phone color="primary" />
+                  <Typography variant="h6" fontWeight="bold">
+                    {t('orders.paymentInformation', 'Payment Information')}
+                  </Typography>
+                </Box>
+
+                {!profile?.phone_number ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.50' }}
+                  >
+                    <Phone
+                      sx={{ fontSize: 48, color: 'warning.main', mb: 2 }}
+                    />
+                    <Typography variant="subtitle1" gutterBottom>
+                      {t(
+                        'orders.phoneNumberRequired',
+                        'Phone Number Required'
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 2 }}
+                    >
+                      {t(
+                        'orders.phoneNumberRequiredMessage',
+                        'Please add your phone number to receive payment requests'
+                      )}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      onClick={() => navigate('/profile')}
+                      size="small"
+                    >
+                      {t('orders.addPhoneNumber', 'Add Phone Number')}
+                    </Button>
+                  </Paper>
+                ) : (
+                  <>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight="medium"
+                        gutterBottom
+                      >
+                        {t('orders.mobilePayment', 'Mobile Money Payment')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {t(
+                          'orders.paymentRequestMessage',
+                          'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                        )}
+                      </Typography>
+                    </Alert>
+
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 2, bgcolor: 'grey.50', mb: 2 }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        gutterBottom
+                      >
+                        {t(
+                          'orders.paymentPhoneNumber',
+                          'Payment Phone Number'
+                        )}
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {useDifferentPhone
+                          ? overridePhoneNumber
+                          : profile.phone_number}
+                      </Typography>
+                    </Paper>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={useDifferentPhone}
+                          onChange={(e) =>
+                            setUseDifferentPhone(e.target.checked)
+                          }
+                          disabled={loading}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2">
+                          {t(
+                            'orders.useDifferentPhone',
+                            'Use a different phone number'
+                          )}
+                        </Typography>
+                      }
+                    />
+
+                    {useDifferentPhone && (
+                      <Box sx={{ mt: 2 }}>
+                        <PhoneInput
+                          value={overridePhoneNumber}
+                          onChange={(value) =>
+                            setOverridePhoneNumber(value || '')
+                          }
+                          label={t(
+                            'orders.overridePhoneNumber',
+                            'Phone Number for Payment'
+                          )}
+                          defaultCountry="GA"
+                          fullWidth
+                          onlyCountries={supportedCountries}
+                          error={
+                            !phoneValidation.isValid &&
+                            overridePhoneNumber.trim() !== '' &&
+                            phoneValidation.message !== null
+                          }
+                          helperText={
+                            !phoneValidation.isValid &&
+                            overridePhoneNumber.trim() !== '' &&
+                            phoneValidation.message !== null
+                              ? phoneValidation.message || ''
+                              : t(
+                                  'orders.overridePhoneNote',
+                                  'This number will receive the payment request for this order'
+                                )
+                          }
+                        />
+                      </Box>
+                    )}
+
+                    {phoneValidation.message && !phoneValidation.isValid && (
+                      <Alert severity="error" sx={{ mt: 2 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          gutterBottom
+                        >
+                          {t(
+                            'orders.phoneNumberNotSupported',
+                            'Phone Number Not Supported'
+                          )}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 2 }}>
+                          {phoneValidation.message}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {t(
+                            'orders.useAlternativePhone',
+                            'Please use the "Use a different phone number" option above to enter a phone number from a supported country.'
+                          )}
+                        </Typography>
+                      </Alert>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {error && (
+              <Alert severity="error">{error}</Alert>
+            )}
+          </Stack>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <Box
       sx={{
         bgcolor: 'grey.50',
         minHeight: '100vh',
-        // Add extra bottom padding on mobile to account for fixed OrderSummary + bottom nav
-        // OrderSummary is ~300-400px tall, bottom nav is 64px, plus some spacing
-        pb:
-          isMobile && profile?.client
-            ? { xs: '480px', md: 4 } // Enough space for OrderSummary + bottom nav + spacing
-            : isMobile
-              ? { xs: '400px', md: 4 } // For non-clients, just OrderSummary + spacing
-              : 4,
+        // Add extra bottom padding on mobile to account for fixed navigation bar + bottom nav
+        pb: isMobile
+          ? profile?.client
+            ? '180px' // Navigation bar (100px) + bottom nav (64px) + spacing (16px)
+            : '116px' // Navigation bar (100px) + spacing (16px)
+          : 4,
       }}
     >
       <Container
         maxWidth="xl"
         sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
       >
-        {/* Header with Progress */}
+        {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Button
-            onClick={handleBack}
+            onClick={isMobile ? handleBack : handlePageBack}
             startIcon={<ArrowBack />}
             size="small"
             sx={{ mb: 2 }}
@@ -672,7 +1465,93 @@ const PlaceOrderPage: React.FC = () => {
           </Typography>
         </Box>
 
-        {/* Main Content Grid */}
+        {/* Mobile Wizard View */}
+        {isMobile ? (
+          <Box>
+            <Stepper
+              activeStep={activeStep}
+              orientation="vertical"
+              sx={{
+                mb: 4,
+                '& .MuiStepLabel-label': {
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                },
+              }}
+            >
+              {steps.map((label, index) => (
+                <Step key={label}>
+                  <StepLabel
+                    onClick={() => handleStepClick(index)}
+                    sx={{
+                      cursor:
+                        index <= activeStep ? 'pointer' : 'default',
+                    }}
+                  >
+                    {label}
+                  </StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+
+            <Box sx={{ mb: 4 }}>{renderStepContent(activeStep)}</Box>
+
+            {/* Navigation Buttons */}
+            <Box
+              sx={{
+                position: 'fixed',
+                bottom: profile?.client ? '80px' : '64px',
+                left: 0,
+                right: 0,
+                bgcolor: 'background.paper',
+                borderTop: 1,
+                borderColor: 'divider',
+                p: 2,
+                zIndex: 1000,
+                boxShadow: '0 -4px 12px rgba(0,0,0,0.1)',
+                paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0))',
+              }}
+            >
+              <Stack direction="row" spacing={2}>
+                <Button
+                  onClick={handleBack}
+                  disabled={activeStep === 0}
+                  variant="outlined"
+                  fullWidth
+                >
+                  {t('common.back', 'Back')}
+                </Button>
+                {activeStep === steps.length - 1 ? (
+                  <Button
+                    onClick={handleSubmit}
+                    variant="contained"
+                    fullWidth
+                    disabled={!canPlaceOrder || loading}
+                    startIcon={
+                      loading ? <CircularProgress size={20} /> : <ShoppingCart />
+                    }
+                  >
+                    {loading
+                      ? t('orders.placingOrder', 'Placing Order...')
+                      : t('orders.confirmOrder', 'Confirm Order')}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleNext}
+                    variant="contained"
+                    fullWidth
+                    disabled={!isStepValid(activeStep)}
+                  >
+                    {t('common.next', 'Next')}
+                  </Button>
+                )}
+              </Stack>
+            </Box>
+          </Box>
+        ) : (
+          <>
+            {/* Desktop Layout - Existing Grid View */}
+            {/* Main Content Grid */}
         <Grid container spacing={3}>
           {/* Left Column - Order Details */}
           <Grid size={{ xs: 12, lg: 8 }}>
@@ -1369,7 +2248,6 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
-              fastDeliveryFee={fastDeliveryConfig?.fee || 0}
               requiresFastDelivery={requiresFastDelivery}
               formatCurrency={formatCurrency}
               onSubmit={handleSubmit}
@@ -1380,6 +2258,8 @@ const PlaceOrderPage: React.FC = () => {
             />
           </Grid>
         </Grid>
+          </>
+        )}
       </Container>
 
       {/* Address Dialog */}

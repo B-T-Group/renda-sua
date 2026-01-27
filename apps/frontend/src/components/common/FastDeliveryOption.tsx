@@ -1,14 +1,21 @@
-import { AccessTime, LocalShipping } from '@mui/icons-material';
+import {
+  AccessTime,
+  ExpandLess,
+  ExpandMore,
+  LocalShipping,
+} from '@mui/icons-material';
 import {
   Box,
   Card,
   CardContent,
   Chip,
+  Collapse,
   FormControlLabel,
+  IconButton,
   Switch,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 
@@ -32,9 +39,14 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
   formatCurrency,
 }) => {
   const { t } = useTranslation();
+  const [operatingHoursExpanded, setOperatingHoursExpanded] = useState(false);
 
   const handleToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     onToggle(event.target.checked);
+  };
+
+  const handleOperatingHoursToggle = () => {
+    setOperatingHoursExpanded(!operatingHoursExpanded);
   };
 
   const formatTime = (time: string) => {
@@ -145,61 +157,83 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
           sx={{ mb: 3 }}
         />
 
-        {/* Operating Hours - Always Visible */}
+        {/* Operating Hours - Collapsible */}
         <Box sx={{ mt: 3, pt: 2, borderTop: 2, borderColor: 'divider' }}>
-          <Typography
-            variant="subtitle1"
-            fontWeight="bold"
-            color="primary"
-            sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+            onClick={handleOperatingHoursToggle}
           >
-            <AccessTime />
-            {t('orders.fastDelivery.operatingHours', 'Operating Hours')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-            {Object.entries(config.operatingHours).map(
-              ([day, hours]: [string, OperatingHours]) => (
-                <Box
-                  key={day}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    p: 1.5,
-                    borderRadius: 2,
-                    bgcolor: hours.enabled ? 'success.50' : 'grey.100',
-                    border: 2,
-                    borderColor: hours.enabled ? 'success.main' : 'grey.300',
-                    minWidth: { xs: '100%', sm: 'calc(50% - 6px)' },
-                    transition: 'all 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: hours.enabled
-                        ? '0 4px 8px rgba(46, 125, 50, 0.2)'
-                        : '0 2px 4px rgba(0, 0, 0, 0.1)',
-                    },
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    fontWeight="bold"
-                    sx={{ minWidth: 90 }}
-                  >
-                    {getDayName(day)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight="medium"
-                    color={hours.enabled ? 'success.main' : 'text.disabled'}
-                    sx={{ ml: 1 }}
-                  >
-                    {hours.enabled
-                      ? `${formatTime(hours.start)} - ${formatTime(hours.end)}`
-                      : t('common.closed', 'Closed')}
-                  </Typography>
-                </Box>
-              )
-            )}
+            <Typography
+              variant="subtitle1"
+              fontWeight="bold"
+              color="primary"
+              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            >
+              <AccessTime />
+              {t('orders.fastDelivery.operatingHours', 'Operating Hours')}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOperatingHoursToggle();
+              }}
+              sx={{ color: 'primary.main' }}
+            >
+              {operatingHoursExpanded ? <ExpandLess /> : <ExpandMore />}
+            </IconButton>
           </Box>
+          <Collapse in={operatingHoursExpanded} timeout="auto" unmountOnExit>
+            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+              {Object.entries(config.operatingHours).map(
+                ([day, hours]: [string, OperatingHours]) => (
+                  <Box
+                    key={day}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: hours.enabled ? 'success.50' : 'grey.100',
+                      border: 2,
+                      borderColor: hours.enabled ? 'success.main' : 'grey.300',
+                      minWidth: { xs: '100%', sm: 'calc(50% - 6px)' },
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: hours.enabled
+                          ? '0 4px 8px rgba(46, 125, 50, 0.2)'
+                          : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                      },
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      fontWeight="bold"
+                      sx={{ minWidth: 90 }}
+                    >
+                      {getDayName(day)}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight="medium"
+                      color={hours.enabled ? 'success.main' : 'text.disabled'}
+                      sx={{ ml: 1 }}
+                    >
+                      {hours.enabled
+                        ? `${formatTime(hours.start)} - ${formatTime(hours.end)}`
+                        : t('common.closed', 'Closed')}
+                    </Typography>
+                  </Box>
+                )
+              )}
+            </Box>
+          </Collapse>
         </Box>
       </CardContent>
     </Card>
