@@ -5,9 +5,66 @@
 
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { AppModule } from './app/app.module';
 
+async function loadSecrets() {
+  const client = new SecretsManagerClient({
+    region: process.env.AWS_REGION || 'ca-central-1',
+  });
+
+  // More explicit environment detection
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const deploymentEnv = process.env.DEPLOYMENT_ENV || nodeEnv;
+
+  const secretName =
+    deploymentEnv === 'production'
+      ? 'production-rendasua-backend-secrets'
+      : 'development-rendasua-backend-secrets';
+
+  console.log(
+    `Loading secrets for environment: ${deploymentEnv} (NODE_ENV: ${nodeEnv})`
+  );
+  console.log(`Using secret name: ${secretName}`);
+
+  try {
+    const command = new GetSecretValueCommand({ SecretId: secretName });
+    const data = await client.send(command);
+
+    let secrets: Record<string, string> = {};
+
+    if (data.SecretString) {
+      secrets = JSON.parse(data.SecretString);
+      console.log(`Successfully loaded secrets from: ${secretName}`);
+    } else if (data.SecretBinary) {
+      const buff = Buffer.from(data.SecretBinary as Uint8Array);
+      secrets = JSON.parse(buff.toString('ascii'));
+      console.log(`Successfully loaded binary secrets from: ${secretName}`);
+    } else {
+      console.log(`No secret data found in: ${secretName}`);
+      return;
+    }
+
+    // Inject into process.env
+    for (const [key, value] of Object.entries(secrets)) {
+      if (!process.env[key]) {
+        // Only set if not already in process.env (env vars take precedence)
+        process.env[key] = String(value);
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to load secrets from ${secretName}:`, err);
+    // Continue without secrets - some may be in process.env already
+  }
+}
+
 async function bootstrap() {
+  // Load secrets BEFORE NestJS starts
+  await loadSecrets();
+
   const app = await NestFactory.create(AppModule);
 
   // Use Winston as the NestJS logger

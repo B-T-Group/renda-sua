@@ -4,12 +4,14 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Post,
   Query,
 } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from '../orders/orders.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
@@ -54,11 +56,14 @@ export interface MyPVitCallbackDto {
 
 @Controller('mobile-payments')
 export class MobilePaymentsController {
+  private readonly logger = new Logger(MobilePaymentsController.name);
+
   constructor(
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
-    private readonly ordersService: OrdersService
+    private readonly ordersService: OrdersService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
 
   /**
@@ -216,13 +221,25 @@ export class MobilePaymentsController {
         transaction_type: paymentRequest.transactionType || 'PAYMENT',
       });
 
+      // Get the current user's ID for MTN payments
+      let userId: string | undefined;
+      try {
+        const user = await this.hasuraUserService.getUser();
+        userId = user.id;
+      } catch (error) {
+        // User may not be authenticated or may not exist yet
+        // This is okay for non-MTN providers, but MTN will need userId
+        this.logger.warn('Could not get user ID for payment initiation');
+      }
+
       // Initiate payment with provider
       const paymentResponse = await this.mobilePaymentsService.initiatePayment(
         {
           ...paymentRequest,
           callbackUrl,
         },
-        reference
+        reference,
+        userId
       );
 
       // Update transaction with provider response

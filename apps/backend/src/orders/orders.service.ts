@@ -26,8 +26,8 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { OrderQueueService } from './order-queue.service';
-import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { OrderStatusService } from './order-status.service';
+import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -1181,7 +1181,8 @@ export class OrdersService {
 
       paymentTransaction = await this.mobilePaymentsService.initiatePayment(
         paymentRequest,
-        reference
+        reference,
+        user.id
       );
 
       if (!paymentTransaction.success) {
@@ -3680,7 +3681,7 @@ export class OrdersService {
    */
   private getProvider(
     phoneNumber: string
-  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' {
+  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' {
     if (!phoneNumber) {
       throw new HttpException(
         {
@@ -3897,7 +3898,7 @@ export class OrdersService {
 
     const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     const phoneNumber = orderData.phone_number || user.phone_number || '';
-    const provider = this.getProvider(phoneNumber);
+    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
 
     // Create transaction record before initiating payment
     let paymentTransaction = null;

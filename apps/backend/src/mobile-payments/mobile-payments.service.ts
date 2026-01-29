@@ -1,9 +1,69 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as libphonenumber from 'google-libphonenumber';
+import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import {
   MyPVitPaymentRequest,
   MyPVitService,
 } from './providers/mypvit.service';
+
+type CameroonCarrier = "mtn" | "orange";
+
+interface CameroonPhoneResult {
+  carrier: CameroonCarrier;
+  phone: string; // 9 digits, no country code
+}
+
+const MTN_PREFIXES = new Set([
+  "650","651","652","653","654",
+  "670","671","672","673","674",
+  "675","676","677","678","679",
+  "680","681","682","683","684","685","686","687","688","689"
+]);
+
+const ORANGE_PREFIXES = new Set([
+  "655","656","657","658","659",
+  "690","691","692","693","694","695","696","697","698","699"
+]);
+
+function normalizeCameroonPhone(phone: string): string | null {
+  // Remove everything except digits
+  let digits = phone.replace(/\D/g, "");
+
+  // Remove country code if present
+  if (digits.startsWith("237")) {
+    digits = digits.slice(3);
+  }
+
+  // Cameroon mobile numbers: 9 digits, start with 6
+  if (digits.length !== 9 || !digits.startsWith("6")) {
+    return null;
+  }
+
+  return digits;
+}
+
+export function detectCameroonPhone(
+  phone: string
+): CameroonPhoneResult | null {
+  const normalized = normalizeCameroonPhone(phone);
+
+  // Not a Cameroonian mobile number
+  if (!normalized) return null;
+
+  const prefix = normalized.slice(0, 3);
+
+  if (MTN_PREFIXES.has(prefix)) {
+    return { carrier: "mtn", phone: normalized };
+  }
+
+  if (ORANGE_PREFIXES.has(prefix)) {
+    return { carrier: "orange", phone: normalized };
+  }
+
+  // Cameroon number but not MTN or Orange
+  return null;
+}
+
 
 /**
  * Remove country code from phone number using Google's libphonenumber
@@ -65,6 +125,7 @@ function validatePhoneNumber(
     };
   }
 
+
   try {
     const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
     const parsedNumber = phoneUtil.parse(phoneNumber, defaultRegion);
@@ -96,7 +157,7 @@ export interface MobilePaymentRequest {
   ownerCharge?: 'MERCHANT' | 'CUSTOMER';
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
@@ -133,9 +194,17 @@ export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
   private readonly providers: Map<string, unknown> = new Map();
 
-  constructor(private readonly myPVitService: MyPVitService) {
+  constructor(private readonly myPVitService: MyPVitService, private readonly mtnMomoService: MtnMomoService) {
     // Register payment providers
     this.providers.set('mypvit', myPVitService);
+  }
+
+  getProvider(phoneNumber: string): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' {
+    const res = detectCameroonPhone(phoneNumber);
+    if(res) {
+      return res.carrier as 'mtn' | 'orange';
+    }
+    return 'mypvit';
   }
 
   /**
@@ -173,7 +242,8 @@ export class MobilePaymentsService {
    */
   async initiatePayment(
     paymentRequest: MobilePaymentRequest,
-    reference?: string
+    reference?: string,
+    userId?: string
   ): Promise<MobilePaymentResponse> {
     try {
       // Validate phone number if provided
@@ -218,8 +288,9 @@ export class MobilePaymentsService {
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
-        paymentRequest,
-        provider
+        paymentRequest as MobilePaymentRequest & CollectionRequest,
+        provider,
+        reference
       );
 
       let response: MobilePaymentResponse;
@@ -244,6 +315,21 @@ export class MobilePaymentsService {
             message: mypvitResponse.message,
             errorCode: mypvitResponse.errorCode,
             provider: 'mypvit',
+          };
+          break;
+        }
+        case 'mtn': {
+          const mtnResponse = await this.mtnMomoService.requestToPay(
+            providerRequest as CollectionRequest,
+            userId || ''
+          );
+          response = {
+            success: mtnResponse.status,
+            transactionId: mtnResponse.financialTransactionId,
+            paymentUrl: '',
+            message: mtnResponse.error,
+            errorCode: mtnResponse.error,
+            provider: 'mtn',
           };
           break;
         }
@@ -553,6 +639,14 @@ export class MobilePaymentsService {
    * Select the best payment provider based on request
    */
   private selectProvider(request: MobilePaymentRequest): string | null {
+
+    if(request.customerPhone) {
+      const res = detectCameroonPhone(request.customerPhone);
+      if(res) {
+        return res.carrier;
+      }
+    }
+
     // If provider is explicitly specified, use it
     if (request.provider) {
       return request.provider;
@@ -566,25 +660,41 @@ export class MobilePaymentsService {
    * Convert generic request to provider-specific request
    */
   private convertToProviderRequest(
-    request: MobilePaymentRequest,
-    provider: string
-  ): unknown {
+    request: MobilePaymentRequest & CollectionRequest,
+    provider: string,
+    reference?: string
+  ): CollectionRequest | MyPVitPaymentRequest {
+    const phoneNumber = removeCountryCode(request.customerPhone || '');
+    const amount: number = request.amount;
+    
     switch (provider) {
       case 'mypvit':
       case 'airtel':
       case 'moov': {
-        const phoneNumber = removeCountryCode(request.customerPhone || '');
         return {
-          amount: request.amount,
+          amount: amount,
           service: 'RESTFUL',
           callback_url_code: this.myPVitService.getCallbackUrlCode(),
           customer_account_number: phoneNumber,
           merchant_operation_account_code:
-            this.myPVitService.getMerchantOperationAccountCode(phoneNumber), // UPDATED
+            this.myPVitService.getMerchantOperationAccountCode(phoneNumber),
           transaction_type: request.transactionType || 'PAYMENT',
           owner_charge: request.ownerCharge || 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
+      }
+      case 'mtn': {
+        return {
+          amount: amount.toString(),
+          currency: request.currency.toUpperCase(),
+          externalId: reference || '',
+          payer: {
+            partyIdType: 'MSISDN',
+            partyId: phoneNumber,
+          },
+          payerMessage: request.description,
+          payeeNote: request.description,
+        } as CollectionRequest;
       }
       default:
         throw new Error(`Unsupported provider: ${provider}`);

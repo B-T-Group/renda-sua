@@ -125,14 +125,14 @@ const EmailVerificationPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        p: 2,
+        p: { xs: 1.5, sm: 2 },
       }}
     >
-      <Container maxWidth="sm">
+      <Container maxWidth="sm" sx={{ px: { xs: 1, sm: 0 } }}>
         <Card
           sx={{
             textAlign: 'center',
-            p: 4,
+            p: { xs: 3, sm: 4 },
             boxShadow: 3,
           }}
         >
@@ -276,7 +276,7 @@ const EmailVerificationPage: React.FC = () => {
                   isResending ? <CircularProgress size={20} /> : <Refresh />
                 }
                 sx={{
-                  minWidth: 200,
+                  minWidth: { xs: '100%', sm: 200 },
                   py: 1.5,
                 }}
               >
@@ -287,6 +287,21 @@ const EmailVerificationPage: React.FC = () => {
                       'Resend Verification Email'
                     )}
               </Button>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mt: 1,
+                  textAlign: 'center',
+                  px: { xs: 1, sm: 0 },
+                }}
+              >
+                {t(
+                  'auth.emailVerification.refreshHelper',
+                  'After you have clicked the verification link in your email, tap the button below.'
+                )}
+              </Typography>
 
               <Button
                 variant="outlined"
@@ -301,7 +316,8 @@ const EmailVerificationPage: React.FC = () => {
                   )
                 }
                 sx={{
-                  minWidth: 200,
+                  minWidth: { xs: '100%', sm: 200 },
+                  width: '100%',
                   py: 1.5,
                 }}
               >
@@ -309,7 +325,7 @@ const EmailVerificationPage: React.FC = () => {
                   ? t('auth.emailVerification.refreshing', 'Checking...')
                   : t(
                       'auth.emailVerification.refreshButton',
-                      "I've Verified My Email"
+                      'Click here after verifying your email'
                     )}
               </Button>
 
@@ -319,7 +335,8 @@ const EmailVerificationPage: React.FC = () => {
                 onClick={handleLogout}
                 disabled={isResending || isRefreshing}
                 sx={{
-                  minWidth: 200,
+                  minWidth: { xs: '100%', sm: 200 },
+                  width: '100%',
                   py: 1.5,
                 }}
               >

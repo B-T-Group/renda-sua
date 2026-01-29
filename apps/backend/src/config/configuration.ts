@@ -148,83 +148,37 @@ export interface Configuration {
   pdfEndpoint: PdfEndpointConfig;
 }
 
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
-
-async function getSecrets(): Promise<Record<string, string>> {
-  const client = new SecretsManagerClient({
-    region: process.env.AWS_REGION || 'ca-central-1',
-  });
-
-  // More explicit environment detection
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  const deploymentEnv = process.env.DEPLOYMENT_ENV || nodeEnv;
-
-  const secretName =
-    deploymentEnv === 'production'
-      ? 'production-rendasua-backend-secrets'
-      : 'development-rendasua-backend-secrets';
-
-  console.log(
-    `Loading secrets for environment: ${deploymentEnv} (NODE_ENV: ${nodeEnv})`
-  );
-  console.log(`Using secret name: ${secretName}`);
-
-  try {
-    const command = new GetSecretValueCommand({ SecretId: secretName });
-    const data = await client.send(command);
-
-    if (data.SecretString) {
-      const secrets = JSON.parse(data.SecretString);
-      console.log(`Successfully loaded secrets from: ${secretName}`);
-      return secrets;
-    } else if (data.SecretBinary) {
-      const buff = Buffer.from(data.SecretBinary as Uint8Array);
-      const secrets = JSON.parse(buff.toString('ascii'));
-      console.log(`Successfully loaded binary secrets from: ${secretName}`);
-      return secrets;
-    }
-    console.log(`No secret data found in: ${secretName}`);
-    return {};
-  } catch (err) {
-    console.error(`Failed to load secrets from ${secretName}:`, err);
-    // Fallback to empty object if secrets cannot be loaded
-    return {};
-  }
-}
-
-export default async (): Promise<Configuration> => {
-  const secrets = await getSecrets();
+// Secrets are now loaded in main.ts before NestJS starts
+// This function is synchronous and reads from process.env
+export default (): Configuration => {
 
   return {
-    GOOGLE_MAPS_API_KEY: secrets.GOOGLE_MAPS_API_KEY,
+    GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY || '',
     GOOGLE_CACHE_ENABLED: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
     GOOGLE_CACHE_TTL: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??
         '80d9a954-e12a-43a8-8fd5-7dcb926ce6af',
-      clientSecret: secrets.AIRTEL_MONEY_CLIENT_SECRET ?? '',
+      clientSecret: process.env.AIRTEL_MONEY_CLIENT_SECRET ?? '',
       targetEnvironment:
         process.env.AIRTEL_MONEY_TARGET_ENVIRONMENT ?? 'sandbox',
       callbackUrl: process.env.AIRTEL_MONEY_CALLBACK_URL ?? '',
       country: process.env.AIRTEL_MONEY_COUNTRY ?? 'UG',
       currency: process.env.AIRTEL_MONEY_CURRENCY ?? 'UGX',
       disbursementPrimaryKey:
-        secrets.AIRTEL_MONEY_DISBURSEMENT_PRIMARY_KEY ?? '',
+        process.env.AIRTEL_MONEY_DISBURSEMENT_PRIMARY_KEY ?? '',
       disbursementSecondaryKey:
-        secrets.AIRTEL_MONEY_DISBURSEMENT_SECONDARY_KEY ?? '',
-      remittancePrimaryKey: secrets.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
+        process.env.AIRTEL_MONEY_DISBURSEMENT_SECONDARY_KEY ?? '',
+      remittancePrimaryKey: process.env.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
       remittanceSecondaryKey:
-        secrets.AIRTEL_MONEY_REMITTANCE_SECONDARY_KEY ?? '',
+        process.env.AIRTEL_MONEY_REMITTANCE_SECONDARY_KEY ?? '',
     },
     mypvit: {
       baseUrl: process.env.MYPVIT_BASE_URL || 'https://api.mypvit.pro',
       merchantSlug: process.env.MYPVIT_MERCHANT_SLUG || 'MR_1755783875',
-      airtelSecretKey: secrets.AIRTEL_MYPVIT_SECRET_KEY || '', // RENAMED
-      moovSecretKey: secrets.MOOV_MYPVIT_SECRET_KEY || '', // NEW
+      airtelSecretKey: process.env.AIRTEL_MYPVIT_SECRET_KEY || '', // RENAMED
+      moovSecretKey: process.env.MOOV_MYPVIT_SECRET_KEY || '', // NEW
       environment:
         (process.env.MYPVIT_ENVIRONMENT as 'test' | 'production') || 'test',
       callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
@@ -255,14 +209,12 @@ export default async (): Promise<Configuration> => {
         'http://localhost:8080/v1/graphql',
       adminSecret:
         process.env.HASURA_GRAPHQL_ADMIN_SECRET ||
-        secrets.HASURA_GRAPHQL_ADMIN_SECRET ||
         'myadminsecretkey',
     },
     aws: {
       region: process.env.AWS_REGION || 'ca-central-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID,
-      secretAccessKey:
-        process.env.AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY,
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
       s3BucketName: process.env.S3_BUCKET_NAME,
       s3BucketRegion:
         process.env.S3_BUCKET_REGION ||
@@ -284,7 +236,7 @@ export default async (): Promise<Configuration> => {
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       user: process.env.SMTP_USER || '',
       pass: process.env.SMTP_PASS || '',
-      sendGridApiKey: secrets.SENDGRID_API_KEY,
+      sendGridApiKey: process.env.SENDGRID_API_KEY,
       sendGridFromEmail: 'noreply@rendasua.com',
     },
     redis: {
@@ -298,16 +250,16 @@ export default async (): Promise<Configuration> => {
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     },
     mtnMomo: {
-      subscriptionKey: secrets.MTN_MOMO_SUBSCRIPTION_KEY,
-      apiKey: secrets.MTN_MOMO_API_KEY,
+      subscriptionKey: process.env.MTN_MOMO_SUBSCRIPTION_KEY || '',
+      apiKey: process.env.MTN_MOMO_API_KEY || '',
       apiUserId: process.env.MTN_MOMO_API_USER_ID,
       targetEnvironment: process.env.MTN_MOMO_TARGET_ENVIRONMENT || 'sandbox',
-      collectionPrimaryKey: secrets.MTN_MOMO_COLLECTION_PRIMARY_KEY,
-      collectionSecondaryKey: secrets.MTN_MOMO_COLLECTION_SECONDARY_KEY,
-      disbursementPrimaryKey: secrets.MTN_MOMO_DISBURSEMENT_PRIMARY_KEY,
-      disbursementSecondaryKey: secrets.MTN_MOMO_DISBURSEMENT_SECONDARY_KEY,
-      remittancePrimaryKey: secrets.MTN_MOMO_REMITTANCE_PRIMARY_KEY,
-      remittanceSecondaryKey: secrets.MTN_MOMO_REMITTANCE_SECONDARY_KEY,
+      collectionPrimaryKey: process.env.MTN_MOMO_COLLECTION_PRIMARY_KEY || '',
+      collectionSecondaryKey: process.env.MTN_MOMO_COLLECTION_SECONDARY_KEY || '',
+      disbursementPrimaryKey: process.env.MTN_MOMO_DISBURSEMENT_PRIMARY_KEY || '',
+      disbursementSecondaryKey: process.env.MTN_MOMO_DISBURSEMENT_SECONDARY_KEY || '',
+      remittancePrimaryKey: process.env.MTN_MOMO_REMITTANCE_PRIMARY_KEY || '',
+      remittanceSecondaryKey: process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY || '',
       callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
     },
     order: {
@@ -324,23 +276,22 @@ export default async (): Promise<Configuration> => {
       audience:
         process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
       managementClientId:
-        process.env.AUTH0_MGMT_CLIENT_ID || secrets.AUTH0_MGMT_CLIENT_ID,
+        process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret:
-        process.env.AUTH0_MGMT_CLIENT_SECRET ||
-        secrets.AUTH0_MGMT_CLIENT_SECRET,
+        process.env.AUTH0_MGMT_CLIENT_SECRET || '',
     },
     googleCache: {
       enabled: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true
       ttl: parseInt(process.env.GOOGLE_CACHE_TTL || '86400', 10), // Default to 1 day
     },
     openai: {
-      apiKey: process.env.OPENAI_API_KEY || secrets.OPENAI_API_KEY || '',
+      apiKey: process.env.OPENAI_API_KEY || '',
     },
     notification: {
       orderStatusChangeEnabled: process.env.NODE_ENV === 'production',
     },
     pdfEndpoint: {
-      apiToken: secrets.PDF_ENDPOINT_TOKEN || '',
+      apiToken: process.env.PDF_ENDPOINT_TOKEN || '',
       sandbox: process.env.NODE_ENV !== 'production',
     },
   };

@@ -36,10 +36,10 @@ import { AppService } from './app.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
       load: [configuration],
       cache: true,
       expandVariables: true,
+      envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
     }),
     ScheduleModule.forRoot(),
     WinstonModule.forRootAsync({
