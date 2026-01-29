@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageType } from '../types/image';
 import { useApiClient } from './useApiClient';
 
@@ -88,6 +88,8 @@ export interface GetInventoryItemsQuery {
   max_price?: number;
   currency?: string;
   is_active?: boolean;
+  country_code?: string;
+  state?: string;
 }
 
 export interface PaginatedInventoryItems {
@@ -116,8 +118,16 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   } | null>(null);
 
   const apiClient = useApiClient();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchInventoryItems = useCallback(async () => {
+    // Cancel any in-flight request so it cannot overwrite results from this request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
 
@@ -133,8 +143,13 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.min_price && { min_price: query.min_price }),
           ...(query.max_price && { max_price: query.max_price }),
           ...(query.currency && { currency: query.currency }),
+          ...(query.country_code && { country_code: query.country_code }),
+          ...(query.state && { state: query.state }),
         },
+        signal: controller.signal,
       });
+
+      if (controller.signal.aborted) return;
 
       if (response.data.success) {
         setInventoryItems(response.data.data.items);
@@ -148,6 +163,12 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
         setError(response.data.message || 'Failed to fetch inventory items');
       }
     } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      const isAborted =
+        (err as { name?: string })?.name === 'Canceled' ||
+        (err as { name?: string })?.name === 'AbortError';
+      if (isAborted) return;
+
       const errorMessage =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ||
@@ -156,9 +177,14 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       setError(errorMessage);
       console.error('Error fetching inventory items:', err);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
-  }, []);
+  }, [query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency, query.country_code, query.state]);
 
   useEffect(() => {
     fetchInventoryItems();

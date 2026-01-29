@@ -911,6 +911,7 @@
     "locations": "Emplacements",
     "manage": "Gérer",
     "messages": "Messages",
+    "more": "Plus",
     "moreThan": "Plus de",
     "next": "Suivant",
     "no": "Non",
@@ -952,6 +953,7 @@
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "search": "Rechercher",
+    "searchPlaceholder": "Rechercher par nom, catégorie ou entreprise",
     "store": "Boutique",
     "searchItems": "Rechercher des articles...",
     "showing": "Affichage",
@@ -966,6 +968,13 @@
     "view": "Voir",
     "weight": "Poids",
     "yes": "Oui"
+  },
+  "dashboard": {
+    "client": {
+      "title": "Tableau de bord client",
+      "subtitle": "Bon retour, {{name}} ! Parcourez les articles disponibles et gérez vos commandes."
+    },
+    "availableItems": "Articles disponibles"
   },
   "faq": {
     "agent": {
@@ -1061,7 +1070,7 @@
       "title": "Livraison Rapide d'Articles de Qualité",
       "trustSignals": {
         "deliveryTime": "Livraison 24-48h",
-        "securePayment": "Paiements sécurisés (Airtel Money)"
+        "securePayment": "Paiements sécurisés (MTN, Orange, Moov, Airtel Money)"
       }
     },
     "howItWorks": {

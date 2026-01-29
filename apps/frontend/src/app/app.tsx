@@ -9,7 +9,6 @@ import AgentBottomNav from '../components/layout/AgentBottomNav';
 import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
 import Header from '../components/layout/Header';
-import { useUserProfileContext } from '../contexts/UserProfileContext';
 import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
@@ -32,6 +31,7 @@ import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
+import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 import FAQ from '../components/pages/FAQ';
 import ItemsPage from '../components/pages/ItemsPage';

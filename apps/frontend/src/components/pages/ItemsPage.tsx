@@ -67,11 +67,24 @@ const ItemsPage: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const itemsPerPage = 12;
 
-  // Fetch all inventory items for public view
+  // Primary or first address for location-based inventory filtering (when logged in)
+  const userAddress = useMemo(() => {
+    if (!profile?.addresses?.length) return null;
+    return (
+      profile.addresses.find((a) => a.is_primary) ?? profile.addresses[0]
+    );
+  }, [profile?.addresses]);
+
+  // Fetch all inventory items; pass country_code and state when user is logged in and has an address
   const { inventoryItems, loading, error } = useInventoryItems({
     page: 1,
     limit: 1000, // Get all items for client-side filtering
     is_active: true,
+    ...(isAuthenticated &&
+      userAddress && {
+        country_code: userAddress.country,
+        state: userAddress.state,
+      }),
   });
 
   // Dashboard-specific hooks for authenticated clients

@@ -272,7 +272,7 @@ const LandingPage: React.FC = () => {
                     <Typography variant="body2" sx={{ color: 'white' }}>
                       {t(
                         'landing.hero.trustSignals.securePayment',
-                        'Secure payments (Airtel Money)'
+                        'Secure payments (MTN, Orange, Moov, Airtel Money)'
                       )}
                     </Typography>
                   </Box>

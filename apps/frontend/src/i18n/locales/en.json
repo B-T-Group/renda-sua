@@ -910,6 +910,7 @@
     "locations": "Locations",
     "manage": "Manage",
     "messages": "Messages",
+    "more": "More",
     "moreThan": "More than",
     "next": "Next",
     "no": "No",
@@ -965,6 +966,13 @@
     "view": "View",
     "weight": "Weight",
     "yes": "Yes"
+  },
+  "dashboard": {
+    "client": {
+      "title": "Client Dashboard",
+      "subtitle": "Welcome back, {{name}}! Browse available items and manage your orders."
+    },
+    "availableItems": "Available Items"
   },
   "faq": {
     "agent": {
@@ -1060,7 +1068,7 @@
       "title": "Fast Delivery of Quality Items",
       "trustSignals": {
         "deliveryTime": "24-48h delivery",
-        "securePayment": "Secure payments (Airtel Money)"
+        "securePayment": "Secure payments (MTN, Orange, Moov, Airtel Money)"
       }
     },
     "howItWorks": {
