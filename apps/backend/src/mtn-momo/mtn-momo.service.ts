@@ -1,3 +1,8 @@
+/**
+ * MTN MoMo payment service.
+ * @deprecated For Cameroon mobile payments, Freemopay is used instead (see mobile-payments FreemopayService).
+ * This module is retained for potential use in other countries or future removal.
+ */
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';

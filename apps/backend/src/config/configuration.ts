@@ -115,6 +115,13 @@ export interface MyPVitConfig {
   paymentEndpointCode: string;
 }
 
+export interface FreemopayConfig {
+  baseUrl: string;
+  appKey: string;
+  secretKey: string;
+  callbackUrl: string;
+}
+
 export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
@@ -140,6 +147,7 @@ export interface Configuration {
   mtnMomo: MtnMomoConfig;
   airtelMoney: AirtelMoneyConfig;
   mypvit: MyPVitConfig;
+  freemopay: FreemopayConfig;
   order: OrderConfig;
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
@@ -192,6 +200,13 @@ export default (): Configuration => {
         'ACC_68A722C33473B', // NEW
       paymentEndpointCode:
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
+    },
+    freemopay: {
+      baseUrl:
+        process.env.FREEMOPAY_BASE_URL || 'https://api-v2.freemopay.com',
+      appKey: process.env.FREEMOPAY_APP_KEY || '',
+      secretKey: process.env.FREEMOPAY_SECRET_KEY || '',
+      callbackUrl: process.env.FREEMOPAY_CALLBACK_URL || '',
     },
     app: {
       port: parseInt(process.env.PORT || '3000', 10),

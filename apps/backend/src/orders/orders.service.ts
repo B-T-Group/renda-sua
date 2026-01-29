@@ -3677,11 +3677,12 @@ export class OrdersService {
   }
 
   /**
-   * Get payment provider based on phone number
+   * Get payment provider based on phone number.
+   * Delegates to MobilePaymentsService: Gabon -> mypvit/airtel/moov, Cameroon -> freemopay.
    */
   private getProvider(
     phoneNumber: string
-  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' {
+  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' | 'freemopay' {
     if (!phoneNumber) {
       throw new HttpException(
         {
@@ -3693,22 +3694,7 @@ export class OrdersService {
       );
     }
 
-    if (phoneNumber.startsWith('+241')) {
-      return 'airtel';
-    }
-
-    throw new HttpException(
-      {
-        success: false,
-        message: 'Phone number not yet supported for mobile payments',
-        error: 'UNSUPPORTED_PHONE_NUMBER',
-        data: {
-          phoneNumber,
-          supportedPrefixes: ['+241 (Airtel)'],
-        },
-      },
-      HttpStatus.BAD_REQUEST
-    );
+    return this.mobilePaymentsService.getProvider(phoneNumber);
   }
 
   /**

@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as libphonenumber from 'google-libphonenumber';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import {
+  FreemopayPaymentRequest,
+  FreemopayService,
+} from './providers/freemopay.service';
+import {
   MyPVitPaymentRequest,
   MyPVitService,
 } from './providers/mypvit.service';
@@ -157,7 +161,7 @@ export interface MobilePaymentRequest {
   ownerCharge?: 'MERCHANT' | 'CUSTOMER';
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
@@ -194,15 +198,20 @@ export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
   private readonly providers: Map<string, unknown> = new Map();
 
-  constructor(private readonly myPVitService: MyPVitService, private readonly mtnMomoService: MtnMomoService) {
+  constructor(
+    private readonly myPVitService: MyPVitService,
+    private readonly mtnMomoService: MtnMomoService,
+    private readonly freemopayService: FreemopayService
+  ) {
     // Register payment providers
     this.providers.set('mypvit', myPVitService);
+    this.providers.set('freemopay', freemopayService);
   }
 
-  getProvider(phoneNumber: string): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' {
+  getProvider(phoneNumber: string): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' | 'freemopay' {
     const res = detectCameroonPhone(phoneNumber);
-    if(res) {
-      return res.carrier as 'mtn' | 'orange';
+    if (res) {
+      return 'freemopay';
     }
     return 'mypvit';
   }
@@ -213,13 +222,22 @@ export class MobilePaymentsService {
   async getAvailableProviders(): Promise<PaymentProvider[]> {
     const providers: PaymentProvider[] = [];
 
-    // MyPVit provider
+    // MyPVit provider (Gabon)
     const mypvitAvailable = await this.myPVitService.testConnection();
     providers.push({
       name: 'MyPVit',
       supportedMethods: ['mobile_money', 'card'],
       supportedCurrencies: ['XAF', 'USD', 'EUR'],
       isAvailable: mypvitAvailable,
+    });
+
+    // Freemopay provider (Cameroon)
+    const freemopayAvailable = await this.freemopayService.testConnection();
+    providers.push({
+      name: 'Freemopay',
+      supportedMethods: ['mobile_money'],
+      supportedCurrencies: ['XAF'],
+      isAvailable: freemopayAvailable,
     });
 
     return providers;
@@ -232,6 +250,8 @@ export class MobilePaymentsService {
     switch (provider.toLowerCase()) {
       case 'mypvit':
         return await this.myPVitService.getSupportedPaymentMethods();
+      case 'freemopay':
+        return await this.freemopayService.getSupportedPaymentMethods();
       default:
         return [];
     }
@@ -318,6 +338,21 @@ export class MobilePaymentsService {
           };
           break;
         }
+        case 'freemopay': {
+          const freemopayResponse = await this.freemopayService.initiatePayment(
+            providerRequest as FreemopayPaymentRequest,
+            reference
+          );
+          response = {
+            success: freemopayResponse.success,
+            transactionId: freemopayResponse.transactionId,
+            paymentUrl: freemopayResponse.paymentUrl,
+            message: freemopayResponse.message,
+            errorCode: freemopayResponse.errorCode,
+            provider: 'freemopay',
+          };
+          break;
+        }
         case 'mtn': {
           const mtnResponse = await this.mtnMomoService.requestToPay(
             providerRequest as CollectionRequest,
@@ -395,6 +430,21 @@ export class MobilePaymentsService {
           };
           break;
         }
+        case 'freemopay': {
+          const freemopayStatus =
+            await this.freemopayService.checkTransactionStatus(transactionId);
+          status = {
+            transactionId: freemopayStatus.transactionId,
+            status: (freemopayStatus.status?.toLowerCase() ||
+              'pending') as 'pending' | 'success' | 'failed' | 'cancelled',
+            amount: freemopayStatus.amount || 0,
+            currency: 'XAF',
+            reference: freemopayStatus.reference || freemopayStatus.merchantRef || '',
+            message: freemopayStatus.reason || freemopayStatus.message,
+            provider: 'freemopay',
+          };
+          break;
+        }
         default:
           throw new Error(`Unsupported payment provider: ${paymentProvider}`);
       }
@@ -432,6 +482,9 @@ export class MobilePaymentsService {
         case 'mypvit':
           success = await this.myPVitService.cancelTransaction(transactionId);
           break;
+        case 'freemopay':
+          success = await this.freemopayService.cancelTransaction(transactionId);
+          break;
         default:
           throw new Error(`Unsupported payment provider: ${paymentProvider}`);
       }
@@ -459,6 +512,12 @@ export class MobilePaymentsService {
       switch (provider.toLowerCase()) {
         case 'mypvit':
           return await this.myPVitService.verifyCallback(
+            payload,
+            signature,
+            timestamp
+          );
+        case 'freemopay':
+          return this.freemopayService.verifyCallback(
             payload,
             signature,
             timestamp
@@ -492,6 +551,8 @@ export class MobilePaymentsService {
       switch (provider.toLowerCase()) {
         case 'mypvit':
           return await this.myPVitService.getTransactionHistory(filters);
+        case 'freemopay':
+          return [];
         default:
           this.logger.warn(
             `Unsupported provider for transaction history: ${provider}`
@@ -514,6 +575,10 @@ export class MobilePaymentsService {
       switch (provider.toLowerCase()) {
         case 'mypvit':
           return await this.myPVitService.checkBalance();
+        case 'freemopay':
+          throw new Error(
+            'Freemopay does not support balance check via API'
+          );
         default:
           throw new Error(
             `Unsupported provider for balance check: ${provider}`
@@ -639,11 +704,10 @@ export class MobilePaymentsService {
    * Select the best payment provider based on request
    */
   private selectProvider(request: MobilePaymentRequest): string | null {
-
-    if(request.customerPhone) {
+    if (request.customerPhone) {
       const res = detectCameroonPhone(request.customerPhone);
-      if(res) {
-        return res.carrier;
+      if (res) {
+        return 'freemopay';
       }
     }
 
@@ -652,7 +716,7 @@ export class MobilePaymentsService {
       return request.provider;
     }
 
-    // Default to MyPVit for now
+    // Default to MyPVit for now (Gabon)
     return 'mypvit';
   }
 
@@ -663,10 +727,10 @@ export class MobilePaymentsService {
     request: MobilePaymentRequest & CollectionRequest,
     provider: string,
     reference?: string
-  ): CollectionRequest | MyPVitPaymentRequest {
+  ): CollectionRequest | MyPVitPaymentRequest | FreemopayPaymentRequest {
     const phoneNumber = removeCountryCode(request.customerPhone || '');
     const amount: number = request.amount;
-    
+
     switch (provider) {
       case 'mypvit':
       case 'airtel':
@@ -682,6 +746,18 @@ export class MobilePaymentsService {
           owner_charge: request.ownerCharge || 'CUSTOMER',
           free_info: request.description,
         } as MyPVitPaymentRequest;
+      }
+      case 'freemopay': {
+        const payer = phoneNumber.startsWith('237')
+          ? phoneNumber
+          : '237' + phoneNumber;
+        return {
+          payer,
+          amount,
+          externalId: reference || '',
+          description: request.description || 'Payment',
+          callback: this.freemopayService.getCallbackUrl(),
+        } as FreemopayPaymentRequest;
       }
       case 'mtn': {
         return {
@@ -705,14 +781,16 @@ export class MobilePaymentsService {
    * Detect provider from transaction ID
    */
   private async detectProvider(transactionId: string): Promise<string | null> {
-    // This is a simplified implementation
-    // In a real scenario, you might store provider information with the transaction
-    // For now, we'll try MyPVit first
+    try {
+      await this.freemopayService.checkTransactionStatus(transactionId);
+      return 'freemopay';
+    } catch {
+      // Not a Freemopay reference, try MyPVit
+    }
     try {
       await this.myPVitService.checkTransactionStatus(transactionId);
       return 'mypvit';
     } catch {
-      // Try other providers here when they're implemented
       return null;
     }
   }

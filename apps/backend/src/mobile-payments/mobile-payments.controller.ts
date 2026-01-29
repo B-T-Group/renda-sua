@@ -24,7 +24,7 @@ export interface InitiatePaymentDto {
   customerEmail?: string;
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'freemopay';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
@@ -52,6 +52,15 @@ export interface MyPVitCallbackDto {
   transactionOperation: string;
   operator: string;
   code: number;
+}
+
+export interface FreemopayCallbackDto {
+  reference: string;
+  externalId?: string;
+  merchantRef?: string;
+  status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  amount?: number;
+  reason?: string;
 }
 
 @Controller('mobile-payments')
@@ -692,6 +701,131 @@ export class MobilePaymentsController {
       };
     } catch (error: any) {
       console.error('MyPVIT callback processing error:', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to process callback',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Payment callback endpoint for Freemopay (Cameroon)
+   */
+  @Public()
+  @Post('callback/freemopay')
+  async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
+    try {
+      const externalId =
+        callbackData.externalId ?? callbackData.merchantRef;
+      if (!callbackData.reference || !externalId || !callbackData.status) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing required callback data (reference, externalId/merchantRef, status)',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      await this.databaseService.logCallback(
+        callbackData.reference,
+        callbackData
+      );
+
+      const transaction = await this.databaseService.getTransactionByReference(
+        externalId
+      );
+
+      if (transaction) {
+        const status =
+          callbackData.status === 'SUCCESS' ? 'success' : 'failed';
+
+        await this.databaseService.updateTransaction(transaction.id, {
+          status,
+          transaction_id: callbackData.reference,
+          error_message:
+            callbackData.status === 'FAILED'
+              ? callbackData.reason || 'Payment failed'
+              : undefined,
+        });
+
+        this.logger.log(
+          `Updated transaction ${transaction.id} with status: ${status}`
+        );
+
+        if (
+          callbackData.status === 'SUCCESS' &&
+          transaction.account_id &&
+          transaction.transaction_type === 'PAYMENT'
+        ) {
+          try {
+            const creditResult = await this.accountsService.registerTransaction(
+              {
+                accountId: transaction.account_id,
+                amount: transaction.amount,
+                transactionType: 'deposit',
+                memo: `Mobile payment deposit - ${transaction.reference}`,
+                referenceId: transaction.id,
+              }
+            );
+
+            if (creditResult.success) {
+              this.logger.log(
+                `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
+              );
+
+              if (transaction.payment_entity === 'order') {
+                await this.ordersService.processOrderPayment(transaction);
+              } else if (transaction.payment_entity === 'claim_order') {
+                await this.ordersService.processClaimOrderPayment(transaction);
+              }
+            } else {
+              this.logger.error(
+                `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
+              );
+            }
+          } catch (creditError) {
+            this.logger.error(
+              `Error crediting account ${transaction.account_id}:`,
+              creditError
+            );
+          }
+        }
+      } else {
+        this.logger.warn(
+          `Transaction not found for reference: ${externalId}`
+        );
+      }
+
+      if (transaction) {
+        if (
+          callbackData.status === 'FAILED' &&
+          transaction.payment_entity === 'order'
+        ) {
+          const order = await this.ordersService.getOrderByNumber(
+            transaction.reference
+          );
+          await this.ordersService.onOrderPaymentFailed(order.id);
+        } else if (
+          callbackData.status === 'FAILED' &&
+          transaction.payment_entity === 'claim_order'
+        ) {
+          this.logger.log(
+            `Claim order payment failed for order ${transaction.reference}`
+          );
+        }
+      }
+
+      return {
+        received: true,
+        reference: callbackData.reference,
+      };
+    } catch (error: any) {
+      this.logger.error('Freemopay callback processing error:', error);
       throw new HttpException(
         {
           success: false,
