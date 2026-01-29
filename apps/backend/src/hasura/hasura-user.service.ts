@@ -10,8 +10,8 @@ import {
   Clients,
   Users,
 } from '../generated/graphql';
-import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
 import { HasuraSystemService } from './hasura-system.service';
+import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -70,7 +70,6 @@ export class HasuraUserService {
     private readonly hasuraSystemService: HasuraSystemService
   ) {
     const hasuraConfig = this.configService.get('hasura');
-    console.log('hasuraConfig', hasuraConfig);
     this.hasuraUrl =
       hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();

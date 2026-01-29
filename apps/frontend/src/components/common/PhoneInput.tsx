@@ -22,6 +22,8 @@ export const DEV_PHONE_NUMBERS = [
   '+237 6 77 41 65 47',
   '+237 6 77 41 65 48',
   '+237 6 77 41 65 49',
+  '+237 6 93 07 23 61',
+  '+237 6 81 56 35 31',
 ];
 
 interface PhoneInputProps {
