@@ -97,7 +97,7 @@ export class FreemopayService {
     try {
       const externalId = reference || paymentRequest.externalId;
       this.logger.log(
-        `Initiating Freemopay payment for payer: ${paymentRequest.payer}, externalId: ${externalId}`
+        `Initiating Freemopay payment for payer: ${paymentRequest.payer}, externalId: ${externalId}, callback: ${paymentRequest.callback}`
       );
 
       const payload = {
