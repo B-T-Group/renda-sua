@@ -8,6 +8,7 @@ import LoadingScreen from '../components/common/LoadingScreen';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
 import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
+import GuestBottomNav from '../components/layout/GuestBottomNav';
 import Header from '../components/layout/Header';
 import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
@@ -52,7 +53,7 @@ import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 
 function App() {
-  const { isLoading } = useAuth0();
+  const { isLoading, isAuthenticated } = useAuth0();
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
@@ -60,9 +61,10 @@ function App() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Determine if agent bottom nav should be visible
+  // Determine which bottom nav should be visible (only one at a time)
   const showAgentBottomNav = userType === 'agent' && isMobile;
   const showClientBottomNav = userType === 'client' && isMobile;
+  const showGuestBottomNav = !isAuthenticated && isMobile;
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
@@ -105,9 +107,9 @@ function App() {
         sx={{
           flex: 1,
           py: 4,
-          // Add bottom padding when agent bottom nav is visible to prevent content overlap
+          // Add bottom padding when any bottom nav is visible to prevent content overlap
           paddingBottom:
-            showAgentBottomNav || showClientBottomNav
+            showAgentBottomNav || showClientBottomNav || showGuestBottomNav
               ? { xs: '80px', md: 4 }
               : 4,
         }}
@@ -430,6 +432,9 @@ function App() {
 
       {/* Client Bottom Navigation - Only visible for clients on mobile */}
       <ClientBottomNav />
+
+      {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
+      <GuestBottomNav />
 
       {/* Global API Loading Screen */}
       <LoadingScreen open={isApiLoading} message={loadingMessage} />
