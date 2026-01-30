@@ -15,6 +15,7 @@ export interface AwsConfig {
   s3BucketRegion?: string;
   cloudWatchLogGroup?: string;
   cloudWatchLogStream?: string;
+  enableCloudWatch?: boolean;
 }
 
 export interface JwtConfig {
@@ -238,6 +239,7 @@ export default (): Configuration => {
       cloudWatchLogGroup:
         process.env.CLOUDWATCH_LOG_GROUP || 'rendasua-backend-logs',
       cloudWatchLogStream: process.env.CLOUDWATCH_LOG_STREAM || 'application',
+      enableCloudWatch: process.env.ENABLE_CLOUDWATCH === 'true',
     },
     jwt: {
       secret: process.env.JWT_SECRET || 'your_jwt_secret_key',

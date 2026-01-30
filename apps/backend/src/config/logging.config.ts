@@ -34,23 +34,25 @@ export const createWinstonConfig = (config: LoggingConfig) => {
     );
   }
 
-  // CloudWatch transport for production
-  if (config.enableCloudWatch && config.accessKeyId && config.secretAccessKey) {
-    transports.push(
-      new CloudWatchTransport({
-        logGroupName: config.logGroupName,
-        logStreamName: config.logStreamName,
-        awsRegion: config.region,
-        awsAccessKeyId: config.accessKeyId,
-        awsSecretKey: config.secretAccessKey,
-        messageFormatter: (item: any) => {
-          return `[${item.level}]: ${item.message}`;
-        },
-        errorHandler: (err: any) => {
-          console.error('CloudWatch logging error:', err);
-        },
-      })
-    );
+  // CloudWatch transport: use when enabled. Credentials optional—when omitted,
+  // the AWS SDK uses the default chain (e.g. IAM role on ECS/EC2/Lambda).
+  if (config.enableCloudWatch) {
+    const cloudWatchOptions: Record<string, unknown> = {
+      logGroupName: config.logGroupName,
+      logStreamName: config.logStreamName,
+      awsRegion: config.region,
+      messageFormatter: (item: { level: string; message: string }) => {
+        return `[${item.level}]: ${item.message}`;
+      },
+      errorHandler: (err: Error) => {
+        console.error('CloudWatch logging error:', err);
+      },
+    };
+    if (config.accessKeyId && config.secretAccessKey) {
+      cloudWatchOptions.awsAccessKeyId = config.accessKeyId;
+      cloudWatchOptions.awsSecretKey = config.secretAccessKey;
+    }
+    transports.push(new CloudWatchTransport(cloudWatchOptions as any));
   }
 
   return {
