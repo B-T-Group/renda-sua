@@ -111,7 +111,7 @@ export class FreemopayService {
       const response = await this.httpClient.post('/api/v2/payment', payload);
 
       const data = response.data;
-
+      this.logger.log(`Freemopay API Response: ${JSON.stringify(data)}`);
       if (response.status === 200 && data?.reference) {
         return {
           success: true,
