@@ -177,7 +177,7 @@ const OnboardingContent: React.FC<{
             alignItems: 'center',
             p: 2,
             minHeight: 300,
-            maxHeight: isMobile ? '40vh' : '50vh',
+            maxHeight: isMobile ? '50vh' : '60vh',
           }}
         >
           <Box
@@ -185,7 +185,8 @@ const OnboardingContent: React.FC<{
             src={currentStep.image}
             alt={t(currentStep.titleKey)}
             sx={{
-              maxWidth: '100%',
+              width: '80%',
+              maxWidth: 500,
               maxHeight: '100%',
               objectFit: 'contain',
               borderRadius: 2,
