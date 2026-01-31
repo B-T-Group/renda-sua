@@ -1922,5 +1922,51 @@
     "multipleOrdersNotice": "Vos articles seront divisés en {{count}} commandes séparées",
     "success": "Commandes créées avec succès !",
     "error": "Échec de la création des commandes : {{error}}"
+  },
+  "agentOnboarding": {
+    "title": "Comment Fonctionnent les Livraisons",
+    "subtitle": "Apprenez à gagner de l'argent en livrant des commandes",
+    "quit": "Passer le Guide",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "complete": "Commencer",
+    "stepOf": "Étape {{current}} sur {{total}}",
+    "viewGuide": "Voir le Guide de Livraison",
+    "step1": {
+      "title": "Voir les Commandes Disponibles",
+      "description": "Parcourez les commandes disponibles prêtes à être récupérées. Chaque commande affiche le lieu de récupération, la destination de livraison et votre commission de livraison. Les commandes avec le statut 'Prêt pour le ramassage' attendent qu'un agent les réclame."
+    },
+    "step2": {
+      "title": "Réclamer une Commande",
+      "description": "Lorsque vous trouvez une commande que vous souhaitez livrer, cliquez sur 'Réclamer la Commande' pour la réserver. Vous pouvez consulter les détails de la commande avant de la réclamer pour vérifier les lieux de ramassage et de livraison."
+    },
+    "step3": {
+      "title": "Confirmation et Caution",
+      "description": "Avant de réclamer, vous devrez fournir un dépôt de garantie (un pourcentage de la valeur de la commande). Ce dépôt est entièrement remboursé après une livraison réussie. Vous pouvez abandonner une commande à tout moment et votre caution sera remboursée."
+    },
+    "step3_2": {
+      "title": "Pourquoi la Caution est Requise",
+      "description": "Le dépôt de garantie aide à assurer la sécurité des commandes et renforce la confiance dans la plateforme. Il protège les entreprises et les clients pendant que vous manipulez leurs commandes. Plus vous effectuez de livraisons, plus votre montant de caution requis peut diminuer."
+    },
+    "step4": {
+      "title": "Récupérer la Commande",
+      "description": "Rendez-vous à l'emplacement de l'entreprise indiqué sur la commande. Montrez le numéro de commande au personnel. Une fois la commande en main, cliquez sur le bouton pour changer son statut en 'Récupéré'."
+    },
+    "step5": {
+      "title": "Commencer la Livraison",
+      "description": "Une fois en route, mettez à jour le statut de la commande en 'En Livraison'. Cela permet au client de savoir que sa commande est en chemin et de suivre votre progression."
+    },
+    "step6": {
+      "title": "Livrer et Marquer comme Terminé",
+      "description": "Lorsque vous arrivez chez le client et remettez la commande, marquez-la comme 'Livrée'. Important : Le client doit également confirmer la réception de son côté pour libérer votre paiement."
+    },
+    "step7": {
+      "title": "Recevoir le Paiement",
+      "description": "Après confirmation par le client, votre solde est mis à jour avec le remboursement de votre caution plus la commission de livraison. Cliquez sur votre solde pour voir les transactions ou retirer vers votre compte mobile money."
+    },
+    "step8": {
+      "title": "Voir les Transactions",
+      "description": "Vous pouvez consulter toutes vos transactions, y compris les gains, les dépôts de caution et les retraits, dans la section de votre compte. Suivez facilement vos revenus et gérez vos fonds."
+    }
   }
 }

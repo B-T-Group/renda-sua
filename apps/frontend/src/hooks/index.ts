@@ -26,6 +26,7 @@ export { useOrders } from './useOrders';
 export type { Order, OrderFilters } from './useOrders';
 
 // Agent hooks
+export { useAgentOnboarding } from './useAgentOnboarding';
 export { useAgentOrders } from './useAgentOrders';
 
 // Business hooks

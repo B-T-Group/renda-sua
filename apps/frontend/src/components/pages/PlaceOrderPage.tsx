@@ -50,6 +50,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
+import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
@@ -59,7 +60,6 @@ import DeliveryTimeWindowSelector, {
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
-import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 
 // Loading Skeleton Component
 const OrderPageSkeleton: React.FC = () => {

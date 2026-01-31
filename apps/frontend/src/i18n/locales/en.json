@@ -1914,5 +1914,51 @@
     "multipleOrdersNotice": "Your items will be split into {{count}} separate orders",
     "success": "Orders created successfully!",
     "error": "Failed to create orders: {{error}}"
+  },
+  "agentOnboarding": {
+    "title": "How Deliveries Work",
+    "subtitle": "Learn how to earn money delivering orders",
+    "quit": "Skip Guide",
+    "next": "Next",
+    "previous": "Previous",
+    "complete": "Get Started",
+    "stepOf": "Step {{current}} of {{total}}",
+    "viewGuide": "View Delivery Guide",
+    "step1": {
+      "title": "View Available Orders",
+      "description": "Browse available orders ready for pickup. Each order shows the pickup location, delivery destination, and your delivery commission. Orders with the 'Ready for Pickup' status are waiting for an agent to claim them."
+    },
+    "step2": {
+      "title": "Claim an Order",
+      "description": "When you find an order you want to deliver, click 'Claim Order' to reserve it. You can view order details before claiming to check the pickup and delivery locations."
+    },
+    "step3": {
+      "title": "Confirmation & Caution",
+      "description": "Before claiming, you'll need to provide a caution deposit (a percentage of the order value). This deposit is fully refunded after successful delivery. You can drop an order anytime and your caution will be refunded."
+    },
+    "step3_2": {
+      "title": "Why Caution is Required",
+      "description": "The caution deposit helps ensure order security and builds trust in the platform. It protects businesses and customers while you handle their orders. As you complete more deliveries, your required caution amount may decrease."
+    },
+    "step4": {
+      "title": "Pick Up the Order",
+      "description": "Go to the business location shown on the order. Show the order number to the staff. Once you have the order, click the button to change its status to 'Picked Up'."
+    },
+    "step5": {
+      "title": "Start Delivery",
+      "description": "Once you're on the move, update the order status to 'In Delivery'. This lets the customer know their order is on the way and they can track your progress."
+    },
+    "step6": {
+      "title": "Deliver & Mark Complete",
+      "description": "When you arrive at the customer's location and hand over the order, mark it as 'Delivered'. Important: The customer must also confirm receipt on their end to release your payment."
+    },
+    "step7": {
+      "title": "Get Paid",
+      "description": "After the customer confirms delivery, your account balance is updated with your caution refund plus delivery commission. Click on your account balance to view transactions or withdraw to your mobile money account."
+    },
+    "step8": {
+      "title": "View Transactions",
+      "description": "You can view all your transactions including earnings, caution deposits, and withdrawals in your account section. Track your income and manage your funds easily."
+    }
   }
 }

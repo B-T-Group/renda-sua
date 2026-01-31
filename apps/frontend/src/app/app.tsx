@@ -1,10 +1,11 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
+import AgentOnboardingModal from '../components/dialogs/AgentOnboardingModal';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
 import ClientBottomNav from '../components/layout/ClientBottomNav';
 import Footer from '../components/layout/Footer';
@@ -33,6 +34,7 @@ import ItemFormPage from '../components/pages/ItemFormPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
 import FAQ from '../components/pages/FAQ';
 import ItemsPage from '../components/pages/ItemsPage';
@@ -57,9 +59,29 @@ function App() {
   const { isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
-  const { userType } = useUserProfileContext();
+  const { userType, profile, refetch } = useUserProfileContext();
+  const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Check if agent needs to complete onboarding (global check)
+  const agentNeedsOnboarding = useMemo((): boolean => {
+    return Boolean(
+      isAuthenticated &&
+      userType === 'agent' &&
+      profile?.agent &&
+      profile.agent.onboarding_complete === false
+    );
+  }, [isAuthenticated, userType, profile]);
+
+  // Handler for completing onboarding
+  const handleOnboardingComplete = useCallback(async () => {
+    const success = await completeOnboarding();
+    if (success) {
+      // Refetch profile to update onboarding_complete status
+      await refetch();
+    }
+  }, [completeOnboarding, refetch]);
 
   // Determine which bottom nav should be visible (only one at a time)
   const showAgentBottomNav = userType === 'agent' && isMobile;
@@ -438,6 +460,13 @@ function App() {
 
       {/* Global API Loading Screen */}
       <LoadingScreen open={isApiLoading} message={loadingMessage} />
+
+      {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
+      <AgentOnboardingModal
+        open={agentNeedsOnboarding}
+        onComplete={handleOnboardingComplete}
+        loading={onboardingLoading}
+      />
     </Box>
   );
 }

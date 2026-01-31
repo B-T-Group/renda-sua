@@ -4,7 +4,7 @@ import OpenOrdersPage from './OpenOrdersPage';
 
 /**
  * AgentDashboard component that shows available orders for agents to claim
- * Redirects to the OpenOrdersPage for order discovery workflow
+ * Note: Agent onboarding is handled globally in App.tsx
  */
 const AgentDashboard: React.FC = () => {
   return (

@@ -354,4 +354,72 @@ export class AgentsController {
       );
     }
   }
+
+  @Post('complete_onboarding')
+  async completeOnboarding() {
+    try {
+      // Get the current agent's ID
+      const user = await this.hasuraUserService.getUser();
+      if (!user.agent) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'User is not an agent',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      const agentId = user.agent.id;
+
+      // Update the agent's onboarding_complete status
+      const mutation = `
+        mutation CompleteAgentOnboarding($agentId: uuid!) {
+          update_agents_by_pk(
+            pk_columns: { id: $agentId }
+            _set: { 
+              onboarding_complete: true,
+              updated_at: "now()"
+            }
+          ) {
+            id
+            onboarding_complete
+            updated_at
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
+        agentId,
+      });
+
+      if (!result.update_agents_by_pk) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Agent not found or could not be updated',
+          },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return {
+        success: true,
+        agent: result.update_agents_by_pk,
+        message: 'Onboarding completed successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to complete onboarding',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 }

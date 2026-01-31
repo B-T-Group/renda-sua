@@ -46,6 +46,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         user_id
         vehicle_type_id
         is_verified
+        onboarding_complete
         created_at
         updated_at
       }
@@ -182,6 +183,7 @@ export const GET_USER_AGENT = gql`
       user_id
       vehicle_type_id
       is_verified
+      onboarding_complete
       agent_addresses {
         address {
           id
@@ -233,6 +235,7 @@ export const GET_AGENT_BY_ID = gql`
       user_id
       vehicle_type_id
       is_verified
+      onboarding_complete
     }
   }
 `;

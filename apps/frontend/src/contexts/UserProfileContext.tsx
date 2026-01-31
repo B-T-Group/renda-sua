@@ -55,6 +55,7 @@ export interface UserProfile {
     user_id: string;
     vehicle_type_id: string;
     is_verified: boolean;
+    onboarding_complete: boolean;
     created_at: string;
     updated_at: string;
   };

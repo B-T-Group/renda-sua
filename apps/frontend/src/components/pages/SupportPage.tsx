@@ -2,6 +2,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import {
   Chat,
   ContactSupport,
+  DeliveryDining,
   Email,
   Emergency,
   Feedback,
@@ -33,10 +34,12 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAgentOnboarding } from '../../hooks/useAgentOnboarding';
+import AgentOnboardingModal from '../dialogs/AgentOnboardingModal';
 import SEOHead from '../seo/SEOHead';
 
 const SupportPage: React.FC = () => {
@@ -44,8 +47,10 @@ const SupportPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth0();
-  const { userType } = useUserProfileContext();
+  const { userType, refetch } = useUserProfileContext();
+  const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const [expandedPanel, setExpandedPanel] = useState<string | false>(false);
+  const [showOnboardingGuide, setShowOnboardingGuide] = useState(false);
   const [feedbackForm, setFeedbackForm] = useState({
     name: '',
     email: '',
@@ -53,6 +58,12 @@ const SupportPage: React.FC = () => {
     message: '',
     category: 'general',
   });
+
+  // Handler for closing onboarding guide from support page
+  const handleOnboardingClose = useCallback(async () => {
+    // Just close the modal without calling API (since this is a revisit)
+    setShowOnboardingGuide(false);
+  }, []);
 
   const handlePanelChange =
     (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
@@ -544,7 +555,7 @@ const SupportPage: React.FC = () => {
 
           {/* Order-Specific Help */}
           {isAuthenticated && userType === 'client' && (
-            <Paper sx={{ p: 3 }}>
+            <Paper sx={{ p: 3, mb: 3 }}>
               <Typography
                 variant="h6"
                 gutterBottom
@@ -577,6 +588,35 @@ const SupportPage: React.FC = () => {
                   {t('support.orderhelp.trackorder', 'Track Current Orders')}
                 </Button>
               </Stack>
+            </Paper>
+          )}
+
+          {/* Agent Delivery Guide */}
+          {isAuthenticated && userType === 'agent' && (
+            <Paper sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <DeliveryDining color="primary" />
+                {t('agentOnboarding.title', 'How Deliveries Work')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t(
+                  'agentOnboarding.subtitle',
+                  'Learn how to earn money delivering orders'
+                )}
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                fullWidth
+                onClick={() => setShowOnboardingGuide(true)}
+                startIcon={<LocalShipping />}
+              >
+                {t('agentOnboarding.viewGuide', 'View Delivery Guide')}
+              </Button>
             </Paper>
           )}
         </Grid>
@@ -672,6 +712,15 @@ const SupportPage: React.FC = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Agent Onboarding Modal for revisiting the guide */}
+      {userType === 'agent' && (
+        <AgentOnboardingModal
+          open={showOnboardingGuide}
+          onComplete={handleOnboardingClose}
+          loading={false}
+        />
+      )}
     </Container>
   );
 };
