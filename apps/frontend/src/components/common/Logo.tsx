@@ -17,9 +17,15 @@ const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1),
+  [theme.breakpoints.down('sm')]: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
   ...(size === 'small' && {
     '& .MuiTypography-root': {
       fontSize: '1rem',
+      [theme.breakpoints.down('sm')]: { fontSize: '0.9rem' },
     },
     '& img': {
       height: '24px',
@@ -29,6 +35,7 @@ const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
   ...(size === 'medium' && {
     '& .MuiTypography-root': {
       fontSize: '1.5rem',
+      [theme.breakpoints.down('sm')]: { fontSize: '1.25rem' },
     },
     '& img': {
       height: '32px',
@@ -38,10 +45,12 @@ const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
   ...(size === 'large' && {
     '& .MuiTypography-root': {
       fontSize: '2.5rem',
+      [theme.breakpoints.down('sm')]: { fontSize: '1.5rem' },
     },
     '& img': {
       height: '56px',
       width: 'auto',
+      [theme.breakpoints.down('sm')]: { height: '40px' },
     },
   }),
 }));
@@ -89,7 +98,7 @@ const Logo: React.FC<LogoProps> = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'flex-start',
+        alignItems: { xs: 'center', sm: 'flex-start' },
         gap: 1,
       }}
     >

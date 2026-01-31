@@ -568,6 +568,126 @@ export class AddressesService {
   }
 
   /**
+   * Create address at signup and link to client, agent, or business.
+   * For business: inserts both business_addresses and business_locations (HQ).
+   * No geocoding; postal_code defaults to empty string.
+   */
+  async createAddressForSignup(
+    entityId: string,
+    entityType: 'client' | 'agent' | 'business',
+    addressData: {
+      address_line_1: string;
+      country: string;
+      city: string;
+      state: string;
+    }
+  ): Promise<AddressResponse> {
+    const createAddressMutation = `
+      mutation CreateAddressForSignup(
+        $addressLine1: String!,
+        $city: String!,
+        $state: String!,
+        $postalCode: String!,
+        $country: String!
+      ) {
+        insert_addresses_one(object: {
+          address_line_1: $addressLine1,
+          city: $city,
+          state: $state,
+          postal_code: $postalCode,
+          country: $country,
+          address_type: "home"
+        }) {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          is_primary
+          address_type
+          latitude
+          longitude
+          created_at
+          updated_at
+        }
+      }
+    `;
+
+    const addressResult = await this.hasuraSystemService.executeMutation(
+      createAddressMutation,
+      {
+        addressLine1: addressData.address_line_1,
+        city: addressData.city,
+        state: addressData.state,
+        postalCode: '',
+        country: addressData.country,
+      }
+    );
+
+    const address = addressResult.insert_addresses_one;
+    if (!address) {
+      throw new HttpException(
+        { success: false, error: 'Failed to create address' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    if (entityType === 'client') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateClientAddress($clientId: uuid!, $addressId: uuid!) {
+          insert_client_addresses_one(object: {
+            client_id: $clientId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { clientId: entityId, addressId: address.id }
+      );
+    } else if (entityType === 'agent') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateAgentAddress($agentId: uuid!, $addressId: uuid!) {
+          insert_agent_addresses_one(object: {
+            agent_id: $agentId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { agentId: entityId, addressId: address.id }
+      );
+    } else if (entityType === 'business') {
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateBusinessAddress($businessId: uuid!, $addressId: uuid!) {
+          insert_business_addresses_one(object: {
+            business_id: $businessId,
+            address_id: $addressId
+          }) { id }
+        }`,
+        { businessId: entityId, addressId: address.id }
+      );
+      await this.hasuraSystemService.executeMutation(
+        `mutation CreateBusinessLocationHQ($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
+          insert_business_locations_one(object: {
+            business_id: $businessId,
+            address_id: $addressId,
+            name: $name,
+            location_type: $locationType,
+            is_primary: $isPrimary
+          }) { id }
+        }`,
+        {
+          businessId: entityId,
+          addressId: address.id,
+          name: 'HQ',
+          locationType: 'office',
+          isPrimary: true,
+        }
+      );
+    }
+
+    return address as AddressResponse;
+  }
+
+  /**
    * Get a single address by ID with user validation
    */
   async getAddress(addressId: string): Promise<AddressResponse> {

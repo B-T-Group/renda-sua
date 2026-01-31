@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import { AddressesService } from '../addresses/addresses.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -17,7 +18,8 @@ export class UsersController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly auth0Service: Auth0Service
+    private readonly auth0Service: Auth0Service,
+    private readonly addressesService: AddressesService
   ) {}
 
   @Get('me')
@@ -293,10 +295,34 @@ export class UsersController {
         vehicle_type_id?: string;
         name?: string;
       };
+      address?: {
+        address_line_1: string;
+        country: string;
+        city: string;
+        state: string;
+      };
     }
   ) {
     try {
       const identifier = this.hasuraUserService.getIdentifier();
+
+      const addressData =
+        userData.address &&
+        ['client', 'agent', 'business'].includes(userData.user_type_id)
+          ? {
+              address_line_1: userData.address.address_line_1,
+              country: userData.address.country,
+              city: userData.address.city,
+              state: userData.address.state,
+            }
+          : null;
+
+      if (
+        ['client', 'agent', 'business'].includes(userData.user_type_id) &&
+        !addressData
+      ) {
+        throw new Error('address is required for client, agent, and business');
+      }
 
       let result: any;
 
@@ -312,6 +338,13 @@ export class UsersController {
               user_type_id: userData.user_type_id,
             }
           );
+          if (addressData) {
+            await this.addressesService.createAddressForSignup(
+              result.client.id,
+              'client',
+              addressData
+            );
+          }
           return {
             success: true,
             user: result.user,
@@ -336,6 +369,13 @@ export class UsersController {
               vehicle_type_id: userData.profile.vehicle_type_id,
             }
           );
+          if (addressData) {
+            await this.addressesService.createAddressForSignup(
+              result.agent.id,
+              'agent',
+              addressData
+            );
+          }
           return {
             success: true,
             user: result.user,
@@ -360,6 +400,13 @@ export class UsersController {
               name: userData.profile.name,
             }
           );
+          if (addressData) {
+            await this.addressesService.createAddressForSignup(
+              result.business.id,
+              'business',
+              addressData
+            );
+          }
           return {
             success: true,
             user: result.user,

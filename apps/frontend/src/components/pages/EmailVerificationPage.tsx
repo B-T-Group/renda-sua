@@ -125,20 +125,20 @@ const EmailVerificationPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        p: { xs: 1.5, sm: 2 },
+        p: { xs: 1, sm: 2 },
       }}
     >
-      <Container maxWidth="sm" sx={{ px: { xs: 1, sm: 0 } }}>
+      <Container maxWidth="sm" sx={{ px: { xs: 0, sm: 0 } }}>
         <Card
           sx={{
             textAlign: 'center',
-            p: { xs: 3, sm: 4 },
+            p: { xs: 2, sm: 4 },
             boxShadow: 3,
           }}
         >
-          <CardContent>
+          <CardContent sx={{ px: { xs: 1.5, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
             {/* Logo */}
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: { xs: 2, sm: 3 } }}>
               <Logo variant="default" size="large" />
             </Box>
 
@@ -147,12 +147,12 @@ const EmailVerificationPage: React.FC = () => {
               sx={{
                 display: 'flex',
                 justifyContent: 'center',
-                mb: 3,
+                mb: { xs: 2, sm: 3 },
               }}
             >
               <Email
                 sx={{
-                  fontSize: 64,
+                  fontSize: { xs: 48, sm: 64 },
                   color: 'primary.main',
                 }}
               />
@@ -166,7 +166,8 @@ const EmailVerificationPage: React.FC = () => {
               sx={{
                 fontWeight: 700,
                 color: 'text.primary',
-                mb: 2,
+                mb: { xs: 1, sm: 2 },
+                fontSize: { xs: '1.5rem', sm: '2rem' },
               }}
             >
               {t(
@@ -180,7 +181,7 @@ const EmailVerificationPage: React.FC = () => {
               variant="body1"
               color="text.secondary"
               sx={{
-                mb: 3,
+                mb: { xs: 2, sm: 3 },
                 lineHeight: 1.6,
               }}
             >
@@ -190,13 +191,15 @@ const EmailVerificationPage: React.FC = () => {
               )}
             </Typography>
 
-            {/* Email Address */}
+            {/* Email Address - word-break and reduced padding so full email is visible */}
             <Box
               sx={{
                 bgcolor: 'grey.50',
-                p: 2,
+                p: { xs: 1.5, sm: 2 },
                 borderRadius: 2,
-                mb: 3,
+                mb: { xs: 2, sm: 3 },
+                px: { xs: 1, sm: 2 },
+                overflow: 'hidden',
               }}
             >
               <Typography
@@ -204,6 +207,8 @@ const EmailVerificationPage: React.FC = () => {
                 sx={{
                   fontWeight: 600,
                   color: 'primary.main',
+                  wordBreak: 'break-all',
+                  overflowWrap: 'anywhere',
                 }}
               >
                 {user?.email}
@@ -215,7 +220,7 @@ const EmailVerificationPage: React.FC = () => {
               variant="body2"
               color="text.secondary"
               sx={{
-                mb: 4,
+                mb: { xs: 2, sm: 4 },
                 lineHeight: 1.6,
               }}
             >
@@ -230,7 +235,7 @@ const EmailVerificationPage: React.FC = () => {
               <Alert
                 severity="success"
                 sx={{
-                  mb: 3,
+                  mb: { xs: 2, sm: 3 },
                   textAlign: 'left',
                 }}
               >
@@ -246,7 +251,7 @@ const EmailVerificationPage: React.FC = () => {
               <Alert
                 severity="error"
                 sx={{
-                  mb: 3,
+                  mb: { xs: 2, sm: 3 },
                   textAlign: 'left',
                 }}
               >
@@ -263,7 +268,7 @@ const EmailVerificationPage: React.FC = () => {
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 2,
+                gap: { xs: 1.5, sm: 2 },
                 alignItems: 'center',
               }}
             >
@@ -292,14 +297,14 @@ const EmailVerificationPage: React.FC = () => {
                 variant="body2"
                 color="text.secondary"
                 sx={{
-                  mt: 1,
+                  mt: 0.5,
                   textAlign: 'center',
-                  px: { xs: 1, sm: 0 },
+                  px: 0,
                 }}
               >
                 {t(
                   'auth.emailVerification.refreshHelper',
-                  'After you have clicked the verification link in your email, tap the button below.'
+                  'Click below after verifying your email'
                 )}
               </Typography>
 
@@ -325,7 +330,7 @@ const EmailVerificationPage: React.FC = () => {
                   ? t('auth.emailVerification.refreshing', 'Checking...')
                   : t(
                       'auth.emailVerification.refreshButton',
-                      'Click here after verifying your email'
+                      'I\'ve verified my email'
                     )}
               </Button>
 
@@ -349,7 +354,7 @@ const EmailVerificationPage: React.FC = () => {
               variant="caption"
               color="text.secondary"
               sx={{
-                mt: 3,
+                mt: { xs: 2, sm: 3 },
                 display: 'block',
               }}
             >

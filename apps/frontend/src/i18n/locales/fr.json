@@ -372,6 +372,8 @@
       "pageDescription": "Pour accéder à votre compte, veuillez vérifier votre adresse e-mail. Nous avons envoyé un lien de vérification à :",
       "pageTitle": "Vérifiez Votre Adresse E-mail",
       "refreshing": "Vérification en cours...",
+      "refreshHelper": "Cliquez ci-dessous après avoir vérifié votre e-mail",
+      "refreshButton": "J'ai vérifié mon e-mail",
       "resendButton": "Renvoyer l'E-mail de Vérification",
       "resendError": "Échec de l'envoi de l'e-mail de vérification. Veuillez réessayer.",
       "resendSuccess": "E-mail de vérification envoyé avec succès",
@@ -379,6 +381,22 @@
     },
     "logout": "Déconnexion",
     "profile": "Profil"
+  },
+  "completeProfile": {
+    "title": "Complétez Votre Profil",
+    "subtitle": "Veuillez fournir quelques informations supplémentaires pour finaliser la configuration de votre compte",
+    "choosePersona": "Choisissez Votre Profil",
+    "choosePersonaHint": "Sélectionnez le type de compte que vous souhaitez créer",
+    "addressStep": "Adresse",
+    "addressStepHint": "Nous utilisons votre adresse pour adapter le contenu et les options de livraison.",
+    "addressLine1": "Ligne d'adresse 1",
+    "country": "Pays",
+    "state": "Région / État",
+    "city": "Ville",
+    "personalInformation": "Informations Personnelles",
+    "reviewTitle": "Vérifiez Vos Informations",
+    "creating": "Création en cours...",
+    "completeButton": "Compléter le Profil"
   },
   "business": {
     "csvUpload": {

@@ -370,6 +370,8 @@
       "pageDescription": "To access your account, please verify your email address. We sent a verification link to:",
       "pageTitle": "Verify Your Email Address",
       "refreshing": "Checking...",
+      "refreshHelper": "Click below after verifying your email",
+      "refreshButton": "I've verified my email",
       "resendButton": "Resend Verification Email",
       "resendError": "Failed to send verification email. Please try again.",
       "resendSuccess": "Verification email sent successfully",
@@ -377,6 +379,22 @@
     },
     "logout": "Logout",
     "profile": "Profile"
+  },
+  "completeProfile": {
+    "title": "Complete Your Profile",
+    "subtitle": "Please provide some additional information to complete your account setup",
+    "choosePersona": "Choose Your Persona",
+    "choosePersonaHint": "Select the type of account you want to create",
+    "addressStep": "Address",
+    "addressStepHint": "We use your address to tailor content and delivery options for you.",
+    "addressLine1": "Address Line 1",
+    "country": "Country",
+    "state": "State / Region",
+    "city": "City",
+    "personalInformation": "Personal Information",
+    "reviewTitle": "Review Your Information",
+    "creating": "Creating...",
+    "completeButton": "Complete Profile"
   },
   "business": {
     "csvUpload": {

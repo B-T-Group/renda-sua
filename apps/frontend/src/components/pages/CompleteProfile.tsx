@@ -2,31 +2,37 @@ import { useAuth0 } from '@auth0/auth0-react';
 import {
   ArrowForward,
   Business,
+  LocationOn,
   LocalShipping,
   Person,
   Save,
 } from '@mui/icons-material';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogContent,
   FormControl,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Step,
-  StepLabel,
+  StepButton,
   Stepper,
   TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import { City, State } from 'country-state-city';
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -34,19 +40,53 @@ import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
 
+const SIGNUP_COUNTRIES = [
+  { code: 'CM', name: 'Cameroon' },
+  { code: 'GA', name: 'Gabon' },
+];
+
 interface ProfileData {
   first_name: string;
   last_name: string;
   email: string;
   phone_number: string;
   user_type_id: string;
+  address: {
+    address_line_1: string;
+    country: string;
+    city: string;
+    state: string;
+  };
   profile: {
     vehicle_type_id?: string;
     name?: string;
   };
 }
 
-const steps = ['Choose Persona', 'Personal Information', 'Review & Submit'];
+const steps = ['Choose Persona', 'Address', 'Personal Information', 'Review & Submit'];
+
+const StepIconWrapper: React.FC<{
+  completed?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+}> = ({ completed, active, children }) => (
+  <Box
+    sx={{
+      width: 28,
+      height: 28,
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '0.875rem',
+      fontWeight: 600,
+      bgcolor: completed ? 'primary.main' : active ? 'primary.main' : 'action.hover',
+      color: completed || active ? 'primary.contrastText' : 'text.secondary',
+    }}
+  >
+    {children}
+  </Box>
+);
 
 const personaOptions = [
   {
@@ -73,6 +113,7 @@ const personaOptions = [
 ];
 
 const CompleteProfile: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user, getAccessTokenSilently } = useAuth0();
@@ -95,8 +136,32 @@ const CompleteProfile: React.FC = () => {
     email: user?.email || '',
     phone_number: '',
     user_type_id: '',
+    address: {
+      address_line_1: '',
+      country: '',
+      city: '',
+      state: '',
+    },
     profile: {},
   });
+
+  const addressStates = useMemo(
+    () => (profileData.address.country ? State.getStatesOfCountry(profileData.address.country) : []),
+    [profileData.address.country]
+  );
+
+  const selectedStateCode = useMemo(() => {
+    if (!profileData.address.state) return '';
+    const found = addressStates.find(
+      (s) => s.name === profileData.address.state
+    );
+    return found?.isoCode ?? '';
+  }, [addressStates, profileData.address.state]);
+
+  const addressCities = useMemo(() => {
+    if (!profileData.address.country || !selectedStateCode) return [];
+    return City.getCitiesOfState(profileData.address.country, selectedStateCode);
+  }, [profileData.address.country, selectedStateCode]);
 
   const handleInputChange =
     (field: keyof ProfileData) =>
@@ -131,7 +196,19 @@ const CompleteProfile: React.FC = () => {
     setProfileData({
       ...profileData,
       user_type_id: userTypeId,
-      profile: {}, // Reset profile data when persona changes
+      profile: {},
+    });
+  };
+
+  const handleAddressChange = (field: keyof ProfileData['address'], value: string) => {
+    setProfileData({
+      ...profileData,
+      address: {
+        ...profileData.address,
+        [field]: value,
+        ...(field === 'country' && { state: '', city: '' }),
+        ...(field === 'state' && { city: '' }),
+      },
     });
   };
 
@@ -153,7 +230,6 @@ const CompleteProfile: React.FC = () => {
     setError(null);
 
     try {
-      // Use the POST /users API with the profile object format
       await apiClient.post('/users', profileData);
       setSuccess(true);
 
@@ -196,6 +272,15 @@ const CompleteProfile: React.FC = () => {
       case 0:
         return profileData.user_type_id !== '';
       case 1: {
+        const a = profileData.address;
+        return !!(
+          a.address_line_1?.trim() &&
+          a.country &&
+          a.city?.trim() &&
+          a.state
+        );
+      }
+      case 2: {
         const hasRequiredFields =
           profileData.first_name &&
           profileData.last_name &&
@@ -220,6 +305,12 @@ const CompleteProfile: React.FC = () => {
     return personaOptions.find((p) => p.id === profileData.user_type_id);
   };
 
+  const handleStepClick = (step: number) => {
+    if (step < activeStep || (step === activeStep + 1 && isStepValid(activeStep))) {
+      setActiveStep(step);
+    }
+  };
+
   const renderStepContent = (step: number) => {
     switch (step) {
       case 0:
@@ -232,10 +323,10 @@ const CompleteProfile: React.FC = () => {
             }}
           >
             <Typography variant="h6" gutterBottom>
-              Choose Your Persona
+              {t('completeProfile.choosePersona', 'Choose Your Persona')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Select the type of account you want to create
+              {t('completeProfile.choosePersonaHint', 'Select the type of account you want to create')}
             </Typography>
 
             <Box
@@ -289,8 +380,83 @@ const CompleteProfile: React.FC = () => {
               gap: { xs: 2, sm: 3 },
             }}
           >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <LocationOn color="primary" />
+              <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+                {t('completeProfile.addressStep', 'Address')}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {t('completeProfile.addressStepHint', 'We use your address to tailor content and delivery options for you.')}
+            </Typography>
+
+            <TextField
+              label={t('completeProfile.addressLine1', 'Address Line 1')}
+              value={profileData.address.address_line_1}
+              onChange={(e) => handleAddressChange('address_line_1', e.target.value)}
+              fullWidth
+              required
+            />
+
+            <FormControl fullWidth required>
+              <InputLabel>{t('completeProfile.country', 'Country')}</InputLabel>
+              <Select
+                value={profileData.address.country}
+                label={t('completeProfile.country', 'Country')}
+                onChange={(e) => handleAddressChange('country', e.target.value)}
+              >
+                {SIGNUP_COUNTRIES.map((c) => (
+                  <MenuItem key={c.code} value={c.code}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth required disabled={!profileData.address.country}>
+              <InputLabel>{t('completeProfile.state', 'State / Region')}</InputLabel>
+              <Select
+                value={profileData.address.state}
+                label={t('completeProfile.state', 'State / Region')}
+                onChange={(e) => handleAddressChange('state', e.target.value)}
+              >
+                {addressStates.map((s) => (
+                  <MenuItem key={s.isoCode} value={s.name}>
+                    {s.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Autocomplete
+              freeSolo
+              options={addressCities.map((c) => c.name)}
+              value={profileData.address.city}
+              onInputChange={(_, value) => handleAddressChange('city', value ?? '')}
+              onChange={(_, value) => handleAddressChange('city', typeof value === 'string' ? value : value ?? '')}
+              disabled={!profileData.address.country || !profileData.address.state}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('completeProfile.city', 'City')}
+                  required
+                />
+              )}
+            />
+          </Box>
+        );
+
+      case 2:
+        return (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: { xs: 2, sm: 3 },
+            }}
+          >
             <Typography variant="h6" gutterBottom>
-              Personal Information
+              {t('completeProfile.personalInformation', 'Personal Information')}
             </Typography>
 
             <TextField
@@ -353,7 +519,7 @@ const CompleteProfile: React.FC = () => {
           </Box>
         );
 
-      case 2: {
+      case 3: {
         const selectedPersona = getSelectedPersona();
         return (
           <Box
@@ -364,10 +530,10 @@ const CompleteProfile: React.FC = () => {
             }}
           >
             <Typography variant="h6" gutterBottom>
-              Review Your Information
+              {t('completeProfile.reviewTitle', 'Review Your Information')}
             </Typography>
 
-            <Paper sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'grey.50' }}>
+            <Paper sx={{ p: { xs: 1.25, sm: 2 }, bgcolor: 'grey.50' }}>
               <Typography variant="body2" gutterBottom>
                 <strong>Name:</strong> {profileData.first_name}{' '}
                 {profileData.last_name}
@@ -376,7 +542,7 @@ const CompleteProfile: React.FC = () => {
                 variant="body2"
                 gutterBottom
                 sx={{
-                  wordBreak: 'break-word',
+                  wordBreak: 'break-all',
                   overflowWrap: 'anywhere',
                 }}
               >
@@ -411,6 +577,13 @@ const CompleteProfile: React.FC = () => {
                     <strong>Business Name:</strong> {profileData.profile.name}
                   </Typography>
                 )}
+              <Typography variant="body2" gutterBottom>
+                <strong>Address:</strong>{' '}
+                {profileData.address.address_line_1},{' '}
+                {profileData.address.city}, {profileData.address.state},{' '}
+                {SIGNUP_COUNTRIES.find((c) => c.code === profileData.address.country)?.name ||
+                  profileData.address.country}
+              </Typography>
             </Paper>
           </Box>
         );
@@ -488,6 +661,167 @@ const CompleteProfile: React.FC = () => {
     );
   }
 
+  const stepContent = (
+    <>
+      <Box sx={{ textAlign: 'center', mb: { xs: 1.5, sm: 4 } }}>
+        <Box sx={{ mb: { xs: 1, sm: 2 } }}>
+          <Logo variant="default" size="large" />
+        </Box>
+        <Typography variant="h4" component="h1" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
+          {t('completeProfile.title', 'Complete Your Profile')}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {t('completeProfile.subtitle', 'Please provide some additional information to complete your account setup')}
+        </Typography>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: { xs: 2, sm: 3 } }}>
+          {error}
+        </Alert>
+      )}
+
+      {typesLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 2, sm: 3 } }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      <Stepper
+        activeStep={activeStep}
+        sx={{ mb: { xs: 1.5, sm: 4 }, overflow: 'auto', py: 1.5, px: { xs: 0, sm: 2 } }}
+      >
+        {steps.map((_, index) => (
+          <Step key={index}>
+            <StepButton
+              onClick={() => handleStepClick(index)}
+              icon={
+                <StepIconWrapper
+                  completed={index < activeStep}
+                  active={index === activeStep}
+                >
+                  {index + 1}
+                </StepIconWrapper>
+              }
+              sx={{ cursor: index <= activeStep ? 'pointer' : 'default' }}
+            />
+          </Step>
+        ))}
+      </Stepper>
+
+      <Box sx={{ mb: { xs: 1.5, sm: 4 } }}>{renderStepContent(activeStep)}</Box>
+    </>
+  );
+
+  const navButtons = (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+      <Button disabled={activeStep === 0} onClick={handleBack}>
+        Back
+      </Button>
+      <Box>
+        {activeStep === steps.length - 1 ? (
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={loading || !isStepValid(activeStep) || typesLoading}
+            startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+          >
+            {loading ? t('completeProfile.creating', 'Creating...') : t('completeProfile.completeButton', 'Complete Profile')}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            onClick={handleNext}
+            disabled={!isStepValid(activeStep) || typesLoading}
+            endIcon={<ArrowForward />}
+          >
+            Next
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+
+  if (isMobile) {
+    return (
+      <Dialog
+        fullScreen
+        open
+        PaperProps={{ sx: { m: 0, maxHeight: '100dvh', borderRadius: 0 } }}
+      >
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100dvh',
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ flexShrink: 0, px: 2, pt: 2, pb: 1 }}>
+            <Button onClick={activeStep === 0 ? () => navigate(-1) : handleBack} size="small">
+              Back
+            </Button>
+          </Box>
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              minHeight: 0,
+              px: 2,
+              pb: 2,
+            }}
+          >
+            <Box sx={{ maxWidth: 600, mx: 'auto', width: '100%' }}>{stepContent}</Box>
+          </Box>
+          <Box
+            sx={{
+              flexShrink: 0,
+              bgcolor: 'background.paper',
+              borderTop: 1,
+              borderColor: 'divider',
+              p: 2,
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.1)',
+              paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0))',
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                disabled={activeStep === 0}
+                onClick={handleBack}
+                variant="outlined"
+                fullWidth
+              >
+                Back
+              </Button>
+              {activeStep === steps.length - 1 ? (
+                <Button
+                  variant="contained"
+                  onClick={handleSubmit}
+                  disabled={loading || !isStepValid(activeStep) || typesLoading}
+                  startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+                  fullWidth
+                >
+                  {loading ? t('completeProfile.creating', 'Creating...') : t('completeProfile.completeButton', 'Complete Profile')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={handleNext}
+                  disabled={!isStepValid(activeStep) || typesLoading}
+                  endIcon={<ArrowForward />}
+                  fullWidth
+                >
+                  Next
+                </Button>
+              )}
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Box
       sx={{
@@ -499,88 +833,9 @@ const CompleteProfile: React.FC = () => {
         p: { xs: 1, sm: 2 },
       }}
     >
-      <Paper
-        sx={{
-          p: { xs: 2, sm: 4 },
-          maxWidth: 800,
-          width: '100%',
-        }}
-      >
-        <Box sx={{ textAlign: 'center', mb: { xs: 2, sm: 4 } }}>
-          <Box sx={{ mb: { xs: 1, sm: 2 } }}>
-            <Logo variant="default" size="large" />
-          </Box>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Complete Your Profile
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Please provide some additional information to complete your account
-            setup
-          </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
-        {typesLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        <Stepper
-          activeStep={activeStep}
-          orientation={isMobile ? 'vertical' : 'horizontal'}
-          sx={{
-            mb: { xs: 2, sm: 4 },
-            overflow: 'auto',
-            ...(isMobile && {
-              '& .MuiStepLabel-label': {
-                wordBreak: 'break-word',
-                overflowWrap: 'anywhere',
-              },
-            }),
-          }}
-        >
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-
-        <Box sx={{ mb: { xs: 2, sm: 4 } }}>{renderStepContent(activeStep)}</Box>
-
-        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button disabled={activeStep === 0} onClick={handleBack}>
-            Back
-          </Button>
-
-          <Box>
-            {activeStep === steps.length - 1 ? (
-              <Button
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={loading || !isStepValid(activeStep) || typesLoading}
-                startIcon={loading ? <CircularProgress size={20} /> : <Save />}
-              >
-                {loading ? 'Creating...' : 'Complete Profile'}
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                onClick={handleNext}
-                disabled={!isStepValid(activeStep) || typesLoading}
-                endIcon={<ArrowForward />}
-              >
-                Next
-              </Button>
-            )}
-          </Box>
-        </Box>
+      <Paper sx={{ p: { xs: 1.5, sm: 4 }, maxWidth: 800, width: '100%' }}>
+        {stepContent}
+        {navButtons}
       </Paper>
     </Box>
   );
