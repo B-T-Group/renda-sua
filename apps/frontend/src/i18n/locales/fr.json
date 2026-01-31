@@ -1296,7 +1296,7 @@
     "specialInstructions": "Instructions Spéciales",
     "fastDelivery": {
       "additionalFee": "frais supplémentaire",
-      "description": "Recevez votre commande en {{minHours}}-{{maxHours}} heures avec notre service de livraison premium.",
+      "description": "Bénéficiez d'une livraison prioritaire rapide pour votre commande.",
       "enableOption": "Activer la Livraison Rapide",
       "enabled": "Activé",
       "fee": "Frais de Livraison Rapide",

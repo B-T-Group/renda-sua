@@ -1289,7 +1289,7 @@
     "specialInstructions": "Special Instructions",
     "fastDelivery": {
       "additionalFee": "additional fee",
-      "description": "Get your order delivered in {{minHours}}-{{maxHours}} hours with our premium delivery service.",
+      "description": "Get fast priority delivery for your order.",
       "enableOption": "Enable Fast Delivery",
       "enabled": "Enabled",
       "fee": "Fast Delivery Fee",

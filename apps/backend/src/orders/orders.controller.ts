@@ -656,7 +656,7 @@ export class OrdersController {
       const config = {
         enabled: fastDeliveryConfig.enabled,
         fee: fastDeliveryConfig.baseFee,
-        minHours: 2,
+        minHours: 12,
         maxHours: fastDeliveryConfig.sla,
         operatingHours: fastDeliveryConfig.serviceHours,
       };

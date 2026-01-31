@@ -22,6 +22,8 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogContent,
   Divider,
   FormControl,
   FormControlLabel,
@@ -33,7 +35,7 @@ import {
   Skeleton,
   Stack,
   Step,
-  StepLabel,
+  StepButton,
   Stepper,
   Switch,
   Typography,
@@ -91,6 +93,32 @@ const OrderPageSkeleton: React.FC = () => {
     </Container>
   );
 };
+
+// Step icon for mobile wizard - numbers only, no labels
+const StepIconWrapper: React.FC<{
+  completed?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+}> = ({ completed, active, children }) => (
+  <Box
+    sx={{
+      width: 28,
+      height: 28,
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '0.875rem',
+      fontWeight: 600,
+      bgcolor: completed ? 'primary.main' : active ? 'primary.main' : 'action.hover',
+      color: completed || active ? 'primary.contrastText' : 'text.secondary',
+      border: active && !completed ? 2 : 0,
+      borderColor: 'primary.main',
+    }}
+  >
+    {children}
+  </Box>
+);
 
 // Order Summary Component
 interface OrderSummaryProps {
@@ -702,16 +730,16 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
-  // Render step content for mobile wizard
+  // Render step content for mobile wizard (compact for viewport fit)
   const renderStepContent = (step: number) => {
     switch (step) {
       case 0: // Delivery Options
         return (
-          <Stack spacing={3}>
+          <Stack spacing={2}>
             {fastDeliveryConfig &&
               isEnabledForLocation(userCountry, userState) && (
                 <Card>
-                  <CardContent sx={{ p: 3 }}>
+                  <CardContent sx={{ p: 2 }}>
                     <FastDeliveryOption
                       config={fastDeliveryConfig}
                       selected={requiresFastDelivery}
@@ -726,8 +754,8 @@ const PlaceOrderPage: React.FC = () => {
 
             {selectedAddress && (
               <Card>
-                <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                     {t(
                       'orders.deliveryTimeWindow.title',
                       'When will you be available?'
@@ -749,22 +777,22 @@ const PlaceOrderPage: React.FC = () => {
       case 1: // Quantity
         return (
           <Card>
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 2 }}>
               <Box
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
-                  mb: 3,
+                  mb: 2,
                 }}
               >
                 <ShoppingCart color="primary" />
-                <Typography variant="h6" fontWeight="bold">
+                <Typography variant="subtitle1" fontWeight="bold">
                   {t('orders.productDetails', 'Product Details')}
                 </Typography>
               </Box>
 
-              <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid size={{ xs: 12 }}>
                   {selectedItem.item.item_images?.[0] ? (
                     <CardMedia
@@ -774,7 +802,7 @@ const PlaceOrderPage: React.FC = () => {
                       sx={{
                         borderRadius: 2,
                         width: '100%',
-                        height: 250,
+                        height: 180,
                         objectFit: 'cover',
                       }}
                     />
@@ -783,7 +811,7 @@ const PlaceOrderPage: React.FC = () => {
                       sx={{
                         borderRadius: 2,
                         width: '100%',
-                        height: 250,
+                        height: 180,
                         bgcolor: 'grey.200',
                         display: 'flex',
                         alignItems: 'center',
@@ -812,7 +840,7 @@ const PlaceOrderPage: React.FC = () => {
                 </Grid>
               </Grid>
 
-              <Divider sx={{ my: 3 }} />
+              <Divider sx={{ my: 2 }} />
 
               <Typography
                 variant="subtitle1"
@@ -856,31 +884,31 @@ const PlaceOrderPage: React.FC = () => {
       case 2: // Delivery Address
         return (
           <Card>
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 2 }}>
               <Box
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
-                  mb: 3,
+                  mb: 2,
                 }}
               >
                 <LocationOn color="primary" />
-                <Typography variant="h6" fontWeight="bold">
+                <Typography variant="subtitle1" fontWeight="bold">
                   {t('orders.deliveryAddress', 'Delivery Address')}
                 </Typography>
               </Box>
 
               {addressesLoading ? (
                 <Box
-                  sx={{ display: 'flex', justifyContent: 'center', py: 3 }}
+                  sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
                 >
                   <CircularProgress />
                 </Box>
               ) : addresses.length === 0 ? (
                 <Paper
                   variant="outlined"
-                  sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}
+                  sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
                 >
                   <LocationOn
                     sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
@@ -1019,10 +1047,10 @@ const PlaceOrderPage: React.FC = () => {
 
       case 3: // Review & Place Order
         return (
-          <Stack spacing={3}>
+          <Stack spacing={2}>
             <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
+              <CardContent sx={{ p: 2 }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   {t('orders.orderSummary', 'Order Summary')}
                 </Typography>
                 <Divider sx={{ my: 2 }} />
@@ -1129,17 +1157,17 @@ const PlaceOrderPage: React.FC = () => {
             {/* Delivery Time Window Details */}
             {deliveryWindow && selectedAddress && (
               <Card>
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: 2 }}>
                   <Box
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 1,
-                      mb: 2,
+                      mb: 1.5,
                     }}
                   >
                     <Schedule color="primary" />
-                    <Typography variant="h6" fontWeight="bold">
+                    <Typography variant="subtitle1" fontWeight="bold">
                       {t(
                         'orders.deliveryTimeWindow.title',
                         'Delivery Time Window'
@@ -1242,17 +1270,17 @@ const PlaceOrderPage: React.FC = () => {
             )}
 
             <Card>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: 2 }}>
                 <Box
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
-                    mb: 3,
+                    mb: 2,
                   }}
                 >
                   <Phone color="primary" />
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="subtitle1" fontWeight="bold">
                     {t('orders.paymentInformation', 'Payment Information')}
                   </Typography>
                 </Box>
@@ -1260,7 +1288,7 @@ const PlaceOrderPage: React.FC = () => {
                 {!profile?.phone_number ? (
                   <Paper
                     variant="outlined"
-                    sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.50' }}
+                    sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.50' }}
                   >
                     <Phone
                       sx={{ fontSize: 48, color: 'warning.main', mb: 2 }}
@@ -1421,93 +1449,86 @@ const PlaceOrderPage: React.FC = () => {
   };
 
   return (
-    <Box
-      sx={{
-        bgcolor: 'grey.50',
-        minHeight: '100vh',
-        // Add extra bottom padding on mobile to account for fixed navigation bar + bottom nav
-        pb: isMobile
-          ? profile?.client
-            ? '180px' // Navigation bar (100px) + bottom nav (64px) + spacing (16px)
-            : '116px' // Navigation bar (100px) + spacing (16px)
-          : 4,
-      }}
-    >
-      <Container
-        maxWidth="xl"
-        sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
-      >
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Button
-            onClick={isMobile ? handleBack : handlePageBack}
-            startIcon={<ArrowBack />}
-            size="small"
-            sx={{ mb: 2 }}
+    <>
+      {isMobile ? (
+        <Dialog
+          fullScreen
+          open
+          PaperProps={{
+            sx: {
+              m: 0,
+              maxHeight: '100dvh',
+              borderRadius: 0,
+            },
+          }}
+        >
+          <DialogContent
+            sx={{
+              p: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100dvh',
+              overflow: 'hidden',
+            }}
           >
-            {t('common.goBack', 'Go Back')}
-          </Button>
+            {/* Compact header */}
+            <Box sx={{ flexShrink: 0, px: 2, pt: 2, pb: 1 }}>
+              <Button
+                onClick={handleBack}
+                startIcon={<ArrowBack />}
+                size="small"
+              >
+                {t('common.goBack', 'Go Back')}
+              </Button>
+            </Box>
 
-          <Typography
-            variant="h4"
-            component="h1"
-            fontWeight="bold"
-            gutterBottom
-            sx={{ fontSize: { xs: '1.75rem', md: '2.5rem' } }}
-          >
-            {t('orders.completeYourOrder', 'Complete Your Order')}
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {t(
-              'orders.reviewDetails',
-              'Review your order details and confirm your delivery information'
-            )}
-          </Typography>
-        </Box>
-
-        {/* Mobile Wizard View */}
-        {isMobile ? (
-          <Box>
+            {/* Horizontal stepper - numbers only */}
             <Stepper
               activeStep={activeStep}
-              orientation="vertical"
-              sx={{
-                mb: 4,
-                '& .MuiStepLabel-label': {
-                  wordBreak: 'break-word',
-                  overflowWrap: 'anywhere',
-                },
-              }}
+              sx={{ flexShrink: 0, py: 1.5, px: 2 }}
             >
-              {steps.map((label, index) => (
-                <Step key={label}>
-                  <StepLabel
+              {steps.map((_, index) => (
+                <Step key={index}>
+                  <StepButton
                     onClick={() => handleStepClick(index)}
+                    icon={
+                      <StepIconWrapper
+                        completed={index < activeStep}
+                        active={index === activeStep}
+                      >
+                        {index + 1}
+                      </StepIconWrapper>
+                    }
                     sx={{
                       cursor:
                         index <= activeStep ? 'pointer' : 'default',
                     }}
-                  >
-                    {label}
-                  </StepLabel>
+                  />
                 </Step>
               ))}
             </Stepper>
 
-            <Box sx={{ mb: 4 }}>{renderStepContent(activeStep)}</Box>
-
-            {/* Navigation Buttons */}
+            {/* Scrollable step content */}
             <Box
               sx={{
-                position: 'fixed',
-                bottom: profile?.client ? '80px' : '64px',
-                left: 0,
-                right: 0,
+                flex: 1,
+                overflow: 'auto',
+                minHeight: 0,
+                px: 2,
+                pb: 2,
+              }}
+            >
+              {renderStepContent(activeStep)}
+            </Box>
+
+            {/* Fixed bottom nav */}
+            <Box
+              sx={{
+                flexShrink: 0,
                 bgcolor: 'background.paper',
                 borderTop: 1,
                 borderColor: 'divider',
                 p: 2,
-                zIndex: 1000,
                 boxShadow: '0 -4px 12px rgba(0,0,0,0.1)',
                 paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0))',
               }}
@@ -1547,8 +1568,47 @@ const PlaceOrderPage: React.FC = () => {
                 )}
               </Stack>
             </Box>
-          </Box>
-        ) : (
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <Box
+          sx={{
+            bgcolor: 'grey.50',
+            minHeight: '100vh',
+            pb: 4,
+          }}
+        >
+          <Container
+            maxWidth="xl"
+            sx={{ py: 4, px: { xs: 0, sm: 2 } }}
+          >
+            {/* Header */}
+            <Box sx={{ mb: 4 }}>
+              <Button
+                onClick={handlePageBack}
+                startIcon={<ArrowBack />}
+                size="small"
+                sx={{ mb: 2 }}
+              >
+                {t('common.goBack', 'Go Back')}
+              </Button>
+
+              <Typography
+                variant="h4"
+                component="h1"
+                fontWeight="bold"
+                gutterBottom
+                sx={{ fontSize: '2.5rem' }}
+              >
+                {t('orders.completeYourOrder', 'Complete Your Order')}
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                {t(
+                  'orders.reviewDetails',
+                  'Review your order details and confirm your delivery information'
+                )}
+              </Typography>
+            </Box>
           <>
             {/* Desktop Layout - Existing Grid View */}
             {/* Main Content Grid */}
@@ -2259,8 +2319,9 @@ const PlaceOrderPage: React.FC = () => {
           </Grid>
         </Grid>
           </>
-        )}
-      </Container>
+          </Container>
+        </Box>
+      )}
 
       {/* Address Dialog */}
       <AddressDialog
@@ -2271,11 +2332,12 @@ const PlaceOrderPage: React.FC = () => {
         showAddressType={true}
         showIsPrimary={true}
         showCoordinates={false}
+        fullScreen={isMobile}
         onClose={handleCloseAddressDialog}
         onSave={handleSaveAddress}
         onAddressChange={handleAddressChange}
       />
-    </Box>
+    </>
   );
 };
 

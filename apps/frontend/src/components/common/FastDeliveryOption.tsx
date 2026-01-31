@@ -124,8 +124,7 @@ const FastDeliveryOption: React.FC<FastDeliveryOptionProps> = ({
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
           {t(
             'orders.fastDelivery.description',
-            'Get your order delivered in {{minHours}}-{{maxHours}} hours with our premium delivery service.',
-            { minHours: config.minHours, maxHours: config.maxHours }
+            'Get fast priority delivery for your order.'
           )}
         </Typography>
 
