@@ -37,6 +37,7 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
 import FAQ from '../components/pages/FAQ';
+import ItemDetailPage from '../components/pages/ItemDetailPage';
 import ItemsPage from '../components/pages/ItemsPage';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
@@ -179,6 +180,9 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Item detail (public) */}
+            <Route path="/items/:id" element={<ItemDetailPage />} />
 
             {/* Order Confirmation route */}
             <Route

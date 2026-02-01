@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   Request,
 } from '@nestjs/common';
 import {
@@ -77,6 +78,70 @@ export class RatingsController {
   async getOrderRatings(@Param('orderId') orderId: string) {
     try {
       const ratings = await this.ratingsService.getRatingsForOrder(orderId);
+
+      return {
+        success: true,
+        message: 'Ratings retrieved successfully',
+        ratings,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to retrieve ratings',
+        ratings: [],
+      };
+    }
+  }
+
+  @Get('entity/:entityType/:entityId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public ratings for an entity (e.g. item)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Ratings retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Ratings retrieved successfully' },
+        ratings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              order_id: { type: 'string', format: 'uuid' },
+              rating_type: { type: 'string' },
+              rater_user_id: { type: 'string', format: 'uuid' },
+              rated_entity_type: { type: 'string' },
+              rated_entity_id: { type: 'string', format: 'uuid' },
+              rating: { type: 'number', minimum: 1, maximum: 5 },
+              comment: { type: 'string' },
+              is_public: { type: 'boolean' },
+              is_verified: { type: 'boolean' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getEntityRatings(
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string
+  ) {
+    try {
+      const limitNum = limit ? parseInt(limit, 10) : 20;
+      const offsetNum = offset ? parseInt(offset, 10) : 0;
+      const ratings = await this.ratingsService.getRatingsForEntity(
+        entityType,
+        entityId,
+        limitNum,
+        offsetNum
+      );
 
       return {
         success: true,

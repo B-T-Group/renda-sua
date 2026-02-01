@@ -13,11 +13,13 @@ import { OrderRating } from '../../hooks/useOrderRatings';
 interface OrderRatingsDisplayProps {
   ratings: OrderRating[];
   userType: 'client' | 'agent' | 'business';
+  title?: string;
 }
 
 const OrderRatingsDisplay: React.FC<OrderRatingsDisplayProps> = ({
   ratings,
   userType,
+  title,
 }) => {
   const { t } = useTranslation();
 
@@ -74,7 +76,7 @@ const OrderRatingsDisplay: React.FC<OrderRatingsDisplayProps> = ({
     <Card sx={{ mb: 2 }}>
       <CardContent>
         <Typography variant="h6" gutterBottom>
-          {t('rating.orderRatings', 'Order Ratings')}
+          {title ?? t('rating.orderRatings', 'Order Ratings')}
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

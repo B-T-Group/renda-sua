@@ -20,6 +20,8 @@ export { useClients } from './useClients';
 export { useCreateOrder } from './useCreateOrder';
 export { useDeliveryFees } from './useDeliveryFees';
 export { useInventoryItems } from './useInventoryItems';
+export { useItemRatings } from './useItemRatings';
+export type { UseItemRatingsReturn } from './useItemRatings';
 export { useOrderById } from './useOrderById';
 export type { OrderData } from './useOrderById';
 export { useOrders } from './useOrders';

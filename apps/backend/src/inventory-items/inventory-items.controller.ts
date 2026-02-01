@@ -180,6 +180,7 @@ export class InventoryItemsController {
     }
   }
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific inventory item by ID' })
   @ApiResponse({

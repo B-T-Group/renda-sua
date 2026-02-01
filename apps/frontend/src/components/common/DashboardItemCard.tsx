@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   Straighten,
   Verified,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
   Box,
@@ -16,9 +17,14 @@ import {
   CardContent,
   CardMedia,
   Chip,
+  Dialog,
+  DialogContent,
+  IconButton,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import CloseIcon from '@mui/icons-material/Close';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 interface DashboardItemCardProps {
@@ -57,6 +63,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   canOrder = true,
   showCartButtons = false,
 }) => {
+  const navigate = useNavigate();
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
       return item.item.item_images[0].image_url;
@@ -83,8 +92,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         },
       }}
     >
-      {/* Image Section - Top */}
+      {/* Image Section - Top (clickable to view) */}
       <Box
+        onClick={() => primaryImage && setImageLightboxOpen(true)}
         sx={{
           width: '100%',
           height: '240px',
@@ -95,6 +105,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          cursor: primaryImage ? 'pointer' : 'default',
         }}
       >
         {primaryImage ? (
@@ -108,6 +119,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               width: '100%',
               height: '100%',
               transition: 'transform 0.3s ease',
+              pointerEvents: 'none',
               '.MuiCard-root:hover &': {
                 transform: 'scale(1.05)',
               },
@@ -421,7 +433,24 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         </CardContent>
 
         {/* Action Buttons */}
-        <CardActions sx={{ p: 1.5, pt: 0, justifyContent: 'center' }}>
+        <CardActions
+          sx={{
+            p: 1.5,
+            pt: 0,
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            gap: 0.5,
+          }}
+        >
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<VisibilityIcon />}
+            onClick={() => navigate(`/items/${inventory.id}`)}
+            sx={{ alignSelf: 'center' }}
+          >
+            View details
+          </Button>
           {inventory.computed_available_quantity === 0 ? (
             <Button
               variant="outlined"
@@ -512,6 +541,66 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           )}
         </CardActions>
       </Box>
+
+      {/* Image lightbox */}
+      <Dialog
+        open={imageLightboxOpen}
+        onClose={() => setImageLightboxOpen(false)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            maxWidth: '90vw',
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+          },
+        }}
+        slotProps={{
+          backdrop: {
+            sx: { bgcolor: 'rgba(0,0,0,0.85)' },
+          },
+        }}
+        onClick={() => setImageLightboxOpen(false)}
+      >
+        <IconButton
+          aria-label="close"
+          onClick={() => setImageLightboxOpen(false)}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: 'white',
+            bgcolor: 'rgba(0,0,0,0.5)',
+            zIndex: 1,
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent
+          onClick={(e) => e.stopPropagation()}
+          sx={{
+            p: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          {primaryImage && (
+            <Box
+              component="img"
+              src={primaryImage}
+              alt={inventory.item.name}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '90vh',
+                objectFit: 'contain',
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
