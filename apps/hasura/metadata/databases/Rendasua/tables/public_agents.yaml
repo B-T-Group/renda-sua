@@ -119,6 +119,7 @@ select_permissions:
         - created_at
         - updated_at
         - is_verified
+        - onboarding_complete
       filter:
         user:
           identifier:
