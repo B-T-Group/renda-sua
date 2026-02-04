@@ -16,7 +16,15 @@
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "index": "apps/frontend/src/index.html",
         "baseHref": "/",
-        "assets": ["apps/frontend/src/favicon.ico", "apps/frontend/src/assets"],
+        "assets": [
+          "apps/frontend/src/favicon.ico",
+          "apps/frontend/src/assets",
+          {
+            "input": "apps/frontend/public",
+            "glob": "**/*",
+            "output": "/"
+          }
+        ],
         "styles": ["apps/frontend/src/styles.css"],
         "isolatedConfig": true,
         "webpackConfig": "apps/frontend/webpack.config.js"
