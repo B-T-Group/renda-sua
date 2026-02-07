@@ -60,23 +60,29 @@ const DeliveryTimeWindowSelector: React.FC<DeliveryTimeWindowSelectorProps> = ({
     fetchNextDay,
   } = useNextAvailableDaySlots(countryCode, stateCode, isFastDelivery);
 
-  // Find next available slot
+  // Find next available slot (prioritize closest: morning → afternoon → evening)
   const nextAvailableSlot = useMemo(() => {
     if (!nextAvailableSlots || nextAvailableSlots.length === 0) {
       return null;
     }
-    // Find the first evening slot with availability, or first available slot
+    const available = (slot: DeliveryTimeSlot) =>
+      slot.is_available && slot.available_capacity > 0;
+    const morningSlot = nextAvailableSlots.find(
+      (slot) => available(slot) && slot.slot_name.toLowerCase().includes('morning')
+    );
+    const afternoonSlot = nextAvailableSlots.find(
+      (slot) =>
+        available(slot) && slot.slot_name.toLowerCase().includes('afternoon')
+    );
     const eveningSlot = nextAvailableSlots.find(
       (slot) =>
-        slot.is_available &&
-        slot.available_capacity > 0 &&
-        slot.slot_name.toLowerCase().includes('evening')
+        available(slot) && slot.slot_name.toLowerCase().includes('evening')
     );
     return (
+      morningSlot ||
+      afternoonSlot ||
       eveningSlot ||
-      nextAvailableSlots.find(
-        (slot) => slot.is_available && slot.available_capacity > 0
-      ) ||
+      nextAvailableSlots.find(available) ||
       null
     );
   }, [nextAvailableSlots]);

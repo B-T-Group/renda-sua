@@ -41,12 +41,14 @@ export class DeliverySlotsService {
   /**
    * Get available delivery time slots for a specific location and date
    * Optimized to batch capacity checks in a single query
+   * @param timezone - Optional IANA timezone (e.g. 'Africa/Libreville'). If not provided, fetched from country_delivery_configs.
    */
   async getAvailableSlots(
     countryCode: string,
     stateCode: string,
     date: string,
-    isFastDelivery = false
+    isFastDelivery = false,
+    timezone?: string
   ): Promise<AvailableSlot[]> {
     try {
       const slotType = isFastDelivery ? 'fast' : 'standard';
@@ -133,9 +135,10 @@ export class DeliverySlotsService {
         bookingCountMap.set(slotId, (bookingCountMap.get(slotId) || 0) + 1);
       });
 
-      // Get timezone for the country
-      const timezone =
-        (await this.deliveryConfigService.getTimezone(countryCode)) ||
+      // Get timezone for the country (use provided or fetch from config)
+      const resolvedTimezone =
+        timezone ??
+        (await this.deliveryConfigService.getTimezone(countryCode)) ??
         'Africa/Libreville';
 
       // Get current time + 2 hours in UTC for comparison
@@ -156,7 +159,7 @@ export class DeliverySlotsService {
           const isSlotInFuture = await this.isSlotAtLeast2HoursInFuture(
             date,
             slot.start_time,
-            timezone,
+            resolvedTimezone,
             twoHoursFromNow
           );
 
@@ -273,6 +276,7 @@ export class DeliverySlotsService {
   /**
    * Get the next available delivery day (today or in the future)
    * Returns all available slots for the first day that has available slots, or null if none found
+   * Dates are calculated in the country's timezone. If current time is noon or later, search starts from the next day.
    */
   async getNextAvailableDay(
     countryCode: string,
@@ -280,21 +284,25 @@ export class DeliverySlotsService {
     isFastDelivery = false
   ): Promise<{ date: string; slots: AvailableSlot[] } | null> {
     try {
-      const today = new Date();
+      // Get timezone from country_delivery_configs
+      const timezone =
+        (await this.deliveryConfigService.getTimezone(countryCode)) ||
+        'Africa/Libreville';
+
+      const nowInTimezone = DateTime.now().setZone(timezone);
+      const startDayOffset = nowInTimezone.hour >= 12 ? 1 : 0;
       const maxDaysToCheck = 30; // Check up to 30 days in the future
 
-      // Check each day starting from today
-      for (let dayOffset = 0; dayOffset < maxDaysToCheck; dayOffset++) {
-        const checkDate = new Date(today);
-        checkDate.setDate(checkDate.getDate() + dayOffset);
-        const dateStr = checkDate.toISOString().split('T')[0];
+      for (let dayOffset = startDayOffset; dayOffset < maxDaysToCheck; dayOffset++) {
+        const checkDate = nowInTimezone.plus({ days: dayOffset });
+        const dateStr = checkDate.toFormat('yyyy-MM-dd');
 
-        // Get slots for this date
         const slots = await this.getAvailableSlots(
           countryCode,
           stateCode,
           dateStr,
-          isFastDelivery
+          isFastDelivery,
+          timezone
         );
 
         // Filter to only available slots (is_available === true and available_capacity > 0)

@@ -767,6 +767,7 @@ const PlaceOrderPage: React.FC = () => {
                     onChange={handleDeliveryWindowChange}
                     isFastDelivery={requiresFastDelivery}
                     loading={loading}
+                    shouldFetchNextAvailable={true}
                   />
                 </CardContent>
               </Card>
@@ -2123,6 +2124,7 @@ const PlaceOrderPage: React.FC = () => {
                       onChange={handleDeliveryWindowChange}
                       isFastDelivery={requiresFastDelivery}
                       loading={loading}
+                      shouldFetchNextAvailable={true}
                     />
                   </CardContent>
                 </Card>
