@@ -662,66 +662,116 @@ const ManageOrderPage: React.FC = () => {
                         {t('orders.orderItems', 'Order Items')}
                       </Typography>
                       <Stack spacing={2}>
-                        {order.order_items?.map((item) => (
-                          <Paper key={item.id} variant="outlined" sx={{ p: 2 }}>
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                              {item.item?.item_images?.[0]?.image_url && (
-                                <Box
-                                  component="img"
-                                  src={item.item.item_images[0].image_url}
-                                  alt={item.item.name}
-                                  sx={{
-                                    width: 80,
-                                    height: 80,
-                                    objectFit: 'cover',
-                                    borderRadius: 1,
-                                  }}
-                                />
-                              )}
-                              <Box sx={{ flex: 1 }}>
-                                <Typography
-                                  variant="subtitle1"
-                                  fontWeight="medium"
-                                >
-                                  {item.item?.name}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  {t('orders.quantity', 'Quantity')}:{' '}
-                                  {item.quantity}
-                                </Typography>
-                                {(item.item?.weight != null || item.item?.dimensions) && (
+                        {order.order_items?.map((item) => {
+                          const categoryName =
+                            item.item?.item_sub_category?.item_category?.name ||
+                            item.item?.item_sub_category?.name;
+                          const hasAgentRestrictedView =
+                            !item.item?.item_images?.length &&
+                            item.item?.name == null;
+                          return (
+                            <Paper
+                              key={item.id}
+                              variant="outlined"
+                              sx={{ p: 2 }}
+                            >
+                              <Box sx={{ display: 'flex', gap: 2 }}>
+                                {item.item?.item_images?.[0]?.image_url && (
+                                  <Box
+                                    component="img"
+                                    src={item.item.item_images[0].image_url}
+                                    alt={item.item.name ?? ''}
+                                    sx={{
+                                      width: 80,
+                                      height: 80,
+                                      objectFit: 'cover',
+                                      borderRadius: 1,
+                                    }}
+                                  />
+                                )}
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography
+                                    variant="subtitle1"
+                                    fontWeight="medium"
+                                  >
+                                    {hasAgentRestrictedView
+                                      ? categoryName || t('orders.item', 'Item')
+                                      : item.item?.name ?? item.item_name}
+                                  </Typography>
                                   <Typography
                                     variant="body2"
                                     color="text.secondary"
                                   >
-                                    {[
-                                      item.item?.weight != null
-                                        ? `${item.item.weight} ${item.item.weight_unit ?? ''}`.trim()
-                                        : null,
-                                      item.item?.dimensions || null,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(' · ')}
+                                    {t('orders.quantity', 'Quantity')}:{' '}
+                                    {item.quantity}
                                   </Typography>
-                                )}
-                                <Typography
-                                  variant="h6"
-                                  color="primary"
-                                  sx={{ mt: 1 }}
-                                >
-                                  {item.unit_price !== undefined &&
-                                    formatCurrency(
-                                      item.unit_price * item.quantity,
-                                      order.currency
-                                    )}
-                                </Typography>
+                                  {(item.item?.weight != null ||
+                                    item.item?.dimensions) && (
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {[
+                                        item.item?.weight != null
+                                          ? `${item.item.weight} ${item.item.weight_unit ?? ''}`.trim()
+                                          : null,
+                                        item.item?.dimensions || null,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </Typography>
+                                  )}
+                                  {(item.item?.is_fragile ||
+                                    item.item?.is_perishable) && (
+                                    <Box
+                                      sx={{
+                                        display: 'flex',
+                                        gap: 0.5,
+                                        flexWrap: 'wrap',
+                                        mt: 0.5,
+                                      }}
+                                    >
+                                      {item.item?.is_fragile && (
+                                        <Chip
+                                          size="small"
+                                          label={t(
+                                            'orders.fragile',
+                                            'Fragile'
+                                          )}
+                                          color="warning"
+                                          variant="outlined"
+                                        />
+                                      )}
+                                      {item.item?.is_perishable && (
+                                        <Chip
+                                          size="small"
+                                          label={t(
+                                            'orders.perishable',
+                                            'Perishable'
+                                          )}
+                                          color="info"
+                                          variant="outlined"
+                                        />
+                                      )}
+                                    </Box>
+                                  )}
+                                  {item.unit_price !== undefined && (
+                                    <Typography
+                                      variant="h6"
+                                      color="primary"
+                                      sx={{ mt: 1 }}
+                                    >
+                                      {formatCurrency(
+                                        item.unit_price * item.quantity,
+                                        order.currency
+                                      )}
+                                    </Typography>
+                                  )}
+                                </Box>
                               </Box>
-                            </Box>
-                          </Paper>
-                        ))}
+                            </Paper>
+                          );
+                        })}
                       </Stack>
                     </Box>
 

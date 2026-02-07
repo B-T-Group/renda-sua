@@ -3,12 +3,12 @@
  * This is only a minimal backend to get started.
  */
 
-import { NestFactory } from '@nestjs/core';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import { NestFactory } from '@nestjs/core';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
 
 async function loadSecrets() {
@@ -50,10 +50,7 @@ async function loadSecrets() {
 
     // Inject into process.env
     for (const [key, value] of Object.entries(secrets)) {
-      if (!process.env[key]) {
-        // Only set if not already in process.env (env vars take precedence)
         process.env[key] = String(value);
-      }
     }
   } catch (err) {
     console.error(`Failed to load secrets from ${secretName}:`, err);

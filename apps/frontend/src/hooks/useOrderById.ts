@@ -96,41 +96,43 @@ export interface OrderData {
   };
   order_items: Array<{
     id: string;
-    business_inventory_id: string;
-    item_id: string;
-    item_name: string;
+    business_inventory_id?: string;
+    item_id?: string;
+    item_name?: string;
     item_description?: string;
     unit_price?: number; // Optional for agents
     quantity: number;
     total_price?: number; // Optional for agents
     special_instructions?: string;
     item: {
-      id: string;
-      sku: string;
-      name: string;
+      id?: string;
+      sku?: string;
+      name?: string;
       description?: string;
-      currency: string;
+      currency?: string;
       model?: string;
       color?: string;
       weight?: number;
       weight_unit?: string;
       dimensions?: string;
+      is_fragile?: boolean;
+      is_perishable?: boolean;
       brand?: {
         id: string;
         name: string;
         description?: string;
       };
       item_sub_category: {
-        id: string;
+        id?: string;
         name: string;
         description?: string;
         item_category: {
-          id: string;
+          id?: string;
           name: string;
           description?: string;
         };
       };
-      item_images: Array<{
+      item_images?: Array<{
         id: string;
         image_url: string;
         alt_text?: string;

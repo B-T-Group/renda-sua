@@ -42,12 +42,16 @@ import ConfirmOrderModal from '../business/ConfirmOrderModal';
 
 interface OrderItem {
   id: string;
-  item_name: string;
+  item_name?: string;
   quantity: number;
-  unit_price: number;
-  total_price: number;
+  unit_price?: number;
+  total_price?: number;
   item?: {
     item_images?: Array<{ image_url: string }>;
+    item_sub_category?: {
+      name: string;
+      item_category?: { name: string };
+    };
   };
 }
 
@@ -676,7 +680,12 @@ const OrderCard: React.FC<OrderCardProps> = ({
                                 {item.item?.item_images?.[0]?.image_url ? (
                                   <img
                                     src={item.item.item_images[0].image_url}
-                                    alt={item.item_name || 'Item'}
+                                    alt={
+                                      item.item_name ??
+                                      item.item?.item_sub_category
+                                        ?.item_category?.name ??
+                                      'Item'
+                                    }
                                     style={{
                                       width: '100%',
                                       height: '100%',
@@ -721,30 +730,37 @@ const OrderCard: React.FC<OrderCardProps> = ({
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  {item.item_name ||
+                                  {item.item_name ??
+                                    item.item?.item_sub_category
+                                      ?.item_category?.name ??
+                                    item.item?.item_sub_category?.name ??
                                     t('orders.unknownItem', 'Unknown Item')}
                                 </Typography>
                                 <Typography
                                   variant="caption"
                                   color="text.secondary"
                                 >
-                                  {t('orders.quantity', 'Qty')}: {item.quantity}{' '}
-                                  ×{' '}
-                                  {formatCurrency(
-                                    item.unit_price,
-                                    order.currency
-                                  )}
+                                  {t('orders.quantity', 'Qty')}: {item.quantity}
+                                  {item.unit_price != null &&
+                                    order.currency &&
+                                    ` × ${formatCurrency(
+                                      item.unit_price,
+                                      order.currency
+                                    )}`}
                                 </Typography>
-                                <Typography
-                                  variant="body2"
-                                  fontWeight="medium"
-                                  color="primary"
-                                >
-                                  {formatCurrency(
-                                    item.total_price,
-                                    order.currency
+                                {item.total_price != null &&
+                                  order.currency && (
+                                    <Typography
+                                      variant="body2"
+                                      fontWeight="medium"
+                                      color="primary"
+                                    >
+                                      {formatCurrency(
+                                        item.total_price,
+                                        order.currency
+                                      )}
+                                    </Typography>
                                   )}
-                                </Typography>
                               </Box>
                             </Box>
                           </Paper>

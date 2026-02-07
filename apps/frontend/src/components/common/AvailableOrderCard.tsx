@@ -99,6 +99,38 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     );
   };
 
+  // Aggregate item specs from order_items
+  const getItemSpecs = () => {
+    if (!order.order_items || order.order_items.length === 0) {
+      return { totalWeight: null, weightUnit: null, dimensions: [], isFragile: false, isPerishable: false };
+    }
+    let totalWeight: number | null = null;
+    let weightUnit: string | null = null;
+    const dimensionsSet = new Set<string>();
+    let isFragile = false;
+    let isPerishable = false;
+
+    order.order_items.forEach((oi) => {
+      const it = oi.item;
+      const qty = oi.quantity || 1;
+      if (it?.weight != null) {
+        totalWeight = (totalWeight ?? 0) + it.weight * qty;
+        weightUnit = it.weight_unit || weightUnit || 'kg';
+      }
+      if (it?.dimensions) dimensionsSet.add(it.dimensions);
+      if (it?.is_fragile) isFragile = true;
+      if (it?.is_perishable) isPerishable = true;
+    });
+
+    return {
+      totalWeight,
+      weightUnit,
+      dimensions: Array.from(dimensionsSet),
+      isFragile,
+      isPerishable,
+    };
+  };
+
   const handleClaim = async () => {
     if (!profile?.agent?.id) {
       setClaimError(
@@ -242,64 +274,10 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   return (
     <Card
       sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
         mb: 1.5,
         position: 'relative',
       }}
     >
-      {/* Order Image */}
-      <Box
-        sx={{
-          width: { xs: '100%', sm: '240px' },
-          minHeight: { xs: 120, sm: 120 },
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'grey.100',
-          overflow: 'hidden',
-          borderRadius: 0,
-          flexShrink: 0,
-        }}
-      >
-        {order.order_items?.[0]?.item?.item_images?.[0]?.image_url ? (
-          <img
-            src={order.order_items[0].item.item_images[0].image_url}
-            alt={t('orders.orderImage', 'Order')}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const parent = target.parentElement;
-              if (parent) {
-                parent.innerHTML =
-                  '<div style="font-size: 2rem; color: #999;"><span role="img" aria-label="package">📦</span></div>';
-              }
-            }}
-          />
-        ) : (
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'grey.500',
-              fontSize: '2rem',
-              width: '100%',
-              height: '100%',
-            }}
-          >
-            <span role="img" aria-label="package">
-              📦
-            </span>
-          </Box>
-        )}
-      </Box>
-
       {/* Order Details */}
       <CardContent
         sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.5 }}
@@ -545,6 +523,59 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               </Typography>
             </Box>
           </Box>
+
+          {/* Item specs: weight, dimensions, fragile, perishable */}
+          {(() => {
+            const specs = getItemSpecs();
+            const hasSpecs =
+              specs.totalWeight != null ||
+              specs.dimensions.length > 0 ||
+              specs.isFragile ||
+              specs.isPerishable;
+            if (!hasSpecs) return null;
+            return (
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 1.5,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  mt: 1,
+                }}
+              >
+                {specs.totalWeight != null && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    <strong>{t('orders.weight', 'Weight')}:</strong>{' '}
+                    {specs.totalWeight} {specs.weightUnit || 'kg'}
+                  </Typography>
+                )}
+                {specs.dimensions.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    <strong>{t('orders.dimensions', 'Dimensions')}:</strong>{' '}
+                    {specs.dimensions.join(', ')}
+                  </Typography>
+                )}
+                {specs.isFragile && (
+                  <Chip
+                    label={t('orders.fragile', 'Fragile')}
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                )}
+                {specs.isPerishable && (
+                  <Chip
+                    label={t('orders.perishable', 'Perishable')}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                )}
+              </Box>
+            );
+          })()}
         </Box>
 
         {/* Action Buttons - Compact */}

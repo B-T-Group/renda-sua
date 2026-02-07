@@ -82,12 +82,19 @@ export interface ActiveOrder {
   };
   order_items: Array<{
     id: string;
-    item_name: string;
-    item_description: string;
-    unit_price: number;
     quantity: number;
-    total_price: number;
     special_instructions?: string;
+    item?: {
+      weight?: number;
+      weight_unit?: string;
+      dimensions?: string;
+      is_fragile?: boolean;
+      is_perishable?: boolean;
+      item_sub_category?: {
+        name: string;
+        item_category?: { name: string };
+      };
+    };
   }>;
 }
 
@@ -199,10 +206,21 @@ export class AgentsController {
             }
             order_items {
               id
-              item_name
-              item_description
               quantity
               special_instructions
+              item {
+                weight
+                weight_unit
+                dimensions
+                is_fragile
+                is_perishable
+                item_sub_category {
+                  name
+                  item_category {
+                    name
+                  }
+                }
+              }
             }
           }
         }

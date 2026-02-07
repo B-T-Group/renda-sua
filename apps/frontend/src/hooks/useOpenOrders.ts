@@ -28,8 +28,6 @@ export const useOpenOrders = () => {
     autoFetch: isAgent,
   });
 
-  const hasAddresses = addresses && addresses.length > 0;
-
   // Update loading state based on address loading
   useEffect(() => {
     if (addressesLoading) {
@@ -51,13 +49,6 @@ export const useOpenOrders = () => {
         setLoading(false);
       }
       return;
-    }
-
-    // Don't fetch if agent has no addresses
-    if (!hasAddresses) {
-      setLoading(false);
-      setOpenOrders([]);
-      return [];
     }
 
     if (!apiClient) {
@@ -93,7 +84,7 @@ export const useOpenOrders = () => {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, hasAddresses, agentId, addressesLoading, isAgent]);
+  }, [apiClient, agentId, addressesLoading, isAgent]);
 
   useEffect(() => {
     fetchOpenOrders();

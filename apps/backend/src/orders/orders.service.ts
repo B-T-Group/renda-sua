@@ -378,14 +378,35 @@ export class OrdersService {
         ...restOrder
       } = order;
 
-      // Remove unit_price and total_price from order_items if present
+      // Restrict order_items to agent-allowed fields only (no name, image, brand)
       const orderItems = restOrder.order_items?.map((item: any) => {
         const {
           unit_price: _unit_price,
           total_price: _total_price,
+          item_name: _item_name,
+          item_description: _item_description,
           ...restItem
         } = item;
-        return restItem;
+        const it = restItem.item;
+        const restrictedItem =
+          it == null
+            ? undefined
+            : {
+                weight: it.weight,
+                weight_unit: it.weight_unit,
+                dimensions: it.dimensions,
+                is_fragile: it.is_fragile,
+                is_perishable: it.is_perishable,
+                item_sub_category: it.item_sub_category
+                  ? {
+                      name: it.item_sub_category.name,
+                      item_category: it.item_sub_category.item_category
+                        ? { name: it.item_sub_category.item_category.name }
+                        : undefined,
+                    }
+                  : undefined,
+              };
+        return { ...restItem, item: restrictedItem };
       });
 
       return {
@@ -2207,26 +2228,21 @@ export class OrdersService {
           created_at
           order_items {
             id
-            item_name
+            quantity
+            special_instructions
             item {
-              model
-              color
               weight
               weight_unit
-              brand {
-                name
-              }
+              dimensions
+              is_fragile
+              is_perishable
               item_sub_category {
                 name
                 item_category {
                   name
                 }
               }
-              item_images {
-                image_url
-              }
             }
-            quantity
           }
         }
       }
@@ -2417,43 +2433,19 @@ export class OrdersService {
           }
           order_items {
             id
-            business_inventory_id
-            item_id
-            item_name
-            item_description
             quantity
             special_instructions
             item {
-              id
-              sku
-              name
-              description
-              currency
-              model
-              color
               weight
               weight_unit
               dimensions
-              brand {
-                id
-                name
-                description
-              }
+              is_fragile
+              is_perishable
               item_sub_category {
-                id
                 name
-                description
                 item_category {
-                  id
                   name
-                  description
                 }
-              }
-              item_images {
-                id
-                image_url
-                alt_text
-                display_order
               }
             }
           }

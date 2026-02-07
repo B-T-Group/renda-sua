@@ -4,19 +4,21 @@ import { useBackendOrders } from './useBackendOrders';
 import { useCurrentLocation } from './useCurrentLocation';
 import { useDistanceMatrix } from './useDistanceMatrix';
 
+/** Agent-facing order item: only category, weight, dimensions, is_fragile, is_perishable (no name, image, brand). */
 export interface OrderItem {
   id: string;
-  item_name: string;
-  item_description: string;
-  unit_price?: number; // Optional for agents
   quantity: number;
-  total_price?: number; // Optional for agents
   special_instructions?: string;
   item?: {
     weight?: number;
     weight_unit?: string;
     dimensions?: string;
-    [key: string]: unknown;
+    is_fragile?: boolean;
+    is_perishable?: boolean;
+    item_sub_category?: {
+      name: string;
+      item_category?: { name: string };
+    };
   };
 }
 
