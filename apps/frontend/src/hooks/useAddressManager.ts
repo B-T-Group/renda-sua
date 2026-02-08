@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Address {
   id: string;
@@ -77,118 +76,13 @@ interface AddressManagerConfig {
   onAccountCreated?: (account: any) => void;
 }
 
-// GraphQL queries for fetching addresses
-const GET_AGENT_ADDRESSES = `
-  query GetAgentAddresses($agentId: uuid!) {
-    agent_addresses(where: { agent_id: { _eq: $agentId } }) {
-      id
-      agent_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
-const GET_CLIENT_ADDRESSES = `
-  query GetClientAddresses($clientId: uuid!) {
-    client_addresses(where: { client_id: { _eq: $clientId } }) {
-      id
-      client_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
-const GET_BUSINESS_ADDRESSES = `
-  query GetBusinessAddresses($businessId: uuid!) {
-    business_addresses(where: { business_id: { _eq: $businessId } }) {
-      id
-      business_id
-      address_id
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        created_at
-        updated_at
-      }
-    }
-  }
-`;
-
-const UPDATE_ADDRESS = `
-  mutation UpdateAddress($id: uuid!, $address: addresses_set_input!) {
-    update_addresses_by_pk(
-      pk_columns: { id: $id }
-      _set: $address
-    ) {
-      id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-      is_primary
-      address_type
-      latitude
-      longitude
-      created_at
-      updated_at
-    }
-  }
-`;
-
-const DELETE_ADDRESS = `
-  mutation DeleteAddress($id: uuid!) {
-    delete_addresses_by_pk(id: $id) {
-      id
-    }
-  }
-`;
+export interface GetAddressesResponse {
+  success: boolean;
+  message: string;
+  data: {
+    addresses: Array<{ address: Address }>;
+  };
+}
 
 export const useAddressManager = (config: AddressManagerConfig) => {
   const { entityType, entityId, autoFetch = true, onAccountCreated } = config;
@@ -199,66 +93,42 @@ export const useAddressManager = (config: AddressManagerConfig) => {
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [warning, setWarning] = useState<string | null>(null);
 
-  // GraphQL hooks for fetching and other operations
-  const { execute: executeAgentQuery } = useGraphQLRequest(GET_AGENT_ADDRESSES);
-  const { execute: executeClientQuery } =
-    useGraphQLRequest(GET_CLIENT_ADDRESSES);
-  const { execute: executeBusinessQuery } = useGraphQLRequest(
-    GET_BUSINESS_ADDRESSES
-  );
-
-  const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
-  const { execute: deleteAddress } = useGraphQLRequest(DELETE_ADDRESS);
-
-  // API client for backend requests
   const apiClient = useApiClient();
 
-  // Get the appropriate query based on entity type
-  const getQueryExecutor = useCallback(() => {
-    switch (entityType) {
-      case 'agent':
-        return executeAgentQuery;
-      case 'client':
-        return executeClientQuery;
-      case 'business':
-        return executeBusinessQuery;
-      default:
-        throw new Error(`Unsupported entity type: ${entityType}`);
-    }
-  }, [entityType, executeAgentQuery, executeClientQuery, executeBusinessQuery]);
-
-  // Fetch addresses
+  // Fetch addresses via backend REST API (GET /addresses)
   const fetchAddresses = useCallback(async () => {
     if (!entityId) return;
+
+    if (!apiClient) {
+      setError('API client not available');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const queryExecutor = getQueryExecutor();
-      const variables = {
-        [`${entityType}Id`]: entityId,
-      };
+      const response = await apiClient.get<GetAddressesResponse>('/addresses');
+      const result = response.data;
 
-      const result = await queryExecutor(variables);
-
-      // Extract addresses from the result
-      const addressKey = `${entityType}_addresses`;
-      const addressData = result[addressKey] || [];
-
-      // Keep the structure consistent with the state type
-      const addresses = addressData.filter((item: any) => item.address);
-
-      setAddresses(addresses);
+      if (result.success && result.data?.addresses) {
+        const addressData = result.data.addresses.filter(
+          (item: { address?: Address }) => item.address
+        );
+        setAddresses(addressData);
+      } else {
+        setAddresses([]);
+      }
     } catch (err) {
       console.error('Error fetching addresses:', err);
       setError(
         err instanceof Error ? err.message : 'Failed to fetch addresses'
       );
+      setAddresses([]);
     } finally {
       setLoading(false);
     }
-  }, [entityId, entityType, getQueryExecutor]);
+  }, [entityId, apiClient]);
 
   // Add new address using the new POST API with useApiClient
   const addAddress = useCallback(

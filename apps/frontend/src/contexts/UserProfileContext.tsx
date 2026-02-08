@@ -80,6 +80,12 @@ export interface UserProfileResponse {
   message: string;
 }
 
+export interface GetAccountsResponse {
+  success: boolean;
+  message: string;
+  data: { accounts: Account[] };
+}
+
 export type UserType = 'client' | 'agent' | 'business';
 
 // GraphQL Mutations
@@ -286,28 +292,6 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   );
   const { execute: updateAddress } = useGraphQLRequest(UPDATE_ADDRESS);
 
-  // GraphQL query for accounts
-  // Note: This query relies on Hasura RLS to filter by authenticated user
-  // The index on accounts.user_id ensures efficient filtering
-  const GET_ACCOUNTS = `
-    query GetAccounts {
-      accounts(where: { is_active: { _eq: true } }, order_by: { created_at: desc }) {
-        id
-        user_id
-        currency
-        available_balance
-        withheld_balance
-        total_balance
-        is_active
-        created_at
-        updated_at
-      }
-    }
-  `;
-
-  const { execute: fetchAccounts } = useGraphQLRequest<{
-    accounts: Account[];
-  }>(GET_ACCOUNTS);
 
   const checkProfile = useCallback(async () => {
     if (!apiClient || !isAuthenticated) {
@@ -383,19 +367,31 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
       return;
     }
 
+    if (!apiClient) {
+      setAccountsError('API client not available');
+      setAccountsLoading(false);
+      return;
+    }
+
     setAccountsLoading(true);
     setAccountsError(null);
 
     try {
-      const result = await fetchAccounts();
-      setAccounts(result?.accounts || []);
+      const response = await apiClient.get<GetAccountsResponse>('/accounts');
+      const result = response.data;
+      if (result.success && result.data?.accounts) {
+        setAccounts(result.data.accounts);
+      } else {
+        setAccounts([]);
+      }
     } catch (err: unknown) {
       const error = err as { message?: string };
       setAccountsError(error.message || 'Failed to fetch accounts');
+      setAccounts([]);
     } finally {
       setAccountsLoading(false);
     }
-  }, [isAuthenticated, fetchAccounts]);
+  }, [isAuthenticated, apiClient]);
 
   const clearProfile = () => {
     setProfile(null);

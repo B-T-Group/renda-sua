@@ -576,6 +576,11 @@ export class HasuraUserService {
         query = `
           query GetAllClientAddresses($userId: uuid!) {
             client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              id
+              client_id
+              address_id
+              created_at
+              updated_at
               address {
                 id
                 address_line_1
@@ -586,6 +591,8 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                latitude
+                longitude
                 created_at
                 updated_at
               }
@@ -597,6 +604,11 @@ export class HasuraUserService {
         query = `
           query GetAllAgentAddresses($userId: uuid!) {
             agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              id
+              agent_id
+              address_id
+              created_at
+              updated_at
               address {
                 id
                 address_line_1
@@ -607,6 +619,8 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                latitude
+                longitude
                 created_at
                 updated_at
               }
@@ -618,6 +632,11 @@ export class HasuraUserService {
         query = `
           query GetAllBusinessAddresses($userId: uuid!) {
             business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              id
+              business_id
+              address_id
+              created_at
+              updated_at
               address {
                 id
                 address_line_1
@@ -628,6 +647,8 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                latitude
+                longitude
                 created_at
                 updated_at
               }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAccountSubscription } from './useAccountSubscription';
+import { useApiClient } from './useApiClient';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface Account {
@@ -22,22 +23,11 @@ interface AccountManagerConfig {
   autoFetch?: boolean;
 }
 
-// GraphQL queries for fetching accounts
-const GET_USER_ACCOUNTS = `
-  query GetUserAccounts($userId: uuid!) {
-    accounts(where: { user_id: { _eq: $userId } }) {
-      id
-      user_id
-      currency
-      available_balance
-      withheld_balance
-      total_balance
-      is_active
-      created_at
-      updated_at
-    }
-  }
-`;
+export interface GetAccountsResponse {
+  success: boolean;
+  message: string;
+  data: { accounts: Account[] };
+}
 
 const GET_ACCOUNT_TRANSACTIONS = `
   query GetAccountTransactions($accountId: uuid!, $limit: Int = 10) {
@@ -97,34 +87,39 @@ export const useAccountManager = (config: AccountManagerConfig) => {
     enabled: autoFetch && !!entityId,
   });
 
-  // GraphQL hooks
-  const { execute: executeAccountsQuery } =
-    useGraphQLRequest(GET_USER_ACCOUNTS);
+  const apiClient = useApiClient();
   const { execute: executeTransactionsQuery } = useGraphQLRequest(
     GET_ACCOUNT_TRANSACTIONS
   );
 
-  // Fetch accounts for the user
+  // Fetch accounts via backend REST API (GET /accounts)
   const fetchAccounts = useCallback(async () => {
     if (!entityId) return;
+
+    if (!apiClient) {
+      setError('API client not available');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      // For all entity types, we fetch accounts by user_id
-      // The entityId should be the user_id for the entity
-      const result = await executeAccountsQuery({ userId: entityId });
-
-      const accountData = result.accounts || [];
-      setAccounts(accountData);
+      const response = await apiClient.get<GetAccountsResponse>('/accounts');
+      const result = response.data;
+      if (result.success && result.data?.accounts) {
+        setAccounts(result.data.accounts);
+      } else {
+        setAccounts([]);
+      }
     } catch (err) {
       console.error('Error fetching accounts:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch accounts');
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
-  }, [entityId, executeAccountsQuery]);
+  }, [entityId, apiClient]);
 
   // Fetch transactions for a specific account
   const fetchAccountTransactions = useCallback(

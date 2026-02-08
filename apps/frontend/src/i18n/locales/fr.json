@@ -890,6 +890,7 @@
     "apply": "Appliquer les Filtres",
     "available": "disponible",
     "back": "Retour",
+    "browseItems": "Parcourir les Articles",
     "business": "Entreprise",
     "cancel": "Annuler",
     "category": "Catégorie",
@@ -1478,6 +1479,12 @@
       "pending": "Commande Passée",
       "preparing": "En Préparation",
       "ready": "Prêt"
+    },
+    "step": {
+      "address": "Adresse de Livraison",
+      "deliveryOptions": "Options de Livraison",
+      "quantity": "Quantité",
+      "review": "Réviser et Passer la Commande"
     },
     "step1": "Vérifiez votre téléphone mobile pour une notification de demande de paiement",
     "step2": "Confirmez la demande de paiement pour autoriser la transaction",

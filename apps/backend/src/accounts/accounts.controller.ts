@@ -1,22 +1,119 @@
 import {
   Body,
   Controller,
+  Get,
   HttpException,
   HttpStatus,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '../auth/auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { TransactionRequest } from './accounts.service';
 import { AccountsService } from './accounts.service';
 
+@ApiTags('accounts')
 @Controller('accounts')
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 export class AccountsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly accountsService: AccountsService
   ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Get active accounts for the current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Accounts retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            accounts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  user_id: { type: 'string' },
+                  currency: { type: 'string' },
+                  available_balance: { type: 'number' },
+                  withheld_balance: { type: 'number' },
+                  total_balance: { type: 'number' },
+                  is_active: { type: 'boolean' },
+                  created_at: { type: 'string' },
+                  updated_at: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAccounts() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) {
+        throw new HttpException(
+          { success: false, error: 'User not found' },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+
+      const query = `
+        query GetAccounts($userId: uuid!) {
+          accounts(
+            where: { user_id: { _eq: $userId }, is_active: { _eq: true } }
+            order_by: { created_at: desc }
+          ) {
+            id
+            user_id
+            currency
+            available_balance
+            withheld_balance
+            total_balance
+            is_active
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        userId: user.id,
+      });
+
+      const accounts = result.accounts || [];
+
+      return {
+        success: true,
+        message: 'Accounts retrieved successfully',
+        data: { accounts },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch accounts',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   @Post()
   async createAccount(@Body() accountData: { currency: string }) {

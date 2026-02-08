@@ -139,11 +139,14 @@ export class AddressesController {
     try {
       const addresses = await this.addressesService.getUserAddresses();
 
+      // Wrap each address as { address } to match frontend format (client_addresses, agent_addresses, etc.)
+      const wrappedAddresses = addresses.map((addr) => ({ address: addr }));
+
       return {
         success: true,
         message: 'Addresses retrieved successfully',
         data: {
-          addresses,
+          addresses: wrappedAddresses,
         },
       };
     } catch (error: any) {

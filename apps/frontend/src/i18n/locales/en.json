@@ -889,6 +889,7 @@
     "apply": "Apply Filters",
     "available": "available",
     "back": "Back",
+    "browseItems": "Browse Items",
     "business": "Business",
     "cancel": "Cancel",
     "category": "Category",
@@ -1470,6 +1471,12 @@
       "pending": "Order Placed",
       "preparing": "Preparing",
       "ready": "Ready"
+    },
+    "step": {
+      "address": "Delivery Address",
+      "deliveryOptions": "Delivery Options",
+      "quantity": "Quantity",
+      "review": "Review & Place Order"
     },
     "step1": "Check your mobile phone for a payment request notification",
     "step2": "Confirm the payment request to authorize the transaction",
