@@ -1,36 +1,36 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
-  AccountCircle as AccountIcon,
-  Assignment,
-  Inventory,
-  Search as SearchIcon,
+    AccountCircle as AccountIcon,
+    Assignment,
+    Inventory,
+    Search as SearchIcon,
 } from '@mui/icons-material';
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Pagination,
-  Paper,
-  Skeleton,
-  Typography,
+    Alert,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    Container,
+    Pagination,
+    Paper,
+    Skeleton,
+    Typography,
 } from '@mui/material';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
 import {
-  InventoryItem,
-  useInventoryItems,
+    InventoryItem,
+    useInventoryItems,
 } from '../../hooks/useInventoryItems';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsPageFilter, {
-  ItemsPageFilterState,
+    ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';

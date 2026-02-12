@@ -1,28 +1,28 @@
 import {
-  Build,
-  Business,
-  Category,
-  Palette,
-  Scale,
-  ShoppingCart,
-  Straighten,
-  Verified,
-  Visibility as VisibilityIcon,
+    Build,
+    Business,
+    Category,
+    Palette,
+    Scale,
+    ShoppingCart,
+    Straighten,
+    Verified,
+    Visibility as VisibilityIcon,
 } from '@mui/icons-material';
-import {
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CardMedia,
-  Chip,
-  Dialog,
-  DialogContent,
-  IconButton,
-  Typography,
-} from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import {
+    Box,
+    Button,
+    Card,
+    CardActions,
+    CardContent,
+    CardMedia,
+    Chip,
+    Dialog,
+    DialogContent,
+    IconButton,
+    Typography,
+} from '@mui/material';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';

@@ -1,29 +1,29 @@
 import {
-  Close as CloseIcon,
-  FilterList as FilterListIcon,
-  Search as SearchIcon,
+    Close as CloseIcon,
+    FilterList as FilterListIcon,
+    Search as SearchIcon,
 } from '@mui/icons-material';
 import {
-  Badge,
-  Box,
-  Button,
-  Chip,
-  Drawer,
-  FormControl,
-  Grid,
-  IconButton,
-  InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
-  Skeleton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
-  useTheme,
+    Badge,
+    Box,
+    Button,
+    Chip,
+    Drawer,
+    FormControl,
+    Grid,
+    IconButton,
+    InputAdornment,
+    InputLabel,
+    MenuItem,
+    Select,
+    Skeleton,
+    Stack,
+    TextField,
+    Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
