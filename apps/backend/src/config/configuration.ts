@@ -94,6 +94,11 @@ export interface OrderConfig {
   paymentTimeoutWaitMinutes?: number;
 }
 
+/** When agent has an active delivery, location update interval in ms (default 60s). */
+export interface AgentTrackingConfig {
+  activeDeliveryIntervalMs: number;
+}
+
 export interface GoogleCacheConfig {
   enabled: boolean;
   ttl: number; // Time to live in seconds
@@ -127,6 +132,19 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+export interface PushConfig {
+  vapidPublicKey: string;
+  vapidPrivateKey: string;
+  enabled: boolean;
+}
+
+export interface SmsConfig {
+  enabled: boolean;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioPhoneNumber: string;
+}
+
 export interface PdfEndpointConfig {
   apiToken: string;
   sandbox: boolean;
@@ -150,10 +168,13 @@ export interface Configuration {
   mypvit: MyPVitConfig;
   freemopay: FreemopayConfig;
   order: OrderConfig;
+  agentTracking: AgentTrackingConfig;
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   notification: NotificationConfig;
+  push: PushConfig;
+  sms: SmsConfig;
   pdfEndpoint: PdfEndpointConfig;
 }
 
@@ -288,6 +309,12 @@ export default (): Configuration => {
         10
       ),
     },
+    agentTracking: {
+      activeDeliveryIntervalMs: parseInt(
+        process.env.AGENT_TRACKING_INTERVAL_ACTIVE_MS || '60000',
+        10
+      ),
+    },
     auth0: {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
       audience:
@@ -306,6 +333,17 @@ export default (): Configuration => {
     },
     notification: {
       orderStatusChangeEnabled: process.env.NODE_ENV === 'production',
+    },
+    push: {
+      vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+      vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+      enabled: process.env.PUSH_NOTIFICATIONS_ENABLED === 'true',
+    },
+    sms: {
+      enabled: process.env.SMS_ENABLED === 'true',
+      twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+      twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
+      twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER ?? '',
     },
     pdfEndpoint: {
       apiToken: process.env.PDF_ENDPOINT_TOKEN || '',

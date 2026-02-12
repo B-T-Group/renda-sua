@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import './styles/apple-fonts.css';
 
 import App from './app/app';
+import { AnalyticsInit } from './components/analytics/AnalyticsInit';
 import { environment } from './config/environment';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
@@ -59,6 +60,7 @@ root.render(
         <BrowserRouter
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
+          <AnalyticsInit />
           <LoadingProvider>
             <UserProfileProvider>
               <CartProvider>

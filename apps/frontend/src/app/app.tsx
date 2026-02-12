@@ -21,6 +21,7 @@ import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
+import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
@@ -48,6 +49,7 @@ import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import SupportPage from '../components/pages/SupportPage';
+import SupportTicketsPage from '../components/pages/SupportTicketsPage';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartOrders from '../components/routing/SmartOrders';
@@ -301,6 +303,16 @@ function App() {
             {/* FAQ route */}
             <Route path="/faq" element={<FAQ />} />
 
+            {/* Support tickets - user's own tickets */}
+            <Route
+              path="/support/tickets"
+              element={
+                <ProtectedRoute>
+                  <SupportTicketsPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Smart orders route */}
             <Route
               path="/orders"
@@ -352,6 +364,14 @@ function App() {
             />
 
             {/* Business routes */}
+            <Route
+              path="/business/analytics"
+              element={
+                <ProtectedRoute>
+                  <BusinessAnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/business/locations"
               element={

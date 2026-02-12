@@ -23,7 +23,11 @@ export class AppController {
 
   @Public()
   @Get('health')
-  getHealth(): { status: string; timestamp: string } {
+  async getHealth(): Promise<{
+    status: string;
+    timestamp: string;
+    hasura?: { status: string; latencyMs?: number };
+  }> {
     this.logger.info('GET /health endpoint called', {
       service: 'AppController',
       method: 'getHealth',
@@ -31,7 +35,37 @@ export class AppController {
       timestamp: new Date().toISOString(),
     });
 
-    return this.appService.getHealth();
+    const base = this.appService.getHealth();
+    let hasura: { status: string; latencyMs?: number } | undefined;
+    try {
+      const start = Date.now();
+      await this.hasuraSystemService.executeQuery(
+        'query Health { user_types(limit: 1) { id } }',
+        {}
+      );
+      const latencyMs = Date.now() - start;
+      hasura = { status: 'up', latencyMs };
+    } catch (err) {
+      this.logger.warn('Health check: Hasura unreachable', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      hasura = { status: 'down' };
+    }
+    return {
+      ...base,
+      hasura,
+    };
+  }
+
+  @Public()
+  @Get('metrics')
+  getMetrics(): string {
+    const uptimeSeconds = process.uptime();
+    return [
+      '# HELP app_uptime_seconds Application uptime in seconds',
+      '# TYPE app_uptime_seconds gauge',
+      `app_uptime_seconds ${uptimeSeconds}`,
+    ].join('\n');
   }
 
   @Get()

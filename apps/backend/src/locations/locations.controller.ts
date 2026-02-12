@@ -4,14 +4,22 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Param,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
 import {
   DeliveryConfigService,
   FastDeliveryConfig,
 } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { LocationsService } from './locations.service';
+
+interface RequestWithUser extends Request {
+  user?: { sub?: string; id?: string };
+}
 
 export interface SupportedLocation {
   id: string;
@@ -79,7 +87,8 @@ export class LocationsController {
 
   constructor(
     private readonly hasuraService: HasuraSystemService,
-    private readonly deliveryConfigService: DeliveryConfigService
+    private readonly deliveryConfigService: DeliveryConfigService,
+    private readonly locationsService: LocationsService
   ) {}
 
   @Get('supported')
@@ -575,6 +584,151 @@ export class LocationsController {
           success: false,
           error: 'Failed to fetch supported states',
         },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('orders/:orderId/agent-location')
+  @ApiOperation({
+    summary: 'Get agent location for an order (client only)',
+    description:
+      'Returns the latest location of the agent assigned to the order. Only the client of the order can call this, and only when order status is picked_up, in_transit, or out_for_delivery.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Agent location retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        location: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', format: 'uuid' },
+            latitude: { type: 'number' },
+            longitude: { type: 'number' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not the order client' })
+  @ApiResponse({ status: 404, description: 'Order not found or agent not assigned' })
+  async getOrderAgentLocation(
+    @Param('orderId') orderId: string,
+    @Req() request: RequestWithUser
+  ): Promise<{
+    success: boolean;
+    location?: {
+      agentId: string;
+      latitude: number;
+      longitude: number;
+      updatedAt: string;
+    };
+    error?: string;
+  }> {
+    const userIdentifier = request.user?.sub ?? request.user?.id;
+    if (!userIdentifier) {
+      throw new HttpException(
+        { success: false, error: 'Unauthorized' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
+    const allowedStatuses = [
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+    ];
+
+    try {
+      const orderQuery = `
+        query GetOrderForAgentLocation($orderId: uuid!) {
+          orders_by_pk(id: $orderId) {
+            id
+            current_status
+            assigned_agent_id
+            client {
+              user_id
+              user {
+                identifier
+              }
+            }
+          }
+        }
+      `;
+      const orderResult = await this.hasuraService.executeQuery(orderQuery, {
+        orderId,
+      });
+      const order = orderResult?.orders_by_pk as {
+        id: string;
+        current_status: string;
+        assigned_agent_id: string | null;
+        client?: { user_id: string; user?: { identifier?: string } };
+      } | null;
+
+      if (!order) {
+        throw new HttpException(
+          { success: false, error: 'Order not found' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      if (order.client?.user?.identifier !== userIdentifier) {
+        throw new HttpException(
+          { success: false, error: 'You can only view agent location for your own orders' },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      if (!allowedStatuses.includes(order.current_status)) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Agent location is only available when order is picked up, in transit, or out for delivery',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (!order.assigned_agent_id) {
+        throw new HttpException(
+          { success: false, error: 'No agent assigned to this order' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      const location =
+        await this.locationsService.getLatestAgentLocation(
+          order.assigned_agent_id
+        );
+
+      if (!location) {
+        return {
+          success: true,
+          location: undefined,
+        };
+      }
+
+      return {
+        success: true,
+        location: {
+          agentId: location.agentId,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          updatedAt: location.updatedAt,
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(
+        'Failed to get order agent location',
+        error?.stack ?? error
+      );
+      throw new HttpException(
+        { success: false, error: 'Failed to get agent location' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

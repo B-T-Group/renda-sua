@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '@sendgrid/mail';
+import twilio = require('twilio');
+import * as webPush from 'web-push';
 import { Configuration } from '../config/configuration';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface EmailTemplate {
   id: string;
@@ -110,7 +113,10 @@ export class NotificationsService {
     client_order_refunded_fr: 'd-d8d0f3f06e944e619193b5ebce213baf',
   };
 
-  constructor(private readonly configService: ConfigService<Configuration>) {
+  constructor(
+    private readonly configService: ConfigService<Configuration>,
+    private readonly hasuraSystemService: HasuraSystemService
+  ) {
     // Initialize with empty values - will be set when first used
     this.sendGridApiKey = '';
     this.fromEmail = 'noreply@rendasua.com';
@@ -195,6 +201,11 @@ export class NotificationsService {
         }
       }
 
+      // Send push notifications for key statuses
+      await this.sendPushForOrderStatus(data);
+      // Send SMS for critical statuses when enabled
+      await this.sendSmsForOrderStatus(data);
+
       this.logger.log(
         `Order status change notifications sent for order ${data.orderNumber} (${previousStatus} → ${data.orderStatus})`
       );
@@ -205,6 +216,219 @@ export class NotificationsService {
         }`
       );
       throw error;
+    }
+  }
+
+  /**
+   * Send push notifications for order status (out_for_delivery, delivered, assigned_to_agent)
+   */
+  private async sendPushForOrderStatus(data: NotificationData): Promise<void> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig?.enabled || !pushConfig.vapidPrivateKey) return;
+
+    const status = data.orderStatus;
+    const pushPayload = {
+      title: '',
+      body: '',
+      url: `/orders/${data.orderId}`,
+      orderId: data.orderId,
+      orderNumber: data.orderNumber,
+    };
+
+    try {
+      if (status === 'out_for_delivery' && data.clientEmail) {
+        pushPayload.title = 'Order out for delivery';
+        pushPayload.body = `Order ${data.orderNumber} is on its way.`;
+        await this.sendPushNotificationByEmail(
+          data.clientEmail,
+          pushPayload.title,
+          pushPayload.body,
+          pushPayload
+        );
+      } else if (status === 'delivered' && data.clientEmail) {
+        pushPayload.title = 'Order delivered';
+        pushPayload.body = `Order ${data.orderNumber} has been delivered.`;
+        await this.sendPushNotificationByEmail(
+          data.clientEmail,
+          pushPayload.title,
+          pushPayload.body,
+          pushPayload
+        );
+      } else if (status === 'assigned_to_agent' && data.agentEmail) {
+        pushPayload.title = 'New delivery assigned';
+        pushPayload.body = `Order ${data.orderNumber} has been assigned to you.`;
+        await this.sendPushNotificationByEmail(
+          data.agentEmail,
+          pushPayload.title,
+          pushPayload.body,
+          pushPayload
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Push notification failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  /**
+   * Get VAPID public key for client push subscription (no auth required)
+   */
+  getVapidPublicKey(): { publicKey: string } {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    return {
+      publicKey: pushConfig?.vapidPublicKey ?? '',
+    };
+  }
+
+  /**
+   * Initialize web-push with VAPID keys
+   */
+  private initializeWebPush(): void {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig?.vapidPublicKey || !pushConfig?.vapidPrivateKey) return;
+    try {
+      webPush.setVapidDetails(
+        'mailto:noreply@rendasua.com',
+        pushConfig.vapidPublicKey,
+        pushConfig.vapidPrivateKey
+      );
+    } catch (e) {
+      this.logger.warn('Failed to set VAPID details for web-push', e);
+    }
+  }
+
+  /**
+   * Save push subscription for a user (by Auth0 identifier)
+   */
+  async savePushSubscription(
+    userIdentifier: string,
+    subscription: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const query = `
+        query GetUserByIdentifier($identifier: String!) {
+          users(where: { identifier: { _eq: $identifier } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        identifier: userIdentifier,
+      });
+      const users = (result?.users as { id: string }[]) ?? [];
+      if (users.length === 0) {
+        return { success: false, error: 'User not found' };
+      }
+      const userId = users[0].id;
+
+      const mutation = `
+        mutation InsertPushSubscription($object: push_subscriptions_insert_input!) {
+          insert_push_subscriptions_one(object: $object) {
+            id
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(mutation, {
+        object: {
+          user_id: userId,
+          endpoint: subscription.endpoint,
+          p256dh_key: subscription.keys.p256dh,
+          auth_key: subscription.keys.auth,
+        },
+      });
+      return { success: true };
+    } catch (err: any) {
+      this.logger.error('Failed to save push subscription', err);
+      return {
+        success: false,
+        error: err?.message ?? 'Failed to save subscription',
+      };
+    }
+  }
+
+  /**
+   * Send push notification to all subscriptions for a user (lookup by email)
+   */
+  private async sendPushNotificationByEmail(
+    email: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig?.enabled || !pushConfig.vapidPrivateKey) return;
+
+    this.initializeWebPush();
+
+    try {
+      const userQuery = `
+        query GetUserByEmail($email: String!) {
+          users(where: { email: { _eq: $email } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const userResult = await this.hasuraSystemService.executeQuery(
+        userQuery,
+        { email }
+      );
+      const users = (userResult?.users as { id: string }[]) ?? [];
+      if (users.length === 0) return;
+      const userId = users[0].id;
+
+      const subQuery = `
+        query GetPushSubscriptions($userId: uuid!) {
+          push_subscriptions(where: { user_id: { _eq: $userId } }) {
+            id
+            endpoint
+            p256dh_key
+            auth_key
+          }
+        }
+      `;
+      const subResult = await this.hasuraSystemService.executeQuery(
+        subQuery,
+        { userId }
+      );
+      const subs = (subResult?.push_subscriptions as Array<{
+        endpoint: string;
+        p256dh_key: string;
+        auth_key: string;
+      }>) ?? [];
+
+      const payload = JSON.stringify({
+        title,
+        body,
+        ...data,
+      });
+
+      for (const sub of subs) {
+        try {
+          await webPush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh_key,
+                auth: sub.auth_key,
+              },
+            },
+            payload,
+            { TTL: 86400 }
+          );
+        } catch (sendErr) {
+          this.logger.warn(
+            `Push send failed for subscription ${sub.endpoint}: ${sendErr}`
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `sendPushNotificationByEmail failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -483,6 +707,84 @@ export class NotificationsService {
     }
 
     return recipients;
+  }
+
+  /**
+   * Send SMS for critical order statuses (when SMS enabled)
+   */
+  private async sendSmsForOrderStatus(data: NotificationData): Promise<void> {
+    const smsConfig = this.configService.get<Configuration['sms']>('sms');
+    if (!smsConfig?.enabled || !smsConfig.twilioAccountSid || !smsConfig.twilioAuthToken) return;
+
+    const status = data.orderStatus;
+    let email: string | undefined;
+    let body: string;
+
+    switch (status) {
+      case 'confirmed':
+        email = data.clientEmail;
+        body = `Rendasua: Your order ${data.orderNumber} has been confirmed.`;
+        break;
+      case 'assigned_to_agent':
+        email = data.agentEmail;
+        body = `Rendasua: Order ${data.orderNumber} has been assigned to you.`;
+        break;
+      case 'out_for_delivery':
+        email = data.clientEmail;
+        body = `Rendasua: Order ${data.orderNumber} is out for delivery.`;
+        break;
+      case 'delivered':
+        email = data.clientEmail;
+        body = `Rendasua: Order ${data.orderNumber} has been delivered. Thank you!`;
+        break;
+      default:
+        return;
+    }
+
+    if (!email) return;
+
+    try {
+      const userQuery = `
+        query GetUserPhoneByEmail($email: String!) {
+          users(where: { email: { _eq: $email } }, limit: 1) {
+            phone_number
+          }
+        }
+      `;
+      const userResult = await this.hasuraSystemService.executeQuery(userQuery, { email });
+      const users = (userResult?.users as { phone_number?: string | null }[]) ?? [];
+      if (users.length === 0 || !users[0].phone_number) return;
+
+      const to = users[0].phone_number.trim();
+      if (!to) return;
+
+      await this.sendSms(to, body);
+    } catch (err) {
+      this.logger.warn(
+        `SMS for order status failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  /**
+   * Send SMS via Twilio
+   */
+  private async sendSms(to: string, body: string): Promise<void> {
+    const smsConfig = this.configService.get<Configuration['sms']>('sms');
+    if (!smsConfig?.twilioAccountSid || !smsConfig?.twilioAuthToken || !smsConfig?.twilioPhoneNumber) return;
+
+    try {
+      const client = twilio(smsConfig.twilioAccountSid, smsConfig.twilioAuthToken);
+      await client.messages.create({
+        body,
+        from: smsConfig.twilioPhoneNumber,
+        to: to.startsWith('+') ? to : `+${to}`,
+      });
+      this.logger.log(`SMS sent to ${to}`);
+    } catch (err) {
+      this.logger.error(`Failed to send SMS to ${to}: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
+    }
   }
 
   /**

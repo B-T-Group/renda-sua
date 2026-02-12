@@ -21,8 +21,14 @@ import { useGraphQLRequest } from './useGraphQLRequest';
 // Default update interval: 20 minutes (1200000 ms)
 const DEFAULT_UPDATE_INTERVAL = 20 * 60 * 1000;
 
+// When agent has an active delivery, update every 60 seconds
+const ACTIVE_DELIVERY_UPDATE_INTERVAL = 60 * 1000;
+
 // Minimum distance change to trigger update (in meters)
 const MIN_DISTANCE_CHANGE = 100; // 100 meters
+
+// During active delivery, trigger update if agent moved at least 50m
+const MIN_DISTANCE_CHANGE_ACTIVE = 50;
 
 const UPSERT_AGENT_LOCATION = `
   mutation UpsertAgentLocation($locationData: agent_locations_insert_input!, $onConflict: agent_locations_on_conflict!) {
@@ -42,6 +48,8 @@ interface UseAgentLocationTrackerOptions {
   updateInterval?: number;
   /** Enable background sync (default: true) */
   enableBackgroundSync?: boolean;
+  /** When set, use 60s interval and 50m min distance (active delivery) */
+  activeOrderId?: string | null;
 }
 
 interface UseAgentLocationTrackerReturn {
@@ -88,7 +96,16 @@ export const useAgentLocationTracker = (
   const {
     updateInterval = DEFAULT_UPDATE_INTERVAL,
     enableBackgroundSync = true,
+    activeOrderId,
   } = options;
+
+  const isActiveDelivery = Boolean(activeOrderId);
+  const effectiveInterval = isActiveDelivery
+    ? ACTIVE_DELIVERY_UPDATE_INTERVAL
+    : updateInterval;
+  const minDistanceChange = isActiveDelivery
+    ? MIN_DISTANCE_CHANGE_ACTIVE
+    : MIN_DISTANCE_CHANGE;
 
   const { isAuthenticated } = useAuth0();
   const { profile, userType } = useUserProfileContext();
@@ -173,7 +190,7 @@ export const useAgentLocationTracker = (
           coordinates.longitude
         );
 
-        if (distance < MIN_DISTANCE_CHANGE) {
+        if (distance < minDistanceChange) {
           console.log(
             `Location change too small (${distance.toFixed(
               0
@@ -237,6 +254,7 @@ export const useAgentLocationTracker = (
     getCurrentCoordinates,
     upsertLocation,
     enableBackgroundSync,
+    minDistanceChange,
   ]);
 
   /**
@@ -276,14 +294,14 @@ export const useAgentLocationTracker = (
     // Set up periodic updates
     intervalRef.current = setInterval(() => {
       updateLocation();
-    }, updateInterval);
+    }, effectiveInterval);
 
     setIsTracking(true);
   }, [
     isAgent,
     isAuthenticated,
     updateLocation,
-    updateInterval,
+    effectiveInterval,
     enableBackgroundSync,
   ]);
 
@@ -327,11 +345,20 @@ export const useAgentLocationTracker = (
       const handleMessage = async (event: MessageEvent) => {
         if (event.data.type === 'REQUEST_LOCATION_SYNC') {
           // Service worker is requesting location sync data
-          // Send last stored location and auth token
+          // Only send if current user is still an agent and stored agentId matches (avoids FK violation from stale id)
           try {
             const location = getLastLocation();
             if (!location) {
               console.log('No location data to sync');
+              return;
+            }
+
+            const currentAgentId = profile?.agent?.id;
+            if (!currentAgentId || currentAgentId !== location.agentId) {
+              console.warn(
+                'Stored location has stale or invalid agent id; clearing to avoid FK violation'
+              );
+              clearLastLocation();
               return;
             }
 
@@ -350,6 +377,9 @@ export const useAgentLocationTracker = (
           } catch (error) {
             console.error('Error handling location sync request:', error);
           }
+        } else if (event.data.type === 'CLEAR_STORED_LOCATION') {
+          // Service worker reports location update failed (e.g. FK violation); clear stale data
+          clearLastLocation();
         }
       };
 
@@ -360,7 +390,7 @@ export const useAgentLocationTracker = (
       };
     }
     return undefined;
-  }, [isAuthenticated, getAccessTokenSilently]);
+  }, [isAuthenticated, getAccessTokenSilently, profile?.agent?.id]);
 
   return {
     isTracking,

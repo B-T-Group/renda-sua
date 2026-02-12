@@ -3,6 +3,12 @@
  * This is only a minimal backend to get started.
  */
 
+// Polyfill global crypto for Node 18 (global crypto is available in Node 19+)
+import { webcrypto } from 'node:crypto';
+if (typeof (globalThis as unknown as { crypto?: unknown }).crypto === 'undefined') {
+  (globalThis as unknown as { crypto: unknown }).crypto = webcrypto;
+}
+
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
@@ -61,6 +67,26 @@ async function loadSecrets() {
 }
 
 async function bootstrap() {
+  if (process.env.SENTRY_DSN) {
+    try {
+      const Sentry = await import('@sentry/node');
+      Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        environment: process.env.NODE_ENV || 'development',
+        tracesSampleRate: 0.1,
+      });
+      process.on('unhandledRejection', (reason: unknown) => {
+        Sentry.captureException(reason);
+      });
+      process.on('uncaughtException', (err: Error) => {
+        Sentry.captureException(err);
+        throw err;
+      });
+    } catch (e) {
+      console.warn('Sentry init skipped:', e);
+    }
+  }
+
   // Load secrets BEFORE NestJS starts
   await loadSecrets();
 

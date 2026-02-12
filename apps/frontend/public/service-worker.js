@@ -35,6 +35,43 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Push event - show notification
+self.addEventListener('push', (event) => {
+  let data = { title: 'Rendasua', body: '', url: '/' };
+  if (event.data) {
+    try {
+      data = { ...data, ...event.data.json() };
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Rendasua', {
+      body: data.body,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      data: { url: data.url || '/', orderId: data.orderId },
+      tag: data.orderId ? `order-${data.orderId}` : 'rendasua-notification',
+    })
+  );
+});
+
+// Notification click - open URL
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) {
+        clientList[0].focus();
+        clientList[0].navigate(url);
+      } else if (self.clients.openWindow) {
+        self.clients.openWindow(url);
+      }
+    })
+  );
+});
+
 // Background Sync event - handle location updates
 self.addEventListener('sync', (event) => {
   if (event.tag === SYNC_TAG) {
@@ -89,13 +126,29 @@ async function executeLocationUpdate(location, authToken, hasuraUrl) {
     const result = await response.json();
 
     if (result.errors) {
-      throw new Error(result.errors[0]?.message || 'GraphQL error');
+      const msg = result.errors[0]?.message || '';
+      throw new Error(msg);
     }
 
     console.log('Location update successful:', result.data);
     return true;
   } catch (error) {
     console.error('Error executing location update:', error);
+    const isFkOrInvalid =
+      (error.message && error.message.includes('foreign key')) ||
+      (error.message && error.message.includes('violates foreign key'));
+    if (isFkOrInvalid) {
+      try {
+        const clients = await self.clients.matchAll({
+          includeUncontrolled: true,
+        });
+        clients.forEach((client) => {
+          client.postMessage({ type: 'CLEAR_STORED_LOCATION' });
+        });
+      } catch (e) {
+        console.warn('Could not notify clients to clear stored location', e);
+      }
+    }
     return false;
   }
 }

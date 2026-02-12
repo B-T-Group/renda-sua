@@ -161,6 +161,48 @@ export class LocationsService {
   }
 
   /**
+   * Get the latest location for an agent by agent ID.
+   * Returns null if no location is stored.
+   */
+  async getLatestAgentLocation(agentId: string): Promise<{
+    agentId: string;
+    latitude: number;
+    longitude: number;
+    updatedAt: string;
+  } | null> {
+    try {
+      const query = `
+        query GetLatestAgentLocation($agentId: uuid!) {
+          agent_locations(where: { agent_id: { _eq: $agentId } }, limit: 1) {
+            agent_id
+            latitude
+            longitude
+            updated_at
+            created_at
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        agentId,
+      });
+      const rows = result?.agent_locations ?? [];
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        agentId: row.agent_id,
+        latitude: parseFloat(row.latitude?.toString() ?? '0'),
+        longitude: parseFloat(row.longitude?.toString() ?? '0'),
+        updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to get latest agent location for ${agentId}: ${error.message}`
+      );
+      return null;
+    }
+  }
+
+  /**
    * Find all agents within specified radius of business location
    */
   async findAgentsWithinRadius(

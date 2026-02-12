@@ -24,6 +24,7 @@ export { useItemRatings } from './useItemRatings';
 export type { UseItemRatingsReturn } from './useItemRatings';
 export { useOrderById } from './useOrderById';
 export type { OrderData } from './useOrderById';
+export { useOrderSubscription } from './useOrderSubscription';
 export { useOrders } from './useOrders';
 export type { Order, OrderFilters } from './useOrders';
 
@@ -135,3 +136,6 @@ export { useUserDetails } from './useUserDetails';
 // Search hooks
 export { useItemSearch } from './useItemSearch';
 export type { SearchResult } from './useItemSearch';
+
+// Push notifications
+export { usePushSubscription } from './usePushSubscription';

@@ -330,6 +330,14 @@
         }
       }
     },
+    "paymentApproval": {
+      "title": "Approuvez le paiement sur votre téléphone",
+      "message": "Une demande de paiement a été envoyée sur votre téléphone. Veuillez vérifier votre téléphone et approuver la demande de paiement pour finaliser la réclamation de cette commande.",
+      "orderNumber": "Numéro de commande",
+      "instruction": "Une fois le paiement approuvé sur votre téléphone, la commande vous sera assignée. Vous pourrez alors consulter les détails de la commande et commencer la livraison.",
+      "note": "Après avoir approuvé le paiement, cliquez sur « Voir la commande » ci-dessous pour afficher les détails.",
+      "goToOrder": "Voir la commande"
+    },
     "openOrders": {
       "available": "Commandes Disponibles",
       "claimed": "Commandes Déjà Réclamées",
@@ -1215,6 +1223,12 @@
     "availability": "Disponibilité",
     "brand": "Marque",
     "browseItems": "Parcourir les Articles",
+    "fragile": "Fragile",
+    "liveUpdates": "En direct",
+    "trackDelivery": "Suivez votre livraison",
+    "driverLocation": "Position du chauffeur",
+    "updatedAt": "Mis à jour",
+    "viewOnMap": "Voir sur la carte",
     "business": {
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande",
@@ -1557,6 +1571,15 @@
       }
     }
   },
+  "items": {
+    "details": "Détails",
+    "dimensions": "Dimensions",
+    "fragile": "Fragile",
+    "noReviews": "Pas encore d'avis",
+    "reviews": "Avis",
+    "specialHandling": "Spécial",
+    "weight": "Poids"
+  },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",
     "businessInformation": "Informations d'Entreprise",
@@ -1736,6 +1759,18 @@
     }
   },
   "support": {
+    "description": "Description",
+    "descriptionPlaceholder": "Décrivez ce qui s'est passé...",
+    "reportIssue": "Signaler un problème",
+    "subject": "Sujet",
+    "subjectPlaceholder": "Résumé bref du problème",
+    "submit": "Soumettre",
+    "type": "Type",
+    "types": {
+      "complaint": "Réclamation",
+      "dispute": "Litige",
+      "question": "Question"
+    },
     "contact": {
       "description": "Choisissez la meilleure façon de nous joindre selon vos besoins",
       "email": {

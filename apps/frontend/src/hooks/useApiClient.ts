@@ -69,6 +69,7 @@ export const useApiClient = (): AxiosInstance => {
       const skipLoadingEndpoints = [
         '/users/me',
         '/pdf/shipping-labels',
+        '/locations/',
       ];
       if (
         showLoading &&

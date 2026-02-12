@@ -62,11 +62,13 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/throttler": "^6.5.0",
     "@types/mustache": "^4.2.6",
     "axios": "^1.6.0",
     "country-state-city": "^3.2.1",
     "country-to-currency": "^2.0.2",
     "google-libphonenumber": "^3.2.42",
+    "graphql": "^16.9.0",
     "graphql-request": "^5.2.0",
     "mustache": "^4.2.0",
     "react": "19.0.0",
@@ -74,7 +76,8 @@
     "react-pdf": "^10.3.0",
     "react-router-dom": "6.29.0",
     "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "twilio": "^5.12.1"
   },
   "devDependencies": {
     "@babel/core": "^7.14.5",

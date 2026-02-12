@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Star,
   Store,
+  Support as SupportIcon,
   Timeline as TimelineIcon,
 } from '@mui/icons-material';
 import {
@@ -50,14 +51,18 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useOrderById } from '../../hooks/useOrderById';
+import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
 import ConfirmationModal from '../common/ConfirmationModal';
+import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import DeliveryTimeWindowDisplay from '../common/DeliveryTimeWindowDisplay';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import RatingDialog from '../dialogs/RatingDialog';
+import ReportIssueDialog from '../dialogs/ReportIssueDialog';
 import AgentActions from '../orders/AgentActions';
 import AgentOrderAlerts from '../orders/AgentOrderAlerts';
 import BusinessActions from '../orders/BusinessActions';
@@ -201,6 +206,11 @@ const ManageOrderPage: React.FC = () => {
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
+  const { isActive: orderSubscriptionActive } = useOrderSubscription({
+    orderId: orderId ?? null,
+    onOrderUpdate: refetch,
+    enabled: Boolean(orderId),
+  });
 
   const {
     cancelOrder,
@@ -218,7 +228,9 @@ const ManageOrderPage: React.FC = () => {
   } | null>(null);
   const [notes, setNotes] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [reportIssueDialogOpen, setReportIssueDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const api = useApiClient();
   const [notificationAlert, setNotificationAlert] = useState<{
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
@@ -498,7 +510,7 @@ const ManageOrderPage: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Stack direction="row" spacing={1}>
+              <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   color={getStatusColor(order.current_status) as any}
@@ -506,6 +518,15 @@ const ManageOrderPage: React.FC = () => {
                   size="medium"
                   sx={{ fontWeight: 600, px: 2, py: 2.5 }}
                 />
+                {orderSubscriptionActive && (
+                  <Chip
+                    size="small"
+                    label={t('orders.liveUpdates', 'Live')}
+                    color="success"
+                    variant="outlined"
+                    sx={{ fontWeight: 500 }}
+                  />
+                )}
                 <IconButton
                   onClick={refetch}
                   disabled={loading}
@@ -1182,6 +1203,18 @@ const ManageOrderPage: React.FC = () => {
                       <DeliveryTimeWindowDisplay order={order} />
                     </Box>
 
+                    {/* Track your delivery - client only when order is in transit */}
+                    {profile?.client &&
+                      ['picked_up', 'in_transit', 'out_for_delivery'].includes(
+                        order.current_status
+                      ) && (
+                        <DeliveryTrackingMap
+                          orderId={order.id}
+                          pickupAddress={order.business_location?.address}
+                          deliveryAddress={order.delivery_address}
+                        />
+                      )}
+
                     {/* Agent Info */}
                     {order.assigned_agent && (
                       <Box>
@@ -1518,6 +1551,22 @@ const ManageOrderPage: React.FC = () => {
                     >
                       {t('orders.actions.viewHistory', 'View History')}
                     </Button>
+
+                    {/* Report issue - client only for delivered/failed/complete/refunded */}
+                    {profile?.client &&
+                      ['delivered', 'failed', 'complete', 'refunded'].includes(
+                        order.current_status
+                      ) && (
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          startIcon={<SupportIcon />}
+                          onClick={() => setReportIssueDialogOpen(true)}
+                          fullWidth
+                        >
+                          {t('support.reportIssue', 'Report an issue')}
+                        </Button>
+                      )}
                   </Stack>
                 </CardContent>
               </Card>
@@ -1610,6 +1659,21 @@ const ManageOrderPage: React.FC = () => {
           })) || []
         }
         orderNumber={order.order_number}
+      />
+
+      {/* Report issue dialog */}
+      <ReportIssueDialog
+        open={reportIssueDialogOpen}
+        onClose={() => setReportIssueDialogOpen(false)}
+        orderId={order.id}
+        orderNumber={order.order_number}
+        onSubmit={async (payload) => {
+          await api.post('/support/tickets', payload);
+          handleShowNotification(
+            t('support.ticketCreated', 'Support ticket created. We will get back to you soon.'),
+            'success'
+          );
+        }}
       />
 
       {/* Rating Dialog */}

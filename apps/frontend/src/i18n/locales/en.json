@@ -330,6 +330,14 @@
         }
       }
     },
+    "paymentApproval": {
+      "title": "Approve Payment on Your Phone",
+      "message": "A payment request has been sent to your phone. Please check your phone and approve the payment request to complete claiming this order.",
+      "orderNumber": "Order Number",
+      "instruction": "Once you approve the payment on your phone, the order will be assigned to you. You can then proceed to view the order details and start the delivery process.",
+      "note": "After approving the payment, click \"Go to Order\" below to view the order details.",
+      "goToOrder": "Go to Order"
+    },
     "openOrders": {
       "available": "Available Orders",
       "claimed": "Already Claimed Orders",
@@ -1213,6 +1221,12 @@
     "availability": "Availability",
     "brand": "Brand",
     "browseItems": "Browse Items",
+    "fragile": "Fragile",
+    "liveUpdates": "Live",
+    "trackDelivery": "Track your delivery",
+    "driverLocation": "Driver location",
+    "updatedAt": "Updated",
+    "viewOnMap": "View on map",
     "business": {
       "actionRequired": {
         "delivered": "Action Required: Complete order",
@@ -1549,6 +1563,15 @@
       }
     }
   },
+  "items": {
+    "details": "Details",
+    "dimensions": "Dimensions",
+    "fragile": "Fragile",
+    "noReviews": "No reviews yet",
+    "reviews": "Reviews",
+    "specialHandling": "Special",
+    "weight": "Weight"
+  },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",
     "businessInformation": "Business Information",
@@ -1728,6 +1751,18 @@
     }
   },
   "support": {
+    "description": "Description",
+    "descriptionPlaceholder": "Describe what happened...",
+    "reportIssue": "Report an issue",
+    "subject": "Subject",
+    "subjectPlaceholder": "Brief summary of the issue",
+    "submit": "Submit",
+    "type": "Type",
+    "types": {
+      "complaint": "Complaint",
+      "dispute": "Dispute",
+      "question": "Question"
+    },
     "contact": {
       "description": "Choose the best way to reach us based on your needs",
       "email": {

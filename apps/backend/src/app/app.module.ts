@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
@@ -27,6 +30,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
 import { ServicesModule } from '../services/services.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
+import { SupportModule } from '../support/support.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
 import { AppController } from './app.controller';
@@ -42,6 +46,13 @@ import { AppService } from './app.service';
       envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     WinstonModule.forRootAsync({
       useFactory: () => {
         return createWinstonConfig({
@@ -57,6 +68,7 @@ import { AppService } from './app.service';
         });
       },
     }),
+    AnalyticsModule,
     AuthModule,
     HasuraModule,
     InventoryItemsModule,
@@ -80,8 +92,15 @@ import { AppService } from './app.service';
     SubcategoriesModule,
     AiModule,
     DeliveryModule,
+    SupportModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
