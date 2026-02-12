@@ -1000,7 +1000,8 @@
       "title": "Client Dashboard",
       "subtitle": "Welcome back, {{name}}! Browse available items and manage your orders."
     },
-    "availableItems": "Available Items"
+    "availableItems": "Available Items",
+    "ordersRequiringAction": "Orders Requiring Action"
   },
   "faq": {
     "agent": {
@@ -1189,6 +1190,8 @@
     "title": "Order History"
   },
   "orders": {
+    "completeOrder": "Complete Order",
+    "orderImages": "Order Images",
     "actions": {
       "cancel": "Cancel",
       "completeOrder": "Complete Order",
@@ -1752,6 +1755,7 @@
   },
   "support": {
     "description": "Description",
+    "subtitle": "We're here to help you every step of the way",
     "descriptionPlaceholder": "Describe what happened...",
     "reportIssue": "Report an issue",
     "subject": "Subject",
@@ -1796,12 +1800,16 @@
     "faq": {
       "account": {
         "createAccount": "How do I create an account?",
+        "createAccountAnswer": "Click \"Sign Up\" and choose your account type (Client, Agent, or Business). Follow the verification process to activate your account.",
         "forgotPassword": "I forgot my password",
+        "forgotPasswordAnswer": "Click \"Forgot Password\" on the login page and follow the instructions sent to your email to reset your password.",
         "title": "Account & Profile",
-        "updateProfile": "How do I update my profile?"
+        "updateProfile": "How do I update my profile?",
+        "updateProfileAnswer": "Go to your profile page and click \"Edit\" to update your information. Some changes may require verification."
       },
       "delivery": {
         "deliveryFees": "How are delivery fees calculated?",
+        "deliveryFeesAnswer": "Delivery fees are calculated based on distance, item weight, and delivery urgency. You'll see the exact fee before confirming your order.",
         "deliveryTime": "How long does delivery take?",
         "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
         "title": "Delivery & Tracking",
@@ -1810,7 +1818,9 @@
       },
       "ordering": {
         "cancelOrder": "Can I cancel my order?",
+        "cancelOrderAnswer": "Orders can be cancelled within 30 minutes of placement if they haven't been confirmed by the business. Contact support for assistance.",
         "howToOrder": "How do I place an order?",
+        "howToOrderAnswer": "To place an order, browse our items, select what you want, add to cart, and proceed to checkout. You'll need to create an account and add payment method.",
         "paymentMethods": "What payment methods do you accept?",
         "paymentMethodsAnswer": "We accept Airtel Money, MTN Mobile Money, and will soon support credit cards. All payments are secure and encrypted.",
         "title": "Ordering & Payments"

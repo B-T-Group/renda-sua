@@ -1002,7 +1002,8 @@
       "title": "Tableau de bord client",
       "subtitle": "Bon retour, {{name}} ! Parcourez les articles disponibles et gérez vos commandes."
     },
-    "availableItems": "Articles disponibles"
+    "availableItems": "Articles disponibles",
+    "ordersRequiringAction": "Commandes nécessitant une action"
   },
   "faq": {
     "agent": {
@@ -1191,6 +1192,8 @@
     "title": "Historique des Commandes"
   },
   "orders": {
+    "completeOrder": "Terminer la Commande",
+    "orderImages": "Images de la commande",
     "actions": {
       "cancel": "Annuler",
       "completeOrder": "Terminer la Commande",
@@ -1760,6 +1763,7 @@
   },
   "support": {
     "description": "Description",
+    "subtitle": "Nous sommes là pour vous aider à chaque étape",
     "descriptionPlaceholder": "Décrivez ce qui s'est passé...",
     "reportIssue": "Signaler un problème",
     "subject": "Sujet",
@@ -1803,22 +1807,28 @@
     },
     "faq": {
       "account": {
-        "createAccount": "How do I create an account?",
-        "forgotPassword": "I forgot my password",
-        "title": "Account & Profile",
-        "updateProfile": "How do I update my profile?"
+        "createAccount": "Comment créer un compte ?",
+        "createAccountAnswer": "Cliquez sur \"S'inscrire\" et choisissez votre type de compte (Client, Agent ou Entreprise). Suivez le processus de vérification pour activer votre compte.",
+        "forgotPassword": "J'ai oublié mon mot de passe",
+        "forgotPasswordAnswer": "Cliquez sur \"Mot de passe oublié\" sur la page de connexion et suivez les instructions envoyées à votre e-mail pour réinitialiser votre mot de passe.",
+        "title": "Compte et Profil",
+        "updateProfile": "Comment mettre à jour mon profil ?",
+        "updateProfileAnswer": "Allez sur votre page de profil et cliquez sur \"Modifier\" pour mettre à jour vos informations. Certaines modifications peuvent nécessiter une vérification."
       },
       "delivery": {
-        "deliveryFees": "How are delivery fees calculated?",
-        "deliveryTime": "How long does delivery take?",
+        "deliveryFees": "Comment les frais de livraison sont-ils calculés ?",
+        "deliveryFeesAnswer": "Les frais de livraison sont calculés en fonction de la distance, du poids des articles et de l'urgence de la livraison. Vous verrez le montant exact avant de confirmer votre commande.",
+        "deliveryTime": "Combien de temps prend la livraison ?",
         "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
         "title": "Delivery & Tracking",
         "trackOrder": "How do I track my order?",
         "trackOrderAnswer": "You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email."
       },
       "ordering": {
-        "cancelOrder": "Can I cancel my order?",
-        "howToOrder": "How do I place an order?",
+        "cancelOrder": "Puis-je annuler ma commande ?",
+        "cancelOrderAnswer": "Les commandes peuvent être annulées dans les 30 minutes suivant leur création si elles n'ont pas été confirmées par l'entreprise. Contactez le support pour assistance.",
+        "howToOrder": "Comment passer une commande ?",
+        "howToOrderAnswer": "Pour passer une commande, parcourez nos articles, sélectionnez ce que vous voulez, ajoutez au panier et passez au paiement. Vous devrez créer un compte et ajouter un moyen de paiement.",
         "paymentMethods": "What payment methods do you accept?",
         "paymentMethodsAnswer": "We accept Airtel Money, MTN Mobile Money, and will soon support credit cards. All payments are secure and encrypted.",
         "title": "Ordering & Payments"

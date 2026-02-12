@@ -164,7 +164,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               fullWidth
               label={t('business.items.filters.search')}
@@ -177,7 +177,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>{t('business.items.filters.status')}</InputLabel>
               <Select
@@ -195,7 +195,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>{t('business.items.filters.brand')}</InputLabel>
               <Select
@@ -214,7 +214,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>{t('business.items.filters.category')}</InputLabel>
               <Select
@@ -233,7 +233,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={12}>
             <Typography variant="body2" color="text.secondary">
               {t('business.items.filters.showing')}: {filteredItems.length} /{' '}
               {items.length}
@@ -245,7 +245,7 @@ const ItemsCards: React.FC<ItemsCardsProps> = ({
       {/* Items Cards */}
       <Grid container spacing={2}>
         {filteredItems.map((item) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
+          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.id}>
             <Card
               sx={{
                 height: '400px',

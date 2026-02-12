@@ -76,7 +76,7 @@ const ItemsTable: React.FC<ItemsTableProps> = ({
   return (
     <Grid container spacing={2}>
       {items.map((item) => (
-        <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.id}>
           <Card
             sx={{
               height: '400px',

@@ -299,7 +299,7 @@ const FailedDeliveriesPage: React.FC = () => {
             </Typography>
             <Grid container spacing={2}>
               {pendingDeliveries.map((failedDelivery) => (
-                <Grid item xs={12} key={failedDelivery.id}>
+                <Grid size={12} key={failedDelivery.id}>
                   <Card>
                     <CardContent>
                       <Stack spacing={2}>
@@ -412,7 +412,7 @@ const FailedDeliveriesPage: React.FC = () => {
             </Typography>
             <Grid container spacing={2}>
               {completedDeliveries.map((failedDelivery) => (
-                <Grid item xs={12} key={failedDelivery.id}>
+                <Grid size={12} key={failedDelivery.id}>
                   <Card variant="outlined">
                     <CardContent>
                       <Stack spacing={2}>

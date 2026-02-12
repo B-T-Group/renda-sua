@@ -330,7 +330,7 @@ const SupportPage: React.FC = () => {
 
       <Grid container spacing={4}>
         {/* Contact Support Section */}
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Paper sx={{ p: 4, mb: 4 }}>
             <Typography
               variant="h4"
@@ -349,7 +349,7 @@ const SupportPage: React.FC = () => {
 
             <Grid container spacing={3}>
               {contactMethods.map((method, index) => (
-                <Grid item xs={12} sm={6} md={3} key={index}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                   <Card
                     sx={{
                       height: '100%',
@@ -393,7 +393,7 @@ const SupportPage: React.FC = () => {
         </Grid>
 
         {/* Emergency Support */}
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Alert
             severity="error"
             icon={<Emergency />}
@@ -419,7 +419,7 @@ const SupportPage: React.FC = () => {
         </Grid>
 
         {/* FAQ Section */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Typography
             variant="h4"
             gutterBottom
@@ -474,7 +474,7 @@ const SupportPage: React.FC = () => {
         </Grid>
 
         {/* Self-Help Resources */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Typography
             variant="h5"
             gutterBottom
@@ -622,7 +622,7 @@ const SupportPage: React.FC = () => {
         </Grid>
 
         {/* Feedback Section */}
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Paper sx={{ p: 4 }}>
             <Typography
               variant="h4"
@@ -641,7 +641,7 @@ const SupportPage: React.FC = () => {
 
             <Box component="form" onSubmit={handleFeedbackSubmit}>
               <Grid container spacing={3}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     label={t('support.feedback.name', 'Name')}
@@ -652,7 +652,7 @@ const SupportPage: React.FC = () => {
                     required
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     label={t('support.feedback.email', 'Email')}
@@ -667,7 +667,7 @@ const SupportPage: React.FC = () => {
                     required
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <TextField
                     fullWidth
                     label={t('support.feedback.subject', 'Subject')}
@@ -681,7 +681,7 @@ const SupportPage: React.FC = () => {
                     required
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <TextField
                     fullWidth
                     label={t('support.feedback.message', 'Message')}
@@ -697,7 +697,7 @@ const SupportPage: React.FC = () => {
                     required
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Button
                     type="submit"
                     variant="contained"

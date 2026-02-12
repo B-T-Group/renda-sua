@@ -85,7 +85,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
           opacity: isEnabled ? 1 : 0.7,
         }}
       >
-        <Grid item xs={2} sm={1}>
+        <Grid size={{ xs: 2, sm: 1 }}>
           <Checkbox
             checked={isEnabled}
             onChange={(event) =>
@@ -93,7 +93,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
             }
           />
         </Grid>
-        <Grid item xs={10} sm={3}>
+        <Grid size={{ xs: 10, sm: 3 }}>
           <Box
             sx={{
               display: 'flex',
@@ -108,7 +108,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
             </Typography>
           </Box>
         </Grid>
-        <Grid item xs={6} sm={4}>
+        <Grid size={{ xs: 6, sm: 4 }}>
           <TextField
             fullWidth
             type="time"
@@ -122,7 +122,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
             inputProps={{ step: 900 }}
           />
         </Grid>
-        <Grid item xs={6} sm={4}>
+        <Grid size={{ xs: 6, sm: 4 }}>
           <TextField
             fullWidth
             type="time"
@@ -164,8 +164,8 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          <Grid item sm={1} />
-          <Grid item sm={3}>
+          <Grid size={{ xs: 12, sm: 1 }} />
+          <Grid size={{ xs: 12, sm: 3 }}>
             <Box
               sx={{
                 display: 'flex',
@@ -181,12 +181,12 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
               </Typography>
             </Box>
           </Grid>
-          <Grid item sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <Typography variant="caption" color="text.secondary">
               {t('admin.applicationSetup.startTime', 'Start time')}
             </Typography>
           </Grid>
-          <Grid item sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <Typography variant="caption" color="text.secondary">
               {t('admin.applicationSetup.endTime', 'End time')}
             </Typography>

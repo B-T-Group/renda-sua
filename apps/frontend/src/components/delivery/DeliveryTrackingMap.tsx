@@ -1,4 +1,16 @@
-import { Box, Button, Card, CardContent, Link, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Link,
+  Typography,
+} from '@mui/material';
+import Close from '@mui/icons-material/Close';
 import LocationOn from '@mui/icons-material/LocationOn';
 import LocalShipping from '@mui/icons-material/LocalShipping';
 import Store from '@mui/icons-material/Store';
@@ -58,6 +70,7 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
     updatedAt: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mapModalOpen, setMapModalOpen] = useState(false);
 
   const fetchAgentLocation = useCallback(async () => {
     try {
@@ -114,7 +127,15 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
       ? `https://www.google.com/maps?q=${agentLocation.latitude},${agentLocation.longitude}`
       : null;
 
+  const mapEmbedUrl = agentMapsUrl
+    ? `${agentMapsUrl}&z=15&output=embed`
+    : null;
+
+  const openMapModal = () => setMapModalOpen(true);
+  const closeMapModal = () => setMapModalOpen(false);
+
   return (
+    <>
     <Card variant="outlined" sx={{ mt: 2 }}>
       <CardContent>
         <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -163,10 +184,10 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
                 </Typography>
                 {agentMapsUrl && (
                   <Link
-                    href={agentMapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    sx={{ fontSize: '0.875rem' }}
+                    component="button"
+                    variant="body2"
+                    onClick={openMapModal}
+                    sx={{ fontSize: '0.875rem', cursor: 'pointer' }}
                   >
                     {t('orders.viewOnMap', 'View on map')}
                   </Link>
@@ -197,6 +218,40 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
         </Box>
       </CardContent>
     </Card>
+
+    <Dialog
+      open={mapModalOpen}
+      onClose={closeMapModal}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: { height: '80vh', minHeight: 400 },
+      }}
+    >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+        {t('orders.driverLocation', 'Driver location')}
+        <IconButton aria-label="close" onClick={closeMapModal} size="small">
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0, overflow: 'hidden', display: 'flex' }}>
+        {mapEmbedUrl && (
+          <iframe
+            title={t('orders.viewOnMap', 'View on map')}
+            src={mapEmbedUrl}
+            style={{
+              border: 0,
+              flex: 1,
+              minHeight: 360,
+              width: '100%',
+            }}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  </>
   );
 };
 

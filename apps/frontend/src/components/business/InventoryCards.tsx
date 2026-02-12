@@ -172,7 +172,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               fullWidth
               label={t('business.inventory.filters.search')}
@@ -185,7 +185,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>
                 {t('business.inventory.filters.stockStatus')}
@@ -212,7 +212,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>
                 {t('business.inventory.filters.location')}
@@ -233,7 +233,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Typography variant="body2" color="text.secondary">
               {t('business.inventory.filters.showing')}: {filteredItems.length}{' '}
               / {items.length}
@@ -247,7 +247,7 @@ const InventoryCards: React.FC<InventoryCardsProps> = ({
         {filteredItems.map((item) => {
           const stockStatus = getStockStatus(item);
           return (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.id}>
               <Card
                 sx={{
                   height: '400px',
