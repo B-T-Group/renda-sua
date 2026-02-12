@@ -146,6 +146,11 @@ export interface OrderFilters {
   [key: string]: any;
 }
 
+interface UseOrdersOptions {
+  /** When false, skips the initial fetch (e.g. when user is not signed in). Default true. */
+  enabled?: boolean;
+}
+
 interface UseOrdersReturn {
   orders: Order[];
   loading: boolean;
@@ -154,9 +159,10 @@ interface UseOrdersReturn {
   refreshOrders: () => Promise<void>;
 }
 
-export const useOrders = (): UseOrdersReturn => {
+export const useOrders = (options?: UseOrdersOptions): UseOrdersReturn => {
+  const enabled = options?.enabled !== false;
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [lastFilters, setLastFilters] = useState<OrderFilters | undefined>();
   const apiClient = useApiClient();
@@ -218,8 +224,12 @@ export const useOrders = (): UseOrdersReturn => {
   }, [fetchOrders, lastFilters]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    if (enabled) {
+      fetchOrders();
+    } else {
+      setLoading(false);
+    }
+  }, [enabled, fetchOrders]);
 
   return {
     orders,

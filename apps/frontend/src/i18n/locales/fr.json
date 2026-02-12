@@ -890,6 +890,7 @@
     "apply": "Appliquer les Filtres",
     "available": "disponible",
     "back": "Retour",
+    "brand": "Marque",
     "browseItems": "Parcourir les Articles",
     "business": "Entreprise",
     "cancel": "Annuler",
@@ -1154,6 +1155,9 @@
     "sending": "Envoi en cours...",
     "title": "Messages",
     "viewAll": "Voir Tous les Messages"
+  },
+  "nav": {
+    "support": "Assistance"
   },
   "orderActions": {
     "cancelOrder": "Annuler la Commande",
@@ -1638,7 +1642,12 @@
       "locationFilterNote": "Les articles sont filtrés en fonction de votre localisation",
       "state": "État/Province",
       "country": "Pays",
-      "availableItems": "Articles Disponibles"
+      "availableItems": "Articles Disponibles",
+      "authCta": {
+        "button": "Se connecter",
+        "description": "Créez un compte pour parcourir et commander des articles.",
+        "title": "Connectez-vous pour passer des commandes"
+      }
     }
   },
   "rating": {

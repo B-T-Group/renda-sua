@@ -889,6 +889,7 @@
     "apply": "Apply Filters",
     "available": "available",
     "back": "Back",
+    "brand": "Brand",
     "browseItems": "Browse Items",
     "business": "Business",
     "cancel": "Cancel",
@@ -1152,6 +1153,9 @@
     "sending": "Sending...",
     "title": "Messages",
     "viewAll": "View All Messages"
+  },
+  "nav": {
+    "support": "Support"
   },
   "orderActions": {
     "cancelOrder": "Cancel Order",
@@ -1630,7 +1634,12 @@
       "locationFilterNote": "Items are filtered based on your location",
       "state": "State",
       "country": "Country",
-      "availableItems": "Available Items"
+      "availableItems": "Available Items",
+      "authCta": {
+        "button": "Sign In",
+        "description": "Create an account to browse and order items.",
+        "title": "Sign in to place orders"
+      }
     }
   },
   "rating": {

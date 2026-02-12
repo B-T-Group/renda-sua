@@ -479,16 +479,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               Available to Clients Only
             </Button>
           ) : isPublicView ? (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<ShoppingCart />}
-              onClick={() => onOrderClick(inventory)}
-              size="small"
-              sx={{ width: '75%' }}
-            >
-              {loginButtonText}
-            </Button>
+            null
           ) : showCartButtons && onAddToCart ? (
             <Box
               sx={{

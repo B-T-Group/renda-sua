@@ -11,17 +11,13 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   Container,
-  InputAdornment,
   Pagination,
   Paper,
   Skeleton,
-  TextField,
   Typography,
 } from '@mui/material';
-import { Country, State } from 'country-state-city';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
@@ -33,7 +29,9 @@ import {
 } from '../../hooks/useInventoryItems';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
-import ItemsFilter from '../common/ItemsFilter';
+import ItemsPageFilter, {
+  ItemsPageFilterState,
+} from '../common/ItemsPageFilter';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import SEOHead from '../seo/SEOHead';
@@ -63,6 +61,11 @@ const ItemsPage: React.FC = () => {
   const { addToCart } = useCart();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<ItemsPageFilterState>({
+    category: '',
+    subcategory: '',
+    brand: '',
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const itemsPerPage = 12;
@@ -87,31 +90,22 @@ const ItemsPage: React.FC = () => {
       }),
   });
 
-  // Dashboard-specific hooks for authenticated clients
-  const { orders, refreshOrders } = useOrders();
+  // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
+  const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
 
-  // Filter inventory items based on search (only for public users)
-  const filteredItemsFromSearch = inventoryItems.filter(
-    (inventoryItem: InventoryItem) => {
-      if (!searchTerm) return true;
+  // Display items from ItemsPageFilter; when no filters applied, show inventoryItems until filter callback runs
+  const displayItems = useMemo(() => {
+    if (filteredItems.length > 0) return filteredItems;
+    const noFilters =
+      !searchTerm && !filters.category && !filters.subcategory && !filters.brand;
+    if (noFilters) return inventoryItems;
+    return [];
+  }, [filteredItems, inventoryItems, searchTerm, filters]);
 
-      return (
-        inventoryItem.item.name
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        inventoryItem.item.description
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        inventoryItem.item.brand?.name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase())
-      );
-    }
-  );
-
-  // Use ItemsFilter result if available, otherwise use search-filtered items
-  const displayItems =
-    filteredItems.length > 0 ? filteredItems : filteredItemsFromSearch;
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters.category, filters.subcategory, filters.brand]);
 
   // Pagination
   const totalPages = Math.ceil(displayItems.length / itemsPerPage);
@@ -209,30 +203,15 @@ const ItemsPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Get user's primary address for location display
-  const primaryAddress =
-    profile?.addresses?.find((addr) => addr.is_primary) ||
-    profile?.addresses?.[0];
-
-  // Convert country code to country name
-  const userCountryName = useMemo(() => {
-    if (!primaryAddress?.country) return null;
-    const countryCode = primaryAddress.country;
-    const country = Country.getCountryByCode(countryCode);
-    return country?.name || countryCode;
-  }, [primaryAddress?.country]);
-
-  // Convert state code to state name
-  const userStateName = useMemo(() => {
-    if (!primaryAddress?.state || !primaryAddress?.country) return null;
-    const stateCode = primaryAddress.state;
-    const countryCode = primaryAddress.country;
-    const state = State.getStateByCodeAndCountry(stateCode, countryCode);
-    return state?.name || stateCode;
-  }, [primaryAddress?.state, primaryAddress?.country]);
-
   // Check if any filters are active
-  const hasActiveFilters = searchTerm;
+  const hasActiveFilters = Boolean(
+    searchTerm || filters.category || filters.subcategory || filters.brand
+  );
+
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setFilters({ category: '', subcategory: '', brand: '' });
+  };
 
   if (error) {
     return (
@@ -397,26 +376,6 @@ const ItemsPage: React.FC = () => {
         )}
       </Box>
 
-      {/* Search Controls - Only for public users */}
-      {!isAuthenticated && (
-        <Box sx={{ mb: 4 }}>
-          <TextField
-            fullWidth
-            placeholder={t('public.items.searchPlaceholder', 'Search items...')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ maxWidth: 400 }}
-          />
-        </Box>
-      )}
-
       {/* Items Section */}
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Typography
@@ -435,48 +394,16 @@ const ItemsPage: React.FC = () => {
             : t('public.items.availableItems', 'Available Items')}
         </Typography>
 
-        {/* Location Filter Note */}
-        {(userStateName || userCountryName) && (
-          <Alert severity="info" sx={{ mb: 3, mt: 2 }}>
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              {t(
-                'public.items.locationFilterNote',
-                'Items are filtered based on your location'
-              )}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-              {userStateName && (
-                <Chip
-                  label={`${t(
-                    'public.items.state',
-                    'State'
-                  )}: ${userStateName}`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-              {userCountryName && (
-                <Chip
-                  label={`${t(
-                    'public.items.country',
-                    'Country'
-                  )}: ${userCountryName}`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-            </Box>
-          </Alert>
-        )}
-
-        {/* Filter Component - Only for authenticated clients */}
-        {isClient && inventoryItems.length > 0 && (
-          <ItemsFilter
-            items={inventoryItems}
-            onFilterChange={setFilteredItems}
-            loading={loading}
-          />
-        )}
+        {/* Unified filter for all users */}
+        <ItemsPageFilter
+          items={inventoryItems}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onFilterChange={setFilteredItems}
+          loading={loading}
+        />
 
         {/* Items Grid */}
         {loading ? (
@@ -543,13 +470,13 @@ const ItemsPage: React.FC = () => {
                     'Check back soon for new items from our sellers.'
                   )}
             </Typography>
-            {searchTerm && (
+            {hasActiveFilters && (
               <Button
                 variant="outlined"
                 size="large"
-                onClick={() => setSearchTerm('')}
+                onClick={handleClearAllFilters}
               >
-                {t('public.items.clearSearch', 'Clear Search')}
+                {t('public.items.clearSearch', 'Clear filters')}
               </Button>
             )}
           </Box>
