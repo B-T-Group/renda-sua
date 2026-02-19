@@ -14,6 +14,7 @@ import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { BrandsModule } from '../brands/brands.module';
+import { BusinessItemsModule } from '../business-items/business-items.module';
 import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
@@ -88,6 +89,7 @@ import { AppService } from './app.service';
     AdminModule,
     NotificationsModule,
     BrandsModule,
+    BusinessItemsModule,
     CategoriesModule,
     SubcategoriesModule,
     AiModule,

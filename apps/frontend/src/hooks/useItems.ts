@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
+import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
@@ -107,81 +108,6 @@ export interface CreateBrandData {
   name: string;
   description: string;
 }
-
-const GET_ITEMS = `
-  query GetItems($businessId: uuid!) {
-    items(
-      where: { business_id: { _eq: $businessId } }
-      order_by: { name: asc }
-    ) {
-      id
-      name
-      description
-      item_sub_category_id
-      weight
-      weight_unit
-      dimensions
-      price
-      currency
-      sku
-      brand_id
-      model
-      color
-      is_fragile
-      is_perishable
-      requires_special_handling
-      max_delivery_distance
-      estimated_delivery_time
-      min_order_quantity
-      max_order_quantity
-      is_active
-      business_id
-      created_at
-      updated_at
-      brand {
-        id
-        name
-        description
-      }
-      item_sub_category {
-        id
-        name
-        item_category {
-          id
-          name
-        }
-      }
-      item_images {
-        id
-        image_url
-        image_type
-        alt_text
-        display_order
-        created_at
-      }
-      business_inventories {
-        id
-        item_id
-        business_location_id
-        quantity
-        computed_available_quantity
-        reserved_quantity
-        selling_price
-        unit_cost
-        reorder_point
-        reorder_quantity
-        is_active
-        created_at
-        updated_at
-        business_location {
-          id
-          name
-          address_id
-        }
-      }
-    }
-  }
-`;
 
 const GET_BRANDS = `
   query GetBrands {
@@ -301,7 +227,7 @@ export const useItems = (businessId?: string) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { execute: executeItemsQuery } = useGraphQLRequest(GET_ITEMS);
+  const apiClient = useApiClient();
   const { execute: executeSingleItemQuery } =
     useGraphQLRequest(GET_SINGLE_ITEM);
   const { execute: executeBrandsQuery } = useGraphQLRequest(GET_BRANDS);
@@ -432,9 +358,12 @@ export const useItems = (businessId?: string) => {
       setError(null);
 
       try {
-        const result = await executeItemsQuery({ businessId });
-        console.log('useItems: Fetch result:', result);
-        const fetchedItems = result.items || [];
+        const response = await apiClient.get<{
+          success: boolean;
+          data: { items: any[] };
+        }>('/business-items/items');
+        console.log('useItems: Fetch result:', response.data);
+        const fetchedItems = response.data?.data?.items ?? [];
         // Collect unique destination address IDs from all business_inventories
         const allAddressIds = fetchedItems
           .flatMap((item: any) =>
@@ -483,7 +412,7 @@ export const useItems = (businessId?: string) => {
         setLoading(false);
       }
     },
-    [businessId]
+    [businessId, apiClient, fetchDistanceMatrix]
   );
 
   const fetchSingleItem = useCallback(

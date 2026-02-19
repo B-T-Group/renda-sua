@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useApiClient } from './useApiClient';
 import { useGraphQLRequest } from './useGraphQLRequest';
 
 export interface BusinessInventoryItem {
@@ -154,72 +155,6 @@ const GET_BUSINESS_INVENTORY = `
   }
 `;
 
-const GET_AVAILABLE_ITEMS = `
-  query GetAvailableItems {
-    items(
-      where: { 
-        is_active: { _eq: true },
-        business: { is_verified: { _eq: true } }
-      }
-      order_by: { name: asc }
-    ) {
-      id
-      name
-      description
-      price
-      currency
-      weight
-      weight_unit
-      sku
-      brand {
-        id
-        name
-        description
-      }
-      model
-      color
-      is_fragile
-      is_perishable
-      requires_special_handling
-      max_delivery_distance
-      estimated_delivery_time
-      min_order_quantity
-      max_order_quantity
-      is_active
-      business {
-        id
-        name
-        is_verified
-      }
-    }
-  }
-`;
-
-const GET_BUSINESS_LOCATIONS = `
-  query GetBusinessLocations($businessId: uuid!) {
-    business_locations(
-      where: { business_id: { _eq: $businessId } }
-      order_by: { name: asc }
-    ) {
-      id
-      name
-      location_type
-      is_primary
-      created_at
-      updated_at
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-      }
-    }
-  }
-`;
-
 export const useBusinessInventory = (businessId?: string) => {
   const [inventory, setInventory] = useState<BusinessInventoryItem[]>([]);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
@@ -227,19 +162,10 @@ export const useBusinessInventory = (businessId?: string) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const apiClient = useApiClient();
   const { execute: executeInventoryQuery } = useGraphQLRequest(
     GET_BUSINESS_INVENTORY,
     { loadingMessage: 'common.fetchingInventory' }
-  );
-  const { execute: executeItemsQuery } = useGraphQLRequest(
-    GET_AVAILABLE_ITEMS,
-    {
-      loadingMessage: 'common.fetchingItems',
-    }
-  );
-  const { execute: executeLocationsQuery } = useGraphQLRequest(
-    GET_BUSINESS_LOCATIONS,
-    { loadingMessage: 'common.fetchingLocations' }
   );
 
   // Create mutation hooks at the top level
@@ -361,14 +287,17 @@ export const useBusinessInventory = (businessId?: string) => {
 
   const fetchAvailableItems = useCallback(async () => {
     try {
-      const result = await executeItemsQuery();
-      setAvailableItems(result.items || []);
+      const response = await apiClient.get<{
+        success: boolean;
+        data: { items: any[] };
+      }>('/business-items/available-items');
+      setAvailableItems(response.data?.data?.items ?? []);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to fetch available items'
       );
     }
-  }, [executeItemsQuery]);
+  }, [apiClient]);
 
   const fetchBusinessLocations = useCallback(async () => {
     if (!businessId) {
@@ -379,9 +308,12 @@ export const useBusinessInventory = (businessId?: string) => {
     }
 
     try {
-      const result = await executeLocationsQuery({ businessId });
-      console.log('useBusinessInventory: Locations fetch result:', result);
-      setBusinessLocations(result.business_locations || []);
+      const response = await apiClient.get<{
+        success: boolean;
+        data: { business_locations: any[] };
+      }>('/business-items/locations');
+      console.log('useBusinessInventory: Locations fetch result:', response.data);
+      setBusinessLocations(response.data?.data?.business_locations ?? []);
     } catch (err) {
       setError(
         err instanceof Error
@@ -389,7 +321,7 @@ export const useBusinessInventory = (businessId?: string) => {
           : 'Failed to fetch business locations'
       );
     }
-  }, [executeLocationsQuery, businessId]);
+  }, [apiClient, businessId]);
 
   const addInventoryItem = useCallback(
     async (itemData: AddInventoryItemData) => {

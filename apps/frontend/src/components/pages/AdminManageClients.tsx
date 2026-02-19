@@ -1,19 +1,20 @@
 import { Edit as EditIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  TextField,
-  Typography,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    Container,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
+    TextField,
+    Typography,
 } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,20 +62,29 @@ const AdminManageClients: React.FC = () => {
   };
 
   return (
-    <Box>
+    <Container maxWidth="lg" sx={{ py: 2, px: { xs: 2, sm: 3 } }}>
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          alignItems: { xs: 'stretch', sm: 'center' },
           gap: 2,
           mb: 2,
         }}
       >
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
           {t('admin.manageClients', 'Manage Clients')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1.5,
+            width: { xs: '100%', sm: 'auto' },
+            minWidth: { sm: 0 },
+          }}
+        >
           <TextField
             size="small"
             label={t('common.search', 'Search')}
@@ -83,8 +93,9 @@ const AdminManageClients: React.FC = () => {
               setPage(1);
               setSearch(e.target.value);
             }}
+            sx={{ minWidth: { sm: 200 } }}
           />
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
             <InputLabel id="clients-page-size">
               {t('common.pageSize', 'Page size')}
             </InputLabel>
@@ -120,8 +131,8 @@ const AdminManageClients: React.FC = () => {
         </Card>
       )}
 
-      <Card>
-        <CardContent>
+      <Card sx={{ overflow: 'hidden' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
           {loading ? (
             <Typography>Loading...</Typography>
           ) : (
@@ -151,14 +162,24 @@ const AdminManageClients: React.FC = () => {
               <Box
                 sx={{
                   display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
                   justifyContent: 'space-between',
-                  alignItems: 'center',
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                  gap: 1.5,
+                  pt: 1,
                 }}
               >
                 <Typography variant="body2" color="text.secondary">
                   {t('common.results', '{{count}} results', { count: total })}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: 1,
+                    alignItems: 'center',
+                    justifyContent: { xs: 'space-between', sm: 'flex-end' },
+                  }}
+                >
                   <Button
                     variant="outlined"
                     size="small"
@@ -167,7 +188,7 @@ const AdminManageClients: React.FC = () => {
                   >
                     {t('common.prev', 'Prev')}
                   </Button>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
                     {t('common.page', 'Page')} {page} /{' '}
                     {Math.max(1, Math.ceil((total || 0) / (limit || 1)))}
                   </Typography>
@@ -194,9 +215,15 @@ const AdminManageClients: React.FC = () => {
         onClose={() => setEditingId(null)}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: {
+            m: { xs: 2, sm: 3 },
+            maxHeight: { xs: 'calc(100% - 32px)', sm: 'calc(100% - 48px)' },
+          },
+        }}
       >
         <DialogTitle>Edit Client</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: { xs: 2, sm: 3 } }}>
           <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
             <TextField
               label="First Name"
@@ -221,14 +248,14 @@ const AdminManageClients: React.FC = () => {
             />
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
           <Button onClick={() => setEditingId(null)}>Cancel</Button>
           <Button variant="contained" onClick={handleSave}>
             Save
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 
