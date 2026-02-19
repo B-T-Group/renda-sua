@@ -215,6 +215,14 @@ const UPDATE_BUSINESS_INVENTORY = `
   }
 `;
 
+const GET_ITEM_SUB_CATEGORY_IDS = `
+  query GetItemSubCategoryIds {
+    item_sub_categories {
+      id
+    }
+  }
+`;
+
 const GET_ITEM_IMAGES = `
   query GetItemImages($itemId: uuid!) {
     item_images(where: { item_id: { _eq: $itemId } }, order_by: { display_order: asc }) {
@@ -253,6 +261,15 @@ export class BusinessItemsService {
       { businessId }
     );
     return result.items ?? [];
+  }
+
+  async getItemSubCategoryIds(): Promise<Set<number>> {
+    const result =
+      await this.hasuraUserService.executeQuery<{
+        item_sub_categories: { id: number }[];
+      }>(GET_ITEM_SUB_CATEGORY_IDS, {});
+    const list = result?.item_sub_categories ?? [];
+    return new Set(list.map((s) => s.id));
   }
 
   async getBusinessLocations(businessId: string) {
@@ -296,9 +313,12 @@ export class BusinessItemsService {
     userId: string,
     rows: CsvItemRowDto[]
   ): Promise<CsvUploadResultDto> {
-    const items = await this.getItems(businessId);
-    const locations = await this.getBusinessLocations(businessId);
-    const inventory = await this.getBusinessInventory(businessId);
+    const [items, locations, inventory, validSubCategoryIds] = await Promise.all([
+      this.getItems(businessId),
+      this.getBusinessLocations(businessId),
+      this.getBusinessInventory(businessId),
+      this.getItemSubCategoryIds(),
+    ]);
 
     const details: CsvUploadResultDto['details'] = {
       inserted: [],
@@ -349,10 +369,14 @@ export class BusinessItemsService {
             );
           }
 
+          const resolvedSubCategoryId =
+            row.item_sub_category_id != null && validSubCategoryIds.has(row.item_sub_category_id)
+              ? row.item_sub_category_id
+              : undefined;
           const itemData = {
             name: row.name,
             description: row.description ?? '',
-            item_sub_category_id: row.item_sub_category_id ?? 1,
+            ...(resolvedSubCategoryId !== undefined && { item_sub_category_id: resolvedSubCategoryId }),
             price: row.price,
             currency: row.currency,
             ...(row.sku === existingItem.sku || !existingItem.sku
@@ -391,10 +415,14 @@ export class BusinessItemsService {
             );
           }
 
+          const resolvedSubCategoryIdForInsert =
+            row.item_sub_category_id != null && validSubCategoryIds.has(row.item_sub_category_id)
+              ? row.item_sub_category_id
+              : undefined;
           const insertData = {
             name: row.name,
             description: row.description ?? '',
-            item_sub_category_id: row.item_sub_category_id ?? 1,
+            ...(resolvedSubCategoryIdForInsert !== undefined && { item_sub_category_id: resolvedSubCategoryIdForInsert }),
             price: row.price,
             currency: row.currency,
             business_id: businessId,
@@ -450,11 +478,20 @@ export class BusinessItemsService {
         };
 
         if (existingInv) {
+          const updatePayload = {
+            quantity: row.quantity,
+            reserved_quantity: row.reserved_quantity,
+            reorder_point: row.reorder_point,
+            reorder_quantity: row.reorder_quantity,
+            unit_cost: row.unit_cost,
+            selling_price: row.selling_price,
+            is_active: row.is_active ?? true,
+          };
           await this.hasuraUserService.executeMutation(
             UPDATE_BUSINESS_INVENTORY,
             {
               itemId: existingInv.id,
-              updates: inventoryPayload,
+              updates: updatePayload,
             }
           );
           details.updated.push(
