@@ -26,14 +26,9 @@ import { useSnackbar } from 'notistack';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import {
-  AddInventoryItemData,
-  useBusinessInventory,
-} from '../../hooks/useBusinessInventory';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import { useItemImages } from '../../hooks/useItemImages';
+import { useApiClient } from '../../hooks/useApiClient';
+import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems } from '../../hooks/useItems';
-import { ItemImage } from '../../types/image';
 import { CSV_ITEMS_TEMPLATE_HEADERS } from './csvItemsTemplate';
 
 interface CSVUploadDialogProps {
@@ -91,49 +86,6 @@ interface UploadResult {
   };
 }
 
-interface CreateItemData {
-  name: string;
-  description: string;
-  item_sub_category_id: number;
-  price: number;
-  currency: string;
-  business_id: string;
-  sku?: string;
-  weight?: number;
-  weight_unit?: string;
-  dimensions?: string;
-  color?: string;
-  model?: string;
-  is_fragile?: boolean;
-  is_perishable?: boolean;
-  requires_special_handling?: boolean;
-  min_order_quantity?: number;
-  max_order_quantity?: number;
-  is_active?: boolean;
-  brand_id?: string;
-}
-
-interface UpdateItemData {
-  name?: string;
-  description?: string;
-  item_sub_category_id?: number;
-  price?: number;
-  currency?: string;
-  sku?: string;
-  weight?: number;
-  weight_unit?: string;
-  dimensions?: string;
-  color?: string;
-  model?: string;
-  is_fragile?: boolean;
-  is_perishable?: boolean;
-  requires_special_handling?: boolean;
-  min_order_quantity?: number;
-  max_order_quantity?: number;
-  is_active?: boolean;
-  brand_id?: string;
-}
-
 export default function CSVUploadDialog({
   open,
   onClose,
@@ -141,12 +93,10 @@ export default function CSVUploadDialog({
 }: CSVUploadDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { createItem, updateItem, items } = useItems(businessId);
-  const { addInventoryItem, updateInventoryItem, inventory } =
+  const apiClient = useApiClient();
+  const { fetchItems } = useItems(businessId);
+  const { fetchInventory, refreshBusinessLocations } =
     useBusinessInventory(businessId);
-  const { locations } = useBusinessLocations(businessId);
-  const { uploadItemImage, createItemImage, fetchItemImages, deleteItemImage } =
-    useItemImages();
   const { profile } = useUserProfileContext();
 
   const [csvData, setCsvData] = useState<CSVItemWithInventory[]>([]);
@@ -259,224 +209,71 @@ export default function CSVUploadDialog({
     }
 
     setUploading(true);
-    const result: UploadResult = {
-      success: 0,
-      errors: 0,
-      details: {
-        inserted: [],
-        updated: [],
-        errors: [],
-      },
-    };
-
-    await handleUnifiedUpload(csvData, result);
-
-    setUploadResult(result);
-    setUploading(false);
-
-    if (result.success > 0) {
-      enqueueSnackbar(
-        t('business.csvUpload.uploadSuccess', {
-          success: result.success,
-          errors: result.errors,
-        }),
-        { variant: 'success' }
-      );
-    }
-  };
-
-  const handleUnifiedUpload = async (
-    data: CSVItemWithInventory[],
-    result: UploadResult
-  ) => {
-    const bucketName =
-      process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
-
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      try {
-        // Step 1: Create or update the item
-        const existingItem = items.find(
-          (existing) =>
-            existing.name.toLowerCase() === row.name.toLowerCase() ||
-            (row.sku &&
-              existing.sku &&
-              existing.sku.toLowerCase() === row.sku.toLowerCase())
-        );
-
-        let itemId: string;
-        if (existingItem) {
-          // Check if this is a SKU conflict (different item with same SKU)
-          const isSkuConflict =
-            existingItem.name.toLowerCase() !== row.name.toLowerCase() &&
-            row.sku &&
-            existingItem.sku &&
-            existingItem.sku.toLowerCase() === row.sku.toLowerCase();
-
-          if (isSkuConflict) {
-            throw new Error(
-              `SKU "${row.sku}" is already used by item "${existingItem.name}". Cannot update item "${row.name}" with conflicting SKU.`
-            );
-          }
-
-          // Update existing item - only pass item-specific fields, but skip SKU if it's different
-          const updateItemData: UpdateItemData = {
-            name: row.name,
-            description: row.description || '',
-            item_sub_category_id: row.item_sub_category_id || 1,
-            price: row.price,
-            currency: row.currency,
-            // Only update SKU if it's the same or if the existing item has no SKU
-            ...(row.sku === existingItem.sku || !existingItem.sku
-              ? { sku: row.sku }
-              : {}),
-            weight: row.weight,
-            weight_unit: row.weight_unit,
-            dimensions: row.dimensions?.trim() || undefined,
-            color: row.color,
-            model: row.model,
-            is_fragile: row.is_fragile,
-            is_perishable: row.is_perishable,
-            requires_special_handling: row.requires_special_handling,
-            min_order_quantity: row.min_order_quantity,
-            max_order_quantity: row.max_order_quantity,
-            is_active: row.is_active,
-            brand_id: row.brand_id,
-          };
-          await updateItem(existingItem.id, updateItemData);
-          result.details.updated.push(`Item: ${row.name}`);
-          itemId = existingItem.id;
-        } else {
-          // Check if SKU already exists in the database
-          const skuExists = items.some(
-            (existing) =>
-              row.sku &&
-              existing.sku &&
-              existing.sku.toLowerCase() === row.sku.toLowerCase()
-          );
-
-          if (skuExists) {
-            throw new Error(
-              `SKU "${row.sku}" already exists. Cannot create item "${row.name}" with duplicate SKU.`
-            );
-          }
-
-          // Create new item
-          const createData: CreateItemData = {
-            name: row.name,
-            description: row.description || '',
-            item_sub_category_id: row.item_sub_category_id || 1,
-            price: row.price,
-            currency: row.currency,
-            business_id: row.business_id,
-            sku: row.sku,
-            weight: row.weight,
-            weight_unit: row.weight_unit,
-            dimensions: row.dimensions?.trim() || undefined,
-            color: row.color,
-            model: row.model,
-            is_fragile: row.is_fragile,
-            is_perishable: row.is_perishable,
-            requires_special_handling: row.requires_special_handling,
-            min_order_quantity: row.min_order_quantity,
-            max_order_quantity: row.max_order_quantity,
-            is_active: row.is_active,
-            brand_id: row.brand_id,
-          };
-          const newItem = await createItem(createData);
-          itemId = newItem.id;
-          result.details.inserted.push(`Item: ${row.name}`);
-        }
-
-        // Step 2: Create or update inventory
-        const location = locations.find(
-          (existing) =>
-            existing.name.toLowerCase() ===
-            row.business_location_name.toLowerCase()
-        );
-
-        if (!location) {
-          throw new Error(`Location "${row.business_location_name}" not found`);
-        }
-
-        const existingInventory = inventory.find(
-          (existing) =>
-            existing.item_id === itemId &&
-            existing.business_location_id === location.id
-        );
-
-        const inventoryData: AddInventoryItemData = {
-          business_location_id: location.id,
-          item_id: itemId,
-          quantity: row.quantity,
-          reserved_quantity: row.reserved_quantity,
-          reorder_point: row.reorder_point,
-          reorder_quantity: row.reorder_quantity,
-          unit_cost: row.unit_cost,
-          selling_price: row.selling_price,
-          is_active: row.is_active ?? true,
+    try {
+      const response = await apiClient.post<{
+        success: boolean;
+        data: {
+          success: number;
+          inserted: number;
+          updated: number;
+          errors: number;
+          details: UploadResult['details'];
         };
+      }>('/business-items/csv-upload', { rows: csvData });
 
-        if (existingInventory) {
-          await updateInventoryItem(existingInventory.id, inventoryData);
-          result.details.updated.push(
-            `Inventory: ${row.name} at ${row.business_location_name}`
-          );
-        } else {
-          await addInventoryItem(inventoryData);
-          result.details.inserted.push(
-            `Inventory: ${row.name} at ${row.business_location_name}`
-          );
-        }
-
-        // Step 3: Add image if provided
-        if (row.image_url) {
-          try {
-            // Check if item already has a main image and delete it first
-            const existingImages = await fetchItemImages(itemId);
-            const existingMainImage = existingImages.find(
-              (img: ItemImage) => img.image_type === 'main'
-            );
-
-            if (existingMainImage) {
-              await deleteItemImage(existingMainImage.id);
-            }
-
-            // Create the image record with the provided URL
-            const imageData = {
-              item_id: itemId,
-              image_url: row.image_url,
-              image_type: 'main' as const,
-              alt_text: row.image_alt_text || row.name,
-              caption: row.image_caption,
-              display_order: 1,
-              uploaded_by: profile?.id || '',
-            };
-
-            await createItemImage(imageData);
-            result.details.inserted.push(`Image: ${row.name}`);
-          } catch (imageError) {
-            console.error('Failed to add image:', imageError);
-            // Don't fail the entire row for image errors
-            result.details.errors.push({
-              row: i + 2,
-              error: `Image upload failed: ${
-                imageError instanceof Error
-                  ? imageError.message
-                  : 'Unknown error'
-              }`,
-            });
+      const data = response.data?.data;
+      const result: UploadResult = data
+        ? {
+            success: data.success,
+            errors: data.errors,
+            details: data.details,
           }
-        }
+        : {
+            success: 0,
+            errors: csvData.length,
+            details: {
+              inserted: [],
+              updated: [],
+              errors: [
+                {
+                  row: 2,
+                  error: 'No response from server',
+                },
+              ],
+            },
+          };
 
-        result.success++;
-      } catch (error) {
-        result.errors++;
-        result.details.errors.push({
-          row: i + 2, // +2 because of 0-based index and header row
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+      setUploadResult(result);
+
+      if (result.success > 0) {
+        enqueueSnackbar(
+          t('business.csvUpload.uploadSuccess', {
+            success: result.success,
+            errors: result.errors,
+          }),
+          { variant: 'success' }
+        );
+        fetchItems(false);
+        fetchInventory();
+        refreshBusinessLocations();
       }
+    } catch (err: unknown) {
+      let errorMessage = 'Upload failed';
+      if (err instanceof Error) errorMessage = err.message;
+      const res = (err as { response?: { data?: { error?: string } } }).response;
+      if (res?.data?.error) errorMessage = res.data.error;
+      setUploadResult({
+        success: 0,
+        errors: csvData.length,
+        details: {
+          inserted: [],
+          updated: [],
+          errors: [{ row: 2, error: errorMessage }],
+        },
+      });
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setUploading(false);
     }
   };
 
