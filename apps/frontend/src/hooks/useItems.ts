@@ -220,7 +220,15 @@ const GET_SINGLE_ITEM = `
   }
 `;
 
-export const useItems = (businessId?: string) => {
+export interface UseItemsOptions {
+  /** When true, skip the initial fetch of items (e.g. when using page-data endpoint) */
+  skipInitialItemsFetch?: boolean;
+}
+
+export const useItems = (
+  businessId?: string,
+  options?: UseItemsOptions
+) => {
   const [items, setItems] = useState<Item[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [itemSubCategories, setItemSubCategories] = useState<any[]>([]);
@@ -525,10 +533,10 @@ export const useItems = (businessId?: string) => {
 
   useEffect(() => {
     console.log('useItems: useEffect triggered, businessId:', businessId);
-    if (businessId) {
+    if (businessId && !options?.skipInitialItemsFetch) {
       fetchItems(false);
     }
-  }, [businessId]);
+  }, [businessId, options?.skipInitialItemsFetch]);
 
   return {
     items,

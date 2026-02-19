@@ -33,6 +33,8 @@ export { useAgentOnboarding } from './useAgentOnboarding';
 export { useAgentOrders } from './useAgentOrders';
 
 // Business hooks
+export { useBusinessItemsPageData } from './useBusinessItemsPageData';
+export type { BusinessItemsPageData } from './useBusinessItemsPageData';
 export { useBusinessInventory } from './useBusinessInventory';
 export { useBusinessLocations } from './useBusinessLocations';
 export { useBusinessOrders } from './useBusinessOrders';

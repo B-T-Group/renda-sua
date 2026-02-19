@@ -25,6 +25,25 @@ export class BusinessItemsController {
     private readonly businessItemsService: BusinessItemsService
   ) {}
 
+  @Get('page-data')
+  @ApiOperation({
+    summary: 'Get all page data for business items (items, locations, available-items) in one request',
+  })
+  @ApiResponse({ status: 200, description: 'Page data retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  async getPageData() {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const data = await this.businessItemsService.getPageData(businessId);
+    return { success: true, data };
+  }
+
   @Get('items')
   @ApiOperation({ summary: 'Get items for the current business' })
   @ApiResponse({ status: 200, description: 'Items retrieved successfully' })

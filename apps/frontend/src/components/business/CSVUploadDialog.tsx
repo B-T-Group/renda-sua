@@ -27,14 +27,14 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
-import { useBusinessInventory } from '../../hooks/useBusinessInventory';
-import { useItems } from '../../hooks/useItems';
 import { CSV_ITEMS_TEMPLATE_HEADERS } from './csvItemsTemplate';
 
 interface CSVUploadDialogProps {
   open: boolean;
   onClose: () => void;
   businessId: string;
+  /** Called after a successful upload so the parent can refetch page data */
+  onUploadSuccess?: () => void;
 }
 
 interface CSVItemWithInventory {
@@ -90,13 +90,11 @@ export default function CSVUploadDialog({
   open,
   onClose,
   businessId,
+  onUploadSuccess,
 }: CSVUploadDialogProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const apiClient = useApiClient();
-  const { fetchItems } = useItems(businessId);
-  const { fetchInventory, refreshBusinessLocations } =
-    useBusinessInventory(businessId);
   const { profile } = useUserProfileContext();
 
   const [csvData, setCsvData] = useState<CSVItemWithInventory[]>([]);
@@ -210,6 +208,7 @@ export default function CSVUploadDialog({
 
     setUploading(true);
     try {
+      const CSV_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
       const response = await apiClient.post<{
         success: boolean;
         data: {
@@ -219,7 +218,9 @@ export default function CSVUploadDialog({
           errors: number;
           details: UploadResult['details'];
         };
-      }>('/business-items/csv-upload', { rows: csvData });
+      }>('/business-items/csv-upload', { rows: csvData }, {
+        timeout: CSV_UPLOAD_TIMEOUT_MS,
+      });
 
       const data = response.data?.data;
       const result: UploadResult = data
@@ -253,9 +254,7 @@ export default function CSVUploadDialog({
           }),
           { variant: 'success' }
         );
-        fetchItems(false);
-        fetchInventory();
-        refreshBusinessLocations();
+        onUploadSuccess?.();
       }
     } catch (err: unknown) {
       let errorMessage = 'Upload failed';

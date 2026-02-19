@@ -58,6 +58,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
 import AddItemDialog from '../business/AddItemDialog';
@@ -259,15 +260,28 @@ const BusinessItemsPage: React.FC = () => {
 
   const {
     items,
+    businessLocations,
+    loading: pageDataLoading,
+    error: pageDataError,
+    refetch: refetchPageData,
+  } = useBusinessItemsPageData(profile?.business?.id);
+
+  const {
     brands,
     itemSubCategories,
     loading: itemsLoading,
     error: itemsError,
-    fetchItems,
     fetchBrands,
     fetchItemSubCategories,
     updateItem,
-  } = useItems(profile?.business?.id);
+  } = useItems(profile?.business?.id, { skipInitialItemsFetch: true });
+
+  useBusinessInventory(profile?.business?.id, { skipInitialFetch: true });
+
+  const navigate = useNavigate();
+
+  const loading = pageDataLoading || itemsLoading;
+  const error = pageDataError || itemsError;
 
   // Inline-edit state (Table View) – per-field, triggered by cell click
   const [editingCell, setEditingCell] = useState<{
@@ -277,44 +291,22 @@ const BusinessItemsPage: React.FC = () => {
   const [draftValues, setDraftValues] = useState<InlineDraft | null>(null);
   const [inlineUpdateLoading, setInlineUpdateLoading] = useState(false);
 
-  const {
-    businessLocations,
-    loading: inventoryLoading,
-    refreshBusinessLocations,
-  } = useBusinessInventory(profile?.business?.id);
-
-  const navigate = useNavigate();
-
-  // Fetch data when component mounts
+  // Fetch brands and subcategories when component mounts (items/locations come from page-data)
   useEffect(() => {
     if (profile?.business?.id) {
-      fetchItems(false);
       fetchBrands();
       fetchItemSubCategories();
-      refreshBusinessLocations(); // Ensure business locations are loaded
     }
-  }, [
-    profile?.business?.id,
-    fetchItems,
-    fetchBrands,
-    fetchItemSubCategories,
-    refreshBusinessLocations,
-  ]);
+  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
 
-  // Refresh data when window regains focus or becomes visible (useful when returning from other pages)
+  // Refresh page data when window regains focus or becomes visible
   useEffect(() => {
     const handleFocus = () => {
-      if (profile?.business?.id) {
-        fetchItems(false);
-        refreshBusinessLocations();
-      }
+      if (profile?.business?.id) refetchPageData();
     };
 
     const handleVisibilityChange = () => {
-      if (!document.hidden && profile?.business?.id) {
-        fetchItems(false);
-        refreshBusinessLocations();
-      }
+      if (!document.hidden && profile?.business?.id) refetchPageData();
     };
 
     window.addEventListener('focus', handleFocus);
@@ -324,7 +316,7 @@ const BusinessItemsPage: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [profile?.business?.id, fetchItems, refreshBusinessLocations]);
+  }, [profile?.business?.id, refetchPageData]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -374,7 +366,7 @@ const BusinessItemsPage: React.FC = () => {
 
   const handleRefreshLocations = async () => {
     try {
-      await refreshBusinessLocations();
+      await refetchPageData();
       enqueueSnackbar(t('business.locations.locationsRefreshed'), {
         variant: 'success',
       });
@@ -441,6 +433,7 @@ const BusinessItemsPage: React.FC = () => {
         payload as Parameters<typeof updateItem>[1],
         { skipRefetch: true }
       );
+      await refetchPageData();
       enqueueSnackbar(t('business.items.itemUpdated'), { variant: 'success' });
       cancelInlineEdit();
     } catch (err) {
@@ -1167,7 +1160,7 @@ const BusinessItemsPage: React.FC = () => {
                       setSelectedDownloadLocationId(null);
                       setDownloadLocationDialogOpen(true);
                     }}
-                    disabled={itemsLoading || !items || items.length === 0}
+                    disabled={loading || !items || items.length === 0}
                   >
                     {t('business.items.download')}
                   </Button>
@@ -1184,7 +1177,7 @@ const BusinessItemsPage: React.FC = () => {
                     variant="outlined"
                     startIcon={<RefreshIcon />}
                     onClick={handleRefreshLocations}
-                    disabled={inventoryLoading}
+                    disabled={loading}
                   >
                     {t('business.locations.refresh')}
                   </Button>
@@ -1201,7 +1194,7 @@ const BusinessItemsPage: React.FC = () => {
                         );
                         return;
                       }
-                      refreshBusinessLocations();
+                      refetchPageData();
                       setShowAddItemDialog(true);
                     }}
                     disabled={businessLocations.length === 0}
@@ -1223,10 +1216,10 @@ const BusinessItemsPage: React.FC = () => {
             />
 
             {/* DataGrid */}
-            {itemsLoading ? (
+            {loading ? (
               <ItemsTableSkeleton />
-            ) : itemsError ? (
-              <Alert severity="error">{itemsError}</Alert>
+            ) : error ? (
+              <Alert severity="error">{error}</Alert>
             ) : (
               <div style={{ height: 'calc(100vh - 200px)', minHeight: 400, width: '100%' }}>
                 <DataGrid
@@ -1286,7 +1279,7 @@ const BusinessItemsPage: React.FC = () => {
                       setSelectedDownloadLocationId(null);
                       setDownloadLocationDialogOpen(true);
                     }}
-                    disabled={itemsLoading || !items || items.length === 0}
+                    disabled={loading || !items || items.length === 0}
                   >
                     {t('business.items.download')}
                   </Button>
@@ -1303,7 +1296,7 @@ const BusinessItemsPage: React.FC = () => {
                     variant="outlined"
                     startIcon={<RefreshIcon />}
                     onClick={handleRefreshLocations}
-                    disabled={inventoryLoading}
+                    disabled={loading}
                   >
                     {t('business.locations.refresh')}
                   </Button>
@@ -1350,10 +1343,10 @@ const BusinessItemsPage: React.FC = () => {
               filteredItemsCount={filteredItems.length}
             />
 
-            {itemsLoading ? (
+            {loading ? (
               <ItemsCardsSkeleton />
-            ) : itemsError ? (
-              <Alert severity="error">{itemsError}</Alert>
+            ) : error ? (
+              <Alert severity="error">{error}</Alert>
             ) : !filteredItems || filteredItems.length === 0 ? (
               <Alert severity="info">{t('business.items.noItemsFound')}</Alert>
             ) : (
@@ -1393,7 +1386,7 @@ const BusinessItemsPage: React.FC = () => {
         items={items}
         brands={brands}
         itemSubCategories={itemSubCategories}
-        loading={itemsLoading}
+        loading={loading}
       />
 
       <UpdateInventoryDialog
@@ -1407,7 +1400,7 @@ const BusinessItemsPage: React.FC = () => {
         }
         selectedInventory={updatingInventoryItem}
         onInventoryUpdated={() => {
-          fetchItems(false); // Refresh items list
+          refetchPageData();
         }}
       />
 
@@ -1415,6 +1408,7 @@ const BusinessItemsPage: React.FC = () => {
         open={showCSVUploadDialog}
         onClose={() => setShowCSVUploadDialog(false)}
         businessId={profile.business.id}
+        onUploadSuccess={refetchPageData}
       />
 
       {/* Download CSV – location select */}

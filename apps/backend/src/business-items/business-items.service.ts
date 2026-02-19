@@ -270,6 +270,19 @@ export class BusinessItemsService {
     return result.items ?? [];
   }
 
+  /**
+   * Fetch all data needed for the business items page in one call.
+   * Runs items, locations, and available-items queries in parallel.
+   */
+  async getPageData(businessId: string) {
+    const [items, business_locations, available_items] = await Promise.all([
+      this.getItems(businessId),
+      this.getBusinessLocations(businessId),
+      this.getAvailableItems(),
+    ]);
+    return { items, business_locations, available_items };
+  }
+
   async getBusinessInventory(businessId: string) {
     const result =
       await this.hasuraUserService.executeQuery<{

@@ -155,7 +155,15 @@ const GET_BUSINESS_INVENTORY = `
   }
 `;
 
-export const useBusinessInventory = (businessId?: string) => {
+export interface UseBusinessInventoryOptions {
+  /** When true, skip the initial fetch of inventory, locations, and available items (e.g. when using page-data) */
+  skipInitialFetch?: boolean;
+}
+
+export const useBusinessInventory = (
+  businessId?: string,
+  options?: UseBusinessInventoryOptions
+) => {
   const [inventory, setInventory] = useState<BusinessInventoryItem[]>([]);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [businessLocations, setBusinessLocations] = useState<any[]>([]);
@@ -386,6 +394,7 @@ export const useBusinessInventory = (businessId?: string) => {
   );
 
   useEffect(() => {
+    if (options?.skipInitialFetch) return;
     console.log(
       'useBusinessInventory: useEffect triggered, businessId:',
       businessId
@@ -395,7 +404,13 @@ export const useBusinessInventory = (businessId?: string) => {
       fetchBusinessLocations();
     }
     fetchAvailableItems();
-  }, [businessId, fetchInventory, fetchAvailableItems, fetchBusinessLocations]);
+  }, [
+    businessId,
+    options?.skipInitialFetch,
+    fetchInventory,
+    fetchAvailableItems,
+    fetchBusinessLocations,
+  ]);
 
   return {
     inventory,
