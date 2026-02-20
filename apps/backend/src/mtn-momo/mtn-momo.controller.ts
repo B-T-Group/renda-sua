@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 import type {
@@ -20,6 +21,7 @@ import type {
 import { MtnMomoService } from './mtn-momo.service';
 
 @Controller('mtn-momo')
+@Throttle({ short: { limit: 20, ttl: 60000 } })
 export class MtnMomoController {
   private readonly logger = new Logger(MtnMomoController.name);
 
