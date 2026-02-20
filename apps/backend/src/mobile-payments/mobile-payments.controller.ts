@@ -9,7 +9,6 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -65,7 +64,6 @@ export interface FreemopayCallbackDto {
 }
 
 @Controller('mobile-payments')
-@Throttle({ short: { limit: 20, ttl: 60000 } })
 export class MobilePaymentsController {
   private readonly logger = new Logger(MobilePaymentsController.name);
 

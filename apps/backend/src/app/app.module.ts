@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
@@ -47,13 +45,6 @@ import { AppService } from './app.service';
       envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
     }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
     WinstonModule.forRootAsync({
       useFactory: () => {
         return createWinstonConfig({
@@ -97,12 +88,6 @@ import { AppService } from './app.service';
     SupportModule,
   ],
   controllers: [AppController, AccountsController, MtnMomoController],
-  providers: [
-    AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

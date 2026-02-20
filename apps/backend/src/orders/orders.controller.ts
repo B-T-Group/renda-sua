@@ -16,7 +16,6 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { Public } from '../auth/public.decorator';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -37,7 +36,6 @@ export interface UpdateOrderStatusRequest {
 
 @ApiTags('Orders')
 @Controller('orders')
-@Throttle({ short: { limit: 30, ttl: 60000 } })
 export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
