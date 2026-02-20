@@ -200,7 +200,8 @@ export default (): Configuration => {
         process.env.AIRTEL_MONEY_DISBURSEMENT_PRIMARY_KEY ?? '',
       disbursementSecondaryKey:
         process.env.AIRTEL_MONEY_DISBURSEMENT_SECONDARY_KEY ?? '',
-      remittancePrimaryKey: process.env.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
+      remittancePrimaryKey:
+        process.env.AIRTEL_MONEY_REMITTANCE_PRIMARY_KEY ?? '',
       remittanceSecondaryKey:
         process.env.AIRTEL_MONEY_REMITTANCE_SECONDARY_KEY ?? '',
     },
@@ -224,9 +225,9 @@ export default (): Configuration => {
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
     },
     freemopay: {
-      baseUrl:
-        process.env.FREEMOPAY_BASE_URL || 'https://api-v2.freemopay.com',
-      appKey: process.env.FREEMOPAY_APP_KEY || '',
+      baseUrl: process.env.FREEMOPAY_BASE_URL || 'https://api-v2.freemopay.com',
+      appKey:
+        process.env.FREEMOPAY_APP_KEY || '5b084323-3fff-47e4-bbcb-a1970efe3051',
       secretKey: process.env.FREEMOPAY_SECRET_KEY || '',
       callbackUrl: process.env.FREEMOPAY_CALLBACK_URL || '',
     },
@@ -245,8 +246,7 @@ export default (): Configuration => {
         process.env.HASURA_GRAPHQL_ENDPOINT ||
         'http://localhost:8080/v1/graphql',
       adminSecret:
-        process.env.HASURA_GRAPHQL_ADMIN_SECRET ||
-        'myadminsecretkey',
+        process.env.HASURA_GRAPHQL_ADMIN_SECRET || 'myadminsecretkey',
     },
     aws: {
       region: process.env.AWS_REGION || 'ca-central-1',
@@ -293,11 +293,15 @@ export default (): Configuration => {
       apiUserId: process.env.MTN_MOMO_API_USER_ID,
       targetEnvironment: process.env.MTN_MOMO_TARGET_ENVIRONMENT || 'sandbox',
       collectionPrimaryKey: process.env.MTN_MOMO_COLLECTION_PRIMARY_KEY || '',
-      collectionSecondaryKey: process.env.MTN_MOMO_COLLECTION_SECONDARY_KEY || '',
-      disbursementPrimaryKey: process.env.MTN_MOMO_DISBURSEMENT_PRIMARY_KEY || '',
-      disbursementSecondaryKey: process.env.MTN_MOMO_DISBURSEMENT_SECONDARY_KEY || '',
+      collectionSecondaryKey:
+        process.env.MTN_MOMO_COLLECTION_SECONDARY_KEY || '',
+      disbursementPrimaryKey:
+        process.env.MTN_MOMO_DISBURSEMENT_PRIMARY_KEY || '',
+      disbursementSecondaryKey:
+        process.env.MTN_MOMO_DISBURSEMENT_SECONDARY_KEY || '',
       remittancePrimaryKey: process.env.MTN_MOMO_REMITTANCE_PRIMARY_KEY || '',
-      remittanceSecondaryKey: process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY || '',
+      remittanceSecondaryKey:
+        process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY || '',
       callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
     },
     order: {
@@ -319,10 +323,8 @@ export default (): Configuration => {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
       audience:
         process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
-      managementClientId:
-        process.env.AUTH0_MGMT_CLIENT_ID || '',
-      managementClientSecret:
-        process.env.AUTH0_MGMT_CLIENT_SECRET || '',
+      managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
+      managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
     },
     googleCache: {
       enabled: process.env.GOOGLE_CACHE_ENABLED !== 'false', // Default to true

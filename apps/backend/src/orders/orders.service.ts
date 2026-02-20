@@ -3518,8 +3518,22 @@ export class OrdersService {
         throw new Error(`Order with ID ${orderId} not found`);
       }
 
-      // Update order status to cancelled
-      await this.orderStatusService.updateOrderStatus(orderId, 'cancelled');
+      // Update order status to cancelled (system context - no request user)
+      const updateStatusMutation = `
+        mutation UpdateOrderStatusCancelled($orderId: uuid!, $newStatus: order_status!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: { current_status: $newStatus, updated_at: "now()" }
+          ) {
+            id
+            current_status
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(updateStatusMutation, {
+        orderId,
+        newStatus: 'cancelled',
+      });
 
       // Get user ID from the order (client user)
       const userId = order.client?.user?.id;
