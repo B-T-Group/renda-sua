@@ -27,6 +27,7 @@
     "class-validator": "^0.14.2",
     "country-currency-map": "^2.1.7",
     "country-to-currency": "^2.0.2",
+    "express": "^4.21.0",
     "google-libphonenumber": "^3.2.34",
     "graphql": "^16.11.0",
     "graphql-request": "^5.2.0",
