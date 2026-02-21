@@ -1066,6 +1066,20 @@ const BusinessItemsPage: React.FC = () => {
         .filter((name): name is string => Boolean(name)) || []
     )
   );
+  // Stats: total count and per-category count (for display at top)
+  const totalItemCount = items?.length ?? 0;
+  const categoryCountMap = (items || []).reduce<Record<string, number>>(
+    (acc, item) => {
+      const label =
+        item.item_sub_category?.name ?? t('business.items.filters.noCategory');
+      acc[label] = (acc[label] ?? 0) + 1;
+      return acc;
+    },
+    {}
+  );
+  const categoryCountEntries = Object.entries(categoryCountMap).sort(
+    ([a], [b]) => a.localeCompare(b)
+  );
   const brandsInItems = Array.from(
     new Set(
       items
@@ -1130,6 +1144,36 @@ const BusinessItemsPage: React.FC = () => {
       <Typography variant="h4" sx={{ mb: 0.5 }}>
         {t('business.items.title')}
       </Typography>
+
+      {/* Stats: total item count and per-category count */}
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 1.5,
+          mb: 1,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 0.5 }}>
+          {t('business.items.statsTotal', { count: totalItemCount })}
+        </Typography>
+        {categoryCountEntries.length > 0 && (
+          <Stack direction="row" flexWrap="wrap" gap={0.75} alignItems="center">
+            {categoryCountEntries.map(([categoryName, count]) => (
+              <Chip
+                key={categoryName}
+                size="small"
+                label={`${categoryName}: ${count}`}
+                variant="outlined"
+                sx={{ fontWeight: 500 }}
+              />
+            ))}
+          </Stack>
+        )}
+      </Paper>
 
       <Paper sx={{ width: '100%', mb: 0.5 }} elevation={0}>
         <Tabs
