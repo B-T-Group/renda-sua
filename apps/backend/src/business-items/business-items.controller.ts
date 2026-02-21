@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -87,6 +90,24 @@ export class BusinessItemsController {
   async getAvailableItems() {
     const items = await this.businessItemsService.getAvailableItems();
     return { success: true, data: { items } };
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Soft-delete an item (set status to deleted, clear location inventories)' })
+  @ApiResponse({ status: 204, description: 'Item deleted successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item not found or not owned by business' })
+  async deleteItem(@Param('id') id: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    await this.businessItemsService.deleteItem(businessId, id);
   }
 
   @Post('csv-upload')

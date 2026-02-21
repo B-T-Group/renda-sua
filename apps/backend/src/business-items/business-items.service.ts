@@ -1,11 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
     items(
-      where: { business_id: { _eq: $businessId } }
+      where: { business_id: { _eq: $businessId }, status: { _eq: active } }
       order_by: { name: asc }
     ) {
       id
@@ -107,6 +111,7 @@ const GET_AVAILABLE_ITEMS = `
     items(
       where: { 
         is_active: { _eq: true },
+        status: { _eq: active },
         business: { is_verified: { _eq: true } }
       }
       order_by: { name: asc }
@@ -251,6 +256,32 @@ const INSERT_ITEM_IMAGE = `
   }
 `;
 
+const GET_ITEM_BY_ID = `
+  query GetItemById($itemId: uuid!) {
+    items_by_pk(id: $itemId) {
+      id
+      business_id
+    }
+  }
+`;
+
+const DELETE_BUSINESS_INVENTORY_BY_ITEM = `
+  mutation DeleteBusinessInventoryByItem($itemId: uuid!) {
+    delete_business_inventory(where: { item_id: { _eq: $itemId } }) {
+      affected_rows
+    }
+  }
+`;
+
+const UPDATE_ITEM_STATUS = `
+  mutation UpdateItemStatus($itemId: uuid!, $status: item_status_enum!) {
+    update_items_by_pk(pk_columns: { id: $itemId }, _set: { status: $status }) {
+      id
+      status
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessItemsService {
   constructor(private readonly hasuraUserService: HasuraUserService) {}
@@ -306,6 +337,36 @@ export class BusinessItemsService {
         business_inventory: any[];
       }>(GET_BUSINESS_INVENTORY, { businessId });
     return result.business_inventory ?? [];
+  }
+
+  /**
+   * Soft-delete an item: clear business_inventory for the item, then set item status to 'deleted'.
+   * Throws 404 if item not found, 403 if item is not owned by the business.
+   */
+  async deleteItem(businessId: string, itemId: string): Promise<void> {
+    const itemResult = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = itemResult?.items_by_pk;
+    if (!item) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    if (item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found or not owned by business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    await this.hasuraUserService.executeMutation(DELETE_BUSINESS_INVENTORY_BY_ITEM, {
+      itemId,
+    });
+    await this.hasuraUserService.executeMutation(UPDATE_ITEM_STATUS, {
+      itemId,
+      status: 'deleted',
+    });
   }
 
   async processCsvRows(

@@ -58,6 +58,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
@@ -258,6 +259,7 @@ const BusinessItemsPage: React.FC = () => {
     stockFilter: 'all',
   });
 
+  const apiClient = useApiClient();
   const {
     items,
     businessLocations,
@@ -342,14 +344,17 @@ const BusinessItemsPage: React.FC = () => {
 
     setDeleteLoading(true);
     try {
-      // TODO: Implement item deletion
+      await apiClient.delete('/business-items/' + itemToDelete.id);
       enqueueSnackbar(t('business.items.itemDeleted'), {
         variant: 'success',
       });
       setShowDeleteConfirm(false);
       setItemToDelete(null);
-    } catch (error) {
-      enqueueSnackbar(t('business.items.deleteError'), {
+      await refetchPageData();
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error ?? t('business.items.deleteError');
+      enqueueSnackbar(message, {
         variant: 'error',
       });
     } finally {

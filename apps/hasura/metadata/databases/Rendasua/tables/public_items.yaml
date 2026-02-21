@@ -78,6 +78,7 @@ insert_permissions:
         - max_order_quantity
         - is_active
         - business_id
+        - status
 select_permissions:
   - role: agent
     permission:
@@ -104,6 +105,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - created_at
         - updated_at
       filter: {}
@@ -132,6 +134,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - created_at
         - updated_at
       filter: {}
@@ -160,6 +163,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - created_at
         - updated_at
       filter:
@@ -192,6 +196,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - created_at
         - updated_at
       filter: {}
@@ -220,6 +225,7 @@ select_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - created_at
         - updated_at
       filter: {}
@@ -247,6 +253,7 @@ update_permissions:
         - min_order_quantity
         - max_order_quantity
         - is_active
+        - status
         - updated_at
       filter:
         business:
