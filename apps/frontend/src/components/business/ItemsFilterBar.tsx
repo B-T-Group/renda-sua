@@ -138,8 +138,10 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     return chips;
   };
 
+  const inputSharpSx = { '& .MuiOutlinedInput-root': { borderRadius: 0 } };
+
   const FiltersContent = () => (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={inputSharpSx}>
       {/* Search */}
       <TextField
         fullWidth
@@ -268,7 +270,13 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     <Box>
       {/* Desktop Filters */}
       {!isMobile ? (
-        <Paper sx={{ p: 2, mb: 2 }}>
+        <Paper
+          sx={{
+            p: 2,
+            mb: 2,
+            '& .MuiOutlinedInput-root': { borderRadius: 0 },
+          }}
+        >
           <Stack spacing={2}>
             {/* First Row - Search and Main Filters */}
             <Stack direction="row" spacing={2} alignItems="center">
@@ -440,7 +448,13 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
       ) : (
         /* Mobile Filters */
         <>
-          <Paper sx={{ p: 2, mb: 2 }}>
+          <Paper
+            sx={{
+              p: 2,
+              mb: 2,
+              '& .MuiOutlinedInput-root': { borderRadius: 0 },
+            }}
+          >
             <Stack spacing={2}>
               {/* Search Bar */}
               <TextField

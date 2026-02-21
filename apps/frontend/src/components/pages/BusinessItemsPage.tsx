@@ -1,6 +1,7 @@
 import {
   Add as AddIcon,
   Check as CheckIcon,
+  CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
@@ -8,8 +9,10 @@ import {
   Inventory as InventoryIcon,
   LocationOn as LocationOnIcon,
   Refresh as RefreshIcon,
+  TrendingUp as TrendingUpIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -27,6 +30,7 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
+  Grid,
   IconButton,
   InputLabel,
   MenuItem,
@@ -1070,9 +1074,9 @@ const BusinessItemsPage: React.FC = () => {
   const totalItemCount = items?.length ?? 0;
   const categoryCountMap = (items || []).reduce<Record<string, number>>(
     (acc, item) => {
-      const label =
-        item.item_sub_category?.name ?? t('business.items.filters.noCategory');
-      acc[label] = (acc[label] ?? 0) + 1;
+      const key =
+        item.item_sub_category?.name ?? '_no_category';
+      acc[key] = (acc[key] ?? 0) + 1;
       return acc;
     },
     {}
@@ -1080,6 +1084,29 @@ const BusinessItemsPage: React.FC = () => {
   const categoryCountEntries = Object.entries(categoryCountMap).sort(
     ([a], [b]) => a.localeCompare(b)
   );
+  const categoryCount = categoryCountEntries.length;
+
+  // Inventory stats for stat cards
+  const { inStockCount, lowStockCount, totalCatalogueValue } = (items || []).reduce(
+    (acc, item) => {
+      const status = getItemStockStatus(item);
+      const inv = item.business_inventories?.[0];
+      const qty = inv?.computed_available_quantity ?? 0;
+      const unitCost = inv?.unit_cost ?? 0;
+      if (status === 'inStock') acc.inStockCount += 1;
+      if (status === 'lowStock' || status === 'outOfStock') acc.lowStockCount += 1;
+      acc.totalCatalogueValue += Number(qty) * Number(unitCost);
+      return acc;
+    },
+    { inStockCount: 0, lowStockCount: 0, totalCatalogueValue: 0 }
+  );
+
+  const formatCatalogueValue = (n: number) =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(2)}M`
+      : n >= 1_000
+        ? `${(n / 1_000).toFixed(2)}K`
+        : String(Math.round(n));
   const brandsInItems = Array.from(
     new Set(
       items
@@ -1141,47 +1168,187 @@ const BusinessItemsPage: React.FC = () => {
         keywords={t('seo.business-items.keywords')}
       />
 
-      <Typography variant="h4" sx={{ mb: 0.5 }}>
-        {t('business.items.title')}
-      </Typography>
-
-      {/* Stats: total item count and per-category count */}
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 1.5,
-          mb: 1,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 1.5,
-        }}
+      {/* Title row: title + subtitle, actions */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+        gap={1}
+        sx={{ mb: 2 }}
       >
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 0.5 }}>
-          {t('business.items.statsTotal', { count: totalItemCount })}
-        </Typography>
-        {categoryCountEntries.length > 0 && (
-          <Stack direction="row" flexWrap="wrap" gap={0.75} alignItems="center">
-            {categoryCountEntries.map(([categoryName, count]) => (
-              <Chip
-                key={categoryName}
-                size="small"
-                label={`${categoryName}: ${count}`}
-                variant="outlined"
-                sx={{ fontWeight: 500 }}
-              />
-            ))}
-          </Stack>
-        )}
-      </Paper>
+        <Box>
+          <Typography variant="h4" sx={{ mb: 0.5 }}>
+            {t('business.items.title').split(' ').slice(0, -1).join(' ')}{' '}
+            <Box component="span" color="error.main">
+              {t('business.items.title').split(' ').slice(-1)[0]}
+            </Box>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('business.items.subtitle', {
+              count: totalItemCount,
+              categories: categoryCount,
+            })}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={() => {
+              setSelectedDownloadLocationId(null);
+              setDownloadLocationDialogOpen(true);
+            }}
+            disabled={loading || !items || items.length === 0}
+            size="medium"
+            sx={{ borderRadius: 0 }}
+          >
+            {t('business.items.export')}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UploadIcon />}
+            onClick={() => setShowCSVUploadDialog(true)}
+            size="medium"
+            sx={{ borderRadius: 0 }}
+          >
+            {t('business.items.csvUpload')}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/business/items/new')}
+            size="medium"
+            sx={{ borderRadius: 0 }}
+          >
+            {t('business.items.addItem')}
+          </Button>
+        </Stack>
+      </Stack>
+
+      {/* Four stat cards */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
+            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    {t('business.items.stats.totalItems')}
+                  </Typography>
+                  <Typography variant="h4">{totalItemCount}</Typography>
+                </Box>
+                <InventoryIcon sx={{ color: 'warning.main', fontSize: 28 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
+            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    {t('business.items.stats.inStock')}
+                  </Typography>
+                  <Typography variant="h4">{inStockCount}</Typography>
+                  <Typography variant="caption" color="success.main">
+                    {totalItemCount > 0
+                      ? `^ ${((100 * inStockCount) / totalItemCount).toFixed(1)}% ${t('business.items.stats.ofCatalogue')}`
+                      : ''}
+                  </Typography>
+                </Box>
+                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 28 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
+            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    {t('business.items.stats.lowStock')}
+                  </Typography>
+                  <Typography variant="h4">{lowStockCount}</Typography>
+                  <Typography variant="caption" color="warning.main">
+                    {lowStockCount > 0 ? `v ${t('business.items.stats.needsRestocking')}` : ''}
+                  </Typography>
+                </Box>
+                <WarningIcon sx={{ color: 'warning.main', fontSize: 28 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined" sx={{ borderRadius: 0, height: '100%' }}>
+            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    {t('business.items.stats.totalValue')}
+                  </Typography>
+                  <Typography variant="h4">{formatCatalogueValue(totalCatalogueValue)}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    FCFA · {t('business.items.stats.catalogueValue')}
+                  </Typography>
+                </Box>
+                <TrendingUpIcon sx={{ color: 'info.main', fontSize: 28 }} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Low stock alert banner */}
+      {lowStockCount > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2, borderRadius: 0 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => setFilters((f) => ({ ...f, stockFilter: 'lowStock' }))}
+            >
+              {t('business.items.viewLowStock')} →
+            </Button>
+          }
+        >
+          {t('business.items.lowStockBanner', { count: lowStockCount })}
+        </Alert>
+      )}
 
       <Paper sx={{ width: '100%', mb: 0.5 }} elevation={0}>
+        {/* Category filter tabs */}
+        <Tabs
+          value={filters.categoryFilter}
+          onChange={(_e, v) => setFilters((f) => ({ ...f, categoryFilter: v }))}
+          variant="scrollable"
+          scrollButtons="auto"
+          indicatorColor="primary"
+          textColor="primary"
+          aria-label="category tabs"
+          sx={{ px: 0, minHeight: 40, borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label={`${t('business.items.allItems')} ${totalItemCount}`} value="all" />
+          {categoryCountEntries.map(([key, count]) => (
+            <Tab
+              key={key}
+              label={`${key === '_no_category' ? t('business.items.filters.noCategory') : key} ${count}`}
+              value={key}
+            />
+          ))}
+        </Tabs>
+
+        {/* View mode: Table / Cards */}
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           indicatorColor="primary"
           textColor="primary"
-          aria-label="items tabs"
+          aria-label="view mode tabs"
           sx={{ px: 0, minHeight: 40 }}
         >
           <Tab label={t('business.items.tableView')} />
