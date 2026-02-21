@@ -7,10 +7,9 @@ import {
   LocalShipping as LocalShippingIcon,
   LocationOn,
   Schedule as ScheduleIcon,
-  Store,
+  ShoppingBag,
 } from '@mui/icons-material';
 import {
-  Avatar,
   Box,
   Button,
   Card,
@@ -18,13 +17,10 @@ import {
   Chip,
   CircularProgress,
   Collapse,
-  Divider,
-  IconButton,
-  LinearProgress,
   Paper,
   Stack,
+  Tooltip,
   Typography,
-  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -70,7 +66,6 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { profile } = useUserProfileContext();
   const { enqueueSnackbar } = useSnackbar();
   const { confirmOrder, startPreparing, completePreparation, completeOrder } =
@@ -80,16 +75,12 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
+  // Print label only before order is picked up (no longer available after picked_up)
   const PRINT_LABEL_STATUSES = [
     'confirmed',
     'preparing',
     'ready_for_pickup',
     'assigned_to_agent',
-    'picked_up',
-    'in_transit',
-    'out_for_delivery',
-    'delivered',
-    'complete',
   ];
 
   const getStatusColor = (status: string) => {
@@ -124,26 +115,6 @@ const OrderCard: React.FC<OrderCardProps> = ({
       default:
         return 'default';
     }
-  };
-
-  const getStatusProgress = (status: string): number => {
-    const statusProgression = {
-      pending: 10,
-      pending_payment: 15,
-      confirmed: 25,
-      preparing: 40,
-      ready_for_pickup: 55,
-      assigned_to_agent: 65,
-      picked_up: 75,
-      in_transit: 85,
-      out_for_delivery: 95,
-      delivered: 100,
-      complete: 100,
-      cancelled: 0,
-      failed: 0,
-      refunded: 0,
-    };
-    return statusProgression[status as keyof typeof statusProgression] || 0;
   };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -189,7 +160,6 @@ const OrderCard: React.FC<OrderCardProps> = ({
 
   const orderImage = getOrderImage();
   const currentStatus = order.current_status || 'unknown';
-  const statusProgress = getStatusProgress(currentStatus);
   const isCompleted = ['delivered', 'complete'].includes(currentStatus);
   const isCancelled = ['cancelled', 'failed', 'refunded'].includes(
     currentStatus
@@ -392,544 +362,301 @@ const OrderCard: React.FC<OrderCardProps> = ({
   };
 
   const availableActions = getAvailableActions();
+  const primaryAction = availableActions[0];
+  const statusBarColor =
+    theme.palette[getStatusColor(currentStatus) as keyof typeof theme.palette]?.main ??
+    theme.palette.divider;
+  const itemCount = order.order_items?.length ?? 0;
+  const deliveryFee = getDeliveryFee();
+  const addressShort = order.delivery_address
+    ? [order.delivery_address.address_line_1, order.delivery_address.city].filter(Boolean).join(', ')
+    : '';
+  const addressFull = order.delivery_address
+    ? [
+        order.delivery_address.address_line_1,
+        order.delivery_address.address_line_2,
+        order.delivery_address.city,
+        order.delivery_address.state,
+        order.delivery_address.postal_code,
+        order.delivery_address.country,
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : '';
 
   return (
     <Card
       sx={{
         overflow: 'hidden',
-        transition: 'all 0.3s ease',
+        transition: 'box-shadow 0.2s ease',
         border: '1px solid',
         borderColor: 'divider',
+        borderRadius: 1.5,
+        display: 'flex',
         '&:hover': {
-          boxShadow: 6,
-          borderColor: 'primary.main',
-          transform: 'translateY(-2px)',
+          boxShadow: 2,
+          borderColor: 'action.hover',
         },
       }}
     >
-      {/* Progress Bar - Top of Card */}
-      {!isCancelled && (
-        <LinearProgress
-          variant="determinate"
-          value={statusProgress}
-          sx={{
-            height: 6,
-            bgcolor: 'grey.200',
-            '& .MuiLinearProgress-bar': {
-              bgcolor: isCompleted ? 'success.main' : 'primary.main',
-            },
-          }}
-        />
-      )}
-
-      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-        {/* Header Section */}
-        <Box sx={{ mb: 2 }}>
+      {/* Vertical status indicator */}
+      <Box sx={{ width: 4, flexShrink: 0, bgcolor: statusBarColor }} />
+      <CardContent
+        sx={{
+          flex: 1,
+          p: 1.5,
+          py: 1.25,
+          '&:last-child': { pb: 1.25 },
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { sm: 'center' },
+          gap: { xs: 1, sm: 2 },
+          minWidth: 0,
+        }}
+      >
+        {/* Left: icon + order id + meta row */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1, minWidth: 0 }}>
           <Box
             sx={{
+              width: 48,
+              height: 48,
+              flexShrink: 0,
+              borderRadius: 1,
+              overflow: 'hidden',
+              bgcolor: 'grey.200',
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              mb: 1,
-              flexWrap: 'wrap',
-              gap: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <Typography
-              variant="h6"
-              component="div"
-              fontWeight="bold"
-              sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-            >
-              {t('common.orderNumber', { orderNumber: order.order_number })}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {orderImage ? (
+              <img
+                src={orderImage}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    const span = document.createElement('span');
+                    span.setAttribute('role', 'img');
+                    span.setAttribute('aria-label', t('orders.package', 'Package'));
+                    span.textContent = '📦';
+                    parent.appendChild(span);
+                  }
+                }}
+              />
+            ) : (
+              <Typography component="span" sx={{ fontSize: 24 }} role="img" aria-label={t('orders.package', 'Package')}>
+                📦
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.75} sx={{ mb: 0.25 }}>
+              <Typography variant="subtitle1" fontWeight="bold" sx={{ fontSize: '1rem' }}>
+                #{order.order_number}
+              </Typography>
               <Chip
-                label={String(
-                  t(`common.orderStatus.${currentStatus}`, currentStatus)
-                )}
+                label={String(t(`common.orderStatus.${currentStatus}`, currentStatus))}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 color={getStatusColor(currentStatus) as any}
                 size="small"
-                sx={{ fontWeight: 600 }}
-                icon={
-                  isCompleted ? <CheckCircle fontSize="small" /> : undefined
-                }
+                sx={{ fontWeight: 600, height: 22 }}
+                icon={isCompleted ? <CheckCircle sx={{ fontSize: 14 }} /> : undefined}
               />
               {order.requires_fast_delivery && (
                 <Chip
                   label={t('orders.fastDelivery.title', 'Fast Delivery')}
-                  color="warning"
                   size="small"
-                  sx={{ fontWeight: 600 }}
-                  icon={<FlashOn fontSize="small" />}
+                  sx={{ height: 22, fontWeight: 600, bgcolor: 'warning.light', color: 'warning.dark' }}
+                  icon={<FlashOn sx={{ fontSize: 14 }} />}
                 />
               )}
-            </Box>
+            </Stack>
+            <Stack
+              direction="row"
+              flexWrap="wrap"
+              alignItems="center"
+              sx={{ typography: 'caption', color: 'text.secondary', gap: { xs: 1, sm: 2 } }}
+            >
+              <Stack direction="row" alignItems="center" gap={0.5}>
+                <ScheduleIcon sx={{ fontSize: 14 }} />
+                <span>{formatDate(order.created_at)}</span>
+              </Stack>
+              {addressShort && (
+                <Stack direction="row" alignItems="center" gap={0.5} sx={{ minWidth: 0 }}>
+                  <LocationOn sx={{ fontSize: 14 }} />
+                  <Tooltip title={addressFull || addressShort} enterDelay={300}>
+                    <Typography component="span" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: { xs: 120, md: 200 } }}>
+                      {addressShort}
+                    </Typography>
+                  </Tooltip>
+                </Stack>
+              )}
+              <Stack direction="row" alignItems="center" gap={0.5}>
+                <ShoppingBag sx={{ fontSize: 14 }} />
+                <span>
+                  {itemCount} {itemCount === 1 ? t('orders.item', 'item') : t('orders.items', 'items')}
+                </span>
+              </Stack>
+            </Stack>
           </Box>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-          >
-            <ScheduleIcon fontSize="small" />
-            {formatDate(order.created_at)}
-          </Typography>
         </Box>
 
-        <Divider sx={{ my: 2 }} />
-
-        {/* Main Content Section */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          {/* Order Image */}
-          {!isMobile && (
-            <Box
-              sx={{
-                width: { xs: '100%', sm: 120 },
-                height: { xs: 200, sm: 120 },
-                flexShrink: 0,
-                borderRadius: 2,
-                overflow: 'hidden',
-                bgcolor: 'grey.100',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {orderImage ? (
-                <img
-                  src={orderImage}
-                  alt={t('orders.orderImage', 'Order')}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const parent = target.parentElement;
-                    if (parent) {
-                      parent.innerHTML =
-                        '<div style="font-size: 2rem; color: #999;">📦</div>';
-                    }
-                  }}
-                />
-              ) : (
-                <Typography variant="h1" color="text.secondary">
-                  <span role="img" aria-label={t('orders.package', 'Package')}>
-                    📦
-                  </span>
-                </Typography>
-              )}
-            </Box>
-          )}
-
-          {/* Order Info */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Stack spacing={1.5}>
-              {/* Business Name */}
-              {order.business && (
-                <Paper
-                  variant="outlined"
-                  sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Avatar
-                      sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
-                    >
-                      <Store fontSize="small" />
-                    </Avatar>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block' }}
-                      >
-                        {t('orders.business', 'Business')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        fontWeight="medium"
-                        noWrap
-                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
-                      >
-                        {order.business.name}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              )}
-
-              {/* Delivery Info Grid */}
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                  gap: 1,
-                }}
-              >
-                {/* Agent Info */}
-                {order.assigned_agent && (
-                  <Paper variant="outlined" sx={{ p: 1, borderRadius: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <LocalShippingIcon fontSize="small" color="primary" />
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {t('orders.agent.label', 'Agent')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight="medium"
-                          noWrap
-                          sx={{ fontSize: '0.875rem' }}
-                        >
-                          {order.assigned_agent.user.first_name}{' '}
-                          {order.assigned_agent.user.last_name}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                )}
-
-                {/* Items Count */}
-                <Paper variant="outlined" sx={{ p: 1, borderRadius: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="h6" color="primary">
-                      {order.order_items?.length || 0}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('orders.items', 'items')}
-                    </Typography>
-                    {order.order_items && order.order_items.length > 1 && (
-                      <IconButton
-                        size="small"
-                        onClick={() => setShowItems(!showItems)}
-                        sx={{ ml: 'auto' }}
-                      >
-                        {showItems ? <ExpandLess /> : <ExpandMore />}
-                      </IconButton>
-                    )}
-                  </Box>
-                </Paper>
-              </Box>
-
-              {/* Delivery Address */}
-              {order.delivery_address && (
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  <LocationOn fontSize="small" color="action" />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('orders.deliveryAddress', 'Delivery Address')}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                      {order.delivery_address.address_line_1},{' '}
-                      {order.delivery_address.city}
-                      {profile?.agent?.id &&
-                        order.assigned_agent_id &&
-                        order.assigned_agent_id === profile.agent.id &&
-                        order.client?.user?.phone_number && (
-                          <> • 📞 {order.client.user.phone_number}</>
-                        )}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-
-              {/* Order Items - Collapsible */}
-              {order.order_items && order.order_items.length > 1 && (
-                <Collapse in={showItems}>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {t('orders.orderItems', 'Order Items')}
-                    </Typography>
-                    <Stack spacing={1}>
-                      {order.order_items.map(
-                        (item: OrderItem, index: number) => (
-                          <Paper
-                            key={item.id || index}
-                            variant="outlined"
-                            sx={{ p: 1.5 }}
-                          >
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                gap: 2,
-                                alignItems: 'center',
-                              }}
-                            >
-                              {/* Item Image */}
-                              <Box
-                                sx={{
-                                  width: 50,
-                                  height: 50,
-                                  borderRadius: 1,
-                                  overflow: 'hidden',
-                                  bgcolor: 'grey.100',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {item.item?.item_images?.[0]?.image_url ? (
-                                  <img
-                                    src={item.item.item_images[0].image_url}
-                                    alt={
-                                      item.item_name ??
-                                      item.item?.item_sub_category
-                                        ?.item_category?.name ??
-                                      'Item'
-                                    }
-                                    style={{
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'cover',
-                                    }}
-                                    onError={(e) => {
-                                      const target =
-                                        e.target as HTMLImageElement;
-                                      target.style.display = 'none';
-                                      const parent = target.parentElement;
-                                      if (parent) {
-                                        parent.innerHTML = '📦';
-                                      }
-                                    }}
-                                  />
-                                ) : (
-                                  <Typography
-                                    variant="h6"
-                                    color="text.secondary"
-                                  >
-                                    <span
-                                      role="img"
-                                      aria-label={t(
-                                        'orders.package',
-                                        'Package'
-                                      )}
-                                    >
-                                      📦
-                                    </span>
-                                  </Typography>
-                                )}
-                              </Box>
-
-                              {/* Item Details */}
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography
-                                  variant="body2"
-                                  fontWeight="medium"
-                                  sx={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {item.item_name ??
-                                    item.item?.item_sub_category
-                                      ?.item_category?.name ??
-                                    item.item?.item_sub_category?.name ??
-                                    t('orders.unknownItem', 'Unknown Item')}
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  {t('orders.quantity', 'Qty')}: {item.quantity}
-                                  {item.unit_price != null &&
-                                    order.currency &&
-                                    ` × ${formatCurrency(
-                                      item.unit_price,
-                                      order.currency
-                                    )}`}
-                                </Typography>
-                                {item.total_price != null &&
-                                  order.currency && (
-                                    <Typography
-                                      variant="body2"
-                                      fontWeight="medium"
-                                      color="primary"
-                                    >
-                                      {formatCurrency(
-                                        item.total_price,
-                                        order.currency
-                                      )}
-                                    </Typography>
-                                  )}
-                              </Box>
-                            </Box>
-                          </Paper>
-                        )
-                      )}
-                    </Stack>
-                  </Box>
-                </Collapse>
-              )}
-            </Stack>
-          </Box>
-        </Stack>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Quick Action Buttons */}
-        {availableActions.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              {availableActions.map((action, index) => (
-                <Button
-                  key={index}
-                  variant="outlined"
-                  color={action.color}
-                  onClick={action.onClick}
-                  disabled={
-                    action.loading || !!loadingAction || printLabelLoading
-                  }
-                  startIcon={
-                    action.loading ? (
-                      <CircularProgress size={16} />
-                    ) : (
-                      action.icon ?? <CheckCircle />
-                    )
-                  }
-                  sx={{
-                    minWidth: { xs: '100%', sm: 140 },
-                    textTransform: 'none',
-                  }}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </Stack>
-          </Box>
-        )}
-
-        {/* Footer Section */}
+        {/* Right: total + delivery line + actions */}
         <Box
           sx={{
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            flexWrap: 'wrap',
-            gap: 2,
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
+            flexShrink: 0,
           }}
         >
-          {/* Amount Breakdown */}
-          <Box sx={{ flex: 1, minWidth: 200 }}>
-            {profile?.agent ? (
-              // Agent view: Show only delivery commission
+          <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+            {profile?.agent && order.delivery_commission !== undefined ? (
               <>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
-                  {t('orders.deliveryCommission', 'Delivery Commission')}
+                <Typography variant="body2" color="text.secondary">
+                  {t('orders.earnings', 'Your Earnings')}
                 </Typography>
-                <Stack spacing={0.5}>
-                  {order.delivery_commission !== undefined && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body1" fontWeight="bold" color="primary">
-                        {t('orders.earnings', 'Your Earnings')}:
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        color="primary"
-                        fontWeight="bold"
-                        sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-                      >
-                        {formatCurrency(order.delivery_commission, order.currency)}
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                  {formatCurrency(order.delivery_commission, order.currency)}
+                </Typography>
               </>
             ) : (
-              // Business/Client view: Show full breakdown
               <>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
-                  {t('orders.amountBreakdown', 'Amount Breakdown')}
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {order.total_amount != null
+                    ? formatCurrency(order.total_amount, order.currency)
+                    : '—'}
                 </Typography>
-                <Stack spacing={0.5}>
-                  {/* Subtotal */}
-                  {order.subtotal !== undefined && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.subtotal', 'Subtotal')}:
-                      </Typography>
-                      <Typography variant="body2" fontWeight="medium">
-                        {formatCurrency(order.subtotal, order.currency)}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Total Delivery Fee */}
-                  {(order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0) > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.deliveryFee', 'Delivery Fee')}:
-                      </Typography>
-                      <Typography variant="body2" fontWeight="medium">
-                        {getDeliveryFeeDisplay()}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Tax Amount */}
-                  {order.tax_amount > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.tax', 'Tax')}:
-                      </Typography>
-                      <Typography variant="body2" fontWeight="medium">
-                        {formatCurrency(order.tax_amount, order.currency)}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Divider */}
-                  <Divider sx={{ my: 0.5 }} />
-
-                  {/* Total Amount */}
-                  {order.total_amount !== undefined && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body1" fontWeight="bold" color="primary">
-                        {t('orders.totalAmount', 'Total')}:
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        color="primary"
-                        fontWeight="bold"
-                        sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-                      >
-                        {formatCurrency(order.total_amount, order.currency)}
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
+                {isCancelled ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('orders.cancelledByCustomer', 'Cancelled by customer')}
+                  </Typography>
+                ) : deliveryFee > 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('orders.inclDelivery', 'incl.')} {getDeliveryFeeDisplay()} {t('orders.delivery', 'delivery')}
+                  </Typography>
+                ) : null}
               </>
             )}
           </Box>
-
-          <Button
-            variant="contained"
-            onClick={() => navigate(`/orders/${order.id}`)}
-            endIcon={<ArrowForward />}
-            sx={{
-              px: 3,
-              py: 1,
-              textTransform: 'none',
-              fontWeight: 600,
-              boxShadow: 2,
-              '&:hover': {
-                boxShadow: 4,
-              },
-            }}
-          >
-            {t('orders.viewDetails', 'View Details')}
-          </Button>
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" flexShrink={0}>
+            {primaryAction && (
+              <Button
+                variant="contained"
+                color={primaryAction.color}
+                size="small"
+                onClick={primaryAction.onClick}
+                disabled={primaryAction.loading || !!loadingAction || printLabelLoading}
+                startIcon={
+                  primaryAction.loading ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    primaryAction.icon ?? <CheckCircle fontSize="small" />
+                  )
+                }
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                {primaryAction.label}
+              </Button>
+            )}
+            {availableActions.length > 1 && (
+              <Stack direction="row" spacing={0.5}>
+                {availableActions.slice(1).map((action, idx) => (
+                  <Button
+                    key={idx}
+                    variant="outlined"
+                    size="small"
+                    color={action.color}
+                    onClick={action.onClick}
+                    disabled={action.loading || !!loadingAction}
+                    startIcon={action.icon}
+                    sx={{ textTransform: 'none', minWidth: 'auto' }}
+                  >
+                    {action.label}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+            <Button
+              variant="text"
+              size="small"
+              color={isCompleted || isCancelled ? 'inherit' : 'primary'}
+              onClick={() => navigate(`/orders/${order.id}`)}
+              endIcon={<ArrowForward fontSize="small" />}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 500,
+                color: isCompleted || isCancelled ? 'text.secondary' : undefined,
+              }}
+            >
+              {t('orders.details', 'Details')}
+            </Button>
+          </Stack>
         </Box>
       </CardContent>
+
+      {/* Expandable order items (multi-item) */}
+      {order.order_items && order.order_items.length > 1 && (
+        <>
+          <Button
+            fullWidth
+            size="small"
+            onClick={() => setShowItems(!showItems)}
+            endIcon={showItems ? <ExpandLess /> : <ExpandMore />}
+            sx={{ textTransform: 'none', py: 0.5 }}
+          >
+            {t('orders.orderItems', 'Order Items')}
+          </Button>
+          <Collapse in={showItems}>
+            <Box sx={{ px: 2, pb: 1.5, pt: 0 }}>
+              <Stack spacing={1}>
+                {order.order_items.map((item: OrderItem, index: number) => (
+                  <Paper key={item.id || index} variant="outlined" sx={{ p: 1 }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          bgcolor: 'grey.100',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.item?.item_images?.[0]?.image_url ? (
+                          <img
+                            src={item.item.item_images[0].image_url}
+                            alt=""
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Typography variant="caption" color="text.secondary">📦</Typography>
+                          </Box>
+                        )}
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight="medium" noWrap>
+                          {item.item_name ?? item.item?.item_sub_category?.name ?? t('orders.unknownItem', 'Unknown Item')}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('orders.quantity', 'Qty')}: {item.quantity}
+                          {item.total_price != null && order.currency && ` · ${formatCurrency(item.total_price, order.currency)}`}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          </Collapse>
+        </>
+      )}
 
       {/* Confirm Order Modal */}
       <ConfirmOrderModal

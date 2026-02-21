@@ -1544,6 +1544,11 @@
     "verifiedAgentDescription": "Seuls les agents vérifiés peuvent livrer cette commande",
     "viewAndTakeAction": "Voir et Agir",
     "viewDetails": "Voir les Détails",
+    "details": "Détails",
+    "item": "article",
+    "items": "articles",
+    "cancelledByCustomer": "Annulé par le client",
+    "inclDelivery": "incl.",
     "viewMyOrders": "Voir Mes Commandes",
     "viewOrderDetails": "Voir les Détails de la Commande",
     "shippingLabel": {
