@@ -120,11 +120,7 @@ const CompleteProfile: React.FC = () => {
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { refetch } = useUserProfileContext();
-  const {
-    vehicleTypes,
-    loading: typesLoading,
-    error: typesError,
-  } = useUserTypes();
+  const { loading: typesLoading, error: typesError } = useUserTypes();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -285,10 +281,6 @@ const CompleteProfile: React.FC = () => {
           profileData.first_name &&
           profileData.last_name &&
           profileData.user_type_id;
-
-        if (profileData.user_type_id === 'agent') {
-          return hasRequiredFields && profileData.profile.vehicle_type_id;
-        }
 
         if (profileData.user_type_id === 'business') {
           return hasRequiredFields && profileData.profile.name;
@@ -489,24 +481,6 @@ const CompleteProfile: React.FC = () => {
               useDevPhoneDropdown
             />
 
-            {profileData.user_type_id === 'agent' && (
-              <FormControl fullWidth required>
-                <InputLabel>Vehicle Type</InputLabel>
-                <Select
-                  value={profileData.profile.vehicle_type_id || ''}
-                  label="Vehicle Type"
-                  onChange={handleProfileChange('vehicle_type_id')}
-                  disabled={typesLoading}
-                >
-                  {vehicleTypes.map((type) => (
-                    <MenuItem key={type.id} value={type.id}>
-                      {type.comment}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-
             {profileData.user_type_id === 'business' && (
               <TextField
                 label="Business Name"
@@ -560,17 +534,6 @@ const CompleteProfile: React.FC = () => {
               <Typography variant="body2" gutterBottom>
                 <strong>Persona:</strong> {selectedPersona?.title}
               </Typography>
-              {profileData.user_type_id === 'agent' &&
-                profileData.profile.vehicle_type_id && (
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Vehicle Type:</strong>{' '}
-                    {
-                      vehicleTypes.find(
-                        (t) => t.id === profileData.profile.vehicle_type_id
-                      )?.comment
-                    }
-                  </Typography>
-                )}
               {profileData.user_type_id === 'business' &&
                 profileData.profile.name && (
                   <Typography variant="body2" gutterBottom>

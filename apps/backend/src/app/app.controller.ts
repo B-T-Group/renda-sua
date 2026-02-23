@@ -202,9 +202,6 @@ export class AppController {
           };
 
         case 'agent':
-          if (!userData.profile.vehicle_type_id) {
-            throw new Error('vehicle_type_id is required for agent users');
-          }
           result = await this.hasuraSystemService.executeMutation(
             `
             mutation CreateUserWithAgent($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $vehicle_type_id: String!) {
@@ -244,7 +241,7 @@ export class AppController {
               first_name: userData.first_name,
               last_name: userData.last_name,
               user_type_id: userData.user_type_id,
-              vehicle_type_id: userData.profile.vehicle_type_id,
+              vehicle_type_id: userData.profile.vehicle_type_id || 'other',
             }
           );
           return {

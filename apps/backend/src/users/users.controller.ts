@@ -353,9 +353,6 @@ export class UsersController {
           };
 
         case 'agent':
-          if (!userData.profile.vehicle_type_id) {
-            throw new Error('vehicle_type_id is required for agent users');
-          }
           result = await this.hasuraSystemService.createUserWithAgent(
             identifier,
             {
@@ -366,7 +363,7 @@ export class UsersController {
               user_type_id: userData.user_type_id,
             },
             {
-              vehicle_type_id: userData.profile.vehicle_type_id,
+              vehicle_type_id: userData.profile.vehicle_type_id || 'other',
             }
           );
           if (addressData) {
