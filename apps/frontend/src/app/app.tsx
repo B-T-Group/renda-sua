@@ -56,6 +56,7 @@ import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
+import { useDetectedCountry } from '../hooks/useDetectedCountry';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth0();
@@ -93,6 +94,9 @@ function App() {
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
+
+  // Detect and store country for anonymous users (for inventory-items country_code)
+  useDetectedCountry();
 
   // Only show loading for auth flow when on /app route
   const shouldShowLoading = useMemo(() => {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageType } from '../types/image';
+import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
+import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
 
 export interface InventoryItem {
   id: string;
@@ -106,7 +108,10 @@ export interface ApiResponse {
   message: string;
 }
 
+const ALLOWED_ANONYMOUS_COUNTRIES = ['CM', 'GA'];
+
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
+  const { isAuthenticated } = useAuth0();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +136,25 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     setLoading(true);
     setError(null);
 
+    // Logged-in: backend uses user address; do not pass country_code/state.
+    // Anonymous: pass country_code only if detected and CM or GA.
+    let country_code: string | undefined;
+    let state: string | undefined;
+    if (isAuthenticated) {
+      country_code = undefined;
+      state = undefined;
+    } else {
+      const detected =
+        typeof window !== 'undefined'
+          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
+          : null;
+      const code = detected?.toUpperCase();
+      if (code && ALLOWED_ANONYMOUS_COUNTRIES.includes(code)) {
+        country_code = code;
+      }
+      state = undefined;
+    }
+
     try {
       const response = await apiClient.get<ApiResponse>('/inventory-items', {
         params: {
@@ -143,8 +167,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.min_price && { min_price: query.min_price }),
           ...(query.max_price && { max_price: query.max_price }),
           ...(query.currency && { currency: query.currency }),
-          ...(query.country_code && { country_code: query.country_code }),
-          ...(query.state && { state: query.state }),
+          ...(country_code && { country_code }),
+          ...(state && { state }),
         },
         signal: controller.signal,
       });
@@ -184,7 +208,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
         abortControllerRef.current = null;
       }
     }
-  }, [query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency, query.country_code, query.state]);
+  }, [isAuthenticated, query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency]);
 
   useEffect(() => {
     fetchInventoryItems();

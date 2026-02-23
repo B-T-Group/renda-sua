@@ -70,24 +70,11 @@ const ItemsPage: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const itemsPerPage = 12;
 
-  // Primary or first address for location-based inventory filtering (when logged in)
-  const userAddress = useMemo(() => {
-    if (!profile?.addresses?.length) return null;
-    return (
-      profile.addresses.find((a) => a.is_primary) ?? profile.addresses[0]
-    );
-  }, [profile?.addresses]);
-
-  // Fetch all inventory items; pass country_code and state when user is logged in and has an address
+  // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
   const { inventoryItems, loading, error } = useInventoryItems({
     page: 1,
     limit: 1000, // Get all items for client-side filtering
     is_active: true,
-    ...(isAuthenticated &&
-      userAddress && {
-        country_code: userAddress.country,
-        state: userAddress.state,
-      }),
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)

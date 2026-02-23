@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 
 export interface InventoryItem {
   id: string;
@@ -103,10 +104,15 @@ export interface PaginatedInventoryItems {
 export class InventoryItemsService {
   private readonly logger = new Logger(InventoryItemsService.name);
 
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   /**
-   * Get paginated inventory items with optional filters
+   * Get paginated inventory items with optional filters.
+   * When a valid JWT is present, uses the logged-in user's primary address for country_code/state.
+   * Otherwise uses query params (e.g. from anonymous users).
    */
   async getInventoryItems(
     query: GetInventoryItemsQuery = {}
@@ -121,9 +127,27 @@ export class InventoryItemsService {
       max_price,
       currency,
       is_active = true,
-      country_code,
-      state,
+      country_code: queryCountryCode,
+      state: queryState,
     } = query;
+
+    // Resolve country_code and state: prefer logged-in user's address when JWT present
+    let country_code = queryCountryCode;
+    let state = queryState;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const addresses = user.addresses;
+      if (addresses?.length) {
+        const primary =
+          addresses.find((a) => a.is_primary === true) ?? addresses[0];
+        if (primary?.country) {
+          country_code = primary.country;
+          state = primary.state ?? state;
+        }
+      }
+    } catch {
+      // Anonymous or invalid token: use query params as-is
+    }
 
     // Build where conditions
     const whereConditions: any[] = [];
