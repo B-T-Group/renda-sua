@@ -2,6 +2,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
@@ -284,6 +285,8 @@ const UPDATE_ITEM_STATUS = `
 
 @Injectable()
 export class BusinessItemsService {
+  private readonly logger = new Logger(BusinessItemsService.name);
+
   constructor(private readonly hasuraUserService: HasuraUserService) {}
 
   async getItems(businessId: string) {
@@ -374,6 +377,7 @@ export class BusinessItemsService {
     userId: string,
     rows: CsvItemRowDto[]
   ): Promise<CsvUploadResultDto> {
+    this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length}`);
     const [items, locations, inventory, validSubCategoryIds] = await Promise.all([
       this.getItems(businessId),
       this.getBusinessLocations(businessId),
@@ -460,6 +464,7 @@ export class BusinessItemsService {
             id: existingItem.id,
             itemData,
           });
+          this.logger.log(`CSV upload: updated item id=${existingItem.id} name="${row.name}"`);
           details.updated.push(`Item: ${row.name}`);
           updatedCount++;
           itemId = existingItem.id;
@@ -509,6 +514,7 @@ export class BusinessItemsService {
             throw new Error('Failed to create item');
           }
           itemId = newItem.id;
+          this.logger.log(`CSV upload: inserted item id=${itemId} name="${row.name}"`);
           details.inserted.push(`Item: ${row.name}`);
           insertedCount++;
           items.push({
@@ -555,6 +561,7 @@ export class BusinessItemsService {
               updates: updatePayload,
             }
           );
+          this.logger.log(`CSV upload: updated inventory item="${row.name}" location="${row.business_location_name}" invId=${existingInv.id}`);
           details.updated.push(
             `Inventory: ${row.name} at ${row.business_location_name}`
           );
@@ -564,6 +571,7 @@ export class BusinessItemsService {
             INSERT_BUSINESS_INVENTORY,
             { itemData: inventoryPayload }
           );
+          this.logger.log(`CSV upload: inserted inventory item="${row.name}" location="${row.business_location_name}"`);
           details.inserted.push(
             `Inventory: ${row.name} at ${row.business_location_name}`
           );
@@ -602,26 +610,32 @@ export class BusinessItemsService {
                 uploaded_by: userId,
               },
             });
+            this.logger.log(`CSV upload: inserted image for item="${row.name}" id=${itemId}`);
             details.inserted.push(`Image: ${row.name}`);
             insertedCount++;
           } catch (imageErr) {
+            const errMsg = imageErr instanceof Error ? imageErr.message : 'Unknown error';
+            this.logger.error(`CSV upload: image upload failed for item="${row.name}" row=${rowIndex}: ${errMsg}`);
             details.errors.push({
               row: rowIndex,
-              error: `Image upload failed: ${
-                imageErr instanceof Error ? imageErr.message : 'Unknown error'
-              }`,
+              error: `Image upload failed: ${errMsg}`,
             });
           }
         }
       } catch (err) {
         errorCount++;
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        this.logger.error(`CSV upload: error row=${rowIndex} item="${row?.name ?? 'unknown'}": ${errMsg}`);
         details.errors.push({
           row: rowIndex,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: errMsg,
         });
       }
     }
 
+    this.logger.log(
+      `CSV upload: completed businessId=${businessId} inserted=${insertedCount} updated=${updatedCount} errors=${errorCount}`
+    );
     return {
       success: rows.length - errorCount,
       inserted: insertedCount,

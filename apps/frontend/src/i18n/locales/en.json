@@ -407,6 +407,7 @@
   "business": {
     "csvUpload": {
       "downloadTemplate": "Download Template",
+      "takesSomeTime": "This process may take several minutes depending on the number of items. Please do not close this window.",
       "emptyFile": "File is empty",
       "errorDetails": "Error Details",
       "errors": "Errors",

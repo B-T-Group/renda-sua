@@ -208,7 +208,7 @@ export default function CSVUploadDialog({
 
     setUploading(true);
     try {
-      const CSV_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+      const CSV_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
       const response = await apiClient.post<{
         success: boolean;
         data: {
@@ -386,6 +386,9 @@ export default function CSVUploadDialog({
               Upload a CSV file to create items, inventory records, and add
               images in one operation. Each row should contain item details,
               inventory information, and an optional image URL.
+            </Typography>
+            <Typography variant="body2" color="info.main" sx={{ mt: 1, fontWeight: 500 }}>
+              {t('business.csvUpload.takesSomeTime')}
             </Typography>
             <Box mt={2}>
               <Button

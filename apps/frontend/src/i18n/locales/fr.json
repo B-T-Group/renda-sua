@@ -409,6 +409,7 @@
   "business": {
     "csvUpload": {
       "downloadTemplate": "Télécharger le Modèle",
+      "takesSomeTime": "Ce processus peut prendre plusieurs minutes selon le nombre d'articles. Veuillez ne pas fermer cette fenêtre.",
       "emptyFile": "Le fichier est vide",
       "errorDetails": "Détails de l'Erreur",
       "errors": "Erreurs",
