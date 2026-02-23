@@ -417,6 +417,8 @@
       "noData": "No data found",
       "parseError": "Error parsing CSV file",
       "preview": "Preview",
+      "progress": "Processing {{processed}} of {{total}} items (batch {{batch}} of {{totalBatches}})",
+      "uploadingBatch": "Batch {{batch}} of {{totalBatches}}...",
       "results": "Results",
       "selectFile": "Select CSV File",
       "title": "CSV Upload",

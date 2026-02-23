@@ -161,6 +161,12 @@ export class CsvUploadRequestDto {
   @ValidateNested({ each: true })
   @Type(() => CsvItemRowDto)
   rows!: CsvItemRowDto[];
+
+  /** 0-based offset of first row in batch (for correct CSV row numbers in error details) */
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  rowOffset?: number;
 }
 
 export interface CsvUploadResultDto {

@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  LinearProgress,
   Paper,
   Stack,
   Table,
@@ -101,7 +102,16 @@ export default function CSVUploadDialog({
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [previewData, setPreviewData] = useState<CSVItemWithInventory[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{
+    processed: number;
+    total: number;
+    currentBatch: number;
+    totalBatches: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const CSV_BATCH_SIZE = 10;
+  const BATCH_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes per batch
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -207,50 +217,67 @@ export default function CSVUploadDialog({
     }
 
     setUploading(true);
+    setUploadResult(null);
+    const totalBatches = Math.ceil(csvData.length / CSV_BATCH_SIZE);
+    setUploadProgress({ processed: 0, total: csvData.length, currentBatch: 0, totalBatches });
+
+    const aggregatedResult: UploadResult = {
+      success: 0,
+      errors: 0,
+      details: { inserted: [], updated: [], errors: [] },
+    };
+
     try {
-      const CSV_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-      const response = await apiClient.post<{
-        success: boolean;
-        data: {
-          success: number;
-          inserted: number;
-          updated: number;
-          errors: number;
-          details: UploadResult['details'];
-        };
-      }>('/business-items/csv-upload', { rows: csvData }, {
-        timeout: CSV_UPLOAD_TIMEOUT_MS,
-      });
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const start = batchIndex * CSV_BATCH_SIZE;
+        const end = Math.min(start + CSV_BATCH_SIZE, csvData.length);
+        const batch = csvData.slice(start, end);
+        const rowOffset = start;
 
-      const data = response.data?.data;
-      const result: UploadResult = data
-        ? {
-            success: data.success,
-            errors: data.errors,
-            details: data.details,
-          }
-        : {
-            success: 0,
-            errors: csvData.length,
-            details: {
-              inserted: [],
-              updated: [],
-              errors: [
-                {
-                  row: 2,
-                  error: 'No response from server',
-                },
-              ],
-            },
+        setUploadProgress({
+          processed: start,
+          total: csvData.length,
+          currentBatch: batchIndex + 1,
+          totalBatches,
+        });
+
+        const response = await apiClient.post<{
+          success: boolean;
+          data: {
+            success: number;
+            inserted: number;
+            updated: number;
+            errors: number;
+            details: UploadResult['details'];
           };
+        }>('/business-items/csv-upload', { rows: batch, rowOffset }, {
+          timeout: BATCH_TIMEOUT_MS,
+        });
 
-      setUploadResult(result);
+        const data = response.data?.data;
+        if (data) {
+          aggregatedResult.success += data.success;
+          aggregatedResult.errors += data.errors;
+          aggregatedResult.details.inserted.push(...data.details.inserted);
+          aggregatedResult.details.updated.push(...data.details.updated);
+          aggregatedResult.details.errors.push(...data.details.errors);
+        }
 
-      if (result.success > 0) {
+        setUploadProgress({
+          processed: end,
+          total: csvData.length,
+          currentBatch: batchIndex + 1,
+          totalBatches,
+        });
+      }
+
+      setUploadResult(aggregatedResult);
+
+      if (aggregatedResult.success > 0) {
         enqueueSnackbar(
           t('business.csvUpload.uploadSuccess', {
-            success: result.success,
-            errors: result.errors,
+            success: aggregatedResult.success,
+            errors: aggregatedResult.errors,
           }),
           { variant: 'success' }
         );
@@ -261,18 +288,26 @@ export default function CSVUploadDialog({
       if (err instanceof Error) errorMessage = err.message;
       const res = (err as { response?: { data?: { error?: string } } }).response;
       if (res?.data?.error) errorMessage = res.data.error;
+      const failedBatchSize = csvData.length - (uploadProgress?.processed ?? 0);
       setUploadResult({
-        success: 0,
-        errors: csvData.length,
+        success: aggregatedResult.success,
+        errors: aggregatedResult.errors + failedBatchSize,
         details: {
-          inserted: [],
-          updated: [],
-          errors: [{ row: 2, error: errorMessage }],
+          inserted: aggregatedResult.details.inserted,
+          updated: aggregatedResult.details.updated,
+          errors: [
+            ...aggregatedResult.details.errors,
+            {
+              row: (uploadProgress?.processed ?? 0) + 2,
+              error: errorMessage,
+            },
+          ],
         },
       });
       enqueueSnackbar(errorMessage, { variant: 'error' });
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -324,6 +359,7 @@ export default function CSVUploadDialog({
     setCsvData([]);
     setPreviewData([]);
     setUploadResult(null);
+    setUploadProgress(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -422,6 +458,25 @@ export default function CSVUploadDialog({
             </Button>
           </Paper>
 
+          {/* Upload Progress */}
+          {uploading && uploadProgress && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                {t('business.csvUpload.progress', {
+                  processed: uploadProgress.processed,
+                  total: uploadProgress.total,
+                  batch: uploadProgress.currentBatch,
+                  totalBatches: uploadProgress.totalBatches,
+                })}
+              </Typography>
+              <LinearProgress
+                variant="determinate"
+                value={(uploadProgress.processed / uploadProgress.total) * 100}
+                sx={{ mt: 1, height: 8, borderRadius: 1 }}
+              />
+            </Paper>
+          )}
+
           {/* Preview */}
           {previewData.length > 0 && (
             <Paper variant="outlined" sx={{ p: 2 }}>
@@ -490,8 +545,11 @@ export default function CSVUploadDialog({
           variant="contained"
           disabled={csvData.length === 0 || uploading}
         >
-          {uploading
-            ? t('business.csvUpload.uploading')
+          {uploading && uploadProgress
+            ? t('business.csvUpload.uploadingBatch', {
+                batch: uploadProgress.currentBatch,
+                totalBatches: uploadProgress.totalBatches,
+              })
             : t('business.csvUpload.upload')}
         </Button>
       </DialogActions>

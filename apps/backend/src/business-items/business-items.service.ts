@@ -375,9 +375,10 @@ export class BusinessItemsService {
   async processCsvRows(
     businessId: string,
     userId: string,
-    rows: CsvItemRowDto[]
+    rows: CsvItemRowDto[],
+    rowOffset = 0
   ): Promise<CsvUploadResultDto> {
-    this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length}`);
+    this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length} rowOffset=${rowOffset}`);
     const [items, locations, inventory, validSubCategoryIds] = await Promise.all([
       this.getItems(businessId),
       this.getBusinessLocations(businessId),
@@ -396,7 +397,7 @@ export class BusinessItemsService {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowIndex = i + 2; // 1-based + header
+      const rowIndex = rowOffset + i + 2; // 1-based + header, adjusted for batch offset
 
       try {
         // Resolve location by name (case-insensitive)

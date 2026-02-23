@@ -419,6 +419,8 @@
       "noData": "Aucune donnée trouvée",
       "parseError": "Erreur lors de l'analyse du fichier CSV",
       "preview": "Aperçu",
+      "progress": "Traitement de {{processed}} sur {{total}} articles (lot {{batch}} sur {{totalBatches}})",
+      "uploadingBatch": "Lot {{batch}} sur {{totalBatches}}...",
       "results": "Résultats",
       "selectFile": "Sélectionner un Fichier CSV",
       "title": "Téléversement CSV",

@@ -150,10 +150,12 @@ export class BusinessItemsController {
         HttpStatus.BAD_REQUEST
       );
     }
+    const rowOffset = body?.rowOffset ?? 0;
     const data = await this.businessItemsService.processCsvRows(
       businessId,
       userId,
-      rows
+      rows,
+      rowOffset
     );
     return { success: true, data };
   }
