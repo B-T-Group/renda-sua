@@ -49,21 +49,20 @@ export class GoogleDistanceService {
       );
 
       if (cachedResult) {
-        console.log(
-          'Using cached distance matrix result for all destination pairs'
-        );
+        this.logger.log('Using cached distance matrix result for all destination pairs');
         return cachedResult;
       }
     }
-
+    this.logger.log('Not all destination pairs cached, calling Google API');
     // Not all destinations are cached, call Google API
-    console.log('Not all destination pairs cached, calling Google API');
 
     const destinationStrs = destinationAddresses.map((dest) => dest.formatted);
     const googleResponse = await this.callGoogleDistanceMatrix(
       [originAddressFormatted],
       destinationStrs
     );
+
+    this.logger.log('Google API response:', googleResponse);
 
     // Cache the results if enabled
     if (this.cacheEnabled) {
