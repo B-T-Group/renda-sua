@@ -3536,7 +3536,7 @@ export class OrdersService {
       });
 
       // Get user ID from the order (client user)
-      const userId = order.client?.user?.id;
+      const userId = order.client.user_id;
       if (!userId) {
         throw new Error('Client user ID not found in order');
       }
@@ -4633,12 +4633,21 @@ export class OrdersService {
             distanceMatrix.rows[0].elements[0].distance.value / 1000
           ); // Convert meters to km and round to nearest integer
 
+          this.logger.log(`Distance-based delivery fee calculated: ${distanceKm}`);
+
           // Calculate fee using tiered pricing model
           const feeComponents = await this.calculateTieredDeliveryFee(
             distanceKm,
             businessAddress.country,
             requiresFastDelivery
           );
+
+          this.logger.log(`Tiered delivery fee calculated: ${distanceKm}km`);
+          this.logger.log(`Base delivery fee: ${feeComponents.baseFee}`);
+          this.logger.log(`Per km delivery fee: ${feeComponents.perKmFee}`);
+          this.logger.log(`Total delivery fee: ${feeComponents.totalFee}`);
+          this.logger.log(`Currency: ${item.item.currency}`);
+          this.logger.log(`Country: ${businessAddress.country}`);
 
           return {
             deliveryFee: feeComponents.totalFee,
@@ -4675,6 +4684,13 @@ export class OrdersService {
           finalDeliveryFee += fastDeliveryConfig.fee;
         }
       }
+
+      this.logger.log(`Flat fee calculated: ${finalDeliveryFee}`);
+      this.logger.log(`Currency: ${item.item.currency}`);
+      this.logger.log(`Country: ${businessAddress.country}`);
+      this.logger.log(`Base delivery fee: ${flatFee}`);
+      this.logger.log(`Per km delivery fee: 0`);
+      this.logger.log(`Total delivery fee: ${finalDeliveryFee}`);
 
       return {
         deliveryFee: finalDeliveryFee,
