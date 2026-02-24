@@ -6,11 +6,11 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { WinstonModule } from 'nest-winston';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
-import { AnalyticsModule } from '../analytics/analytics.module';
 import { AddressesModule } from '../addresses/addresses.module';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AiModule } from '../ai/ai.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { BrandsModule } from '../brands/brands.module';
@@ -59,7 +59,9 @@ import { AppService } from './app.service';
         return createWinstonConfig({
           logGroupName:
             process.env.CLOUDWATCH_LOG_GROUP || 'rendasua-backend-logs',
-          logStreamName: process.env.CLOUDWATCH_LOG_STREAM || 'application',
+          logStreamName:
+            process.env.CLOUDWATCH_LOG_STREAM ||
+            `${process.env.DEPLOYMENT_ENV || 'app'}-${new Date().toISOString().split('T')[0]}`,
           region: process.env.AWS_REGION || 'ca-central-1',
           accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
