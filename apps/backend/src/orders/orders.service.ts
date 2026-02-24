@@ -3131,6 +3131,11 @@ export class OrdersService {
             user_id
             is_verified
           }
+          order_items {
+            id
+            business_inventory_id
+            quantity
+          }
           delivery_time_windows {
             id
             order_id
