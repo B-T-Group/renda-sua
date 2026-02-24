@@ -49,11 +49,11 @@ export class GoogleDistanceService {
       );
 
       if (cachedResult) {
-        this.logger.log('Using cached distance matrix result for all destination pairs');
+        this.logger.log('Using cached distance matrix result for all destination pairs', cachedResult);
         return cachedResult;
       }
     }
-    this.logger.log('Not all destination pairs cached, calling Google API');
+    this.logger.log('Not all destination pairs cached, calling Google API', destinationIds);
     // Not all destinations are cached, call Google API
 
     const destinationStrs = destinationAddresses.map((dest) => dest.formatted);
