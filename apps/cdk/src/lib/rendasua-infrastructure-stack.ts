@@ -304,7 +304,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         `RefreshMoovMobilePaymentsKey-${environment}`,
         {
           functionName: `refresh-moov-mobile-payments-key-${environment}`,
-          runtime: lambda.Runtime.PYTHON_3_9,
+          runtime: lambda.Runtime.PYTHON_3_11,
           handler: 'refresh-moov-mobile-payments-key.handler',
           code: lambda.Code.fromAsset('src/lambda'),
           timeout: cdk.Duration.minutes(5),
