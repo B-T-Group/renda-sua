@@ -207,7 +207,10 @@ export class MyPVitService {
         };
       }
     } catch (error: any) {
-      this.logger.error('Failed to initiate payment:', error);
+      this.logger.error(
+        'Failed to initiate payment:',
+        error.response?.data?.message
+      );
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to initiate payment',
