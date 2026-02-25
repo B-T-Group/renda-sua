@@ -37,6 +37,7 @@ const AdminManageAgents: React.FC = () => {
     error,
     fetchAgents,
     updateAgent,
+    setAgentInternal,
   } = useAdminAgents();
   const { vehicleTypes } = useVehicleTypes();
   const { t } = useTranslation();
@@ -53,14 +54,35 @@ const AdminManageAgents: React.FC = () => {
       phone_number: target?.user.phone_number || '',
       is_verified: target?.is_verified || false,
       vehicle_type_id: target?.vehicle_type_id || 'other',
+      is_internal: target?.is_internal || false,
     });
     setEditingId(id);
   };
 
   const handleSave = async () => {
     if (!editingId) return;
-    await updateAgent(editingId, form);
-    setEditingId(null);
+    const original = agents.find((a) => a.id === editingId);
+    try {
+      await updateAgent(editingId, {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone_number: form.phone_number,
+        is_verified: form.is_verified,
+        vehicle_type_id: form.vehicle_type_id,
+      });
+
+      if (
+        original &&
+        typeof form.is_internal === 'boolean' &&
+        form.is_internal !== !!original.is_internal
+      ) {
+        await setAgentInternal(editingId, !!form.is_internal);
+      }
+
+      setEditingId(null);
+    } catch {
+      // Errors are handled by useApiWithLoading (toasts); keep dialog open
+    }
   };
 
   return (
@@ -133,10 +155,14 @@ const AdminManageAgents: React.FC = () => {
               {agents.map((a) => (
                 <AdminUserCard
                   key={a.id}
-                  title={`${a.user.first_name} ${a.user.last_name}`}
+                  title={`${a.user.first_name} ${a.user.last_name}${
+                    a.is_internal ? ' (Internal)' : ''
+                  }`}
                   subtitle={`${a.user.email} • Vehicle: ${
                     a.vehicle_type_id
-                  } • Verified: ${a.is_verified ? 'Yes' : 'No'}`}
+                  } • Verified: ${a.is_verified ? 'Yes' : 'No'}${
+                    a.is_internal ? ' • Internal agent' : ''
+                  }`}
                   accounts={(a.user as any).accounts}
                   addresses={(a as any).addresses}
                   verified={!!a.is_verified}
@@ -253,6 +279,22 @@ const AdminManageAgents: React.FC = () => {
                 }
               />
               <Typography>Verified</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Switch
+                checked={!!form.is_internal}
+                onChange={(e) =>
+                  setForm((f: any) => ({
+                    ...f,
+                    is_internal: e.target.checked,
+                  }))
+                }
+                disabled={!form.is_verified}
+              />
+              <Typography>
+                Internal (Rendasua agent)
+                {!form.is_verified ? ' - verify first' : ''}
+              </Typography>
             </Box>
           </Box>
         </DialogContent>

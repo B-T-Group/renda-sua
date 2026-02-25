@@ -17,6 +17,7 @@ export interface AdminAgent {
   user_id: string;
   vehicle_type_id: string;
   is_verified: boolean;
+  is_internal?: boolean;
   created_at: string;
   updated_at: string;
   user: AdminAgentUser;
@@ -94,6 +95,18 @@ export const useAdminAgents = () => {
     [apiClient, callWithLoading, ensureClient, fetchAgents]
   );
 
+  const setAgentInternal = useCallback(
+    async (id: string, internal: boolean) => {
+      const client = ensureClient(apiClient);
+      await callWithLoading(
+        () => client.patch(`/business/agents/${id}/internal`, { internal }),
+        'admin.loading.updateAgent'
+      );
+      await fetchAgents();
+    },
+    [apiClient, callWithLoading, ensureClient, fetchAgents]
+  );
+
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
@@ -112,6 +125,7 @@ export const useAdminAgents = () => {
       error,
       fetchAgents,
       updateAgent,
+      setAgentInternal,
     }),
     [
       agents,
@@ -123,6 +137,7 @@ export const useAdminAgents = () => {
       error,
       fetchAgents,
       updateAgent,
+      setAgentInternal,
     ]
   );
 };
