@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '@sendgrid/mail';
-import twilio = require('twilio');
 import * as webPush from 'web-push';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import twilio = require('twilio');
 
 export interface EmailTemplate {
   id: string;
@@ -504,12 +504,13 @@ export class NotificationsService {
         title: title ?? 'Test notification',
         body: body ?? 'This is a test push from Rendasua.',
         type: 'test',
+        orderId: `test-${Date.now()}`,
       });
 
       let sentCount = 0;
       for (const sub of subs) {
         try {
-          await webPush.sendNotification(
+          const result = await webPush.sendNotification(
             {
               endpoint: sub.endpoint,
               keys: {
@@ -520,6 +521,7 @@ export class NotificationsService {
             payload,
             { TTL: 86400 }
           );
+          console.log('result', result);
           sentCount += 1;
         } catch (sendErr) {
           this.logger.warn(
@@ -605,7 +607,7 @@ export class NotificationsService {
 
       for (const sub of subs) {
         try {
-          await webPush.sendNotification(
+          const result = await webPush.sendNotification(
             {
               endpoint: sub.endpoint,
               keys: {
@@ -616,6 +618,7 @@ export class NotificationsService {
             payload,
             { TTL: 86400 }
           );
+          console.log('result', result);
         } catch (sendErr) {
           this.logger.warn(
             `Push send failed for subscription ${sub.endpoint}: ${sendErr}`

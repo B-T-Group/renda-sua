@@ -46,13 +46,20 @@ self.addEventListener('push', (event) => {
     }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Rendasua', {
-      body: data.body,
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      data: { url: data.url || '/', orderId: data.orderId },
-      tag: data.orderId ? `order-${data.orderId}` : 'rendasua-notification',
-    })
+    (async () => {
+      try {
+        await self.registration.showNotification(data.title || 'Rendasua', {
+          body: data.body,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          data: { url: data.url || '/', orderId: data.orderId },
+          tag: data.orderId ? `order-${data.orderId}` : 'rendasua-notification',
+          requireInteraction: true,
+        });
+      } catch (e) {
+        console.error('Failed to show push notification:', e);
+      }
+    })()
   );
 });
 
