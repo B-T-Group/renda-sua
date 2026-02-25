@@ -3,7 +3,6 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Grid,
   Typography,
 } from '@mui/material';
 import React from 'react';
@@ -39,8 +38,8 @@ const AgentQuickStats: React.FC<AgentQuickStatsProps> = ({
   if (loading) {
     return (
       <Card variant="outlined" sx={{ width: '100%' }}>
-        <CardContent>
-          <Box display="flex" justifyContent="center" alignItems="center" minHeight={80}>
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight={72}>
             <CircularProgress size={24} />
           </Box>
         </CardContent>
@@ -60,30 +59,30 @@ const AgentQuickStats: React.FC<AgentQuickStatsProps> = ({
 
   return (
     <Card variant="outlined" sx={{ width: '100%' }}>
-      <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+      <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+        <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
           {t('agent.earnings.quickStats', 'Quick stats')}
         </Typography>
-        <Grid container spacing={2} sx={{ width: '100%' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Typography variant="body2" color="text.secondary">
+        <Box display="flex" flexWrap="wrap" gap={2} alignItems="baseline">
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
               {t('agent.earnings.todaysDeliveries', "Today's deliveries")}
             </Typography>
-            <Typography variant="h6" fontWeight="600">
+            <Typography variant="h6" fontWeight="600" component="span">
               {todayDeliveries}
             </Typography>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Typography variant="body2" color="text.secondary">
+          </Box>
+          <Box sx={{ borderLeft: 1, borderColor: 'divider', pl: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
               {t('agent.earnings.avgCommission', 'Avg. commission (today)')}
             </Typography>
-            <Typography variant="h6" fontWeight="600">
+            <Typography variant="h6" fontWeight="600" component="span">
               {avgCommission != null
                 ? formatCurrency(avgCommission, summary.currency)
                 : '—'}
             </Typography>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </CardContent>
     </Card>
   );

@@ -17,8 +17,8 @@ const AgentDashboard: React.FC = () => {
   return (
     <>
       <AgentAddressPrompt />
-      <Container maxWidth="lg" sx={{ py: 2, width: '100%' }}>
-        <Grid container spacing={2} sx={{ width: '100%' }}>
+      <Container maxWidth="lg" sx={{ py: 1.5, width: '100%' }}>
+        <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentEarningsWidget summary={summary} loading={loading} error={error} />
           </Grid>

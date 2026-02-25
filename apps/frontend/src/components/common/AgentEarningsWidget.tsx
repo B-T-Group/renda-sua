@@ -1,15 +1,13 @@
-import { AttachMoney } from '@mui/icons-material';
+import { AttachMoney, ExpandLess, ExpandMore } from '@mui/icons-material';
 import {
   Box,
   Card,
   CardContent,
   CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
+  Collapse,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 
@@ -38,13 +36,14 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   if (loading) {
     return (
       <Card variant="outlined" sx={{ width: '100%' }}>
-        <CardContent>
-          <Box display="flex" justifyContent="center" alignItems="center" minHeight={120}>
-            <CircularProgress size={32} />
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight={72}>
+            <CircularProgress size={24} />
           </Box>
         </CardContent>
       </Card>
@@ -54,7 +53,7 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
   if (error) {
     return (
       <Card variant="outlined" sx={{ width: '100%' }}>
-        <CardContent>
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
           <Typography color="error" variant="body2">
             {error}
           </Typography>
@@ -69,34 +68,61 @@ const AgentEarningsWidget: React.FC<AgentEarningsWidgetProps> = ({
 
   return (
     <Card variant="outlined" sx={{ width: '100%' }}>
-      <CardContent>
-        <Box display="flex" alignItems="center" gap={1} mb={1}>
-          <AttachMoney color="primary" sx={{ fontSize: 28 }} />
-          <Typography variant="h6" component="h2">
+      <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+        <Box display="flex" alignItems="center" gap={0.75} mb={0.5}>
+          <AttachMoney color="primary" sx={{ fontSize: 20 }} />
+          <Typography variant="subtitle1" component="h2" fontWeight="600">
             {t('agent.earnings.todaysEarnings', "Today's Earnings")}
           </Typography>
         </Box>
-        <Typography variant="h4" fontWeight="bold" color="primary.main">
+        <Typography variant="h5" fontWeight="bold" color="primary.main">
           {formatCurrency(summary.todayEarnings, summary.currency)}
         </Typography>
         {summary.recentCommissions.length > 0 && (
-          <>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1.5, mb: 0.5 }}>
+          <Box sx={{ mt: 0.5 }}>
+            <Box
+              role="button"
+              tabIndex={0}
+              onClick={() => setDetailsOpen((o) => !o)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setDetailsOpen((o) => !o);
+                }
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                cursor: 'pointer',
+                color: 'text.secondary',
+                typography: 'caption',
+                '&:hover': { color: 'text.primary' },
+              }}
+              aria-expanded={detailsOpen}
+              aria-label={detailsOpen ? t('agent.earnings.collapseDetails', 'Collapse details') : t('agent.earnings.expandDetails', 'Expand details')}
+            >
               {t('agent.earnings.recentCommissions', 'Recent commissions')}
-            </Typography>
-            <List dense disablePadding>
-              {summary.recentCommissions.slice(0, 5).map((rc) => (
-                <ListItem key={rc.orderId} disablePadding sx={{ py: 0 }}>
-                  <ListItemText
-                    primary={`#${rc.orderNumber}`}
-                    secondary={formatCurrency(rc.amount, summary.currency)}
-                    primaryTypographyProps={{ variant: 'body2' }}
-                    secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </>
+              {detailsOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+            </Box>
+            <Collapse in={detailsOpen}>
+              <Box component="ul" sx={{ m: 0, mt: 0.25, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                {summary.recentCommissions.slice(0, 5).map((rc) => (
+                  <Box
+                    key={rc.orderId}
+                    component="li"
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="baseline"
+                    sx={{ typography: 'body2', fontSize: '0.8125rem' }}
+                  >
+                    <span>#{rc.orderNumber}</span>
+                    <span style={{ fontWeight: 500 }}>{formatCurrency(rc.amount, summary.currency)}</span>
+                  </Box>
+                ))}
+              </Box>
+            </Collapse>
+          </Box>
         )}
       </CardContent>
     </Card>
