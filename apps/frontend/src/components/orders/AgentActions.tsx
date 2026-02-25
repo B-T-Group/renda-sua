@@ -557,7 +557,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         title={t('orders.confirmClaimOrder', 'Confirm Claim Order')}
         message={t(
           'orders.confirmClaimOrderMessage',
-          'Are you sure you want to claim order #{{orderNumber}}? Claiming an order can be undone.',
+          'Are you sure you want to claim order #{{orderNumber}}?',
           { orderNumber: order.order_number }
         )}
         confirmText={t('orderActions.claimOrder', 'Claim Order')}
@@ -567,21 +567,38 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         confirmColor="primary"
         loading={loading}
         additionalContent={
-          order.agent_hold_amount !== undefined &&
-          order.agent_hold_amount > 0 ? (
+          (order.agent_hold_amount !== undefined &&
+            order.agent_hold_amount > 0) ||
+          order.delivery_commission !== undefined ? (
             <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="body2">
-                {t(
-                  'orders.claimOrderHoldAmountInfo',
-                  'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
-                  {
-                    holdAmount: formatCurrency(
-                      order.agent_hold_amount,
+              <Stack spacing={0.75}>
+                {order.delivery_commission !== undefined && (
+                  <Typography variant="body2">
+                    <strong>
+                      {t('orders.deliveryCommission', 'Delivery commission')}:
+                    </strong>{' '}
+                    {formatCurrency(
+                      order.delivery_commission,
                       order.currency
-                    ),
-                  }
+                    )}
+                  </Typography>
                 )}
-              </Typography>
+                {order.agent_hold_amount !== undefined &&
+                  order.agent_hold_amount > 0 && (
+                    <Typography variant="body2">
+                      {t(
+                        'orders.claimOrderHoldAmountInfo',
+                        'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
+                        {
+                          holdAmount: formatCurrency(
+                            order.agent_hold_amount,
+                            order.currency
+                          ),
+                        }
+                      )}
+                    </Typography>
+                  )}
+              </Stack>
             </Alert>
           ) : undefined
         }
