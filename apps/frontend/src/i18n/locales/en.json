@@ -274,6 +274,10 @@
       "viewTransactions": "View Transactions",
       "withheldBalance": "Withheld Balance"
     },
+    "loading": {
+      "default": "Loading...",
+      "fetchAgents": "Loading agents..."
+    },
     "manageAgents": "Manage Agents",
     "manageBusinesses": "Manage Businesses",
     "manageClients": "Manage Clients",

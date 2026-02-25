@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -123,6 +124,53 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch agents',
+      };
+    }
+  }
+
+  @Patch('agents/:id')
+  async updateAgent(@Param('id') agentId: string, @Body() body: any) {
+    try {
+      const {
+        first_name,
+        last_name,
+        phone_number,
+        is_verified,
+        vehicle_type_id,
+      } = body || {};
+
+      const userUpdates: {
+        first_name?: string;
+        last_name?: string;
+        phone_number?: string;
+      } = {};
+
+      if (typeof first_name === 'string') userUpdates.first_name = first_name;
+      if (typeof last_name === 'string') userUpdates.last_name = last_name;
+      if (typeof phone_number === 'string')
+        userUpdates.phone_number = phone_number;
+
+      const agentUpdates: { is_verified?: boolean; vehicle_type_id?: string } =
+        {};
+      if (typeof is_verified === 'boolean') agentUpdates.is_verified = is_verified;
+      if (typeof vehicle_type_id === 'string')
+        agentUpdates.vehicle_type_id = vehicle_type_id;
+
+      const result = await this.adminService.updateAgent(
+        agentId,
+        userUpdates,
+        agentUpdates
+      );
+
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error: any) {
+      console.error('Error updating agent:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update agent',
       };
     }
   }

@@ -247,7 +247,7 @@ export class AdminService {
     const query = `
       query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!) {
         agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id vehicle_type_id is_verified created_at updated_at
+          id user_id vehicle_type_id is_verified is_internal created_at updated_at
           user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           agent_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }

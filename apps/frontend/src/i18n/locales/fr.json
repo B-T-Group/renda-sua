@@ -274,6 +274,10 @@
       "viewTransactions": "Voir les Transactions",
       "withheldBalance": "Solde Retenu"
     },
+    "loading": {
+      "default": "Chargement...",
+      "fetchAgents": "Chargement des agents..."
+    },
     "manageAgents": "Gérer les Agents",
     "manageBusinesses": "Gérer les Entreprises",
     "manageClients": "Gérer les Clients",
