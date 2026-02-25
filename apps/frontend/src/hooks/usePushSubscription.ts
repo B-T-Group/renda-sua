@@ -1,17 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
+const isDev = process.env.NODE_ENV === 'development';
+
 export function usePushSubscription() {
   const apiClient = useApiClient();
   const [status, setStatus] = useState<'idle' | 'prompting' | 'subscribed' | 'unsupported' | 'denied' | 'error'>('idle');
   const hasSyncedThisSession = useRef(false);
+  const hasRequestedPermissionThisSession = useRef(false);
 
-  /** Sync existing subscription to backend without prompting. Call once after login when permission already granted. */
+  /** Sync subscription to backend. If permission not granted, optionally request once then sync. */
   const syncWhenGranted = useCallback(async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       setStatus('unsupported');
+      if (isDev) console.log('[Push] Unsupported: service worker or push not available');
       return;
     }
+
+    if (Notification.permission === 'denied') {
+      setStatus('denied');
+      if (isDev) console.log('[Push] Permission denied');
+      return;
+    }
+
+    // First-time: request permission once per session so push can work for new users
+    if (Notification.permission === 'default' && !hasRequestedPermissionThisSession.current) {
+      hasRequestedPermissionThisSession.current = true;
+      setStatus('prompting');
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          setStatus('denied');
+          if (isDev) console.log('[Push] User declined permission');
+          return;
+        }
+      } catch (e) {
+        setStatus('error');
+        if (isDev) console.warn('[Push] requestPermission failed', e);
+        return;
+      }
+    }
+
     if (Notification.permission !== 'granted') return;
     if (hasSyncedThisSession.current) return;
     try {
@@ -27,10 +56,14 @@ export function usePushSubscription() {
       if (!sub) {
         const publicKeyRes = await apiClient.get<{ publicKey: string }>('/notifications/vapid-public-key');
         const publicKey = publicKeyRes.data?.publicKey;
-        if (!publicKey) return;
+        if (!publicKey) {
+          setStatus('error');
+          if (isDev) console.warn('[Push] Backend returned no VAPID public key – set VAPID_PUBLIC_KEY and PUSH_NOTIFICATIONS_ENABLED');
+          return;
+        }
         sub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
         });
       }
 
@@ -51,9 +84,11 @@ export function usePushSubscription() {
           /* ignore */
         }
         setStatus('subscribed');
+        if (isDev) console.log('[Push] Subscription synced to backend');
       }
     } catch (err) {
-      console.warn('Push sync error:', err);
+      setStatus('error');
+      if (isDev) console.warn('[Push] Sync error:', err);
     }
   }, [apiClient]);
 
@@ -83,7 +118,7 @@ export function usePushSubscription() {
         }
         sub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
         });
       }
 
@@ -102,8 +137,7 @@ export function usePushSubscription() {
       }
     } catch (err) {
       console.warn('Push subscription error:', err);
-      if (Notification.permission === 'denied') setStatus('denied');
-      else setStatus('error');
+      setStatus('error');
     }
   }, [apiClient]);
 

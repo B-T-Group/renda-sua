@@ -96,10 +96,12 @@ function App() {
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
 
-  // Sync push subscription to backend once when user is logged in and permission already granted (no prompt)
+  // Sync push subscription to backend once when user is logged in (prompts for permission once if needed)
   const { syncWhenGranted } = usePushSubscription();
   useEffect(() => {
-    if (isAuthenticated) syncWhenGranted();
+    if (!isAuthenticated) return;
+    const t = setTimeout(() => syncWhenGranted(), 800);
+    return () => clearTimeout(t);
   }, [isAuthenticated, syncWhenGranted]);
 
   // Detect and store country for anonymous users (for inventory-items country_code)

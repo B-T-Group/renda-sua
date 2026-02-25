@@ -70,6 +70,7 @@ export const useApiClient = (): AxiosInstance => {
         '/users/me',
         '/pdf/shipping-labels',
         '/locations/',
+        '/notifications/',
       ];
       if (
         showLoading &&
