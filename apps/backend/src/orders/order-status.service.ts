@@ -259,7 +259,7 @@ export class OrderStatusService {
   /**
    * Get order details for notification purposes
    */
-  private async getOrderDetailsForNotification(
+  async getOrderDetailsForNotification(
     orderId: string
   ): Promise<NotificationData | null> {
     try {

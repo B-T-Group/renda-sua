@@ -330,7 +330,7 @@ export default (): Configuration => {
       apiKey: process.env.OPENAI_API_KEY || '',
     },
     notification: {
-      orderStatusChangeEnabled: process.env.NODE_ENV === 'production',
+      orderStatusChangeEnabled: true,
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

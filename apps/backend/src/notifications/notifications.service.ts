@@ -193,11 +193,20 @@ export class NotificationsService {
       for (const recipient of recipients) {
         const recipientTemplate = `${recipient.type}_${templateKey}`;
         if (this.templateIds[recipientTemplate]) {
-          await this.sendEmail({
-            to: recipient.email,
-            templateId: this.templateIds[recipientTemplate],
-            dynamicTemplateData: this.prepareTemplateData(data, recipient.type),
-          });
+          try {
+            await this.sendEmail({
+              to: recipient.email,
+              templateId: this.templateIds[recipientTemplate],
+              dynamicTemplateData: this.prepareTemplateData(
+                data,
+                recipient.type
+              ),
+            });
+          } catch (error: unknown) {
+            this.logger.warn(
+              `Failed to send order status email to ${recipient.email}: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
         }
       }
 
@@ -220,55 +229,115 @@ export class NotificationsService {
   }
 
   /**
-   * Send push notifications for order status (out_for_delivery, delivered, assigned_to_agent)
+   * Send push notifications for every order status change using webPush.sendNotification.
+   * Recipients are determined by getRecipientsForStatus; each gets a status-appropriate message.
    */
   private async sendPushForOrderStatus(data: NotificationData): Promise<void> {
     const pushConfig = this.configService.get<Configuration['push']>('push');
     if (!pushConfig?.enabled || !pushConfig.vapidPrivateKey) return;
 
     const status = data.orderStatus;
+    const { title, body } = this.getPushMessageForOrderStatus(
+      status,
+      data.orderNumber
+    );
+    if (!title || !body) return;
+
     const pushPayload = {
-      title: '',
-      body: '',
       url: `/orders/${data.orderId}`,
       orderId: data.orderId,
       orderNumber: data.orderNumber,
     };
 
     try {
-      if (status === 'out_for_delivery' && data.clientEmail) {
-        pushPayload.title = 'Order out for delivery';
-        pushPayload.body = `Order ${data.orderNumber} is on its way.`;
-        await this.sendPushNotificationByEmail(
-          data.clientEmail,
-          pushPayload.title,
-          pushPayload.body,
-          pushPayload
-        );
-      } else if (status === 'delivered' && data.clientEmail) {
-        pushPayload.title = 'Order delivered';
-        pushPayload.body = `Order ${data.orderNumber} has been delivered.`;
-        await this.sendPushNotificationByEmail(
-          data.clientEmail,
-          pushPayload.title,
-          pushPayload.body,
-          pushPayload
-        );
-      } else if (status === 'assigned_to_agent' && data.agentEmail) {
-        pushPayload.title = 'New delivery assigned';
-        pushPayload.body = `Order ${data.orderNumber} has been assigned to you.`;
-        await this.sendPushNotificationByEmail(
-          data.agentEmail,
-          pushPayload.title,
-          pushPayload.body,
-          pushPayload
-        );
+      const recipients = this.getRecipientsForStatus(status, data);
+      for (const recipient of recipients) {
+        if (recipient.email) {
+          await this.sendPushNotificationByEmail(
+            recipient.email,
+            title,
+            body,
+            pushPayload
+          );
+        }
       }
     } catch (err) {
       this.logger.warn(
         `Push notification failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+  }
+
+  /**
+   * Get title and body for push notification by order status.
+   */
+  private getPushMessageForOrderStatus(
+    status: string,
+    orderNumber: string
+  ): { title: string; body: string } {
+    const messages: Record<
+      string,
+      { title: string; body: string }
+    > = {
+      pending: {
+        title: 'Order received',
+        body: `Order ${orderNumber} has been received and is being processed.`,
+      },
+      confirmed: {
+        title: 'Order confirmed',
+        body: `Order ${orderNumber} has been confirmed.`,
+      },
+      preparing: {
+        title: 'Order preparing',
+        body: `Order ${orderNumber} is being prepared.`,
+      },
+      ready_for_pickup: {
+        title: 'Ready for pickup',
+        body: `Order ${orderNumber} is ready for pickup.`,
+      },
+      assigned_to_agent: {
+        title: 'New delivery assigned',
+        body: `Order ${orderNumber} has been assigned to you.`,
+      },
+      picked_up: {
+        title: 'Order picked up',
+        body: `Order ${orderNumber} has been picked up.`,
+      },
+      in_transit: {
+        title: 'Order in transit',
+        body: `Order ${orderNumber} is on the way.`,
+      },
+      out_for_delivery: {
+        title: 'Order out for delivery',
+        body: `Order ${orderNumber} is on its way.`,
+      },
+      delivered: {
+        title: 'Order delivered',
+        body: `Order ${orderNumber} has been delivered.`,
+      },
+      complete: {
+        title: 'Order complete',
+        body: `Order ${orderNumber} is complete.`,
+      },
+      cancelled: {
+        title: 'Order cancelled',
+        body: `Order ${orderNumber} has been cancelled.`,
+      },
+      failed: {
+        title: 'Order failed',
+        body: `Order ${orderNumber} has failed.`,
+      },
+      refunded: {
+        title: 'Order refunded',
+        body: `Order ${orderNumber} has been refunded.`,
+      },
+    };
+    return (
+      messages[status] || {
+        title: 'Order status updated',
+        body: `Order ${orderNumber} status has been updated.`,
+      }
+    );
   }
 
   /**
@@ -749,6 +818,12 @@ export class NotificationsService {
     const recipients = [];
 
     switch (status) {
+      case 'pending':
+        recipients.push(
+          { email: data.clientEmail, type: 'client' },
+          { email: data.businessEmail, type: 'business' }
+        );
+        break;
       case 'confirmed':
         recipients.push(
           { email: data.clientEmail, type: 'client' },

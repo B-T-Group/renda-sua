@@ -3709,6 +3709,30 @@ export class OrdersService {
         'client',
         order.client.user_id
       );
+
+      // Send order status change notifications (email, push via webPush, SMS)
+      try {
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
+        if (notificationsEnabled) {
+          const orderDetails =
+            await this.orderStatusService.getOrderDetailsForNotification(
+              orderId
+            );
+          if (orderDetails) {
+            await this.notificationsService.sendOrderStatusChangeNotifications(
+              orderDetails,
+              'pending_payment'
+            );
+          }
+        }
+      } catch (notifError) {
+        this.logger.error(
+          `Failed to send order status change notifications: ${
+            notifError instanceof Error ? notifError.message : String(notifError)
+          }`
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Failed to update order status and payment status for order ${orderId}: ${
