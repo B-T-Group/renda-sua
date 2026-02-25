@@ -359,6 +359,13 @@
       "title": "Available Orders"
     },
     "activeOrders": "Active Orders",
+    "earnings": {
+      "todaysEarnings": "Today's Earnings",
+      "recentCommissions": "Recent commissions",
+      "quickStats": "Quick stats",
+      "todaysDeliveries": "Today's deliveries",
+      "avgCommission": "Avg. commission (today)"
+    },
     "unverifiedHoldNote": "Verify your account and add a profile picture to reduce your hold amounts.",
     "orders": {
       "amountBreakdown": "Amount Breakdown",

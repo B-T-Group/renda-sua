@@ -359,6 +359,13 @@
       "title": "Commandes Disponibles"
     },
     "activeOrders": "Commandes Actives",
+    "earnings": {
+      "todaysEarnings": "Gains du jour",
+      "recentCommissions": "Commissions récentes",
+      "quickStats": "Stats rapides",
+      "todaysDeliveries": "Livraisons du jour",
+      "avgCommission": "Commission moy. (aujourd'hui)"
+    },
     "unverifiedHoldNote": "Vérifiez votre compte et ajoutez une photo de profil pour réduire vos montants de retenue.",
     "orders": {
       "amountBreakdown": "Répartition des Montants",

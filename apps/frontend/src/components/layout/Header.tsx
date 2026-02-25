@@ -1,37 +1,37 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
-  Assignment,
-  Dashboard,
-  Description,
-  Logout,
-  Menu,
-  MoreVert,
-  Person,
-  ShoppingCart,
+    Assignment,
+    Dashboard,
+    Description,
+    Logout,
+    Menu,
+    MoreVert,
+    Person,
+    ShoppingCart,
 } from '@mui/icons-material';
 import {
-  AppBar,
-  Avatar,
-  Badge,
-  Box,
-  Button,
-  Chip,
-  Container,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Menu as MenuComponent,
-  MenuItem,
-  Stack,
-  Toolbar,
-  Typography,
-  useMediaQuery,
-  useTheme,
+    AppBar,
+    Avatar,
+    Badge,
+    Box,
+    Button,
+    Chip,
+    Container,
+    Divider,
+    Drawer,
+    IconButton,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemIcon,
+    ListItemText,
+    Menu as MenuComponent,
+    MenuItem,
+    Stack,
+    Toolbar,
+    Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -299,6 +299,18 @@ const Header: React.FC = () => {
                     mb: 0.5,
                   }}
                 >
+                  <Avatar
+                    src={profile?.profile_picture_url || undefined}
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      fontSize: '0.75rem',
+                      backgroundColor: '#007aff',
+                      color: 'white',
+                    }}
+                  >
+                    {getUserInitials()}
+                  </Avatar>
                   <Typography
                     variant="subtitle2"
                     fontWeight={600}
@@ -521,6 +533,7 @@ const Header: React.FC = () => {
                     }}
                   >
                     <Avatar
+                      src={profile?.profile_picture_url || undefined}
                       sx={{
                         width: 28,
                         height: 28,
@@ -564,6 +577,18 @@ const Header: React.FC = () => {
                           mb: 0.5,
                         }}
                       >
+                        <Avatar
+                          src={profile?.profile_picture_url || undefined}
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            fontSize: '0.75rem',
+                            backgroundColor: '#007aff',
+                            color: 'white',
+                          }}
+                        >
+                          {getUserInitials()}
+                        </Avatar>
                         <Typography variant="subtitle2" fontWeight={600}>
                           {getUserDisplayName()}
                         </Typography>

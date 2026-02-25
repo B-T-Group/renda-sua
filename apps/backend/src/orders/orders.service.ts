@@ -3194,6 +3194,59 @@ export class OrdersService {
     return result.orders_by_pk;
   }
 
+  /**
+   * Get agent earnings for a specific order. Only the assigned agent can access.
+   */
+  async getOrderAgentEarnings(orderId: string): Promise<{
+    success: boolean;
+    earnings: {
+      totalEarnings: number;
+      baseDeliveryCommission: number;
+      perKmDeliveryCommission: number;
+      currency: string;
+    };
+    message?: string;
+  }> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
+      throw new HttpException(
+        'Only agents can access order earnings',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.assigned_agent_id !== user.agent.id) {
+      throw new HttpException(
+        'Unauthorized to access this order earnings',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const config = await this.commissionsService.getCommissionConfigs();
+    const earnings = this.commissionsService.calculateAgentEarningsSync(
+      {
+        id: order.id,
+        base_delivery_fee: order.base_delivery_fee ?? 0,
+        per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
+        currency: order.currency ?? 'XAF',
+      },
+      user.agent.is_verified ?? false,
+      config
+    );
+    return {
+      success: true,
+      earnings: {
+        totalEarnings: earnings.totalEarnings,
+        baseDeliveryCommission: earnings.baseDeliveryCommission,
+        perKmDeliveryCommission: earnings.perKmDeliveryCommission,
+        currency: earnings.currency,
+      },
+      message: 'Agent earnings calculated successfully',
+    };
+  }
+
   private async getOrderDetailsByNumber(
     orderNumber: string
   ): Promise<Orders | null> {

@@ -1,15 +1,15 @@
 import {
-  Body,
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Post,
+    Body,
+    Controller,
+    Get,
+    HttpException,
+    HttpStatus,
+    Post,
 } from '@nestjs/common';
-import { AgentHoldService } from './agent-hold.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { AgentHoldService } from './agent-hold.service';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -292,6 +292,174 @@ export class AgentsController {
         {
           success: false,
           error: error.message || 'Failed to fetch active orders',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('earnings-summary')
+  async getEarningsSummary() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.agent) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'User is not an agent',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      const agentId = user.agent.id;
+      const isAgentVerified = user.agent?.is_verified || false;
+
+      // Start and end of today (server date, UTC)
+      const now = new Date();
+      const startOfToday = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+      ).toISOString();
+      const endOfTodayDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+      );
+      endOfTodayDate.setUTCDate(endOfTodayDate.getUTCDate() + 1);
+      const endOfToday = endOfTodayDate.toISOString();
+
+      // 1) Today's delivered orders (for todayEarnings and todayDeliveryCount)
+      const deliveredTodayQuery = `
+        query GetAgentDeliveredToday($agentId: uuid!, $startOfToday: timestamptz!, $endOfToday: timestamptz!) {
+          orders(
+            where: {
+              assigned_agent_id: { _eq: $agentId }
+              current_status: { _in: ["delivered", "complete"] }
+              actual_delivery_time: { _gte: $startOfToday, _lt: $endOfToday }
+            }
+            order_by: { actual_delivery_time: desc }
+          ) {
+            id
+            order_number
+            base_delivery_fee
+            per_km_delivery_fee
+            currency
+            actual_delivery_time
+          }
+        }
+      `;
+
+      // 2) Recent delivered orders (last 10, for recentCommissions list)
+      const recentDeliveredQuery = `
+        query GetAgentRecentDelivered($agentId: uuid!) {
+          orders(
+            where: {
+              assigned_agent_id: { _eq: $agentId }
+              current_status: { _in: ["delivered", "complete"] }
+              actual_delivery_time: { _is_null: false }
+            }
+            order_by: { actual_delivery_time: desc }
+            limit: 10
+          ) {
+            id
+            order_number
+            base_delivery_fee
+            per_km_delivery_fee
+            currency
+            actual_delivery_time
+          }
+        }
+      `;
+
+      // 3) Active order count (in-progress statuses)
+      const activeCountQuery = `
+        query GetAgentActiveOrderCount($agentId: uuid!) {
+          orders_aggregate(
+            where: {
+              assigned_agent_id: { _eq: $agentId }
+              current_status: { _in: ["assigned_to_agent", "picked_up", "in_transit", "out_for_delivery"] }
+            }
+          ) {
+            aggregate {
+              count
+            }
+          }
+        }
+      `;
+
+      const [deliveredTodayResult, recentDeliveredResult, activeCountResult] =
+        await Promise.all([
+          this.hasuraSystemService.executeQuery(deliveredTodayQuery, {
+            agentId,
+            startOfToday,
+            endOfToday,
+          }),
+          this.hasuraSystemService.executeQuery(recentDeliveredQuery, {
+            agentId,
+          }),
+          this.hasuraSystemService.executeQuery(activeCountQuery, {
+            agentId,
+          }),
+        ]);
+
+      const deliveredTodayOrders = deliveredTodayResult.orders || [];
+      const recentOrders = recentDeliveredResult.orders || [];
+      const activeOrderCount =
+        activeCountResult.orders_aggregate?.aggregate?.count ?? 0;
+
+      const commissionConfig =
+        await this.commissionsService.getCommissionConfigs();
+
+      let todayEarnings = 0;
+      const currency = deliveredTodayOrders[0]?.currency ?? 'XAF';
+
+      for (const order of deliveredTodayOrders) {
+        const earnings = this.commissionsService.calculateAgentEarningsSync(
+          {
+            id: order.id,
+            base_delivery_fee: order.base_delivery_fee ?? 0,
+            per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
+            currency: order.currency,
+          },
+          isAgentVerified,
+          commissionConfig
+        );
+        todayEarnings += earnings.totalEarnings;
+      }
+
+      const recentCommissions = recentOrders.map((order: any) => {
+        const earnings = this.commissionsService.calculateAgentEarningsSync(
+          {
+            id: order.id,
+            base_delivery_fee: order.base_delivery_fee ?? 0,
+            per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
+            currency: order.currency,
+          },
+          isAgentVerified,
+          commissionConfig
+        );
+        return {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          amount: earnings.totalEarnings,
+          deliveredAt: order.actual_delivery_time,
+        };
+      });
+
+      return {
+        success: true,
+        todayEarnings,
+        currency,
+        todayDeliveryCount: deliveredTodayOrders.length,
+        activeOrderCount,
+        recentCommissions,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch earnings summary',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

@@ -1,8 +1,9 @@
 import { Assignment, LocalShipping } from '@mui/icons-material';
-import { Box, Paper, useTheme, useMediaQuery } from '@mui/material';
+import { Badge, Box, Paper, useTheme, useMediaQuery } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
 const AgentBottomNav: React.FC = () => {
@@ -12,6 +13,9 @@ const AgentBottomNav: React.FC = () => {
   const { userType } = useUserProfileContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { summary } = useAgentEarningsSummary(userType === 'agent' && isMobile);
+
+  const activeOrderCount = summary?.activeOrderCount ?? 0;
 
   // Only show for agents on mobile
   if (userType !== 'agent' || !isMobile) {
@@ -102,7 +106,7 @@ const AgentBottomNav: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Active Orders Tab */}
+        {/* Active Orders Tab with count badge */}
         <Box
           onClick={() => handleNavigate('/orders')}
           sx={{
@@ -127,14 +131,21 @@ const AgentBottomNav: React.FC = () => {
             },
           }}
         >
-          <Assignment
-            sx={{
-              fontSize: 24,
-              color: isActiveOrdersActive
-                ? 'primary.main'
-                : 'text.secondary',
-            }}
-          />
+          <Badge
+            badgeContent={activeOrderCount}
+            color="primary"
+            max={99}
+            invisible={activeOrderCount === 0}
+          >
+            <Assignment
+              sx={{
+                fontSize: 24,
+                color: isActiveOrdersActive
+                  ? 'primary.main'
+                  : 'text.secondary',
+              }}
+            />
+          </Badge>
           <Box
             component="span"
             sx={{

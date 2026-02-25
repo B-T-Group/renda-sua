@@ -694,6 +694,54 @@ export class OrdersController {
     }
   }
 
+  @Get(':orderId/agent-earnings')
+  @ApiOperation({ summary: 'Get agent earnings for an order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Agent earnings for the order',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        earnings: {
+          type: 'object',
+          properties: {
+            totalEarnings: { type: 'number' },
+            baseDeliveryCommission: { type: 'number' },
+            perKmDeliveryCommission: { type: 'number' },
+            currency: { type: 'string' },
+          },
+        },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not the assigned agent' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderAgentEarnings(@Param('orderId') orderId: string) {
+    try {
+      return await this.ordersService.getOrderAgentEarnings(orderId);
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const errorMessage = error.message || 'Failed to get agent earnings';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      if (errorMessage.includes('Order not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('Only agents')
+      ) {
+        statusCode = HttpStatus.FORBIDDEN;
+      }
+      throw new HttpException(
+        { success: false, error: errorMessage },
+        statusCode
+      );
+    }
+  }
+
   @Get(':id')
   async getOrderById(@Param('id') orderId: string) {
     try {
