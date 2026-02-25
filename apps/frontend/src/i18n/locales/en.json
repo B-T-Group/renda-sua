@@ -1668,7 +1668,8 @@
     "manageDocumentsDescription": "Upload and manage your verification documents",
     "changePhoto": "Change photo",
     "profilePictureHint": "JPG, PNG or WebP. Max 5MB.",
-    "agentProfilePictureNote": "Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother."
+    "agentProfilePictureNote": "Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother.",
+    "personalAddressesDescription": "Add and manage your delivery and billing addresses"
   },
   "public": {
     "items": {

@@ -3,6 +3,7 @@ import {
   CameraAlt as CameraAltIcon,
   Description as DescriptionIcon,
   Edit as EditIcon,
+  LocationOn as LocationOnIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
 import {
@@ -169,10 +170,17 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 }, px: { xs: 2, sm: 3 } }}>
+    <Container
+      maxWidth="lg"
+      sx={{
+        py: { xs: 2, sm: 3 },
+        px: { xs: 1.5, sm: 2, md: 3 },
+        width: '100%',
+      }}
+    >
       {/* Success/Error Messages */}
       {(successMessage || errorMessage) && (
-        <Stack spacing={1} sx={{ mb: 3 }}>
+        <Stack spacing={1} sx={{ mb: 2 }}>
           {successMessage && (
             <Alert severity="success" onClose={clearMessages}>
               {successMessage}
@@ -190,12 +198,12 @@ const Profile: React.FC = () => {
         variant="h4"
         component="h1"
         gutterBottom
-        sx={{ fontWeight: 600, mb: 3 }}
+        sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}
       >
         {t('profile.title')}
       </Typography>
 
-      <Grid container spacing={3} sx={{ width: '100%' }}>
+      <Grid container spacing={2} sx={{ width: '100%', margin: 0 }}>
         {/* Profile Information */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: '100%' }}>
@@ -223,6 +231,8 @@ const Profile: React.FC = () => {
                       position: 'absolute',
                       bottom: 0,
                       right: 0,
+                      minWidth: 44,
+                      minHeight: 44,
                       bgcolor: 'background.paper',
                       boxShadow: 1,
                       '&:hover': { bgcolor: 'action.hover' },
@@ -270,6 +280,7 @@ const Profile: React.FC = () => {
                   onClick={() => setEditingProfile(!editingProfile)}
                   color="primary"
                   aria-label={editingProfile ? 'Cancel' : 'Edit'}
+                  sx={{ minWidth: 44, minHeight: 44 }}
                 >
                   {editingProfile ? <CancelIcon /> : <EditIcon />}
                 </IconButton>
@@ -345,26 +356,7 @@ const Profile: React.FC = () => {
           </Card>
         </Grid>
 
-        {/* Addresses */}
-        {profile && (
-          <Grid size={{ xs: 12, md: 6 }}>
-            <AddressManager
-              entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
-              entityId={
-                profile.user_type_id === 'agent'
-                  ? profile.agent?.id || ''
-                  : profile.user_type_id === 'client'
-                  ? profile.client?.id || ''
-                  : profile.business?.id || ''
-              }
-              title={t('profile.personalAddresses')}
-              showCoordinates={false}
-              onAccountCreated={handleAccountCreated}
-            />
-          </Grid>
-        )}
-
-        {/* Documents link - quick access to document management */}
+        {/* Manage Documents - link card (same style as Personal Addresses) */}
         <Grid size={{ xs: 12 }}>
           <Card
             component={RouterLink}
@@ -374,33 +366,110 @@ const Profile: React.FC = () => {
               color: 'inherit',
               display: 'flex',
               alignItems: 'center',
-              p: 2,
+              p: { xs: 1.5, sm: 2 },
+              minHeight: 56,
               transition: 'background-color 0.2s',
               '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            <DescriptionIcon sx={{ mr: 2, color: 'primary.main' }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
+            <DescriptionIcon
+              sx={{
+                mr: { xs: 1.5, sm: 2 },
+                color: 'primary.main',
+                fontSize: { xs: 28, sm: 32 },
+              }}
+            />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={600}
+                sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' } }}
+              >
                 {t('profile.manageDocuments', 'Manage Documents')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+              >
                 {t(
                   'profile.manageDocumentsDescription',
                   'Upload and manage your verification documents'
                 )}
               </Typography>
             </Box>
-            <Typography variant="body2" color="primary.main">
+            <Typography
+              variant="body2"
+              color="primary.main"
+              sx={{ flexShrink: 0, ml: 1, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+            >
               {t('common.view', 'View')} →
             </Typography>
           </Card>
         </Grid>
+
+        {/* Personal Addresses - card with same header style, content below */}
+        {profile && (
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  p: { xs: 1.5, sm: 2 },
+                  pb: 0,
+                }}
+              >
+                <LocationOnIcon
+                  sx={{
+                    mr: { xs: 1.5, sm: 2 },
+                    color: 'primary.main',
+                    fontSize: { xs: 28, sm: 32 },
+                  }}
+                />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight={600}
+                    sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' } }}
+                  >
+                    {t('profile.personalAddresses', 'Personal Addresses')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+                  >
+                    {t(
+                      'profile.personalAddressesDescription',
+                      'Add and manage your delivery and billing addresses'
+                    )}
+                  </Typography>
+                </Box>
+              </Box>
+              <CardContent sx={{ pt: 1, px: { xs: 2, sm: 3 }, pb: { xs: 2, sm: 3 } }}>
+                <AddressManager
+                  entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
+                  entityId={
+                    profile.user_type_id === 'agent'
+                      ? profile.agent?.id || ''
+                      : profile.user_type_id === 'client'
+                        ? profile.client?.id || ''
+                        : profile.business?.id || ''
+                  }
+                  showCoordinates={false}
+                  onAccountCreated={handleAccountCreated}
+                  embedded
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
 
       {/* Accounts */}
       {profile && (
-        <Box sx={{ mt: 4 }}>
+        <Box sx={{ mt: { xs: 3, sm: 4 } }}>
           <AccountManager
             ref={accountManagerRef}
             entityType={profile.user_type_id as 'agent' | 'client' | 'business'}

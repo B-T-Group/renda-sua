@@ -42,6 +42,8 @@ interface AddressManagerProps {
   allowDelete?: boolean;
   emptyStateMessage?: string;
   onAccountCreated?: (account: { id: string; [key: string]: unknown }) => void;
+  /** When true, do not render outer Card (for embedding inside another card) */
+  embedded?: boolean;
 }
 
 const defaultAddressTypeOptions = [
@@ -66,6 +68,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
   allowDelete = true,
   emptyStateMessage,
   onAccountCreated,
+  embedded = false,
 }) => {
   const { t } = useTranslation();
 
@@ -227,32 +230,36 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
   // Loading skeleton
   if (loading && addresses.length === 0) {
+    const skeletonContent = (
+      <>
+        <Box
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+          mb={2}
+        >
+          <Skeleton variant="text" width={150} height={32} />
+          <Skeleton variant="rectangular" width={120} height={36} />
+        </Box>
+        <Stack spacing={2}>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} variant="rectangular" height={100} />
+          ))}
+        </Stack>
+      </>
+    );
+    if (embedded) {
+      return <Box>{skeletonContent}</Box>;
+    }
     return (
       <Card>
-        <CardContent>
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            mb={2}
-          >
-            <Skeleton variant="text" width={150} height={32} />
-            <Skeleton variant="rectangular" width={120} height={36} />
-          </Box>
-          <Stack spacing={2}>
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={100} />
-            ))}
-          </Stack>
-        </CardContent>
+        <CardContent>{skeletonContent}</CardContent>
       </Card>
     );
   }
 
-  return (
+  const content = (
     <>
-      <Card>
-        <CardContent>
           {/* Header */}
           <Box
             display="flex"
@@ -405,8 +412,18 @@ const AddressManager: React.FC<AddressManagerProps> = ({
               {t('addresses.maxAddressesReached', { max: maxAddresses })}
             </Alert>
           )}
-        </CardContent>
-      </Card>
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <Box>{content}</Box>
+      ) : (
+        <Card>
+          <CardContent>{content}</CardContent>
+        </Card>
+      )}
 
       {/* Address Dialog */}
       <AddressDialog

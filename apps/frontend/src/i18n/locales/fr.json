@@ -1676,7 +1676,8 @@
     "manageDocumentsDescription": "Téléchargez et gérez vos documents de vérification",
     "changePhoto": "Changer la photo",
     "profilePictureHint": "JPG, PNG ou WebP. Max 5 Mo.",
-    "agentProfilePictureNote": "Ajoutez une photo de profil pour que les clients voient qui livre leur commande. Cela renforce la confiance et facilite les remises."
+    "agentProfilePictureNote": "Ajoutez une photo de profil pour que les clients voient qui livre leur commande. Cela renforce la confiance et facilite les remises.",
+    "personalAddressesDescription": "Ajoutez et gérez vos adresses de livraison et de facturation"
   },
   "public": {
     "items": {
