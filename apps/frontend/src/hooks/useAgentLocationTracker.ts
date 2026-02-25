@@ -10,11 +10,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { environment } from '../config/environment';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import {
-  clearLastLocation,
-  getLastLocation,
-  isBackgroundSyncSupported,
-  registerBackgroundSync,
-  storeLastLocation,
+    clearLastLocation,
+    getLastLocation,
+    isBackgroundSyncSupported,
+    registerBackgroundSync,
+    storeLastLocation,
 } from '../utils/backgroundLocationSync';
 import { useGraphQLRequest } from './useGraphQLRequest';
 

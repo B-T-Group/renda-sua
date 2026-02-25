@@ -21,6 +21,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { OrderData } from '../../hooks/useOrderById';
+import rendasuaLogo from '../../assets/rendasua.svg';
 import DeliveryTimeWindowDisplay from './DeliveryTimeWindowDisplay';
 
 interface OrderViewProps {
@@ -468,6 +469,15 @@ const OrderView: React.FC<OrderViewProps> = ({
                         {order.assigned_agent.user.first_name}{' '}
                         {order.assigned_agent.user.last_name}
                       </Typography>
+                      {order.assigned_agent.is_internal && (
+                        <Box
+                          component="img"
+                          src={rendasuaLogo}
+                          alt="Rendasua"
+                          sx={{ width: 24, height: 24 }}
+                          title={t('orders.internalAgent', 'Internal agent')}
+                        />
+                      )}
                       {order.assigned_agent.is_verified && (
                         <Chip
                           label={t('orders.verified', 'Verified')}

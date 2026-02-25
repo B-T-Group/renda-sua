@@ -85,6 +85,7 @@ export interface OrderData {
     id: string;
     user_id: string;
     is_verified: boolean;
+    is_internal?: boolean;
     user: {
       id: string;
       identifier: string;

@@ -1,22 +1,22 @@
 import {
-  Body,
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Req,
-  UseGuards,
+    Body,
+    Controller,
+    Get,
+    HttpException,
+    HttpStatus,
+    Param,
+    Patch,
+    Post,
+    Req,
+    UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import type {
-  CreateTicketDto,
-  SupportTicket,
-  SupportTicketStatus,
+    CreateTicketDto,
+    SupportTicket,
+    SupportTicketStatus,
 } from './support.service';
 import { SupportService } from './support.service';
 

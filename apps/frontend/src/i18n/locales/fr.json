@@ -355,6 +355,7 @@
       "title": "Commandes Disponibles"
     },
     "activeOrders": "Commandes Actives",
+    "unverifiedHoldNote": "Vérifiez votre compte et ajoutez une photo de profil pour réduire vos montants de retenue.",
     "orders": {
       "amountBreakdown": "Répartition des Montants",
       "assignedToOther": "Cette commande a été réclamée par un autre agent et n'est plus disponible.",
@@ -379,6 +380,7 @@
       "preparingNotice": "L'entreprise prépare actuellement cette commande. Elle sera prête pour la collecte sous peu.",
       "subtitle": "Gérer les livraisons assignées",
       "title": "Commandes d'Agent",
+      "internalRequired": "Cette commande nécessite un agent interne. Contactez le support pour devenir un agent interne.",
       "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez compléter votre vérification pour réclamer des commandes de grande valeur."
     }
   },
@@ -1049,11 +1051,11 @@
   "faq": {
     "agent": {
       "hold": {
-        "a": "Un pourcentage de vos gains est retenu à des fins de sécurité et libéré après une livraison réussie.",
+        "a": "Un pourcentage de vos gains est retenu pour la sécurité : agents non vérifiés 100 %, agents vérifiés 80 %, agents internes 0 %. Vérifiez votre compte et ajoutez une photo de profil pour réduire le montant retenu.",
         "q": "Combien est retenu de mes gains ?"
       },
       "verifiedLessHold": {
-        "a": "Les agents vérifiés avec un bon historique de livraison ont des montants de retenue réduits car ils ont prouvé leur fiabilité.",
+        "a": "Les agents non vérifiés ont 100 % retenu ; les agents vérifiés 80 % ; les agents internes (Rendasua) 0 %. Vérifiez votre compte et ajoutez une photo de profil pour bénéficier de montants de retenue réduits.",
         "q": "Pourquoi les agents vérifiés ont-ils moins de retenue ?"
       }
     },
@@ -1364,6 +1366,7 @@
     "delivery": "Livraison",
     "deliveryAddress": "Adresse de Livraison",
     "deliveryAgent": "Agent de Livraison",
+    "internalAgent": "Agent interne",
     "deliveryFee": "Frais de Livraison",
     "deliveryCommission": "Commission de Livraison",
     "earnings": "Vos Gains",

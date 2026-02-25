@@ -351,6 +351,134 @@ export class NotificationsService {
   }
 
   /**
+   * Send a test push notification using the same VAPID config and stored push subscriptions.
+   * Explicitly uses ConfigService push config and push_subscriptions from the DB.
+   */
+  async sendTestPushNotification(
+    userIdentifier: string,
+    title?: string,
+    body?: string
+  ): Promise<{ sent: boolean; subscriptionsCount: number; sentCount?: number; error?: string }> {
+    const pushConfig = this.configService.get<Configuration['push']>('push');
+    if (!pushConfig) {
+      return {
+        sent: false,
+        subscriptionsCount: 0,
+        error: 'Push config not available',
+      };
+    }
+    if (!pushConfig.enabled) {
+      return {
+        sent: false,
+        subscriptionsCount: 0,
+        error: 'Push notifications are disabled (PUSH_NOTIFICATIONS_ENABLED is not true)',
+      };
+    }
+    if (!pushConfig.vapidPublicKey || !pushConfig.vapidPrivateKey) {
+      return {
+        sent: false,
+        subscriptionsCount: 0,
+        error: 'VAPID keys not configured (set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in env)',
+      };
+    }
+
+    this.initializeWebPush();
+
+    try {
+      const userQuery = `
+        query GetUserByIdentifier($identifier: String!) {
+          users(where: { identifier: { _eq: $identifier } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const userResult = await this.hasuraSystemService.executeQuery(
+        userQuery,
+        { identifier: userIdentifier }
+      );
+      const users = (userResult?.users as { id: string }[]) ?? [];
+      if (users.length === 0) {
+        return { sent: false, subscriptionsCount: 0, error: 'User not found' };
+      }
+      const userId = users[0].id;
+
+      const subQuery = `
+        query GetPushSubscriptions($userId: uuid!) {
+          push_subscriptions(where: { user_id: { _eq: $userId } }) {
+            id
+            endpoint
+            p256dh_key
+            auth_key
+          }
+        }
+      `;
+      const subResult = await this.hasuraSystemService.executeQuery(
+        subQuery,
+        { userId }
+      );
+      const subs = (subResult?.push_subscriptions as Array<{
+        id: string;
+        endpoint: string;
+        p256dh_key: string;
+        auth_key: string;
+      }>) ?? [];
+
+      if (subs.length === 0) {
+        return {
+          sent: false,
+          subscriptionsCount: 0,
+          error: 'No push subscriptions for this user. Subscribe from the app first.',
+        };
+      }
+
+      const payload = JSON.stringify({
+        title: title ?? 'Test notification',
+        body: body ?? 'This is a test push from Rendasua.',
+        type: 'test',
+      });
+
+      let sentCount = 0;
+      for (const sub of subs) {
+        try {
+          await webPush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh_key,
+                auth: sub.auth_key,
+              },
+            },
+            payload,
+            { TTL: 86400 }
+          );
+          sentCount += 1;
+        } catch (sendErr) {
+          this.logger.warn(
+            `Test push failed for subscription ${sub.endpoint}: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`
+          );
+        }
+      }
+
+      return {
+        sent: sentCount > 0,
+        subscriptionsCount: subs.length,
+        sentCount,
+        ...(sentCount < subs.length && {
+          error: `Sent to ${sentCount}/${subs.length} subscription(s); some may have expired.`,
+        }),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`sendTestPushNotification failed: ${message}`);
+      return {
+        sent: false,
+        subscriptionsCount: 0,
+        error: message,
+      };
+    }
+  }
+
+  /**
    * Send push notification to all subscriptions for a user (lookup by email)
    */
   private async sendPushNotificationByEmail(

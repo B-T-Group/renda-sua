@@ -124,7 +124,7 @@ pending → confirmed → preparing → ready_for_pickup → assigned_to_agent �
 
 ### **Hold Management**
 
-- **Hold Amount**: 80% of order total (configurable via `AGENT_HOLD_PERCENTAGE`)
+- **Hold Amount**: Percentage of order total by agent type (internal 0%, verified 80%, unverified 100%, from `application_configurations`)
 - **Hold Placement**: When agent gets order (`assigned_to_agent`)
 - **Hold Release**:
   - On successful delivery (`delivered`)
@@ -289,21 +289,14 @@ CREATE TABLE account_transactions (
 ### **Environment Variables**
 
 ```bash
-# Agent hold percentage (default: 80%)
-AGENT_HOLD_PERCENTAGE=80
-
 # Hasura configuration
 HASURA_GRAPHQL_ENDPOINT=http://localhost:8080/v1/graphql
 HASURA_GRAPHQL_ADMIN_SECRET=myadminsecretkey
 ```
 
-### **Configuration Interface**
+### **Agent Hold Configuration**
 
-```typescript
-export interface OrderConfig {
-  agentHoldPercentage: number;
-}
-```
+Hold percentages are in `application_configurations`: `internal_agent_hold_percentage` (0), `verified_agent_hold_percentage` (80), `unverified_agent_hold_percentage` (100). Agents use `GET /agents/hold-percentage`; business admins set internal via `PATCH /business/agents/:agentId/internal`.
 
 ## 🚀 Performance & Scalability
 
@@ -317,7 +310,7 @@ export interface OrderConfig {
 
 - **Order Data**: Cache frequently accessed orders
 - **User Permissions**: Cache user roles and permissions
-- **Configuration**: Cache hold percentages
+- **Configuration**: Cache hold percentage configs (internal/verified/unverified)
 
 ### **Monitoring**
 
@@ -334,7 +327,7 @@ export interface OrderConfig {
 3. **Advanced Analytics**: Order flow analytics
 4. **Mobile Push**: Real-time mobile notifications
 5. **Geolocation**: Enhanced location tracking
-6. **Dynamic Holds**: Per-order or per-agent hold rates
+6. **Dynamic Holds**: Per-agent hold rates (internal/verified/unverified) in place
 
 ### **Scalability Improvements**
 

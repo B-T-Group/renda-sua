@@ -89,7 +89,6 @@ export interface Auth0Config {
 }
 
 export interface OrderConfig {
-  agentHoldPercentage: number;
   /** Minutes to wait before payment timeout cancellation (default 5). Used by wait-and-execute state machine. */
   paymentTimeoutWaitMinutes?: number;
 }
@@ -305,9 +304,6 @@ export default (): Configuration => {
       callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
     },
     order: {
-      agentHoldPercentage: parseFloat(
-        process.env.AGENT_HOLD_PERCENTAGE || '80'
-      ),
       paymentTimeoutWaitMinutes: parseInt(
         process.env.PAYMENT_TIMEOUT_WAIT_MINUTES || '5',
         10

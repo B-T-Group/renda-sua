@@ -361,6 +361,7 @@ export class HasuraUserService {
           user_id
           vehicle_type_id
           is_verified
+          is_internal
           created_at
           updated_at
         }
@@ -396,6 +397,7 @@ export class HasuraUserService {
         user_id: agent.user_id,
         vehicle_type_id: agent.vehicle_type_id,
         is_verified: agent.is_verified,
+        is_internal: agent.is_internal,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
       } as Agents,

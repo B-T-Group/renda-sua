@@ -105,6 +105,7 @@ select_permissions:
         - created_at
         - updated_at
         - is_verified
+        - is_internal
         - onboarding_complete
       filter:
         user:
@@ -119,6 +120,7 @@ select_permissions:
         - created_at
         - updated_at
         - is_verified
+        - is_internal
         - onboarding_complete
       filter:
         user:
@@ -133,6 +135,7 @@ select_permissions:
         - created_at
         - updated_at
         - is_verified
+        - is_internal
         - onboarding_complete
       filter:
         user:
@@ -147,6 +150,7 @@ select_permissions:
         - created_at
         - updated_at
         - is_verified
+        - is_internal
         - onboarding_complete
       filter:
         user:

@@ -10,8 +10,8 @@ if (typeof (globalThis as unknown as { crypto?: unknown }).crypto === 'undefined
 }
 
 import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
+    GetSecretValueCommand,
+    SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';

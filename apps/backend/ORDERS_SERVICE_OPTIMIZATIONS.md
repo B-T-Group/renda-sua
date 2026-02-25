@@ -196,8 +196,7 @@ export class OrdersService {
       return cached;
     }
     
-    const config = this.configService.get('order');
-    const value = config?.agentHoldPercentage || 80;
+    const value = await this.agentHoldService.getHoldPercentageForAgent();
     
     // Cache for 10 minutes
     await this.cacheManager.set(cacheKey, value, 600000);

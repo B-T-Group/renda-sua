@@ -47,6 +47,46 @@ export class NotificationsController {
     });
   }
 
+  @Post('test-push')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Send a test push notification to the current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Test push sent or reason it was not sent',
+  })
+  async testPush(
+    @Body() body: { title?: string; body?: string },
+    @Req() request: RequestWithUser
+  ) {
+    const userIdentifier = request.user?.sub ?? request.user?.id;
+    if (!userIdentifier) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    const result = await this.notificationsService.sendTestPushNotification(
+      userIdentifier,
+      body?.title,
+      body?.body
+    );
+    if (result.sent) {
+      return {
+        success: true,
+        message:
+          result.sentCount !== undefined
+            ? `Test push sent to ${result.sentCount}/${result.subscriptionsCount} subscription(s)`
+            : `Test push sent to ${result.subscriptionsCount} subscription(s)`,
+        subscriptionsCount: result.subscriptionsCount,
+        sentCount: result.sentCount,
+        ...(result.error && { warning: result.error }),
+      };
+    }
+    return {
+      success: false,
+      error: result.error,
+      subscriptionsCount: result.subscriptionsCount,
+      sentCount: result.sentCount ?? 0,
+    };
+  }
+
   @Post('test-order-created')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Test order creation notifications' })

@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DateTime } from 'luxon';
+import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { CommissionsService } from '../commissions/commissions.service';
@@ -283,6 +284,7 @@ export class OrdersService {
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
+    private readonly agentHoldService: AgentHoldService,
     private readonly pdfService: PdfService,
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService
@@ -322,21 +324,6 @@ export class OrdersService {
       success: results.some((result) => result.success),
       results,
     };
-  }
-
-  /**
-   * Get agent hold percentage from configuration
-   */
-  async getAgentHoldPercentage(): Promise<number> {
-    try {
-      const config = this.configService.get('order');
-      return config?.agentHoldPercentage || 80; // Default to 80% if not configured
-    } catch (error: any) {
-      this.logger.warn(
-        `Failed to get agent hold percentage: ${error.message}. Using default 80%.`
-      );
-      return 80; // Default fallback
-    }
   }
 
   /**
@@ -1025,14 +1012,15 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Check if order requires verified agent and if agent is verified
-    if (order.verified_agent_delivery && !user.agent.is_verified) {
+    // Check if order requires internal agent (high-value orders)
+    if (order.verified_agent_delivery && !user.agent.is_internal) {
       throw new HttpException(
-        'This order requires a verified agent. Please contact support to get your account verified.',
+        'This order requires an internal agent. Contact support to become an internal agent.',
         HttpStatus.FORBIDDEN
       );
     }
-    const holdPercentage = this.configService.get('order').agentHoldPercentage;
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
     const holdAmount = (order.subtotal * holdPercentage) / 100;
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
@@ -1043,21 +1031,21 @@ export class OrdersService {
         `No account found for currency ${order.currency}`,
         HttpStatus.BAD_REQUEST
       );
-    
-    // Explicitly check for negative balance
-    if (Number(agentAccount.available_balance) < 0) {
-      throw new HttpException(
-        `Account balance is negative. Please top up your account before claiming orders. Current balance: ${agentAccount.available_balance} ${order.currency}`,
-        HttpStatus.FORBIDDEN
-      );
+
+    // When hold is 0 (e.g. internal agent), skip balance checks
+    if (holdAmount > 0) {
+      if (Number(agentAccount.available_balance) < 0) {
+        throw new HttpException(
+          `Account balance is negative. Please top up your account before claiming orders. Current balance: ${agentAccount.available_balance} ${order.currency}`,
+          HttpStatus.FORBIDDEN
+        );
+      }
+      if (Number(agentAccount.available_balance) < holdAmount)
+        throw new HttpException(
+          `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
+          HttpStatus.FORBIDDEN
+        );
     }
-    
-    // Check if available balance is sufficient for hold amount
-    if (Number(agentAccount.available_balance) < holdAmount)
-      throw new HttpException(
-        `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
-        HttpStatus.FORBIDDEN
-      );
 
     // Block if another agent has a pending claim (claim-with-topup) on this order
     const hasPendingClaim =
@@ -1082,13 +1070,15 @@ export class OrdersService {
       agent_id: user.agent.id,
     });
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: holdAmount,
-      transactionType: 'hold',
-      memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
-    });
+    if (holdAmount > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: agentAccount.id,
+        amount: holdAmount,
+        transactionType: 'hold',
+        memo: `Hold for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+    }
 
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
@@ -1131,12 +1121,44 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    // Check if order requires verified agent and if agent is verified
-    if (order.verified_agent_delivery && !user.agent.is_verified) {
+    // Check if order requires internal agent (high-value orders)
+    if (order.verified_agent_delivery && !user.agent.is_internal) {
       throw new HttpException(
-        'This order requires a verified agent. Please contact support to get your account verified.',
+        'This order requires an internal agent. Contact support to become an internal agent.',
         HttpStatus.FORBIDDEN
       );
+    }
+
+    // Get hold percentage and calculate required amount
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
+
+    // When hold is 0 (e.g. internal agent), skip payment and assign directly
+    if (holdAmount === 0) {
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+      await this.updateOrderHold(orderHold.id, {
+        agent_hold_amount: 0,
+        agent_id: user.agent.id,
+      });
+      const updatedOrder = await this.assignOrderToAgent(
+        request.orderId,
+        user.agent.id,
+        'assigned_to_agent'
+      );
+      await this.createStatusHistoryEntry(
+        request.orderId,
+        'assigned_to_agent',
+        `Order assigned to agent ${user.first_name} ${user.last_name}`,
+        'agent',
+        user.id
+      );
+      return {
+        success: true,
+        order: updatedOrder,
+        holdAmount: 0,
+        message: 'Order assigned successfully',
+      };
     }
 
     // Block if another agent has a pending claim (claim-with-topup) on this order
@@ -1154,10 +1176,6 @@ export class OrdersService {
         HttpStatus.CONFLICT
       );
     }
-
-    // Get hold percentage and calculate required amount
-    const holdPercentage = this.configService.get('order').agentHoldPercentage;
-    const holdAmount = (order.subtotal * holdPercentage) / 100;
 
     // Get or create agent account
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -2141,7 +2159,7 @@ export class OrdersService {
       // Get commission config and hold percentage once for all orders
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
-      const holdPercentage = await this.getAgentHoldPercentage();
+      const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
       return this.transformOrdersForAgentSync(
         result.orders,
         agentInfo.isVerified,
@@ -2275,7 +2293,7 @@ export class OrdersService {
     // Transform orders for agents to show commission amounts
     const commissionConfig =
       await this.commissionsService.getCommissionConfigs();
-    const holdPercentage = await this.getAgentHoldPercentage();
+    const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
     const transformedOrders = this.transformOrdersForAgentSync(
       filteredOrders,
       user.agent.is_verified || false,
@@ -2762,7 +2780,7 @@ export class OrdersService {
     if (agentInfo?.isAgent) {
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
-      const holdPercentage = await this.getAgentHoldPercentage();
+      const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
       const transformedOrder = this.transformOrderForAgentSync(
         orderData,
         agentInfo.isVerified,
@@ -3321,7 +3339,7 @@ export class OrdersService {
     if (agentInfo?.isAgent) {
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
-      const holdPercentage = await this.getAgentHoldPercentage();
+      const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
       return this.transformOrderForAgentSync(
         order,
         agentInfo.isVerified,

@@ -11,25 +11,20 @@ This module handles the complete order lifecycle from creation to delivery, with
 - **Order Status Management**: Controlled status transitions with validation
 - **Agent Assignment**: Automatic agent assignment with financial holds
 - **Order History**: Complete audit trail of all status changes
-- **Financial Controls**: Configurable hold percentages for agent assignments
+- **Financial Controls**: Agent hold by type (internal 0%, verified 80%, unverified 100%)
 - **Permission-Based Access**: Role-based access control for different operations
 
 ## Configuration
 
-### Environment Variables
+### Agent Hold Percentages
 
-```bash
-# Agent hold percentage (default: 80)
-AGENT_HOLD_PERCENTAGE=80
-```
+Hold percentages are stored in `application_configurations` and applied by agent type:
 
-### Configuration Interface
+- **Internal agents**: 0% (`internal_agent_hold_percentage`)
+- **Verified agents**: 80% (`verified_agent_hold_percentage`)
+- **Unverified agents**: 100% (`unverified_agent_hold_percentage`)
 
-```typescript
-export interface OrderConfig {
-  agentHoldPercentage: number;
-}
-```
+Agents get their hold via `GET /agents/hold-percentage`. Business admins set internal via `PATCH /business/agents/:agentId/internal` (agent must be verified first).
 
 ## API Endpoints
 
@@ -259,15 +254,9 @@ All status changes are automatically logged to the `order_status_history` table 
 - **release**: Money released from hold (when order completes)
 - **payment**: Payment for completed order
 
-### Configuration
+### Hold Configuration
 
-```typescript
-// Default hold percentage
-AGENT_HOLD_PERCENTAGE = 80;
-
-// Example: 90% hold
-AGENT_HOLD_PERCENTAGE = 90;
-```
+Values come from `application_configurations` (internal_agent_hold_percentage, verified_agent_hold_percentage, unverified_agent_hold_percentage). Defaults: 0%, 80%, 100%.
 
 ## Error Handling
 
@@ -423,4 +412,4 @@ All operations log:
 3. **Advanced Analytics**: Order flow analytics
 4. **Mobile Push Notifications**: Real-time status updates
 5. **Geolocation Tracking**: Enhanced location tracking
-6. **Dynamic Hold Percentages**: Per-order or per-agent hold rates
+6. **Dynamic Hold Percentages**: Per-agent (internal/verified/unverified) already in place

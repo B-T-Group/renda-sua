@@ -61,6 +61,8 @@ export const GET_ORDERS = gql`
       }
       assigned_agent {
         id
+        is_verified
+        is_internal
         user {
           id
           first_name
@@ -242,6 +244,7 @@ export const GET_ORDER_BY_ID = gql`
         id
         user_id
         is_verified
+        is_internal
         user {
           id
           identifier
@@ -767,6 +770,8 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       }
       assigned_agent {
         user_id
+        is_verified
+        is_internal
         user {
           first_name
           last_name

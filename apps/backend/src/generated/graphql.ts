@@ -1823,6 +1823,8 @@ export type Agents = {
   id: Scalars['uuid']['output'];
   /** Indicates if the agent account has been verified */
   is_verified?: Maybe<Scalars['Boolean']['output']>;
+  /** Agent works for Rendasua; hold percentage is 0 */
+  is_internal?: Maybe<Scalars['Boolean']['output']>;
   /** An array relationship */
   order_holds: Array<Order_Holds>;
   /** An aggregate relationship */
@@ -1996,6 +1998,7 @@ export type Agents_Bool_Exp = {
   agent_addresses_aggregate?: InputMaybe<Agent_Addresses_Aggregate_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_internal?: InputMaybe<Boolean_Comparison_Exp>;
   is_verified?: InputMaybe<Boolean_Comparison_Exp>;
   order_holds?: InputMaybe<Order_Holds_Bool_Exp>;
   order_holds_aggregate?: InputMaybe<Order_Holds_Aggregate_Bool_Exp>;
@@ -2023,6 +2026,8 @@ export type Agents_Insert_Input = {
   agent_addresses?: InputMaybe<Agent_Addresses_Arr_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Agent works for Rendasua; hold percentage is 0 */
+  is_internal?: InputMaybe<Scalars['Boolean']['input']>;
   /** Indicates if the agent account has been verified */
   is_verified?: InputMaybe<Scalars['Boolean']['input']>;
   order_holds?: InputMaybe<Order_Holds_Arr_Rel_Insert_Input>;
@@ -2097,6 +2102,7 @@ export type Agents_Order_By = {
   agent_addresses_aggregate?: InputMaybe<Agent_Addresses_Aggregate_Order_By>;
   created_at?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  is_internal?: InputMaybe<Order_By>;
   is_verified?: InputMaybe<Order_By>;
   order_holds_aggregate?: InputMaybe<Order_Holds_Aggregate_Order_By>;
   orders_aggregate?: InputMaybe<Orders_Aggregate_Order_By>;
@@ -2119,6 +2125,8 @@ export enum Agents_Select_Column {
   CreatedAt = 'created_at',
   /** column name */
   Id = 'id',
+  /** column name */
+  IsInternal = 'is_internal',
   /** column name */
   IsVerified = 'is_verified',
   /** column name */
@@ -2145,6 +2153,8 @@ export enum Agents_Select_Column_Agents_Aggregate_Bool_Exp_Bool_Or_Arguments_Col
 export type Agents_Set_Input = {
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Agent works for Rendasua; hold percentage is 0 */
+  is_internal?: InputMaybe<Scalars['Boolean']['input']>;
   /** Indicates if the agent account has been verified */
   is_verified?: InputMaybe<Scalars['Boolean']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -2164,6 +2174,8 @@ export type Agents_Stream_Cursor_Input = {
 export type Agents_Stream_Cursor_Value_Input = {
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Agent works for Rendasua; hold percentage is 0 */
+  is_internal?: InputMaybe<Scalars['Boolean']['input']>;
   /** Indicates if the agent account has been verified */
   is_verified?: InputMaybe<Scalars['Boolean']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -2177,6 +2189,8 @@ export enum Agents_Update_Column {
   CreatedAt = 'created_at',
   /** column name */
   Id = 'id',
+  /** column name */
+  IsInternal = 'is_internal',
   /** column name */
   IsVerified = 'is_verified',
   /** column name */

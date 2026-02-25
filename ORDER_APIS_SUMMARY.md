@@ -5,7 +5,7 @@
 Successfully implemented comprehensive order status management APIs with the following key features:
 
 - **4 New API Endpoints** for specific order status transitions
-- **Financial Hold System** with configurable agent hold percentages
+- **Financial Hold System** with agent hold by type (internal 0%, verified 80%, unverified 100%)
 - **Complete Order History** tracking all status changes
 - **Role-Based Access Control** for business and agent users
 - **Comprehensive Testing** with unit and integration tests
@@ -49,27 +49,22 @@ Successfully implemented comprehensive order status management APIs with the fol
 - **Access**: Agent users only
 - **Status Transition**: `ready_for_pickup` → `assigned_to_agent`
 - **Features**:
-  - **Financial Hold**: Places 80% (configurable) hold on agent's account
+  - **Financial Hold**: Places a percentage hold on agent's account (internal 0%, verified 80%, unverified 100%, from application_configurations)
   - **Balance Validation**: Returns 403 if insufficient funds
   - **Account Management**: Updates available and withheld balances
   - **Transaction Logging**: Creates hold transaction record
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Agent Hold Percentages
 
-```bash
-# Agent hold percentage (default: 80%)
-AGENT_HOLD_PERCENTAGE=80
-```
+Hold percentages are stored in `application_configurations` and applied by agent type:
 
-### Configuration Interface
+- **Internal agents** (work for Rendasua): 0% hold (`internal_agent_hold_percentage`)
+- **Verified agents**: 80% hold (`verified_agent_hold_percentage`)
+- **Unverified agents**: 100% hold (`unverified_agent_hold_percentage`)
 
-```typescript
-export interface OrderConfig {
-  agentHoldPercentage: number;
-}
-```
+Agents fetch their current hold via `GET /agents/hold-percentage`. Business admins can set an agent as internal with `PATCH /business/agents/:agentId/internal` (agent must be verified first).
 
 ## 🏗️ Architecture
 
@@ -270,7 +265,6 @@ CREATE TABLE account_transactions (
 
 ```bash
 # Required environment variables
-AGENT_HOLD_PERCENTAGE=80
 HASURA_GRAPHQL_ENDPOINT=http://localhost:8080/v1/graphql
 HASURA_GRAPHQL_ADMIN_SECRET=myadminsecretkey
 ```
@@ -297,7 +291,7 @@ npm test
 3. **Advanced Analytics**: Order flow analytics
 4. **Mobile Push**: Real-time mobile notifications
 5. **Geolocation**: Enhanced location tracking
-6. **Dynamic Holds**: Per-order or per-agent hold rates
+6. **Dynamic Holds**: Per-agent hold rates (internal/verified/unverified) already in place
 
 ### Scalability Improvements
 

@@ -48,6 +48,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         user_id
         vehicle_type_id
         is_verified
+        is_internal
         onboarding_complete
         created_at
         updated_at

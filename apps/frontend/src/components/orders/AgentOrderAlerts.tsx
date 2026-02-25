@@ -23,7 +23,7 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
   const theme = useTheme();
   const { profile } = useUserProfileContext();
 
-  const agentVerified = profile?.agent?.is_verified || false;
+  const agentInternal = profile?.agent?.is_internal || false;
 
   const getDeliveryFee = () => {
     // Use delivery_commission from order (computed field for agents)
@@ -93,12 +93,12 @@ const AgentOrderAlerts: React.FC<AgentOrderAlertsProps> = ({ order }) => {
           });
         } else {
           // Available for claiming
-          if (order.verified_agent_delivery && !agentVerified) {
+          if (order.verified_agent_delivery && !agentInternal) {
             alerts.push({
               severity: 'warning' as const,
               message: t(
-                'agent.orders.verificationRequired',
-                'This order requires a verified agent. Please complete your verification to claim high-value orders.'
+                'agent.orders.internalRequired',
+                'This order requires an internal agent. Contact support to become an internal agent.'
               ),
             });
           } else {

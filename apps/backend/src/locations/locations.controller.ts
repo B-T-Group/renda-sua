@@ -1,18 +1,18 @@
 import {
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Logger,
-  Param,
-  Query,
-  Req,
+    Controller,
+    Get,
+    HttpException,
+    HttpStatus,
+    Logger,
+    Param,
+    Query,
+    Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import {
-  DeliveryConfigService,
-  FastDeliveryConfig,
+    DeliveryConfigService,
+    FastDeliveryConfig,
 } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { LocationsService } from './locations.service';

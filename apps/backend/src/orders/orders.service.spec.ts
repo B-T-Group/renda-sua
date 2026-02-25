@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -13,6 +14,7 @@ describe('OrdersService', () => {
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let configService: jest.Mocked<ConfigService<Configuration>>;
+  let agentHoldService: jest.Mocked<AgentHoldService>;
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
 
@@ -98,6 +100,10 @@ describe('OrdersService', () => {
       get: jest.fn(),
     };
 
+    const mockAgentHoldService = {
+      getHoldPercentageForAgent: jest.fn().mockResolvedValue(80),
+    };
+
     const mockAccountsService = {
       registerTransaction: jest.fn(),
     };
@@ -122,6 +128,10 @@ describe('OrdersService', () => {
           useValue: mockConfigService,
         },
         {
+          provide: AgentHoldService,
+          useValue: mockAgentHoldService,
+        },
+        {
           provide: AccountsService,
           useValue: mockAccountsService,
         },
@@ -136,6 +146,7 @@ describe('OrdersService', () => {
     hasuraUserService = module.get(HasuraUserService);
     hasuraSystemService = module.get(HasuraSystemService);
     configService = module.get(ConfigService);
+    agentHoldService = module.get(AgentHoldService);
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
   });
@@ -366,7 +377,7 @@ describe('OrdersService', () => {
 
   describe('getOrder', () => {
     beforeEach(() => {
-      configService.get.mockReturnValue({ agentHoldPercentage: 80 }); // 80% hold percentage
+      agentHoldService.getHoldPercentageForAgent.mockResolvedValue(80); // 80% hold percentage
     });
 
     it('should assign order to agent successfully', async () => {

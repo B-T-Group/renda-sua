@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface BusinessAnalytics {

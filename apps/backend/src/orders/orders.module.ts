@@ -1,6 +1,7 @@
 import { Global, Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { AgentsModule } from '../agents/agents.module';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { DeliveryModule } from '../delivery/delivery.module';
@@ -24,6 +25,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     forwardRef(() => MobilePaymentsModule),
     NotificationsModule,
     AdminModule,
+    AgentsModule,
     DeliveryModule,
     DeliveryConfigModule,
     CommissionsModule,

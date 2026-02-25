@@ -49,6 +49,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import rendasuaLogo from '../../assets/rendasua.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo, useBackendOrders } from '../../hooks';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -1243,13 +1244,33 @@ const ManageOrderPage: React.FC = () => {
                               {order.assigned_agent.user.last_name?.[0]}
                             </Avatar>
                             <Box>
-                              <Typography
-                                variant="subtitle1"
-                                fontWeight="medium"
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 0.5,
+                                }}
                               >
-                                {order.assigned_agent.user.first_name}{' '}
-                                {order.assigned_agent.user.last_name}
-                              </Typography>
+                                <Typography
+                                  variant="subtitle1"
+                                  fontWeight="medium"
+                                >
+                                  {order.assigned_agent.user.first_name}{' '}
+                                  {order.assigned_agent.user.last_name}
+                                </Typography>
+                                {order.assigned_agent.is_internal && (
+                                  <Box
+                                    component="img"
+                                    src={rendasuaLogo}
+                                    alt="Rendasua"
+                                    sx={{ width: 24, height: 24 }}
+                                    title={t(
+                                      'orders.internalAgent',
+                                      'Internal agent'
+                                    )}
+                                  />
+                                )}
+                              </Box>
                               {order.assigned_agent.user.phone_number && (
                                 <Box
                                   sx={{

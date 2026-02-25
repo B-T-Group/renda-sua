@@ -16,8 +16,9 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { Link } from 'react-router-dom';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useOpenOrders } from '../../hooks/useOpenOrders';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
 import SEOHead from '../seo/SEOHead';
@@ -31,7 +32,7 @@ interface OrderFilters {
 
 const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-
+  const { profile } = useUserProfileContext();
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
 
   const [filters, setFilters] = useState<OrderFilters>({
@@ -173,6 +174,14 @@ const OpenOrdersPage: React.FC = () => {
         maxWidth="lg"
         sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
       >
+        {profile?.agent && !profile.agent.is_verified && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t(
+              'agent.unverifiedHoldNote',
+              'Verify your account and add a profile picture to reduce your hold amounts.'
+            )}
+          </Alert>
+        )}
         <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>

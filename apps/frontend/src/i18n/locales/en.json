@@ -355,6 +355,7 @@
       "title": "Available Orders"
     },
     "activeOrders": "Active Orders",
+    "unverifiedHoldNote": "Verify your account and add a profile picture to reduce your hold amounts.",
     "orders": {
       "amountBreakdown": "Amount Breakdown",
       "assignedToOther": "This order has been claimed by another agent and is no longer available.",
@@ -377,6 +378,7 @@
       "preparingNotice": "Business is currently preparing this order. It will be ready for pickup shortly.",
       "subtitle": "Manage assigned deliveries",
       "title": "Agent Orders",
+      "internalRequired": "This order requires an internal agent. Contact support to become an internal agent.",
       "verificationRequired": "This order requires a verified agent. Please complete your verification to claim high-value orders."
     }
   },
@@ -1047,11 +1049,11 @@
   "faq": {
     "agent": {
       "hold": {
-        "a": "A percentage of your earnings is held for security purposes and released after successful delivery.",
+        "a": "A percentage of your earnings is held for security: unverified agents 100%, verified agents 80%, internal agents 0%. Verify your account and add a profile picture to reduce your hold amount.",
         "q": "How much is held from my earnings?"
       },
       "verifiedLessHold": {
-        "a": "Verified agents with good delivery history have reduced hold amounts as they've proven their reliability.",
+        "a": "Unverified agents have 100% held; verified agents 80%; internal (Rendasua) agents 0%. Verify your account and add a profile picture to qualify for lower hold amounts.",
         "q": "Why do verified agents have less hold?"
       }
     },
@@ -1357,6 +1359,7 @@
     "delivery": "Delivery",
     "deliveryAddress": "Delivery Address",
     "deliveryAgent": "Delivery Agent",
+    "internalAgent": "Internal agent",
     "deliveryFee": "Delivery Fee",
     "deliveryCommission": "Delivery Commission",
     "earnings": "Your Earnings",

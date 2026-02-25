@@ -6,9 +6,8 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { AgentHoldService } from './agent-hold.service';
 import { CommissionsService } from '../commissions/commissions.service';
-import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -104,7 +103,7 @@ export class AgentsController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly commissionsService: CommissionsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly agentHoldService: AgentHoldService
   ) {}
 
   @Get('active_orders')
@@ -237,7 +236,7 @@ export class AgentsController {
       const commissionConfig =
         await this.commissionsService.getCommissionConfigs();
       const holdPercentage =
-        this.configService.get('order')?.agentHoldPercentage || 80;
+        await this.agentHoldService.getHoldPercentageForAgent();
 
       const transformedOrders = orders.map((order: any) => {
         try {
@@ -297,6 +296,20 @@ export class AgentsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('hold-percentage')
+  async getHoldPercentage() {
+    const user = await this.hasuraUserService.getUser();
+    if (!user?.agent) {
+      throw new HttpException(
+        { success: false, error: 'Only agents can access hold percentage' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    return { holdPercentage };
   }
 
   @Post('pick_up_order')

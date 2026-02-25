@@ -14,6 +14,7 @@ import { AnalyticsModule } from '../analytics/analytics.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { BrandsModule } from '../brands/brands.module';
+import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
@@ -91,6 +92,7 @@ import { AppService } from './app.service';
     AdminModule,
     NotificationsModule,
     BrandsModule,
+    BusinessAgentsModule,
     BusinessItemsModule,
     CategoriesModule,
     SubcategoriesModule,

@@ -95,7 +95,9 @@ The following configuration items are pre-populated:
 
 ### Global Configurations
 
-- `default_agent_hold_amount_percentage`: 80% (global)
+- `internal_agent_hold_percentage`: 0% (agents who work for Rendasua)
+- `verified_agent_hold_percentage`: 80% (verified identity)
+- `unverified_agent_hold_percentage`: 100% (default for unverified agents)
 
 ### Country-Specific Configurations
 
@@ -113,8 +115,8 @@ The following configuration items are pre-populated:
 ### Getting a Configuration Value
 
 ```typescript
-// Get global configuration
-const holdPercentage = await configService.getConfigurationByKey('default_agent_hold_amount_percentage');
+// Agent hold percentages are read by AgentHoldService from application_configurations
+// (internal_agent_hold_percentage, verified_agent_hold_percentage, unverified_agent_hold_percentage)
 
 // Get country-specific configuration
 const baseDeliveryFee = await configService.getConfigurationByKey(
