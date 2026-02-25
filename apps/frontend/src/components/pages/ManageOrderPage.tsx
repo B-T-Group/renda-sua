@@ -1230,13 +1230,17 @@ const ManageOrderPage: React.FC = () => {
                             }}
                           >
                             <Avatar
+                              src={
+                                order.assigned_agent.user.profile_picture_url
+                              }
                               sx={{
                                 width: 56,
                                 height: 56,
                                 bgcolor: 'info.main',
                               }}
                             >
-                              <LocalShipping />
+                              {order.assigned_agent.user.first_name?.[0]}
+                              {order.assigned_agent.user.last_name?.[0]}
                             </Avatar>
                             <Box>
                               <Typography

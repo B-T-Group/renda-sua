@@ -65,6 +65,7 @@ export interface ClientOrder {
       first_name: string;
       last_name: string;
       email: string;
+      profile_picture_url?: string;
     };
   } | null;
   order_items: Array<{
@@ -188,6 +189,7 @@ const GET_CLIENT_ORDERS = `
           first_name
           last_name
           email
+          profile_picture_url
         }
       }
       order_items {

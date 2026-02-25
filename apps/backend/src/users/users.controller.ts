@@ -7,11 +7,22 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AddressesService } from '../addresses/addresses.service';
+import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
+import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+
+const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const PROFILE_PICTURE_ACCEPTED_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+];
 
 @Controller('users')
 export class UsersController {
@@ -19,7 +30,9 @@ export class UsersController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
-    private readonly addressesService: AddressesService
+    private readonly addressesService: AddressesService,
+    private readonly awsService: AwsService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   @Get('me')
@@ -49,6 +62,92 @@ export class UsersController {
           error: error.message,
         },
         HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  @Post('profile-picture/presigned-url')
+  async getProfilePicturePresignedUrl(
+    @Body()
+    body: { contentType: string; fileName: string; fileSize?: number }
+  ) {
+    try {
+      const { contentType, fileName, fileSize } = body;
+      if (!contentType || !fileName) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'contentType and fileName are required',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (!PROFILE_PICTURE_ACCEPTED_TYPES.includes(contentType)) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Invalid file type. Allowed: jpeg, jpg, png, webp',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (fileSize != null && fileSize > PROFILE_PICTURE_MAX_SIZE) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'File size exceeds maximum allowed (5MB)',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const user = await this.hasuraUserService.getUser();
+      const ext =
+        fileName.split('.').pop()?.toLowerCase() ||
+        (contentType === 'image/jpeg' || contentType === 'image/jpg'
+          ? 'jpg'
+          : contentType === 'image/png'
+            ? 'png'
+            : contentType === 'image/webp'
+              ? 'webp'
+              : 'jpg');
+      const key = `users/${user.id}/profile_picture.${ext}`;
+
+      const awsConfig = this.configService.get('aws');
+      const bucketName =
+        awsConfig?.s3BucketName || process.env.S3_BUCKET_NAME || 'rendasua-uploads';
+      const region =
+        awsConfig?.s3BucketRegion ||
+        awsConfig?.region ||
+        process.env.S3_BUCKET_REGION ||
+        'ca-central-1';
+
+      const { url, expiresAt } = await this.awsService.generateImageUploadUrl(
+        bucketName,
+        key,
+        contentType,
+        3600
+      );
+
+      const finalUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+
+      return {
+        success: true,
+        presigned_url: url,
+        key,
+        final_url: finalUrl,
+        expires_at: expiresAt,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to generate presigned URL',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

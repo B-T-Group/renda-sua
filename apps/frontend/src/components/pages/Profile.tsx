@@ -1,28 +1,38 @@
 import {
   Cancel as CancelIcon,
+  CameraAlt as CameraAltIcon,
+  Description as DescriptionIcon,
   Edit as EditIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
+  Container,
+  Grid,
   IconButton,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import axios from 'axios';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useDocumentManagement } from '../../hooks/useDocumentManagement';
+import { useApiClient } from '../../hooks/useApiClient';
 
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
 import PhoneInput from '../common/PhoneInput';
-import { SimpleDocumentUpload } from '../common/SimpleDocumentUpload';
+
+const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
+const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 const Profile: React.FC = () => {
   const { t } = useTranslation();
@@ -43,12 +53,14 @@ const Profile: React.FC = () => {
     successMessage,
     errorMessage,
     updateProfile,
+    updateProfilePicture,
     clearMessages,
     refetch,
   } = useUserProfileContext();
 
-  // Document management
-  const { documentTypes } = useDocumentManagement();
+  const apiClient = useApiClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [profilePictureUploading, setProfilePictureUploading] = useState(false);
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -76,6 +88,46 @@ const Profile: React.FC = () => {
 
     if (success) {
       setEditingProfile(false);
+    }
+  };
+
+  const handleProfilePictureChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !profile || !apiClient) return;
+    if (file.size > PROFILE_PICTURE_MAX_SIZE) {
+      return; // TODO: show error via context or snackbar
+    }
+    const acceptedTypes = PROFILE_PICTURE_ACCEPT.split(',');
+    if (!acceptedTypes.includes(file.type)) return;
+
+    setProfilePictureUploading(true);
+    try {
+      const { data } = await apiClient.post<{
+        success: boolean;
+        presigned_url?: string;
+        final_url?: string;
+        error?: string;
+      }>('/users/profile-picture/presigned-url', {
+        contentType: file.type,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+      if (!data.success || !data.presigned_url || !data.final_url) {
+        throw new Error(data.error || 'Failed to get upload URL');
+      }
+      await axios.put(data.presigned_url, file, {
+        headers: { 'Content-Type': file.type },
+      });
+      const updated = await updateProfilePicture(profile.id, data.final_url);
+      if (updated && fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err) {
+      console.error('Profile picture upload failed:', err);
+    } finally {
+      setProfilePictureUploading(false);
     }
   };
 
@@ -117,166 +169,238 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <Box p={3}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 }, px: { xs: 2, sm: 3 } }}>
       {/* Success/Error Messages */}
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={clearMessages}>
-          {successMessage}
-        </Alert>
-      )}
-      {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={clearMessages}>
-          {errorMessage}
-        </Alert>
+      {(successMessage || errorMessage) && (
+        <Stack spacing={1} sx={{ mb: 3 }}>
+          {successMessage && (
+            <Alert severity="success" onClose={clearMessages}>
+              {successMessage}
+            </Alert>
+          )}
+          {errorMessage && (
+            <Alert severity="error" onClose={clearMessages}>
+              {errorMessage}
+            </Alert>
+          )}
+        </Stack>
       )}
 
-      <Typography variant="h4" gutterBottom>
+      <Typography
+        variant="h4"
+        component="h1"
+        gutterBottom
+        sx={{ fontWeight: 600, mb: 3 }}
+      >
         {t('profile.title')}
       </Typography>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          gap: 3,
-        }}
-      >
+      <Grid container spacing={3} sx={{ width: '100%' }}>
         {/* Profile Information */}
-        <Card>
-          <CardContent>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">
-                {t('profile.personalInformation')}
-              </Typography>
-              <IconButton
-                onClick={() => setEditingProfile(!editingProfile)}
-                color="primary"
-              >
-                {editingProfile ? <CancelIcon /> : <EditIcon />}
-              </IconButton>
-            </Box>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              {/* Profile picture */}
+              <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+                <Box sx={{ position: 'relative' }}>
+                  <Avatar
+                    src={profile?.profile_picture_url}
+                    sx={{ width: 80, height: 80 }}
+                  >
+                    {profile?.first_name?.[0]}
+                    {profile?.last_name?.[0]}
+                  </Avatar>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={PROFILE_PICTURE_ACCEPT}
+                    onChange={handleProfilePictureChange}
+                    style={{ display: 'none' }}
+                  />
+                  <IconButton
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      bgcolor: 'background.paper',
+                      boxShadow: 1,
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={profilePictureUploading}
+                    aria-label={t('profile.changePhoto', 'Change photo')}
+                  >
+                    {profilePictureUploading ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <CameraAltIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {t(
+                      'profile.profilePictureHint',
+                      'JPG, PNG or WebP. Max 5MB.'
+                    )}
+                  </Typography>
+                </Box>
+              </Stack>
 
-            {editingProfile ? (
-              <Box>
-                <TextField
-                  fullWidth
-                  label={t('profile.firstName')}
-                  value={profileForm.first_name}
-                  onChange={(e) =>
-                    setProfileForm((prev) => ({
-                      ...prev,
-                      first_name: e.target.value,
-                    }))
-                  }
-                  margin="normal"
-                />
-                <TextField
-                  fullWidth
-                  label={t('profile.lastName')}
-                  value={profileForm.last_name}
-                  onChange={(e) =>
-                    setProfileForm((prev) => ({
-                      ...prev,
-                      last_name: e.target.value,
-                    }))
-                  }
-                  margin="normal"
-                />
-                <PhoneInput
-                  value={profileForm.phone_number}
-                  onChange={(value) =>
-                    setProfileForm((prev) => ({
-                      ...prev,
-                      phone_number: value || '',
-                    }))
-                  }
-                  label={t('profile.phoneNumber')}
-                  helperText={t('profile.phoneNumberHelper')}
-                  margin="normal"
-                  useDevPhoneDropdown
-                />
-                <Box mt={2}>
+              {profile?.user_type_id === 'agent' && !profile?.profile_picture_url && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {t(
+                    'profile.agentProfilePictureNote',
+                    'Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother.'
+                  )}
+                </Alert>
+              )}
+
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={2}
+              >
+                <Typography variant="h6" fontWeight={600}>
+                  {t('profile.personalInformation')}
+                </Typography>
+                <IconButton
+                  onClick={() => setEditingProfile(!editingProfile)}
+                  color="primary"
+                  aria-label={editingProfile ? 'Cancel' : 'Edit'}
+                >
+                  {editingProfile ? <CancelIcon /> : <EditIcon />}
+                </IconButton>
+              </Stack>
+
+              {editingProfile ? (
+                <Stack spacing={2}>
+                  <TextField
+                    fullWidth
+                    label={t('profile.firstName')}
+                    value={profileForm.first_name}
+                    onChange={(e) =>
+                      setProfileForm((prev) => ({
+                        ...prev,
+                        first_name: e.target.value,
+                      }))
+                    }
+                    size="small"
+                  />
+                  <TextField
+                    fullWidth
+                    label={t('profile.lastName')}
+                    value={profileForm.last_name}
+                    onChange={(e) =>
+                      setProfileForm((prev) => ({
+                        ...prev,
+                        last_name: e.target.value,
+                      }))
+                    }
+                    size="small"
+                  />
+                  <PhoneInput
+                    value={profileForm.phone_number}
+                    onChange={(value) =>
+                      setProfileForm((prev) => ({
+                        ...prev,
+                        phone_number: value || '',
+                      }))
+                    }
+                    label={t('profile.phoneNumber')}
+                    helperText={t('profile.phoneNumberHelper')}
+                    margin="normal"
+                    useDevPhoneDropdown
+                  />
                   <Button
                     variant="contained"
                     startIcon={<SaveIcon />}
                     onClick={handleProfileSave}
+                    sx={{ alignSelf: 'flex-start' }}
                   >
                     {t('common.save')}
                   </Button>
-                </Box>
-              </Box>
-            ) : (
-              <Box>
-                <Typography variant="body1">
-                  <strong>{t('profile.name')}:</strong> {profile?.first_name}{' '}
-                  {profile?.last_name}
-                </Typography>
-                <Typography variant="body1">
-                  <strong>{t('profile.email')}:</strong> {profile?.email}
-                </Typography>
-                <Typography variant="body1">
-                  <strong>{t('profile.phone')}:</strong> {profile?.phone_number}
-                </Typography>
-                <Typography variant="body1">
-                  <strong>{t('profile.memberSince')}:</strong>{' '}
-                  {new Date(profile?.created_at || '').toLocaleDateString()}
-                </Typography>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+                </Stack>
+              ) : (
+                <Stack spacing={1.5}>
+                  <Typography variant="body1">
+                    <strong>{t('profile.name')}:</strong> {profile?.first_name}{' '}
+                    {profile?.last_name}
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>{t('profile.email')}:</strong> {profile?.email}
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>{t('profile.phone')}:</strong> {profile?.phone_number}
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>{t('profile.memberSince')}:</strong>{' '}
+                    {new Date(profile?.created_at || '').toLocaleDateString()}
+                  </Typography>
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
         {/* Addresses */}
         {profile && (
-          <AddressManager
-            entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
-            entityId={
-              profile.user_type_id === 'agent'
-                ? profile.agent?.id || ''
-                : profile.user_type_id === 'client'
-                ? profile.client?.id || ''
-                : profile.business?.id || ''
-            }
-            title={t('profile.personalAddresses')}
-            showCoordinates={false}
-            onAccountCreated={handleAccountCreated}
-          />
+          <Grid size={{ xs: 12, md: 6 }}>
+            <AddressManager
+              entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
+              entityId={
+                profile.user_type_id === 'agent'
+                  ? profile.agent?.id || ''
+                  : profile.user_type_id === 'client'
+                  ? profile.client?.id || ''
+                  : profile.business?.id || ''
+              }
+              title={t('profile.personalAddresses')}
+              showCoordinates={false}
+              onAccountCreated={handleAccountCreated}
+            />
+          </Grid>
         )}
 
-        {/* Document Upload */}
-        {documentTypes.length > 0 && (
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t('profile.uploadDocuments')}
+        {/* Documents link - quick access to document management */}
+        <Grid size={{ xs: 12 }}>
+          <Card
+            component={RouterLink}
+            to="/documents"
+            sx={{
+              textDecoration: 'none',
+              color: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              p: 2,
+              transition: 'background-color 0.2s',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <DescriptionIcon sx={{ mr: 2, color: 'primary.main' }} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {t('profile.manageDocuments', 'Manage Documents')}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t('profile.uploadDocumentsDescription')}
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'profile.manageDocumentsDescription',
+                  'Upload and manage your verification documents'
+                )}
               </Typography>
-              <SimpleDocumentUpload
-                documentTypes={documentTypes}
-                compact={true}
-                showNote={true}
-                onUploadSuccess={(document) => {
-                  console.log('Document uploaded:', document);
-                }}
-                onUploadError={(error) => {
-                  console.error('Upload failed:', error);
-                }}
-              />
-            </CardContent>
+            </Box>
+            <Typography variant="body2" color="primary.main">
+              {t('common.view', 'View')} →
+            </Typography>
           </Card>
-        )}
-      </Box>
+        </Grid>
+      </Grid>
 
       {/* Accounts */}
       {profile && (
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 4 }}>
           <AccountManager
             ref={accountManagerRef}
             entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
@@ -290,7 +414,7 @@ const Profile: React.FC = () => {
           />
         </Box>
       )}
-    </Box>
+    </Container>
   );
 };
 

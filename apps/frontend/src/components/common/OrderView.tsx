@@ -448,27 +448,44 @@ const OrderView: React.FC<OrderViewProps> = ({
                   <LocalShippingIcon sx={{ mr: 1 }} />
                   {t('orders.assignedAgent', 'Assigned Agent')}
                 </Typography>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Typography variant="body1" fontWeight="medium">
-                    {order.assigned_agent.user.first_name}{' '}
-                    {order.assigned_agent.user.last_name}
-                  </Typography>
-                  {order.assigned_agent.is_verified && (
-                    <Chip
-                      label={t('orders.verified', 'Verified')}
-                      size="small"
-                      color="success"
-                    />
-                  )}
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  gap={2}
+                  flexWrap="wrap"
+                  mb={1}
+                >
+                  <Avatar
+                    src={order.assigned_agent.user.profile_picture_url}
+                    sx={{ width: 48, height: 48 }}
+                  >
+                    {order.assigned_agent.user.first_name?.[0]}
+                    {order.assigned_agent.user.last_name?.[0]}
+                  </Avatar>
+                  <Box>
+                    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                      <Typography variant="body1" fontWeight="medium">
+                        {order.assigned_agent.user.first_name}{' '}
+                        {order.assigned_agent.user.last_name}
+                      </Typography>
+                      {order.assigned_agent.is_verified && (
+                        <Chip
+                          label={t('orders.verified', 'Verified')}
+                          size="small"
+                          color="success"
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {order.assigned_agent.user.email}
+                    </Typography>
+                    {order.assigned_agent.user.phone_number && (
+                      <Typography variant="body2" color="text.secondary">
+                        {order.assigned_agent.user.phone_number}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {order.assigned_agent.user.email}
-                </Typography>
-                {order.assigned_agent.user.phone_number && (
-                  <Typography variant="body2" color="text.secondary">
-                    {order.assigned_agent.user.phone_number}
-                  </Typography>
-                )}
               </CardContent>
             </Card>
           </Grid>

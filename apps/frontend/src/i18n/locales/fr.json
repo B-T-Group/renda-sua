@@ -947,6 +947,19 @@
     "goBack": "Retour",
     "dashboard": "Tableau de Bord",
     "documents": "Documents",
+    "documentManagement": {
+      "title": "Gestion des Documents",
+      "subtitle": "Téléchargez, consultez et gérez vos documents par catégorie",
+      "allDocuments": "Tous les Documents",
+      "uploadNew": "Télécharger un Nouveau Document",
+      "uploadSuccess": "Document téléchargé avec succès !",
+      "uploadError": "Échec du téléchargement",
+      "deleteSuccess": "Document supprimé avec succès !",
+      "noteUpdateSuccess": "Note du document mise à jour avec succès !",
+      "noDocuments": "Aucun document",
+      "noDocumentsHint": "Téléchargez votre premier document pour commencer",
+      "backToProfile": "Retour au Profil"
+    },
     "goToDashboard": "Aller au Tableau de Bord",
     "home": "Accueil",
     "inStock": "en stock",
@@ -1658,7 +1671,12 @@
     "phoneNumberHelper": "Ce numéro de téléphone doit être votre numéro de mobile money et sera utilisé pour les paiements associés à votre compte.",
     "title": "Paramètres du Profil",
     "uploadDocuments": "Télécharger des Documents",
-    "uploadDocumentsDescription": "Téléchargez des documents importants pour la vérification de votre compte."
+    "uploadDocumentsDescription": "Téléchargez des documents importants pour la vérification de votre compte.",
+    "manageDocuments": "Gérer les Documents",
+    "manageDocumentsDescription": "Téléchargez et gérez vos documents de vérification",
+    "changePhoto": "Changer la photo",
+    "profilePictureHint": "JPG, PNG ou WebP. Max 5 Mo.",
+    "agentProfilePictureNote": "Ajoutez une photo de profil pour que les clients voient qui livre leur commande. Cela renforce la confiance et facilite les remises."
   },
   "public": {
     "items": {

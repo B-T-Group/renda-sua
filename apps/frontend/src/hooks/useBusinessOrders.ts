@@ -65,6 +65,7 @@ export interface BusinessOrder {
       first_name: string;
       last_name: string;
       email: string;
+      profile_picture_url?: string;
     };
   } | null;
   order_items: Array<{
@@ -176,6 +177,7 @@ const GET_BUSINESS_ORDERS = `
           first_name
           last_name
           email
+          profile_picture_url
         }
       }
       verified_agent_delivery

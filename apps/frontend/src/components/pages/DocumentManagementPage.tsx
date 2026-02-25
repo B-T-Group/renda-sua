@@ -1,4 +1,4 @@
-import { Add, CloudUpload } from '@mui/icons-material';
+import { Add, ArrowBack, CloudUpload } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -9,13 +9,17 @@ import {
   DialogContent,
   DialogTitle,
   Fab,
+  IconButton,
   Paper,
   Snackbar,
+  Stack,
   Tab,
   Tabs,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   useDocumentManagement,
   UserDocument,
@@ -46,6 +50,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export const DocumentManagementPage: React.FC = () => {
+  const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
@@ -79,38 +84,41 @@ export const DocumentManagementPage: React.FC = () => {
     (document: UserDocument) => {
       setSnackbar({
         open: true,
-        message: 'Document uploaded successfully!',
+        message: t('common.documentManagement.uploadSuccess'),
         severity: 'success',
       });
       setUploadDialogOpen(false);
       refreshDocuments();
     },
-    [refreshDocuments]
+    [refreshDocuments, t]
   );
 
-  const handleUploadError = useCallback((error: string) => {
-    setSnackbar({
-      open: true,
-      message: `Upload failed: ${error}`,
-      severity: 'error',
-    });
-  }, []);
+  const handleUploadError = useCallback(
+    (error: string) => {
+      setSnackbar({
+        open: true,
+        message: `${t('common.documentManagement.uploadError')}: ${error}`,
+        severity: 'error',
+      });
+    },
+    [t]
+  );
 
   const handleDeleteSuccess = useCallback(() => {
     setSnackbar({
       open: true,
-      message: 'Document deleted successfully!',
+      message: t('common.documentManagement.deleteSuccess'),
       severity: 'success',
     });
-  }, []);
+  }, [t]);
 
   const handleUpdateNoteSuccess = useCallback(() => {
     setSnackbar({
       open: true,
-      message: 'Document note updated successfully!',
+      message: t('common.documentManagement.noteUpdateSuccess'),
       severity: 'success',
     });
-  }, []);
+  }, [t]);
 
   const handleDelete = useCallback(
     async (documentId: string) => {
@@ -166,24 +174,67 @@ export const DocumentManagementPage: React.FC = () => {
 
   // Add "All Documents" tab
   const allTabs = [
-    { label: 'All Documents', value: 0, documents },
+    {
+      label: t('common.documentManagement.allDocuments'),
+      value: 0,
+      documents,
+    },
     ...documentTypeTabs.map((tab, index) => ({
       ...tab,
       value: index + 1,
     })),
   ];
 
+  const hasDocuments = documents.length > 0;
+  const hasDocumentTypes = documentTypes.length > 0;
+
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Document Management
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Upload, view, and manage your documents by category
-        </Typography>
-      </Box>
+    <Container
+      maxWidth="xl"
+      sx={{
+        py: { xs: 2, sm: 3, md: 4 },
+        px: { xs: 2, sm: 3 },
+        pb: { xs: 10, md: 4 },
+      }}
+    >
+      {/* Page Header with back link and upload button */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        spacing={2}
+        sx={{ mb: 3 }}
+      >
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+            <IconButton
+              component={RouterLink}
+              to="/profile"
+              aria-label={t('common.documentManagement.backToProfile')}
+              size="small"
+              sx={{ mr: 0.5 }}
+            >
+              <ArrowBack />
+            </IconButton>
+            <Typography variant="h4" component="h1" fontWeight={600}>
+              {t('common.documentManagement.title')}
+            </Typography>
+          </Stack>
+          <Typography variant="body1" color="text.secondary">
+            {t('common.documentManagement.subtitle')}
+          </Typography>
+        </Box>
+        {hasDocumentTypes && (
+          <Button
+            variant="contained"
+            startIcon={<CloudUpload />}
+            onClick={() => setUploadDialogOpen(true)}
+            sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
+          >
+            {t('common.documentManagement.uploadNew')}
+          </Button>
+        )}
+      </Stack>
 
       {/* Error Display */}
       {error && (
@@ -192,50 +243,90 @@ export const DocumentManagementPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* Document Type Tabs */}
-      <Paper sx={{ width: '100%', mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          aria-label="document type tabs"
+      {/* Empty state when no documents */}
+      {!loading && !hasDocuments && (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 4,
+            textAlign: 'center',
+            mb: 3,
+          }}
         >
-          {allTabs.map((tab) => (
-            <Tab
-              key={tab.value}
-              label={`${tab.label} (${tab.documents.length})`}
-              id={`document-tab-${tab.value}`}
-              aria-controls={`document-tabpanel-${tab.value}`}
-            />
-          ))}
-        </Tabs>
-      </Paper>
+          <CloudUpload sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            {t('common.documentManagement.noDocuments')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('common.documentManagement.noDocumentsHint')}
+          </Typography>
+          {hasDocumentTypes && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setUploadDialogOpen(true)}
+            >
+              {t('common.documentManagement.uploadNew')}
+            </Button>
+          )}
+        </Paper>
+      )}
+
+      {/* Document Type Tabs - only when we have documents */}
+      {hasDocuments && (
+        <Paper sx={{ width: '100%', mb: 3, overflow: 'hidden' }}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label="document type tabs"
+            sx={{ minHeight: 48 }}
+          >
+            {allTabs.map((tab) => (
+              <Tab
+                key={tab.value}
+                label={`${tab.label} (${tab.documents.length})`}
+                id={`document-tab-${tab.value}`}
+                aria-controls={`document-tabpanel-${tab.value}`}
+              />
+            ))}
+          </Tabs>
+        </Paper>
+      )}
 
       {/* Tab Panels */}
-      {allTabs.map((tab) => (
-        <TabPanel key={tab.value} value={tabValue} index={tab.value}>
-          <DocumentList
-            documents={tab.documents}
-            documentTypes={documentTypes}
-            loading={loading}
-            error={error}
-            onDelete={handleDelete}
-            onUpdateNote={handleUpdateNote}
-            onRefresh={handleRefresh}
-          />
-        </TabPanel>
-      ))}
+      {hasDocuments &&
+        allTabs.map((tab) => (
+          <TabPanel key={tab.value} value={tabValue} index={tab.value}>
+            <DocumentList
+              documents={tab.documents}
+              documentTypes={documentTypes}
+              loading={loading}
+              error={error}
+              onDelete={handleDelete}
+              onUpdateNote={handleUpdateNote}
+              onRefresh={handleRefresh}
+            />
+          </TabPanel>
+        ))}
 
-      {/* Upload FAB */}
-      <Fab
-        color="primary"
-        aria-label="upload document"
-        sx={{ position: 'fixed', bottom: 16, right: 16 }}
-        onClick={() => setUploadDialogOpen(true)}
-      >
-        <Add />
-      </Fab>
+      {/* Upload FAB - mobile friendly, clears bottom nav */}
+      {hasDocumentTypes && (
+        <Fab
+          color="primary"
+          aria-label={t('common.documentManagement.uploadNew')}
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 80, md: 24 },
+            right: { xs: 16, md: 24 },
+            zIndex: 1100,
+          }}
+          onClick={() => setUploadDialogOpen(true)}
+        >
+          <Add />
+        </Fab>
+      )}
 
       {/* Upload Dialog */}
       <Dialog
@@ -243,12 +334,15 @@ export const DocumentManagementPage: React.FC = () => {
         onClose={() => setUploadDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        PaperProps={{ sx: { m: { xs: 1 } } }}
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={1}>
             <CloudUpload />
-            Upload New Document
-          </Box>
+            <Typography variant="h6">
+              {t('common.documentManagement.uploadNew')}
+            </Typography>
+          </Stack>
         </DialogTitle>
         <DialogContent>
           <DocumentUpload
@@ -257,8 +351,10 @@ export const DocumentManagementPage: React.FC = () => {
             onUploadError={handleUploadError}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setUploadDialogOpen(false)}>
+            {t('common.cancel')}
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -267,7 +363,7 @@ export const DocumentManagementPage: React.FC = () => {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           onClose={handleCloseSnackbar}

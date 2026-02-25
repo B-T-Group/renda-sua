@@ -273,13 +273,17 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             Filters
           </Typography>
 
-          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ mb: 2 }}
+          >
             <TextField
               label="Search files"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               size="small"
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: { xs: '100%', sm: 200 } }}
               InputProps={{
                 startAdornment: (
                   <Search sx={{ mr: 1, color: 'text.secondary' }} />
@@ -287,7 +291,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
               }}
             />
 
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
               <InputLabel>Document Type</InputLabel>
               <Select
                 value={selectedDocumentType}
@@ -305,7 +309,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
               <InputLabel>Status</InputLabel>
               <Select
                 value={approvalFilter}
@@ -361,7 +365,11 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             Documents ({filteredDocuments.length})
           </Typography>
 
-          <TableContainer component={Paper} variant="outlined">
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ overflowX: 'auto' }}
+          >
             <Table>
               <TableHead>
                 <TableRow>

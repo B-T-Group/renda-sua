@@ -2036,6 +2036,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              profile_picture_url
             }
           }
           order_items {
@@ -2429,6 +2430,7 @@ export class OrdersService {
               last_name
               email
               phone_number
+              profile_picture_url
             }
           }
           order_items {
@@ -2613,6 +2615,7 @@ export class OrdersService {
               last_name
               email
               phone_number
+              profile_picture_url
             }
           }
           order_items {
@@ -3242,6 +3245,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              profile_picture_url
             }
           }
           order_items {

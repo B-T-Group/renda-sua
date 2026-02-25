@@ -13,6 +13,7 @@ export const GET_USER_BY_IDENTIFIER = gql`
       phone_number_verified
       email_verified
       user_type_id
+      profile_picture_url
       created_at
       updated_at
     }
@@ -33,6 +34,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
       phone_number_verified
       email_verified
       user_type_id
+      profile_picture_url
       created_at
       updated_at
       client {
@@ -71,6 +73,7 @@ export const GET_USER_BY_ID = gql`
       email
       first_name
       last_name
+      profile_picture_url
       agent {
         id
       }

@@ -946,6 +946,19 @@
     "goBack": "Go Back",
     "dashboard": "Dashboard",
     "documents": "Documents",
+    "documentManagement": {
+      "title": "Document Management",
+      "subtitle": "Upload, view, and manage your documents by category",
+      "allDocuments": "All Documents",
+      "uploadNew": "Upload New Document",
+      "uploadSuccess": "Document uploaded successfully!",
+      "uploadError": "Upload failed",
+      "deleteSuccess": "Document deleted successfully!",
+      "noteUpdateSuccess": "Document note updated successfully!",
+      "noDocuments": "No documents yet",
+      "noDocumentsHint": "Upload your first document to get started",
+      "backToProfile": "Back to Profile"
+    },
     "goToDashboard": "Go to Dashboard",
     "home": "Home",
     "inStock": "in stock",
@@ -1650,7 +1663,12 @@
     "phoneNumberHelper": "This phone number should be your mobile money phone number and will be used for payments associated with your account.",
     "title": "Profile Settings",
     "uploadDocuments": "Upload Documents",
-    "uploadDocumentsDescription": "Upload important documents for your account verification."
+    "uploadDocumentsDescription": "Upload important documents for your account verification.",
+    "manageDocuments": "Manage Documents",
+    "manageDocumentsDescription": "Upload and manage your verification documents",
+    "changePhoto": "Change photo",
+    "profilePictureHint": "JPG, PNG or WebP. Max 5MB.",
+    "agentProfilePictureNote": "Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother."
   },
   "public": {
     "items": {

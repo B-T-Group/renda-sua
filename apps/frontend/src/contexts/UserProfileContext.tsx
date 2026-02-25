@@ -43,6 +43,7 @@ export interface UserProfile {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  profile_picture_url?: string;
   user_type_id: string;
   client?: {
     id: string;
@@ -102,8 +103,21 @@ const UPDATE_USER = `
       phone_number
       identifier
       user_type_id
+      profile_picture_url
       created_at
       updated_at
+    }
+  }
+`;
+
+const UPDATE_USER_PROFILE_PICTURE = `
+  mutation UpdateUserProfilePicture($id: uuid!, $profile_picture_url: String) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { profile_picture_url: $profile_picture_url }
+    ) {
+      id
+      profile_picture_url
     }
   }
 `;
@@ -243,6 +257,10 @@ interface UserProfileContextType {
     lastName: string,
     phoneNumber: string
   ) => Promise<boolean>;
+  updateProfilePicture: (
+    userId: string,
+    profilePictureUrl: string
+  ) => Promise<boolean>;
   addAddress: (
     addressData: AddressFormData,
     userType: string,
@@ -282,6 +300,9 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
 
   // GraphQL hooks for mutations
   const { execute: updateUser } = useGraphQLRequest(UPDATE_USER);
+  const { execute: updateUserProfilePicture } = useGraphQLRequest(
+    UPDATE_USER_PROFILE_PICTURE
+  );
   const { execute: insertAgentAddress } =
     useGraphQLRequest(INSERT_AGENT_ADDRESS);
   const { execute: insertClientAddress } = useGraphQLRequest(
@@ -443,6 +464,34 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     }
   };
 
+  const updateProfilePicture = async (
+    userId: string,
+    profilePictureUrl: string
+  ): Promise<boolean> => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const result = await updateUserProfilePicture({
+        id: userId,
+        profile_picture_url: profilePictureUrl,
+      });
+
+      if (result?.update_users_by_pk) {
+        setSuccessMessage('Profile picture updated successfully!');
+        await checkProfile();
+        return true;
+      } else {
+        setErrorMessage('Failed to update profile picture.');
+        return false;
+      }
+    } catch (err: unknown) {
+      setErrorMessage('Failed to update profile picture.');
+      console.error('Error updating profile picture:', err);
+      return false;
+    }
+  };
+
   const addAddress = async (
     addressData: AddressFormData,
     userType: string,
@@ -540,6 +589,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     refetchAccounts: checkAccounts,
     clearProfile,
     updateProfile,
+    updateProfilePicture,
     addAddress,
     updateAddress: updateAddressMutation,
     clearMessages,

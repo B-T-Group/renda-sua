@@ -66,6 +66,7 @@ export const GET_ORDERS = gql`
           first_name
           last_name
           email
+          profile_picture_url
         }
       }
       order_items {
@@ -248,6 +249,7 @@ export const GET_ORDER_BY_ID = gql`
           last_name
           email
           phone_number
+          profile_picture_url
         }
       }
       order_items {
@@ -768,6 +770,7 @@ export const GET_ORDER_FOR_RECEIPT = gql`
         user {
           first_name
           last_name
+          profile_picture_url
         }
       }
       delivery_address {
