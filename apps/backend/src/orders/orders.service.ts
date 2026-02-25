@@ -5225,7 +5225,7 @@ export class OrdersService {
         }
 
         const updateMutation = `
-          mutation UpdateInventoryOnCompletion($id: uuid!, $quantity: Int!) {
+          mutation UpdateInventoryOnCompletion($id: uuid!, $quantity: Int!, $reservedQuantity: Int!) {
             update_business_inventory_by_pk(
               pk_columns: { id: $id }
               _inc: { 
