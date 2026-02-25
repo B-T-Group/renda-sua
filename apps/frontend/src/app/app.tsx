@@ -21,8 +21,8 @@ import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
-import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
+import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import CartPage from '../components/pages/CartPage';
@@ -37,6 +37,7 @@ import TermsOfServicePage from '../components/pages/TermsOfServicePage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
+import AgentDashboard from '../components/pages/AgentDashboard';
 import FAQ from '../components/pages/FAQ';
 import ItemDetailPage from '../components/pages/ItemDetailPage';
 import ItemsPage from '../components/pages/ItemsPage';
@@ -44,7 +45,6 @@ import ItemViewPage from '../components/pages/ItemViewPage';
 import LandingPage from '../components/pages/LandingPage';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
-import OpenOrdersPage from '../components/pages/OpenOrdersPage';
 import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
@@ -152,10 +152,7 @@ function App() {
               : 4,
         }}
       >
-        <Container
-          maxWidth="xl"
-          sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}
-        >
+        <Container maxWidth="xl" sx={{ px: { xs: 1.5, sm: 2, md: 3 } }}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
 
@@ -361,7 +358,7 @@ function App() {
               path="/open-orders"
               element={
                 <ProtectedRoute>
-                  <OpenOrdersPage />
+                  <AgentDashboard />
                 </ProtectedRoute>
               }
             />
