@@ -1273,6 +1273,7 @@
     "driverLocation": "Position du chauffeur",
     "updatedAt": "Mis à jour",
     "viewOnMap": "Voir sur la carte",
+    "weight": "Poids",
     "business": {
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande",
@@ -1299,6 +1300,7 @@
     "cancelling": "Annulation en cours...",
     "cannotCancelOrder": "Cette commande ne peut pas être annulée car elle a déjà été récupérée par un agent de livraison.",
     "category": "Catégorie",
+    "dimensions": "Dimensions",
     "client": {
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande pour libérer le paiement"

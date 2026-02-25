@@ -1,6 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
@@ -57,6 +57,7 @@ import { useLoading } from '../contexts/LoadingContext';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth0();
@@ -94,6 +95,12 @@ function App() {
 
   // Initialize agent location tracking (runs automatically for agents)
   useAgentLocationTracker();
+
+  // Sync push subscription to backend once when user is logged in and permission already granted (no prompt)
+  const { syncWhenGranted } = usePushSubscription();
+  useEffect(() => {
+    if (isAuthenticated) syncWhenGranted();
+  }, [isAuthenticated, syncWhenGranted]);
 
   // Detect and store country for anonymous users (for inventory-items country_code)
   useDetectedCountry();
