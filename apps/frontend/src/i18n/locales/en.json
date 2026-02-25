@@ -104,6 +104,15 @@
       "home": "Home",
       "work": "Work"
     },
+    "types": {
+      "home": "Home",
+      "work": "Work",
+      "delivery": "Delivery",
+      "billing": "Billing",
+      "store": "Store",
+      "warehouse": "Warehouse",
+      "office": "Office"
+    },
     "coordinates": "Coordinates",
     "deleteConfirmMessage": "Are you sure you want to delete this address?",
     "deleteConfirmTitle": "Delete Address",

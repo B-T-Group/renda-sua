@@ -104,6 +104,15 @@
       "home": "Domicile",
       "work": "Travail"
     },
+    "types": {
+      "home": "Domicile",
+      "work": "Travail",
+      "delivery": "Livraison",
+      "billing": "Facturation",
+      "store": "Magasin",
+      "warehouse": "Entrepôt",
+      "office": "Bureau"
+    },
     "coordinates": "Coordonnées",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette adresse ?",
     "deleteConfirmTitle": "Supprimer l'Adresse",
