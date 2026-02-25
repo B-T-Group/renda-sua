@@ -313,7 +313,7 @@ export class AgentsController {
       }
 
       const agentId = user.agent.id;
-      const isAgentVerified = user.agent?.is_verified || false;
+      const agentUserId = user.id;
 
       // Start and end of today (server date, UTC)
       const now = new Date();
@@ -326,50 +326,70 @@ export class AgentsController {
       endOfTodayDate.setUTCDate(endOfTodayDate.getUTCDate() + 1);
       const endOfToday = endOfTodayDate.toISOString();
 
-      // 1) Today's delivered orders (for todayEarnings and todayDeliveryCount)
+      // 1) Today's delivered orders from order_status_history (agent marked as delivered, created_at today)
       const deliveredTodayQuery = `
-        query GetAgentDeliveredToday($agentId: uuid!, $startOfToday: timestamptz!, $endOfToday: timestamptz!) {
-          orders(
+        query GetAgentDeliveredToday($agentUserId: uuid!, $startOfToday: timestamptz!, $endOfToday: timestamptz!) {
+          order_status_history(
             where: {
-              assigned_agent_id: { _eq: $agentId }
-              current_status: { _in: ["delivered", "complete"] }
-              actual_delivery_time: { _gte: $startOfToday, _lt: $endOfToday }
+              changed_by_type: { _eq: "agent" }
+              changed_by_user_id: { _eq: $agentUserId }
+              status: { _eq: delivered }
+              created_at: { _gte: $startOfToday, _lt: $endOfToday }
             }
-            order_by: { actual_delivery_time: desc }
+            order_by: { created_at: desc }
           ) {
-            id
-            order_number
-            base_delivery_fee
-            per_km_delivery_fee
-            currency
-            actual_delivery_time
+            order_id
+            created_at
+            order {
+              id
+              order_number
+              currency
+              actual_delivery_time
+            }
           }
         }
       `;
 
-      // 2) Recent delivered orders (last 10, for recentCommissions list)
+      // 2) Recent delivered orders (last 10) from order_status_history where agent marked as delivered
       const recentDeliveredQuery = `
-        query GetAgentRecentDelivered($agentId: uuid!) {
-          orders(
+        query GetAgentRecentDelivered($agentUserId: uuid!) {
+          order_status_history(
             where: {
-              assigned_agent_id: { _eq: $agentId }
-              current_status: { _in: ["delivered", "complete"] }
-              actual_delivery_time: { _is_null: false }
+              changed_by_type: { _eq: "agent" }
+              changed_by_user_id: { _eq: $agentUserId }
+              status: { _eq: delivered }
             }
-            order_by: { actual_delivery_time: desc }
+            order_by: { created_at: desc }
             limit: 10
           ) {
-            id
-            order_number
-            base_delivery_fee
-            per_km_delivery_fee
-            currency
-            actual_delivery_time
+            order_id
+            created_at
+            order {
+              id
+              order_number
+              actual_delivery_time
+            }
           }
         }
       `;
 
-      // 3) Active order count (in-progress statuses)
+      // 3b) Agent account deposit transactions (for recentCommissions amount from memo containing order_number)
+      const agentDepositsQuery = `
+        query GetAgentDepositTransactions($agentUserId: uuid!) {
+          account_transactions(
+            where: {
+              account: { user_id: { _eq: $agentUserId } }
+              transaction_type: { _eq: deposit }
+            }
+            order_by: { created_at: desc }
+          ) {
+            amount
+            memo
+          }
+        }
+      `;
+
+      // 4) Active order count (in-progress statuses)
       const activeCountQuery = `
         query GetAgentActiveOrderCount($agentId: uuid!) {
           orders_aggregate(
@@ -385,70 +405,98 @@ export class AgentsController {
         }
       `;
 
-      const [deliveredTodayResult, recentDeliveredResult, activeCountResult] =
-        await Promise.all([
-          this.hasuraSystemService.executeQuery(deliveredTodayQuery, {
-            agentId,
-            startOfToday,
-            endOfToday,
-          }),
-          this.hasuraSystemService.executeQuery(recentDeliveredQuery, {
-            agentId,
-          }),
-          this.hasuraSystemService.executeQuery(activeCountQuery, {
-            agentId,
-          }),
-        ]);
+      const [
+        deliveredTodayResult,
+        recentDeliveredResult,
+        activeCountResult,
+        agentDepositsResult,
+      ] = await Promise.all([
+        this.hasuraSystemService.executeQuery(deliveredTodayQuery, {
+          agentUserId,
+          startOfToday,
+          endOfToday,
+        }),
+        this.hasuraSystemService.executeQuery(recentDeliveredQuery, {
+          agentUserId,
+        }),
+        this.hasuraSystemService.executeQuery(activeCountQuery, {
+          agentId,
+        }),
+        this.hasuraSystemService.executeQuery(agentDepositsQuery, {
+          agentUserId,
+        }),
+      ]);
 
-      const deliveredTodayOrders = deliveredTodayResult.orders || [];
-      const recentOrders = recentDeliveredResult.orders || [];
+      const deliveredTodayHistoryRows =
+        deliveredTodayResult.order_status_history || [];
+      const recentHistoryRows =
+        recentDeliveredResult.order_status_history || [];
       const activeOrderCount =
         activeCountResult.orders_aggregate?.aggregate?.count ?? 0;
+      const depositTransactions: Array<{ amount: number; memo: string | null }> =
+        agentDepositsResult.account_transactions || [];
 
-      const commissionConfig =
-        await this.commissionsService.getCommissionConfigs();
-
-      let todayEarnings = 0;
-      const currency = deliveredTodayOrders[0]?.currency ?? 'XAF';
-
-      for (const order of deliveredTodayOrders) {
-        const earnings = this.commissionsService.calculateAgentEarningsSync(
-          {
-            id: order.id,
-            base_delivery_fee: order.base_delivery_fee ?? 0,
-            per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
-            currency: order.currency,
-          },
-          isAgentVerified,
-          commissionConfig
-        );
-        todayEarnings += earnings.totalEarnings;
+      const seenTodayOrderIds = new Set<string>();
+      const todayOrderNumbers: string[] = [];
+      let currency = 'XAF';
+      for (const row of deliveredTodayHistoryRows) {
+        if (seenTodayOrderIds.has(row.order_id)) continue;
+        seenTodayOrderIds.add(row.order_id);
+        const orderNumber = row.order?.order_number;
+        if (orderNumber) todayOrderNumbers.push(orderNumber);
+        if (row.order?.currency && currency === 'XAF')
+          currency = row.order.currency;
       }
+      const todayDeliveryCount = seenTodayOrderIds.size;
+      const todayEarnings = todayOrderNumbers.reduce(
+        (sum, orderNumber) =>
+          sum +
+          depositTransactions
+            .filter((tx) => tx.memo && tx.memo.includes(orderNumber))
+            .reduce((s, tx) => s + Number(tx.amount), 0),
+        0
+      );
 
-      const recentCommissions = recentOrders.map((order: any) => {
-        const earnings = this.commissionsService.calculateAgentEarningsSync(
-          {
-            id: order.id,
-            base_delivery_fee: order.base_delivery_fee ?? 0,
-            per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
-            currency: order.currency,
-          },
-          isAgentVerified,
-          commissionConfig
+      const seenOrderIds = new Set<string>();
+      const recentCommissions = recentHistoryRows
+        .filter((row: { order_id: string }) => {
+          if (seenOrderIds.has(row.order_id)) return false;
+          seenOrderIds.add(row.order_id);
+          return true;
+        })
+        .map(
+          (row: {
+            order_id: string;
+            created_at: string;
+            order: {
+              id: string;
+              order_number: string;
+              actual_delivery_time: string | null;
+            };
+          }) => {
+            const orderNumber = row.order?.order_number;
+            const amount = orderNumber
+              ? depositTransactions
+                  .filter(
+                    (tx) => tx.memo && tx.memo.includes(orderNumber)
+                  )
+                  .reduce((sum, tx) => sum + Number(tx.amount), 0)
+              : 0;
+            return {
+              orderId: row.order?.id,
+              orderNumber: orderNumber ?? '',
+              amount,
+              deliveredAt:
+                row.order?.actual_delivery_time ?? row.created_at,
+            };
+          }
         );
-        return {
-          orderId: order.id,
-          orderNumber: order.order_number,
-          amount: earnings.totalEarnings,
-          deliveredAt: order.actual_delivery_time,
-        };
-      });
 
       return {
         success: true,
         todayEarnings,
         currency,
-        todayDeliveryCount: deliveredTodayOrders.length,
+        todayDeliveryCount,
         activeOrderCount,
         recentCommissions,
       };

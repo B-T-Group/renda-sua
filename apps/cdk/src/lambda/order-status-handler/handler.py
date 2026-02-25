@@ -18,11 +18,9 @@ from rendasua_core_packages.hasura_client import (
     get_cancellation_fee_config,
     get_order_business_location_country,
     register_cancellation_fee_transactions,
-    get_order_details_for_notification,
 )
 from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
 from rendasua_core_packages.commission_handler import distribute_commissions
-from order_notifications import send_cancellation_notifications
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from notifications import send_notifications_to_nearby_agents
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
@@ -839,41 +837,9 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
     if not financial_result.get("success"):
         log_error("Cancellation financial processing failed", order_id=message.orderId, error=financial_result.get("error"))
         # Continue even if financial processing fails - order is already cancelled
-    
-    # Send cancellation notifications
-    try:
-        # Get order details for notifications
-        order_notification_data = get_order_details_for_notification(
-            message.orderId,
-            hasura_endpoint,
-            hasura_admin_secret
-        )
-        
-        if order_notification_data:
-            # Add cancellation reason to notification data
-            if message.cancellationReason:
-                order_notification_data["notes"] = message.cancellationReason
-            
-            # Send notifications
-            notifications_sent = send_cancellation_notifications(
-                order_notification_data,
-                environment
-            )
-            log_info(
-                "Cancellation notifications sent",
-                order_id=message.orderId,
-                notifications_sent=notifications_sent,
-            )
-        else:
-            log_error("Failed to fetch order details for notifications", order_id=message.orderId)
-    except Exception as e:
-        log_error(
-            "Error sending cancellation notifications",
-            error=e,
-            order_id=message.orderId,
-        )
-        # Don't fail the entire process if notifications fail
-    
+
+    # Cancellation emails are sent by the backend when status is updated to cancelled
+
     return {
         "success": financial_result.get("success", False),
         "financial_processing": financial_result,
