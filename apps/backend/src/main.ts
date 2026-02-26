@@ -10,8 +10,8 @@ if (typeof (globalThis as unknown as { crypto?: unknown }).crypto === 'undefined
 }
 
 import {
-    GetSecretValueCommand,
-    SecretsManagerClient,
+  GetSecretValueCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -56,7 +56,7 @@ async function loadSecrets() {
 
     // Inject into process.env
     for (const [key, value] of Object.entries(secrets)) {
-      if (!process.env[key] || key === 'HASURA_GRAPHQL_ADMIN_SECRET') {
+      if (!process.env[key] || key === 'HASURA_GRAPHQL_ADMIN_SECRET' || key === 'GOOGLE_MAPS_API_KEY') {
         process.env[key] = String(value);
       }
     }
