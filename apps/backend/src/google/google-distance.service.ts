@@ -26,6 +26,13 @@ export class GoogleDistanceService {
     this.apiKey = this.configService.get('GOOGLE_MAPS_API_KEY');
     this.cacheEnabled = this.configService.get('GOOGLE_CACHE_ENABLED', true);
     this.cacheTTL = this.configService.get('GOOGLE_CACHE_TTL', 86400); // 1 day
+    const keyPreview =
+      typeof this.apiKey === 'string' && this.apiKey.length >= 8
+        ? `${this.apiKey.slice(0, 4)}...${this.apiKey.slice(-4)}`
+        : this.apiKey
+          ? '****'
+          : '(not set)';
+    this.logger.log(`Google Maps API key is: ${keyPreview}`);
   }
 
   /**
