@@ -1,0 +1,37 @@
+table:
+  name: agent_restorations
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+  - name: restored_by_user
+    using:
+      foreign_key_constraint_on: restored_by_user_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - agent_id
+        - restored_by_user_id
+        - reason
+        - restored_at
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - id
+        - agent_id
+        - restored_by_user_id
+        - reason
+        - restored_at
+      filter:
+        agent:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

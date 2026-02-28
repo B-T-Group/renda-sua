@@ -3,6 +3,8 @@
 - "!include public_addresses.yaml"
 - "!include public_agent_addresses.yaml"
 - "!include public_agent_locations.yaml"
+- "!include public_agent_restorations.yaml"
+- "!include public_agent_strikes.yaml"
 - "!include public_agents.yaml"
 - "!include public_airtel_money_payments.yaml"
 - "!include public_application_configurations.yaml"

@@ -54,6 +54,24 @@ array_relationships:
         remote_table:
           name: ratings
           schema: public
+  - name: agent_strikes
+    using:
+      manual_configuration:
+        column_mapping:
+          id: agent_id
+        insertion_order: null
+        remote_table:
+          name: agent_strikes
+          schema: public
+  - name: agent_restorations
+    using:
+      manual_configuration:
+        column_mapping:
+          id: agent_id
+        insertion_order: null
+        remote_table:
+          name: agent_restorations
+          schema: public
 insert_permissions:
   - role: agent
     permission:
@@ -107,6 +125,7 @@ select_permissions:
         - is_verified
         - is_internal
         - onboarding_complete
+        - status
       filter:
         user:
           identifier:
@@ -122,6 +141,7 @@ select_permissions:
         - is_verified
         - is_internal
         - onboarding_complete
+        - status
       filter:
         user:
           identifier:
@@ -137,6 +157,7 @@ select_permissions:
         - is_verified
         - is_internal
         - onboarding_complete
+        - status
       filter:
         user:
           identifier:
@@ -152,6 +173,7 @@ select_permissions:
         - is_verified
         - is_internal
         - onboarding_complete
+        - status
       filter:
         user:
           identifier:

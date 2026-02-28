@@ -139,6 +139,8 @@ select_permissions:
         - updated_at
         - requires_fast_delivery
         - verified_agent_delivery
+        - delivery_pin_attempts
+        - delivery_overwrite_code_used_at
       filter:
         assigned_agent:
           user:
@@ -171,6 +173,7 @@ select_permissions:
         - updated_at
         - requires_fast_delivery
         - verified_agent_delivery
+        - delivery_overwrite_code_used_at
       filter:
         business:
           user:
