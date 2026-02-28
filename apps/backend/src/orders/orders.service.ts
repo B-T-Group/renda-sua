@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
@@ -26,6 +27,7 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
+import { DeliveryPinService } from './delivery-pin.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -71,6 +73,12 @@ export interface ConfirmOrderRequest {
 export interface GetOrderRequest {
   orderId: string;
   phone_number?: string;
+}
+
+export interface CompleteDeliveryRequest {
+  orderId: string;
+  pin?: string;
+  overwriteCode?: string;
 }
 
 // Custom interface for complex order data with all relationships
@@ -287,7 +295,8 @@ export class OrdersService {
     private readonly agentHoldService: AgentHoldService,
     private readonly pdfService: PdfService,
     private readonly orderQueueService: OrderQueueService,
-    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService
+    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
+    private readonly deliveryPinService: DeliveryPinService
   ) {}
 
   private async processBatch(
@@ -1003,6 +1012,13 @@ export class OrdersService {
         'Only agent users can get orders',
         HttpStatus.FORBIDDEN
       );
+    const agentStatus = await this.getAgentStatus(user.agent.id);
+    if (agentStatus === 'suspended') {
+      throw new HttpException(
+        'Your account is suspended. You cannot claim orders. Contact support.',
+        HttpStatus.FORBIDDEN
+      );
+    }
     const order = await this.getOrderWithItems(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -1107,6 +1123,13 @@ export class OrdersService {
         'Only agent users can claim orders',
         HttpStatus.FORBIDDEN
       );
+    const agentStatus = await this.getAgentStatus(user.agent.id);
+    if (agentStatus === 'suspended') {
+      throw new HttpException(
+        'Your account is suspended. You cannot claim orders. Contact support.',
+        HttpStatus.FORBIDDEN
+      );
+    }
 
     const timestamp = Date.now().toString().slice(-8);
     const random = Math.random().toString(36).substr(2, 4);
@@ -1457,44 +1480,13 @@ export class OrdersService {
     );
   }
 
-  async deliverOrder(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can deliver orders',
-        HttpStatus.FORBIDDEN
-      );
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.assigned_agent_id !== user.agent.id)
-      throw new HttpException(
-        'Only the assigned agent can deliver this order',
-        HttpStatus.FORBIDDEN
-      );
-    if (order.current_status !== 'out_for_delivery')
-      throw new HttpException(
-        `Cannot deliver order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
-
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
-      request.orderId,
-      'delivered'
+  async deliverOrder(
+    request: OrderStatusChangeRequest
+  ): Promise<{ order: any; message: string }> {
+    throw new HttpException(
+      'This endpoint is deprecated. Use POST /orders/complete-delivery with the delivery PIN or overwrite code to complete the order.',
+      HttpStatus.GONE
     );
-    await this.createStatusHistoryEntry(
-      request.orderId,
-      'delivered',
-      'Order delivered successfully to customer',
-      'agent',
-      user.id,
-      request.notes
-    );
-    return {
-      success: true,
-      order: updatedOrder,
-      message: 'Order delivered successfully',
-    };
   }
 
   async deliverOrderBatch(
@@ -1505,27 +1497,121 @@ export class OrdersService {
     );
   }
 
-  async completeOrder(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
-    if (!user.client)
-      throw new HttpException(
-        'Only client users can complete orders',
-        HttpStatus.FORBIDDEN
-      );
+  async completeOrder(_request: OrderStatusChangeRequest) {
+    throw new HttpException(
+      'Order completion is now done by the delivery agent using the PIN. Please share your delivery PIN with the agent at delivery.',
+      HttpStatus.GONE
+    );
+  }
 
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.client_id !== user.client.id)
+  /**
+   * Complete delivery with PIN or overwrite code (agent only). One-step out_for_delivery -> complete.
+   * On 3 wrong PIN attempts: record one strike; suspend agent only if 3 strikes in current month.
+   */
+  async completeDelivery(request: CompleteDeliveryRequest) {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
       throw new HttpException(
-        'Only the client can complete this order',
+        'Only agent users can complete delivery',
         HttpStatus.FORBIDDEN
       );
-    if (order.current_status !== 'delivered')
+    }
+    const hasPin = !!request.pin?.trim();
+    const hasOverwrite = !!request.overwriteCode?.trim();
+    if (!hasPin && !hasOverwrite) {
       throw new HttpException(
-        `Cannot complete order in ${order.current_status} status`,
+        'Either pin or overwriteCode is required',
         HttpStatus.BAD_REQUEST
       );
+    }
+    if (hasPin && hasOverwrite) {
+      throw new HttpException(
+        'Provide either pin or overwriteCode, not both',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const order = await this.getOrderDetails(request.orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.assigned_agent_id !== user.agent.id) {
+      throw new HttpException(
+        'Only the assigned agent can complete this delivery',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (order.current_status !== 'out_for_delivery') {
+      throw new HttpException(
+        `Cannot complete delivery in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const agentStatus = (order as any).assigned_agent?.status;
+    if (agentStatus === 'suspended') {
+      throw new HttpException(
+        'Your account is suspended. You cannot complete deliveries. Contact support.',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const attempts = (order as any).delivery_pin_attempts ?? 0;
+    if (attempts >= this.deliveryPinService.getMaxPinAttempts()) {
+      if (hasPin) {
+        throw new HttpException(
+          'Maximum PIN attempts reached for this order. Use an overwrite code from the business if available.',
+          HttpStatus.FORBIDDEN
+        );
+      }
+    }
+
+    if (hasPin) {
+      const hash = (order as any).delivery_pin_hash;
+      if (!hash) {
+        throw new HttpException(
+          'This order has no delivery PIN set.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const valid = this.deliveryPinService.verifyPin(
+        request.orderId,
+        request.pin!,
+        hash
+      );
+      if (!valid) {
+        const newAttempts = attempts + 1;
+        await this.incrementOrderDeliveryPinAttempts(request.orderId);
+        if (newAttempts >= this.deliveryPinService.getMaxPinAttempts()) {
+          await this.recordPinFailedStrikeAndMaybeSuspend(
+            user.agent.id,
+            request.orderId
+          );
+          throw new HttpException(
+            'Maximum PIN attempts reached. A strike has been recorded. Use an overwrite code from the business if available.',
+            HttpStatus.FORBIDDEN
+          );
+        }
+        throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
+      }
+    } else {
+      const overwriteHash = (order as any).delivery_overwrite_code_hash;
+      if (!overwriteHash) {
+        throw new HttpException(
+          'No overwrite code has been set for this order. Ask the business to generate one.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const valid = this.deliveryPinService.verifyOverwriteCode(
+        request.orderId,
+        request.overwriteCode!,
+        overwriteHash
+      );
+      if (!valid) {
+        throw new HttpException('Invalid overwrite code', HttpStatus.FORBIDDEN);
+      }
+      await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
+    }
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
@@ -1534,54 +1620,242 @@ export class OrdersService {
     await this.createStatusHistoryEntry(
       request.orderId,
       'complete',
-      'Order completed by client',
-      'client',
-      user.id,
-      request.notes
+      hasPin
+        ? 'Order completed by agent (PIN verified)'
+        : 'Order completed by agent (overwrite code used)',
+      'agent',
+      user.id
     );
 
-    // Update inventory quantities - decrement both reserved and total quantities
     try {
       const orderItems = order.order_items || [];
       await this.updateInventoryOnCompletion(orderItems);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
-        `Failed to update inventory after order completion: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Failed to update inventory after completion: ${error.message}`
       );
-      // Don't fail the completion if inventory update fails
     }
-
-    // Payment processing is now handled asynchronously by the order-status-handler Lambda
-    // await this.releaseHoldAndProcessPayment(order.id);
-
-    // Generate receipt automatically after successful completion
     try {
       await this.pdfService.generateReceipt(order.id, order.client.user_id);
-      this.logger.log(`Receipt generated for order ${order.id}`);
     } catch (error: any) {
       this.logger.error(`Failed to generate receipt: ${error.message}`);
-      // Don't fail completion if receipt generation fails
     }
-
-    // Send order.completed message to SQS queue
     try {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
-    } catch (error) {
-      // Log but don't throw - order completion should succeed
+    } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed message to SQS: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Failed to send order.completed message: ${error.message}`
       );
     }
+
+    this.deliveryPinService.clearPinForOrder(order.id);
 
     return {
       success: true,
       order: updatedOrder,
-      message: 'Order completed successfully',
+      message: 'Delivery completed successfully',
     };
+  }
+
+  private async incrementOrderDeliveryPinAttempts(orderId: string): Promise<void> {
+    const order = await this.getOrderDetails(orderId);
+    const current = (order as any)?.delivery_pin_attempts ?? 0;
+    const mutation = `
+      mutation IncrementDeliveryPinAttempts($orderId: uuid!, $newAttempts: Int!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_pin_attempts: $newAttempts }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      newAttempts: current + 1,
+    });
+  }
+
+  private async setOrderDeliveryOverwriteUsedAt(orderId: string): Promise<void> {
+    const mutation = `
+      mutation SetOverwriteUsedAt($orderId: uuid!, $usedAt: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_overwrite_code_used_at: $usedAt }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      usedAt: new Date().toISOString(),
+    });
+  }
+
+  private async recordPinFailedStrikeAndMaybeSuspend(
+    agentId: string,
+    orderId: string
+  ): Promise<void> {
+    const existingQuery = `
+      query ExistingStrike($agentId: uuid!, $orderId: uuid!, $reason: String!) {
+        agent_strikes(where: { agent_id: { _eq: $agentId }, order_id: { _eq: $orderId }, reason: { _eq: $reason } }, limit: 1) {
+          id
+          created_at
+        }
+      }
+    `;
+    const existing = await this.hasuraSystemService.executeQuery(
+      existingQuery,
+      { agentId, orderId, reason: 'pin_failed_3' }
+    );
+    const rows = (existing as any).agent_strikes ?? [];
+    let strike = rows[0];
+    if (!strike) {
+      const insertMutation = `
+        mutation InsertAgentStrike($agentId: uuid!, $orderId: uuid!, $reason: String!) {
+          insert_agent_strikes_one(object: { agent_id: $agentId, order_id: $orderId, reason: $reason }) {
+            id
+            created_at
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeMutation(
+        insertMutation,
+        { agentId, orderId, reason: 'pin_failed_3' }
+      );
+      strike = (result as any).insert_agent_strikes_one;
+    }
+    if (!strike?.created_at) return;
+
+    const countQuery = `
+      query CountAgentStrikesInMonth($agentId: uuid!, $startOfMonth: timestamptz!, $endOfMonth: timestamptz!) {
+        agent_strikes_aggregate(
+          where: {
+            agent_id: { _eq: $agentId },
+            created_at: { _gte: $startOfMonth, _lte: $endOfMonth }
+          }
+        ) { aggregate { count } }
+      }
+    `;
+    const created = new Date(strike.created_at);
+    const startOfMonth = new Date(created.getFullYear(), created.getMonth(), 1);
+    const endOfMonth = new Date(
+      created.getFullYear(),
+      created.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+    const countResult = await this.hasuraSystemService.executeQuery(
+      countQuery,
+      {
+        agentId,
+        startOfMonth: startOfMonth.toISOString(),
+        endOfMonth: endOfMonth.toISOString(),
+      }
+    );
+    const count =
+      (countResult as any).agent_strikes_aggregate?.aggregate?.count ?? 0;
+    if (count >= 3) {
+      const updateMutation = `
+        mutation SetAgentSuspended($agentId: uuid!) {
+          update_agents_by_pk(pk_columns: { id: $agentId }, _set: { status: "suspended" }) {
+            id
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(updateMutation, {
+        agentId,
+      });
+    }
+  }
+
+  /**
+   * Get delivery PIN for the order's client. Client can retrieve multiple times until order is completed.
+   */
+  async getDeliveryPinForClient(orderId: string): Promise<{ pin: string } | null> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.client) {
+      throw new HttpException(
+        'Only the order client can retrieve the delivery PIN',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.client_id !== user.client.id) {
+      throw new HttpException(
+        'Only the order client can retrieve the delivery PIN',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (order.current_status === 'complete') {
+      throw new HttpException(
+        'Order already completed. PIN is no longer needed.',
+        HttpStatus.GONE
+      );
+    }
+    const pin = this.deliveryPinService.getPinForClient(orderId);
+    if (!pin) {
+      throw new HttpException(
+        'Delivery PIN is not available. If the order was just paid, try again in a moment.',
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return { pin };
+  }
+
+  /**
+   * Generate overwrite code for an order (business only). Returns plain code once.
+   */
+  async generateDeliveryOverwriteCode(orderId: string): Promise<{
+    overwriteCode: string;
+  }> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.business) {
+      throw new HttpException(
+        'Only the order business can generate an overwrite code',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.business_id !== user.business.id) {
+      throw new HttpException(
+        'Only the order business can generate an overwrite code',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (order.current_status !== 'out_for_delivery') {
+      throw new HttpException(
+        `Overwrite code can only be generated for orders that are out for delivery (current: ${order.current_status})`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const hash = this.deliveryPinService.hashOverwriteCode(orderId, code);
+    const mutation = `
+      mutation SetOverwriteCodeHash($orderId: uuid!, $hash: String!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_overwrite_code_hash: $hash }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      hash,
+    });
+    return { overwriteCode: code };
   }
 
   async failDelivery(request: OrderStatusChangeRequest) {
@@ -3151,7 +3425,12 @@ export class OrdersService {
           assigned_agent {
             user_id
             is_verified
+            status
           }
+          delivery_pin_hash
+          delivery_pin_attempts
+          delivery_overwrite_code_hash
+          delivery_overwrite_code_used_at
           order_items {
             id
             business_inventory_id
@@ -3443,6 +3722,12 @@ export class OrdersService {
       // Update order status from pending_payment to pending and payment_status to paid
       await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
 
+      // Generate 4-digit delivery PIN (hashed on order); plain PIN available once for client via getDeliveryPin
+      const deliveryPin = this.deliveryPinService.generatePin();
+      const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
+      await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
+      this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+
       // Send order creation notifications
       try {
         // Check if notifications are enabled
@@ -3655,6 +3940,43 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private async getAgentStatus(agentId: string): Promise<string> {
+    const query = `
+      query GetAgentStatus($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          status
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return (result as any).agents_by_pk?.status ?? 'active';
+  }
+
+  /**
+   * Set delivery PIN hash on order (after payment). Used by PIN-based completion flow.
+   */
+  private async setOrderDeliveryPinHash(
+    orderId: string,
+    deliveryPinHash: string
+  ): Promise<void> {
+    const mutation = `
+      mutation SetOrderDeliveryPinHash($orderId: uuid!, $deliveryPinHash: String!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_pin_hash: $deliveryPinHash }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      deliveryPinHash,
+    });
   }
 
   /**

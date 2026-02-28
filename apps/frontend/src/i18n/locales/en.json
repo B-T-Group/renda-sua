@@ -303,6 +303,8 @@
     }
   },
   "agent": {
+    "suspendedBanner": "Your account is suspended. You cannot claim new orders. If you believe this is an error, please contact support.",
+    "suspendedCannotClaim": "Your account is suspended. You cannot claim orders. Contact support.",
     "addressPrompt": {
       "addAddress": "Add Address",
       "benefit1": "Receive orders near your location",
@@ -1224,6 +1226,7 @@
     "cancelOrder": "Cancel Order",
     "claimOrder": "Claim Order",
     "claiming": "Claiming...",
+    "completeDelivery": "Complete delivery",
     "completeOrder": "Complete Order",
     "completePreparation": "Complete Preparation",
     "confirmOrder": "Confirm Order",
@@ -1329,6 +1332,28 @@
     "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",
+    "completeDelivery": {
+      "title": "Complete Delivery",
+      "instruction": "Enter the 4-digit PIN the client shared with you, or the overwrite code from the business.",
+      "pinLabel": "Delivery PIN (4 digits)",
+      "overwriteLabel": "Or overwrite code",
+      "enterPinOrOverwrite": "Enter the 4-digit PIN from the client or the overwrite code from the business.",
+      "enterOneOnly": "Enter either the PIN or the overwrite code, not both.",
+      "submit": "Complete delivery"
+    },
+    "deliveryPin": {
+      "title": "Delivery PIN",
+      "viewPin": "View delivery PIN",
+      "shareWithAgent": "Share this PIN with your delivery agent. They will enter it to complete the delivery.",
+      "unavailable": "Delivery PIN is no longer available (already viewed or expired)."
+    },
+    "overwriteCode": {
+      "button": "Generate overwrite code",
+      "title": "Delivery overwrite code",
+      "shareWithAgent": "Share this code with the delivery agent so they can complete the order without the client PIN.",
+      "generated": "Overwrite code generated. Share it with the agent.",
+      "error": "Failed to generate overwrite code"
+    },
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",
     "orderCompletionSuccessMessage": "Congratulations! Your order has been successfully completed. We hope you enjoyed your purchase and look forward to serving you again soon!",

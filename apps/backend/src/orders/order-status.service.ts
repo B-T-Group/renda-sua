@@ -246,7 +246,7 @@ export class OrderStatusService {
       assigned_to_agent: isAssignedAgent ? ['picked_up'] : [],
       picked_up: isAssignedAgent ? ['in_transit', 'out_for_delivery'] : [],
       in_transit: isAssignedAgent ? ['out_for_delivery'] : [],
-      out_for_delivery: isAssignedAgent ? ['delivered', 'failed'] : [],
+      out_for_delivery: isAssignedAgent ? ['complete', 'failed'] : [],
       delivered: isClient ? ['complete'] : [],
       cancelled: [],
       failed: [],

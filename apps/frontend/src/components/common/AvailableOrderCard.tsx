@@ -607,7 +607,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
             color="primary"
             size="medium"
             onClick={handleClaim}
-            disabled={claimLoading}
+            disabled={claimLoading || profile?.agent?.status === 'suspended'}
             startIcon={
               claimLoading ? (
                 <CircularProgress size={14} color="inherit" />

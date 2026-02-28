@@ -45,6 +45,12 @@ export interface OrderStatusChangeRequest {
   failure_reason_id?: string; // Required for fail_delivery endpoint
 }
 
+export interface CompleteDeliveryRequest {
+  orderId: string;
+  pin?: string;
+  overwriteCode?: string;
+}
+
 export interface ConfirmOrderData {
   orderId: string;
   notes?: string;
@@ -778,6 +784,81 @@ export const useBackendOrders = () => {
     }, 'orders.completing');
   };
 
+  const completeDelivery = async (
+    request: CompleteDeliveryRequest
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          '/orders/complete-delivery',
+          request
+        );
+
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to complete delivery'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          'Failed to complete delivery';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.completingDelivery');
+  };
+
+  const getDeliveryPin = async (
+    orderId: string
+  ): Promise<{ pin: string }> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.get<{ pin: string }>(
+      `/orders/${orderId}/delivery-pin`
+    );
+
+    if (!response.data?.pin) {
+      throw new Error('Failed to get delivery PIN');
+    }
+
+    return response.data;
+  };
+
+  const generateDeliveryOverwriteCode = async (
+    orderId: string
+  ): Promise<{ overwriteCode: string }> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    const response = await apiClient.post<{
+      overwriteCode: string;
+    }>(`/orders/${orderId}/delivery-overwrite-code`, {});
+
+    if (!response.data?.overwriteCode) {
+      throw new Error('Failed to generate overwrite code');
+    }
+
+    return response.data;
+  };
+
   return {
     // Legacy methods
     createOrder,
@@ -806,6 +887,11 @@ export const useBackendOrders = () => {
 
     // Client methods
     completeOrder,
+
+    // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
+    completeDelivery,
+    getDeliveryPin,
+    generateDeliveryOverwriteCode,
 
     loading: false, // Loading is now handled globally
     error,

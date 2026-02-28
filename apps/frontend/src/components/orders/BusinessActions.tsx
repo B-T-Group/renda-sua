@@ -4,7 +4,16 @@ import {
   AttachMoney as RefundIcon,
   LocalShipping,
 } from '@mui/icons-material';
-import { Box, Button, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Typography,
+} from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -50,7 +59,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     startPreparing,
     completePreparation,
     refundOrder,
-    completeOrder,
+    generateDeliveryOverwriteCode,
   } = useBackendOrders();
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [loading, setLoading] = useState(false);
@@ -189,20 +198,27 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     }
   };
 
-  const handleCompleteOrder = async () => {
+  const [overwriteCodeDialogOpen, setOverwriteCodeDialogOpen] = useState(false);
+  const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
+
+  const handleGenerateOverwriteCode = async () => {
     setLoading(true);
+    setOverwriteCode(null);
     try {
-      await completeOrder({ orderId: order.id });
+      const { overwriteCode: code } = await generateDeliveryOverwriteCode(
+        order.id
+      );
+      setOverwriteCode(code);
+      setOverwriteCodeDialogOpen(true);
       onShowNotification?.(
-        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        t('orders.overwriteCode.generated', 'Overwrite code generated. Share it with the agent.'),
         'success'
       );
-      onActionComplete?.();
     } catch (error) {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : t('messages.orderCompleteError', 'Failed to complete order');
+          : t('orders.overwriteCode.error', 'Failed to generate overwrite code');
       onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
@@ -264,14 +280,17 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         });
         break;
 
-      case 'delivered':
+      case 'out_for_delivery':
         actions.push({
-          label: t('orderActions.completeOrder', 'Complete Order'),
-          action: handleCompleteOrder,
-          color: 'success' as const,
+          label: t('orders.overwriteCode.button', 'Generate overwrite code'),
+          action: handleGenerateOverwriteCode,
+          color: 'primary' as const,
           icon: <CheckCircle />,
         });
-        // Only show refund option if payment is not pending
+        break;
+
+      case 'delivered':
+        // Completion is done by agent with PIN. Refund option only.
         if (order.payment_status !== 'pending') {
           actions.push({
             label: t('orderActions.refundOrder', 'Refund Order'),
@@ -382,6 +401,51 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         loading={loading}
       />
 
+      {/* Overwrite code dialog */}
+      <Dialog
+        open={overwriteCodeDialogOpen}
+        onClose={() => {
+          setOverwriteCodeDialogOpen(false);
+          setOverwriteCode(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.overwriteCode.title', 'Delivery overwrite code')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'orders.overwriteCode.shareWithAgent',
+              'Share this code with the delivery agent so they can complete the order without the client PIN.'
+            )}
+          </Typography>
+          {overwriteCode && (
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{
+                fontFamily: 'monospace',
+                letterSpacing: 2,
+                py: 1,
+              }}
+            >
+              {overwriteCode}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setOverwriteCodeDialogOpen(false);
+              setOverwriteCode(null);
+            }}
+          >
+            {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

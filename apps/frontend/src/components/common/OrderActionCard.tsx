@@ -15,17 +15,13 @@ import {
   CardActions,
   CardContent,
   Chip,
-  CircularProgress,
   IconButton,
   Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { Order } from '../../hooks/useOrders';
-import ConfirmationModal from './ConfirmationModal';
-import OrderCompletionSuccessDialog from './OrderCompletionSuccessDialog';
 
 interface OrderActionCardProps {
   order: Order;
@@ -42,11 +38,6 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { completeOrder } = useBackendOrders();
-  const [loading, setLoading] = useState(false);
-  const [completeConfirmationOpen, setCompleteConfirmationOpen] =
-    useState(false);
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const getActionRequiredInfo = () => {
@@ -77,38 +68,12 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
               ),
               action: 'complete_preparation',
             };
-          case 'delivered':
-            return {
-              required: true,
-              severity: 'success' as const,
-              icon: <CheckCircle />,
-              message: t(
-                'orders.business.actionRequired.delivered',
-                'Action Required: Complete order'
-              ),
-              action: 'complete_order',
-            };
           default:
             return { required: false };
         }
 
       case 'client':
-        switch (status) {
-          case 'delivered':
-            return {
-              required: true,
-              severity: 'success' as const,
-              icon: <CheckCircle />,
-              message: t(
-                'orders.client.actionRequired.delivered',
-                'Action Required: Complete order to release payment'
-              ),
-              action: 'complete_order',
-            };
-
-          default:
-            return { required: false };
-        }
+        return { required: false };
 
       case 'agent':
         switch (status) {
@@ -208,36 +173,6 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
       setCurrentImageIndex(0);
     }
   }, [orderImages.length, currentImageIndex]);
-
-  const handleCompleteOrderClick = () => {
-    setCompleteConfirmationOpen(true);
-  };
-
-  const handleConfirmCompleteOrder = async () => {
-    setLoading(true);
-    try {
-      await completeOrder({ orderId: order.id });
-      setCompleteConfirmationOpen(false);
-      setSuccessModalOpen(true);
-      // Don't call onActionComplete yet - wait until user closes the success modal
-    } catch (error) {
-      console.error('Failed to complete order:', error);
-      // Error is handled by the hook, but we still close the modal
-      setCompleteConfirmationOpen(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCloseSuccessModal = () => {
-    setSuccessModalOpen(false);
-    // Call onActionComplete after modal is closed to trigger parent refresh
-    onActionComplete?.();
-  };
-
-  const handleCancelCompleteOrder = () => {
-    setCompleteConfirmationOpen(false);
-  };
 
   const handlePreviousImage = () => {
     setCurrentImageIndex((prev) =>
@@ -465,80 +400,17 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
       </CardContent>
 
       <CardActions>
-        {userType === 'client' &&
-        order.current_status === 'delivered' &&
-        actionInfo.required ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1,
-              width: '100%',
-            }}
-          >
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleCompleteOrderClick}
-              disabled={loading}
-              startIcon={
-                loading ? <CircularProgress size={16} /> : <CheckCircle />
-              }
-              fullWidth
-            >
-              {loading
-                ? t('orders.completing', 'Completing...')
-                : t('orders.completeOrder', 'Complete Order')}
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={() => navigate(`/orders/${order.id}`)}
-              fullWidth
-            >
-              {t('orders.viewDetails', 'View Details')}
-            </Button>
-          </Box>
-        ) : (
-          <Button
-            variant="contained"
-            color="primary"
-            fullWidth
-            onClick={() => navigate(`/orders/${order.id}`)}
-          >
-            {actionInfo.required
-              ? t('orders.viewAndTakeAction', 'View & Take Action')
-              : t('orders.viewDetails', 'View Details')}
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          color="primary"
+          fullWidth
+          onClick={() => navigate(`/orders/${order.id}`)}
+        >
+          {actionInfo.required
+            ? t('orders.viewAndTakeAction', 'View & Take Action')
+            : t('orders.viewDetails', 'View Details')}
+        </Button>
       </CardActions>
-
-      {/* Order Completion Confirmation Modal */}
-      {userType === 'client' && (
-        <>
-          <ConfirmationModal
-            open={completeConfirmationOpen}
-            title={t(
-              'orders.confirmOrderCompletion',
-              'Confirm Order Completion'
-            )}
-            message={t('orders.confirmOrderCompletionMessage', {
-              orderNumber: order.order_number,
-              defaultValue: `Are you sure you want to complete order #${order.order_number}? This action cannot be undone.`,
-            })}
-            confirmText={t('common.confirm', 'Confirm')}
-            cancelText={t('common.cancel', 'Cancel')}
-            onConfirm={handleConfirmCompleteOrder}
-            onCancel={handleCancelCompleteOrder}
-            confirmColor="success"
-            loading={loading}
-          />
-          <OrderCompletionSuccessDialog
-            open={successModalOpen}
-            onClose={handleCloseSuccessModal}
-          />
-        </>
-      )}
     </Card>
   );
 };

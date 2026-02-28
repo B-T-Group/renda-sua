@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -11,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -126,6 +129,39 @@ export class AdminController {
         error: error.message || 'Failed to fetch agents',
       };
     }
+  }
+
+  @Post('agents/:id/restore')
+  @ApiOperation({
+    summary: 'Restore suspended agent',
+    description:
+      'Set agent status back to active and record the restoration. Only for agents that were suspended (e.g. after 3 strikes in a month).',
+  })
+  @ApiParam({ name: 'id', description: 'Agent UUID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { reason: { type: 'string', description: 'Optional reason for restoration' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Agent restored' })
+  async restoreAgent(
+    @Param('id') agentId: string,
+    @Body() body: { reason?: string },
+    @Req() request: RequestWithUser
+  ) {
+    const result = await this.adminService.restoreAgent(
+      agentId,
+      request.user.id,
+      body?.reason
+    );
+    if (!result.success) {
+      throw new HttpException(
+        result.error ?? 'Failed to restore agent',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return { success: true, message: 'Agent restored to active' };
   }
 
   @Patch('agents/:id')

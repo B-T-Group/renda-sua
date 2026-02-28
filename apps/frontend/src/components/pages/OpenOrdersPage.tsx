@@ -174,7 +174,15 @@ const OpenOrdersPage: React.FC = () => {
         maxWidth="lg"
         sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
       >
-        {profile?.agent && !profile.agent.is_verified && (
+        {profile?.agent?.status === 'suspended' && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t(
+              'agent.suspendedBanner',
+              'Your account is suspended. You cannot claim new orders. If you believe this is an error, please contact support.'
+            )}
+          </Alert>
+        )}
+        {profile?.agent && !profile.agent.is_verified && profile?.agent?.status !== 'suspended' && (
           <Alert severity="info" sx={{ mb: 2 }}>
             {t(
               'agent.unverifiedHoldNote',

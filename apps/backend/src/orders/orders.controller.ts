@@ -25,6 +25,7 @@ import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
   BatchOrderStatusChangeResult,
+  CompleteDeliveryRequest,
   ConfirmOrderRequest,
   GetOrderRequest,
   OrderStatusChangeRequest,
@@ -371,6 +372,51 @@ export class OrdersController {
   @Post('complete')
   async completeOrder(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.completeOrder(request);
+  }
+
+  @Post('complete-delivery')
+  @ApiOperation({
+    summary: 'Complete delivery with PIN or overwrite code',
+    description:
+      'Agent completes order in one step (out_for_delivery → complete) by entering the client PIN or business overwrite code. On 3 wrong PIN attempts a strike is recorded; 3 strikes in the month suspends the agent.',
+  })
+  @ApiBody({
+    description: 'Order ID and either pin or overwriteCode',
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: { type: 'string', format: 'uuid' },
+        pin: { type: 'string', description: '4-digit delivery PIN' },
+        overwriteCode: { type: 'string', description: 'Overwrite code from business' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Delivery completed successfully' })
+  @ApiResponse({ status: 403, description: 'Invalid PIN, max attempts reached, or account suspended' })
+  async completeDelivery(@Body() request: CompleteDeliveryRequest) {
+    return this.ordersService.completeDelivery(request);
+  }
+
+  @Get(':id/delivery-pin')
+  @ApiOperation({
+    summary: 'Get delivery PIN (client only, one-time)',
+    description: 'Returns the 4-digit delivery PIN for the order. Only the order client can call this; PIN is returned once then invalidated.',
+  })
+  @ApiResponse({ status: 200, description: 'PIN returned' })
+  @ApiResponse({ status: 410, description: 'PIN already retrieved or expired' })
+  async getDeliveryPin(@Param('id') orderId: string) {
+    return this.ordersService.getDeliveryPinForClient(orderId);
+  }
+
+  @Post(':id/delivery-overwrite-code')
+  @ApiOperation({
+    summary: 'Generate overwrite code (business only)',
+    description: 'Generates a one-time overwrite code so the agent can complete the order without the client PIN. Order must be out_for_delivery.',
+  })
+  @ApiResponse({ status: 200, description: 'Overwrite code generated' })
+  async generateDeliveryOverwriteCode(@Param('id') orderId: string) {
+    return this.ordersService.generateDeliveryOverwriteCode(orderId);
   }
 
   @Post('cancel')

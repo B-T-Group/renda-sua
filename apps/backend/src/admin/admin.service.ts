@@ -8,6 +8,7 @@ const GET_AGENTS_QUERY = `
       user_id
       vehicle_type_id
       is_verified
+      status
       created_at
       updated_at
       user {
@@ -434,6 +435,57 @@ export class AdminService {
       ? await this.updateAgentRecord(agentId, agentUpdates)
       : null;
     return { user: updatedUser, agent: updatedAgent };
+  }
+
+  /**
+   * Restore a suspended agent to active. Records the restoration in agent_restorations.
+   */
+  async restoreAgent(
+    agentId: string,
+    restoredByUserId: string,
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const updateMutation = `
+        mutation SetAgentActive($agentId: uuid!) {
+          update_agents_by_pk(
+            pk_columns: { id: $agentId }
+            _set: { status: "active" }
+          ) {
+            id
+            status
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(updateMutation, {
+        agentId,
+      });
+      const insertMutation = `
+        mutation InsertAgentRestoration($agentId: uuid!, $restoredByUserId: uuid!, $reason: String) {
+          insert_agent_restorations_one(
+            object: {
+              agent_id: $agentId
+              restored_by_user_id: $restoredByUserId
+              reason: $reason
+            }
+          ) {
+            id
+            restored_at
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(insertMutation, {
+        agentId,
+        restoredByUserId,
+        reason: reason ?? null,
+      });
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error?.message ?? 'Failed to restore agent',
+      };
+    }
   }
 
   async updateBusiness(

@@ -50,6 +50,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         is_verified
         is_internal
         onboarding_complete
+        status
         created_at
         updated_at
       }

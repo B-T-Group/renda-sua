@@ -19,6 +19,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
+import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
@@ -55,6 +56,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   } | null>(null);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
   const [showFailDeliveryDialog, setShowFailDeliveryDialog] = useState(false);
+  const [showCompleteDeliveryDialog, setShowCompleteDeliveryDialog] =
+    useState(false);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -272,8 +275,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    // Direct update for out_for_delivery and delivered (no confirmation)
-    if (newStatus === 'out_for_delivery' || newStatus === 'delivered') {
+    // Direct update for out_for_delivery only (delivered is replaced by complete-delivery with PIN)
+    if (newStatus === 'out_for_delivery') {
       await handleStatusUpdateDirect(newStatus);
       return;
     }
@@ -389,8 +392,15 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           action: handleClaim,
           color: 'primary' as const,
           icon: <CheckCircle />,
-          disabled: false, // Always enabled - will show dialog if insufficient funds
-          isClaim: true, // Mark as claim action for special styling
+          disabled: profile?.agent?.status === 'suspended',
+          tooltip:
+            profile?.agent?.status === 'suspended'
+              ? t(
+                  'agent.suspendedCannotClaim',
+                  'Your account is suspended. You cannot claim orders. Contact support.'
+                )
+              : undefined,
+          isClaim: true,
         });
         break;
 
@@ -444,8 +454,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 
       case 'out_for_delivery':
         actions.push({
-          label: t('orderActions.markAsDelivered', 'Mark as Delivered'),
-          action: () => handleStatusUpdate('delivered'),
+          label: t('orderActions.completeDelivery', 'Complete delivery'),
+          action: () => setShowCompleteDeliveryDialog(true),
           color: 'success' as const,
           icon: <CheckCircle />,
         });
@@ -629,6 +639,20 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onClose={() => setShowFailDeliveryDialog(false)}
         onConfirm={handleConfirmFailDelivery}
         loading={loading}
+      />
+
+      <CompleteDeliveryDialog
+        open={showCompleteDeliveryDialog}
+        onClose={() => setShowCompleteDeliveryDialog(false)}
+        orderId={order.id}
+        orderNumber={order.order_number}
+        onSuccess={() => {
+          onShowNotification?.(
+            t('messages.orderCompleted', 'Order completed successfully'),
+            'success'
+          );
+          onActionComplete?.();
+        }}
       />
     </>
   );

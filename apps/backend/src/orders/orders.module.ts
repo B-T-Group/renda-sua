@@ -10,6 +10,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
+import { DeliveryPinService } from './delivery-pin.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
 import { OrderQueueService } from './order-queue.service';
@@ -40,6 +41,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     WaitAndExecuteScheduleService,
     ConfigurationsService,
     FailedDeliveriesService,
+    DeliveryPinService,
   ],
   exports: [OrdersService, OrderStatusService],
 })

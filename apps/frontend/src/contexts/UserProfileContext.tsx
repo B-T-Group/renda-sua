@@ -58,6 +58,7 @@ export interface UserProfile {
     is_verified: boolean;
     is_internal: boolean;
     onboarding_complete: boolean;
+    status?: 'active' | 'suspended';
     created_at: string;
     updated_at: string;
   };

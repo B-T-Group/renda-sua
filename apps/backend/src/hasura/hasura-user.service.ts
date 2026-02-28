@@ -398,9 +398,11 @@ export class HasuraUserService {
         vehicle_type_id: agent.vehicle_type_id,
         is_verified: agent.is_verified,
         is_internal: agent.is_internal,
+        onboarding_complete: agent.onboarding_complete,
+        status: agent.status ?? 'active',
         created_at: agent.created_at,
         updated_at: agent.updated_at,
-      } as Agents,
+      } as unknown as Agents,
     };
   }
 
