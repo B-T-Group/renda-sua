@@ -42,12 +42,20 @@ export class AccountsService {
   ): Promise<TransactionResult> {
     try {
       // Validate input
-      if (!request.accountId || !request.amount || !request.transactionType) {
+      if (!request.accountId || request.amount == null || !request.transactionType) {
         return {
           success: false,
           error:
             'Missing required fields: accountId, amount, or transactionType',
         };
+      }
+
+      // Do not register hold or release when amount is 0 (no-op, success)
+      if (
+        (request.transactionType === 'hold' || request.transactionType === 'release') &&
+        request.amount === 0
+      ) {
+        return { success: true };
       }
 
       if (request.amount <= 0) {
