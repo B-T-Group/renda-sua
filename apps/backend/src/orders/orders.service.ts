@@ -1800,12 +1800,22 @@ export class OrdersService {
         HttpStatus.GONE
       );
     }
-    const pin = this.deliveryPinService.getPinForClient(orderId);
+    let pin = this.deliveryPinService.getPinForClient(orderId);
     if (!pin) {
-      throw new HttpException(
-        'Delivery PIN is not available. If the order was just paid, try again in a moment.',
-        HttpStatus.NOT_FOUND
-      );
+      const orderHasPinFlow = !!(order as { delivery_pin_hash?: string })
+        ?.delivery_pin_hash;
+      if (orderHasPinFlow) {
+        pin = this.deliveryPinService.generatePin();
+        const deliveryPinHash = this.deliveryPinService.hashPin(orderId, pin);
+        await this.setOrderDeliveryPinHash(orderId, deliveryPinHash);
+        await this.resetOrderDeliveryPinAttempts(orderId);
+        this.deliveryPinService.setPinForClient(orderId, pin);
+      } else {
+        throw new HttpException(
+          'Delivery PIN is not available. If the order was just paid, try again in a moment.',
+          HttpStatus.NOT_FOUND
+        );
+      }
     }
     return { pin };
   }
@@ -3722,7 +3732,7 @@ export class OrdersService {
       // Update order status from pending_payment to pending and payment_status to paid
       await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
 
-      // Generate 4-digit delivery PIN (hashed on order); plain PIN available once for client via getDeliveryPin
+      // Generate 4-digit delivery PIN (hashed on order); plain PIN in cache for client retrieval
       const deliveryPin = this.deliveryPinService.generatePin();
       const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
       await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
@@ -3977,6 +3987,20 @@ export class OrdersService {
       orderId,
       deliveryPinHash,
     });
+  }
+
+  private async resetOrderDeliveryPinAttempts(orderId: string): Promise<void> {
+    const mutation = `
+      mutation ResetDeliveryPinAttempts($orderId: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { delivery_pin_attempts: 0 }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, { orderId });
   }
 
   /**
