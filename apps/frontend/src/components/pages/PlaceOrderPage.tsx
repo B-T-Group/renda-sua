@@ -1029,8 +1029,8 @@ const PlaceOrderPage: React.FC = () => {
                       sx={{
                         borderRadius: 2,
                         width: '100%',
-                        height: 180,
-                        objectFit: 'cover',
+                        height: 'auto',
+                        display: 'block',
                       }}
                     />
                   ) : (
@@ -1038,7 +1038,7 @@ const PlaceOrderPage: React.FC = () => {
                       sx={{
                         borderRadius: 2,
                         width: '100%',
-                        height: 180,
+                        minHeight: 120,
                         bgcolor: 'grey.200',
                         display: 'flex',
                         alignItems: 'center',
