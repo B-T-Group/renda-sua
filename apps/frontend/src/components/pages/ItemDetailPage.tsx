@@ -1,6 +1,7 @@
 import {
   ArrowBack as ArrowBackIcon,
   Business as BusinessIcon,
+  Inventory2 as SpecsIcon,
   ShoppingCart,
   Verified,
 } from '@mui/icons-material';
@@ -13,6 +14,7 @@ import {
   CardMedia,
   Chip,
   Container,
+  Divider,
   Grid,
   Skeleton,
   Stack,
@@ -229,36 +231,8 @@ export default function ItemDetailPage() {
               </Box>
             )}
 
-            {/* Specs chips */}
+            {/* Quick specs chips */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.min_order_quantity > 0 && (
-                <Chip
-                  label={`Min: ${item.min_order_quantity}`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-              {item.max_order_quantity > 0 && (
-                <Chip
-                  label={`Max: ${item.max_order_quantity}`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-              {item.max_delivery_distance > 0 && (
-                <Chip
-                  label={`Max ${item.max_delivery_distance} km`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-              {item.estimated_delivery_time > 0 && (
-                <Chip
-                  label={`~${item.estimated_delivery_time} min`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
               {item.is_fragile && (
                 <Chip label={t('items.fragile', 'Fragile')} size="small" color="warning" />
               )}
@@ -307,38 +281,149 @@ export default function ItemDetailPage() {
         </Grid>
       </Grid>
 
-      {/* Description and specs - full width */}
-      {(item.description || item.weight || item.dimensions) && (
-        <Card sx={{ mt: 3, border: '1px solid', borderColor: 'divider' }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {t('items.details', 'Details')}
+      {/* Product information - full width */}
+      <Card sx={{ mt: 3, border: '1px solid', borderColor: 'divider' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <SpecsIcon color="primary" />
+            <Typography variant="h6">
+              {t('items.productInformation', 'Product Information')}
             </Typography>
-            {item.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          </Box>
+
+          {item.description && (
+            <>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {t('items.description', 'Description')}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, whiteSpace: 'pre-wrap' }}>
                 {item.description}
               </Typography>
+            </>
+          )}
+
+          <Grid container spacing={2}>
+            {item.item_sub_category?.item_category?.name && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.category', 'Category')}
+                </Typography>
+                <Typography variant="body2">{item.item_sub_category.item_category.name}</Typography>
+              </Grid>
             )}
-            <Stack direction="row" spacing={2} flexWrap="wrap">
-              {item.weight > 0 && (
+            {item.item_sub_category?.name && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.subcategory', 'Subcategory')}
+                </Typography>
+                <Typography variant="body2">{item.item_sub_category.name}</Typography>
+              </Grid>
+            )}
+            {item.brand?.name && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.brand', 'Brand')}
+                </Typography>
+                <Typography variant="body2">{item.brand.name}</Typography>
+              </Grid>
+            )}
+            {item.model?.trim() && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.model', 'Model')}
+                </Typography>
+                <Typography variant="body2">{item.model}</Typography>
+              </Grid>
+            )}
+            {item.color?.trim() && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.color', 'Color')}
+                </Typography>
+                <Typography variant="body2">{item.color}</Typography>
+              </Grid>
+            )}
+            {item.sku?.trim() && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.sku', 'SKU')}
+                </Typography>
+                <Typography variant="body2" fontFamily="monospace">{item.sku}</Typography>
+              </Grid>
+            )}
+            {item.weight != null && item.weight > 0 && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.weight', 'Weight')}
+                </Typography>
                 <Typography variant="body2">
-                  {t('items.weight', 'Weight')}: {item.weight} {item.weight_unit}
+                  {item.weight} {item.weight_unit || 'g'}
                 </Typography>
-              )}
-              {item.dimensions && (
-                <Typography variant="body2">
-                  {t('items.dimensions', 'Dimensions')}: {item.dimensions}
+              </Grid>
+            )}
+            {item.dimensions?.trim() && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.dimensions', 'Dimensions')}
                 </Typography>
-              )}
-              {item.sku && (
-                <Typography variant="body2" color="text.secondary">
-                  SKU: {item.sku}
+                <Typography variant="body2">{item.dimensions}</Typography>
+              </Grid>
+            )}
+            {item.min_order_quantity != null && item.min_order_quantity > 0 && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.minOrderQuantity', 'Min. order quantity')}
                 </Typography>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+                <Typography variant="body2">{item.min_order_quantity}</Typography>
+              </Grid>
+            )}
+            {item.max_order_quantity != null && item.max_order_quantity > 0 && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.maxOrderQuantity', 'Max. order quantity')}
+                </Typography>
+                <Typography variant="body2">{item.max_order_quantity}</Typography>
+              </Grid>
+            )}
+            {item.max_delivery_distance != null && item.max_delivery_distance > 0 && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.maxDeliveryDistance', 'Max. delivery distance')}
+                </Typography>
+                <Typography variant="body2">{item.max_delivery_distance} km</Typography>
+              </Grid>
+            )}
+            {item.estimated_delivery_time != null && item.estimated_delivery_time > 0 && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('items.estimatedDeliveryTime', 'Est. delivery time')}
+                </Typography>
+                <Typography variant="body2">~{item.estimated_delivery_time} min</Typography>
+              </Grid>
+            )}
+          </Grid>
+
+          {(item.is_fragile || item.is_perishable || item.requires_special_handling) && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                {t('items.specialProperties', 'Special properties')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {item.is_fragile && (
+                  <Chip label={t('items.fragile', 'Fragile')} size="small" color="warning" />
+                )}
+                {item.is_perishable && (
+                  <Chip label={t('items.perishable', 'Perishable')} size="small" color="error" />
+                )}
+                {item.requires_special_handling && (
+                  <Chip label={t('items.specialHandling', 'Special handling')} size="small" color="info" />
+                )}
+              </Box>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Reviews */}
       <Box sx={{ mt: 4 }}>

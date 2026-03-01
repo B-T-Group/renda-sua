@@ -330,14 +330,20 @@ const PlaceOrderPage: React.FC = () => {
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
   
-  // Wizard step state (for mobile only)
+  // Wizard step state (for mobile only). Steps 1 & 3 merged: Delivery Options + Address on first step.
   const [activeStep, setActiveStep] = useState(0);
-  const steps = [
-    t('orders.step.deliveryOptions', 'Delivery Options'),
-    t('orders.step.quantity', 'Quantity'),
-    t('orders.step.address', 'Delivery Address'),
-    t('orders.step.review', 'Review & Place Order'),
-  ];
+  const steps = isMobile
+    ? [
+        t('orders.step.deliveryOptionsAndAddress', 'Delivery & Address'),
+        t('orders.step.quantity', 'Quantity'),
+        t('orders.step.review', 'Review & Place Order'),
+      ]
+    : [
+        t('orders.step.deliveryOptions', 'Delivery Options'),
+        t('orders.step.quantity', 'Quantity'),
+        t('orders.step.address', 'Delivery Address'),
+        t('orders.step.review', 'Review & Place Order'),
+      ];
 
   const handleDeliveryWindowChange = useCallback(
     (data: DeliveryWindowData | null) => {
@@ -692,8 +698,20 @@ const PlaceOrderPage: React.FC = () => {
       ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
       : profile?.phone_number && phoneValidation.isValid);
 
-  // Step validation function
+  // Step validation function (mobile: 3 steps with merged step 0; desktop: 4 steps)
   const isStepValid = (step: number): boolean => {
+    if (isMobile) {
+      switch (step) {
+        case 0: // Delivery Options & Address (merged)
+          return !!selectedAddressId && addresses.length > 0;
+        case 1: // Quantity
+          return quantity >= 1;
+        case 2: // Review & Place Order
+          return !!canPlaceOrder;
+        default:
+          return false;
+      }
+    }
     switch (step) {
       case 0: // Delivery Options
         return true; // Optional fields
@@ -732,8 +750,216 @@ const PlaceOrderPage: React.FC = () => {
 
   // Render step content for mobile wizard (compact for viewport fit)
   const renderStepContent = (step: number) => {
-    switch (step) {
-      case 0: // Delivery Options
+    // Mobile: 3 steps — 0 = Delivery & Address (merged), 1 = Quantity, 2 = Review (case 3 content)
+    const contentStep = isMobile && step === 2 ? 3 : step;
+    if (isMobile && step === 0) {
+      return (
+        <Stack spacing={2}>
+          {/* Delivery Address (merged from former step 3) */}
+          <Card>
+            <CardContent sx={{ p: 2 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 2,
+                }}
+              >
+                <LocationOn color="primary" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {t('orders.deliveryAddress', 'Delivery Address')}
+                </Typography>
+              </Box>
+
+              {addressesLoading ? (
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', py: 2 }}
+                >
+                  <CircularProgress />
+                </Box>
+              ) : addresses.length === 0 ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
+                >
+                  <LocationOn
+                    sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
+                  />
+                  <Typography variant="subtitle1" gutterBottom>
+                    {t('orders.noAddresses', 'No delivery address found')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2 }}
+                  >
+                    {t(
+                      'orders.noAddressesMessage',
+                      'Please add a delivery address to continue with your order'
+                    )}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenAddressDialog}
+                    startIcon={<Add />}
+                  >
+                    {t('orders.addAddress', 'Add Delivery Address')}
+                  </Button>
+                </Paper>
+              ) : (
+                <>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>
+                      {t('orders.selectAddress', 'Select Delivery Address')}
+                    </InputLabel>
+                    <Select
+                      value={selectedAddressId}
+                      label={t(
+                        'orders.selectAddress',
+                        'Select Delivery Address'
+                      )}
+                      onChange={(e) => setSelectedAddressId(e.target.value)}
+                      disabled={loading}
+                    >
+                      {addresses.map((addressWrapper) => {
+                        const address = addressWrapper.address;
+                        return (
+                          <MenuItem key={address.id} value={address.id}>
+                            <Box>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                }}
+                              >
+                                <Typography variant="body2">
+                                  {address.address_line_1}, {address.city}
+                                </Typography>
+                                {address.is_primary && (
+                                  <Chip
+                                    label="Primary"
+                                    size="small"
+                                    color="primary"
+                                  />
+                                )}
+                              </Box>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {address.address_type}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </FormControl>
+
+                  {selectedAddressId &&
+                    (() => {
+                      const selectedAddressWrapper = addresses.find(
+                        (addr) => addr.address.id === selectedAddressId
+                      );
+                      if (!selectedAddressWrapper) return null;
+                      const address = selectedAddressWrapper.address;
+                      return (
+                        <Paper
+                          variant="outlined"
+                          sx={{ p: 2, bgcolor: 'grey.50' }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              mb: 1,
+                            }}
+                          >
+                            <CheckCircle color="success" fontSize="small" />
+                            <Typography
+                              variant="subtitle2"
+                              fontWeight="bold"
+                            >
+                              {t('orders.deliveryTo', 'Delivery to')}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            {address.address_line_1}
+                            {address.address_line_2 &&
+                              `, ${address.address_line_2}`}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                          >
+                            {address.city}, {address.state}{' '}
+                            {address.postal_code}
+                          </Typography>
+                        </Paper>
+                      );
+                    })()}
+
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    onClick={handleOpenAddressDialog}
+                    startIcon={<Add />}
+                    sx={{ mt: 2 }}
+                  >
+                    {t('orders.addAnotherAddress', 'Add Another Address')}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Delivery Options: fast delivery + time slot (merged from former step 1) */}
+          {fastDeliveryConfig &&
+            isEnabledForLocation(userCountry, userState) && (
+              <Card>
+                <CardContent sx={{ p: 2 }}>
+                  <FastDeliveryOption
+                    config={fastDeliveryConfig}
+                    selected={requiresFastDelivery}
+                    onToggle={setRequiresFastDelivery}
+                    formatCurrency={(amount) =>
+                      formatCurrency(amount, selectedItem?.item.currency)
+                    }
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+          {selectedAddress && (
+            <Card>
+              <CardContent sx={{ p: 2 }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                  {t(
+                    'orders.deliveryTimeWindow.title',
+                    'When will you be available?'
+                  )}
+                </Typography>
+                <DeliveryTimeWindowSelector
+                  countryCode={selectedAddress.country}
+                  stateCode={selectedAddress.state}
+                  onChange={handleDeliveryWindowChange}
+                  isFastDelivery={requiresFastDelivery}
+                  loading={loading}
+                  shouldFetchNextAvailable={true}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </Stack>
+      );
+    }
+
+    switch (contentStep) {
+      case 0: // Delivery Options (desktop only; mobile step 0 handled above)
         return (
           <Stack spacing={2}>
             {fastDeliveryConfig &&
@@ -829,15 +1055,59 @@ const PlaceOrderPage: React.FC = () => {
                   <Typography variant="h5" fontWeight="bold" gutterBottom>
                     {selectedItem.item.name}
                   </Typography>
-                  {selectedItem.item.description && (
+                  {(selectedItem.item.item_sub_category?.item_category?.name ||
+                    selectedItem.item.item_sub_category?.name) && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      {[
+                        selectedItem.item.item_sub_category?.item_category?.name,
+                        selectedItem.item.item_sub_category?.name,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Typography>
+                  )}
+                  {selectedItem.item.description?.trim() && (
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      sx={{ mb: 2 }}
+                      sx={{ mb: 1.5, whiteSpace: 'pre-wrap' }}
                     >
                       {selectedItem.item.description}
                     </Typography>
                   )}
+                  <Stack direction="row" flexWrap="wrap" gap={1.5} useFlexGap sx={{ mt: 1 }}>
+                    {selectedItem.item.weight != null && selectedItem.item.weight > 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.weight', 'Weight')}: {selectedItem.item.weight}{' '}
+                        {selectedItem.item.weight_unit || 'g'}
+                      </Typography>
+                    )}
+                    {selectedItem.item.dimensions?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.dimensions', 'Dimensions')}: {selectedItem.item.dimensions}
+                      </Typography>
+                    )}
+                    {selectedItem.item.brand?.name && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.brand', 'Brand')}: {selectedItem.item.brand.name}
+                      </Typography>
+                    )}
+                    {selectedItem.item.sku?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.sku', 'SKU')}: {selectedItem.item.sku}
+                      </Typography>
+                    )}
+                    {selectedItem.item.model?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.model', 'Model')}: {selectedItem.item.model}
+                      </Typography>
+                    )}
+                    {selectedItem.item.color?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.color', 'Color')}: {selectedItem.item.color}
+                      </Typography>
+                    )}
+                  </Stack>
                 </Grid>
               </Grid>
 
@@ -1071,15 +1341,70 @@ const PlaceOrderPage: React.FC = () => {
                         }}
                       />
                     )}
-                    <Box sx={{ flex: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" fontWeight="medium" noWrap>
                         {selectedItem.item.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" display="block">
                         {t('orders.quantity', 'Quantity')}: {quantity}
                       </Typography>
+                      {(selectedItem.item.item_sub_category?.item_category?.name ||
+                        selectedItem.item.item_sub_category?.name) && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          {[
+                            selectedItem.item.item_sub_category?.item_category?.name,
+                            selectedItem.item.item_sub_category?.name,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Typography>
+                      )}
                     </Box>
                   </Box>
+
+                  {selectedItem.item.description?.trim() && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                        {t('items.description', 'Description')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {selectedItem.item.description}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ pt: 0.5 }}>
+                    {selectedItem.item.weight != null && selectedItem.item.weight > 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.weight', 'Weight')}: {selectedItem.item.weight}{' '}
+                        {selectedItem.item.weight_unit || 'g'}
+                      </Typography>
+                    )}
+                    {selectedItem.item.dimensions?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.dimensions', 'Dimensions')}: {selectedItem.item.dimensions}
+                      </Typography>
+                    )}
+                    {selectedItem.item.brand?.name && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.brand', 'Brand')}: {selectedItem.item.brand.name}
+                      </Typography>
+                    )}
+                    {selectedItem.item.sku?.trim() && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('items.sku', 'SKU')}: {selectedItem.item.sku}
+                      </Typography>
+                    )}
+                  </Stack>
 
                   <Box>
                     <Box

@@ -1578,6 +1578,7 @@
     "step": {
       "address": "Delivery Address",
       "deliveryOptions": "Delivery Options",
+      "deliveryOptionsAndAddress": "Delivery & Address",
       "quantity": "Quantity",
       "review": "Review & Place Order"
     },
@@ -1654,12 +1655,27 @@
     }
   },
   "items": {
+    "brand": "Brand",
+    "category": "Category",
+    "color": "Color",
+    "description": "Description",
     "details": "Details",
     "dimensions": "Dimensions",
+    "estimatedDeliveryTime": "Est. delivery time",
     "fragile": "Fragile",
+    "maxDeliveryDistance": "Max. delivery distance",
+    "maxOrderQuantity": "Max. order quantity",
+    "minOrderQuantity": "Min. order quantity",
+    "model": "Model",
     "noReviews": "No reviews yet",
+    "notFound": "Item not found",
+    "perishable": "Perishable",
+    "productInformation": "Product Information",
     "reviews": "Reviews",
-    "specialHandling": "Special",
+    "sku": "SKU",
+    "specialHandling": "Special handling",
+    "specialProperties": "Special properties",
+    "subcategory": "Subcategory",
     "weight": "Weight"
   },
   "privacyPolicy": {

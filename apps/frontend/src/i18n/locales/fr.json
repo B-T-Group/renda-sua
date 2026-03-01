@@ -1561,6 +1561,7 @@
     "step": {
       "address": "Adresse de Livraison",
       "deliveryOptions": "Options de Livraison",
+      "deliveryOptionsAndAddress": "Livraison et Adresse",
       "quantity": "Quantité",
       "review": "Réviser et Passer la Commande"
     },
@@ -1637,12 +1638,27 @@
     }
   },
   "items": {
+    "brand": "Marque",
+    "category": "Catégorie",
+    "color": "Couleur",
+    "description": "Description",
     "details": "Détails",
     "dimensions": "Dimensions",
+    "estimatedDeliveryTime": "Délai de livraison estimé",
     "fragile": "Fragile",
+    "maxDeliveryDistance": "Distance max. de livraison",
+    "maxOrderQuantity": "Quantité max. de commande",
+    "minOrderQuantity": "Quantité min. de commande",
+    "model": "Modèle",
     "noReviews": "Pas encore d'avis",
+    "notFound": "Article introuvable",
+    "perishable": "Périssable",
+    "productInformation": "Informations produit",
     "reviews": "Avis",
-    "specialHandling": "Spécial",
+    "sku": "Référence",
+    "specialHandling": "Manutention spéciale",
+    "specialProperties": "Propriétés particulières",
+    "subcategory": "Sous-catégorie",
     "weight": "Poids"
   },
   "privacyPolicy": {
