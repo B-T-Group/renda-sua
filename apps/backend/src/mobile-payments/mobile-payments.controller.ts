@@ -62,6 +62,7 @@ export interface FreemopayCallbackDto {
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
   amount?: number;
   reason?: string;
+  message?: string;
 }
 
 @Controller('mobile-payments')
@@ -760,7 +761,9 @@ export class MobilePaymentsController {
           transaction_id: callbackData.reference,
           error_message:
             callbackData.status === 'FAILED'
-              ? callbackData.reason || 'Payment failed'
+              ? callbackData.reason ||
+                callbackData.message ||
+                'Payment failed'
               : undefined,
         });
 
