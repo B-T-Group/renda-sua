@@ -120,6 +120,7 @@ select_permissions:
         - id
         - user_id
         - vehicle_type_id
+        - agent_code
         - created_at
         - updated_at
         - is_verified
@@ -136,6 +137,7 @@ select_permissions:
         - id
         - user_id
         - vehicle_type_id
+        - agent_code
         - created_at
         - updated_at
         - is_verified
@@ -152,6 +154,7 @@ select_permissions:
         - id
         - user_id
         - vehicle_type_id
+        - agent_code
         - created_at
         - updated_at
         - is_verified
@@ -168,6 +171,7 @@ select_permissions:
         - id
         - user_id
         - vehicle_type_id
+        - agent_code
         - created_at
         - updated_at
         - is_verified

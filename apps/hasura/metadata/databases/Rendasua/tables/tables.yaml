@@ -54,3 +54,4 @@
 - "!include public_user_uploads.yaml"
 - "!include public_users.yaml"
 - "!include public_vehicle_types.yaml"
+- "!include public_agent_referrals.yaml"
