@@ -81,8 +81,10 @@ export class AgentReferralsService {
         return { credited: false };
       }
 
+      const currency = this.getCurrencyForCountry(countryCode);
       const accountId = await this.getReferringAgentAccountId(
-        referringAgentId
+        referringAgentId,
+        currency
       );
       if (!accountId) {
         this.logger.warn(
@@ -96,6 +98,7 @@ export class AgentReferralsService {
         amount: amountToCredit,
         transactionType: 'deposit',
         memo: 'Agent referral bonus',
+        referenceId: referredAgentId,
       });
 
       await this.insertReferralRecord({
@@ -215,7 +218,8 @@ export class AgentReferralsService {
   }
 
   private async getReferringAgentAccountId(
-    referringAgentId: string
+    referringAgentId: string,
+    currency: string
   ): Promise<string | null> {
     const agentQuery = `
       query GetAgentUserId($agentId: uuid!) {
@@ -226,11 +230,12 @@ export class AgentReferralsService {
     `;
 
     const accountQuery = `
-      query GetFirstActiveAccount($userId: uuid!) {
+      query GetFirstActiveAccount($userId: uuid!, $currency: currency_enum!) {
         accounts(
           where: {
             user_id: { _eq: $userId },
-            is_active: { _eq: true }
+            is_active: { _eq: true },
+            currency: { _eq: $currency }
           },
           limit: 1
         ) {
@@ -251,7 +256,7 @@ export class AgentReferralsService {
 
       const accountResult = await this.hasuraSystemService.executeQuery(
         accountQuery,
-        { userId }
+        { userId, currency }
       );
       const account = accountResult.accounts?.[0];
       return account?.id || null;
@@ -261,6 +266,17 @@ export class AgentReferralsService {
       );
       return null;
     }
+  }
+
+  private getCurrencyForCountry(countryCode: string): string {
+    const upper = (countryCode || '').toUpperCase();
+    const currencyMap: Record<string, string> = {
+      GA: 'XAF',
+      CM: 'XAF',
+      CA: 'CAD',
+      US: 'USD',
+    };
+    return currencyMap[upper] || 'XAF';
   }
 
   private async insertReferralRecord(params: {
