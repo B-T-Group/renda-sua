@@ -77,6 +77,10 @@ const ItemsPage: React.FC = () => {
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
+  const dealItems = useMemo(
+    () => inventoryItems.filter((item) => item.hasActiveDeal),
+    [inventoryItems]
+  );
 
   // Display items from ItemsPageFilter; when no filters applied, show inventoryItems until filter callback runs
   const displayItems = useMemo(() => {
@@ -366,6 +370,64 @@ const ItemsPage: React.FC = () => {
           </Alert>
         )}
       </Box>
+
+      {/* Deals strip */}
+      {dealItems.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 1.5,
+            }}
+          >
+            <Typography variant="h6">
+              {t('public.items.dealsTitle', 'Deals for you')}
+            </Typography>
+            <Button size="small" onClick={() => navigate('/deals')}>
+              {t('public.items.viewAllDeals', 'View all deals')}
+            </Button>
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 2,
+              overflowX: 'auto',
+              pb: 1,
+            }}
+          >
+            {dealItems.slice(0, 8).map((inventoryItem) => (
+              <Box
+                key={inventoryItem.id}
+                sx={{
+                  minWidth: { xs: 260, sm: 280 },
+                  maxWidth: 320,
+                  flex: '0 0 auto',
+                }}
+              >
+                <DashboardItemCard
+                  item={inventoryItem}
+                  viewsCount={inventoryItem.viewsCount}
+                  formatCurrency={formatCurrency}
+                  onOrderClick={handleOrderClick}
+                  onAddToCart={handleAddToCart}
+                  isPublicView={!isAuthenticated}
+                  canOrder={!isAuthenticated || isClientUser}
+                  showCartButtons={isAuthenticated && isClientUser}
+                  loginButtonText={t(
+                    'public.items.login',
+                    'Sign In to Order'
+                  )}
+                  orderButtonText={t('common.orderNow', 'Order Now')}
+                  addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+                  buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+                />
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
 
       {/* Items Section */}
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>

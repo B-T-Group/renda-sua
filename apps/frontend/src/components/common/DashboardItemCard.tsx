@@ -158,9 +158,30 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
           }}
         >
-          <Typography variant="h6" color="primary" fontWeight="bold">
-            {formatCurrency(inventory.selling_price, inventory.item.currency)}
-          </Typography>
+          {inventory.hasActiveDeal && inventory.original_price && inventory.discounted_price ? (
+            <Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ textDecoration: 'line-through' }}
+              >
+                {formatCurrency(
+                  inventory.original_price,
+                  inventory.item.currency
+                )}
+              </Typography>
+              <Typography variant="h6" color="primary" fontWeight="bold">
+                {formatCurrency(
+                  inventory.discounted_price,
+                  inventory.item.currency
+                )}
+              </Typography>
+            </Box>
+          ) : (
+            <Typography variant="h6" color="primary" fontWeight="bold">
+              {formatCurrency(inventory.selling_price, inventory.item.currency)}
+            </Typography>
+          )}
         </Box>
       </Box>
 

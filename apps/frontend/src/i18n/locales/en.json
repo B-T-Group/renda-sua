@@ -1773,11 +1773,18 @@
       "state": "State",
       "country": "Country",
       "availableItems": "Available Items",
+      "dealsTitle": "Deals for you",
+      "viewAllDeals": "View all deals",
       "authCta": {
         "button": "Sign In",
         "description": "Create an account to browse and order items.",
         "title": "Sign in to place orders"
       }
+    },
+    "deals": {
+      "title": "Current Deals",
+      "subtitle": "Browse all items with active deals and special prices.",
+      "none": "There are no active deals at the moment."
     }
   },
   "rating": {

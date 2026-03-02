@@ -42,6 +42,7 @@ import FAQ from '../components/pages/FAQ';
 import ItemDetailPage from '../components/pages/ItemDetailPage';
 import ItemsPage from '../components/pages/ItemsPage';
 import ItemViewPage from '../components/pages/ItemViewPage';
+import DealsPage from '../components/pages/DealsPage';
 import LandingPage from '../components/pages/LandingPage';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
@@ -158,6 +159,7 @@ function App() {
 
             {/* Public routes */}
             <Route path="/items" element={<ItemsPage />} />
+            <Route path="/deals" element={<DealsPage />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/about" element={<AboutUsPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />

@@ -1761,6 +1761,11 @@
         "description": "Créez un compte pour parcourir et commander des articles.",
         "title": "Connectez-vous pour passer des commandes"
       }
+    },
+    "deals": {
+      "title": "Offres en cours",
+      "subtitle": "Découvrez tous les articles avec des offres et des prix réduits.",
+      "none": "Il n'y a aucune offre active pour le moment."
     }
   },
   "rating": {
