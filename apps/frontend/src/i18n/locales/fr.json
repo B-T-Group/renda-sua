@@ -1665,7 +1665,8 @@
     "weight": "Poids",
     "itemCard": {
       "views": "{{count}} vues"
-    }
+    },
+    "dealEndsOn": "Se termine le {{date}}"
   },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",
@@ -1760,6 +1761,8 @@
       "country": "Pays",
       "availableItems": "Articles Disponibles",
       "dealsSubtitle": "Meilleures remises sélectionnées auprès de vendeurs vérifiés",
+      "dealsTitle": "Offres pour vous",
+      "viewAllDeals": "Voir toutes les offres",
       "authCta": {
         "button": "Se connecter",
         "description": "Créez un compte pour parcourir et commander des articles.",

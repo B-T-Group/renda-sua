@@ -135,17 +135,42 @@ const CartPage: React.FC = () => {
                         <Typography variant="h6" sx={{ mb: 1 }}>
                           {item.itemData.name}
                         </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mb: 2 }}
-                        >
-                          {formatCurrency(
-                            item.itemData.price,
-                            item.itemData.currency
-                          )}{' '}
-                          each
-                        </Typography>
+                        {item.itemData.hasActiveDeal &&
+                        typeof item.itemData.originalPrice === 'number' &&
+                        typeof item.itemData.discountedPrice === 'number' &&
+                        item.itemData.originalPrice > 0 ? (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ textDecoration: 'line-through' }}
+                            >
+                              {formatCurrency(
+                                item.itemData.originalPrice,
+                                item.itemData.currency
+                              )}
+                            </Typography>
+                            <Typography variant="body1" color="primary" fontWeight="bold">
+                              {formatCurrency(
+                                item.itemData.discountedPrice!,
+                                item.itemData.currency
+                              )}{' '}
+                              each
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 2 }}
+                          >
+                            {formatCurrency(
+                              item.itemData.price,
+                              item.itemData.currency
+                            )}{' '}
+                            each
+                          </Typography>
+                        )}
 
                         {/* Quantity Controls */}
                         <Box
@@ -211,12 +236,27 @@ const CartPage: React.FC = () => {
                                 gap: 1,
                               }}
                             >
-                              <Typography variant="h6" color="primary">
-                                {formatCurrency(
-                                  item.itemData.price * item.quantity,
-                                  item.itemData.currency
-                                )}
-                              </Typography>
+                              {(() => {
+                                const hasDeal =
+                                  item.itemData.hasActiveDeal &&
+                                  typeof item.itemData.originalPrice ===
+                                    'number' &&
+                                  typeof item.itemData.discountedPrice ===
+                                    'number' &&
+                                  item.itemData.originalPrice > 0;
+                                const unitPrice = hasDeal
+                                  ? item.itemData.discountedPrice!
+                                  : item.itemData.price;
+                                const lineTotal = unitPrice * item.quantity;
+                                return (
+                                  <Typography variant="h6" color="primary">
+                                    {formatCurrency(
+                                      lineTotal,
+                                      item.itemData.currency
+                                    )}
+                                  </Typography>
+                                );
+                              })()}
                               <IconButton
                                 size="small"
                                 onClick={() =>

@@ -138,12 +138,44 @@ const Dashboard: React.FC = () => {
       businessLocationId: item.business_location_id,
       itemData: {
         name: item.item.name,
-        price: item.selling_price,
+        price:
+          item.hasActiveDeal &&
+          typeof item.original_price === 'number' &&
+          typeof item.discounted_price === 'number' &&
+          item.original_price > 0
+            ? item.discounted_price!
+            : item.selling_price,
         currency: item.item.currency,
         imageUrl: item.item.item_images?.[0]?.image_url,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
+        originalPrice:
+          item.hasActiveDeal &&
+          typeof item.original_price === 'number' &&
+          typeof item.discounted_price === 'number' &&
+          item.original_price > 0
+            ? item.original_price!
+            : undefined,
+        discountedPrice:
+          item.hasActiveDeal &&
+          typeof item.original_price === 'number' &&
+          typeof item.discounted_price === 'number' &&
+          item.original_price > 0
+            ? item.discounted_price!
+            : undefined,
+        hasActiveDeal:
+          item.hasActiveDeal &&
+          typeof item.original_price === 'number' &&
+          typeof item.discounted_price === 'number' &&
+          item.original_price > 0,
+        dealEndAt:
+          item.hasActiveDeal &&
+          typeof item.original_price === 'number' &&
+          typeof item.discounted_price === 'number' &&
+          item.original_price > 0
+            ? item.deal_end_at
+            : undefined,
       },
     });
   };

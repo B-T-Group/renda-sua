@@ -22,6 +22,10 @@ export interface CartItem {
     weight?: number;
     maxOrderQuantity?: number;
     minOrderQuantity?: number;
+    originalPrice?: number;
+    discountedPrice?: number;
+    hasActiveDeal?: boolean;
+    dealEndAt?: string;
   };
 }
 
@@ -237,10 +241,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
   }, [cartItems]);
 
   const getCartTotal = useCallback(() => {
-    return cartItems.reduce(
-      (total, item) => total + item.itemData.price * item.quantity,
-      0
-    );
+    return cartItems.reduce((total, item) => {
+      const hasDeal =
+        item.itemData.hasActiveDeal &&
+        typeof item.itemData.originalPrice === 'number' &&
+        typeof item.itemData.discountedPrice === 'number' &&
+        item.itemData.originalPrice > 0;
+
+      const unitPrice = hasDeal
+        ? item.itemData.discountedPrice!
+        : item.itemData.price;
+
+      return total + unitPrice * item.quantity;
+    }, 0);
   }, [cartItems]);
 
   const isItemInCart = useCallback(

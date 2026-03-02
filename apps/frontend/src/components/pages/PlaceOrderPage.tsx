@@ -1481,7 +1481,17 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight="medium">
                         {formatCurrency(
-                          selectedItem.selling_price * quantity,
+                          (() => {
+                            const hasDeal =
+                              selectedItem.hasActiveDeal &&
+                              typeof selectedItem.original_price === 'number' &&
+                              typeof selectedItem.discounted_price === 'number' &&
+                              selectedItem.original_price > 0;
+                            const unitPrice = hasDeal
+                              ? selectedItem.discounted_price!
+                              : selectedItem.selling_price;
+                            return unitPrice * quantity;
+                          })(),
                           selectedItem.item.currency
                         )}
                       </Typography>
@@ -1531,8 +1541,18 @@ const PlaceOrderPage: React.FC = () => {
                         color="primary"
                       >
                         {formatCurrency(
-                          selectedItem.selling_price * quantity +
-                            (deliveryFee?.deliveryFee || 0),
+                          (() => {
+                            const hasDeal =
+                              selectedItem.hasActiveDeal &&
+                              typeof selectedItem.original_price === 'number' &&
+                              typeof selectedItem.discounted_price === 'number' &&
+                              selectedItem.original_price > 0;
+                            const unitPrice = hasDeal
+                              ? selectedItem.discounted_price!
+                              : selectedItem.selling_price;
+                            const subtotal = unitPrice * quantity;
+                            return subtotal + (deliveryFee?.deliveryFee || 0);
+                          })(),
                           selectedItem.item.currency
                         )}
                       </Typography>

@@ -101,11 +101,15 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         overflow: 'hidden',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: hasDealPrices ? 'secondary.main' : 'divider',
+        borderWidth: hasDealPrices ? 2 : 1,
+        boxShadow: hasDealPrices ? '0 8px 20px rgba(156, 39, 176, 0.25)' : 'none',
         '&:hover': {
           transform: 'translateY(-4px)',
-          boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
-          borderColor: 'primary.main',
+          boxShadow: hasDealPrices
+            ? '0 14px 28px rgba(156, 39, 176, 0.35)'
+            : '0 12px 24px rgba(0,0,0,0.12)',
+          borderColor: hasDealPrices ? 'secondary.dark' : 'primary.main',
         },
       }}
     >
@@ -244,11 +248,19 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 color="error.main"
                 sx={{ fontWeight: 600 }}
               >
-                {new Date(inventory.deal_end_at).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
+                {t(
+                  'items.dealEndsOn',
+                  'Ends on {{date}}',
+                  {
+                    date: new Date(
+                      inventory.deal_end_at
+                    ).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    }),
+                  }
+                )}
               </Typography>
             )}
             <Box

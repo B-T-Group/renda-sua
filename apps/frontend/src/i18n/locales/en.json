@@ -1693,7 +1693,8 @@
     "weight": "Weight",
     "itemCard": {
       "views": "{{count}} views"
-    }
+    },
+    "dealEndsOn": "Ends on {{date}}"
   },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",

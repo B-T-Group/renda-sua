@@ -192,6 +192,14 @@ const ItemsPage: React.FC = () => {
       return;
     }
 
+    const hasDeal =
+      item.hasActiveDeal &&
+      typeof item.original_price === 'number' &&
+      typeof item.discounted_price === 'number' &&
+      item.original_price > 0;
+
+    const unitPrice = hasDeal ? item.discounted_price! : item.selling_price;
+
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
@@ -199,12 +207,16 @@ const ItemsPage: React.FC = () => {
       businessLocationId: item.business_location_id,
       itemData: {
         name: item.item.name,
-        price: item.selling_price,
+        price: unitPrice,
         currency: item.item.currency,
         imageUrl: item.item.item_images?.[0]?.image_url,
         weight: item.item.weight,
         maxOrderQuantity: item.item.max_order_quantity || undefined,
         minOrderQuantity: item.item.min_order_quantity || undefined,
+        originalPrice: hasDeal ? item.original_price! : undefined,
+        discountedPrice: hasDeal ? item.discounted_price! : undefined,
+        hasActiveDeal: hasDeal,
+        dealEndAt: hasDeal ? item.deal_end_at : undefined,
       },
     });
   };
