@@ -720,6 +720,7 @@ export class MobilePaymentsController {
   @Public()
   @Post('callback/freemopay')
   async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
+    console.log('freemopayCallback', callbackData);
     try {
       const externalId =
         callbackData.externalId ?? callbackData.merchantRef;
