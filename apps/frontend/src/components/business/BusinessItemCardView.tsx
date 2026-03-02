@@ -2,6 +2,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Image as ImageIcon,
+  LocalOffer as DealIcon,
   LocationOn as LocationOnIcon,
   Visibility as ViewIcon,
   Warning as WarningIcon,
@@ -63,6 +64,7 @@ interface BusinessItemCardViewProps {
   onEditItem: (item: Item) => void;
   onDeleteItem: (item: Item) => void;
   onRestockInventoryItem: (item: Item) => void;
+  onManageDeals?: (item: Item) => void;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -71,6 +73,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onEditItem,
   onDeleteItem,
   onRestockInventoryItem,
+  onManageDeals,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -400,6 +403,23 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {onManageDeals && (
+            <Tooltip title={t('business.items.manageDeals', 'Manage deals')}>
+              <IconButton
+                size="small"
+                onClick={() => onManageDeals(item)}
+                sx={{
+                  color: theme.palette.secondary.main,
+                  '&:hover': {
+                    bgcolor: 'secondary.light',
+                    opacity: 0.8,
+                  },
+                }}
+              >
+                <DealIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title={t('business.items.deleteItem', 'Delete Item')}>
             <IconButton
               size="small"

@@ -12,6 +12,9 @@ export interface InventoryItem {
   created_at: string;
   updated_at: string;
   viewsCount?: number;
+  hasActiveDeal?: boolean;
+  original_price?: number;
+  discounted_price?: number;
     item: {
       id: string;
       name: string;
@@ -368,13 +371,39 @@ export class InventoryItemsService {
 
       const inventoryIds = items.map((i) => i.id);
       const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
-      const itemsWithViews = items.map((item) => ({
-        ...item,
-        viewsCount: viewsMap[item.id] ?? 0,
-      }));
+      const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
+
+      const itemsWithViewsAndDeals = items.map((item) => {
+        const viewsCount = viewsMap[item.id] ?? 0;
+        const deal = dealsMap[item.id];
+        const originalPrice = item.selling_price;
+        if (!deal) {
+          return {
+            ...item,
+            viewsCount,
+            hasActiveDeal: false,
+            original_price: originalPrice,
+            discounted_price: originalPrice,
+          };
+        }
+
+        const discounted = this.applyDealPrice(
+          originalPrice,
+          deal.discount_type,
+          deal.discount_value
+        );
+
+        return {
+          ...item,
+          viewsCount,
+          hasActiveDeal: true,
+          original_price: originalPrice,
+          discounted_price: discounted,
+        };
+      });
 
       return {
-        items: itemsWithViews,
+        items: itemsWithViewsAndDeals,
         total,
         page,
         limit,
@@ -488,10 +517,31 @@ export class InventoryItemsService {
       }
 
       const viewsMap = await this.getViewCountsByInventoryIds([item.id]);
+      const dealsMap = await this.getActiveDealsByInventoryIds([item.id]);
+      const deal = dealsMap[item.id];
+      const originalPrice = item.selling_price;
+      if (!deal) {
+        return {
+          ...item,
+          viewsCount: viewsMap[item.id] ?? 0,
+          hasActiveDeal: false,
+          original_price: originalPrice,
+          discounted_price: originalPrice,
+        };
+      }
+
+      const discounted = this.applyDealPrice(
+        originalPrice,
+        deal.discount_type,
+        deal.discount_value
+      );
 
       return {
         ...item,
         viewsCount: viewsMap[item.id] ?? 0,
+        hasActiveDeal: true,
+        original_price: originalPrice,
+        discounted_price: discounted,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -594,6 +644,90 @@ export class InventoryItemsService {
       this.logger.error('Failed to fetch item view counts:', error);
       return {};
     }
+  }
+
+  private async getActiveDealsByInventoryIds(
+    inventoryItemIds: string[]
+  ): Promise<
+    Record<
+      string,
+      { discount_type: string; discount_value: number }
+    >
+  > {
+    if (!inventoryItemIds.length) {
+      return {};
+    }
+
+    const now = new Date().toISOString();
+
+    const query = `
+      query GetActiveItemDeals($inventoryItemIds: [uuid!]!, $now: timestamptz!) {
+        item_deals(
+          where: {
+            inventory_item_id: { _in: $inventoryItemIds }
+            is_active: { _eq: true }
+            start_at: { _lte: $now }
+            end_at: { _gte: $now }
+          }
+        ) {
+          inventory_item_id
+          discount_type
+          discount_value
+        }
+      }
+    `;
+
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        inventoryItemIds,
+        now,
+      });
+
+      const deals =
+        (response.item_deals as Array<{
+          inventory_item_id: string;
+          discount_type: string;
+          discount_value: number;
+        }>) ?? [];
+
+      const result: Record<
+        string,
+        { discount_type: string; discount_value: number }
+      > = {};
+
+      deals.forEach((deal) => {
+        if (!result[deal.inventory_item_id]) {
+          result[deal.inventory_item_id] = {
+            discount_type: deal.discount_type,
+            discount_value: deal.discount_value,
+          };
+        }
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to fetch item deals:', error);
+      return {};
+    }
+  }
+
+  private applyDealPrice(
+    basePrice: number,
+    discountType: string,
+    discountValue: number
+  ): number {
+    if (discountType === 'percentage') {
+      const factor = 1 - discountValue / 100;
+      const value = basePrice * factor;
+      return value > 0 ? value : 0;
+    }
+
+    if (discountType === 'fixed') {
+      const value = basePrice - discountValue;
+      return value > 0 ? value : 0;
+    }
+
+    return basePrice;
   }
 
   /**

@@ -293,6 +293,11 @@ t('orders.orderCard.items');
 4. **Confirmation Patterns**: Use ConfirmationModal for destructive actions
 5. **Loading States**: Include proper loading and error states in all components
 
+### Backend Build & Cleanup
+
+- After any substantive backend change, always verify that the backend builds successfully by running `nx build backend` (or the appropriate Nx build target for the backend app).
+- After backend changes, remove any unused variables, methods, imports, and interfaces reported by TypeScript or ESLint before considering the task complete.
+
 ### Database and API Guidelines
 
 1. **Schema First**: Always check database schema before writing queries

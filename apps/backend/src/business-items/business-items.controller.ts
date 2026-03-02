@@ -15,6 +15,9 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CsvUploadRequestDto } from './dto/csv-upload.dto';
 import { BusinessItemsService } from './business-items.service';
+import { ItemDealsService } from '../item-deals/item-deals.service';
+import { CreateItemDealDto } from './dto/create-item-deal.dto';
+import { UpdateItemDealDto } from './dto/update-item-deal.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -25,7 +28,8 @@ const CSV_UPLOAD_ROW_LIMIT = 500;
 export class BusinessItemsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly businessItemsService: BusinessItemsService
+    private readonly businessItemsService: BusinessItemsService,
+    private readonly itemDealsService: ItemDealsService
   ) {}
 
   @Get('page-data')
@@ -158,5 +162,121 @@ export class BusinessItemsController {
       rowOffset
     );
     return { success: true, data };
+  }
+
+  @Get(':inventoryItemId/deals')
+  @ApiOperation({
+    summary: 'List deals for a specific inventory item of the current business',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deals retrieved successfully',
+  })
+  async getItemDeals(@Param('inventoryItemId') inventoryItemId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const deals = await this.itemDealsService.getDealsForInventory(
+      businessId,
+      inventoryItemId
+    );
+    return { success: true, data: { deals } };
+  }
+
+  @Post(':inventoryItemId/deals')
+  @ApiOperation({
+    summary: 'Create a new deal for an inventory item',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Deal created successfully',
+  })
+  async createItemDeal(
+    @Param('inventoryItemId') inventoryItemId: string,
+    @Body() body: CreateItemDealDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const deal = await this.itemDealsService.createDeal({
+      businessId,
+      inventoryItemId,
+      discountType: body.discountType,
+      discountValue: body.discountValue,
+      startAt: body.startAt,
+      endAt: body.endAt,
+    });
+
+    return { success: true, data: { deal } };
+  }
+
+  @Post('deals/:dealId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update an existing deal for the current business',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deal updated successfully',
+  })
+  async updateItemDeal(
+    @Param('dealId') dealId: string,
+    @Body() body: UpdateItemDealDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const deal = await this.itemDealsService.updateDeal({
+      businessId,
+      dealId,
+      updates: {
+        discountType: body.discountType,
+        discountValue: body.discountValue,
+        startAt: body.startAt,
+        endAt: body.endAt,
+        isActive: body.isActive,
+      },
+    });
+
+    return { success: true, data: { deal } };
+  }
+
+  @Delete('deals/:dealId')
+  @ApiOperation({
+    summary: 'Delete a deal for the current business',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Deal deleted successfully',
+  })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteItemDeal(@Param('dealId') dealId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    await this.itemDealsService.deleteDeal(businessId, dealId);
   }
 }

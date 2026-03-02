@@ -72,6 +72,7 @@ import { CSV_ITEMS_TEMPLATE_HEADERS } from '../business/csvItemsTemplate';
 import CSVUploadDialog from '../business/CSVUploadDialog';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
+import ManageDealsDialog from '../business/ManageDealsDialog';
 import SEOHead from '../seo/SEOHead';
 
 interface TabPanelProps {
@@ -253,6 +254,7 @@ const BusinessItemsPage: React.FC = () => {
   const [selectedDownloadLocationId, setSelectedDownloadLocationId] = useState<
     string | null
   >(null);
+  const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -371,6 +373,21 @@ const BusinessItemsPage: React.FC = () => {
     const inventoryItem = item.business_inventories?.[0] || item;
     setUpdatingInventoryItem(inventoryItem);
     setShowUpdateInventoryDialog(true);
+  };
+
+  const handleManageDeals = (item: any) => {
+    const inventoryItem = item.business_inventories?.[0];
+    if (!inventoryItem) {
+      enqueueSnackbar(
+        t(
+          'business.items.deals.noInventory',
+          'Add inventory for this item before creating deals'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
+    setManageDealsItem(inventoryItem);
   };
 
   const handleRefreshLocations = async () => {
@@ -1584,6 +1601,7 @@ const BusinessItemsPage: React.FC = () => {
                       onEditItem={handleEditItem}
                       onDeleteItem={handleDeleteItem}
                       onRestockInventoryItem={handleRestockInventoryItem}
+                      onManageDeals={handleManageDeals}
                     />
                   </Box>
                 ))}
@@ -1625,6 +1643,12 @@ const BusinessItemsPage: React.FC = () => {
         onClose={() => setShowCSVUploadDialog(false)}
         businessId={profile.business.id}
         onUploadSuccess={refetchPageData}
+      />
+
+      <ManageDealsDialog
+        open={Boolean(manageDealsItem)}
+        onClose={() => setManageDealsItem(null)}
+        inventoryItem={manageDealsItem}
       />
 
       {/* Download CSV – location select */}
