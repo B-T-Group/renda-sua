@@ -30,7 +30,25 @@ const DealsPage: React.FC = () => {
   });
 
   const dealItems = useMemo(
-    () => inventoryItems.filter((item) => item.hasActiveDeal),
+    () =>
+      inventoryItems
+        .filter(
+          (item) =>
+            item.hasActiveDeal &&
+            typeof item.original_price === 'number' &&
+            typeof item.discounted_price === 'number' &&
+            item.original_price > 0
+        )
+        .slice()
+        .sort((a, b) => {
+          const aPct =
+            ((a.original_price! - a.discounted_price!) / a.original_price!) *
+            100;
+          const bPct =
+            ((b.original_price! - b.discounted_price!) / b.original_price!) *
+            100;
+          return bPct - aPct;
+        }),
     [inventoryItems]
   );
 

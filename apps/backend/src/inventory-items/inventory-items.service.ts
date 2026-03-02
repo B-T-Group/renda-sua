@@ -15,6 +15,7 @@ export interface InventoryItem {
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
+  deal_end_at?: string;
     item: {
       id: string;
       name: string;
@@ -384,6 +385,7 @@ export class InventoryItemsService {
             hasActiveDeal: false,
             original_price: originalPrice,
             discounted_price: originalPrice,
+            deal_end_at: undefined,
           };
         }
 
@@ -399,6 +401,7 @@ export class InventoryItemsService {
           hasActiveDeal: true,
           original_price: originalPrice,
           discounted_price: discounted,
+          deal_end_at: deal.end_at,
         };
       });
 
@@ -527,6 +530,7 @@ export class InventoryItemsService {
           hasActiveDeal: false,
           original_price: originalPrice,
           discounted_price: originalPrice,
+          deal_end_at: undefined,
         };
       }
 
@@ -542,6 +546,7 @@ export class InventoryItemsService {
         hasActiveDeal: true,
         original_price: originalPrice,
         discounted_price: discounted,
+        deal_end_at: deal.end_at,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -651,7 +656,7 @@ export class InventoryItemsService {
   ): Promise<
     Record<
       string,
-      { discount_type: string; discount_value: number }
+      { discount_type: string; discount_value: number; end_at: string }
     >
   > {
     if (!inventoryItemIds.length) {
@@ -673,6 +678,7 @@ export class InventoryItemsService {
           inventory_item_id
           discount_type
           discount_value
+          end_at
         }
       }
     `;
@@ -688,11 +694,12 @@ export class InventoryItemsService {
           inventory_item_id: string;
           discount_type: string;
           discount_value: number;
+          end_at: string;
         }>) ?? [];
 
       const result: Record<
         string,
-        { discount_type: string; discount_value: number }
+        { discount_type: string; discount_value: number; end_at: string }
       > = {};
 
       deals.forEach((deal) => {
@@ -700,6 +707,7 @@ export class InventoryItemsService {
           result[deal.inventory_item_id] = {
             discount_type: deal.discount_type,
             discount_value: deal.discount_value,
+            end_at: deal.end_at,
           };
         }
       });

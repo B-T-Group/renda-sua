@@ -238,6 +238,19 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {inventory.item.name}
             </Typography>
+            {hasDealPrices && inventory.deal_end_at && (
+              <Typography
+                variant="caption"
+                color="error.main"
+                sx={{ fontWeight: 600 }}
+              >
+                {new Date(inventory.deal_end_at).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </Typography>
+            )}
             <Box
               sx={{
                 display: 'flex',

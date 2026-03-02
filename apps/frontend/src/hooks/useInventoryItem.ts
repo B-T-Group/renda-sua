@@ -15,6 +15,7 @@ export interface InventoryItem {
   hasActiveDeal?: boolean;
   original_price?: number;
   discounted_price?: number;
+  deal_end_at?: string;
   item: {
     id: string;
     name: string;

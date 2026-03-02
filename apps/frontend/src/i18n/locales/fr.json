@@ -1339,6 +1339,7 @@
     "orderCompletionSuccessMessage": "Félicitations ! Votre commande a été terminée avec succès. Nous espérons que vous avez apprécié votre achat et nous avons hâte de vous servir à nouveau bientôt !",
     "orderCompletionThankYou": "Merci d'avoir choisi notre service !",
     "orderSummary": "Résumé de la Commande",
+    "dealEnds": "Offre se termine le {{date}}",
     "placingOrder": "Passage de la Commande...",
     "securePayment": "Paiement Sécurisé",
     "total": "Total",
@@ -1758,6 +1759,7 @@
       "state": "État/Province",
       "country": "Pays",
       "availableItems": "Articles Disponibles",
+      "dealsSubtitle": "Meilleures remises sélectionnées auprès de vendeurs vérifiés",
       "authCta": {
         "button": "Se connecter",
         "description": "Créez un compte pour parcourir et commander des articles.",

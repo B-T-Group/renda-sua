@@ -1519,6 +1519,7 @@
     "orderProgress": "Order Progress",
     "orderStatus": "Order Status",
     "orderSummary": "Order Summary",
+    "dealEnds": "Deal ends on {{date}}",
     "orderTime": "Order Time",
     "otherReasonPlaceholder": "Enter your reason for canceling this order...",
     "overridePhoneNote": "This number will receive the payment request for this order",
@@ -1775,6 +1776,7 @@
       "state": "State",
       "country": "Country",
       "availableItems": "Available Items",
+      "dealsSubtitle": "Top discounts curated from verified sellers",
       "dealsTitle": "Deals for you",
       "viewAllDeals": "View all deals",
       "authCta": {

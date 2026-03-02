@@ -125,6 +125,10 @@ const StepIconWrapper: React.FC<{
 interface OrderSummaryProps {
   selectedItem: {
     selling_price: number;
+    original_price?: number;
+    discounted_price?: number;
+    hasActiveDeal?: boolean;
+    deal_end_at?: string;
     item: {
       name: string;
       currency: string;
@@ -159,7 +163,17 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   error,
 }) => {
   const { t } = useTranslation();
-  const subtotal = selectedItem.selling_price * quantity;
+  const hasDealPrices =
+    selectedItem.hasActiveDeal &&
+    typeof selectedItem.original_price === 'number' &&
+    typeof selectedItem.discounted_price === 'number' &&
+    selectedItem.original_price > 0;
+
+  const unitPrice = hasDealPrices
+    ? selectedItem.discounted_price!
+    : selectedItem.selling_price;
+
+  const subtotal = unitPrice * quantity;
   // Delivery fee is the API delivery fee (already includes fast delivery charge if applicable)
   const computedDeliveryFee = deliveryFee || 0;
   // Total = subtotal + delivery fee (fast delivery already included in deliveryFee from API)
@@ -217,6 +231,45 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Typography>
           </Box>
         </Box>
+
+        {hasDealPrices ? (
+          <Box>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textDecoration: 'line-through' }}
+            >
+              {formatCurrency(
+                selectedItem.original_price!,
+                selectedItem.item.currency
+              )}
+            </Typography>
+            <Typography variant="h6" color="primary" fontWeight="bold">
+              {formatCurrency(
+                selectedItem.discounted_price!,
+                selectedItem.item.currency
+              )}
+            </Typography>
+            {selectedItem.deal_end_at && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.25 }}
+              >
+                {t('orders.dealEnds', 'Deal ends on {{date}}', {
+                  date: new Date(selectedItem.deal_end_at).toLocaleDateString(
+                    undefined,
+                    { month: 'short', day: 'numeric', year: 'numeric' }
+                  ),
+                })}
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          <Typography variant="h6" color="primary" fontWeight="bold">
+            {formatCurrency(unitPrice, selectedItem.item.currency)}
+          </Typography>
+        )}
 
         {/* Price Breakdown */}
         <Box>

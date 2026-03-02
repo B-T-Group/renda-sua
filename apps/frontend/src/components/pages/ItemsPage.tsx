@@ -4,6 +4,7 @@ import {
     Assignment,
     Inventory,
     Search as SearchIcon,
+    LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import {
     Alert,
@@ -78,7 +79,25 @@ const ItemsPage: React.FC = () => {
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
   const dealItems = useMemo(
-    () => inventoryItems.filter((item) => item.hasActiveDeal),
+    () =>
+      inventoryItems
+        .filter(
+          (item) =>
+            item.hasActiveDeal &&
+            typeof item.original_price === 'number' &&
+            typeof item.discounted_price === 'number' &&
+            item.original_price > 0
+        )
+        .slice()
+        .sort((a, b) => {
+          const aPct =
+            ((a.original_price! - a.discounted_price!) / a.original_price!) *
+            100;
+          const bPct =
+            ((b.original_price! - b.discounted_price!) / b.original_price!) *
+            100;
+          return bPct - aPct;
+        }),
     [inventoryItems]
   );
 
@@ -380,11 +399,36 @@ const ItemsPage: React.FC = () => {
               justifyContent: 'space-between',
               alignItems: 'center',
               mb: 1.5,
+              bgcolor: 'primary.50',
+              borderRadius: 2,
+              px: 2,
+              py: 1.5,
             }}
           >
-            <Typography variant="h6">
-              {t('public.items.dealsTitle', 'Deals for you')}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <LocalOfferIcon color="primary" />
+              <Box>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: { xs: '1.05rem', sm: '1.2rem' },
+                  }}
+                >
+                  {t('public.items.dealsTitle', 'Deals for you')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ display: { xs: 'none', sm: 'block' } }}
+                >
+                  {t(
+                    'public.items.dealsSubtitle',
+                    'Top discounts curated from verified sellers'
+                  )}
+                </Typography>
+              </Box>
+            </Box>
             <Button size="small" onClick={() => navigate('/deals')}>
               {t('public.items.viewAllDeals', 'View all deals')}
             </Button>
