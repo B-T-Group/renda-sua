@@ -4244,6 +4244,7 @@ export class OrdersService {
             description
             currency
             weight
+            max_order_quantity
           }
         }
       }
@@ -4279,7 +4280,7 @@ export class OrdersService {
       throw new Error('All items must be from the same business');
     }
 
-    // Validate all items are active and have sufficient quantity
+    // Validate all items are active, respect max_order_quantity, and have sufficient quantity
     for (let i = 0; i < orderData.items.length; i++) {
       const item = orderData.items[i];
       const businessInventory = businessInventories.find(
@@ -4292,14 +4293,21 @@ export class OrdersService {
         );
       }
 
-    if (!businessInventory.is_active) {
-      throw new Error(
-        `Item ${businessInventory.item.name} is not currently available`
-      );
-    }
+      if (!businessInventory.is_active) {
+        throw new Error(
+          `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      const maxOrderQuantity = businessInventory.item?.max_order_quantity;
+      if (maxOrderQuantity != null && item.quantity > maxOrderQuantity) {
+        throw new Error(
+          `Item ${businessInventory.item.name} exceeds max order quantity. Max: ${maxOrderQuantity}, Requested: ${item.quantity}`
+        );
+      }
 
       if (item.quantity > businessInventory.computed_available_quantity) {
-      throw new Error(
+        throw new Error(
           `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${item.quantity}`
         );
       }

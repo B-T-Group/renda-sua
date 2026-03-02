@@ -2053,7 +2053,9 @@
     "items": "Items",
     "deliveryFee": "Delivery Fee",
     "calculatedAtCheckout": "Calculated at checkout",
-    "viewCart": "View Cart"
+    "viewCart": "View Cart",
+    "maxQuantityReached": "Maximum {{count}} per order for this item",
+    "maxOrderQuantity": "Max {{count}} per order for this item"
   },
   "checkout": {
     "title": "Checkout",

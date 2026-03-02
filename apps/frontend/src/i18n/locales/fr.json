@@ -2036,7 +2036,9 @@
     "items": "Articles",
     "deliveryFee": "Frais de Livraison",
     "calculatedAtCheckout": "Calculé à la caisse",
-    "viewCart": "Voir le Panier"
+    "viewCart": "Voir le Panier",
+    "maxQuantityReached": "Maximum {{count}} par commande pour cet article",
+    "maxOrderQuantity": "Max {{count}} par commande pour cet article"
   },
   "checkout": {
     "title": "Caisse",

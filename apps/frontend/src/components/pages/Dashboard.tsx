@@ -142,6 +142,8 @@ const Dashboard: React.FC = () => {
         currency: item.item.currency,
         imageUrl: item.item.item_images?.[0]?.image_url,
         weight: item.item.weight,
+        maxOrderQuantity: item.item.max_order_quantity || undefined,
+        minOrderQuantity: item.item.min_order_quantity || undefined,
       },
     });
   };

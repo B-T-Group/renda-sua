@@ -20,6 +20,8 @@ export interface CartItem {
     currency: string;
     imageUrl?: string;
     weight?: number;
+    maxOrderQuantity?: number;
+    minOrderQuantity?: number;
   };
 }
 
@@ -97,9 +99,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
         if (existingItemIndex >= 0) {
           // Update quantity if item already exists
           const updatedItems = [...prevItems];
+          const existing = updatedItems[existingItemIndex];
+          const max = existing.itemData.maxOrderQuantity;
+          const nextQuantity = existing.quantity + item.quantity;
+          const finalQuantity = max ? Math.min(nextQuantity, max) : nextQuantity;
+
+          if (max && nextQuantity > max) {
+            enqueueSnackbar(
+              t(
+                'cart.maxQuantityReached',
+                'Maximum {{count}} per order for this item',
+                { count: max }
+              ),
+              { variant: 'warning' }
+            );
+          }
+
           updatedItems[existingItemIndex] = {
-            ...updatedItems[existingItemIndex],
-            quantity: updatedItems[existingItemIndex].quantity + item.quantity,
+            ...existing,
+            quantity: finalQuantity,
           };
           enqueueSnackbar(
             t('cart.itemUpdated', 'Item quantity updated in cart'),
@@ -107,11 +125,31 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
           );
           return updatedItems;
         } else {
+          const max = item.itemData.maxOrderQuantity;
+          const initialQuantity = max ? Math.min(item.quantity, max) : item.quantity;
+
+          if (max && item.quantity > max) {
+            enqueueSnackbar(
+              t(
+                'cart.maxQuantityReached',
+                'Maximum {{count}} per order for this item',
+                { count: max }
+              ),
+              { variant: 'warning' }
+            );
+          }
+
           // Add new item
           enqueueSnackbar(t('cart.itemAdded', 'Item added to cart'), {
             variant: 'success',
           });
-          return [...prevItems, item];
+          return [
+            ...prevItems,
+            {
+              ...item,
+              quantity: initialQuantity,
+            },
+          ];
         }
       });
     },
@@ -135,21 +173,44 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateQuantity = useCallback(
     (inventoryItemId: string, quantity: number) => {
-      if (quantity <= 0) {
-        removeFromCart(inventoryItemId);
-        return;
-      }
-
       setCartItems((prevItems) => {
-        const updatedItems = prevItems.map((item) =>
-          item.inventoryItemId === inventoryItemId
-            ? { ...item, quantity }
-            : item
-        );
+        const nextItems: CartItem[] = [];
+
+        prevItems.forEach((item) => {
+          if (item.inventoryItemId !== inventoryItemId) {
+            nextItems.push(item);
+            return;
+          }
+
+          if (quantity <= 0) {
+            return;
+          }
+
+          const max = item.itemData.maxOrderQuantity;
+          const finalQuantity = max && quantity > max ? max : quantity;
+
+          if (max && quantity > max) {
+            enqueueSnackbar(
+              t(
+                'cart.maxQuantityReached',
+                'Maximum {{count}} per order for this item',
+                { count: max }
+              ),
+              { variant: 'warning' }
+            );
+          }
+
+          nextItems.push({
+            ...item,
+            quantity: finalQuantity,
+          });
+        });
+
         enqueueSnackbar(t('cart.quantityUpdated', 'Quantity updated'), {
           variant: 'success',
         });
-        return updatedItems;
+
+        return nextItems;
       });
     },
     [removeFromCart, enqueueSnackbar, t]

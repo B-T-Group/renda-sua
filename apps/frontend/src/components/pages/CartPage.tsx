@@ -151,71 +151,97 @@ const CartPage: React.FC = () => {
                         <Box
                           sx={{
                             display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
+                            flexDirection: 'column',
+                            gap: 0.5,
                           }}
                         >
                           <Box
                             sx={{
                               display: 'flex',
+                              justifyContent: 'space-between',
                               alignItems: 'center',
-                              gap: 1,
                             }}
                           >
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                updateQuantity(
-                                  item.inventoryItemId,
-                                  item.quantity - 1
-                                )
-                              }
-                              disabled={item.quantity <= 1}
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                              }}
                             >
-                              <Remove />
-                            </IconButton>
-                            <Typography
-                              variant="body1"
-                              sx={{ minWidth: 20, textAlign: 'center' }}
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  updateQuantity(
+                                    item.inventoryItemId,
+                                    item.quantity - 1
+                                  )
+                                }
+                                disabled={item.quantity <= 1}
+                              >
+                                <Remove />
+                              </IconButton>
+                              <Typography
+                                variant="body1"
+                                sx={{ minWidth: 20, textAlign: 'center' }}
+                              >
+                                {item.quantity}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  updateQuantity(
+                                    item.inventoryItemId,
+                                    item.quantity + 1
+                                  )
+                                }
+                                disabled={
+                                  !!item.itemData.maxOrderQuantity &&
+                                  item.quantity >= item.itemData.maxOrderQuantity
+                                }
+                              >
+                                <Add />
+                              </IconButton>
+                            </Box>
+
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                              }}
                             >
-                              {item.quantity}
-                            </Typography>
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                updateQuantity(
-                                  item.inventoryItemId,
-                                  item.quantity + 1
-                                )
-                              }
-                            >
-                              <Add />
-                            </IconButton>
+                              <Typography variant="h6" color="primary">
+                                {formatCurrency(
+                                  item.itemData.price * item.quantity,
+                                  item.itemData.currency
+                                )}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  removeFromCart(item.inventoryItemId)
+                                }
+                                color="error"
+                              >
+                                <Delete />
+                              </IconButton>
+                            </Box>
                           </Box>
 
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                            }}
-                          >
-                            <Typography variant="h6" color="primary">
-                              {formatCurrency(
-                                item.itemData.price * item.quantity,
-                                item.itemData.currency
+                          {item.itemData.maxOrderQuantity && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ mt: 0.5 }}
+                            >
+                              {t(
+                                'cart.maxOrderQuantity',
+                                'Max {{count}} per order for this item',
+                                { count: item.itemData.maxOrderQuantity }
                               )}
                             </Typography>
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                removeFromCart(item.inventoryItemId)
-                              }
-                              color="error"
-                            >
-                              <Delete />
-                            </IconButton>
-                          </Box>
+                          )}
                         </Box>
                       </Box>
                     </Box>
