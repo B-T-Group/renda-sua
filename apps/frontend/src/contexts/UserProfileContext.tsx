@@ -59,6 +59,7 @@ export interface UserProfile {
     is_internal: boolean;
     onboarding_complete: boolean;
     status?: 'active' | 'suspended';
+    agent_code?: string;
     created_at: string;
     updated_at: string;
   };

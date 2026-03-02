@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useAgentReferralLookup } from '../../hooks/useAgentReferralLookup';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
@@ -61,6 +62,7 @@ interface ProfileData {
     vehicle_type_id?: string;
     name?: string;
   };
+  referral_agent_code?: string;
 }
 
 const steps = ['Choose Persona', 'Address', 'Personal Information', 'Review & Submit'];
@@ -139,6 +141,7 @@ const CompleteProfile: React.FC = () => {
       state: '',
     },
     profile: {},
+    referral_agent_code: '',
   });
 
   const addressStates = useMemo(
@@ -158,6 +161,12 @@ const CompleteProfile: React.FC = () => {
     if (!profileData.address.country || !selectedStateCode) return [];
     return City.getCitiesOfState(profileData.address.country, selectedStateCode);
   }, [profileData.address.country, selectedStateCode]);
+
+  const {
+    result: referralLookup,
+    loading: referralLookupLoading,
+    error: referralLookupError,
+  } = useAgentReferralLookup(profileData.referral_agent_code || '');
 
   const handleInputChange =
     (field: keyof ProfileData) =>
@@ -489,6 +498,59 @@ const CompleteProfile: React.FC = () => {
                 fullWidth
                 required
               />
+            )}
+
+            {profileData.user_type_id === 'agent' && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <TextField
+                  label={t(
+                    'agent.referrals.referralCodeLabel',
+                    'Referral code (optional)'
+                  )}
+                  value={profileData.referral_agent_code || ''}
+                  onChange={handleInputChange('referral_agent_code')}
+                  fullWidth
+                  helperText={t(
+                    'agent.referrals.referralCodeHelp',
+                    'Enter the code of the agent who referred you (if any).'
+                  )}
+                />
+                {profileData.referral_agent_code &&
+                  profileData.referral_agent_code.trim().length === 6 && (
+                    <Box sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                      {referralLookupLoading && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CircularProgress size={14} />
+                          <span>
+                            {t(
+                              'agent.referrals.lookupLoading',
+                              'Looking up agent...'
+                            )}
+                          </span>
+                        </Box>
+                      )}
+                      {!referralLookupLoading && referralLookup && (
+                        <span>
+                          {t(
+                            'agent.referrals.lookupSuccess',
+                            'Referred by {{name}}',
+                            { name: referralLookup.fullName }
+                          )}
+                        </span>
+                      )}
+                      {!referralLookupLoading &&
+                        !referralLookup &&
+                        referralLookupError && (
+                          <span>
+                            {t(
+                              'agent.referrals.lookupError',
+                              'No agent found for this code'
+                            )}
+                          </span>
+                        )}
+                    </Box>
+                  )}
+              </Box>
             )}
           </Box>
         );

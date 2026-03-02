@@ -1,15 +1,19 @@
 import {
-    Body,
-    Controller,
-    Get,
-    HttpException,
-    HttpStatus,
-    Post,
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
 } from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Public } from '../auth/public.decorator';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { AgentHoldService } from './agent-hold.service';
+import { AgentReferralsService } from './agent-referrals.service';
 
 export interface PickUpOrderRequest {
   order_id: string;
@@ -97,14 +101,61 @@ export interface ActiveOrder {
   }>;
 }
 
+@ApiTags('agents')
 @Controller('agents')
 export class AgentsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly commissionsService: CommissionsService,
-    private readonly agentHoldService: AgentHoldService
+    private readonly agentHoldService: AgentHoldService,
+    private readonly agentReferralsService: AgentReferralsService
   ) {}
+
+  @Public()
+  @Get('public/by-code/:agentCode')
+  @ApiOperation({
+    summary: 'Get agent name by referral code (public)',
+    description:
+      'Public endpoint that returns the display name of an agent given their 6-character referral code.',
+  })
+  @ApiParam({
+    name: 'agentCode',
+    description: 'Agent referral code (6-character alphanumeric)',
+    example: 'AB12CD',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Agent found for given code',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        agentCode: { type: 'string', example: 'AB12CD' },
+        fullName: { type: 'string', example: 'Jane Doe' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No agent found for the provided code',
+  })
+  async getAgentByReferralCode(@Param('agentCode') agentCode: string) {
+    const lookup = await this.agentReferralsService.findAgentByCode(agentCode);
+    if (!lookup) {
+      throw new HttpException(
+        { success: false, error: 'Agent not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const fullName = `${lookup.userFirstName} ${lookup.userLastName}`.trim();
+    return {
+      success: true,
+      agentCode: agentCode.trim().toUpperCase(),
+      fullName,
+    };
+  }
 
   @Get('active_orders')
   async getActiveOrders() {

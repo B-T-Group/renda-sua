@@ -1,9 +1,11 @@
 import { Container, Grid } from '@mui/material';
 import React from 'react';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import AgentAddressPrompt from '../common/AgentAddressPrompt';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
 import AgentQuickStats from '../common/AgentQuickStats';
+import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import OpenOrdersPage from './OpenOrdersPage';
 
 /**
@@ -12,6 +14,8 @@ import OpenOrdersPage from './OpenOrdersPage';
  * Note: Agent onboarding is handled globally in App.tsx
  */
 const AgentDashboard: React.FC = () => {
+  const { profile } = useUserProfileContext();
+  const agentCode = profile?.agent?.agent_code || '';
   const { summary, loading, error } = useAgentEarningsSummary(true);
 
   return (
@@ -25,6 +29,11 @@ const AgentDashboard: React.FC = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentQuickStats summary={summary} loading={loading} error={error} />
           </Grid>
+          {agentCode && (
+            <Grid size={{ xs: 12 }}>
+              <AgentReferralCodeCard agentCode={agentCode} />
+            </Grid>
+          )}
         </Grid>
       </Container>
       <OpenOrdersPage />

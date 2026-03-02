@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -13,6 +14,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BusinessInventoryItem } from '../../hooks/useBusinessInventory';
@@ -85,12 +87,27 @@ const ManageDealsDialog: React.FC<ManageDealsDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-      <DialogTitle>
-        {t(
-          'business.items.deals.title',
-          'Manage deals for {{name}}',
-          { name: inventoryItem.item?.name ?? '' }
-        )}
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+        }}
+      >
+        <Typography variant="h6" component="span">
+          {t('business.items.deals.title', {
+            defaultValue: 'Manage deals for {{name}}',
+            name: inventoryItem.item?.name ?? '',
+          })}
+        </Typography>
+        <IconButton
+          aria-label={t('common.close', 'Close')}
+          onClick={handleClose}
+          size="small"
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={3}>

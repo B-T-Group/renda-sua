@@ -13,6 +13,7 @@ import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { Configuration } from '../config/configuration';
+import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -32,7 +33,8 @@ export class UsersController {
     private readonly auth0Service: Auth0Service,
     private readonly addressesService: AddressesService,
     private readonly awsService: AwsService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly agentReferralsService: AgentReferralsService
   ) {}
 
   @Get('me')
@@ -400,6 +402,7 @@ export class UsersController {
         city: string;
         state: string;
       };
+      referral_agent_code?: string;
     }
   ) {
     try {
@@ -452,32 +455,11 @@ export class UsersController {
           };
 
         case 'agent':
-          result = await this.hasuraSystemService.createUserWithAgent(
+          return await this.createAgentUser(
             identifier,
-            {
-              email: userData.email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              phone_number: userData.phone_number,
-              user_type_id: userData.user_type_id,
-            },
-            {
-              vehicle_type_id: userData.profile.vehicle_type_id || 'other',
-            }
+            userData,
+            addressData
           );
-          if (addressData) {
-            await this.addressesService.createAddressForSignup(
-              result.agent.id,
-              'agent',
-              addressData
-            );
-          }
-          return {
-            success: true,
-            user: result.user,
-            agent: result.agent,
-            identifier: identifier,
-          };
 
         case 'business':
           if (!userData.profile.name) {
@@ -535,5 +517,90 @@ export class UsersController {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  private async createAgentUser(
+    identifier: string,
+    userData: {
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone_number?: string;
+      user_type_id: string;
+      profile: { vehicle_type_id?: string; name?: string };
+      address?: {
+        address_line_1: string;
+        country: string;
+        city: string;
+        state: string;
+      };
+      referral_agent_code?: string;
+    },
+    addressData: {
+      address_line_1: string;
+      country: string;
+      city: string;
+      state: string;
+    } | null
+  ) {
+    const result = await this.hasuraSystemService.createUserWithAgent(
+      identifier,
+      {
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        phone_number: userData.phone_number,
+        user_type_id: userData.user_type_id,
+      },
+      {
+        vehicle_type_id: userData.profile.vehicle_type_id || 'other',
+      }
+    );
+
+    if (addressData) {
+      await this.addressesService.createAddressForSignup(
+        result.agent.id,
+        'agent',
+        addressData
+      );
+    }
+
+    await this.handleAgentReferralIfPresent(
+      result.agent.id,
+      userData.referral_agent_code,
+      userData.address?.country
+    );
+
+    return {
+      success: true,
+      user: result.user,
+      agent: result.agent,
+      identifier: identifier,
+    };
+  }
+
+  private async handleAgentReferralIfPresent(
+    newAgentId: string,
+    referralAgentCode?: string,
+    countryCode?: string
+  ): Promise<void> {
+    const normalizedCode = referralAgentCode?.trim();
+    if (!normalizedCode || !countryCode) {
+      return;
+    }
+
+    const referringAgent = await this.agentReferralsService.findAgentByCode(
+      normalizedCode
+    );
+    if (!referringAgent) {
+      return;
+    }
+
+    await this.agentReferralsService.creditReferral(
+      referringAgent.agentId,
+      newAgentId,
+      countryCode,
+      normalizedCode
+    );
   }
 }

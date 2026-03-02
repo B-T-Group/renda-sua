@@ -368,6 +368,17 @@
       "todaysDeliveries": "Today's deliveries",
       "avgCommission": "Avg. commission (today)"
     },
+    "referrals": {
+      "referralCodeLabel": "Referral code (optional)",
+      "referralCodeHelp": "Enter the code of the agent who referred you (if any).",
+      "lookupLoading": "Looking up agent...",
+      "lookupSuccess": "Referred by {{name}}",
+      "lookupError": "No agent found for this code",
+      "yourCode": "Your agent referral code",
+      "copyCode": "Copy code",
+      "copied": "Copied!",
+      "shareHint": "Share this code with other agents so you can earn referral commissions when they sign up."
+    },
     "unverifiedHoldNote": "Verify your account and add a profile picture to reduce your hold amounts.",
     "orders": {
       "amountBreakdown": "Amount Breakdown",
