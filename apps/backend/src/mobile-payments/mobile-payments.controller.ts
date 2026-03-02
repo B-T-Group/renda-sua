@@ -729,11 +729,12 @@ export class MobilePaymentsController {
   @Public()
   @Post('callback/freemopay')
   async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
-    console.log('freemopayCallback', callbackData);
+    this.logger.log('freemopayCallback', JSON.stringify(callbackData));
     try {
       const externalId =
         callbackData.externalId ?? callbackData.merchantRef;
       if (!callbackData.reference || !externalId || !callbackData.status) {
+        this.logger.error('Missing required callback data (reference, externalId/merchantRef, status)');
         throw new HttpException(
           {
             success: false,
