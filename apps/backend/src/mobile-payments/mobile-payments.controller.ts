@@ -275,12 +275,14 @@ export class MobilePaymentsController {
               });
 
             if (withdrawalResult.success) {
-              console.log(
+              this.logger.log(
                 `Successfully withdrew ${paymentRequest.amount} ${paymentRequest.currency} from account ${paymentRequest.accountId} for give change`
               );
-              console.log('New balance:', withdrawalResult.newBalance);
+              this.logger.debug(
+                `New balance after withdrawal: ${JSON.stringify(withdrawalResult.newBalance)}`
+              );
             } else {
-              console.error(
+              this.logger.error(
                 `Failed to withdraw from account ${paymentRequest.accountId}: ${withdrawalResult.error}`
               );
               // Update transaction status to failed
@@ -304,9 +306,10 @@ export class MobilePaymentsController {
               );
             }
           } catch (withdrawalError) {
-            console.error(
-              `Error withdrawing from account ${paymentRequest.accountId}:`,
-              withdrawalError
+            this.logger.error(
+              `Error withdrawing from account ${paymentRequest.accountId}: ${String(
+                (withdrawalError as any)?.message || withdrawalError
+              )}`
             );
             // Update transaction status to failed
             await this.databaseService.updateTransaction(transaction.id, {
@@ -625,7 +628,7 @@ export class MobilePaymentsController {
             callbackData.status === 'FAILED' ? 'Payment failed' : undefined,
         });
 
-        console.log(
+        this.logger.log(
           `Updated transaction ${transaction.id} with status: ${status}`
         );
 
@@ -647,10 +650,14 @@ export class MobilePaymentsController {
             );
 
             if (creditResult.success) {
-              console.log(
+              this.logger.log(
                 `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
               );
-              console.log('New balance:', creditResult.newBalance);
+              this.logger.debug(
+                `New balance after credit: ${JSON.stringify(
+                  creditResult.newBalance
+                )}`
+              );
 
               if (transaction.payment_entity === 'order') {
                 // Process order payment using the refactored method
@@ -660,19 +667,20 @@ export class MobilePaymentsController {
                 await this.ordersService.processClaimOrderPayment(transaction);
               }
             } else {
-              console.error(
+              this.logger.error(
                 `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
               );
             }
           } catch (creditError) {
-            console.error(
-              `Error crediting account ${transaction.account_id}:`,
-              creditError
+            this.logger.error(
+              `Error crediting account ${transaction.account_id}: ${String(
+                (creditError as any)?.message || creditError
+              )}`
             );
           }
         }
       } else {
-        console.warn(
+        this.logger.warn(
           `Transaction not found for reference: ${callbackData.merchantReferenceId}`
         );
       }
@@ -691,7 +699,7 @@ export class MobilePaymentsController {
       ) {
         // For claim order payment failures, we don't need to cancel the order
         // since the order wasn't claimed yet - just log the failure
-        console.log(
+        this.logger.log(
           `Claim order payment failed for order ${transaction.reference}`
         );
       }
@@ -702,7 +710,7 @@ export class MobilePaymentsController {
         transactionId: callbackData.transactionId,
       };
     } catch (error: any) {
-      console.error('MyPVIT callback processing error:', error);
+      this.logger.error('MyPVIT callback processing error:', error);
       throw new HttpException(
         {
           success: false,
