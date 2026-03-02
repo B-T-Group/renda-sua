@@ -18,6 +18,7 @@ export class BrandsService {
           id
           name
           description
+          approved
           created_at
           updated_at
           items_aggregate {
@@ -52,6 +53,7 @@ export class BrandsService {
           id
           name
           description
+          approved
           created_at
           updated_at
           items_aggregate {
@@ -67,16 +69,18 @@ export class BrandsService {
     return result.brands_by_pk;
   }
 
-  async createBrand(createBrandDto: CreateBrandDto) {
+  async createBrand(createBrandDto: CreateBrandDto, approved: boolean) {
     const mutation = `
-      mutation CreateBrand($name: String!, $description: String!) {
+      mutation CreateBrand($name: String!, $description: String!, $approved: Boolean!) {
         insert_brands_one(object: {
           name: $name,
-          description: $description
+          description: $description,
+          approved: $approved
         }) {
           id
           name
           description
+          approved
           created_at
           updated_at
         }
@@ -86,6 +90,7 @@ export class BrandsService {
     const result = await this.hasuraSystemService.executeMutation(mutation, {
       name: createBrandDto.name,
       description: createBrandDto.description,
+      approved,
     });
 
     this.logger.log(`Brand created: ${result.insert_brands_one.name}`);

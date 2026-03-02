@@ -345,11 +345,14 @@ const ItemFormPage: React.FC = () => {
     setError(null);
 
     try {
+      const normalizedName = formData.name.trim().toUpperCase();
+
       let result;
       if (isEditMode && itemId) {
         // For updates, exclude business_id as it's not allowed in items_set_input
         const updateData = {
           ...formData,
+          name: normalizedName,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -371,6 +374,7 @@ const ItemFormPage: React.FC = () => {
         // For creation, include business_id
         const createData = {
           ...formData,
+          name: normalizedName,
           business_id: profile.business.id,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,

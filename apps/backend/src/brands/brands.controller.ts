@@ -9,7 +9,6 @@ import {
   Post,
   Put,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -18,14 +17,10 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import { Public } from '../auth/public.decorator';
 import { BrandsService } from './brands.service';
-
-interface RequestWithUser extends Request {
-  user: any;
-}
 
 export interface CreateBrandDto {
   name: string;
@@ -41,7 +36,10 @@ export interface UpdateBrandDto {
 @Controller('brands')
 @ApiBearerAuth()
 export class BrandsController {
-  constructor(private readonly brandsService: BrandsService) {}
+  constructor(
+    private readonly brandsService: BrandsService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   @Get()
   @Public()
@@ -114,8 +112,7 @@ export class BrandsController {
   }
 
   @Post()
-  @UseGuards(AdminAuthGuard)
-  @ApiOperation({ summary: 'Create a new brand (Admin only)' })
+  @ApiOperation({ summary: 'Create a new brand (Business or Admin)' })
   @ApiResponse({
     status: 201,
     description: 'Brand created successfully',
@@ -129,11 +126,27 @@ export class BrandsController {
     description: 'Forbidden - Admin privileges required',
   })
   async createBrand(
-    @Body() createBrandDto: CreateBrandDto,
-    @Req() request: RequestWithUser
+    @Body() createBrandDto: CreateBrandDto
   ) {
     try {
-      const brand = await this.brandsService.createBrand(createBrandDto);
+      const user = await this.hasuraUserService.getUser();
+
+      if (!user?.business) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Only business users can create brands',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      const isSuperUser = !!user.business.is_admin;
+
+      const brand = await this.brandsService.createBrand(
+        createBrandDto,
+        isSuperUser
+      );
       return {
         success: true,
         data: brand,
@@ -168,8 +181,7 @@ export class BrandsController {
   })
   async updateBrand(
     @Param('id') id: string,
-    @Body() updateBrandDto: UpdateBrandDto,
-    @Req() request: RequestWithUser
+    @Body() updateBrandDto: UpdateBrandDto
   ) {
     try {
       const brand = await this.brandsService.updateBrand(id, updateBrandDto);
@@ -221,7 +233,7 @@ export class BrandsController {
     status: 400,
     description: 'Bad request - Brand cannot be deleted (has associated items)',
   })
-  async deleteBrand(@Param('id') id: string, @Req() request: RequestWithUser) {
+  async deleteBrand(@Param('id') id: string) {
     try {
       const result = await this.brandsService.deleteBrand(id);
       if (!result) {
