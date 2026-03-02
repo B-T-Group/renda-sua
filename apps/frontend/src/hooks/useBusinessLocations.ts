@@ -61,40 +61,6 @@ export interface UpdateBusinessLocationData {
   };
 }
 
-const GET_BUSINESS_LOCATIONS = `
-  query GetBusinessLocations($businessId: uuid!) {
-    business_locations(
-      where: { business_id: { _eq: $businessId } }
-    ) {
-      id
-      name
-      business_id
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-      }
-      phone
-      email
-      operating_hours
-      is_active
-      is_primary
-      location_type
-      created_at
-      updated_at
-    }
-    businesses {
-      id
-      user_id
-      name
-    }
-  }
-`;
-
 const ADD_BUSINESS_LOCATION = `
   mutation AddBusinessLocation($data: business_locations_insert_input!) {
     insert_business_locations_one(object: $data) {
@@ -214,9 +180,6 @@ export const useBusinessLocations = (
   const [warning, setWarning] = useState<string | null>(null);
   const apiClient = useApiClient();
 
-  const { execute: executeQuery, refetch: refetchQuery } = useGraphQLRequest(
-    GET_BUSINESS_LOCATIONS
-  );
   const { execute: executeAddMutation } = useGraphQLRequest(
     ADD_BUSINESS_LOCATION
   );
@@ -232,21 +195,24 @@ export const useBusinessLocations = (
   );
 
   const fetchLocations = useCallback(async () => {
-    if (!businessId) {
-      console.log(
-        'useBusinessLocations: No businessId provided, skipping fetch'
-      );
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const result = await executeQuery({ businessId });
-      if (result?.business_locations) {
-        setLocations(result.business_locations);
+      if (!apiClient) {
+        throw new Error('API client not available');
+      }
+      const response = await apiClient.get<{
+        success: boolean;
+        message?: string;
+        data?: { business_locations?: BusinessLocation[] };
+      }>('/business-items/locations');
+      if (response.data.success && response.data.data?.business_locations) {
+        setLocations(response.data.data.business_locations);
       } else {
         setLocations([]);
+        if (response.data.message) {
+          setError(response.data.message);
+        }
       }
     } catch (err) {
       console.error(
@@ -261,7 +227,7 @@ export const useBusinessLocations = (
     } finally {
       setLoading(false);
     }
-  }, [executeQuery, businessId]);
+  }, [apiClient]);
 
   const addLocation = useCallback(
     async (data: AddBusinessLocationData) => {

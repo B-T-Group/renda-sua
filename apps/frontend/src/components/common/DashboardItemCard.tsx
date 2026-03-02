@@ -69,6 +69,20 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const { t } = useTranslation();
 
+  const hasDealPrices =
+    inventory.hasActiveDeal &&
+    typeof inventory.original_price === 'number' &&
+    typeof inventory.discounted_price === 'number' &&
+    inventory.original_price > 0;
+
+  const discountPercent = hasDealPrices
+    ? Math.round(
+        ((inventory.original_price! - inventory.discounted_price!) /
+          inventory.original_price!) *
+          100
+      )
+    : null;
+
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
       return item.item.item_images[0].image_url;
@@ -156,27 +170,40 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             py: 1,
             borderRadius: 2,
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
           }}
         >
-          {inventory.hasActiveDeal && inventory.original_price && inventory.discounted_price ? (
-            <Box>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ textDecoration: 'line-through' }}
-              >
-                {formatCurrency(
-                  inventory.original_price,
-                  inventory.item.currency
-                )}
-              </Typography>
-              <Typography variant="h6" color="primary" fontWeight="bold">
-                {formatCurrency(
-                  inventory.discounted_price,
-                  inventory.item.currency
-                )}
-              </Typography>
-            </Box>
+          {hasDealPrices ? (
+            <>
+              <Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textDecoration: 'line-through' }}
+                >
+                  {formatCurrency(
+                    inventory.original_price!,
+                    inventory.item.currency
+                  )}
+                </Typography>
+                <Typography variant="h6" color="primary" fontWeight="bold">
+                  {formatCurrency(
+                    inventory.discounted_price!,
+                    inventory.item.currency
+                  )}
+                </Typography>
+              </Box>
+              {discountPercent && discountPercent > 0 && (
+                <Chip
+                  label={`-${discountPercent}%`}
+                  color="secondary"
+                  size="small"
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
+            </>
           ) : (
             <Typography variant="h6" color="primary" fontWeight="bold">
               {formatCurrency(inventory.selling_price, inventory.item.currency)}

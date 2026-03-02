@@ -648,6 +648,8 @@
       "pricing": "Tarification",
       "quantities": "Quantités",
       "quantity": "Quantité",
+      "updateInventoryFor": "Mettre à jour l'inventaire pour {{itemName}}",
+      "addInventoryFor": "Ajouter à l'inventaire pour {{itemName}}",
       "reorderPoint": "Point de réapprovisionnement",
       "reorderQuantity": "Quantité de Réapprovisionnement",
       "requiresSpecialHandling": "Nécessite une Manutention Spéciale",

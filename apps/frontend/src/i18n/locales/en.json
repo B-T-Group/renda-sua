@@ -648,6 +648,8 @@
       "pricing": "Pricing",
       "quantities": "Quantities",
       "quantity": "Quantity",
+      "updateInventoryFor": "Update inventory for {{itemName}}",
+      "addInventoryFor": "Add inventory for {{itemName}}",
       "reorderPoint": "Reorder Point",
       "reorderQuantity": "Reorder Quantity",
       "requiresSpecialHandling": "Requires Special Handling",

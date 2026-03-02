@@ -7,6 +7,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -94,6 +95,86 @@ export class BusinessItemsController {
   async getAvailableItems() {
     const items = await this.businessItemsService.getAvailableItems();
     return { success: true, data: { items } };
+  }
+
+  @Patch('inventory/:inventoryId')
+  @ApiOperation({
+    summary: 'Update an inventory record for the current business',
+  })
+  @ApiResponse({ status: 200, description: 'Inventory updated successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Inventory not found' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        quantity: { type: 'number' },
+        reserved_quantity: { type: 'number' },
+        reorder_point: { type: 'number' },
+        reorder_quantity: { type: 'number' },
+        unit_cost: { type: 'number' },
+        selling_price: { type: 'number' },
+        is_active: { type: 'boolean' },
+      },
+    },
+  })
+  async updateInventory(
+    @Param('inventoryId') inventoryId: string,
+    @Body()
+    body: {
+      quantity?: number;
+      reserved_quantity?: number;
+      reorder_point?: number;
+      reorder_quantity?: number;
+      unit_cost?: number;
+      selling_price?: number;
+      is_active?: boolean;
+    }
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const inventory = await this.businessItemsService.updateInventoryItem(
+      businessId,
+      inventoryId,
+      body
+    );
+    return { success: true, data: { inventory } };
+  }
+
+  @Get('items/:itemId')
+  @ApiOperation({
+    summary: 'Get a single item for the current business',
+  })
+  @ApiResponse({ status: 200, description: 'Item retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  async getItem(@Param('itemId') itemId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    try {
+      const item = await this.businessItemsService.getSingleItem(
+        businessId,
+        itemId
+      );
+      return { success: true, data: { item } };
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
   }
 
   @Delete(':id')

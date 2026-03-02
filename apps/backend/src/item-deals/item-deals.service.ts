@@ -49,7 +49,6 @@ const GET_OVERLAPPING_DEALS = `
     $inventoryItemId: uuid!
     $startAt: timestamptz!
     $endAt: timestamptz!
-    $excludeId: uuid
   ) {
     item_deals(
       where: {
@@ -57,9 +56,6 @@ const GET_OVERLAPPING_DEALS = `
         is_active: { _eq: true }
         start_at: { _lte: $endAt }
         end_at: { _gte: $startAt }
-        _and: [
-          { id: { _neq: $excludeId } }
-        ]
       }
     ) {
       id
@@ -154,7 +150,6 @@ export class ItemDealsService {
         inventoryItemId,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
-        excludeId: null,
       }
     );
 
@@ -251,11 +246,14 @@ export class ItemDealsService {
         inventoryItemId: deal.inventory_item_id,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
-        excludeId: dealId,
       }
     );
 
-    if ((overlap.item_deals as { id: string }[])?.length) {
+    const overlappingOthers = (overlap.item_deals as { id: string }[]).filter(
+      (d) => d.id !== dealId
+    );
+
+    if (overlappingOthers.length) {
       throw new HttpException(
         {
           success: false,

@@ -38,6 +38,7 @@ import { Item, useItems } from '../../hooks/useItems';
 import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
+import ManageDealsDialog from '../business/ManageDealsDialog';
 import SEOHead from '../seo/SEOHead';
 
 // Type for business_inventories from Item interface
@@ -60,6 +61,8 @@ export default function ItemViewPage() {
     BusinessInventoryItem | ItemBusinessInventory | null
   >(null);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
+  const [manageDealsInventory, setManageDealsInventory] =
+    useState<BusinessInventoryItem | ItemBusinessInventory | null>(null);
 
   const { fetchSingleItem } = useItems(profile?.business?.id);
   const { fetchBusinessLocations } = useBusinessInventory();
@@ -118,6 +121,12 @@ export default function ItemViewPage() {
 
   const handleManageImages = () => {
     setShowImageUploadDialog(true);
+  };
+
+  const handleManageDeals = (
+    inventory: BusinessInventoryItem | ItemBusinessInventory
+  ) => {
+    setManageDealsInventory(inventory);
   };
 
   const handleBack = () => {
@@ -870,19 +879,35 @@ export default function ItemViewPage() {
                               </Box>
                             </Stack>
 
-                            {/* Action Button */}
-                            <Button
-                              variant="contained"
-                              size="small"
-                              onClick={() => handleUpdateInventory(inventory)}
-                              startIcon={<InventoryIcon />}
-                              fullWidth
+                            {/* Action Buttons */}
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              sx={{ mt: 1 }}
                             >
-                              {t(
-                                'business.inventory.updateStock',
-                                'Update Stock'
-                              )}
-                            </Button>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleUpdateInventory(inventory)}
+                                startIcon={<InventoryIcon />}
+                                sx={{ flex: 1 }}
+                              >
+                                {t(
+                                  'business.inventory.updateStock',
+                                  'Update Stock'
+                                )}
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleManageDeals(inventory)}
+                              >
+                                {t(
+                                  'business.items.deals.manage',
+                                  'Manage deals'
+                                )}
+                              </Button>
+                            </Stack>
                           </CardContent>
                         </Card>
                       </Grid>
@@ -1150,6 +1175,14 @@ export default function ItemViewPage() {
         }}
         itemId={itemId || ''}
         itemName={item?.name || ''}
+      />
+
+      <ManageDealsDialog
+        open={Boolean(manageDealsInventory)}
+        onClose={() => setManageDealsInventory(null)}
+        inventoryItem={
+          (manageDealsInventory as unknown as BusinessInventoryItem) || null
+        }
       />
     </Container>
   );

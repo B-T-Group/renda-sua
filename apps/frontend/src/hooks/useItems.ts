@@ -139,86 +139,6 @@ const GET_ITEM_SUB_CATEGORIES = `
   }
 `;
 
-const GET_SINGLE_ITEM = `
-  query GetSingleItem($id: uuid!) {
-    items_by_pk(id: $id) {
-      id
-      name
-      description
-      item_sub_category_id
-      weight
-      weight_unit
-      dimensions
-      price
-      currency
-      sku
-      brand_id
-      model
-      color
-      is_fragile
-      is_perishable
-      requires_special_handling
-      max_delivery_distance
-      estimated_delivery_time
-      min_order_quantity
-      max_order_quantity
-      is_active
-      business_id
-      created_at
-      updated_at
-      brand {
-        id
-        name
-        description
-      }
-      item_sub_category {
-        id
-        name
-        item_category {
-          id
-          name
-        }
-      }
-      item_images {
-        id
-        image_url
-        image_type
-        alt_text
-        display_order
-        created_at
-      }
-      business_inventories {
-        id
-        business_location_id
-        quantity
-        computed_available_quantity
-        reserved_quantity
-        reorder_point
-        reorder_quantity
-        unit_cost
-        selling_price
-        is_active
-        last_restocked_at
-        created_at
-        updated_at
-        business_location {
-          id
-          name
-          location_type
-          address {
-            id
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-          }
-        }
-      }
-    }
-  }
-`;
 
 export interface UseItemsOptions {
   /** When true, skip the initial fetch of items (e.g. when using page-data endpoint) */
@@ -236,8 +156,6 @@ export const useItems = (
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
-  const { execute: executeSingleItemQuery } =
-    useGraphQLRequest(GET_SINGLE_ITEM);
   const { execute: executeBrandsQuery } = useGraphQLRequest(GET_BRANDS);
   const { execute: executeSubCategoriesQuery } = useGraphQLRequest(
     GET_ITEM_SUB_CATEGORIES
@@ -429,8 +347,18 @@ export const useItems = (
       setError(null);
 
       try {
-        const result = await executeSingleItemQuery({ id: itemId });
-        return result.items_by_pk;
+        const response = await apiClient.get<{
+          success: boolean;
+          data: { item: any };
+          message?: string;
+        }>(`/business-items/items/${itemId}`);
+        if (response.data.success && response.data.data?.item) {
+          return response.data.data.item;
+        }
+        setError(
+          response.data.message || 'Failed to fetch item'
+        );
+        return null;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch item');
         throw err;
@@ -438,7 +366,7 @@ export const useItems = (
         setLoading(false);
       }
     },
-    [executeSingleItemQuery]
+    [apiClient]
   );
 
   const fetchBrands = useCallback(async () => {

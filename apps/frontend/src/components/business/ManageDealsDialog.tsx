@@ -89,7 +89,7 @@ const ManageDealsDialog: React.FC<ManageDealsDialogProps> = ({
         {t(
           'business.items.deals.title',
           'Manage deals for {{name}}',
-          { name: inventoryItem.item.name }
+          { name: inventoryItem.item?.name ?? '' }
         )}
       </DialogTitle>
       <DialogContent dividers>

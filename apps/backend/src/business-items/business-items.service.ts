@@ -107,6 +107,88 @@ const GET_BUSINESS_LOCATIONS = `
   }
 `;
 
+const GET_SINGLE_ITEM = `
+  query GetSingleItem($id: uuid!) {
+    items_by_pk(id: $id) {
+      id
+      name
+      description
+      item_sub_category_id
+      weight
+      weight_unit
+      dimensions
+      price
+      currency
+      sku
+      brand_id
+      model
+      color
+      is_fragile
+      is_perishable
+      requires_special_handling
+      max_delivery_distance
+      estimated_delivery_time
+      min_order_quantity
+      max_order_quantity
+      is_active
+      business_id
+      created_at
+      updated_at
+      brand {
+        id
+        name
+        description
+      }
+      item_sub_category {
+        id
+        name
+        item_category {
+          id
+          name
+        }
+      }
+      item_images {
+        id
+        image_url
+        image_type
+        alt_text
+        display_order
+        created_at
+      }
+      business_inventories {
+        id
+        business_location_id
+        quantity
+        computed_available_quantity
+        reserved_quantity
+        reorder_point
+        reorder_quantity
+        unit_cost
+        selling_price
+        is_active
+        last_restocked_at
+        created_at
+        updated_at
+        business_location {
+          id
+          name
+          location_type
+          business_id
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+          }
+        }
+      }
+    }
+  }
+`;
+
 const GET_AVAILABLE_ITEMS = `
   query GetAvailableItems {
     items(
@@ -314,6 +396,17 @@ export class BusinessItemsService {
     return result.business_locations ?? [];
   }
 
+  async getSingleItem(businessId: string, itemId: string) {
+    const result = await this.hasuraUserService.executeQuery<{
+      items_by_pk: any | null;
+    }>(GET_SINGLE_ITEM, { id: itemId });
+    const item = result.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new Error('Item not found or does not belong to this business');
+    }
+    return item;
+  }
+
   async getAvailableItems() {
     const result = await this.hasuraUserService.executeQuery<{ items: any[] }>(
       GET_AVAILABLE_ITEMS
@@ -340,6 +433,59 @@ export class BusinessItemsService {
         business_inventory: any[];
       }>(GET_BUSINESS_INVENTORY, { businessId });
     return result.business_inventory ?? [];
+  }
+
+  async updateInventoryItem(
+    businessId: string,
+    inventoryId: string,
+    updates: {
+      quantity?: number;
+      reserved_quantity?: number;
+      reorder_point?: number;
+      reorder_quantity?: number;
+      unit_cost?: number;
+      selling_price?: number;
+      is_active?: boolean;
+    }
+  ) {
+    const invResult = await this.hasuraUserService.executeQuery<{
+      business_inventory_by_pk: {
+        id: string;
+        business_location: { business_id: string };
+      } | null;
+    }>(
+      `
+      query GetInventoryWithBusiness($id: uuid!) {
+        business_inventory_by_pk(id: $id) {
+          id
+          business_location {
+            business_id
+          }
+        }
+      }
+    `,
+      { id: inventoryId }
+    );
+    const inv = invResult.business_inventory_by_pk;
+    if (!inv || inv.business_location.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Inventory not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const result = await this.hasuraUserService.executeMutation<{
+      update_business_inventory_by_pk: {
+        id: string;
+        item_id: string;
+        business_location_id: string;
+      } | null;
+    }>(UPDATE_BUSINESS_INVENTORY, {
+      itemId: inventoryId,
+      updates,
+    });
+
+    return result.update_business_inventory_by_pk;
   }
 
   /**

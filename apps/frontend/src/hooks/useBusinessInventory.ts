@@ -202,31 +202,6 @@ export const useBusinessInventory = (
     { loadingMessage: 'common.savingData' }
   );
 
-  const updateInventoryMutation = `
-    mutation UpdateInventoryItem($itemId: uuid!, $updates: business_inventory_set_input!) {
-      update_business_inventory_by_pk(
-        pk_columns: { id: $itemId }
-        _set: $updates
-      ) {
-        id
-        quantity
-        computed_available_quantity
-        reserved_quantity
-        reorder_point
-        reorder_quantity
-        unit_cost
-        selling_price
-        is_active
-        last_restocked_at
-        updated_at
-      }
-    }
-  `;
-  const { execute: executeUpdateMutation } = useGraphQLRequest(
-    updateInventoryMutation,
-    { loadingMessage: 'common.updatingInventory' }
-  );
-
   const deleteInventoryMutation = `
     mutation DeleteInventoryItem($itemId: uuid!) {
       delete_business_inventory_by_pk(id: $itemId) {
@@ -350,7 +325,7 @@ export const useBusinessInventory = (
   const updateInventoryItem = useCallback(
     async (itemId: string, updates: Partial<UpdateInventoryItemData>) => {
       try {
-        await executeUpdateMutation({ itemId, updates });
+        await apiClient.patch(`/business-items/inventory/${itemId}`, updates);
 
         // Refresh inventory after updating item
         await fetchInventory();
@@ -360,7 +335,7 @@ export const useBusinessInventory = (
         );
       }
     },
-    [executeUpdateMutation, fetchInventory]
+    [apiClient, fetchInventory]
   );
 
   const deleteInventoryItem = useCallback(
