@@ -30,6 +30,7 @@
 - "!include public_item_images.yaml"
 - "!include public_item_sub_categories.yaml"
 - "!include public_items.yaml"
+- "!include public_item_view_events.yaml"
 - "!include public_mobile_payment_transactions.yaml"
 - "!include public_mtn_momo_payment_requests.yaml"
 - "!include public_order_agent_notifications.yaml"
