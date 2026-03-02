@@ -1,0 +1,8 @@
+table:
+  name: item_deals
+  schema: public
+object_relationships:
+  - name: business_inventory
+    using:
+      foreign_key_constraint_on: inventory_item_id
+
