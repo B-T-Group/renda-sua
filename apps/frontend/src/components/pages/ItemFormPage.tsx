@@ -36,7 +36,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { CURRENCIES, WEIGHT_UNITS } from '../../constants/enums';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAi } from '../../hooks/useAi';
-import { useBrands } from '../../hooks/useBrands';
+import { Brand, useBrands } from '../../hooks/useBrands';
 import {
   ItemCategory,
   ItemSubCategory,
@@ -65,8 +65,17 @@ interface CreateSubCategoryOption {
   createValue: string;
 }
 
+interface CreateBrandOption {
+  id: string;
+  name: string;
+  description: string;
+  isCreateOption: true;
+  createValue: string;
+}
+
 type CategoryOption = ItemCategory | CreateCategoryOption;
 type SubCategoryOption = ItemSubCategory | CreateSubCategoryOption;
+type BrandOption = Brand | CreateBrandOption;
 
 const GET_ALL_SKUS = `
   query GetAllSkus {
@@ -168,6 +177,7 @@ const ItemFormPage: React.FC = () => {
     brands,
     loading: brandsLoading,
     error: brandsError,
+    fetchBrands,
     createBrand,
   } = useBrands();
 
@@ -1016,7 +1026,10 @@ const ItemFormPage: React.FC = () => {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Autocomplete
                       freeSolo
-                      options={brands}
+                      selectOnFocus
+                      clearOnBlur
+                      handleHomeEndKeys
+                      options={brands as BrandOption[]}
                       getOptionLabel={(option) => {
                         if (typeof option === 'string') {
                           return option;
@@ -1035,22 +1048,46 @@ const ItemFormPage: React.FC = () => {
                               name: newValue.trim(),
                               description: '',
                             });
-                            handleInputChange(
-                              'brand_id',
-                              newBrand.data.id as unknown as string
-                            );
+                            handleInputChange('brand_id', newBrand.data.id);
+                            await fetchBrands();
                           } catch (err) {
                             console.error('Failed to create brand:', err);
-                            handleInputChange(
-                              'brand_id',
-                              null as unknown as string
+                            enqueueSnackbar(
+                              t(
+                                'business.items.createBrandError',
+                                'Failed to create brand'
+                              ),
+                              { variant: 'error' }
                             );
                           }
                         } else if (newValue && typeof newValue === 'object') {
-                          handleInputChange(
-                            'brand_id',
-                            newValue.id as unknown as string
-                          );
+                          if (
+                            'isCreateOption' in newValue &&
+                            newValue.isCreateOption
+                          ) {
+                            try {
+                              const newBrand = await createBrand({
+                                name: newValue.createValue,
+                                description: '',
+                              });
+                              handleInputChange('brand_id', newBrand.data.id);
+                              await fetchBrands();
+                            } catch (err) {
+                              console.error('Failed to create brand:', err);
+                              enqueueSnackbar(
+                                t(
+                                  'business.items.createBrandError',
+                                  'Failed to create brand'
+                                ),
+                                { variant: 'error' }
+                              );
+                            }
+                          } else {
+                            handleInputChange(
+                              'brand_id',
+                              (newValue as Brand).id
+                            );
+                          }
                         } else {
                           handleInputChange('brand_id', null);
                         }
@@ -1061,22 +1098,45 @@ const ItemFormPage: React.FC = () => {
                           fullWidth
                           label={t('business.items.brand', 'Brand (Optional)')}
                           disabled={loading || brandsLoading}
-                          placeholder="Nike, Apple, Samsung..."
+                          placeholder={t(
+                            'business.items.brandPlaceholder',
+                            'Nike, Apple, Samsung...'
+                          )}
                         />
                       )}
                       renderOption={(props, option) => (
                         <li {...props}>
                           <Box>
-                            <Typography variant="body1">
-                              {option.name}
-                            </Typography>
-                            {option.description && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {option.description}
-                              </Typography>
+                            {'isCreateOption' in option &&
+                            option.isCreateOption ? (
+                              <>
+                                <Typography variant="body1" color="primary">
+                                  {option.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {t(
+                                    'business.items.createNewBrand',
+                                    'Create a new brand'
+                                  )}
+                                </Typography>
+                              </>
+                            ) : (
+                              <>
+                                <Typography variant="body1">
+                                  {option.name}
+                                </Typography>
+                                {option.description && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {option.description}
+                                  </Typography>
+                                )}
+                              </>
                             )}
                           </Box>
                         </li>
@@ -1088,6 +1148,34 @@ const ItemFormPage: React.FC = () => {
                             .toLowerCase()
                             .includes(inputValue.toLowerCase())
                         );
+
+                        const inputValueTrimmed = inputValue.trim();
+                        const isExisting = options.some(
+                          (option) =>
+                            option.name.toLowerCase() ===
+                            inputValueTrimmed.toLowerCase()
+                        );
+
+                        if (inputValueTrimmed && !isExisting) {
+                          return [
+                            ...filtered,
+                            {
+                              id: 'create-new-brand',
+                              name: t(
+                                'business.items.addBrandOption',
+                                'Add "{{value}}"',
+                                { value: inputValueTrimmed }
+                              ),
+                              description: t(
+                                'business.items.createNewBrand',
+                                'Create a new brand'
+                              ),
+                              isCreateOption: true as const,
+                              createValue: inputValueTrimmed,
+                            } as CreateBrandOption,
+                          ];
+                        }
+
                         return filtered;
                       }}
                     />
@@ -1306,7 +1394,6 @@ const ItemFormPage: React.FC = () => {
                     }
                     multiline
                     rows={4}
-                    required
                     disabled={loading}
                     sx={{ flex: 1 }}
                     placeholder={t(
@@ -1421,7 +1508,6 @@ const ItemFormPage: React.FC = () => {
                   loading ||
                   skusLoading ||
                   !formData.name ||
-                  !formData.description ||
                   formData.price <= 0 ||
                   !!skuError
                 }

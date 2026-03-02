@@ -275,10 +275,47 @@ const INSERT_ITEM = `
 
 const UPDATE_ITEM = `
   mutation UpdateItem($id: uuid!, $itemData: items_set_input!) {
-    update_items_by_pk(pk_columns: { id: $id }, _set: $itemData) {
+    update_items_by_pk(
+      pk_columns: { id: $id }
+      _set: $itemData
+    ) {
       id
       name
+      description
+      item_sub_category_id
+      weight
+      weight_unit
+      dimensions
+      price
+      currency
       sku
+      brand_id
+      model
+      color
+      is_fragile
+      is_perishable
+      requires_special_handling
+      max_delivery_distance
+      estimated_delivery_time
+      min_order_quantity
+      max_order_quantity
+      is_active
+      business_id
+      created_at
+      updated_at
+      brand {
+        id
+        name
+        description
+      }
+      item_sub_category {
+        id
+        name
+        item_category {
+          id
+          name
+        }
+      }
     }
   }
 `;
@@ -486,6 +523,63 @@ export class BusinessItemsService {
     });
 
     return result.update_business_inventory_by_pk;
+  }
+
+  async updateItem(
+    businessId: string,
+    itemId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      item_sub_category_id?: number;
+      weight?: number | null;
+      weight_unit?: string | null;
+      dimensions?: string | null;
+      price?: number;
+      currency?: string;
+      sku?: string | null;
+      brand_id?: string | null;
+      model?: string | null;
+      color?: string | null;
+      is_fragile?: boolean;
+      is_perishable?: boolean;
+      requires_special_handling?: boolean;
+      max_delivery_distance?: number | null;
+      estimated_delivery_time?: number | null;
+      min_order_quantity?: number;
+      max_order_quantity?: number | null;
+      is_active?: boolean;
+    }
+  ) {
+    const result = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = result?.items_by_pk;
+
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found or not owned by business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const itemData = {
+      ...updates,
+      ...(Object.prototype.hasOwnProperty.call(updates, 'description') &&
+      (updates.description === undefined || updates.description === null)
+        ? { description: '' }
+        : {}),
+    };
+
+    const mutationResult =
+      await this.hasuraUserService.executeMutation<{
+        update_items_by_pk: Record<string, unknown> | null;
+      }>(UPDATE_ITEM, {
+        id: itemId,
+        itemData,
+      });
+
+    return mutationResult.update_items_by_pk;
   }
 
   /**

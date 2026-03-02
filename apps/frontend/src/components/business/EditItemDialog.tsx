@@ -104,10 +104,6 @@ export default function EditItemDialog({
       errors.name = t('business.inventory.itemNameRequired');
     }
 
-    if (!formData.description?.trim()) {
-      errors.description = t('business.inventory.descriptionRequired');
-    }
-
     if (!formData.item_sub_category_id) {
       errors.category = t('business.inventory.categoryRequired');
     }
@@ -260,7 +256,6 @@ export default function EditItemDialog({
                 }
                 error={!!validationErrors.description}
                 helperText={validationErrors.description}
-                required
                 sx={{ mt: 2 }}
               />
 

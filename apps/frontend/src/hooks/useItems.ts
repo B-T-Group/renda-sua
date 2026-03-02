@@ -223,55 +223,6 @@ export const useItems = (
   const { execute: executeCreateBrand } =
     useGraphQLRequest(createBrandMutation);
 
-  // Update item mutation
-  const updateItemMutation = `
-    mutation UpdateItem($id: uuid!, $itemData: items_set_input!) {
-      update_items_by_pk(
-        pk_columns: { id: $id }
-        _set: $itemData
-      ) {
-        id
-        name
-        description
-        item_sub_category_id
-        weight
-        weight_unit
-        dimensions
-        price
-        currency
-        sku
-        brand_id
-        model
-        color
-        is_fragile
-        is_perishable
-        requires_special_handling
-        max_delivery_distance
-        estimated_delivery_time
-        min_order_quantity
-        max_order_quantity
-        is_active
-        business_id
-        created_at
-        updated_at
-        brand {
-          id
-          name
-          description
-        }
-        item_sub_category {
-          id
-          name
-          item_category {
-            id
-            name
-          }
-        }
-      }
-    }
-  `;
-  const { execute: executeUpdateItem } = useGraphQLRequest(updateItemMutation);
-
   const fetchItems = useCallback(
     async (withDistanceMatrix = true) => {
       if (!businessId) {
@@ -437,14 +388,16 @@ export const useItems = (
       options?: { skipRefetch?: boolean }
     ) => {
       try {
-        const result = await executeUpdateItem({ id, itemData });
-        const updated = result.update_items_by_pk;
+        const response = await apiClient.patch<{
+          success: boolean;
+          data: { item: Item };
+        }>(`/business-items/items/${id}`, itemData);
+
+        const updated = response.data?.data?.item;
 
         if (options?.skipRefetch && updated) {
           setItems((prev) =>
-            prev.map((it) =>
-              it.id === id ? { ...it, ...updated } : it
-            )
+            prev.map((it) => (it.id === id ? { ...it, ...updated } : it))
           );
           return updated;
         }
@@ -456,7 +409,7 @@ export const useItems = (
         throw err;
       }
     },
-    [executeUpdateItem, fetchItems]
+    [apiClient, fetchItems]
   );
 
   useEffect(() => {

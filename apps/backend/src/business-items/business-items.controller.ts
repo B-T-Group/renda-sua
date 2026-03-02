@@ -19,6 +19,7 @@ import { BusinessItemsService } from './business-items.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
 import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
+import { UpdateItemDto } from './dto/update-item.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -175,6 +176,35 @@ export class BusinessItemsController {
         HttpStatus.NOT_FOUND
       );
     }
+  }
+
+  @Patch('items/:itemId')
+  @ApiOperation({
+    summary: 'Update an item for the current business',
+  })
+  @ApiResponse({ status: 200, description: 'Item updated successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item not found or not owned by business' })
+  @ApiBody({ type: UpdateItemDto })
+  async updateItem(
+    @Param('itemId') itemId: string,
+    @Body() body: UpdateItemDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const item = await this.businessItemsService.updateItem(
+      businessId,
+      itemId,
+      body
+    );
+    return { success: true, data: { item } };
   }
 
   @Delete(':id')
