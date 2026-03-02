@@ -16,7 +16,7 @@ export interface MobilePaymentTransaction {
   error_message?: string;
   error_code?: string;
   account_id?: string;
-  transaction_type: 'PAYMENT' | 'GIVE_CHANGE';
+  transaction_type: 'PAYMENT' | 'GIVE_CHANGE' | 'DEPOSIT';
   payment_entity?: 'order' | 'account' | 'claim_order';
   entity_id?: string;
   created_at: string;
@@ -496,10 +496,8 @@ export class MobilePaymentsDatabaseService {
       }
 
       // If not found by reference, try to find by transaction_id
-      if (!transaction && callbackData.transaction_id) {
-        transaction = await this.getTransactionById(
-          callbackData.transaction_id
-        );
+      if (!transaction) {
+        transaction = await this.getTransactionById(transactionId);
       }
 
       if (!transaction) {

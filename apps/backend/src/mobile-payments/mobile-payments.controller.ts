@@ -744,16 +744,15 @@ export class MobilePaymentsController {
         );
       }
 
-      await this.databaseService.logCallback(
-        callbackData.reference,
-        callbackData
-      );
+       const transaction = await this.databaseService.getTransactionByReference(
+         externalId
+       );
 
-      const transaction = await this.databaseService.getTransactionByReference(
-        externalId
-      );
 
       if (transaction) {
+
+        await this.databaseService.logCallback(transaction.id, callbackData);
+
         const status =
           callbackData.status === 'SUCCESS' ? 'success' : 'failed';
 
@@ -775,7 +774,7 @@ export class MobilePaymentsController {
         if (
           callbackData.status === 'SUCCESS' &&
           transaction.account_id &&
-          transaction.transaction_type === 'PAYMENT'
+          transaction.transaction_type === 'DEPOSIT'
         ) {
           try {
             const creditResult = await this.accountsService.registerTransaction(
