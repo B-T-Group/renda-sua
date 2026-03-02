@@ -299,6 +299,23 @@ export class OrdersService {
     private readonly deliveryPinService: DeliveryPinService
   ) {}
 
+  private computeUnitPriceFromInventory(businessInventory: any): number {
+    const base = businessInventory.selling_price;
+    const deal = businessInventory.item_deals?.[0];
+    if (!deal) {
+      return base;
+    }
+    if (deal.discount_type === 'percentage') {
+      const discounted = base - (base * deal.discount_value) / 100;
+      return discounted > 0 ? discounted : 0;
+    }
+    if (deal.discount_type === 'fixed') {
+      const discounted = base - deal.discount_value;
+      return discounted > 0 ? discounted : 0;
+    }
+    return base;
+  }
+
   private async processBatch(
     request: BatchOrderStatusChangeRequest,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -4217,7 +4234,7 @@ export class OrdersService {
 
     // Get all business inventory items
     const getBusinessInventoryQuery = `
-      query GetBusinessInventory($businessInventoryIds: [uuid!]!) {
+      query GetBusinessInventory($businessInventoryIds: [uuid!]!, $now: timestamptz!) {
         business_inventory(where: { id: { _in: $businessInventoryIds } }) {
           id
           computed_available_quantity
@@ -4246,6 +4263,17 @@ export class OrdersService {
             weight
             max_order_quantity
           }
+          item_deals(
+            where: {
+              is_active: { _eq: true }
+              start_at: { _lte: $now }
+              end_at: { _gte: $now }
+            }
+            limit: 1
+          ) {
+            discount_type
+            discount_value
+          }
         }
       }
     `;
@@ -4257,6 +4285,7 @@ export class OrdersService {
       getBusinessInventoryQuery,
       {
         businessInventoryIds: businessInventoryIds,
+        now: new Date().toISOString(),
       }
     );
 
@@ -4342,7 +4371,9 @@ export class OrdersService {
     // Calculate order amounts for all items
     const totalAmount = businessInventories.reduce(
       (sum, inv, idx) =>
-        sum + inv.selling_price * orderData.items[idx].quantity,
+        sum +
+        this.computeUnitPriceFromInventory(inv) *
+          orderData.items[idx].quantity,
       0
     );
 
@@ -4585,14 +4616,15 @@ export class OrdersService {
       const businessInventory = businessInventories.find(
         (inv) => inv.id === item.business_inventory_id
       );
+      const unitPrice = this.computeUnitPriceFromInventory(businessInventory);
       return {
         business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,
         item_name: businessInventory.item.name,
         item_description: businessInventory.item.description,
         quantity: item.quantity,
-        unit_price: businessInventory.selling_price,
-        total_price: businessInventory.selling_price * item.quantity,
+        unit_price: unitPrice,
+        total_price: unitPrice * item.quantity,
       };
     });
 
