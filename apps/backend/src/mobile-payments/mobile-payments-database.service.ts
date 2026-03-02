@@ -244,6 +244,55 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
+   * Get a mobile payment transaction by external transaction_id (provider reference)
+   */
+  async getTransactionByTransactionId(
+    transactionId: string
+  ): Promise<MobilePaymentTransaction | null> {
+    try {
+      const query = `
+        query GetMobilePaymentTransactionByTransactionId($transactionId: String!) {
+          mobile_payment_transactions(
+            where: { transaction_id: { _eq: $transactionId } }
+            limit: 1
+          ) {
+            id
+            reference
+            amount
+            currency
+            description
+            provider
+            payment_method
+            status
+            transaction_id
+            account_id
+            transaction_type
+            payment_entity
+            customer_phone
+            customer_email
+            error_message
+            error_code
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: MobilePaymentTransaction[];
+      }>(query, { transactionId });
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows[0] ?? null;
+    } catch (error) {
+      this.logger.error(
+        'Failed to get mobile payment transaction by transaction_id:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get order_number (entity_id) values for orders that have a pending claim_order
    * mobile payment. Used to exclude such orders from GET /orders/open.
    */

@@ -732,7 +732,7 @@ export class MobilePaymentsController {
     this.logger.log('freemopayCallback', JSON.stringify(callbackData));
     try {
       const externalId =
-        callbackData.externalId ?? callbackData.merchantRef;
+        callbackData.externalId;
       if (!callbackData.reference || !externalId || !callbackData.status) {
         this.logger.error('Missing required callback data (reference, externalId/merchantRef, status)');
         throw new HttpException(
@@ -744,9 +744,9 @@ export class MobilePaymentsController {
         );
       }
 
-       const transaction = await this.databaseService.getTransactionByReference(
-         externalId
-       );
+      const transaction = await this.databaseService.getTransactionByTransactionId(
+        callbackData.reference
+      );
 
 
       if (transaction) {
