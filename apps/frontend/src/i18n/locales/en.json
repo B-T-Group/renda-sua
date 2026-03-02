@@ -1676,7 +1676,10 @@
     "specialHandling": "Special handling",
     "specialProperties": "Special properties",
     "subcategory": "Subcategory",
-    "weight": "Weight"
+    "weight": "Weight",
+    "itemCard": {
+      "views": "{{count}} views"
+    }
   },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",

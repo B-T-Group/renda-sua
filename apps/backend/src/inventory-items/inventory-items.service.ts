@@ -11,6 +11,7 @@ export interface InventoryItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  viewsCount?: number;
     item: {
       id: string;
       name: string;
@@ -361,12 +362,19 @@ export class InventoryItemsService {
         offset,
       });
 
-      const items = result.business_inventory || [];
+      const items: InventoryItem[] = result.business_inventory || [];
       const total = result.business_inventory_aggregate?.aggregate?.count || 0;
       const totalPages = Math.ceil(total / limit);
 
+      const inventoryIds = items.map((i) => i.id);
+      const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
+      const itemsWithViews = items.map((item) => ({
+        ...item,
+        viewsCount: viewsMap[item.id] ?? 0,
+      }));
+
       return {
-        items,
+        items: itemsWithViews,
         total,
         page,
         limit,
@@ -470,7 +478,7 @@ export class InventoryItemsService {
         id,
       });
 
-      const item = result.business_inventory_by_pk;
+      const item: InventoryItem | null = result.business_inventory_by_pk;
 
       if (!item) {
         throw new HttpException(
@@ -479,7 +487,12 @@ export class InventoryItemsService {
         );
       }
 
-      return item;
+      const viewsMap = await this.getViewCountsByInventoryIds([item.id]);
+
+      return {
+        ...item,
+        viewsCount: viewsMap[item.id] ?? 0,
+      };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -525,6 +538,61 @@ export class InventoryItemsService {
     } catch (error) {
       this.logger.error('Failed to validate location support:', error);
       return false;
+    }
+  }
+
+  private async getViewCountsByInventoryIds(
+    inventoryItemIds: string[]
+  ): Promise<Record<string, number>> {
+    if (!inventoryItemIds.length) {
+      return {};
+    }
+
+    const query = `
+      query GetItemViewEvents($inventoryItemIds: [uuid!]!) {
+        item_view_events(
+          where: {
+            inventory_item_id: { _in: $inventoryItemIds }
+          }
+        ) {
+          inventory_item_id
+          viewer_type
+          viewer_id
+        }
+      }
+    `;
+
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        inventoryItemIds,
+      });
+
+      const events =
+        (response.item_view_events as Array<{
+          inventory_item_id: string;
+          viewer_type: string;
+          viewer_id: string;
+        }>) ?? [];
+
+      const uniqueViewers: Record<string, Set<string>> = {};
+
+      events.forEach((event) => {
+        const key = `${event.viewer_type}:${event.viewer_id}`;
+        if (!uniqueViewers[event.inventory_item_id]) {
+          uniqueViewers[event.inventory_item_id] = new Set<string>();
+        }
+        uniqueViewers[event.inventory_item_id].add(key);
+      });
+
+      const result: Record<string, number> = {};
+      Object.keys(uniqueViewers).forEach((inventoryId) => {
+        result[inventoryId] = uniqueViewers[inventoryId].size;
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to fetch item view counts:', error);
+      return {};
     }
   }
 

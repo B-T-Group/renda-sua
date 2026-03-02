@@ -23,10 +23,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
-import {
-    InventoryItem,
-    useInventoryItems,
-} from '../../hooks/useInventoryItems';
+import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsPageFilter, {
@@ -152,7 +150,10 @@ const ItemsPage: React.FC = () => {
     profile?.client !== null &&
     profile?.client !== undefined;
 
+  const { trackView } = useTrackItemView(null);
+
   const handleOrderClick = (item: InventoryItem) => {
+    trackView(item.id);
     if (!isAuthenticated) {
       handleLogin();
       return;
@@ -162,6 +163,7 @@ const ItemsPage: React.FC = () => {
   };
 
   const handleAddToCart = (item: InventoryItem) => {
+    trackView(item.id);
     if (!isAuthenticated) {
       handleLogin();
       return;
@@ -485,6 +487,7 @@ const ItemsPage: React.FC = () => {
                 <DashboardItemCard
                   key={inventoryItem.id}
                   item={inventoryItem}
+                  viewsCount={inventoryItem.viewsCount}
                   formatCurrency={formatCurrency}
                   onOrderClick={handleOrderClick}
                   onAddToCart={handleAddToCart}

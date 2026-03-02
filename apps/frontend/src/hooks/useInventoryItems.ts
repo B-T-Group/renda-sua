@@ -13,6 +13,7 @@ export interface InventoryItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  viewsCount?: number;
   item: {
     id: string;
     name: string;

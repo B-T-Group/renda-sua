@@ -1659,7 +1659,10 @@
     "specialHandling": "Manutention spéciale",
     "specialProperties": "Propriétés particulières",
     "subcategory": "Sous-catégorie",
-    "weight": "Poids"
+    "weight": "Poids",
+    "itemCard": {
+      "views": "{{count}} vues"
+    }
   },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",

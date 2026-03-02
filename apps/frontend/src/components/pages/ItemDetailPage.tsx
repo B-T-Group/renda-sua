@@ -4,6 +4,7 @@ import {
   Inventory2 as SpecsIcon,
   ShoppingCart,
   Verified,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -30,6 +31,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import SEOHead from '../seo/SEOHead';
@@ -55,11 +57,23 @@ export default function ItemDetailPage() {
     inventoryItem?.item?.id ?? null
   );
 
+  const { trackOnMount, trackView } = useTrackItemView(id || null);
+
+  React.useEffect(() => {
+    if (id) {
+      trackOnMount();
+    }
+  }, [id, trackOnMount]);
+
   const handleOrderClick = () => {
-    if (id) navigate(`/items/${id}/place_order`);
+    if (id) {
+      trackView(id);
+      navigate(`/items/${id}/place_order`);
+    }
   };
 
   const handleAddToCart = (item: InventoryItem) => {
+    trackView(item.id);
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
@@ -213,6 +227,19 @@ export default function ItemDetailPage() {
             <Typography variant="h5" color="primary.main" fontWeight={600}>
               {formatCurrency(inventoryItem.selling_price, item.currency)}
             </Typography>
+
+            {typeof inventoryItem.viewsCount === 'number' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <VisibilityIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'items.itemCard.views',
+                    '{{count}} views',
+                    { count: inventoryItem.viewsCount }
+                  )}
+                </Typography>
+              </Box>
+            )}
 
             {location && business && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

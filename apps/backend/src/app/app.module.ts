@@ -30,6 +30,7 @@ import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
+import { ItemViewsModule } from '../item-views/item-views.module';
 import { ServicesModule } from '../services/services.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
 import { SupportModule } from '../support/support.module';
@@ -84,6 +85,7 @@ import { AppService } from './app.service';
     AddressesModule,
     OrdersModule,
     RatingsModule,
+    ItemViewsModule,
     AgentsModule,
     AwsModule,
     MtnMomoModule,

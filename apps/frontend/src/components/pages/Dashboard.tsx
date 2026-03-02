@@ -21,6 +21,7 @@ import {
 } from '../../hooks';
 import { useDistanceMatrix } from '../../hooks/useDistanceMatrix';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsFilter from '../common/ItemsFilter';
@@ -46,6 +47,8 @@ const Dashboard: React.FC = () => {
 
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+
+  const { trackView } = useTrackItemView(null);
 
   // Aggregate unique destination address IDs from inventoryItems
   const destinationAddressIds = React.useMemo(() => {
@@ -122,10 +125,12 @@ const Dashboard: React.FC = () => {
   };
 
   const handleOrderClick = (item: InventoryItem) => {
+    trackView(item.id);
     navigate(`/items/${item.id}/place_order`);
   };
 
   const handleAddToCart = (item: InventoryItem) => {
+    trackView(item.id);
     addToCart({
       inventoryItemId: item.id,
       quantity: 1,
@@ -333,6 +338,7 @@ const Dashboard: React.FC = () => {
                   <DashboardItemCard
                     key={item.id}
                     item={item}
+                    viewsCount={item.viewsCount}
                     formatCurrency={formatCurrency}
                     onOrderClick={handleOrderClick}
                     onAddToCart={handleAddToCart}

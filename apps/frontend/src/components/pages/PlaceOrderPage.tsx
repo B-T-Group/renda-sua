@@ -54,6 +54,7 @@ import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -318,6 +319,14 @@ const PlaceOrderPage: React.FC = () => {
     supportedCountries,
     loading: paymentSystemsLoading,
   } = useSupportedPaymentSystems();
+
+  const { trackOnMount } = useTrackItemView(id || null);
+
+  useEffect(() => {
+    if (id) {
+      trackOnMount();
+    }
+  }, [id, trackOnMount]);
 
   // State
   const [loading, setLoading] = useState(false);

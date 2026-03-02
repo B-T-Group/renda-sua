@@ -1,13 +1,13 @@
 import {
-    Build,
-    Business,
-    Category,
-    Palette,
-    Scale,
-    ShoppingCart,
-    Straighten,
-    Verified,
-    Visibility as VisibilityIcon,
+  Build,
+  Business,
+  Category,
+  Palette,
+  Scale,
+  ShoppingCart,
+  Straighten,
+  Verified,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -24,6 +24,7 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
@@ -36,14 +37,14 @@ interface DashboardItemCardProps {
   estimatedDuration?: string | null;
   distanceLoading?: boolean;
   distanceError?: string | null;
-  // New props for customization
   isPublicView?: boolean;
   loginButtonText?: string;
   orderButtonText?: string;
   addToCartButtonText?: string;
   buyNowButtonText?: string;
-  canOrder?: boolean; // Controls if user can place orders
-  showCartButtons?: boolean; // NEW: Controls if cart buttons should be shown
+  canOrder?: boolean;
+  showCartButtons?: boolean;
+  viewsCount?: number;
 }
 
 const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
@@ -62,9 +63,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   buyNowButtonText = 'Buy Now',
   canOrder = true,
   showCartButtons = false,
+  viewsCount,
 }) => {
   const navigate = useNavigate();
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const { t } = useTranslation();
 
   const getPrimaryImage = (item: InventoryItem) => {
     if (item.item.item_images && item.item.item_images.length > 0) {
@@ -314,6 +317,24 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   sx={{ fontSize: '0.7rem' }}
                 >
                   {inventory.item.color}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Views */}
+            {typeof viewsCount === 'number' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <VisibilityIcon fontSize="small" color="primary" />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.7rem' }}
+                >
+                  {t(
+                    'items.itemCard.views',
+                    '{{count}} views',
+                    { count: viewsCount }
+                  )}
                 </Typography>
               </Box>
             )}
