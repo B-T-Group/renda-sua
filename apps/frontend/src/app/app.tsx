@@ -23,6 +23,7 @@ import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
+import BusinessImagesPage from '../components/pages/BusinessImagesPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import CartPage from '../components/pages/CartPage';
@@ -397,6 +398,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessItemsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/images"
+              element={
+                <ProtectedRoute>
+                  <BusinessImagesPage />
                 </ProtectedRoute>
               }
             />

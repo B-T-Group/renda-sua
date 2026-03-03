@@ -695,6 +695,92 @@
       "weight": "Poids",
       "weightUnit": "Unité de poids"
     },
+    "images": {
+      "title": "Bibliothèque d'images des articles",
+      "subtitle": "Téléversez en masse, organisez et associez des images à vos articles.",
+      "loadError": "Échec du chargement des images de votre entreprise.",
+      "noBusiness": "Vous avez besoin d'un profil entreprise pour gérer les images.",
+      "filters": {
+        "category": "Filtrer par catégorie",
+        "allCategories": "Toutes les catégories",
+        "subcategory": "Filtrer par sous-catégorie",
+        "allSubcategories": "Toutes les sous-catégories",
+        "status": "Statut",
+        "allStatuses": "Tous les statuts"
+      },
+      "status": {
+        "unassigned": "Non associé",
+        "assigned": "Associé",
+        "archived": "Archivé"
+      },
+      "actions": {
+        "refresh": "Rafraîchir",
+        "associateItem": "Associer un article",
+        "replace": "Remplacer l'image",
+        "delete": "Supprimer l'image"
+      },
+      "upload": {
+        "stepTitle": "1. Choisissez une sous-catégorie et téléversez des images",
+        "categoryLabel": "Catégorie pour les nouvelles images",
+        "noCategory": "Toutes les catégories",
+        "subcategoryLabel": "Sous-catégorie pour les nouvelles images",
+        "noSubcategory": "Aucune sous-catégorie spécifique",
+        "selectFiles": "Sélectionner des fichiers image",
+        "selectedCount": "{{count}} fichier(s) sélectionné(s)",
+        "urlStepTitle": "2. Ou ajoutez des images via une URL",
+        "urlLabel": "URL de l'image",
+        "nothingSelected": "Veuillez d'abord sélectionner des fichiers ou ajouter des URLs d'images",
+        "noBusiness": "Vous avez besoin d'un profil entreprise pour téléverser des images",
+        "presignError": "Échec de la préparation du téléversement d'image",
+        "success": "Images ajoutées à votre bibliothèque avec succès",
+        "error": "Échec du téléversement d'une ou plusieurs images",
+        "saveButton": "Ajouter les images à la bibliothèque"
+      },
+      "list": {
+        "title": "Votre bibliothèque d'images",
+        "countLabel": "images au total",
+        "empty": "Aucune image pour l'instant. Téléversez des fichiers ou ajoutez des URLs d'images pour commencer."
+      },
+      "pagination": {
+        "pageSize": "Par page"
+      },
+      "associate": {
+        "title": "Associer l'image à un article",
+        "imageId": "Image {{id}}",
+        "noCaption": "Aucune légende fournie",
+        "searchLabel": "Rechercher des articles par nom ou Référence",
+        "selectItem": "Veuillez sélectionner un article",
+        "success": "Image associée à l'article avec succès",
+        "error": "Échec de l'association de l'image à l'article",
+        "searchError": "Échec de la recherche d'articles",
+        "noResults": "Aucun article ne correspond à votre recherche",
+        "confirm": "Associer"
+      },
+      "fields": {
+        "category": "Catégorie",
+        "caption": "Légende",
+        "altText": "Texte alternatif",
+        "subcategory": "Sous-catégorie"
+      },
+      "update": {
+        "success": "Image mise à jour avec succès",
+        "error": "Échec de la mise à jour de l'image"
+      },
+      "delete": {
+        "confirmTitle": "Supprimer l'image",
+        "confirmMessage": "Êtes-vous sûr de vouloir supprimer cette image ? Cette action est irréversible.",
+        "success": "Image supprimée avec succès",
+        "error": "Échec de la suppression de l'image"
+      },
+      "replace": {
+        "success": "Image mise à jour avec succès",
+        "error": "Échec de la mise à jour de l'image"
+      },
+      "removeTag": {
+        "success": "Étiquette supprimée",
+        "error": "Échec de la suppression de l'étiquette"
+      }
+    },
     "items": {
       "active": "Actif",
       "addFirstImage": "Upload images to showcase your product to customers",

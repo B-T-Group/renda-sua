@@ -706,6 +706,92 @@
       "weight": "Weight",
       "weightUnit": "Weight Unit"
     },
+    "images": {
+      "title": "Item Images Library",
+      "subtitle": "Bulk upload, organize, and connect images to your items.",
+      "loadError": "Failed to load images for your business.",
+      "noBusiness": "You need a business profile to manage images.",
+      "filters": {
+        "category": "Filter by category",
+        "allCategories": "All categories",
+        "subcategory": "Filter by subcategory",
+        "allSubcategories": "All subcategories",
+        "status": "Status",
+        "allStatuses": "All statuses"
+      },
+      "status": {
+        "unassigned": "Unassigned",
+        "assigned": "Assigned",
+        "archived": "Archived"
+      },
+      "actions": {
+        "refresh": "Refresh",
+        "associateItem": "Associate item",
+        "replace": "Replace image",
+        "delete": "Delete image"
+      },
+      "upload": {
+        "stepTitle": "1. Choose subcategory and upload images",
+        "categoryLabel": "Category for new images",
+        "noCategory": "All categories",
+        "subcategoryLabel": "Subcategory for new images",
+        "noSubcategory": "No specific subcategory",
+        "selectFiles": "Select image files",
+        "selectedCount": "{{count}} file(s) selected",
+        "urlStepTitle": "2. Or add images by URL",
+        "urlLabel": "Image URL",
+        "nothingSelected": "Please select files or add image URLs first",
+        "noBusiness": "You need a business profile to upload images",
+        "presignError": "Failed to prepare image upload",
+        "success": "Images added to your library successfully",
+        "error": "Failed to upload one or more images",
+        "saveButton": "Add images to library"
+      },
+      "list": {
+        "title": "Your image library",
+        "countLabel": "images total",
+        "empty": "No images yet. Upload files or add image URLs to get started."
+      },
+      "pagination": {
+        "pageSize": "Per page"
+      },
+      "associate": {
+        "title": "Associate image with item",
+        "imageId": "Image {{id}}",
+        "noCaption": "No caption provided",
+        "searchLabel": "Search items by name or SKU",
+        "selectItem": "Please select an item",
+        "success": "Image associated with item successfully",
+        "error": "Failed to associate image with item",
+        "searchError": "Failed to search items",
+        "noResults": "No items match your search",
+        "confirm": "Associate"
+      },
+      "fields": {
+        "category": "Category",
+        "caption": "Caption",
+        "altText": "Alt text",
+        "subcategory": "Subcategory"
+      },
+      "update": {
+        "success": "Image updated successfully",
+        "error": "Failed to update image"
+      },
+      "delete": {
+        "confirmTitle": "Delete image",
+        "confirmMessage": "Are you sure you want to delete this image? This cannot be undone.",
+        "success": "Image deleted successfully",
+        "error": "Failed to delete image"
+      },
+      "replace": {
+        "success": "Image file updated successfully",
+        "error": "Failed to update image file"
+      },
+      "removeTag": {
+        "success": "Tag removed",
+        "error": "Failed to remove tag"
+      }
+    },
     "items": {
       "active": "Active",
       "addFirstImage": "Upload images to showcase your product to customers",

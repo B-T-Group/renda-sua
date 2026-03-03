@@ -12,6 +12,7 @@ import {
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
   Group as UsersIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -119,6 +120,17 @@ const BusinessDashboard: React.FC = () => {
       count: items.length,
       color: '#7b1fa2',
       path: '/business/items',
+    },
+    {
+      title: t('business.images.title', 'Item Images Library'),
+      description: t(
+        'business.images.subtitle',
+        'Bulk upload, organize, and connect images to your items.'
+      ),
+      icon: <ImageIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#8e24aa',
+      path: '/business/images',
     },
     {
       title: t('common.locations'),

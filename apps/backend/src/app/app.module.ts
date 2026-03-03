@@ -16,6 +16,7 @@ import { AwsModule } from '../aws/aws.module';
 import { BrandsModule } from '../brands/brands.module';
 import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
+import { BusinessImagesModule } from '../business-images/business-images.module';
 import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
@@ -96,6 +97,7 @@ import { AppService } from './app.service';
     BrandsModule,
     BusinessAgentsModule,
     BusinessItemsModule,
+    BusinessImagesModule,
     CategoriesModule,
     SubcategoriesModule,
     AiModule,
