@@ -284,6 +284,8 @@ const BusinessImagesPage: React.FC = () => {
   const [filterSubcategoryId, setFilterSubcategoryId] = useState<string>('all');
   const [uploadCategoryId, setUploadCategoryId] = useState<string>('');
   const [uploadSubcategoryId, setUploadSubcategoryId] = useState<string>('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
@@ -359,6 +361,7 @@ const BusinessImagesPage: React.FC = () => {
       pageSize,
       sub_category_id: effectiveSubcategoryFilter ?? undefined,
       status: effectiveStatusFilter,
+      search: search || undefined,
     });
   }, [
     fetchImages,
@@ -366,6 +369,7 @@ const BusinessImagesPage: React.FC = () => {
     pageSize,
     effectiveSubcategoryFilter,
     effectiveStatusFilter,
+    search,
   ]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
@@ -374,6 +378,11 @@ const BusinessImagesPage: React.FC = () => {
 
   const handlePageSizeChange = (value: number) => {
     setPageSize(value);
+    setPage(1);
+  };
+
+  const applySearch = () => {
+    setSearch(searchInput.trim());
     setPage(1);
   };
 
@@ -792,6 +801,35 @@ const BusinessImagesPage: React.FC = () => {
               </MenuItem>
             </Select>
           </FormControl>
+
+          <TextField
+            size="small"
+            sx={{ minWidth: 220, flexGrow: 1 }}
+            label={t(
+              'business.images.filters.search',
+              'Search images'
+            )}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                applySearch();
+              }
+            }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={applySearch}
+                    disabled={!searchInput.trim() && !search}
+                  >
+                    <SearchIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
 
           <Box sx={{ flexGrow: 1 }} />
 

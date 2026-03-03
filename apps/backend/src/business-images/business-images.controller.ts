@@ -42,7 +42,8 @@ export class BusinessImagesController {
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '20',
     @Query('sub_category_id') subCategoryId?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('search') search?: string
   ) {
     const businessId = await this.getBusinessIdOrThrow();
     const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
@@ -61,6 +62,7 @@ export class BusinessImagesController {
           ? undefined
           : subCategory,
         status,
+        search,
       }
     );
     return {

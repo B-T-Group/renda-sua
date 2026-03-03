@@ -717,7 +717,8 @@
         "subcategory": "Filter by subcategory",
         "allSubcategories": "All subcategories",
         "status": "Status",
-        "allStatuses": "All statuses"
+        "allStatuses": "All statuses",
+        "search": "Search images"
       },
       "status": {
         "unassigned": "Unassigned",

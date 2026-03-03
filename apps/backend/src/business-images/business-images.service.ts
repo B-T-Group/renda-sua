@@ -211,7 +211,13 @@ export class BusinessImagesService {
 
   async getBusinessImages(
     businessId: string,
-    options: { page: number; pageSize: number; subCategoryId?: number; status?: string }
+    options: {
+      page: number;
+      pageSize: number;
+      subCategoryId?: number;
+      status?: string;
+      search?: string;
+    }
   ): Promise<PaginatedBusinessImages> {
     const where: Record<string, unknown> = { business_id: { _eq: businessId } };
     if (options.subCategoryId != null) {
@@ -219,6 +225,18 @@ export class BusinessImagesService {
     }
     if (options.status) {
       (where as any).status = { _eq: options.status };
+    }
+    const search = options.search?.trim();
+    if (search) {
+      const term = `%${search}%`;
+      const orConditions: Record<string, unknown>[] = [
+        { caption: { _ilike: term } },
+        { alt_text: { _ilike: term } },
+        { image_url: { _ilike: term } },
+        { s3_key: { _ilike: term } },
+      ];
+      orConditions.push({ tags: { _contains: [search] } });
+      (where as any)._or = orConditions;
     }
     const limit = options.pageSize;
     const offset = (options.page - 1) * options.pageSize;

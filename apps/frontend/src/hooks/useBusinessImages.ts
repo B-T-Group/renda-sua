@@ -23,6 +23,7 @@ export interface FetchBusinessImagesParams {
   pageSize?: number;
   sub_category_id?: number | null;
   status?: string;
+  search?: string;
 }
 
 export interface BulkCreateBusinessImagesPayload {
@@ -82,6 +83,7 @@ export const useBusinessImages = () => {
             pageSize: params.pageSize ?? pageSize,
             sub_category_id: params.sub_category_id ?? undefined,
             status: params.status ?? undefined,
+            search: params.search ?? undefined,
           },
         });
         if (response.data.success) {

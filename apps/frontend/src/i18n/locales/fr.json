@@ -706,7 +706,8 @@
         "subcategory": "Filtrer par sous-catégorie",
         "allSubcategories": "Toutes les sous-catégories",
         "status": "Statut",
-        "allStatuses": "Tous les statuts"
+        "allStatuses": "Tous les statuts",
+        "search": "Rechercher des images"
       },
       "status": {
         "unassigned": "Non associé",
