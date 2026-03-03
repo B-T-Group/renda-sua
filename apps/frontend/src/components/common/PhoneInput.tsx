@@ -1,7 +1,7 @@
 import {
+  Autocomplete,
   Box,
   FormHelperText,
-  MenuItem,
   TextField,
 } from '@mui/material';
 import React from 'react';
@@ -67,31 +67,26 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   if (useDropdown) {
     return (
       <Box sx={{ width: fullWidth ? '100%' : 'auto' }}>
-        <TextField
-          select
-          fullWidth={fullWidth}
-          label={label}
+        <Autocomplete
+          freeSolo
+          options={DEV_PHONE_NUMBERS}
           value={value || ''}
-          onChange={(e) => onChange?.(e.target.value || undefined)}
-          error={error}
-          helperText={helperText}
-          required={required}
-          margin={margin}
+          onInputChange={(_, newValue) =>
+            onChange?.(newValue || undefined)
+          }
           disabled={disabled}
-          SelectProps={{
-            displayEmpty: true,
-            renderValue: (v) => v || '',
-          }}
-        >
-          <MenuItem value="">
-            {' '}
-          </MenuItem>
-          {DEV_PHONE_NUMBERS.map((num) => (
-            <MenuItem key={num} value={num}>
-              {num}
-            </MenuItem>
-          ))}
-        </TextField>
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              fullWidth={fullWidth}
+              label={label}
+              error={error}
+              helperText={helperText}
+              required={required}
+              margin={margin}
+            />
+          )}
+        />
         <FormHelperText sx={{ mt: 0.5, ml: 1.5, color: 'text.secondary' }}>
           {t('common.devPhoneNote')}
         </FormHelperText>

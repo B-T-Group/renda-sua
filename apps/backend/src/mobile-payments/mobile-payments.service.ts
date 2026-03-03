@@ -3,6 +3,8 @@ import * as libphonenumber from 'google-libphonenumber';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import {
   FreemopayPaymentRequest,
+  FreemopayPaymentResponse,
+  FreemopayWithdrawalRequest,
   FreemopayService,
 } from './providers/freemopay.service';
 import {
@@ -339,14 +341,21 @@ export class MobilePaymentsService {
           break;
         }
         case 'freemopay': {
-          const freemopayResponse = await this.freemopayService.initiatePayment(
-            providerRequest as FreemopayPaymentRequest,
-            reference
-          );
+          const isGiveChange = paymentRequest.transactionType === 'GIVE_CHANGE';
+          const freemopayResponse = isGiveChange
+            ? await this.freemopayService.withdraw(
+                providerRequest as FreemopayWithdrawalRequest,
+                reference
+              )
+            : await this.freemopayService.initiatePayment(
+                providerRequest as FreemopayPaymentRequest,
+                reference
+              );
           response = {
             success: freemopayResponse.success,
             transactionId: freemopayResponse.transactionId,
-            paymentUrl: freemopayResponse.paymentUrl,
+            paymentUrl: (freemopayResponse as FreemopayPaymentResponse)
+              .paymentUrl,
             message: freemopayResponse.message,
             errorCode: freemopayResponse.errorCode,
             provider: 'freemopay',
@@ -727,7 +736,11 @@ export class MobilePaymentsService {
     request: MobilePaymentRequest & CollectionRequest,
     provider: string,
     reference?: string
-  ): CollectionRequest | MyPVitPaymentRequest | FreemopayPaymentRequest {
+  ):
+    | CollectionRequest
+    | MyPVitPaymentRequest
+    | FreemopayPaymentRequest
+    | FreemopayWithdrawalRequest {
     const phoneNumber = removeCountryCode(request.customerPhone || '');
     const amount: number = request.amount;
 
@@ -748,16 +761,24 @@ export class MobilePaymentsService {
         } as MyPVitPaymentRequest;
       }
       case 'freemopay': {
-        const payer = phoneNumber.startsWith('237')
-          ? phoneNumber
-          : '237' + phoneNumber;
-        return {
-          payer,
-          amount,
-          externalId: reference || '',
-          description: request.description || 'Payment',
-          callback: this.freemopayService.getCallbackUrl(),
-        } as FreemopayPaymentRequest;
+        const phone = phoneNumber || '';
+        const formatted = phone.startsWith('237') ? phone : phone ? `237${phone}` : '';
+        const isGiveChange = request.transactionType === 'GIVE_CHANGE';
+        return isGiveChange
+          ? ({
+              payee: formatted,
+              amount,
+              externalId: reference || '',
+              description: request.description || 'Withdrawal',
+              callback: this.freemopayService.getCallbackUrl(),
+            } as FreemopayWithdrawalRequest)
+          : ({
+              payer: formatted,
+              amount,
+              externalId: reference || '',
+              description: request.description || 'Payment',
+              callback: this.freemopayService.getCallbackUrl(),
+            } as FreemopayPaymentRequest);
       }
       case 'mtn': {
         return {

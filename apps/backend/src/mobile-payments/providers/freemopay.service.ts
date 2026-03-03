@@ -11,11 +11,28 @@ export interface FreemopayPaymentRequest {
   callback: string;
 }
 
+export interface FreemopayWithdrawalRequest {
+  payee: string;
+  amount: number;
+  externalId: string;
+  description: string;
+  callback: string;
+}
+
 export interface FreemopayPaymentResponse {
   success: boolean;
   transactionId?: string;
   reference?: string;
   paymentUrl?: string;
+  message?: string;
+  errorCode?: string;
+  status?: string;
+}
+
+export interface FreemopayWithdrawalResponse {
+  success: boolean;
+  transactionId?: string;
+  reference?: string;
   message?: string;
   errorCode?: string;
   status?: string;
@@ -138,6 +155,66 @@ export class FreemopayService {
           error.response?.data?.statusCode?.toString() ||
           error.response?.status?.toString() ||
           'INITIATION_FAILED',
+        status: 'FAILED',
+      };
+    }
+  }
+
+  /**
+   * Initialize a withdrawal transaction (POST /api/v2/withdrawal)
+   */
+  async withdraw(
+    withdrawalRequest: FreemopayWithdrawalRequest,
+    reference?: string
+  ): Promise<FreemopayWithdrawalResponse> {
+    try {
+      const externalId = reference || withdrawalRequest.externalId;
+      this.logger.log(
+        `Initiating Freemopay withdrawal for payee: ${withdrawalRequest.payee}, externalId: ${externalId}, callback: ${withdrawalRequest.callback}`
+      );
+
+      const payload = {
+        payee: withdrawalRequest.payee,
+        amount: withdrawalRequest.amount,
+        externalId,
+        description: withdrawalRequest.description || 'Withdrawal',
+        callback: withdrawalRequest.callback,
+      };
+
+      const response = await this.httpClient.post(
+        '/api/v2/withdrawal',
+        payload
+      );
+
+      const data = response.data;
+      this.logger.log(`Freemopay withdrawal API Response: ${JSON.stringify(data)}`);
+
+      if (response.status === 200 && data?.reference) {
+        return {
+          success: true,
+          transactionId: data.reference,
+          reference: data.reference,
+          status: data.status,
+          message: data.message,
+        };
+      }
+
+      return {
+        success: false,
+        message: data?.message || 'Withdrawal initiation failed',
+        errorCode: data?.statusCode?.toString() || 'UNKNOWN_ERROR',
+        status: data?.status,
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to initiate Freemopay withdrawal:', error);
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || 'Failed to initiate withdrawal',
+        errorCode:
+          error.response?.data?.statusCode?.toString() ||
+          error.response?.status?.toString() ||
+          'WITHDRAWAL_FAILED',
         status: 'FAILED',
       };
     }

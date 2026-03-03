@@ -31,3 +31,4 @@ These rules apply to the backend application
 - **IMPORTANT**: This project uses Hasura for database management, NOT Supabase
 - Never use `supabase` CLI commands - use `hasura` commands instead
 - See hasura-migrations.mdc for detailed migration rules
+- For backend code that needs to query or mutate Hasura for protected/system-level operations (admin-style access, cross-user data, or background jobs), prefer using `HasuraSystemService` instead of creating ad-hoc `GraphQLClient` instances. Use `HasuraUserService` only when a request must be strictly scoped to the currently authenticated user’s permissions.

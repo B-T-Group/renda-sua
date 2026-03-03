@@ -68,6 +68,60 @@ export class UsersController {
     }
   }
 
+  @Post('me/update')
+  async updateCurrentUser(
+    @Body()
+    body: {
+      firstName: string;
+      lastName: string;
+      phoneNumber?: string;
+    }
+  ) {
+    try {
+      const currentUser = await this.hasuraUserService.getUser();
+      const mutation = `
+        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String) {
+          update_users_by_pk(
+            pk_columns: { id: $id }
+            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number }
+          ) {
+            id
+            identifier
+            email
+            first_name
+            last_name
+            phone_number
+            user_type_id
+            profile_picture_url
+            created_at
+            updated_at
+          }
+        }
+      `;
+      const result = await this.hasuraUserService.executeMutation(mutation, {
+        id: currentUser.id,
+        first_name: body.firstName,
+        last_name: body.lastName,
+        phone_number: body.phoneNumber ?? null,
+      });
+      return {
+        success: true,
+        user: result.update_users_by_pk,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update user profile',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Post('profile-picture/presigned-url')
   async getProfilePicturePresignedUrl(
     @Body()

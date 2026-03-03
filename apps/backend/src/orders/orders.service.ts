@@ -299,9 +299,11 @@ export class OrdersService {
     private readonly deliveryPinService: DeliveryPinService
   ) {}
 
-  private computeUnitPriceFromInventory(businessInventory: any): number {
+  private computeUnitPriceFromInventory(
+    businessInventory: any,
+    deal?: { discount_type: string; discount_value: number }
+  ): number {
     const base = businessInventory.selling_price;
-    const deal = businessInventory.item_deals?.[0];
     if (!deal) {
       return base;
     }
@@ -314,6 +316,72 @@ export class OrdersService {
       return discounted > 0 ? discounted : 0;
     }
     return base;
+  }
+
+  private async getActiveDealsByBusinessInventoryIds(
+    inventoryItemIds: string[],
+    now: string
+  ): Promise<
+    Record<
+      string,
+      { discount_type: string; discount_value: number; end_at: string }
+    >
+  > {
+    if (!inventoryItemIds.length) {
+      return {};
+    }
+
+    const query = `
+      query GetActiveItemDeals($inventoryItemIds: [uuid!]!, $now: timestamptz!) {
+        item_deals(
+          where: {
+            inventory_item_id: { _in: $inventoryItemIds }
+            is_active: { _eq: true }
+            start_at: { _lte: $now }
+            end_at: { _gte: $now }
+          }
+        ) {
+          inventory_item_id
+          discount_type
+          discount_value
+          end_at
+        }
+      }
+    `;
+
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        inventoryItemIds,
+        now,
+      });
+      const deals =
+        (response.item_deals as Array<{
+          inventory_item_id: string;
+          discount_type: string;
+          discount_value: number;
+          end_at: string;
+        }>) ?? [];
+
+      const result: Record<
+        string,
+        { discount_type: string; discount_value: number; end_at: string }
+      > = {};
+
+      deals.forEach((deal) => {
+        if (!result[deal.inventory_item_id]) {
+          result[deal.inventory_item_id] = {
+            discount_type: deal.discount_type,
+            discount_value: deal.discount_value,
+            end_at: deal.end_at,
+          };
+        }
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to fetch item deals for order pricing:', error);
+      return {};
+    }
   }
 
   private async processBatch(
@@ -4234,7 +4302,7 @@ export class OrdersService {
 
     // Get all business inventory items
     const getBusinessInventoryQuery = `
-      query GetBusinessInventory($businessInventoryIds: [uuid!]!, $now: timestamptz!) {
+      query GetBusinessInventory($businessInventoryIds: [uuid!]!) {
         business_inventory(where: { id: { _in: $businessInventoryIds } }) {
           id
           computed_available_quantity
@@ -4263,17 +4331,6 @@ export class OrdersService {
             weight
             max_order_quantity
           }
-          item_deals(
-            where: {
-              is_active: { _eq: true }
-              start_at: { _lte: $now }
-              end_at: { _gte: $now }
-            }
-            limit: 1
-          ) {
-            discount_type
-            discount_value
-          }
         }
       }
     `;
@@ -4281,11 +4338,11 @@ export class OrdersService {
     const businessInventoryIds = orderData.items.map(
       (item: OrderItem) => item.business_inventory_id
     );
+    const now = new Date().toISOString();
     const businessInventoryResult = await this.hasuraSystemService.executeQuery(
       getBusinessInventoryQuery,
       {
         businessInventoryIds: businessInventoryIds,
-        now: new Date().toISOString(),
       }
     );
 
@@ -4298,6 +4355,11 @@ export class OrdersService {
 
     const businessInventories =
       businessInventoryResult.business_inventory as any[];
+
+    const dealsMap = await this.getActiveDealsByBusinessInventoryIds(
+      businessInventoryIds,
+      now
+    );
 
     // Validate all items are from the same business
     const businessIds = [
@@ -4369,13 +4431,11 @@ export class OrdersService {
     const orderNumber = this.createOrderNumber();
 
     // Calculate order amounts for all items
-    const totalAmount = businessInventories.reduce(
-      (sum, inv, idx) =>
-        sum +
-        this.computeUnitPriceFromInventory(inv) *
-          orderData.items[idx].quantity,
-      0
-    );
+    const totalAmount = businessInventories.reduce((sum, inv, idx) => {
+      const deal = dealsMap[inv.id];
+      const unitPrice = this.computeUnitPriceFromInventory(inv, deal);
+      return sum + unitPrice * orderData.items[idx].quantity;
+    }, 0);
 
     const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     const phoneNumber = orderData.phone_number || user.phone_number || '';
@@ -4616,7 +4676,10 @@ export class OrdersService {
       const businessInventory = businessInventories.find(
         (inv) => inv.id === item.business_inventory_id
       );
-      const unitPrice = this.computeUnitPriceFromInventory(businessInventory);
+      const deal = businessInventory ? dealsMap[businessInventory.id] : undefined;
+      const unitPrice = businessInventory
+        ? this.computeUnitPriceFromInventory(businessInventory, deal)
+        : 0;
       return {
         business_inventory_id: item.business_inventory_id,
         item_id: businessInventory.item.id,

@@ -92,27 +92,6 @@ export interface GetAccountsResponse {
 
 export type UserType = 'client' | 'agent' | 'business';
 
-// GraphQL Mutations
-const UPDATE_USER = `
-  mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String) {
-    update_users_by_pk(
-      pk_columns: { id: $id }
-      _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number }
-    ) {
-      id
-      first_name
-      last_name
-      email
-      phone_number
-      identifier
-      user_type_id
-      profile_picture_url
-      created_at
-      updated_at
-    }
-  }
-`;
-
 const UPDATE_USER_PROFILE_PICTURE = `
   mutation UpdateUserProfilePicture($id: uuid!, $profile_picture_url: String) {
     update_users_by_pk(
@@ -302,7 +281,6 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const apiClient = useApiClient();
 
   // GraphQL hooks for mutations
-  const { execute: updateUser } = useGraphQLRequest(UPDATE_USER);
   const { execute: updateUserProfilePicture } = useGraphQLRequest(
     UPDATE_USER_PROFILE_PICTURE
   );
@@ -443,16 +421,21 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setErrorMessage(null);
 
     try {
-      const variables = {
-        id: userId,
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: phoneNumber,
-      };
+      if (!apiClient) {
+        setErrorMessage('API client not available');
+        return false;
+      }
 
-      const result = await updateUser(variables);
+      const response = await apiClient.post<UserProfileResponse>(
+        '/users/me/update',
+        {
+          firstName,
+          lastName,
+          phoneNumber,
+        }
+      );
 
-      if (result?.update_users_by_pk) {
+      if (response.data.success) {
         setSuccessMessage('Profile updated successfully!');
         await checkProfile(); // Refresh the profile data
         return true;
