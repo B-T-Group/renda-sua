@@ -376,8 +376,8 @@ const Dashboard: React.FC = () => {
                     formatCurrency={formatCurrency}
                     onOrderClick={handleOrderClick}
                     onAddToCart={handleAddToCart}
-                    estimatedDistance={distanceInfo?.distance}
-                    estimatedDuration={distanceInfo?.duration}
+                    estimatedDistance={item.distance_text ?? distanceInfo?.distance}
+                    estimatedDuration={item.duration_text ?? distanceInfo?.duration}
                     distanceLoading={distanceLoading}
                     distanceError={distanceError}
                     showCartButtons={profile?.user_type_id === 'client'}

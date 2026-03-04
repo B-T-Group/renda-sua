@@ -1,4 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AddressesService } from '../addresses/addresses.service';
+import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
@@ -16,6 +19,9 @@ export interface InventoryItem {
   original_price?: number;
   discounted_price?: number;
   deal_end_at?: string;
+  distance_text?: string;
+  duration_text?: string;
+  distance_value?: number;
     item: {
       id: string;
       name: string;
@@ -105,13 +111,18 @@ export interface PaginatedInventoryItems {
   totalPages: number;
 }
 
+const INVENTORY_DISTANCE_CACHE_TTL = 7776000; // 3 months in seconds
+
 @Injectable()
 export class InventoryItemsService {
   private readonly logger = new Logger(InventoryItemsService.name);
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly addressesService: AddressesService,
+    private readonly googleDistanceService: GoogleDistanceService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -405,8 +416,12 @@ export class InventoryItemsService {
         };
       });
 
+      const finalItems = await this.enrichWithDistanceAndSort(
+        itemsWithViewsAndDeals
+      );
+
       return {
-        items: itemsWithViewsAndDeals,
+        items: finalItems,
         total,
         page,
         limit,
@@ -736,6 +751,130 @@ export class InventoryItemsService {
     }
 
     return basePrice;
+  }
+
+  /**
+   * Format address for Google Distance Matrix (lat,lng or full string).
+   */
+  private formatAddressForGoogle(address: {
+    latitude?: number | null;
+    longitude?: number | null;
+    address_line_1: string;
+    address_line_2?: string | null;
+    city: string;
+    state: string;
+    postal_code?: string;
+    country: string;
+  }): string {
+    if (address.latitude != null && address.longitude != null) {
+      return `${address.latitude},${address.longitude}`;
+    }
+    return [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  /**
+   * Enrich items with distance from user's primary address and sort by distance.
+   * Returns items unchanged on any error or when user has no primary address.
+   */
+  private async enrichWithDistanceAndSort(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    try {
+      const origin = await this.addressesService.getCurrentUserPrimaryAddress();
+      if (!origin || items.length === 0) return items;
+
+      const destIds = Array.from(
+        new Set(
+          items
+            .map((i) => i.business_location?.address?.id)
+            .filter(Boolean) as string[]
+        )
+      );
+      if (destIds.length === 0) return items;
+
+      const destAddresses =
+        await this.addressesService.getAddressesByIds(destIds);
+      const destFormatted = destAddresses.map((a) => ({
+        id: a.id,
+        formatted: this.formatAddressForGoogle(a),
+      }));
+
+      const ttl =
+        this.configService.get<number>(
+          'GOOGLE_INVENTORY_DISTANCE_CACHE_TTL',
+          INVENTORY_DISTANCE_CACHE_TTL
+        ) ?? INVENTORY_DISTANCE_CACHE_TTL;
+
+      const matrix =
+        await this.googleDistanceService.getDistanceMatrixWithCaching(
+          origin.id,
+          this.formatAddressForGoogle(origin),
+          destFormatted,
+          { ttlSeconds: ttl }
+        );
+
+      const destinationIds = destFormatted.map((d) => d.id);
+      return this.attachDistanceAndSort(items, matrix, destinationIds);
+    } catch (error: any) {
+      this.logger.warn(
+        `Distance enrichment skipped: ${error?.message ?? String(error)}`
+      );
+      return items;
+    }
+  }
+
+  /**
+   * Attach distance/duration to each item and sort by distance (asc), then created_at (desc).
+   */
+  private attachDistanceAndSort(
+    items: InventoryItem[],
+    matrix: {
+      rows: Array<{
+        elements: Array<{
+          status: string;
+          distance?: { text: string; value: number };
+          duration?: { text: string; value: number };
+        }>;
+      }>;
+    },
+    destinationIds: string[]
+  ): InventoryItem[] {
+    const elements = matrix.rows?.[0]?.elements || [];
+
+    const enriched = items.map((item) => {
+      const addressId = item.business_location?.address?.id;
+      const idx = addressId ? destinationIds.indexOf(addressId) : -1;
+      const el = idx >= 0 ? elements[idx] : null;
+      const hasDistance =
+        el?.status === 'OK' && el?.distance && el?.duration;
+
+      return {
+        ...item,
+        distance_text: hasDistance && el?.distance ? el.distance.text : undefined,
+        duration_text: hasDistance && el?.duration ? el.duration.text : undefined,
+        distance_value: hasDistance && el?.distance ? el.distance.value : undefined,
+      };
+    });
+
+    enriched.sort((a, b) => {
+      const aVal = a.distance_value ?? Infinity;
+      const bVal = b.distance_value ?? Infinity;
+      if (aVal !== bVal) return aVal - bVal;
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    });
+
+    return enriched;
   }
 
   /**

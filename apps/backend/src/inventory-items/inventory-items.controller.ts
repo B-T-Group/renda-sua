@@ -42,7 +42,8 @@ export class InventoryItemsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Successfully retrieved inventory items',
+    description:
+      'Successfully retrieved inventory items. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters) from the user to the business location; results are ordered by distance when available.',
     schema: {
       type: 'object',
       properties: {
@@ -50,7 +51,14 @@ export class InventoryItemsController {
         data: {
           type: 'object',
           properties: {
-            items: { type: 'array', items: { type: 'object' } },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                description:
+                  'Item may include optional distance_text, duration_text, distance_value when user is logged in',
+              },
+            },
             total: { type: 'number' },
             page: { type: 'number' },
             limit: { type: 'number' },

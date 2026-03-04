@@ -18,6 +18,9 @@ export interface InventoryItem {
   original_price?: number;
   discounted_price?: number;
   deal_end_at?: string;
+  distance_text?: string;
+  duration_text?: string;
+  distance_value?: number;
   item: {
     id: string;
     name: string;

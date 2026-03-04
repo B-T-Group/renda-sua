@@ -69,7 +69,9 @@ export class GoogleCacheService {
   }
 
   /**
-   * Get cached distance matrix results for specific origin-destination pairs
+   * Get cached distance matrix results for specific origin-destination pairs.
+   * Cache is invalidated (burst) when any origin or destination address has
+   * updated_at after the cache entry's created_at.
    */
   async getCachedDistanceMatrix(
     originAddressId: string,
@@ -93,6 +95,7 @@ export class GoogleCacheService {
           duration_value
           duration_text
           status
+          created_at
         }
       }
     `;
@@ -105,21 +108,46 @@ export class GoogleCacheService {
 
       const cachedEntries = result.google_distance_cache || [];
 
-      // Check if we have cached results for all requested destination addresses
-      const cachedDestinationIds = new Set(
-        cachedEntries.map((entry: any) => entry.destination_address_id)
+      // Fetch updated_at for origin and all destination addresses for cache busting
+      const addressIds = [
+        originAddressId,
+        ...destinationAddressIds.filter((id) => id !== originAddressId),
+      ];
+      const addressUpdatedAts = await this.getAddressUpdatedAts(addressIds);
+      if (!addressUpdatedAts) {
+        return null;
+      }
+
+      const originUpdatedAt = addressUpdatedAts.get(originAddressId);
+      if (originUpdatedAt === undefined) {
+        return null;
+      }
+
+      // Keep only cache entries where both origin and destination were not updated after cache
+      const validEntries = cachedEntries.filter((entry: any) => {
+        const destUpdatedAt = addressUpdatedAts.get(entry.destination_address_id);
+        if (destUpdatedAt === undefined) return false;
+        const cacheCreated = new Date(entry.created_at).getTime();
+        return (
+          cacheCreated >= new Date(originUpdatedAt).getTime() &&
+          cacheCreated >= new Date(destUpdatedAt).getTime()
+        );
+      });
+
+      const validDestinationIds = new Set(
+        validEntries.map((e: any) => e.destination_address_id)
       );
       const allCached = destinationAddressIds.every((id) =>
-        cachedDestinationIds.has(id)
+        validDestinationIds.has(id)
       );
 
       if (!allCached) {
-        return null; // Not all destinations are cached
+        return null;
       }
 
-      // Build the response in the same format as Google API
+      // Build the response in the same format as Google API (use validEntries)
       const elements = destinationAddressIds.map((destId) => {
-        const cachedEntry = cachedEntries.find(
+        const cachedEntry = validEntries.find(
           (entry: any) => entry.destination_address_id === destId
         );
 
@@ -154,17 +182,49 @@ export class GoogleCacheService {
         origin_id: originAddressId,
         destination_ids: destinationAddressIds,
         destination_addresses: destinationAddressIds.map((id) => {
-          const cachedEntry = cachedEntries.find(
+          const cachedEntry = validEntries.find(
             (entry: any) => entry.destination_address_id === id
           );
           return cachedEntry?.destination_address_formatted || '';
         }),
-        origin_addresses: [cachedEntries[0]?.origin_address_formatted || ''],
+        origin_addresses: [validEntries[0]?.origin_address_formatted || ''],
         rows: [{ elements }],
         status: 'OK',
       };
     } catch (error) {
       console.error('Error fetching cached distance matrix:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch updated_at for addresses by IDs (for cache busting).
+   * Returns Map<id, updated_at> or null on error.
+   */
+  private async getAddressUpdatedAts(
+    addressIds: string[]
+  ): Promise<Map<string, string> | null> {
+    if (addressIds.length === 0) return new Map();
+    const query = `
+      query GetAddressUpdatedAts($ids: [uuid!]!) {
+        addresses(where: { id: { _in: $ids } }) {
+          id
+          updated_at
+        }
+      }
+    `;
+    try {
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        ids: addressIds,
+      });
+      const rows = result.addresses || [];
+      const map = new Map<string, string>();
+      for (const row of rows) {
+        if (row.updated_at) map.set(row.id, row.updated_at);
+      }
+      return map;
+    } catch (error) {
+      console.error('Error fetching address updated_at:', error);
       return null;
     }
   }

@@ -611,6 +611,8 @@ const ItemsPage: React.FC = () => {
                   formatCurrency={formatCurrency}
                   onOrderClick={handleOrderClick}
                   onAddToCart={handleAddToCart}
+                  estimatedDistance={inventoryItem.distance_text}
+                  estimatedDuration={inventoryItem.duration_text}
                   isPublicView={!isAuthenticated}
                   canOrder={!isAuthenticated || isClientUser}
                   showCartButtons={isAuthenticated && isClientUser}

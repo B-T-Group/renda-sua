@@ -30,7 +30,8 @@ export class GoogleDistanceService {
   }
 
   /**
-   * Get distance matrix with caching based on address IDs
+   * Get distance matrix with caching based on address IDs.
+   * @param options.ttlSeconds - Override cache TTL in seconds (e.g. 7776000 for 3 months)
    */
   async getDistanceMatrixWithCaching(
     originAddressId: string,
@@ -38,8 +39,10 @@ export class GoogleDistanceService {
     destinationAddresses: Array<{
       id: string;
       formatted: string;
-    }>
+    }>,
+    options?: { ttlSeconds?: number }
   ): Promise<DistanceMatrixResponse> {
+    const ttl = options?.ttlSeconds ?? this.cacheTTL;
     try {
       const destinationIds = destinationAddresses.map((dest) => dest.id);
 
@@ -73,7 +76,7 @@ export class GoogleDistanceService {
           originAddressFormatted,
           destinationAddresses,
           googleResponse,
-          this.cacheTTL
+          ttl
         );
       }
 

@@ -57,6 +57,7 @@ CREATE TABLE google_geocode_cache (
 
 - `GOOGLE_CACHE_ENABLED`: Enable/disable caching (default: true)
 - `GOOGLE_CACHE_TTL`: Cache time-to-live in seconds (default: 86400 = 1 day)
+- `GOOGLE_INVENTORY_DISTANCE_CACHE_TTL`: TTL in seconds for inventory "closest to you" distance cache (default: 7776000 = 3 months). Used when returning inventory items with distance for logged-in users.
 
 ### Example .env
 
@@ -116,6 +117,7 @@ The system will:
    - Caches individual origin-destination pairs
    - Only returns cached results if ALL requested pairs are cached
    - If any pair is missing, calls Google API for all pairs and caches results
+   - **Cache busting**: Cache entries are treated as invalid if the origin or destination address has `updated_at` after the cache entry's `created_at`. This ensures distance results stay correct when addresses are edited.
 
 2. **Geocoding**:
    - Caches individual coordinate pairs
