@@ -34,6 +34,8 @@ interface LocationModalProps {
     data: AddBusinessLocationData | UpdateBusinessLocationData
   ) => Promise<void>;
   location?: BusinessLocation | null;
+  /** Business primary address country. When set, country is read-only and derived from business address. */
+  businessPrimaryCountry?: string | null;
   loading?: boolean;
   error?: string | null;
   warning?: string | null;
@@ -44,12 +46,16 @@ const LocationModal: React.FC<LocationModalProps> = ({
   onClose,
   onSave,
   location,
+  businessPrimaryCountry = null,
   loading = false,
   error = null,
   warning = null,
 }) => {
   const { t } = useTranslation();
   const isEditing = !!location;
+  const effectiveCountry = isEditing
+    ? location?.address?.country
+    : businessPrimaryCountry;
 
   // Form states
   const [formData, setFormData] = useState<AddBusinessLocationData>({
@@ -59,6 +65,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     email: '',
     location_type: 'store',
     is_primary: false,
+    rendasua_item_commission_percentage: null,
   });
 
   const [addressData, setAddressData] = useState<AddressFormData>({
@@ -83,6 +90,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
         email: location.email || '',
         location_type: location.location_type,
         is_primary: location.is_primary,
+        rendasua_item_commission_percentage:
+          location.rendasua_item_commission_percentage ?? null,
       });
 
       // Special case to account for legacy state values in the database not saved as state name but saved as state code
@@ -100,7 +109,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         country: location.address.country,
       });
     } else {
-      // Reset form for new location
+      // Reset form for new location; country comes from business primary address
       setFormData({
         name: '',
         address_id: '',
@@ -108,6 +117,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         email: '',
         location_type: 'store',
         is_primary: false,
+        rendasua_item_commission_percentage: null,
       });
 
       setAddressData({
@@ -116,10 +126,10 @@ const LocationModal: React.FC<LocationModalProps> = ({
         city: '',
         state: '',
         postal_code: '00000',
-        country: '',
+        country: businessPrimaryCountry ?? '',
       });
     }
-  }, [location, open]);
+  }, [location, open, businessPrimaryCountry]);
 
   const handleSave = async () => {
     console.log('LocationModal: handleSave called');
@@ -139,12 +149,13 @@ const LocationModal: React.FC<LocationModalProps> = ({
       !addressData.postal_code.trim() ||
       !addressData.country.trim()
     ) {
-      console.log('LocationModal: Address fields are required');
       return;
     }
 
     const locationData = {
       ...formData,
+      rendasua_item_commission_percentage:
+        formData.rendasua_item_commission_percentage ?? null,
       address: {
         ...addressData,
         state: addressData.state?.trim() || undefined,
@@ -257,10 +268,43 @@ const LocationModal: React.FC<LocationModalProps> = ({
               />
             </Box>
 
+            <TextField
+              label={t('business.locations.commissionLabel', 'RendaSua commission')}
+              type="number"
+              value={formData.rendasua_item_commission_percentage ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const num = v === '' ? null : parseFloat(v);
+                setFormData((prev) => ({
+                  ...prev,
+                  rendasua_item_commission_percentage:
+                    num != null && !Number.isNaN(num) ? num : null,
+                }));
+              }}
+              inputProps={{ min: 0, max: 100, step: 0.01 }}
+              helperText={t(
+                'business.locations.commissionHelper',
+                'Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).'
+              )}
+              fullWidth
+              sx={{ maxWidth: 240 }}
+            />
+
             <Box>
               <Typography variant="h6" gutterBottom>
                 {t('business.locations.address')}
               </Typography>
+
+              {effectiveCountry && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  {t('business.locations.countryReadOnly', 'Country is set from your business address and cannot be changed.')}:{' '}
+                  <strong>{effectiveCountry}</strong>
+                </Typography>
+              )}
 
               {hasAddress ? (
                 <Box
@@ -330,6 +374,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         open={addressDialogOpen}
         title={hasAddress ? 'Edit Location Address' : 'Add Location Address'}
         addressData={addressData}
+        readOnlyCountry={effectiveCountry || undefined}
         onClose={() => setAddressDialogOpen(false)}
         onSave={handleAddressSave}
         onAddressChange={setAddressData}

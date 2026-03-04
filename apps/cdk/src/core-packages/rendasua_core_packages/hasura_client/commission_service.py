@@ -18,13 +18,18 @@ from rendasua_core_packages.commission_handler.types import (
 )
 
 
-def get_commission_configs(client: HasuraClient) -> CommissionConfig:
+def get_commission_configs(
+    client: HasuraClient,
+    business_location_id: Optional[str] = None,
+) -> CommissionConfig:
     """
     Fetch commission configurations from application_configurations table.
-    
+    When business_location_id is provided, uses business_locations.rendasua_item_commission_percentage if set.
+
     Args:
         client: HasuraClient instance
-        
+        business_location_id: Optional business location ID for item commission override
+
     Returns:
         CommissionConfig with values from database or defaults
     """
@@ -46,23 +51,35 @@ def get_commission_configs(client: HasuraClient) -> CommissionConfig:
       }
     }
     """
-    
+
     log_info("Fetching commission configurations")
-    
+
     try:
         data = client.execute(query)
         configs_data = data.get("application_configurations", [])
-        
-        # Build config map
+
         config_map = {}
         for config in configs_data:
             config_map[config["config_key"]] = config["number_value"]
-        
-        # Return config with defaults for missing values
+
+        rendasua_item_commission_percentage = config_map.get(
+            "rendasua_item_commission_percentage", 5.0
+        )
+        if business_location_id:
+            loc_query = """
+            query GetBusinessLocationCommission($id: uuid!) {
+              business_locations_by_pk(id: $id) {
+                rendasua_item_commission_percentage
+              }
+            }
+            """
+            loc_data = client.execute(loc_query, {"id": business_location_id})
+            pct = loc_data.get("business_locations_by_pk", {}).get("rendasua_item_commission_percentage")
+            if pct is not None:
+                rendasua_item_commission_percentage = float(pct)
+
         return CommissionConfig(
-            rendasua_item_commission_percentage=config_map.get(
-                "rendasua_item_commission_percentage", 5.0
-            ),
+            rendasua_item_commission_percentage=rendasua_item_commission_percentage,
             unverified_agent_base_delivery_commission=config_map.get(
                 "unverified_agent_base_delivery_commission", 50.0
             ),
@@ -76,10 +93,9 @@ def get_commission_configs(client: HasuraClient) -> CommissionConfig:
                 "verified_agent_per_km_delivery_commission", 20.0
             ),
         )
-        
+
     except Exception as e:
         log_error("Error fetching commission configs", error=e)
-        # Return defaults on error
         return CommissionConfig(
             rendasua_item_commission_percentage=5.0,
             unverified_agent_base_delivery_commission=50.0,
@@ -222,6 +238,7 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
         subtotal
         currency
         assigned_agent_id
+        business_location_id
         assigned_agent {
           id
           user_id
@@ -288,7 +305,6 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
             log_error("Business user_id not found in order", order_id=order_id)
             return None
         
-        # Create CommissionOrderType
         commission_order = CommissionOrderType(
             id=order_data["id"],
             order_number=order_data["order_number"],
@@ -299,6 +315,7 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
             assigned_agent_id=order_data.get("assigned_agent_id"),
             assigned_agent=assigned_agent,
             business_user_id=business_user_id,
+            business_location_id=order_data.get("business_location_id"),
         )
         
         log_info("Commission order fetched", order_id=order_id, order_number=commission_order.order_number)

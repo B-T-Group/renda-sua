@@ -18,26 +18,53 @@ def get_account_by_user_and_currency(
     user_id: str,
     currency: str,
     hasura_endpoint: str,
-    hasura_admin_secret: str
+    hasura_admin_secret: str,
+    business_location_id: Optional[str] = None,
 ) -> Optional[Account]:
     """
-    Get account by user ID and currency, creating it if it doesn't exist.
-    
+    Get account by user ID and currency, optionally scoped to a business_location_id.
+    Creates the account if it doesn't exist.
+    When business_location_id is set, returns the location-scoped account; otherwise the legacy account.
+
     Args:
         user_id: User ID
         currency: Currency code
         hasura_endpoint: Hasura GraphQL endpoint
         hasura_admin_secret: Hasura admin secret
-        
+        business_location_id: Optional business location ID for location-scoped accounts
+
     Returns:
         Account object, None if error
     """
+    if business_location_id:
+        return _get_or_create_account(
+            user_id=user_id,
+            currency=currency,
+            hasura_endpoint=hasura_endpoint,
+            hasura_admin_secret=hasura_admin_secret,
+            business_location_id=business_location_id,
+        )
+    return _get_or_create_legacy_account(
+        user_id=user_id,
+        currency=currency,
+        hasura_endpoint=hasura_endpoint,
+        hasura_admin_secret=hasura_admin_secret,
+    )
+
+
+def _get_or_create_legacy_account(
+    user_id: str,
+    currency: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> Optional[Account]:
     query = """
     query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
       accounts(
         where: {
           user_id: { _eq: $userId }
           currency: { _eq: $currency }
+          business_location_id: { _is_null: true }
           is_active: { _eq: true }
         }
       ) {
@@ -53,79 +80,154 @@ def get_account_by_user_and_currency(
       }
     }
     """
-    
+    mutation = """
+    mutation CreateAccount($userId: uuid!, $currency: currency_enum!) {
+      insert_accounts_one(object: {
+        user_id: $userId,
+        currency: $currency,
+        available_balance: 0,
+        withheld_balance: 0,
+        is_active: true
+      }) {
+        id
+        user_id
+        currency
+        available_balance
+        withheld_balance
+        total_balance
+        is_active
+        created_at
+        updated_at
+      }
+    }
+    """
+    return _get_or_create_account_impl(
+        user_id=user_id,
+        currency=currency,
+        hasura_endpoint=hasura_endpoint,
+        hasura_admin_secret=hasura_admin_secret,
+        query=query,
+        query_vars={"userId": user_id, "currency": currency},
+        mutation=mutation,
+        mutation_vars={"userId": user_id, "currency": currency},
+    )
+
+
+def _get_or_create_account(
+    user_id: str,
+    currency: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    business_location_id: str,
+) -> Optional[Account]:
+    query = """
+    query GetUserAccountByLocation($userId: uuid!, $currency: currency_enum!, $businessLocationId: uuid!) {
+      accounts(
+        where: {
+          user_id: { _eq: $userId }
+          currency: { _eq: $currency }
+          business_location_id: { _eq: $businessLocationId }
+          is_active: { _eq: true }
+        }
+      ) {
+        id
+        user_id
+        currency
+        available_balance
+        withheld_balance
+        total_balance
+        is_active
+        created_at
+        updated_at
+      }
+    }
+    """
+    mutation = """
+    mutation CreateAccount($userId: uuid!, $currency: currency_enum!, $businessLocationId: uuid!) {
+      insert_accounts_one(object: {
+        user_id: $userId,
+        currency: $currency,
+        business_location_id: $businessLocationId,
+        available_balance: 0,
+        withheld_balance: 0,
+        is_active: true
+      }) {
+        id
+        user_id
+        currency
+        available_balance
+        withheld_balance
+        total_balance
+        is_active
+        created_at
+        updated_at
+      }
+    }
+    """
+    return _get_or_create_account_impl(
+        user_id=user_id,
+        currency=currency,
+        hasura_endpoint=hasura_endpoint,
+        hasura_admin_secret=hasura_admin_secret,
+        query=query,
+        query_vars={"userId": user_id, "currency": currency, "businessLocationId": business_location_id},
+        mutation=mutation,
+        mutation_vars={"userId": user_id, "currency": currency, "businessLocationId": business_location_id},
+    )
+
+
+def _get_or_create_account_impl(
+    user_id: str,
+    currency: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    query: str,
+    query_vars: dict,
+    mutation: str,
+    mutation_vars: dict,
+) -> Optional[Account]:
     client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
     log_info("Fetching account", user_id=user_id, currency=currency)
-    
+
     try:
-        data = client.execute(query, {"userId": user_id, "currency": currency})
+        data = client.execute(query, query_vars)
         accounts_data = data.get("accounts", [])
-        
+
         if accounts_data:
             account_data = accounts_data[0]
-            account = Account(
-                id=account_data["id"],
-                user_id=account_data["user_id"],
-                currency=account_data["currency"],
-                available_balance=float(account_data["available_balance"]),
-                withheld_balance=float(account_data["withheld_balance"]),
-                total_balance=float(account_data.get("total_balance", 0.0)),
-                is_active=account_data.get("is_active", True),
-                created_at=parse_datetime(account_data.get("created_at")),
-                updated_at=parse_datetime(account_data.get("updated_at")),
-            )
+            account = _account_from_data(account_data)
             log_info("Account found", user_id=user_id, account_id=account.id)
             return account
-        
-        # Create account if it doesn't exist
+
         log_info("Account not found, creating new one", user_id=user_id, currency=currency)
-        
-        mutation = """
-        mutation CreateAccount($userId: uuid!, $currency: currency_enum!) {
-          insert_accounts_one(object: {
-            user_id: $userId,
-            currency: $currency,
-            available_balance: 0,
-            withheld_balance: 0,
-            is_active: true
-          }) {
-            id
-            user_id
-            currency
-            available_balance
-            withheld_balance
-            total_balance
-            is_active
-            created_at
-            updated_at
-          }
-        }
-        """
-        
-        create_data = client.execute(mutation, {"userId": user_id, "currency": currency})
+        create_data = client.execute(mutation, mutation_vars)
         account_data = create_data.get("insert_accounts_one")
-        
+
         if not account_data:
             log_error("Failed to create account", user_id=user_id)
             return None
-        
-        account = Account(
-            id=account_data["id"],
-            user_id=account_data["user_id"],
-            currency=account_data["currency"],
-            available_balance=float(account_data["available_balance"]),
-            withheld_balance=float(account_data["withheld_balance"]),
-            total_balance=float(account_data.get("total_balance", 0.0)),
-            is_active=account_data.get("is_active", True),
-            created_at=parse_datetime(account_data.get("created_at")),
-            updated_at=parse_datetime(account_data.get("updated_at")),
-        )
+
+        account = _account_from_data(account_data)
         log_info("Account created successfully", user_id=user_id, account_id=account.id)
         return account
-        
+
     except Exception as e:
         log_error("Error with account", error=e, user_id=user_id)
         return None
+
+
+def _account_from_data(account_data: dict) -> Account:
+    return Account(
+        id=account_data["id"],
+        user_id=account_data["user_id"],
+        currency=account_data["currency"],
+        available_balance=float(account_data["available_balance"]),
+        withheld_balance=float(account_data["withheld_balance"]),
+        total_balance=float(account_data.get("total_balance", 0.0)),
+        is_active=account_data.get("is_active", True),
+        created_at=parse_datetime(account_data.get("created_at")),
+        updated_at=parse_datetime(account_data.get("updated_at")),
+    )
 
 
 def determine_transaction_balance_update(

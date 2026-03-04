@@ -71,6 +71,8 @@
     "withdrawRequest": "Demande de Retrait",
     "withdrawRequestSent": "Demande de retrait envoyée avec succès.",
     "withdrawSuccess": "Demande de retrait envoyée avec succès ! Votre compte sera mis à jour sous peu.",
+    "withdrawalPhoneNoteLocation": "Ce numéro est utilisé pour les retraits du compte de cet emplacement.",
+    "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Retenu",
     "withheldBalance": "Solde retenu"
   },
@@ -958,7 +960,13 @@
       "saveError": "Échec de l'enregistrement de l'emplacement",
       "statusUpdateError": "Échec de la mise à jour du statut de l'emplacement",
       "title": "Emplacements",
-      "totalLocations": "Total des Emplacements"
+      "totalLocations": "Total des Emplacements",
+      "commissionLabel": "Commission RendaSua",
+      "commissionDefault": "5 % (par défaut)",
+      "commissionHelper": "Pourcentage des ventes d'articles reversé à RendaSua. Laisser vide pour utiliser la valeur par défaut de la plateforme (5 %).",
+      "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
+      "addAddressFirst": "Ajoutez d'abord une adresse professionnelle avant d'ajouter des emplacements.",
+      "countryReadOnly": "Le pays est défini selon l'adresse de votre entreprise et ne peut pas être modifié."
     },
     "orders": {
       "agentAssigned": "🚚 Excellent ! Un agent a réclamé cette commande et arrivera bientôt. Préparez la commande pour un transfert rapide.",

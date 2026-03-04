@@ -22,6 +22,8 @@ export interface BusinessLocation {
   location_type: 'store' | 'warehouse' | 'office' | 'pickup_point';
   created_at: string;
   updated_at: string;
+  /** Overrides application default. Null = use platform default (e.g. 5%). */
+  rendasua_item_commission_percentage?: number | null;
 }
 
 export interface AddBusinessLocationData {
@@ -32,6 +34,8 @@ export interface AddBusinessLocationData {
   operating_hours?: any;
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_primary?: boolean;
+  /** Optional. Leave empty to use platform default (e.g. 5%). */
+  rendasua_item_commission_percentage?: number | null;
   address?: {
     address_line_1: string;
     address_line_2?: string;
@@ -51,6 +55,7 @@ export interface UpdateBusinessLocationData {
   location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
   is_active?: boolean;
   is_primary?: boolean;
+  rendasua_item_commission_percentage?: number | null;
   address?: {
     address_line_1?: string;
     address_line_2?: string;
@@ -60,32 +65,6 @@ export interface UpdateBusinessLocationData {
     country?: string;
   };
 }
-
-const ADD_BUSINESS_LOCATION = `
-  mutation AddBusinessLocation($data: business_locations_insert_input!) {
-    insert_business_locations_one(object: $data) {
-      id
-      name
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-      }
-      phone
-      email
-      operating_hours
-      is_active
-      is_primary
-      location_type
-      created_at
-      updated_at
-    }
-  }
-`;
 
 const UPDATE_BUSINESS_LOCATION = `
   mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
@@ -107,6 +86,7 @@ const UPDATE_BUSINESS_LOCATION = `
       is_active
       is_primary
       location_type
+      rendasua_item_commission_percentage
       created_at
       updated_at
     }
@@ -135,63 +115,23 @@ const DELETE_BUSINESS_LOCATION = `
   }
 `;
 
-const ADD_BUSINESS_LOCATION_NESTED = `
-  mutation AddBusinessLocationNested($businessLocation: business_locations_insert_input!) {
-    insert_business_locations_one(object: $businessLocation) {
-      address_id
-      business_id
-      created_at
-      email
-      id
-      is_active
-      is_primary
-      location_type
-      name
-      operating_hours
-      phone
-      updated_at
-              address {
-          address_line_1
-          address_line_2
-          address_type
-          city
-          country
-          created_at
-          id
-          is_primary
-          latitude
-          longitude
-          postal_code
-          state
-          updated_at
-        }
-    }
-  }
-`;
-
 export const useBusinessLocations = (
   businessId?: string,
   userId?: string,
   onAddressCreated?: () => void
 ) => {
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
+  const [primaryAddressCountry, setPrimaryAddressCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const apiClient = useApiClient();
 
-  const { execute: executeAddMutation } = useGraphQLRequest(
-    ADD_BUSINESS_LOCATION
-  );
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
   );
   const { execute: executeUpdateMutation } = useGraphQLRequest(
     UPDATE_BUSINESS_LOCATION
-  );
-
-  const { execute: executeAddNestedMutation } = useGraphQLRequest(
-    ADD_BUSINESS_LOCATION_NESTED
   );
 
   const fetchLocations = useCallback(async () => {
@@ -204,12 +144,19 @@ export const useBusinessLocations = (
       const response = await apiClient.get<{
         success: boolean;
         message?: string;
-        data?: { business_locations?: BusinessLocation[] };
+        data?: {
+          business_locations?: BusinessLocation[];
+          primary_address_country?: string | null;
+        };
       }>('/business-items/locations');
-      if (response.data.success && response.data.data?.business_locations) {
-        setLocations(response.data.data.business_locations);
+      if (response.data.success && response.data.data) {
+        setLocations(response.data.data.business_locations ?? []);
+        setPrimaryAddressCountry(
+          response.data.data.primary_address_country ?? null
+        );
       } else {
         setLocations([]);
+        setPrimaryAddressCountry(null);
         if (response.data.message) {
           setError(response.data.message);
         }
@@ -242,36 +189,37 @@ export const useBusinessLocations = (
         if (!data.address) {
           throw new Error('Address data is required');
         }
-        // Compose the nested insert input
-        const businessLocationInput = {
+        if (!apiClient) {
+          throw new Error('API client not available');
+        }
+        // Always use backend REST endpoint: country from business primary address, account created, validation (e.g. add-address-first).
+        const response = await apiClient.post<{
+          success: boolean;
+          message?: string;
+          data?: { business_location?: BusinessLocation };
+        }>('/business-items/locations', {
           name: data.name,
+          address: {
+            address_line_1: data.address.address_line_1,
+            address_line_2: data.address.address_line_2,
+            city: data.address.city,
+            state: data.address.state,
+            postal_code: data.address.postal_code,
+          },
           phone: data.phone,
           email: data.email,
-          operating_hours: data.operating_hours,
-          location_type: data.location_type,
-          is_primary: data.is_primary,
-          business_id: businessId,
-          is_active: true,
-          address: {
-            data: {
-              ...data.address,
-            },
-          },
-        };
-        const result = await executeAddNestedMutation({
-          businessLocation: businessLocationInput,
+          location_type: data.location_type ?? 'store',
+          is_primary: data.is_primary ?? false,
+          rendasua_item_commission_percentage: data.rendasua_item_commission_percentage ?? null,
         });
-        if (result?.insert_business_locations_one) {
-          // Optionally, you can refetch or update state here
+        if (response.data.success && response.data.data?.business_location) {
           await fetchLocations();
-
-          // Notify that a new address was created (for nested address creation)
           if (onAddressCreated) {
             onAddressCreated();
           }
-
-          return result.insert_business_locations_one;
+          return response.data.data.business_location;
         }
+        throw new Error(response.data.message ?? 'Failed to create location');
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to add business location'
@@ -281,7 +229,7 @@ export const useBusinessLocations = (
         setLoading(false);
       }
     },
-    [executeAddNestedMutation, businessId, fetchLocations, onAddressCreated]
+    [apiClient, businessId, fetchLocations, onAddressCreated]
   );
 
   const updateLocation = useCallback(
@@ -418,6 +366,7 @@ export const useBusinessLocations = (
 
   return {
     locations,
+    primaryAddressCountry,
     loading,
     error,
     warning,

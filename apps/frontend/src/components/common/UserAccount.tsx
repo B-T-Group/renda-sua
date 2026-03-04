@@ -396,7 +396,9 @@ const UserAccount: React.FC<UserAccountProps> = ({
             <Box flex={1}>
               <Box display="flex" alignItems="center" gap={1} mb={1}>
                 <Typography variant="h6" color="primary">
-                  {account.currency} {t('accounts.account')}
+                  {account.business_location?.name
+                    ? `${account.business_location.name} - ${account.currency}`
+                    : `${account.currency} ${t('accounts.account')}`}
                 </Typography>
                 {!subscriptionFailed && (
                   <Box
@@ -501,11 +503,16 @@ const UserAccount: React.FC<UserAccountProps> = ({
       <WithdrawModal
         open={withdrawModalOpen}
         onClose={() => setWithdrawModalOpen(false)}
-        userPhoneNumber={profile?.phone_number || ''}
+        userPhoneNumber={account.business_location?.phone || profile?.phone_number || ''}
         currency={account.currency}
         availableBalance={account.available_balance}
         loading={mobilePaymentsLoading}
         onConfirm={handleWithdrawConfirm}
+        withdrawalPhoneNote={
+          account.business_location
+            ? t('accounts.withdrawalPhoneNoteLocation', 'This is the phone number used for withdrawals from this location\'s account.')
+            : undefined
+        }
       />
 
       {/* Success Messages */}

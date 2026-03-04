@@ -664,7 +664,9 @@ export class AddressesService {
         }`,
         { businessId: entityId, addressId: address.id }
       );
-      await this.hasuraSystemService.executeMutation(
+      const locationResult = await this.hasuraSystemService.executeMutation<{
+        insert_business_locations_one: { id: string };
+      }>(
         `mutation CreateBusinessLocationHQ($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!) {
           insert_business_locations_one(object: {
             business_id: $businessId,
@@ -682,6 +684,10 @@ export class AddressesService {
           isPrimary: true,
         }
       );
+      const locationId = locationResult.insert_business_locations_one?.id;
+      if (locationId) {
+        await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
+      }
     }
 
     return address as AddressResponse;
@@ -1334,6 +1340,7 @@ export class AddressesService {
         ) {
           id
           address_id
+          business_id
         }
       }
     `;
@@ -1358,6 +1365,18 @@ export class AddressesService {
 
     const businessLocation = locationResult.business_locations[0];
     const addressId = businessLocation.address_id || location.id;
+    const businessId = businessLocation.business_id;
+
+    // Country must always match business primary address; ignore any client-supplied country
+    const primaryCountry =
+      businessId != null
+        ? await this.hasuraSystemService.getBusinessPrimaryAddressCountry(
+            businessId
+          )
+        : null;
+    const effectiveCountry = primaryCountry ?? location.country;
+    const countryToUse =
+      addressData.country !== undefined ? effectiveCountry : location.country;
 
     // Check if address fields changed
     const addressFieldsChanged =
@@ -1375,8 +1394,7 @@ export class AddressesService {
         : addressData.postal_code !== undefined &&
           addressData.postal_code !== location.postal_code
         ? true
-        : addressData.country !== undefined &&
-          addressData.country !== location.country
+        : addressData.country !== undefined && countryToUse !== location.country
         ? true
         : false;
 
@@ -1393,7 +1411,7 @@ export class AddressesService {
           city: addressData.city ?? location.city,
           state: addressData.state ?? location.state,
           postal_code: addressData.postal_code ?? location.postal_code,
-          country: addressData.country ?? location.country,
+          country: countryToUse,
         };
 
         coordinates = await this.geocodeAddress(addressForGeocoding);
@@ -1426,7 +1444,7 @@ export class AddressesService {
       updateData.postal_code = addressData.postal_code;
     }
     if (addressData.country !== undefined) {
-      updateData.country = addressData.country;
+      updateData.country = countryToUse;
     }
     if (addressData.address_type !== undefined) {
       updateData.address_type = addressData.address_type;

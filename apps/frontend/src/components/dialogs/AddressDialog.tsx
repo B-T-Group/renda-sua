@@ -46,6 +46,8 @@ interface AddressDialogProps {
   addressTypeOptions?: Array<{ value: string; label: string }>;
   /** Use full-screen dialog on small viewports (e.g. mobile) for better UX */
   fullScreen?: boolean;
+  /** When set, country is read-only and fixed to this value (e.g. business location = business primary address country). */
+  readOnlyCountry?: string | null;
   onClose: () => void;
   onSave: () => void;
   onAddressChange: (address: AddressFormData) => void;
@@ -61,6 +63,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   showCoordinates = true,
   addressTypeOptions,
   fullScreen = false,
+  readOnlyCountry = null,
   onClose,
   onSave,
   onAddressChange,
@@ -459,13 +462,14 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   const handleInputChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (field: keyof AddressFormData, value: any) => {
+      const country = readOnlyCountry ?? addressData?.country ?? '';
       onAddressChange({
         address_line_1: addressData?.address_line_1 || '',
         address_line_2: addressData?.address_line_2 || '',
         city: addressData?.city || '',
         state: addressData?.state || '',
         postal_code: addressData?.postal_code || '',
-        country: addressData?.country || '',
+        country: field === 'country' && !readOnlyCountry ? value : country,
         address_type: addressData?.address_type || 'home',
         is_primary: addressData?.is_primary || false,
         latitude: addressData?.latitude,
@@ -473,7 +477,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
         [field]: value,
       });
     },
-    [addressData, onAddressChange]
+    [addressData, readOnlyCountry, onAddressChange]
   );
 
   const handleClose = () => {
@@ -590,12 +594,12 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           </Box>
 
           {/* Country */}
-          <FormControl fullWidth required>
+          <FormControl fullWidth required disabled={!!readOnlyCountry}>
             <InputLabel>
               {t('addresses.addressDialog.country', 'Country')}
             </InputLabel>
             <Select
-              value={addressData?.country || ''}
+              value={readOnlyCountry ?? addressData?.country ?? ''}
               onChange={(e) => handleInputChange('country', e.target.value)}
               label={t('addresses.addressDialog.country', 'Country')}
             >

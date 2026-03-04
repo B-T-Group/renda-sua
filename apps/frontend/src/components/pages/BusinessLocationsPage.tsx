@@ -52,6 +52,7 @@ const BusinessLocationsPage: React.FC = () => {
 
   const {
     locations,
+    primaryAddressCountry,
     loading: locationsLoading,
     error: locationsError,
     warning: locationsWarning,
@@ -60,6 +61,8 @@ const BusinessLocationsPage: React.FC = () => {
     deleteLocation,
     fetchLocations,
   } = useBusinessLocations(profile?.business?.id, undefined, refetchProfile);
+
+  const canAddLocation = !!primaryAddressCountry;
 
   // Fetch locations when component mounts or business ID changes
   useEffect(() => {
@@ -249,12 +252,22 @@ const BusinessLocationsPage: React.FC = () => {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleAddLocation}
+            disabled={!canAddLocation}
             size={isMobile ? 'medium' : 'large'}
             sx={{ minWidth: { xs: '100%', sm: 'auto' } }}
           >
             {t('business.locations.addLocation', 'Add Location')}
           </Button>
         </Stack>
+
+        {!locationsLoading && !canAddLocation && profile?.business && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            {t(
+              'business.locations.addAddressFirst',
+              'Add a business address first before adding locations.'
+            )}
+          </Alert>
+        )}
 
         {/* Stats Summary */}
         {!locationsLoading && locations.length > 0 && (
@@ -352,9 +365,18 @@ const BusinessLocationsPage: React.FC = () => {
             size="large"
             startIcon={<AddIcon />}
             onClick={handleAddLocation}
+            disabled={!canAddLocation}
           >
             {t('business.locations.addFirstLocation', 'Add First Location')}
           </Button>
+          {!canAddLocation && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              {t(
+                'business.locations.addAddressFirst',
+                'Add a business address first before adding locations.'
+              )}
+            </Typography>
+          )}
         </Paper>
       )}
 
@@ -450,6 +472,7 @@ const BusinessLocationsPage: React.FC = () => {
         onClose={() => setShowLocationModal(false)}
         onSave={handleSaveLocation}
         location={editingLocation}
+        businessPrimaryCountry={primaryAddressCountry}
         loading={locationsLoading}
         error={locationsError}
         warning={locationsWarning}

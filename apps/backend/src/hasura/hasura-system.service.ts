@@ -20,6 +20,7 @@ import {
 import {
   GET_ACCOUNT_BY_ID,
   GET_USER_ACCOUNT,
+  GET_USER_ACCOUNT_BY_LOCATION,
   GET_USER_AGENT,
   GET_USER_BUSINESS,
   GET_USER_BY_ID,
@@ -78,27 +79,31 @@ export class HasuraSystemService {
   }
 
   /**
-   * Create a user account for a given user and currency
+   * Create a user account for a given user and currency.
+   * When businessLocationId is set, creates a location-scoped account.
    */
   async createUserAccount(
     userId: string,
     currency: string,
     available_balance = 0,
-    withheld_balance = 0
+    withheld_balance = 0,
+    businessLocationId?: string | null
   ): Promise<any> {
     const mutation = `
-      mutation CreateUserAccount($userId: uuid!, $currency: currency_enum!, $available_balance: numeric!, $withheld_balance: numeric!) {
+      mutation CreateUserAccount($userId: uuid!, $currency: currency_enum!, $available_balance: numeric!, $withheld_balance: numeric!, $businessLocationId: uuid) {
         insert_accounts_one(object: {
           user_id: $userId,
           currency: $currency,
           available_balance: $available_balance,
-          withheld_balance: $withheld_balance
+          withheld_balance: $withheld_balance,
+          business_location_id: $businessLocationId
         }) {
           id
           user_id
           currency
           available_balance
           withheld_balance
+          business_location_id
         }
       }
     `;
@@ -107,6 +112,7 @@ export class HasuraSystemService {
       currency,
       available_balance,
       withheld_balance,
+      businessLocationId: businessLocationId ?? null,
     });
     return result.insert_accounts_one;
   }
@@ -192,22 +198,99 @@ export class HasuraSystemService {
   }
 
   /**
-   * Get user account by userId and currency
+   * Get user account by userId and currency.
+   * When businessLocationId is provided, returns the location-scoped account; otherwise the legacy (no location) account.
    */
-  async getAccount(userId: string, currency: string) {
-    const result = await this.executeQuery<GetUserAccountQuery>(
-      GET_USER_ACCOUNT,
-      {
+  async getAccount(
+    userId: string,
+    currency: string,
+    businessLocationId?: string | null
+  ): Promise<any> {
+    if (businessLocationId) {
+      const result = await this.executeQuery(GET_USER_ACCOUNT_BY_LOCATION, {
         userId,
         currency,
+        businessLocationId,
+      });
+      let account = (result as any).accounts?.[0] ?? null;
+      if (!account) {
+        account = await this.createUserAccount(
+          userId,
+          currency,
+          0,
+          0,
+          businessLocationId
+        );
       }
+      return account;
+    }
+    const result = await this.executeQuery<GetUserAccountQuery>(
+      GET_USER_ACCOUNT,
+      { userId, currency }
     );
     let account = result.accounts[0] || null;
     if (!account) {
-      // Create the account if it doesn't exist
       account = await this.createUserAccount(userId, currency);
     }
     return account;
+  }
+
+  /**
+   * Get the primary (or first) business address country for a business.
+   * Returns null if the business has no addresses.
+   */
+  async getBusinessPrimaryAddressCountry(businessId: string): Promise<string | null> {
+    const query = `
+      query GetBusinessPrimaryAddress($businessId: uuid!) {
+        business_addresses(
+          where: { business_id: { _eq: $businessId } }
+          limit: 1
+        ) {
+          address { country }
+        }
+      }
+    `;
+    const result = await this.executeQuery<{
+      business_addresses: Array<{ address: { country: string } }>;
+    }>(query, { businessId });
+    const first = result.business_addresses?.[0]?.address?.country;
+    return first ?? null;
+  }
+
+  /**
+   * Ensure an account exists for a business location (creates if missing).
+   * Uses location's address country for currency. Call after inserting a business_location.
+   */
+  async ensureAccountForBusinessLocation(businessLocationId: string): Promise<any> {
+    const query = `
+      query GetBusinessLocationForAccount($id: uuid!) {
+        business_locations_by_pk(id: $id) {
+          id
+          business { user_id }
+          address { country }
+        }
+      }
+    `;
+    const result = await this.executeQuery<{
+      business_locations_by_pk: { id: string; business: { user_id: string }; address: { country: string } };
+    }>(query, { id: businessLocationId });
+    const row = result.business_locations_by_pk;
+    if (!row?.business?.user_id || !row?.address?.country) {
+      return null;
+    }
+    const currency = await this.getCurrencyFromCountry(row.address.country);
+    return this.getAccount(row.business.user_id, currency, businessLocationId);
+  }
+
+  private async getCurrencyFromCountry(country: string): Promise<string> {
+    try {
+      const countryToCurrency = await import('country-to-currency');
+      const code = (country || '').toUpperCase().slice(0, 2);
+      const currency = (countryToCurrency.default as Record<string, string>)[code];
+      return currency || 'XAF';
+    } catch {
+      return 'XAF';
+    }
   }
 
   /**

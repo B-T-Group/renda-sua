@@ -86,6 +86,12 @@ export class AccountsController {
             is_active
             created_at
             updated_at
+            business_location_id
+            business_location {
+              id
+              name
+              phone
+            }
           }
         }
       `;

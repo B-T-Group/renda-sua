@@ -91,9 +91,12 @@ const GET_BUSINESS_LOCATIONS = `
     ) {
       id
       name
+      phone
+      email
       location_type
       is_active
       is_primary
+      rendasua_item_commission_percentage
       created_at
       updated_at
       address {
@@ -459,6 +462,176 @@ export class BusinessItemsService {
         business_locations: any[];
       }>(GET_BUSINESS_LOCATIONS, { businessId });
     return result.business_locations ?? [];
+  }
+
+  async getBusinessPrimaryAddressCountry(businessId: string): Promise<string | null> {
+    return this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId);
+  }
+
+  /**
+   * Create a business location with address and account.
+   * Country is forced to the business's primary address country.
+   * Fails if business has no address.
+   */
+  async createBusinessLocation(
+    businessId: string,
+    data: {
+      name: string;
+      address: {
+        address_line_1: string;
+        address_line_2?: string;
+        city: string;
+        state: string;
+        postal_code: string;
+      };
+      phone?: string;
+      email?: string;
+      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
+      is_primary?: boolean;
+      rendasua_item_commission_percentage?: number | null;
+    }
+  ): Promise<any> {
+    const country = await this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId);
+    if (!country) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Add a business address first before adding locations.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const addressMutation = `
+      mutation CreateAddress($addressLine1: String!, $addressLine2: String, $city: String!, $state: String!, $postalCode: String!, $country: String!) {
+        insert_addresses_one(object: {
+          address_line_1: $addressLine1,
+          address_line_2: $addressLine2,
+          city: $city,
+          state: $state,
+          postal_code: $postalCode,
+          country: $country,
+          address_type: "home"
+        }) { id }
+      }
+    `;
+    const addressResult = await this.hasuraSystemService.executeMutation<{ insert_addresses_one: { id: string } }>(
+      addressMutation,
+      {
+        addressLine1: data.address.address_line_1,
+        addressLine2: data.address.address_line_2 ?? null,
+        city: data.address.city,
+        state: data.address.state,
+        postalCode: data.address.postal_code ?? '',
+        country,
+      }
+    );
+    const addressId = addressResult.insert_addresses_one?.id;
+    if (!addressId) {
+      throw new HttpException(
+        { success: false, error: 'Failed to create address' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    const locationMutation = `
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric) {
+        insert_business_locations_one(object: {
+          business_id: $businessId,
+          address_id: $addressId,
+          name: $name,
+          location_type: $locationType,
+          is_primary: $isPrimary,
+          phone: $phone,
+          email: $email,
+          rendasua_item_commission_percentage: $commission,
+          is_active: true
+        }) {
+          id
+          name
+          phone
+          email
+          location_type
+          is_primary
+          is_active
+          address { id address_line_1 address_line_2 city state postal_code country }
+        }
+      }
+    `;
+    const locationResult = await this.hasuraSystemService.executeMutation(locationMutation, {
+      businessId,
+      addressId,
+      name: data.name,
+      locationType: data.location_type ?? 'store',
+      isPrimary: data.is_primary ?? false,
+      phone: data.phone ?? null,
+      email: data.email ?? null,
+      commission: data.rendasua_item_commission_percentage ?? null,
+    });
+    const location = (locationResult as any).insert_business_locations_one;
+    if (!location?.id) {
+      throw new HttpException(
+        { success: false, error: 'Failed to create business location' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    await this.hasuraSystemService.ensureAccountForBusinessLocation(location.id);
+    return location;
+  }
+
+  /**
+   * Update business location fields (e.g. rendasua_item_commission_percentage).
+   * Only updates location row; address updates go through addresses API.
+   */
+  async updateBusinessLocation(
+    businessId: string,
+    locationId: string,
+    data: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
+      is_active?: boolean;
+      is_primary?: boolean;
+      rendasua_item_commission_percentage?: number | null;
+    }
+  ): Promise<any> {
+    const query = `
+      query GetLocationBusiness($locationId: uuid!) {
+        business_locations_by_pk(id: $locationId) {
+          id
+          business_id
+        }
+      }
+    `;
+    const row = await this.hasuraUserService.executeQuery<{
+      business_locations_by_pk: { id: string; business_id: string } | null;
+    }>(query, { locationId });
+    const loc = row?.business_locations_by_pk;
+    if (!loc || loc.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Location not found or access denied' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    const updateMutation = `
+      mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
+        update_business_locations_by_pk(pk_columns: { id: $id }, _set: $data) {
+          id
+          name
+          phone
+          email
+          rendasua_item_commission_percentage
+          location_type
+          is_active
+          is_primary
+          address { id address_line_1 address_line_2 city state postal_code country }
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeMutation(updateMutation, {
+      id: locationId,
+      data,
+    });
+    return result?.update_business_locations_by_pk ?? null;
   }
 
   async getSingleItem(businessId: string, itemId: string) {

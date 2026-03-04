@@ -70,6 +70,56 @@ export class BusinessItemsController {
     return { success: true, data: { items } };
   }
 
+  @Patch('locations/:locationId')
+  @ApiOperation({
+    summary: 'Update a business location (e.g. commission percentage)',
+  })
+  @ApiResponse({ status: 200, description: 'Location updated successfully' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Location not found' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        location_type: { type: 'string', enum: ['store', 'warehouse', 'office', 'pickup_point'] },
+        is_active: { type: 'boolean' },
+        is_primary: { type: 'boolean' },
+        rendasua_item_commission_percentage: { type: 'number', nullable: true },
+      },
+    },
+  })
+  async patchLocation(
+    @Param('locationId') locationId: string,
+    @Body()
+    body: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
+      is_active?: boolean;
+      is_primary?: boolean;
+      rendasua_item_commission_percentage?: number | null;
+    }
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const location = await this.businessItemsService.updateBusinessLocation(
+      businessId,
+      locationId,
+      body
+    );
+    return { success: true, data: { business_location: location } };
+  }
+
   @Get('locations')
   @ApiOperation({ summary: 'Get business locations for the current business' })
   @ApiResponse({ status: 200, description: 'Locations retrieved successfully' })
@@ -83,9 +133,77 @@ export class BusinessItemsController {
         HttpStatus.FORBIDDEN
       );
     }
-    const business_locations =
-      await this.businessItemsService.getBusinessLocations(businessId);
-    return { success: true, data: { business_locations } };
+    const [business_locations, primary_address_country] = await Promise.all([
+      this.businessItemsService.getBusinessLocations(businessId),
+      this.businessItemsService.getBusinessPrimaryAddressCountry(businessId),
+    ]);
+    return {
+      success: true,
+      data: { business_locations, primary_address_country },
+    };
+  }
+
+  @Post('locations')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create a business location (address country = business primary address; creates location account)',
+  })
+  @ApiResponse({ status: 201, description: 'Location created successfully' })
+  @ApiResponse({ status: 400, description: 'Business has no address' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name', 'address'],
+      properties: {
+        name: { type: 'string' },
+        address: {
+          type: 'object',
+          required: ['address_line_1', 'city', 'state', 'postal_code'],
+          properties: {
+            address_line_1: { type: 'string' },
+            address_line_2: { type: 'string' },
+            city: { type: 'string' },
+            state: { type: 'string' },
+            postal_code: { type: 'string' },
+          },
+        },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        location_type: { type: 'string', enum: ['store', 'warehouse', 'office', 'pickup_point'] },
+        is_primary: { type: 'boolean' },
+        rendasua_item_commission_percentage: { type: 'number', nullable: true },
+      },
+    },
+  })
+  async createLocation(
+    @Body()
+    body: {
+      name: string;
+      address: {
+        address_line_1: string;
+        address_line_2?: string;
+        city: string;
+        state: string;
+        postal_code: string;
+      };
+      phone?: string;
+      email?: string;
+      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
+      is_primary?: boolean;
+      rendasua_item_commission_percentage?: number | null;
+    }
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const location = await this.businessItemsService.createBusinessLocation(businessId, body);
+    return { success: true, data: { business_location: location } };
   }
 
   @Get('available-items')

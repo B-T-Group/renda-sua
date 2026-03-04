@@ -3510,8 +3510,13 @@ export class OrdersService {
           business {
             user_id
           }
+          business_location_id
           business_location {
+            id
             address_id
+            address {
+              country
+            }
           }
           delivery_address {
             country

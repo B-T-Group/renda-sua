@@ -71,6 +71,8 @@
     "withdrawRequest": "Withdraw Request",
     "withdrawRequestSent": "Withdrawal request sent successfully!",
     "withdrawSuccess": "Withdrawal request sent successfully! Your account will be updated shortly.",
+    "withdrawalPhoneNoteLocation": "This is the phone number used for withdrawals from this location's account.",
+    "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Withheld",
     "withheldBalance": "Withheld Balance"
   },
@@ -969,7 +971,13 @@
       "saveError": "Failed to save location",
       "statusUpdateError": "Failed to update location status",
       "title": "Locations",
-      "totalLocations": "Total Locations"
+      "totalLocations": "Total Locations",
+      "commissionLabel": "RendaSua commission",
+      "commissionDefault": "5% (default)",
+      "commissionHelper": "Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).",
+      "phoneWithdrawalNote": "Used for withdrawals from this location's account",
+      "addAddressFirst": "Add a business address first before adding locations.",
+      "countryReadOnly": "Country is set from your business address and cannot be changed."
     },
     "orders": {
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",

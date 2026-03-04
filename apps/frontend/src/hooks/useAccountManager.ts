@@ -13,6 +13,12 @@ export interface Account {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  business_location_id?: string | null;
+  business_location?: {
+    id: string;
+    name: string;
+    phone?: string | null;
+  } | null;
 }
 
 export type EntityType = 'agent' | 'client' | 'business';

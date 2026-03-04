@@ -105,19 +105,44 @@ export const GET_USER_BY_ID = gql`
   }
 `;
 
-// Query for getting user account
+// Query for getting user account (legacy: no business_location)
 export const GET_USER_ACCOUNT = gql`
   query GetUserAccount($userId: uuid!, $currency: currency_enum!) {
     accounts(
       where: {
         user_id: { _eq: $userId }
         currency: { _eq: $currency }
+        business_location_id: { _is_null: true }
         is_active: { _eq: true }
       }
     ) {
       id
+      user_id
+      currency
       available_balance
       withheld_balance
+      business_location_id
+    }
+  }
+`;
+
+// Query for getting account by user, currency and business_location_id
+export const GET_USER_ACCOUNT_BY_LOCATION = gql`
+  query GetUserAccountByLocation($userId: uuid!, $currency: currency_enum!, $businessLocationId: uuid!) {
+    accounts(
+      where: {
+        user_id: { _eq: $userId }
+        currency: { _eq: $currency }
+        business_location_id: { _eq: $businessLocationId }
+        is_active: { _eq: true }
+      }
+    ) {
+      id
+      user_id
+      currency
+      available_balance
+      withheld_balance
+      business_location_id
     }
   }
 `;
@@ -338,9 +363,9 @@ export const GET_ADDRESS_BY_ID = gql`
   }
 `;
 
-// Mutation to create user account
+// Mutation to create user account (optional business_location_id for location-scoped accounts)
 export const CREATE_USER_ACCOUNT = gql`
-  mutation CreateUserAccount($userId: uuid!, $currency: currency_enum!) {
+  mutation CreateUserAccount($userId: uuid!, $currency: currency_enum!, $businessLocationId: uuid) {
     insert_accounts_one(
       object: {
         user_id: $userId
@@ -348,6 +373,7 @@ export const CREATE_USER_ACCOUNT = gql`
         available_balance: 0
         withheld_balance: 0
         is_active: true
+        business_location_id: $businessLocationId
       }
     ) {
       id
@@ -357,6 +383,7 @@ export const CREATE_USER_ACCOUNT = gql`
       withheld_balance
       is_active
       created_at
+      business_location_id
     }
   }
 `;

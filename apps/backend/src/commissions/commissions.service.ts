@@ -144,17 +144,16 @@ export class CommissionsService {
   }
 
   /**
-   * Calculate commission breakdown for an order
+   * Calculate commission breakdown for an order.
+   * Uses business_location commission override when order has business_location_id.
    */
   async calculateCommissions(order: any): Promise<CommissionBreakdown> {
     try {
-      // Get commission configurations
-      const config = await this.getCommissionConfigs();
+      const businessLocationId = order.business_location_id ?? order.business_location?.id ?? null;
+      const config = await this.getCommissionConfigs(businessLocationId);
 
-      // Get active partners
       const partners = await this.getActivePartners();
 
-      // Calculate base delivery fee commissions
       const baseDeliveryFeeBreakdown = this.calculateBaseDeliveryFeeCommissions(
         order.base_delivery_fee,
         order.assigned_agent?.is_verified || false,
@@ -162,7 +161,6 @@ export class CommissionsService {
         partners
       );
 
-      // Calculate per-km delivery fee commissions
       const perKmDeliveryFeeBreakdown =
         this.calculatePerKmDeliveryFeeCommissions(
           order.per_km_delivery_fee,
@@ -171,14 +169,12 @@ export class CommissionsService {
           partners
         );
 
-      // Calculate item commission (on RendaSua's portion)
       const itemCommissionBreakdown = this.calculateItemCommission(
         order.subtotal,
         config.rendasuaItemCommissionPercentage,
         partners
       );
 
-      // Calculate order subtotal breakdown
       const orderSubtotalBreakdown = this.calculateOrderSubtotalBreakdown(
         order.subtotal,
         config.rendasuaItemCommissionPercentage
@@ -207,8 +203,6 @@ export class CommissionsService {
 
       // Calculate commission breakdown
       const breakdown = await this.calculateCommissions(order);
-
-      console.log('breakdown', breakdown);
 
       // Get RendaSua HQ user
       const rendasuaHQUser = await this.getRendasuaHQUser();
@@ -302,9 +296,10 @@ export class CommissionsService {
   }
 
   /**
-   * Get commission configurations
+   * Get commission configurations.
+   * When businessLocationId is provided, uses business_locations.rendasua_item_commission_percentage if set; else application default.
    */
-  async getCommissionConfigs(): Promise<CommissionConfig> {
+  async getCommissionConfigs(businessLocationId?: string | null): Promise<CommissionConfig> {
     const query = `
       query GetCommissionConfigs {
         application_configurations(
@@ -332,9 +327,28 @@ export class CommissionsService {
       return acc;
     }, {});
 
+    let rendasuaItemCommissionPercentage =
+      configMap.rendasua_item_commission_percentage || 5.0;
+
+    if (businessLocationId) {
+      const locQuery = `
+        query GetBusinessLocationCommission($id: uuid!) {
+          business_locations_by_pk(id: $id) {
+            rendasua_item_commission_percentage
+          }
+        }
+      `;
+      const locResponse = await this.hasuraSystemService.executeQuery(locQuery, {
+        id: businessLocationId,
+      });
+      const pct = locResponse.business_locations_by_pk?.rendasua_item_commission_percentage;
+      if (pct != null && typeof pct === 'number') {
+        rendasuaItemCommissionPercentage = pct;
+      }
+    }
+
     return {
-      rendasuaItemCommissionPercentage:
-        configMap.rendasua_item_commission_percentage || 5.0,
+      rendasuaItemCommissionPercentage,
       unverifiedAgentBaseDeliveryCommission:
         configMap.unverified_agent_base_delivery_commission || 50.0,
       verifiedAgentBaseDeliveryCommission:
@@ -553,7 +567,7 @@ export class CommissionsService {
   }
 
   /**
-   * Process item commissions
+   * Process item commissions (uses location commission % from breakdown calculation).
    */
   private async processItemCommissions(
     order: any,
@@ -561,11 +575,12 @@ export class CommissionsService {
     rendasuaHQUser: any,
     partners: Partners[]
   ): Promise<void> {
-    // Pay partners
+    const businessLocationId = order.business_location_id ?? order.business_location?.id ?? null;
+    const config = await this.getCommissionConfigs(businessLocationId);
+    const rendasuaItemAmount = (order.subtotal * config.rendasuaItemCommissionPercentage) / 100;
+
     for (const partner of partners) {
-      const rendasuaItemAmount = (order.subtotal * 5.0) / 100; // 5% RendaSua commission
-      const partnerAmount =
-        (rendasuaItemAmount * partner.item_commission) / 100;
+      const partnerAmount = (rendasuaItemAmount * partner.item_commission) / 100;
       if (partnerAmount > 0) {
         await this.payCommission(
           order,
@@ -579,7 +594,6 @@ export class CommissionsService {
       }
     }
 
-    // Pay RendaSua HQ
     if (breakdown.rendasua > 0) {
       await this.payCommission(
         order,
@@ -593,26 +607,31 @@ export class CommissionsService {
   }
 
   /**
-   * Process order subtotal payment
+   * Process order subtotal payment to the business_location account (not legacy business user account).
    */
   private async processOrderSubtotalPayment(
     order: any,
     breakdown: { business: number; rendasua: number }
   ): Promise<void> {
-    if (breakdown.business > 0) {
-      await this.payCommission(
-        order,
-        order.business.user_id,
-        'business',
-        'order_subtotal',
-        breakdown.business,
-        order.currency
-      );
-    }
+    if (breakdown.business <= 0) return;
+    const businessLocationId = order.business_location_id ?? order.business_location?.id ?? null;
+    const userId = order.business?.user_id;
+    if (!userId) return;
+    await this.payCommission(
+      order,
+      userId,
+      'business',
+      'order_subtotal',
+      breakdown.business,
+      order.currency,
+      undefined,
+      businessLocationId
+    );
   }
 
   /**
-   * Pay commission to a recipient
+   * Pay commission to a recipient.
+   * When recipientType is 'business' and businessLocationId is set, credits the location-scoped account.
    */
   private async payCommission(
     order: any,
@@ -625,13 +644,14 @@ export class CommissionsService {
       | 'order_subtotal',
     amount: number,
     currency: string,
-    commissionPercentage?: number
+    commissionPercentage?: number,
+    businessLocationId?: string | null
   ): Promise<void> {
     try {
-      // Get recipient account
       const account = await this.hasuraSystemService.getAccount(
         recipientUserId,
-        currency
+        currency,
+        businessLocationId ?? undefined
       );
       if (!account) {
         this.logger.warn(

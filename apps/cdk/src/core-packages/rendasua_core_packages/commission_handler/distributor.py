@@ -32,11 +32,13 @@ def pay_commission(
     ],
     amount: float,
     currency: str,
-    commission_percentage: Optional[float] = None
+    commission_percentage: Optional[float] = None,
+    business_location_id: Optional[str] = None,
 ) -> Optional[str]:
     """
     Pay commission to a recipient.
-    
+    When recipient_type is 'business' and business_location_id is set, credits the location-scoped account.
+
     Args:
         client: HasuraClient instance
         order: Commission order
@@ -46,12 +48,12 @@ def pay_commission(
         amount: Commission amount
         currency: Currency code
         commission_percentage: Optional commission percentage
-        
+        business_location_id: Optional; for 'business' type, the location-scoped account to credit
+
     Returns:
         Account transaction ID if successful, None otherwise
     """
     try:
-        # Validate amount
         if amount <= 0:
             log_info(
                 "Skipping commission payment - amount is zero or negative",
@@ -59,13 +61,13 @@ def pay_commission(
                 amount=amount,
             )
             return None
-        
-        # Get recipient account
+
         account = get_account_by_user_and_currency(
             recipient_user_id,
             currency,
             client._config.endpoint,
-            client._config.admin_secret
+            client._config.admin_secret,
+            business_location_id=business_location_id,
         )
         
         if not account:
@@ -267,21 +269,13 @@ def process_item_commissions(
     breakdown: ItemCommissionBreakdown,
     rendasua_hq_user: User,
     partners: List[Partner],
+    rendasua_item_commission_percentage: float,
 ) -> None:
     """
-    Process item commission payments.
-    
-    Args:
-        client: HasuraClient instance
-        order: Commission order
-        breakdown: Item commission breakdown
-        rendasua_hq_user: RendaSua HQ user
-        partners: List of active partners
+    Process item commission payments using location or app default commission percentage.
     """
-    # Pay partners
     for partner in partners:
-        # Calculate RendaSua's item amount (5% of subtotal)
-        rendasua_item_amount = (order.subtotal * 5.0) / 100
+        rendasua_item_amount = (order.subtotal * rendasua_item_commission_percentage) / 100
         partner_amount = (rendasua_item_amount * partner.item_commission) / 100
         if partner_amount > 0:
             pay_commission(
@@ -314,23 +308,20 @@ def process_order_subtotal_payment(
     breakdown: OrderSubtotalBreakdown,
 ) -> None:
     """
-    Process order subtotal payment to business.
-    
-    Args:
-        client: HasuraClient instance
-        order: Commission order
-        breakdown: Order subtotal breakdown
+    Process order subtotal payment to the business location account (or legacy business account).
     """
-    if breakdown.business > 0:
-        pay_commission(
-            client=client,
-            order=order,
-            recipient_user_id=order.business_user_id,
-            recipient_type="business",
-            commission_type="order_subtotal",
-            amount=breakdown.business,
-            currency=order.currency,
-        )
+    if breakdown.business <= 0:
+        return
+    pay_commission(
+        client=client,
+        order=order,
+        recipient_user_id=order.business_user_id,
+        recipient_type="business",
+        commission_type="order_subtotal",
+        amount=breakdown.business,
+        currency=order.currency,
+        business_location_id=order.business_location_id,
+    )
 
 
 def distribute_commissions(
@@ -366,8 +357,8 @@ def distribute_commissions(
                 "error": f"Order {order_id} not found",
             }
         
-        # Fetch commission configuration
-        config = get_commission_configs(client)
+        # Fetch commission configuration (with location override when present)
+        config = get_commission_configs(client, order.business_location_id)
         
         # Fetch active partners
         partners = get_active_partners(client)
@@ -407,13 +398,14 @@ def distribute_commissions(
             partners,
         )
         
-        # Process item commissions
+        # Process item commissions (use same % as in config for consistency)
         process_item_commissions(
             client,
             order,
             breakdown.item_commission,
             rendasua_hq_user,
             partners,
+            config.rendasua_item_commission_percentage,
         )
         
         # Process order subtotal payment

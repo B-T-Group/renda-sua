@@ -32,6 +32,7 @@ class CommissionOrder(BaseModel):
     assigned_agent_id: Optional[str] = None
     assigned_agent: Optional[AssignedAgent] = None
     business_user_id: str
+    business_location_id: Optional[str] = None
 
 
 class CommissionConfig(BaseModel):

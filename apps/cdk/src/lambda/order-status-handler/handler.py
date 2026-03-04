@@ -701,13 +701,15 @@ def process_cancellation_financials(
             else:
                 log_info("Cancellation fee found", order_id=order_id, fee=cancellation_fee, country_code=country_code)
                 
-                # Get business account
+                # Get business location account (or legacy business account)
                 business_user_id = order.business.user_id
+                business_location_id = getattr(order, "business_location_id", None)
                 business_account = get_account_by_user_and_currency(
                     business_user_id,
                     order.currency,
                     hasura_endpoint,
-                    hasura_admin_secret
+                    hasura_admin_secret,
+                    business_location_id=business_location_id,
                 )
                 
                 if not business_account:

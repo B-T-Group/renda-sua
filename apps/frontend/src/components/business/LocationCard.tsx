@@ -130,12 +130,30 @@ const LocationCard: React.FC<LocationCardProps> = ({
             </Typography>
           </Stack>
 
+          {/* Commission (location override or platform default) */}
+          <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
+            <Typography variant="body2" color="text.secondary">
+              {t('business.locations.commissionLabel', 'RendaSua commission')}:{' '}
+              {location.rendasua_item_commission_percentage != null
+                ? `${location.rendasua_item_commission_percentage}%`
+                : t('business.locations.commissionDefault', '5% (default)')}
+            </Typography>
+          </Stack>
+
           {/* Contact Info */}
           {location.phone && (
             <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
               <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">
                 {location.phone}
+              </Typography>
+              <Typography
+                component="span"
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 0.5, fontStyle: 'italic' }}
+              >
+                — {t('business.locations.phoneWithdrawalNote', 'Used for withdrawals from this location\'s account')}
               </Typography>
             </Stack>
           )}

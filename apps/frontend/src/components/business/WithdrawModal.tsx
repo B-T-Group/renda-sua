@@ -30,6 +30,8 @@ interface WithdrawModalProps {
   currency: string;
   availableBalance: number;
   loading?: boolean;
+  /** When set, shown as helper text under the phone field (e.g. for location account withdrawals). */
+  withdrawalPhoneNote?: string;
 }
 
 const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -40,6 +42,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   currency,
   availableBalance,
   loading = false,
+  withdrawalPhoneNote,
 }) => {
   const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -68,8 +71,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   }, [open]);
 
-  // Get phone number hint for Airtel Money
   const getPhoneNumberHint = () => {
+    if (withdrawalPhoneNote) return withdrawalPhoneNote;
     return t('accounts.phoneNumberHint');
   };
 

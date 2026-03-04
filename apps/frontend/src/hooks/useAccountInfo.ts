@@ -44,6 +44,12 @@ const GET_ACCOUNT_BY_ID = `
       is_active
       created_at
       updated_at
+      business_location_id
+      business_location {
+        id
+        name
+        phone
+      }
       account_transactions {
         id
         account_id
@@ -66,6 +72,12 @@ export interface Account {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  business_location_id?: string | null;
+  business_location?: {
+    id: string;
+    name: string;
+    phone?: string | null;
+  } | null;
   account_transactions: Array<{
     id: string;
     account_id: string;
