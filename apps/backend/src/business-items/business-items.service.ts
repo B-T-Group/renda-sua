@@ -92,6 +92,7 @@ const GET_BUSINESS_LOCATIONS = `
       id
       name
       location_type
+      is_active
       is_primary
       created_at
       updated_at
