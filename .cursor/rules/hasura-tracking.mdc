@@ -2,9 +2,43 @@
 
 ## Description
 
-Rules for ensuring that all newly created database tables are properly tracked in Hasura metadata.
+Rules for ensuring that all newly created database tables are properly tracked in Hasura metadata, and that new columns added to existing tables are added to Hasura metadata permission column lists.
 
 ## Rules
+
+### Always Track New Columns on Existing Tables
+
+1. **When Adding Columns via Migrations**:
+
+   - Whenever you add a new column to a tracked Hasura table (in `apps/hasura/migrations/Rendasua/...`), you **must** add that column to the table’s Hasura metadata.
+   - If the column is not listed in the metadata permission column lists, GraphQL queries/mutations that select or set it will fail with validation errors (e.g. `field '<column>' not found in type '<table>'`).
+
+2. **Where to Update**:
+
+   - Table metadata file: `apps/hasura/metadata/databases/Rendasua/tables/public_<table_name>.yaml`
+   - Add the new column name to **every permission block** where it should be visible or writable:
+     - **select_permissions**: add to `columns` for each role that may read the column (typically all roles that can select from that table).
+     - **insert_permissions**: add to `columns` for each role that may set the column on insert.
+     - **update_permissions**: add to `columns` for each role that may update the column.
+
+3. **Example** (adding `rendasua_item_commission_percentage` to `business_locations`):
+
+   - In `public_business_locations.yaml`, add `- rendasua_item_commission_percentage` to:
+     - `insert_permissions` → business → permission → columns
+     - `select_permissions` → each role (agent, anonymous, business, client, user) → permission → columns
+     - `update_permissions` → business → permission → columns
+
+4. **After Editing Metadata**:
+
+   - Apply metadata: `hasura metadata apply --admin-secret myadminsecretkey` (from `apps/hasura`), or reload: `hasura metadata reload --admin-secret myadminsecretkey`.
+   - Ensure backend/console use the same metadata so new columns are available in the GraphQL schema.
+
+5. **Checklist When Adding a Column to a Tracked Table**:
+   - [ ] Migration adds the column to the table
+   - [ ] Column added to all relevant `select_permissions` column lists for that table
+   - [ ] Column added to `insert_permissions` column list(s) if the role can insert it
+   - [ ] Column added to `update_permissions` column list(s) if the role can update it
+   - [ ] Metadata applied/reloaded
 
 ### Always Track New Tables
 

@@ -339,7 +339,9 @@ const UserAccount: React.FC<UserAccountProps> = ({
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            {account.currency} Account:
+            {account.business_location?.name
+              ? `${account.business_location.name} - ${account.currency}:`
+              : `${account.currency} ${t('accounts.account')}:`}
           </Typography>
           <Typography variant="body2" fontWeight={600}>
             {formatCurrency(account.total_balance, account.currency)}
@@ -558,7 +560,11 @@ const UserAccount: React.FC<UserAccountProps> = ({
             <HistoryIcon />
             {t('accounts.transactionHistory')}
             <Chip
-              label={`${account.currency} ${t('accounts.account')}`}
+              label={
+                account.business_location?.name
+                  ? `${account.business_location.name} - ${account.currency}`
+                  : `${account.currency} ${t('accounts.account')}`
+              }
               size="small"
               color="primary"
             />
