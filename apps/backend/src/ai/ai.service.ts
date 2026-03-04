@@ -224,7 +224,7 @@ export class AiService {
       const body = {
         images: [{ image_url: imageUrl }],
         prompt:
-          'Clean up this product image. Remove background clutter. Add a clean white or neutral professional background. Make the product the focal point for e-commerce.',
+          'Clean up this product image. Remove background clutter. Add a simple background with a few subtle items or props for color (e.g. plants, fabric, or complementary objects). Keep the product as the clear focal point for e-commerce.',
         model: 'gpt-image-1.5',
         n: 1,
         output_format: 'png',
