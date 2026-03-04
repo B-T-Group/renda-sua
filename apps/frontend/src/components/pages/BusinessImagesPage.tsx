@@ -1,5 +1,7 @@
 import {
   Add as AddIcon,
+  AutoFixHigh as AutoFixHighIcon,
+  Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
   Delete as DeleteIcon,
   Image as ImageIcon,
@@ -39,6 +41,7 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmationModal from '../common/ConfirmationModal';
+import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessImages, type BusinessImage } from '../../hooks/useBusinessImages';
 import { useBusinessItemSearch } from '../../hooks/useBusinessItemSearch';
@@ -272,6 +275,7 @@ const BusinessImagesPage: React.FC = () => {
     updateImage,
     deleteImage,
     removeTag,
+    cleanupImage,
     setPage,
     setPageSize,
   } = useBusinessImages();
@@ -297,6 +301,12 @@ const BusinessImagesPage: React.FC = () => {
   const [altEdits, setAltEdits] = useState<Record<string, string>>({});
   const [imageToDelete, setImageToDelete] = useState<BusinessImage | null>(null);
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
+  const [imageToView, setImageToView] = useState<BusinessImage | null>(null);
+  const [imageToCleanup, setImageToCleanup] = useState<BusinessImage | null>(
+    null
+  );
+  const [cleanedB64, setCleanedB64] = useState<string | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
   const [imageCategoryFilters, setImageCategoryFilters] = useState<
     Record<string, string>
   >({});
@@ -371,6 +381,20 @@ const BusinessImagesPage: React.FC = () => {
     effectiveStatusFilter,
     search,
   ]);
+
+  useEffect(() => {
+    if (!imageToCleanup) return;
+    let cancelled = false;
+    cleanupImage(imageToCleanup.id).then((result) => {
+      if (!cancelled && result?.b64_json) {
+        setCleanedB64(result.b64_json);
+      }
+      if (!cancelled) setCleanupLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageToCleanup, cleanupImage]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
@@ -616,6 +640,49 @@ const BusinessImagesPage: React.FC = () => {
       sub_category_id: effectiveSubcategoryFilter ?? undefined,
       status: effectiveStatusFilter,
     });
+  };
+
+  const handleOpenCleanup = (img: BusinessImage) => {
+    setImageToCleanup(img);
+    setCleanedB64(null);
+    setCleanupLoading(true);
+  };
+
+  const handleCleanupAccept = async () => {
+    if (!imageToCleanup || !cleanedB64) return;
+    try {
+      const byteCharacters = atob(cleanedB64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+      const file = new File([blob], 'cleaned-image.png', { type: 'image/png' });
+      const uploaded = await uploadFileToS3(file);
+      await updateImage(imageToCleanup.id, uploaded);
+      enqueueSnackbar(
+        t(
+          'business.images.cleanup.success',
+          'Image replaced with cleaned version'
+        ),
+        { variant: 'success' }
+      );
+      setImageToCleanup(null);
+      setCleanedB64(null);
+      handleRefresh();
+    } catch (err: any) {
+      enqueueSnackbar(
+        err?.message ||
+          t('business.images.cleanup.error', 'Failed to cleanup image'),
+        { variant: 'error' }
+      );
+    }
+  };
+
+  const handleCleanupReject = () => {
+    setImageToCleanup(null);
+    setCleanedB64(null);
   };
 
   const handleEditCaptionAlt = async (
@@ -1148,7 +1215,11 @@ const BusinessImagesPage: React.FC = () => {
                         height="160"
                         image={img.image_url}
                         alt={img.alt_text || ''}
-                        sx={{ objectFit: 'cover' }}
+                        sx={{
+                          objectFit: 'cover',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setImageToView(img)}
                       />
                       <CardContent sx={{ pb: 1 }}>
                         <Stack spacing={1}>
@@ -1342,6 +1413,19 @@ const BusinessImagesPage: React.FC = () => {
                           </Button>
                           <Button
                             size="small"
+                            variant="outlined"
+                            startIcon={<AutoFixHighIcon />}
+                            onClick={() => handleOpenCleanup(img)}
+                            disabled={submitting}
+                            fullWidth
+                          >
+                            {t(
+                              'business.images.actions.cleanup',
+                              'Cleanup picture'
+                            )}
+                          </Button>
+                          <Button
+                            size="small"
                             variant="text"
                             component="label"
                             disabled={submitting}
@@ -1440,6 +1524,79 @@ const BusinessImagesPage: React.FC = () => {
         loading={deleteConfirmLoading}
         onConfirm={handleConfirmDelete}
         onCancel={() => setImageToDelete(null)}
+      />
+
+      {/* Image view lightbox */}
+      <Dialog
+        open={imageToView != null}
+        onClose={() => setImageToView(null)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            maxWidth: '90vw',
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+          },
+        }}
+        slotProps={{
+          backdrop: {
+            sx: { bgcolor: 'rgba(0,0,0,0.85)' },
+          },
+        }}
+        onClick={() => setImageToView(null)}
+      >
+        <IconButton
+          aria-label="close"
+          onClick={() => setImageToView(null)}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: 'white',
+            bgcolor: 'rgba(0,0,0,0.5)',
+            zIndex: 1,
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent
+          onClick={(e) => e.stopPropagation()}
+          sx={{
+            p: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          {imageToView && (
+            <Box
+              component="img"
+              src={imageToView.image_url}
+              alt={imageToView.alt_text || ''}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '90vh',
+                objectFit: 'contain',
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ImageCleanupPreviewDialog
+        open={imageToCleanup != null}
+        onClose={() => {
+          setImageToCleanup(null);
+          setCleanedB64(null);
+        }}
+        originalUrl={imageToCleanup?.image_url ?? ''}
+        cleanedB64={cleanedB64}
+        loading={cleanupLoading}
+        onAccept={handleCleanupAccept}
+        onReject={handleCleanupReject}
       />
     </Box>
   );

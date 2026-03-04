@@ -236,6 +236,31 @@ export const useBusinessImages = () => {
     [apiClient, fetchImages]
   );
 
+  const cleanupImage = useCallback(
+    async (
+      imageId: string
+    ): Promise<{ b64_json: string } | null> => {
+      try {
+        const response = await apiClient.post<{
+          success: boolean;
+          data: { b64_json: string };
+        }>(`/business-images/${imageId}/cleanup`);
+        if (response.data.success && response.data.data?.b64_json) {
+          return response.data.data;
+        }
+        return null;
+      } catch (err: any) {
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            'Failed to cleanup image'
+        );
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
   return {
     images,
     total,
@@ -250,6 +275,7 @@ export const useBusinessImages = () => {
     updateImage,
     deleteImage,
     removeTag,
+    cleanupImage,
     setPage,
     setPageSize,
   };

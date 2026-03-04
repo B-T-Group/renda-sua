@@ -30,10 +30,19 @@ export interface GenerateDescriptionResponse {
   error?: string;
 }
 
+export interface CleanupProductImageResponse {
+  b64_json: string;
+}
+
+interface OpenAIImageEditResponse {
+  data?: Array<{ b64_json?: string; url?: string }>;
+}
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly openaiApiUrl = 'https://api.openai.com/v1/chat/completions';
+  private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -197,6 +206,92 @@ export class AiService {
     Generate the description now:`;
 
     return prompt;
+  }
+
+  async cleanupProductImage(
+    imageUrl: string
+  ): Promise<CleanupProductImageResponse> {
+    const apiKey = this.configService.get<string>('openai.apiKey');
+    if (!apiKey) {
+      this.logger.error('OpenAI API key not configured');
+      throw new HttpException(
+        'OpenAI API key not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    try {
+      const body = {
+        images: [{ image_url: imageUrl }],
+        prompt:
+          'Clean up this product image. Remove background clutter. Add a clean white or neutral professional background. Make the product the focal point for e-commerce.',
+        model: 'gpt-image-1.5',
+        n: 1,
+        output_format: 'png',
+        background: 'opaque',
+      };
+
+      this.logger.log('Sending image URL to OpenAI for cleanup');
+      const editResponse = await axios.post<OpenAIImageEditResponse>(
+        this.openaiImagesEditsUrl,
+        body,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          timeout: 60000, // 60s for image processing
+          maxBodyLength: 50 * 1024 * 1024,
+        }
+      );
+
+      const b64_json =
+        editResponse.data?.data?.[0]?.b64_json ??
+        (editResponse.data as unknown as { b64_json?: string })?.b64_json;
+      if (!b64_json) {
+        this.logger.error('No image data in OpenAI response');
+        throw new HttpException(
+          'No image data returned from cleanup',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+
+      this.logger.log('Image cleanup completed successfully');
+      return { b64_json };
+    } catch (error: unknown) {
+      this.logger.error('Failed to cleanup product image', error);
+      if (error instanceof HttpException) throw error;
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status: number } };
+        if (axiosError.response?.status === 401) {
+          throw new HttpException(
+            'Invalid OpenAI API key',
+            HttpStatus.UNAUTHORIZED
+          );
+        }
+        if (axiosError.response?.status === 429) {
+          throw new HttpException(
+            'OpenAI API rate limit exceeded. Please try again later.',
+            HttpStatus.TOO_MANY_REQUESTS
+          );
+        }
+      }
+      if (error && typeof error === 'object' && 'code' in error) {
+        const err = error as { code?: string };
+        if (err.code === 'ECONNABORTED') {
+          throw new HttpException(
+            'Request timeout. Please try again.',
+            HttpStatus.REQUEST_TIMEOUT
+          );
+        }
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new HttpException(
+        { message: 'Failed to cleanup image', error: message },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   private getSystemPrompt(language: string): string {

@@ -717,6 +717,7 @@
       "actions": {
         "refresh": "Rafraîchir",
         "associateItem": "Associer un article",
+        "cleanup": "Nettoyer l'image",
         "replace": "Remplacer l'image",
         "delete": "Supprimer l'image"
       },
@@ -780,6 +781,16 @@
       "removeTag": {
         "success": "Étiquette supprimée",
         "error": "Échec de la suppression de l'étiquette"
+      },
+      "cleanup": {
+        "loading": "Nettoyage de l'image en cours...",
+        "previewTitle": "Aperçu de l'image nettoyée",
+        "original": "Original",
+        "cleaned": "Nettoyée",
+        "accept": "Accepter et remplacer",
+        "reject": "Rejeter",
+        "success": "Image remplacée par la version nettoyée",
+        "error": "Échec du nettoyage de l'image"
       }
     },
     "items": {

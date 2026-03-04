@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
+import { AiService } from '../ai/ai.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { BusinessImagesService, CreateBusinessImageInput } from './business-images.service';
 import type { UpdateBusinessImageInput } from './business-images.service';
@@ -29,7 +30,8 @@ interface BulkCreateBody {
 export class BusinessImagesController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly businessImagesService: BusinessImagesService
+    private readonly businessImagesService: BusinessImagesService,
+    private readonly aiService: AiService
   ) {}
 
   @Get()
@@ -243,6 +245,39 @@ export class BusinessImagesController {
     }
     await this.businessImagesService.removeTagFromImage(businessId, id, tag);
     return { success: true };
+  }
+
+  @Post(':id/cleanup')
+  @ApiOperation({
+    summary:
+      'Clean up a business image using AI (e.g. nicer background). Returns base64 image for preview.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cleaned image returned as base64',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: { b64_json: { type: 'string' } },
+          required: ['b64_json'],
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Image not found' })
+  @ApiResponse({ status: 429, description: 'OpenAI rate limit exceeded' })
+  async cleanupImage(@Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow();
+    const image = await this.businessImagesService.getImageForBusiness(
+      businessId,
+      id
+    );
+    const result = await this.aiService.cleanupProductImage(image.image_url);
+    return { success: true, data: result };
   }
 
   @Get('item-search')

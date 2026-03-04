@@ -438,6 +438,13 @@ export class BusinessImagesService {
     return image;
   }
 
+  async getImageForBusiness(
+    businessId: string,
+    imageId: string
+  ): Promise<BusinessImage> {
+    return this.fetchImageForBusiness(businessId, imageId);
+  }
+
   private async ensureImageBelongsToBusiness(
     businessId: string,
     imageId: string

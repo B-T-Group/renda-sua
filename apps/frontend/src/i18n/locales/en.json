@@ -728,6 +728,7 @@
       "actions": {
         "refresh": "Refresh",
         "associateItem": "Associate item",
+        "cleanup": "Cleanup picture",
         "replace": "Replace image",
         "delete": "Delete image"
       },
@@ -791,6 +792,16 @@
       "removeTag": {
         "success": "Tag removed",
         "error": "Failed to remove tag"
+      },
+      "cleanup": {
+        "loading": "Cleaning up image...",
+        "previewTitle": "Preview cleaned image",
+        "original": "Original",
+        "cleaned": "Cleaned",
+        "accept": "Accept and replace",
+        "reject": "Reject",
+        "success": "Image replaced with cleaned version",
+        "error": "Failed to cleanup image"
       }
     },
     "items": {
