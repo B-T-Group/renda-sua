@@ -66,47 +66,6 @@ export interface UpdateBusinessLocationData {
   };
 }
 
-const UPDATE_BUSINESS_LOCATION = `
-  mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
-    update_business_locations_by_pk(pk_columns: {id: $id}, _set: $data) {
-      id
-      name
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-      }
-      phone
-      email
-      operating_hours
-      is_active
-      is_primary
-      location_type
-      rendasua_item_commission_percentage
-      created_at
-      updated_at
-    }
-  }
-`;
-
-const UPDATE_ADDRESS = `
-  mutation UpdateAddress($id: uuid!, $data: addresses_set_input!) {
-    update_addresses_by_pk(pk_columns: {id: $id}, _set: $data) {
-      id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-    }
-  }
-`;
-
 const DELETE_BUSINESS_LOCATION = `
   mutation DeleteBusinessLocation($id: uuid!) {
     delete_business_locations_by_pk(id: $id) {
@@ -129,9 +88,6 @@ export const useBusinessLocations = (
 
   const { execute: executeDeleteMutation } = useGraphQLRequest(
     DELETE_BUSINESS_LOCATION
-  );
-  const { execute: executeUpdateMutation } = useGraphQLRequest(
-    UPDATE_BUSINESS_LOCATION
   );
 
   const fetchLocations = useCallback(async () => {
@@ -248,13 +204,30 @@ export const useBusinessLocations = (
         // Extract address data if present
         const { address, ...locationData } = data;
 
-        // Update location fields using GraphQL if there are any location fields to update
-        // Note: The addresses/business-locations API only handles address updates,
-        // so we use GraphQL for location fields (name, phone, email, etc.)
-        let locationUpdateResult = null;
-        if (Object.keys(locationData).length > 0) {
-          const result = await executeUpdateMutation({ id, data: locationData });
-          locationUpdateResult = result.update_business_locations_by_pk;
+        // Update location fields via backend PATCH (name, phone, email, commission, etc.)
+        const locationFields = {
+          ...(locationData.name !== undefined && { name: locationData.name }),
+          ...(locationData.phone !== undefined && { phone: locationData.phone }),
+          ...(locationData.email !== undefined && { email: locationData.email }),
+          ...(locationData.location_type !== undefined && {
+            location_type: locationData.location_type,
+          }),
+          ...(locationData.is_active !== undefined && {
+            is_active: locationData.is_active,
+          }),
+          ...(locationData.is_primary !== undefined && {
+            is_primary: locationData.is_primary,
+          }),
+          ...(locationData.rendasua_item_commission_percentage !== undefined && {
+            rendasua_item_commission_percentage:
+              locationData.rendasua_item_commission_percentage,
+          }),
+        };
+        if (Object.keys(locationFields).length > 0) {
+          await apiClient.patch<{
+            success: boolean;
+            data?: { business_location?: BusinessLocation };
+          }>(`/business-items/locations/${id}`, locationFields);
         }
 
         // If address data is provided, update the address using REST API
@@ -310,7 +283,7 @@ export const useBusinessLocations = (
         // Refetch locations to get updated data
         await fetchLocations();
 
-        return locationUpdateResult || { id };
+        return { id };
       } catch (err: any) {
         console.error('useBusinessLocations: Error updating location:', err);
         
@@ -327,7 +300,7 @@ export const useBusinessLocations = (
         setLoading(false);
       }
     },
-    [fetchLocations, apiClient, executeUpdateMutation]
+    [fetchLocations, apiClient]
   );
 
   const deleteLocation = useCallback(

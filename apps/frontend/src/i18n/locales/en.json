@@ -975,6 +975,7 @@
       "commissionLabel": "RendaSua commission",
       "commissionDefault": "5% (default)",
       "commissionHelper": "Percentage of item sales that goes to RendaSua. Leave empty to use the platform default (5%).",
+      "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addAddressFirst": "Add a business address first before adding locations.",
       "countryReadOnly": "Country is set from your business address and cannot be changed."

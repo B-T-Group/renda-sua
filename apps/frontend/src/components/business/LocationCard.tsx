@@ -1,4 +1,5 @@
 import {
+  AccountBalance as AccountBalanceIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Email as EmailIcon,
@@ -22,8 +23,18 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BusinessLocation } from '../../hooks/useBusinessLocations';
 
+/** Minimal account info for display on the card */
+export interface LocationAccountInfo {
+  currency: string;
+  available_balance: number;
+  total_balance: number;
+  withheld_balance?: number;
+}
+
 interface LocationCardProps {
   location: BusinessLocation;
+  /** When present, shows this location's account balance on the card */
+  account?: LocationAccountInfo | null;
   onEdit: (location: BusinessLocation) => void;
   onDelete: (location: BusinessLocation) => void;
   onToggleStatus: (location: BusinessLocation) => void;
@@ -31,6 +42,7 @@ interface LocationCardProps {
 
 const LocationCard: React.FC<LocationCardProps> = ({
   location,
+  account,
   onEdit,
   onDelete,
   onToggleStatus,
@@ -48,6 +60,12 @@ const LocationCard: React.FC<LocationCardProps> = ({
     ].filter(Boolean);
     return parts.join(', ');
   };
+
+  const formatBalance = (amount: number, currency: string) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+    }).format(amount);
 
   return (
     <Card
@@ -68,7 +86,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
         }`,
       }}
     >
-      <CardContent sx={{ flexGrow: 1, pb: 1 }}>
+      <CardContent sx={{ flexGrow: 1, pb: 1, px: 2, pt: 2 }}>
         {/* Header with Name and Delete Button */}
         <Box
           display="flex"
@@ -115,67 +133,105 @@ const LocationCard: React.FC<LocationCardProps> = ({
           </Tooltip>
         </Box>
 
-        {/* Address */}
-        <Box mb={2}>
-          <Stack direction="row" spacing={0.5} alignItems="flex-start" mb={1}>
-            <LocationIcon
-              sx={{ fontSize: 18, color: 'text.secondary', mt: 0.3 }}
-            />
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ lineHeight: 1.5 }}
-            >
-              {formatAddress(location.address)}
-            </Typography>
-          </Stack>
+        <Stack spacing={2}>
+          {/* Address - full width for readability */}
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <LocationIcon
+                sx={{ fontSize: 20, color: 'text.secondary', mt: 0.25 }}
+              />
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ lineHeight: 1.5, flex: 1, minWidth: 0 }}
+              >
+                {formatAddress(location.address)}
+              </Typography>
+            </Stack>
+          </Box>
 
-          {/* Commission (location override or platform default) */}
-          <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
+          {/* Commission */}
+          <Box>
             <Typography variant="body2" color="text.secondary">
               {t('business.locations.commissionLabel', 'RendaSua commission')}:{' '}
               {location.rendasua_item_commission_percentage != null
                 ? `${location.rendasua_item_commission_percentage}%`
                 : t('business.locations.commissionDefault', '5% (default)')}
             </Typography>
-          </Stack>
+          </Box>
 
-          {/* Contact Info */}
-          {location.phone && (
-            <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
-              <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                {location.phone}
+          {/* Location account balance */}
+          {account && (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                <AccountBalanceIcon
+                  sx={{ fontSize: 18, color: 'primary.main' }}
+                />
+                <Typography variant="subtitle2" color="text.secondary">
+                  {t('business.locations.locationAccount', 'Location account')}
+                </Typography>
+              </Stack>
+              <Typography variant="h6" color="primary.main" fontWeight={600}>
+                {formatBalance(account.total_balance, account.currency)}
               </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t('accounts.availableBalance', 'Available')}:{' '}
+                {formatBalance(account.available_balance, account.currency)}
+                {account.withheld_balance != null &&
+                  account.withheld_balance > 0 && (
+                    <>
+                      {' · '}
+                      {t('accounts.withheld', 'Withheld')}:{' '}
+                      {formatBalance(account.withheld_balance, account.currency)}
+                    </>
+                  )}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Contact - phone on its own line, note below */}
+          {location.phone && (
+            <Box>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <PhoneIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                <Typography variant="body2" color="text.secondary">
+                  {location.phone}
+                </Typography>
+              </Stack>
               <Typography
-                component="span"
                 variant="caption"
                 color="text.secondary"
-                sx={{ ml: 0.5, fontStyle: 'italic' }}
+                sx={{ display: 'block', mt: 0.25, ml: 3.5, fontStyle: 'italic' }}
               >
-                — {t('business.locations.phoneWithdrawalNote', 'Used for withdrawals from this location\'s account')}
+                {t('business.locations.phoneWithdrawalNote', 'Used for withdrawals from this location\'s account')}
               </Typography>
-            </Stack>
+            </Box>
           )}
 
           {location.email && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <EmailIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <EmailIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               <Typography
                 variant="body2"
                 color="text.secondary"
-                sx={{
-                  wordBreak: 'break-word',
-                }}
+                sx={{ wordBreak: 'break-word', minWidth: 0 }}
               >
                 {location.email}
               </Typography>
             </Stack>
           )}
-        </Box>
+        </Stack>
 
         {/* Badges */}
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5} sx={{ mt: 2 }}>
           {location.is_primary && (
             <Chip
               label={t('business.locations.primary', 'Primary')}
@@ -206,7 +262,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
       </CardContent>
 
       {/* Actions */}
-      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2, pt: 0 }}>
         <Button
           size="small"
           startIcon={<EditIcon />}

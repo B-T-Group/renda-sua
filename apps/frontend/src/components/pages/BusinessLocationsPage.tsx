@@ -26,6 +26,7 @@ import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAccountManager } from '../../hooks/useAccountManager';
 import {
   AddBusinessLocationData,
   BusinessLocation,
@@ -61,6 +62,12 @@ const BusinessLocationsPage: React.FC = () => {
     deleteLocation,
     fetchLocations,
   } = useBusinessLocations(profile?.business?.id, undefined, refetchProfile);
+
+  const { accounts } = useAccountManager({
+    entityType: 'business',
+    entityId: profile?.id ?? '',
+    autoFetch: !!profile?.id,
+  });
 
   const canAddLocation = !!primaryAddressCountry;
 
@@ -412,6 +419,9 @@ const BusinessLocationsPage: React.FC = () => {
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
                     <LocationCard
                       location={location}
+                      account={accounts.find(
+                        (a) => a.business_location_id === location.id
+                      )}
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}
@@ -454,6 +464,9 @@ const BusinessLocationsPage: React.FC = () => {
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
                     <LocationCard
                       location={location}
+                      account={accounts.find(
+                        (a) => a.business_location_id === location.id
+                      )}
                       onEdit={handleEditLocation}
                       onDelete={handleDeleteLocation}
                       onToggleStatus={handleToggleLocationStatus}

@@ -964,6 +964,7 @@
       "commissionLabel": "Commission RendaSua",
       "commissionDefault": "5 % (par défaut)",
       "commissionHelper": "Pourcentage des ventes d'articles reversé à RendaSua. Laisser vide pour utiliser la valeur par défaut de la plateforme (5 %).",
+      "locationAccount": "Compte de l'emplacement",
       "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
       "addAddressFirst": "Ajoutez d'abord une adresse professionnelle avant d'ajouter des emplacements.",
       "countryReadOnly": "Le pays est défini selon l'adresse de votre entreprise et ne peut pas être modifié."
