@@ -180,6 +180,7 @@ const UPDATE_BUSINESS_MUTATION = `
       name
       is_admin
       is_verified
+      image_cleanup_enabled
       updated_at
     }
   }
@@ -308,7 +309,7 @@ export class AdminService {
     const query = `
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
-          id user_id name is_admin is_verified created_at updated_at
+          id user_id name is_admin is_verified image_cleanup_enabled created_at updated_at
           user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
@@ -409,7 +410,11 @@ export class AdminService {
 
   private async updateBusinessRecord(
     businessId: string,
-    updates: { name?: string; is_admin?: boolean }
+    updates: {
+      name?: string;
+      is_admin?: boolean;
+      image_cleanup_enabled?: boolean;
+    }
   ) {
     const result = await this.hasuraSystemService.executeMutation(
       UPDATE_BUSINESS_MUTATION,
@@ -495,7 +500,11 @@ export class AdminService {
       last_name?: string;
       phone_number?: string;
     },
-    businessUpdates: { name?: string; is_admin?: boolean }
+    businessUpdates: {
+      name?: string;
+      is_admin?: boolean;
+      image_cleanup_enabled?: boolean;
+    }
   ) {
     const userId = await this.getUserIdByEntity('business', businessId);
     const updatedUser = Object.keys(userUpdates || {}).length

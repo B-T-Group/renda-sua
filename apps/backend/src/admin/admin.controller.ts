@@ -255,6 +255,76 @@ export class AdminController {
     }
   }
 
+  @Patch('businesses/:id')
+  @ApiOperation({
+    summary: 'Update a business (admin only)',
+    description:
+      'Only business accounts with is_admin can update businesses. Supports name, is_admin, image_cleanup_enabled, and owner user fields.',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        is_admin: { type: 'boolean' },
+        image_cleanup_enabled: { type: 'boolean' },
+        first_name: { type: 'string' },
+        last_name: { type: 'string' },
+        phone_number: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Business updated' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async updateBusiness(
+    @Param('id') businessId: string,
+    @Body()
+    body: {
+      name?: string;
+      is_admin?: boolean;
+      image_cleanup_enabled?: boolean;
+      first_name?: string;
+      last_name?: string;
+      phone_number?: string;
+    }
+  ) {
+    try {
+      const userUpdates: {
+        first_name?: string;
+        last_name?: string;
+        phone_number?: string;
+      } = {};
+      if (typeof body.first_name === 'string') userUpdates.first_name = body.first_name;
+      if (typeof body.last_name === 'string') userUpdates.last_name = body.last_name;
+      if (typeof body.phone_number === 'string')
+        userUpdates.phone_number = body.phone_number;
+
+      const businessUpdates: {
+        name?: string;
+        is_admin?: boolean;
+        image_cleanup_enabled?: boolean;
+      } = {};
+      if (typeof body.name === 'string') businessUpdates.name = body.name;
+      if (typeof body.is_admin === 'boolean') businessUpdates.is_admin = body.is_admin;
+      if (typeof body.image_cleanup_enabled === 'boolean')
+        businessUpdates.image_cleanup_enabled = body.image_cleanup_enabled;
+
+      const result = await this.adminService.updateBusiness(
+        businessId,
+        userUpdates,
+        businessUpdates
+      );
+      return { success: true, ...result };
+    } catch (error: any) {
+      console.error('Error updating business:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update business',
+      };
+    }
+  }
+
   @Get('users/:id/uploads')
   async getUserUploads(
     @Param('id') userId: string,

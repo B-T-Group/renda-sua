@@ -134,6 +134,9 @@
     }
   },
   "admin": {
+    "businesses": {
+      "imageCleanupEnabled": "Nettoyage d'image activé"
+    },
     "applicationSetup": {
       "active": "Actif",
       "applicationConfigsTitle": "Configurations de l'application",

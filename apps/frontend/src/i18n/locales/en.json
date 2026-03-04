@@ -134,6 +134,9 @@
     }
   },
   "admin": {
+    "businesses": {
+      "imageCleanupEnabled": "Image cleanup enabled"
+    },
     "applicationSetup": {
       "active": "Active",
       "applicationConfigsTitle": "Application configurations",

@@ -4824,6 +4824,8 @@ export type Businesses = {
   is_admin?: Maybe<Scalars['Boolean']['output']>;
   /** Indicates if the business account has been verified */
   is_verified?: Maybe<Scalars['Boolean']['output']>;
+  /** When true, this business can use the AI image cleanup feature */
+  image_cleanup_enabled?: Maybe<Scalars['Boolean']['output']>;
   /** An array relationship */
   items: Array<Items>;
   /** An aggregate relationship */
@@ -4952,6 +4954,7 @@ export type Businesses_Bool_Exp = {
   business_locations_aggregate?: InputMaybe<Business_Locations_Aggregate_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  image_cleanup_enabled?: InputMaybe<Boolean_Comparison_Exp>;
   is_admin?: InputMaybe<Boolean_Comparison_Exp>;
   is_verified?: InputMaybe<Boolean_Comparison_Exp>;
   items?: InputMaybe<Items_Bool_Exp>;
@@ -5080,6 +5083,8 @@ export type Businesses_Set_Input = {
   is_admin?: InputMaybe<Scalars['Boolean']['input']>;
   /** Indicates if the business account has been verified */
   is_verified?: InputMaybe<Scalars['Boolean']['input']>;
+  /** When true, this business can use the AI image cleanup feature */
+  image_cleanup_enabled?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;

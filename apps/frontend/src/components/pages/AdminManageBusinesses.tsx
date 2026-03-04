@@ -53,6 +53,7 @@ const AdminManageBusinesses: React.FC = () => {
       phone_number: target?.user.phone_number || '',
       name: target?.name || '',
       is_admin: target?.is_admin || false,
+      image_cleanup_enabled: target?.image_cleanup_enabled ?? false,
     });
     setEditingId(id);
   };
@@ -218,6 +219,23 @@ const AdminManageBusinesses: React.FC = () => {
                 }
               />
               <Typography>Admin</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Switch
+                checked={!!form.image_cleanup_enabled}
+                onChange={(e) =>
+                  setForm((f: any) => ({
+                    ...f,
+                    image_cleanup_enabled: e.target.checked,
+                  }))
+                }
+              />
+              <Typography>
+                {t(
+                  'admin.businesses.imageCleanupEnabled',
+                  'Image cleanup enabled'
+                )}
+              </Typography>
             </Box>
             <TextField
               label="Owner First Name"

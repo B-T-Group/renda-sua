@@ -1411,19 +1411,21 @@ const BusinessImagesPage: React.FC = () => {
                               'Associate item'
                             )}
                           </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<AutoFixHighIcon />}
-                            onClick={() => handleOpenCleanup(img)}
-                            disabled={submitting}
-                            fullWidth
-                          >
-                            {t(
-                              'business.images.actions.cleanup',
-                              'Cleanup picture'
-                            )}
-                          </Button>
+                          {profile?.business?.image_cleanup_enabled && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<AutoFixHighIcon />}
+                              onClick={() => handleOpenCleanup(img)}
+                              disabled={submitting}
+                              fullWidth
+                            >
+                              {t(
+                                'business.images.actions.cleanup',
+                                'Cleanup picture'
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="small"
                             variant="text"

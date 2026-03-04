@@ -479,6 +479,7 @@ export class HasuraUserService {
           name
           is_admin
           is_verified
+          image_cleanup_enabled
           created_at
           updated_at
         }
@@ -515,6 +516,7 @@ export class HasuraUserService {
         name: business.name,
         is_admin: business.is_admin,
         is_verified: business.is_verified,
+        image_cleanup_enabled: business.image_cleanup_enabled,
         created_at: business.created_at,
         updated_at: business.updated_at,
       } as Businesses,

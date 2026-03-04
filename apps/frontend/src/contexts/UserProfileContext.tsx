@@ -69,6 +69,7 @@ export interface UserProfile {
     name: string;
     is_admin: boolean;
     is_verified: boolean;
+    image_cleanup_enabled?: boolean;
     created_at: string;
     updated_at: string;
   };

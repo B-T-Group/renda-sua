@@ -18,6 +18,7 @@ export interface AdminBusiness {
   name: string;
   is_admin: boolean;
   is_verified: boolean;
+  image_cleanup_enabled?: boolean;
   created_at: string;
   updated_at: string;
   user: AdminBusinessUser;
@@ -30,6 +31,7 @@ export interface UpdateBusinessPayload {
   phone_number?: string;
   name?: string;
   is_admin?: boolean;
+  image_cleanup_enabled?: boolean;
 }
 
 export const useAdminBusinesses = () => {

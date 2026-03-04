@@ -267,11 +267,31 @@ export class BusinessImagesController {
       },
     },
   })
-  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'User has no business or image cleanup is not enabled for this business',
+  })
   @ApiResponse({ status: 404, description: 'Image not found' })
   @ApiResponse({ status: 429, description: 'OpenAI rate limit exceeded' })
   async cleanupImage(@Param('id') id: string) {
-    const businessId = await this.getBusinessIdOrThrow();
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!user.business?.image_cleanup_enabled) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Image cleanup is not enabled for this business account',
+        },
+        HttpStatus.FORBIDDEN
+      );
+    }
     const image = await this.businessImagesService.getImageForBusiness(
       businessId,
       id

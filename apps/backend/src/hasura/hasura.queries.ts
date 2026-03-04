@@ -60,6 +60,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         name
         is_admin
         is_verified
+        image_cleanup_enabled
         created_at
         updated_at
       }
