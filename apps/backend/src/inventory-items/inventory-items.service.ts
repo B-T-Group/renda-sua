@@ -4,6 +4,10 @@ import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  ItemImagesMergeService,
+  type ItemImageShape,
+} from './item-images-merge.service';
 
 export interface InventoryItem {
   id: string;
@@ -122,7 +126,8 @@ export class InventoryItemsService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly addressesService: AddressesService,
     private readonly googleDistanceService: GoogleDistanceService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly itemImagesMergeService: ItemImagesMergeService
   ) {}
 
   /**
@@ -381,11 +386,14 @@ export class InventoryItemsService {
       const total = result.business_inventory_aggregate?.aggregate?.count || 0;
       const totalPages = Math.ceil(total / limit);
 
-      const inventoryIds = items.map((i) => i.id);
+      const itemsWithMergedImages =
+        await this.mergeTaggedBusinessImagesIntoItems(items);
+
+      const inventoryIds = itemsWithMergedImages.map((i) => i.id);
       const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
       const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
 
-      const itemsWithViewsAndDeals = items.map((item) => {
+      const itemsWithViewsAndDeals = itemsWithMergedImages.map((item) => {
         const viewsCount = viewsMap[item.id] ?? 0;
         const deal = dealsMap[item.id];
         const originalPrice = item.selling_price;
@@ -434,6 +442,61 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /**
+   * Merges SKU-tagged business_images (first) with item.item_images (second) for each item.
+   */
+  private async mergeTaggedBusinessImagesIntoItems(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    if (items.length === 0) return items;
+
+    const businessIds = [
+      ...new Set(
+        items
+          .map((i) => i.business_location?.business_id)
+          .filter((id): id is string => !!id)
+      ),
+    ];
+    const taggedMap =
+      await this.itemImagesMergeService.getTaggedImagesByBusinessAndSku(
+        businessIds
+      );
+
+    return items.map((item) => {
+      const businessId = item.business_location?.business_id;
+      const sku =
+        typeof item.item?.sku === 'string'
+          ? item.item.sku.trim().toLowerCase()
+          : '';
+      const dbImages: ItemImageShape[] = (item.item?.item_images ?? []).map(
+        (img) => ({
+          ...img,
+          display_order: img.display_order ?? 0,
+        })
+      );
+
+      if (!businessId || !sku) {
+        return item;
+      }
+
+      const bySku = taggedMap.get(businessId);
+      const tagged = bySku?.get(sku) ?? [];
+      const merged = this.itemImagesMergeService.mergeItemImages(
+        tagged,
+        dbImages,
+        item.item?.name
+      );
+
+      return {
+        ...item,
+        item: {
+          ...item.item,
+          item_images: merged,
+        },
+      };
+    });
   }
 
   /**
@@ -525,7 +588,7 @@ export class InventoryItemsService {
         id,
       });
 
-      const item: InventoryItem | null = result.business_inventory_by_pk;
+      let item: InventoryItem | null = result.business_inventory_by_pk;
 
       if (!item) {
         throw new HttpException(
@@ -533,6 +596,10 @@ export class InventoryItemsService {
           HttpStatus.NOT_FOUND
         );
       }
+
+      const [itemWithMergedImages] =
+        await this.mergeTaggedBusinessImagesIntoItems([item]);
+      item = itemWithMergedImages;
 
       const viewsMap = await this.getViewCountsByInventoryIds([item.id]);
       const dealsMap = await this.getActiveDealsByInventoryIds([item.id]);
