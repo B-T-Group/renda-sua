@@ -46,6 +46,7 @@ select_permissions:
         - alt_text
         - tags
         - status
+        - is_ai_cleaned
         - created_at
       filter:
         business:
@@ -67,6 +68,7 @@ update_permissions:
         - alt_text
         - tags
         - status
+        - is_ai_cleaned
       filter:
         business:
           user:

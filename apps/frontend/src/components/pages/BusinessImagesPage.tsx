@@ -643,6 +643,16 @@ const BusinessImagesPage: React.FC = () => {
   };
 
   const handleOpenCleanup = (img: BusinessImage) => {
+    if (img.is_ai_cleaned) {
+      enqueueSnackbar(
+        t(
+          'business.images.cleanup.alreadyCleaned',
+          'Image was already cleaned with AI'
+        ),
+        { variant: 'info' }
+      );
+      return;
+    }
     setImageToCleanup(img);
     setCleanedB64(null);
     setCleanupLoading(true);
@@ -660,7 +670,10 @@ const BusinessImagesPage: React.FC = () => {
       const blob = new Blob([byteArray], { type: 'image/png' });
       const file = new File([blob], 'cleaned-image.png', { type: 'image/png' });
       const uploaded = await uploadFileToS3(file);
-      await updateImage(imageToCleanup.id, uploaded);
+      await updateImage(imageToCleanup.id, {
+        ...uploaded,
+        is_ai_cleaned: true,
+      });
       enqueueSnackbar(
         t(
           'business.images.cleanup.success',
@@ -1227,21 +1240,36 @@ const BusinessImagesPage: React.FC = () => {
                             direction="row"
                             justifyContent="space-between"
                             alignItems="center"
+                            flexWrap="wrap"
+                            gap={0.5}
                           >
-                            <Chip
-                              size="small"
-                              label={t(
-                                `business.images.status.${img.status}`,
-                                img.status
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                              <Chip
+                                size="small"
+                                label={t(
+                                  `business.images.status.${img.status}`,
+                                  img.status
+                                )}
+                                color={
+                                  img.status === 'assigned'
+                                    ? 'success'
+                                    : img.status === 'archived'
+                                    ? 'default'
+                                    : 'warning'
+                                }
+                              />
+                              {(img.is_ai_cleaned ||
+                                (img.tags || []).includes('ai-cleaned')) && (
+                                <Chip
+                                  size="small"
+                                  label={t(
+                                    'business.images.tagAiCleaned',
+                                    'AI cleaned'
+                                  )}
+                                  variant="outlined"
+                                />
                               )}
-                              color={
-                                img.status === 'assigned'
-                                  ? 'success'
-                                  : img.status === 'archived'
-                                  ? 'default'
-                                  : 'warning'
-                              }
-                            />
+                            </Stack>
                             <Typography
                               variant="caption"
                               color="text.secondary"
@@ -1417,7 +1445,7 @@ const BusinessImagesPage: React.FC = () => {
                               variant="outlined"
                               startIcon={<AutoFixHighIcon />}
                               onClick={() => handleOpenCleanup(img)}
-                              disabled={submitting}
+                              disabled={submitting || img.is_ai_cleaned}
                               fullWidth
                             >
                               {t(

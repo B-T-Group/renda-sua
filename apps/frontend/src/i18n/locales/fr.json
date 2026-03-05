@@ -719,6 +719,7 @@
         "assigned": "Associé",
         "archived": "Archivé"
       },
+      "tagAiCleaned": "Nettoyée par IA",
       "actions": {
         "refresh": "Rafraîchir",
         "associateItem": "Associer un article",
@@ -795,7 +796,8 @@
         "accept": "Accepter et remplacer",
         "reject": "Rejeter",
         "success": "Image remplacée par la version nettoyée",
-        "error": "Échec du nettoyage de l'image"
+        "error": "Échec du nettoyage de l'image",
+        "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA"
       }
     },
     "items": {

@@ -15,6 +15,7 @@ export interface BusinessImage {
   alt_text?: string | null;
   tags: string[];
   status: string;
+  is_ai_cleaned?: boolean;
   created_at: string;
 }
 
@@ -52,6 +53,7 @@ export interface UpdateBusinessImagePayload {
   alt_text?: string | null;
   tags?: string[];
   status?: string;
+  is_ai_cleaned?: boolean;
 }
 
 export const useBusinessImages = () => {

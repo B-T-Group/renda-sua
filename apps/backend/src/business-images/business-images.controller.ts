@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -189,6 +190,7 @@ export class BusinessImagesController {
           nullable: true,
         },
         status: { type: 'string', nullable: true },
+        is_ai_cleaned: { type: 'boolean', nullable: true },
       },
     },
   })
@@ -272,6 +274,7 @@ export class BusinessImagesController {
     description:
       'User has no business or image cleanup is not enabled for this business',
   })
+  @ApiResponse({ status: 400, description: 'Image was already cleaned with AI' })
   @ApiResponse({ status: 404, description: 'Image not found' })
   @ApiResponse({ status: 429, description: 'OpenAI rate limit exceeded' })
   async cleanupImage(@Param('id') id: string) {
@@ -296,6 +299,11 @@ export class BusinessImagesController {
       businessId,
       id
     );
+    if (image.is_ai_cleaned) {
+      throw new BadRequestException(
+        'Image was already cleaned with AI'
+      );
+    }
     const result = await this.aiService.cleanupProductImage(image.image_url);
     return { success: true, data: result };
   }

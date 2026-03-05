@@ -730,6 +730,7 @@
         "assigned": "Assigned",
         "archived": "Archived"
       },
+      "tagAiCleaned": "AI cleaned",
       "actions": {
         "refresh": "Refresh",
         "associateItem": "Associate item",
@@ -806,7 +807,8 @@
         "accept": "Accept and replace",
         "reject": "Reject",
         "success": "Image replaced with cleaned version",
-        "error": "Failed to cleanup image"
+        "error": "Failed to cleanup image",
+        "alreadyCleaned": "Image was already cleaned with AI"
       }
     },
     "items": {

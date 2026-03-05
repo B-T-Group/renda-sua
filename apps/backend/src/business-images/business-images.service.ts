@@ -16,6 +16,7 @@ export interface BusinessImage {
   alt_text: string | null;
   tags: string[];
   status: string;
+  is_ai_cleaned: boolean;
   created_at: string;
 }
 
@@ -47,6 +48,7 @@ export interface UpdateBusinessImageInput {
   alt_text?: string | null;
   tags?: string[];
   status?: string;
+  is_ai_cleaned?: boolean;
 }
 
 const GET_BUSINESS_IMAGES = `
@@ -74,6 +76,7 @@ const GET_BUSINESS_IMAGES = `
       alt_text
       tags
       status
+      is_ai_cleaned
       created_at
     }
     business_images_aggregate(where: $where) {
@@ -110,6 +113,7 @@ const GET_BUSINESS_IMAGES_DATA_ONLY = `
       alt_text
       tags
       status
+      is_ai_cleaned
       created_at
     }
   }
@@ -165,6 +169,7 @@ const UPDATE_BUSINESS_IMAGE = `
       alt_text
       tags
       status
+      is_ai_cleaned
       created_at
     }
   }
@@ -352,12 +357,18 @@ export class BusinessImagesService {
     imageId: string,
     changes: UpdateBusinessImageInput
   ): Promise<BusinessImage> {
-    await this.ensureImageBelongsToBusiness(businessId, imageId);
+    const current = await this.fetchImageForBusiness(businessId, imageId);
     const cleanedChanges = this.removeUndefinedKeys(
       changes as Record<string, unknown>
     );
+    if (cleanedChanges.is_ai_cleaned === true) {
+      const aiCleanedTag = 'ai-cleaned';
+      const existingTags = current.tags ?? [];
+      if (!existingTags.includes(aiCleanedTag)) {
+        cleanedChanges.tags = [...existingTags, aiCleanedTag];
+      }
+    }
     if (!Object.keys(cleanedChanges).length) {
-      const current = await this.fetchImageForBusiness(businessId, imageId);
       return current;
     }
     const result = await this.hasuraUserService.executeMutation<{
@@ -421,6 +432,7 @@ export class BusinessImagesService {
           alt_text
           tags
           status
+          is_ai_cleaned
           created_at
         }
       }
