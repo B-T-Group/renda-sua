@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
 @Injectable()
 export class PermissionService {
-  constructor(private readonly hasuraUserService: HasuraUserService) {}
+  constructor(
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService
+  ) {}
 
   /**
    * Check if user can view a specific user upload
@@ -13,7 +17,22 @@ export class PermissionService {
    */
   async canViewUserUpload(userId: string, uploadId: string): Promise<boolean> {
     try {
-      // Get the upload record to check ownership
+      // Superuser (business admin) can view any upload – use system query to bypass RLS
+      const isAdmin = await this.isBusinessAdmin(userId);
+      if (isAdmin) {
+        const systemUploadResult =
+          await this.hasuraSystemService.executeQuery(
+            `query GetUserUpload($uploadId: uuid!) {
+              user_uploads_by_pk(id: $uploadId) { id }
+            }`,
+            { uploadId }
+          );
+        if (systemUploadResult?.user_uploads_by_pk) {
+          return true;
+        }
+      }
+
+      // Get the upload record to check ownership (subject to RLS)
       const getUploadQuery = `
         query GetUserUpload($uploadId: uuid!) {
           user_uploads_by_pk(id: $uploadId) {
@@ -34,7 +53,7 @@ export class PermissionService {
       );
 
       if (!uploadResult.user_uploads_by_pk) {
-        return false; // Upload doesn't exist
+        return false; // Upload doesn't exist or not visible to user
       }
 
       const uploadRecord = uploadResult.user_uploads_by_pk;
@@ -42,13 +61,6 @@ export class PermissionService {
       // Check if user owns the upload
       if (uploadRecord.user_id === userId) {
         return true;
-      }
-
-      // Check if user is a business with admin privileges
-      const currentUser = await this.hasuraUserService.getUser();
-      if (currentUser.user_type_id === 'business') {
-        const isAdmin = await this.isBusinessAdmin(userId);
-        return isAdmin;
       }
 
       return false;
