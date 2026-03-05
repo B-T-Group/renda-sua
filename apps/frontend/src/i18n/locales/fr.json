@@ -2267,7 +2267,8 @@
         "confirmCaution": "Confirmez le dépôt de caution pour réserver cette commande.",
         "enRoute": "Mettez à jour le statut de la commande lorsque vous la récupérez et commencez la livraison.",
         "delivered": "La commande est livrée. Cliquez sur l’onglet Compte pour voir vos gains.",
-        "accountSummary": "Consultez votre solde mis à jour et vos transactions, puis terminez le guide."
+        "accountSummary": "Consultez votre solde mis à jour et vos transactions, puis lancez un retrait ou terminez le guide.",
+        "withdrawDemo": "Saisissez le numéro de téléphone mobile money (nous utilisons par défaut le numéro de votre profil) et simulez un retrait."
       },
       "claimOrder": "Réclamer la commande",
       "cautionTitle": "Confirmez votre dépôt de caution",
@@ -2285,7 +2286,11 @@
       "txCommission": "Commission de livraison pour la commande RS-12345",
       "markPickedUp": "Marquer comme retirée",
       "startDelivery": "Commencer la livraison",
-      "markDelivered": "Marquer comme livrée"
+      "markDelivered": "Marquer comme livrée",
+      "withdrawTitle": "Retrait vers Mobile Money",
+      "withdrawDescription": "Saisissez le numéro de téléphone mobile money sur lequel vous souhaitez recevoir vos fonds. Nous pré-remplissons le numéro de votre profil, mais vous pouvez le modifier avant de retirer.",
+      "withdrawCompleteMessage": "Votre demande de retrait a été envoyée dans cette démo. Dans l’application réelle, vous verrez une confirmation et la transaction dans votre historique.",
+      "completeDemo": "Terminer la démo"
     }
   }
 }

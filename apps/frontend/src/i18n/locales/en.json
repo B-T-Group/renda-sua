@@ -2295,7 +2295,8 @@
         "confirmCaution": "Confirm the caution deposit to reserve this order.",
         "enRoute": "Update the order status as you pick up and start delivery.",
         "delivered": "The order is delivered. Click the Account tab to see your earnings.",
-        "accountSummary": "Review your updated balance and transactions, then finish the guide."
+        "accountSummary": "Review your updated balance and transactions, then start a withdrawal or finish the guide.",
+        "withdrawDemo": "Enter your mobile money phone number (we use your profile number by default) and simulate a withdrawal."
       },
       "claimOrder": "Claim order",
       "cautionTitle": "Confirm your caution deposit",
@@ -2313,7 +2314,11 @@
       "txCommission": "Delivery commission for order RS-12345",
       "markPickedUp": "Mark as picked up",
       "startDelivery": "Start delivery",
-      "markDelivered": "Mark as delivered"
+      "markDelivered": "Mark as delivered",
+      "withdrawTitle": "Withdraw to Mobile Money",
+      "withdrawDescription": "Enter the mobile money phone number where you want to receive your funds. We pre-fill your profile phone number, but you can change it before withdrawing.",
+      "withdrawCompleteMessage": "Your withdrawal request has been sent in this demo. In the real app you will see a confirmation and the transaction in your history.",
+      "completeDemo": "Complete demo"
     }
   }
 }

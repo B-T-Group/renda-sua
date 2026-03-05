@@ -11,6 +11,7 @@ import {
   Paper,
   Tab,
   Tabs,
+  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -18,6 +19,8 @@ import {
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import PhoneInput from '../common/PhoneInput';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
 interface AgentOnboardingModalProps {
   open: boolean;
@@ -31,7 +34,8 @@ type DemoStage =
   | 'confirmCaution'
   | 'enRoute'
   | 'delivered'
-  | 'accountSummary';
+  | 'accountSummary'
+  | 'withdrawDemo';
 
 type DemoOrderStatus =
   | 'AVAILABLE'
@@ -88,6 +92,7 @@ const demoStages: DemoStage[] = [
   'enRoute',
   'delivered',
   'accountSummary',
+  'withdrawDemo',
 ];
 
 const getStatusLabel = (status: DemoOrderStatus, t: TFunction) => {
@@ -152,9 +157,15 @@ const getStageInstruction = (stage: DemoStage, t: TFunction) => {
       'The order is delivered. Click the Account tab to see your earnings.',
     );
   }
+  if (stage === 'withdrawDemo') {
+    return t(
+      'agentOnboarding.interactive.instructions.withdrawDemo',
+      'Enter your mobile money phone number (we use your profile number by default) and simulate a withdrawal.',
+    );
+  }
   return t(
     'agentOnboarding.interactive.instructions.accountSummary',
-    'Review your updated balance and transactions, then finish the guide.',
+    'Review your updated balance and transactions, then start a withdrawal or finish the guide.',
   );
 };
 
@@ -681,18 +692,17 @@ const EnRouteScreen: React.FC<EnRouteScreenProps> = ({
 
 interface AccountScreenProps {
   account: DemoAccount;
-  stage: DemoStage;
   onFinish: () => void;
+  onWithdraw: () => void;
   t: TFunction;
 }
 
 const AccountScreen: React.FC<AccountScreenProps> = ({
   account,
-  stage,
   onFinish,
+  onWithdraw,
   t,
 }) => {
-  const isSummary = stage === 'accountSummary';
   const balanceLabel = `${account.balance.toLocaleString()} XAF`;
 
   return (
@@ -705,26 +715,24 @@ const AccountScreen: React.FC<AccountScreenProps> = ({
       }}
     >
       <Paper
-        elevation={isSummary ? 4 : 1}
+        elevation={4}
         sx={{
           p: 2,
           borderRadius: 0,
           border: 2,
-          borderColor: isSummary ? 'primary.main' : 'grey.200',
+          borderColor: 'primary.main',
           position: 'relative',
         }}
       >
-        {isSummary && (
-          <Chip
-            color="primary"
-            label={t(
-              'agentOnboarding.interactive.updated',
-              'Updated',
-            )}
-            size="small"
-            sx={{ position: 'absolute', top: 8, right: 8 }}
-          />
-        )}
+        <Chip
+          color="primary"
+          label={t(
+            'agentOnboarding.interactive.updated',
+            'Updated',
+          )}
+          size="small"
+          sx={{ position: 'absolute', top: 8, right: 8 }}
+        />
         <Typography
           variant="caption"
           color="text.secondary"
@@ -788,11 +796,150 @@ const AccountScreen: React.FC<AccountScreenProps> = ({
           fullWidth
           variant="contained"
           color="primary"
-          onClick={stage === 'accountSummary' ? onFinish : undefined}
+          onClick={onWithdraw}
+          sx={{ mb: 1 }}
         >
+          {t('accounts.withdraw', 'Withdraw')}
+        </Button>
+        <Button fullWidth onClick={onFinish}>
           {t('agentOnboarding.complete', 'Get Started')}
         </Button>
       </Box>
+    </Box>
+  );
+};
+
+interface WithdrawDemoScreenProps {
+  balance: number;
+  defaultPhoneNumber: string;
+  t: TFunction;
+  onComplete: () => void;
+}
+
+const WithdrawDemoScreen: React.FC<WithdrawDemoScreenProps> = ({
+  balance,
+  defaultPhoneNumber,
+  t,
+  onComplete,
+}) => {
+  const [phone, setPhone] = useState(defaultPhoneNumber);
+  const [amount, setAmount] = useState('');
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const handleConfirmWithdraw = () => {
+    setIsSubmitted(true);
+  };
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Typography
+        variant="subtitle1"
+        sx={{ fontWeight: 600 }}
+      >
+        {t(
+          'agentOnboarding.interactive.withdrawTitle',
+          'Withdraw to Mobile Money',
+        )}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+      >
+        {t(
+          'agentOnboarding.interactive.withdrawDescription',
+          'Enter the mobile money phone number where you want to receive your funds. We pre-fill your profile phone number, but you can change it before withdrawing.',
+        )}
+      </Typography>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          borderColor: 'grey.200',
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          {t('accounts.availableBalance', 'Available balance')}
+        </Typography>
+        <Typography
+          variant="h6"
+          color="success.main"
+          sx={{ fontWeight: 700 }}
+        >
+          {balance.toLocaleString()} XAF
+        </Typography>
+      </Paper>
+      {!isSubmitted ? (
+        <>
+          <PhoneInput
+            value={phone}
+            onChange={(value) => setPhone(value || '')}
+            label={t('accounts.phoneNumber', 'Phone Number')}
+            placeholder={t(
+              'accounts.phoneNumberPlaceholder',
+              'Enter phone number',
+            )}
+            helperText={t(
+              'accounts.phoneNumberHint',
+              'Example: 062040404',
+            )}
+            defaultCountry="CM"
+          />
+          <TextField
+            fullWidth
+            label={t('accounts.amount', 'Amount')}
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            type="number"
+            placeholder={t('accounts.amountPlaceholder', 'Enter amount')}
+          />
+          <Box sx={{ mt: 'auto', pt: 1 }}>
+            <Button
+              fullWidth
+              variant="contained"
+              color="primary"
+              onClick={handleConfirmWithdraw}
+              disabled={!phone.trim() || !amount.trim()}
+            >
+              {t('accounts.withdraw', 'Withdraw')}
+            </Button>
+          </Box>
+        </>
+      ) : (
+        <Box sx={{ mt: 'auto', pt: 1 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2 }}
+          >
+            {t(
+              'agentOnboarding.interactive.withdrawCompleteMessage',
+              'Your withdrawal request has been sent in this demo. In the real app you will see a confirmation and the transaction in your history.',
+            )}
+          </Typography>
+          <Button
+            fullWidth
+            variant="contained"
+            color="primary"
+            onClick={onComplete}
+          >
+            {t(
+              'agentOnboarding.interactive.completeDemo',
+              'Complete demo',
+            )}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 };
@@ -806,6 +953,7 @@ const InteractiveOnboardingContent: React.FC<
   InteractiveOnboardingContentProps
 > = ({ loading, onComplete }) => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
   const [stageIndex, setStageIndex] = useState(0);
   const [order, setOrder] = useState<DemoOrder>(initialOrder);
   const [account, setAccount] = useState<DemoAccount>(initialAccount);
@@ -813,7 +961,7 @@ const InteractiveOnboardingContent: React.FC<
 
   const stage = demoStages[stageIndex];
   const isAccountTabRequired =
-    stage === 'accountSummary' || stage === 'delivered';
+    stage === 'accountSummary' || stage === 'delivered' || stage === 'withdrawDemo';
 
   const handleQuit = () => {
     if (!loading) {
@@ -912,6 +1060,14 @@ const InteractiveOnboardingContent: React.FC<
     });
   };
 
+  const handleStartWithdrawDemo = () => {
+    if (stage !== 'accountSummary') {
+      return;
+    }
+    setActiveTab('account');
+    setStageIndex(demoStages.indexOf('withdrawDemo'));
+  };
+
   const handleTabChange = (
     _: React.SyntheticEvent,
     value: 'orders' | 'account',
@@ -928,6 +1084,8 @@ const InteractiveOnboardingContent: React.FC<
 
   const showOrders =
     activeTab === 'orders' || (!isAccountTabRequired && activeTab === 'account');
+
+  const profilePhoneNumber = profile?.phone_number || '';
 
   return (
     <Box
@@ -1074,12 +1232,20 @@ const InteractiveOnboardingContent: React.FC<
                 t={t}
               />
             )}
-            {!showOrders && (
+            {!showOrders && stage === 'accountSummary' && (
               <AccountScreen
                 account={account}
-                stage={stage}
                 onFinish={onComplete}
+                onWithdraw={handleStartWithdrawDemo}
                 t={t}
+              />
+            )}
+            {!showOrders && stage === 'withdrawDemo' && (
+              <WithdrawDemoScreen
+                balance={account.balance}
+                defaultPhoneNumber={profilePhoneNumber}
+                t={t}
+                onComplete={onComplete}
               />
             )}
           </Box>
