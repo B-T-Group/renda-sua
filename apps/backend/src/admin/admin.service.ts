@@ -700,6 +700,10 @@ export class AdminService {
             first_name
             last_name
           }
+          entity_type_info {
+            id
+            comment
+          }
         }
         user_messages_aggregate(where: { user_id: { _eq: $userId } }) {
           aggregate {

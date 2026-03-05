@@ -25,6 +25,7 @@ import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
 import { LocationsModule } from '../locations/locations.module';
+import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
@@ -79,6 +80,7 @@ import { AppService } from './app.service';
     HasuraModule,
     InventoryItemsModule,
     LocationsModule,
+    MessagesModule,
     ServicesModule,
     UploadsModule,
     UsersModule,

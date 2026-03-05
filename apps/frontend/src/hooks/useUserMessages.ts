@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { useApiClient } from './useApiClient';
 import { useGraphQLClient } from './useGraphQLClient';
 
 export interface EntityType {
@@ -31,6 +32,7 @@ export interface MessageFilters {
 }
 
 export const useUserMessages = (specificUserId?: string) => {
+  const apiClient = useApiClient();
   const { client } = useGraphQLClient();
   const { profile: user } = useUserProfileContext();
   const [messages, setMessages] = useState<UserMessage[]>([]);
@@ -38,91 +40,48 @@ export const useUserMessages = (specificUserId?: string) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch entity types
+  // Fetch entity types from backend
   const fetchEntityTypes = useCallback(async () => {
-    if (!client) return;
+    if (!apiClient) return;
 
     try {
-      const query = `
-        query GetEntityTypes {
-          entity_types {
-            id
-            comment
-          }
-        }
-      `;
-
-      const response = await client.request(query);
-      setEntityTypes(response.entity_types || []);
+      const { data } = await apiClient.get<{
+        success: boolean;
+        entity_types: EntityType[];
+      }>('/messages/entity-types');
+      setEntityTypes(data.entity_types || []);
     } catch (err) {
       console.error('Error fetching entity types:', err);
       setError('Failed to fetch entity types');
     }
-  }, [client]);
+  }, [apiClient]);
 
-  // Fetch user messages
+  // Fetch user messages from backend (or admin API when viewing a specific user)
   const fetchMessages = useCallback(
     async (filters?: MessageFilters) => {
-      if (!client) return;
+      if (!apiClient) return;
 
       setLoading(true);
       setError(null);
 
       try {
-        const whereClause: any = {};
-
-        if (filters) {
-          if (filters.entity_type) {
-            whereClause.entity_type = { _eq: filters.entity_type };
-          }
-
-          if (filters.entity_id) {
-            whereClause.entity_id = { _eq: filters.entity_id };
-          }
-
-          if (filters.search) {
-            whereClause.message = { _ilike: `%${filters.search}%` };
-          }
-        }
-
-        // For business admins, show all messages or specific user's messages. For others, show only their own
-        if (user?.user_type_id === 'business' && user?.business?.is_admin) {
-          // Business admins can see all messages or specific user's messages
-          if (specificUserId) {
-            whereClause.user_id = { _eq: specificUserId };
-          }
-          // If no specificUserId, show all messages (no user_id filter)
+        if (specificUserId) {
+          const { data } = await apiClient.get<{
+            success: boolean;
+            messages: UserMessage[];
+          }>(`/admin/users/${specificUserId}/messages?page=1&limit=500`);
+          setMessages(data.messages || []);
         } else {
-          // Regular users can only see their own messages
-          whereClause.user_id = { _eq: user?.id };
+          const params = new URLSearchParams();
+          if (filters?.entity_type) params.set('entity_type', filters.entity_type);
+          if (filters?.entity_id) params.set('entity_id', filters.entity_id);
+          if (filters?.search) params.set('search', filters.search);
+          const { data } = await apiClient.get<{
+            success: boolean;
+            messages: UserMessage[];
+          }>(`/messages?${params.toString()}`);
+          setMessages(data.messages || []);
         }
-
-        const query = `
-          query GetUserMessages($where: user_messages_bool_exp!) {
-            user_messages(where: $where, order_by: {created_at: desc}) {
-              id
-              user_id
-              entity_type
-              entity_id
-              message
-              created_at
-              updated_at
-              user {
-                id
-                first_name
-                last_name
-                email
-              }
-              entity_type_info {
-                id
-                comment
-              }
-            }
-          }
-        `;
-
-        const result = await client.request(query, { where: whereClause });
-        setMessages(result.user_messages || []);
       } catch (err) {
         console.error('Error fetching messages:', err);
         setError('Failed to fetch messages');
@@ -130,13 +89,7 @@ export const useUserMessages = (specificUserId?: string) => {
         setLoading(false);
       }
     },
-    [
-      client,
-      user?.id,
-      user?.user_type_id,
-      user?.business?.is_admin,
-      specificUserId,
-    ]
+    [apiClient, specificUserId]
   );
 
   // Create a new message
