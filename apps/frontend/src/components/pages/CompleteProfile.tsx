@@ -2,6 +2,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import {
   ArrowForward,
   Business,
+  CameraAlt as CameraAltIcon,
   LocationOn,
   LocalShipping,
   Person,
@@ -10,6 +11,7 @@ import {
 import {
   Alert,
   Autocomplete,
+  Avatar,
   Box,
   Button,
   Card,
@@ -18,6 +20,7 @@ import {
   Dialog,
   DialogContent,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -30,16 +33,22 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import axios from 'axios';
 import { City, State } from 'country-state-city';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAgentReferralLookup } from '../../hooks/useAgentReferralLookup';
+import { useDocumentManagement } from '../../hooks/useDocumentManagement';
+import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
+
+const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
+const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 const SIGNUP_COUNTRIES = [
   { code: 'CM', name: 'Cameroon' },
@@ -65,7 +74,8 @@ interface ProfileData {
   referral_agent_code?: string;
 }
 
-const steps = ['Choose Persona', 'Address', 'Personal Information', 'Review & Submit'];
+const BASE_STEPS = ['Choose Persona', 'Address', 'Personal Information', 'Review & Submit'];
+const AGENT_STEPS = ['Choose Persona', 'Address', 'Personal Information', 'ID Document (optional)', 'Review & Submit'];
 
 const StepIconWrapper: React.FC<{
   completed?: boolean;
@@ -121,7 +131,7 @@ const CompleteProfile: React.FC = () => {
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   const apiClient = useApiClient();
-  const { refetch } = useUserProfileContext();
+  const { refetch, updateProfilePicture } = useUserProfileContext();
   const { loading: typesLoading, error: typesError } = useUserTypes();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -143,6 +153,33 @@ const CompleteProfile: React.FC = () => {
     profile: {},
     referral_agent_code: '',
   });
+  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
+  const [idDocumentTypeId, setIdDocumentTypeId] = useState<number | ''>('');
+  const profilePictureInputRef = useRef<HTMLInputElement>(null);
+  const idDocumentInputRef = useRef<HTMLInputElement>(null);
+
+  const steps = useMemo(
+    () => (profileData.user_type_id === 'agent' ? AGENT_STEPS : BASE_STEPS),
+    [profileData.user_type_id]
+  );
+  const isAgent = profileData.user_type_id === 'agent';
+
+  const { documentTypes } = useDocumentManagement();
+  const idDocumentTypes = useMemo(
+    () =>
+      documentTypes.filter((dt) =>
+        ['id_card', 'passport', 'driver_license'].includes(dt.name)
+      ),
+    [documentTypes]
+  );
+  const { uploadFile: uploadDocumentFile } = useDocumentUpload();
+
+  React.useEffect(() => {
+    if (activeStep >= steps.length) {
+      setActiveStep(Math.max(0, steps.length - 1));
+    }
+  }, [steps.length, activeStep]);
 
   const addressStates = useMemo(
     () => (profileData.address.country ? State.getStatesOfCountry(profileData.address.country) : []),
@@ -235,23 +272,60 @@ const CompleteProfile: React.FC = () => {
     setError(null);
 
     try {
-      await apiClient.post('/users', profileData);
-      setSuccess(true);
+      const { data: createResponse } = await apiClient.post<{
+        success: boolean;
+        user?: { id: string };
+      }>('/users', profileData);
 
-      // Refresh the Auth0 token to ensure we have the latest token
+      if (!createResponse?.success || !createResponse?.user?.id) {
+        throw new Error('Failed to create user');
+      }
+      const userId = createResponse.user.id;
+
       try {
-        await getAccessTokenSilently({
-          cacheMode: 'off',
-        });
+        await getAccessTokenSilently({ cacheMode: 'off' });
       } catch (tokenError) {
         console.warn('Failed to refresh Auth0 token:', tokenError);
-        // Continue with profile refresh even if token refresh fails
       }
 
-      // Refresh the user profile context
       await refetch();
 
-      // Redirect to dashboard after a short delay
+      if (profilePictureFile) {
+        try {
+          const { data: picData } = await apiClient.post<{
+            success: boolean;
+            presigned_url?: string;
+            final_url?: string;
+            error?: string;
+          }>('/users/profile-picture/presigned-url', {
+            contentType: profilePictureFile.type,
+            fileName: profilePictureFile.name,
+            fileSize: profilePictureFile.size,
+          });
+          if (picData?.success && picData.presigned_url && picData.final_url) {
+            await axios.put(picData.presigned_url, profilePictureFile, {
+              headers: { 'Content-Type': profilePictureFile.type },
+            });
+            await updateProfilePicture(userId, picData.final_url);
+          }
+        } catch (picErr) {
+          console.warn('Profile picture upload failed:', picErr);
+        }
+      }
+
+      if (
+        profileData.user_type_id === 'agent' &&
+        idDocumentFile &&
+        idDocumentTypeId !== ''
+      ) {
+        try {
+          await uploadDocumentFile(idDocumentFile, idDocumentTypeId as number);
+        } catch (docErr) {
+          console.warn('ID document upload failed:', docErr);
+        }
+      }
+
+      setSuccess(true);
       setTimeout(() => {
         navigate('/app');
       }, 2000);
@@ -310,6 +384,82 @@ const CompleteProfile: React.FC = () => {
     if (step < activeStep || (step === activeStep + 1 && isStepValid(activeStep))) {
       setActiveStep(step);
     }
+  };
+
+  const renderReviewContent = () => {
+    const selectedPersona = getSelectedPersona();
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: { xs: 2, sm: 3 },
+        }}
+      >
+        <Typography variant="h6" gutterBottom>
+          {t('completeProfile.reviewTitle', 'Review Your Information')}
+        </Typography>
+        <Paper sx={{ p: { xs: 1.25, sm: 2 }, bgcolor: 'grey.50' }}>
+          <Typography variant="body2" gutterBottom>
+            <strong>Name:</strong> {profileData.first_name}{' '}
+            {profileData.last_name}
+          </Typography>
+          <Typography
+            variant="body2"
+            gutterBottom
+            sx={{
+              wordBreak: 'break-all',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            <strong>Email:</strong>{' '}
+            {profileData.email || 'Not provided'}
+          </Typography>
+          <Typography
+            variant="body2"
+            gutterBottom
+            sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+          >
+            <strong>Phone Number:</strong>{' '}
+            {profileData.phone_number || 'Not provided'}
+          </Typography>
+          <Typography variant="body2" gutterBottom>
+            <strong>Persona:</strong> {selectedPersona?.title}
+          </Typography>
+          {profileData.user_type_id === 'business' &&
+            profileData.profile.name && (
+              <Typography variant="body2" gutterBottom>
+                <strong>Business Name:</strong> {profileData.profile.name}
+              </Typography>
+            )}
+          {isAgent && (
+            <>
+              {profilePictureFile && (
+                <Typography variant="body2" gutterBottom>
+                  <strong>Profile picture:</strong> {t('completeProfile.added', 'Added')}
+                </Typography>
+              )}
+              {(idDocumentFile && idDocumentTypeId) ? (
+                <Typography variant="body2" gutterBottom>
+                  <strong>ID document:</strong> {t('completeProfile.added', 'Added')}
+                </Typography>
+              ) : (
+                <Typography variant="body2" gutterBottom color="text.secondary">
+                  <strong>ID document:</strong> {t('completeProfile.skipped', 'Skipped')}
+                </Typography>
+              )}
+            </>
+          )}
+          <Typography variant="body2" gutterBottom>
+            <strong>Address:</strong>{' '}
+            {profileData.address.address_line_1},{' '}
+            {profileData.address.city}, {profileData.address.state},{' '}
+            {SIGNUP_COUNTRIES.find((c) => c.code === profileData.address.country)?.name ||
+              profileData.address.country}
+          </Typography>
+        </Paper>
+      </Box>
+    );
   };
 
   const renderStepContent = (step: number) => {
@@ -460,20 +610,75 @@ const CompleteProfile: React.FC = () => {
               {t('completeProfile.personalInformation', 'Personal Information')}
             </Typography>
 
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+              <Box sx={{ position: 'relative' }}>
+                <Avatar
+                  src={profilePictureFile ? URL.createObjectURL(profilePictureFile) : undefined}
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    bgcolor: 'grey.200',
+                    color: 'grey.600',
+                    fontSize: '1.5rem',
+                  }}
+                >
+                  {profileData.first_name?.[0]}
+                  {profileData.last_name?.[0]}
+                </Avatar>
+                <input
+                  ref={profilePictureInputRef}
+                  type="file"
+                  accept={PROFILE_PICTURE_ACCEPT}
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > PROFILE_PICTURE_MAX_SIZE) return;
+                    const accepted = PROFILE_PICTURE_ACCEPT.split(',');
+                    if (!accepted.includes(file.type)) return;
+                    setProfilePictureFile(file);
+                  }}
+                />
+                <IconButton
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    minWidth: 36,
+                    minHeight: 36,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                  onClick={() => profilePictureInputRef.current?.click()}
+                  aria-label={t('completeProfile.profilePicture', 'Profile picture')}
+                >
+                  <CameraAltIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('completeProfile.profilePictureHint', 'JPG, PNG or WebP. Max 5MB.')}
+              </Typography>
+            </Box>
+
             <TextField
-              label="First Name"
+              label={t('profile.firstName', 'First Name')}
               value={profileData.first_name}
               onChange={handleInputChange('first_name')}
               fullWidth
               required
+              helperText={t('completeProfile.firstNameHelper', 'Enter as shown on your ID card.')}
             />
 
             <TextField
-              label="Last Name"
+              label={t('profile.lastName', 'Last Name')}
               value={profileData.last_name}
               onChange={handleInputChange('last_name')}
               fullWidth
               required
+              helperText={t('completeProfile.lastNameHelper', 'Enter as shown on your ID card.')}
             />
 
             <PhoneInput
@@ -555,64 +760,89 @@ const CompleteProfile: React.FC = () => {
           </Box>
         );
 
-      case 3: {
-        const selectedPersona = getSelectedPersona();
-        return (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: { xs: 2, sm: 3 },
-            }}
-          >
-            <Typography variant="h6" gutterBottom>
-              {t('completeProfile.reviewTitle', 'Review Your Information')}
-            </Typography>
-
-            <Paper sx={{ p: { xs: 1.25, sm: 2 }, bgcolor: 'grey.50' }}>
-              <Typography variant="body2" gutterBottom>
-                <strong>Name:</strong> {profileData.first_name}{' '}
-                {profileData.last_name}
+      case 3:
+        if (isAgent) {
+          return (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: { xs: 2, sm: 3 },
+              }}
+            >
+              <Typography variant="h6" gutterBottom>
+                {t('completeProfile.idDocumentStepTitle', 'ID Document (optional)')}
               </Typography>
-              <Typography
-                variant="body2"
-                gutterBottom
-                sx={{
-                  wordBreak: 'break-all',
-                  overflowWrap: 'anywhere',
-                }}
-              >
-                <strong>Email:</strong>{' '}
-                {profileData.email || 'Not provided'}
-              </Typography>
-              <Typography
-                variant="body2"
-                gutterBottom
-                sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-              >
-                <strong>Phone Number:</strong>{' '}
-                {profileData.phone_number || 'Not provided'}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Persona:</strong> {selectedPersona?.title}
-              </Typography>
-              {profileData.user_type_id === 'business' &&
-                profileData.profile.name && (
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Business Name:</strong> {profileData.profile.name}
-                  </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'completeProfile.idDocumentRequiredNote',
+                  'Required for your account to become active. You can skip now and add it later from your Documents.'
                 )}
-              <Typography variant="body2" gutterBottom>
-                <strong>Address:</strong>{' '}
-                {profileData.address.address_line_1},{' '}
-                {profileData.address.city}, {profileData.address.state},{' '}
-                {SIGNUP_COUNTRIES.find((c) => c.code === profileData.address.country)?.name ||
-                  profileData.address.country}
               </Typography>
-            </Paper>
-          </Box>
-        );
-      }
+              <FormControl fullWidth size="small">
+                <InputLabel id="id-doc-type-label">
+                  {t('completeProfile.idDocumentTypeLabel', 'Document type')}
+                </InputLabel>
+                <Select
+                  labelId="id-doc-type-label"
+                  label={t('completeProfile.idDocumentTypeLabel', 'Document type')}
+                  value={idDocumentTypeId}
+                  onChange={(e) =>
+                    setIdDocumentTypeId(
+                      e.target.value === '' ? '' : Number(e.target.value)
+                    )
+                  }
+                >
+                  <MenuItem value="">
+                    <em>{t('common.none', 'None')}</em>
+                  </MenuItem>
+                  {idDocumentTypes.map((dt) => (
+                    <MenuItem key={dt.id} value={dt.id}>
+                      {dt.description || dt.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <input
+                ref={idDocumentInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const maxSize = 10 * 1024 * 1024;
+                  if (file.size > maxSize) return;
+                  setIdDocumentFile(file);
+                }}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => idDocumentInputRef.current?.click()}
+              >
+                {idDocumentFile
+                  ? idDocumentFile.name
+                  : t('completeProfile.idDocumentSelectFile', 'Select file')}
+              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setIdDocumentFile(null);
+                    setIdDocumentTypeId('');
+                    handleNext();
+                  }}
+                >
+                  {t('completeProfile.idDocumentSkip', 'Skip for now')}
+                </Button>
+              </Box>
+            </Box>
+          );
+        }
+        return renderReviewContent();
+
+      case 4:
+        return renderReviewContent();
 
       default:
         return null;
