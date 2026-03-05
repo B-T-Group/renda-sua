@@ -9,7 +9,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UploadService } from '../services/upload.service';
@@ -184,6 +184,62 @@ export class UploadsController {
         {
           success: false,
           error: error.message || 'Failed to approve document',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Patch(':id/reject')
+  @ApiOperation({
+    summary: 'Reject a document (superuser)',
+    description:
+      'Sets the upload note to the rejection message and is_approved to false. The note is visible to the user.',
+  })
+  @ApiParam({ name: 'id', description: 'Upload ID' })
+  @ApiBody({
+    schema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] },
+  })
+  @ApiResponse({ status: 200, description: 'Document rejected successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied' })
+  async rejectUpload(
+    @Param('id') uploadId: string,
+    @Body('message') message: string
+  ) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const isAdmin = await this.permissionService.isBusinessAdmin(user.id);
+      if (!isAdmin) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Access denied. Only business admins can reject documents.',
+          },
+          HttpStatus.FORBIDDEN
+        );
+      }
+      if (!message || typeof message !== 'string' || !message.trim()) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Rejection message is required',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      await this.uploadService.rejectUpload(uploadId, message.trim());
+      return {
+        success: true,
+        message: 'Document rejected successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to reject document',
         },
         HttpStatus.BAD_REQUEST
       );

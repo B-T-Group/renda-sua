@@ -1,4 +1,5 @@
 import {
+  Block as BlockIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
   Refresh as RefreshIcon,
@@ -42,6 +43,7 @@ export interface AgentIdDocument {
   content_type: string;
   document_type: { id: number; name: string; description: string };
   is_approved: boolean;
+  note?: string | null;
   created_at: string;
 }
 
@@ -75,6 +77,9 @@ const AdminManageAgents: React.FC = () => {
   const [idDocumentsLoading, setIdDocumentsLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [presignedUrlLoadingId, setPresignedUrlLoadingId] = useState<string | null>(null);
+  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
+  const [rejectMessage, setRejectMessage] = useState('');
+  const [rejectLoading, setRejectLoading] = useState(false);
 
   const verificationAgent = agents.find((a) => a.id === verificationAgentId);
 
@@ -164,6 +169,26 @@ const AdminManageAgents: React.FC = () => {
       setVerifyLoading(false);
     }
   }, [verificationAgentId, updateAgent, fetchAgents]);
+
+  const handleRejectUpload = useCallback(
+    async (uploadId: string) => {
+      if (!apiClient || !rejectMessage.trim()) return;
+      setRejectLoading(true);
+      try {
+        await apiClient.patch(`/uploads/${uploadId}/reject`, {
+          message: rejectMessage.trim(),
+        });
+        setRejectingDocId(null);
+        setRejectMessage('');
+        if (verificationAgentId) {
+          fetchIdDocuments(verificationAgentId);
+        }
+      } finally {
+        setRejectLoading(false);
+      }
+    },
+    [apiClient, rejectMessage, verificationAgentId, fetchIdDocuments]
+  );
 
   const openEdit = (id: string) => {
     const target = agents.find((a) => a.id === id);
@@ -318,17 +343,18 @@ const AdminManageAgents: React.FC = () => {
                       >
                         {t('common.edit', 'Edit')}
                       </Button>
-                      {!a.is_verified && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          startIcon={<VerifiedUserIcon />}
-                          onClick={() => setVerificationAgentId(a.id)}
-                        >
-                          {t('admin.agents.verification', 'Verification')}
-                        </Button>
-                      )}
+                      {!a.is_verified &&
+                        (a.id_documents?.length ?? 0) > 0 && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<VerifiedUserIcon />}
+                            onClick={() => setVerificationAgentId(a.id)}
+                          >
+                            {t('admin.agents.verification', 'Verification')}
+                          </Button>
+                        )}
                     </Box>
                   }
                 />
@@ -498,7 +524,19 @@ const AdminManageAgents: React.FC = () => {
                   <ListItem key={doc.id}>
                     <ListItemText
                       primary={doc.file_name}
-                      secondary={`${doc.document_type?.description || doc.document_type?.name} • ${doc.is_approved ? t('admin.uploads.approved', 'Approved') : t('admin.uploads.pending', 'Pending')}`}
+                      secondary={
+                        <>
+                          {`${doc.document_type?.description || doc.document_type?.name} • ${doc.is_approved ? t('admin.uploads.approved', 'Approved') : t('admin.uploads.pending', 'Pending')}`}
+                          {doc.note && (
+                            <>
+                              <br />
+                              <Typography component="span" variant="caption" color="text.secondary">
+                                {t('admin.agents.rejectionNote', 'Rejection note (visible to user):')} {doc.note}
+                              </Typography>
+                            </>
+                          )}
+                        </>
+                      }
                     />
                     <ListItemSecondaryAction>
                       <Button
@@ -516,6 +554,17 @@ const AdminManageAgents: React.FC = () => {
                         disabled={presignedUrlLoadingId !== null}
                       >
                         {t('common.download', 'Download')}
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<BlockIcon />}
+                        onClick={() => {
+                          setRejectingDocId(doc.id);
+                          setRejectMessage('');
+                        }}
+                      >
+                        {t('admin.agents.reject', 'Reject')}
                       </Button>
                     </ListItemSecondaryAction>
                   </ListItem>
@@ -541,6 +590,55 @@ const AdminManageAgents: React.FC = () => {
                 : t('admin.agents.setAsVerified', 'Set as verified')}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!rejectingDocId}
+        onClose={() => {
+          if (!rejectLoading) {
+            setRejectingDocId(null);
+            setRejectMessage('');
+          }
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('admin.agents.rejectDocument', 'Reject document')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('admin.agents.rejectMessageHelp', 'The message will be saved to the document note and visible to the user.')}
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label={t('admin.agents.rejectionMessage', 'Rejection message')}
+            value={rejectMessage}
+            onChange={(e) => setRejectMessage(e.target.value)}
+            disabled={rejectLoading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRejectingDocId(null);
+              setRejectMessage('');
+            }}
+            disabled={rejectLoading}
+          >
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={!rejectMessage.trim() || rejectLoading}
+            startIcon={rejectLoading ? <CircularProgress size={20} /> : <BlockIcon />}
+            onClick={() => rejectingDocId && handleRejectUpload(rejectingDocId)}
+          >
+            {rejectLoading ? t('common.loading', 'Loading...') : t('admin.agents.reject', 'Reject')}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

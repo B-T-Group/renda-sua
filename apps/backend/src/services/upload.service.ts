@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { PermissionService } from '../auth/permission.service';
 import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -33,7 +34,8 @@ export class UploadService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly awsService: AwsService
+    private readonly awsService: AwsService,
+    private readonly permissionService: PermissionService
   ) {}
 
   /**
@@ -72,7 +74,6 @@ export class UploadService {
     presigned_url: string;
     expires_at: Date;
   }> {
-    // Get the upload record from the database
     const getUploadQuery = `
       query GetUserUpload($uploadId: uuid!) {
         user_uploads_by_pk(id: $uploadId) {
@@ -91,10 +92,17 @@ export class UploadService {
       }
     `;
 
-    const uploadResult = await this.hasuraUserService.executeQuery(
-      getUploadQuery,
-      { uploadId }
-    );
+    const user = await this.hasuraUserService.getUser();
+    const useSystemService =
+      await this.permissionService.isBusinessAdmin(user.id);
+
+    const uploadResult = useSystemService
+      ? await this.hasuraSystemService.executeQuery(getUploadQuery, {
+          uploadId,
+        })
+      : await this.hasuraUserService.executeQuery(getUploadQuery, {
+          uploadId,
+        });
 
     if (!uploadResult.user_uploads_by_pk) {
       throw new HttpException(
@@ -435,6 +443,40 @@ export class UploadService {
           agentId: agent.id,
         });
       }
+    }
+  }
+
+  /**
+   * Reject a user upload (superuser): set note to rejection message and is_approved to false.
+   * The note is visible to the user.
+   */
+  async rejectUpload(uploadId: string, message: string): Promise<void> {
+    const rejectMutation = `
+      mutation RejectUserUpload($uploadId: uuid!, $note: String!) {
+        update_user_uploads_by_pk(
+          pk_columns: { id: $uploadId }
+          _set: { note: $note, is_approved: false }
+        ) {
+          id
+          note
+          is_approved
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeMutation(
+      rejectMutation,
+      { uploadId, note: message }
+    );
+
+    if (!result.update_user_uploads_by_pk) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Upload record not found or could not be rejected',
+        },
+        HttpStatus.NOT_FOUND
+      );
     }
   }
 }

@@ -255,11 +255,19 @@ export class AdminService {
   }) {
     const { page, limit, search, unverifiedOnly } = params;
     const offset = (page - 1) * limit;
+    const idTypeNames = AdminService.ID_DOCUMENT_TYPE_NAMES;
     const query = `
-      query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!) {
+      query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!, $idTypeNames: [String!]) {
         agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id vehicle_type_id is_verified is_internal created_at updated_at
-          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          user {
+            id identifier email first_name last_name phone_number
+            accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at }
+            user_uploads(where: { document_type: { name: { _in: $idTypeNames } } }, order_by: { created_at: desc }) {
+              id file_name content_type document_type_id is_approved note created_at updated_at
+              document_type { id name description }
+            }
+          }
           agent_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         agents_aggregate(where: $where) { aggregate { count } }
@@ -269,11 +277,19 @@ export class AdminService {
       where: this.buildAgentWhere(search, unverifiedOnly),
       limit,
       offset,
+      idTypeNames,
     });
-    const items = (result.agents || []).map((a: any) => ({
-      ...a,
-      addresses: (a.agent_addresses || []).map((x: any) => x.address),
-    }));
+    const items = (result.agents || []).map((a: any) => {
+      const idDocuments = a.user?.user_uploads ?? [];
+      const { user, ...rest } = a;
+      const { user_uploads, ...userRest } = user || {};
+      return {
+        ...rest,
+        user: userRest,
+        addresses: (a.agent_addresses || []).map((x: any) => x.address),
+        id_documents: idDocuments,
+      };
+    });
     const total = result.agents_aggregate?.aggregate?.count || 0;
     return { items, total, page, limit };
   }

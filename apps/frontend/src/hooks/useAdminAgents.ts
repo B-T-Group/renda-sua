@@ -12,6 +12,18 @@ export interface AdminAgentUser {
   phone_number?: string;
 }
 
+export interface AdminAgentIdDocument {
+  id: string;
+  file_name: string;
+  content_type: string;
+  document_type_id: number;
+  is_approved: boolean;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+  document_type: { id: number; name: string; description: string };
+}
+
 export interface AdminAgent {
   id: string;
   user_id: string;
@@ -22,6 +34,7 @@ export interface AdminAgent {
   updated_at: string;
   user: AdminAgentUser;
   addresses: any[];
+  id_documents?: AdminAgentIdDocument[];
 }
 
 export interface UpdateAgentPayload {
