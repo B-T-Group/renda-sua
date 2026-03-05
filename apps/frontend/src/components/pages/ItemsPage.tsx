@@ -4,7 +4,6 @@ import {
     Assignment,
     Inventory,
     Search as SearchIcon,
-    LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import {
     Alert,
@@ -89,28 +88,6 @@ const ItemsPage: React.FC = () => {
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
   const { orders, refreshOrders } = useOrders({ enabled: isAuthenticated });
-  const dealItems = useMemo(
-    () =>
-      inventoryItems
-        .filter(
-          (item) =>
-            item.hasActiveDeal &&
-            typeof item.original_price === 'number' &&
-            typeof item.discounted_price === 'number' &&
-            item.original_price > 0
-        )
-        .slice()
-        .sort((a, b) => {
-          const aPct =
-            ((a.original_price! - a.discounted_price!) / a.original_price!) *
-            100;
-          const bPct =
-            ((b.original_price! - b.discounted_price!) / b.original_price!) *
-            100;
-          return bPct - aPct;
-        }),
-    [inventoryItems]
-  );
 
   // Display items from ItemsPageFilter; when no filters applied, show inventoryItems until filter callback runs
   const displayItems = useMemo(() => {
@@ -412,89 +389,6 @@ const ItemsPage: React.FC = () => {
           </Alert>
         )}
       </Box>
-
-      {/* Deals strip */}
-      {dealItems.length > 0 && (
-        <Box sx={{ mb: 4 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 1.5,
-              bgcolor: 'primary.50',
-              borderRadius: 2,
-              px: 2,
-              py: 1.5,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <LocalOfferIcon color="primary" />
-              <Box>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: { xs: '1.05rem', sm: '1.2rem' },
-                  }}
-                >
-                  {t('public.items.dealsTitle', 'Deals for you')}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ display: { xs: 'none', sm: 'block' } }}
-                >
-                  {t(
-                    'public.items.dealsSubtitle',
-                    'Top discounts curated from verified sellers'
-                  )}
-                </Typography>
-              </Box>
-            </Box>
-            <Button size="small" onClick={() => navigate('/deals')}>
-              {t('public.items.viewAllDeals', 'View all deals')}
-            </Button>
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 2,
-              overflowX: 'auto',
-              pb: 1,
-            }}
-          >
-            {dealItems.slice(0, 8).map((inventoryItem) => (
-              <Box
-                key={inventoryItem.id}
-                sx={{
-                  minWidth: { xs: 260, sm: 280 },
-                  maxWidth: 320,
-                  flex: '0 0 auto',
-                }}
-              >
-                <DashboardItemCard
-                  item={inventoryItem}
-                  viewsCount={inventoryItem.viewsCount}
-                  formatCurrency={formatCurrency}
-                  onOrderClick={handleOrderClick}
-                  onAddToCart={handleAddToCart}
-                  isPublicView={!isAuthenticated}
-                  canOrder={!isAuthenticated || isClientUser}
-                  showCartButtons={isAuthenticated && isClientUser}
-                  loginButtonText={t(
-                    'public.items.login',
-                    'Sign In to Order'
-                  )}
-                  orderButtonText={t('common.orderNow', 'Order Now')}
-                  addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
-                  buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                />
-              </Box>
-            ))}
-          </Box>
-        </Box>
-      )}
 
       {/* Items Section */}
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
