@@ -1,27 +1,49 @@
-import { Edit as EditIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import {
+  Download as DownloadIcon,
+  Edit as EditIcon,
+  Refresh as RefreshIcon,
+  VerifiedUser as VerifiedUserIcon,
+  Visibility as VisibilityIcon,
+} from '@mui/icons-material';
+import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
   InputLabel,
+  List,
+  ListItem,
+  ListItemSecondaryAction,
+  ListItemText,
   MenuItem,
   Select,
   Switch,
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import { AdminMessagePost } from '../common/AdminMessagePost';
 import AdminUserCard from '../common/AdminUserCard';
+
+export interface AgentIdDocument {
+  id: string;
+  file_name: string;
+  content_type: string;
+  document_type: { id: number; name: string; description: string };
+  is_approved: boolean;
+  created_at: string;
+}
 
 const AdminManageAgents: React.FC = () => {
   const {
@@ -40,11 +62,99 @@ const AdminManageAgents: React.FC = () => {
     setAgentInternal,
   } = useAdminAgents();
   const { vehicleTypes } = useVehicleTypes();
+  const apiClient = useApiClient();
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
+  const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
+    null
+  );
+  const [idDocuments, setIdDocuments] = useState<AgentIdDocument[]>([]);
+  const [idDocumentsLoading, setIdDocumentsLoading] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
 
-  // Note: Removed unused memoized current agent per project rule
+  const verificationAgent = agents.find((a) => a.id === verificationAgentId);
+
+  const fetchIdDocuments = useCallback(
+    async (agentId: string) => {
+      if (!apiClient) return;
+      setIdDocumentsLoading(true);
+      try {
+        const { data } = await apiClient.get<{
+          success: boolean;
+          uploads: AgentIdDocument[];
+        }>(`/admin/agents/${agentId}/id-documents`);
+        setIdDocuments(data.success ? data.uploads || [] : []);
+      } catch {
+        setIdDocuments([]);
+      } finally {
+        setIdDocumentsLoading(false);
+      }
+    },
+    [apiClient]
+  );
+
+  useEffect(() => {
+    if (verificationAgentId) {
+      fetchIdDocuments(verificationAgentId);
+    } else {
+      setIdDocuments([]);
+    }
+  }, [verificationAgentId, fetchIdDocuments]);
+
+  const handleViewUpload = useCallback(
+    async (uploadId: string) => {
+      if (!apiClient) return;
+      try {
+        const { data } = await apiClient.get<{
+          success: boolean;
+          presigned_url?: string;
+        }>(`/uploads/${uploadId}/view`);
+        if (data.success && data.presigned_url) {
+          window.open(data.presigned_url, '_blank');
+        }
+      } catch (err) {
+        console.error('Failed to get view URL:', err);
+      }
+    },
+    [apiClient]
+  );
+
+  const handleDownloadUpload = useCallback(
+    async (uploadId: string, fileName: string) => {
+      if (!apiClient) return;
+      try {
+        const { data } = await apiClient.get<{
+          success: boolean;
+          presigned_url?: string;
+        }>(`/uploads/${uploadId}/view`);
+        if (data.success && data.presigned_url) {
+          const link = document.createElement('a');
+          link.href = data.presigned_url!;
+          link.download = fileName || 'document';
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } catch (err) {
+        console.error('Failed to get download URL:', err);
+      }
+    },
+    [apiClient]
+  );
+
+  const handleSetVerified = useCallback(async () => {
+    if (!verificationAgentId) return;
+    setVerifyLoading(true);
+    try {
+      await updateAgent(verificationAgentId, { is_verified: true });
+      setVerificationAgentId(null);
+      await fetchAgents();
+    } finally {
+      setVerifyLoading(false);
+    }
+  }, [verificationAgentId, updateAgent, fetchAgents]);
 
   const openEdit = (id: string) => {
     const target = agents.find((a) => a.id === id);
@@ -169,14 +279,27 @@ const AdminManageAgents: React.FC = () => {
                   userId={a.user.id}
                   userType="agent"
                   footer={
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<EditIcon />}
-                      onClick={() => openEdit(a.id)}
-                    >
-                      Edit
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<EditIcon />}
+                        onClick={() => openEdit(a.id)}
+                      >
+                        {t('common.edit', 'Edit')}
+                      </Button>
+                      {!a.is_verified && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          startIcon={<VerifiedUserIcon />}
+                          onClick={() => setVerificationAgentId(a.id)}
+                        >
+                          {t('admin.agents.verification', 'Verification')}
+                        </Button>
+                      )}
+                    </Box>
                   }
                 />
               ))}
@@ -303,6 +426,86 @@ const AdminManageAgents: React.FC = () => {
           <Button variant="contained" onClick={handleSave}>
             Save
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!verificationAgentId}
+        onClose={() => setVerificationAgentId(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('admin.agents.verificationTitle', 'Agent Verification')}
+          {verificationAgent && (
+            <Typography variant="body2" color="text.secondary" fontWeight="normal">
+              {verificationAgent.user.first_name} {verificationAgent.user.last_name}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {idDocumentsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : idDocuments.length === 0 ? (
+            <Alert severity="info">
+              {t(
+                'admin.agents.noIdDocument',
+                'No ID document uploaded. Ask the agent to upload a driver\'s license, passport, or national ID from their Documents.'
+              )}
+            </Alert>
+          ) : (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {t('admin.agents.idDocumentsList', 'ID documents (view and verify, then set as verified below)')}
+              </Typography>
+              <List dense>
+                {idDocuments.map((doc) => (
+                  <ListItem key={doc.id}>
+                    <ListItemText
+                      primary={doc.file_name}
+                      secondary={`${doc.document_type?.description || doc.document_type?.name} • ${doc.is_approved ? t('admin.uploads.approved', 'Approved') : t('admin.uploads.pending', 'Pending')}`}
+                    />
+                    <ListItemSecondaryAction>
+                      <Button
+                        size="small"
+                        startIcon={<VisibilityIcon />}
+                        onClick={() => handleViewUpload(doc.id)}
+                      >
+                        {t('common.view', 'View')}
+                      </Button>
+                      <Button
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        onClick={() => handleDownloadUpload(doc.id, doc.file_name)}
+                      >
+                        {t('common.download', 'Download')}
+                      </Button>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVerificationAgentId(null)}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          {idDocuments.length > 0 && (
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={verifyLoading}
+              startIcon={verifyLoading ? <CircularProgress size={20} /> : <VerifiedUserIcon />}
+              onClick={handleSetVerified}
+            >
+              {verifyLoading
+                ? t('admin.agents.verifying', 'Verifying...')
+                : t('admin.agents.setAsVerified', 'Set as verified')}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

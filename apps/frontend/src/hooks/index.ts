@@ -29,6 +29,8 @@ export { useOrders } from './useOrders';
 export type { Order, OrderFilters } from './useOrders';
 
 // Agent hooks
+export { useAgentHasIdDocument } from './useAgentHasIdDocument';
+export type { UseAgentHasIdDocumentResult } from './useAgentHasIdDocument';
 export { useAgentHoldPercentage } from './useAgentHoldPercentage';
 export type { UseAgentHoldPercentageReturn } from './useAgentHoldPercentage';
 export { useAgentOnboarding } from './useAgentOnboarding';

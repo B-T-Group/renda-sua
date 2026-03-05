@@ -18,6 +18,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAgentHasIdDocument } from '../../hooks/useAgentHasIdDocument';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import AvailableOrderCard from '../common/AvailableOrderCard';
 import OrderCard from '../common/OrderCard';
@@ -34,6 +35,7 @@ const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
+  const { hasIdDocument } = useAgentHasIdDocument(profile?.id, profile?.user_type_id);
 
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
@@ -184,9 +186,26 @@ const OpenOrdersPage: React.FC = () => {
         )}
         {profile?.agent && !profile.agent.is_verified && profile?.agent?.status !== 'suspended' && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {t(
-              'agent.unverifiedHoldNote',
-              'Verify your account and add a profile picture to reduce your hold amounts.'
+            {hasIdDocument
+              ? t(
+                  'agent.openOrders.accountUnderReview',
+                  'Your account is under review. You will see available orders once you are verified.'
+                )
+              : t(
+                  'agent.openOrders.uploadIdToGetVerified',
+                  "Upload an ID (driver's license, passport, or national ID) to get verified and see available orders."
+                )}
+            {!hasIdDocument && (
+              <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                <Button
+                  component={Link}
+                  to="/documents"
+                  variant="outlined"
+                  size="small"
+                >
+                  {t('agent.openOrders.goToDocuments', 'Go to Documents')}
+                </Button>
+              </Box>
             )}
           </Alert>
         )}

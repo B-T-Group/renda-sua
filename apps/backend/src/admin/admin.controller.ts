@@ -211,6 +211,20 @@ export class AdminController {
     }
   }
 
+  @Get('agents/:agentId/id-documents')
+  async getAgentIdDocuments(@Param('agentId') agentId: string) {
+    try {
+      const result = await this.adminService.getAgentIdDocuments(agentId);
+      return { success: true, ...result };
+    } catch (error: any) {
+      console.error('Error fetching agent ID documents:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch agent ID documents',
+      };
+    }
+  }
+
   @Get('clients')
   async getClients(
     @Query('page') page?: string,

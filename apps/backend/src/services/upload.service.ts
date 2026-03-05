@@ -356,5 +356,58 @@ export class UploadService {
         HttpStatus.NOT_FOUND
       );
     }
+
+    // If this is an ID-type document for an agent, set agent is_verified = true
+    const ID_DOCUMENT_TYPES = ['id_card', 'passport', 'driver_license'];
+    const fetchUploadQuery = `
+      query GetUploadWithType($uploadId: uuid!) {
+        user_uploads_by_pk(id: $uploadId) {
+          user_id
+          document_type {
+            name
+          }
+        }
+      }
+    `;
+    const uploadData = await this.hasuraSystemService.executeQuery(
+      fetchUploadQuery,
+      { uploadId }
+    );
+    const upload = uploadData?.user_uploads_by_pk as
+      | { user_id: string; document_type: { name: string } | null }
+      | undefined;
+    if (
+      upload?.document_type?.name &&
+      ID_DOCUMENT_TYPES.includes(upload.document_type.name)
+    ) {
+      const agentByUserQuery = `
+        query GetAgentByUserId($userId: uuid!) {
+          agents(where: { user_id: { _eq: $userId } }, limit: 1) {
+            id
+          }
+        }
+      `;
+      const agentResult = await this.hasuraSystemService.executeQuery(
+        agentByUserQuery,
+        { userId: upload.user_id }
+      );
+      const agent = (agentResult?.agents as { id: string }[] | undefined)?.[0];
+      if (agent) {
+        const updateAgentMutation = `
+          mutation SetAgentVerified($agentId: uuid!) {
+            update_agents_by_pk(
+              pk_columns: { id: $agentId }
+              _set: { is_verified: true }
+            ) {
+              id
+              is_verified
+            }
+          }
+        `;
+        await this.hasuraSystemService.executeMutation(updateAgentMutation, {
+          agentId: agent.id,
+        });
+      }
+    }
   }
 }

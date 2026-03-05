@@ -2502,6 +2502,10 @@ export class OrdersService {
       );
     }
 
+    if (!user.agent.is_verified) {
+      return { success: true, orders: [] };
+    }
+
     // Get agent's address information
     const agentAddresses = await this.hasuraSystemService.getAllUserAddresses(
       user.id,

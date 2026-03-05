@@ -586,6 +586,66 @@ export class AdminService {
     };
   }
 
+  private static readonly ID_DOCUMENT_TYPE_NAMES = [
+    'id_card',
+    'passport',
+    'driver_license',
+  ];
+
+  async getAgentIdDocuments(agentId: string) {
+    const agentQuery = `
+      query GetAgentUserId($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          user_id
+        }
+      }
+    `;
+    const agentResult = await this.hasuraSystemService.executeQuery(
+      agentQuery,
+      { agentId }
+    );
+    const userId = (agentResult?.agents_by_pk as { user_id: string } | null)
+      ?.user_id;
+    if (!userId) {
+      return { uploads: [] };
+    }
+
+    const query = `
+      query GetAgentIdDocuments($userId: uuid!, $typeNames: [String!]) {
+        user_uploads(
+          where: {
+            user_id: { _eq: $userId }
+            document_type: { name: { _in: $typeNames } }
+          }
+          order_by: { created_at: desc }
+        ) {
+          id
+          user_id
+          file_name
+          key
+          content_type
+          file_size
+          document_type_id
+          is_approved
+          note
+          created_at
+          updated_at
+          document_type {
+            id
+            name
+            description
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      userId,
+      typeNames: AdminService.ID_DOCUMENT_TYPE_NAMES,
+    });
+    const uploads = result.user_uploads || [];
+    return { uploads };
+  }
+
   async getUserMessages(params: {
     userId: string;
     page: number;
