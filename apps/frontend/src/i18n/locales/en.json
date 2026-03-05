@@ -529,7 +529,10 @@
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "failedDeliveries": "Failed Deliveries",
-      "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business"
+      "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
+      "verified": "Verified",
+      "unverified": "Unverified",
+      "notVerified": "Not verified"
     },
     "failedDeliveries": {
       "title": "Failed Deliveries",
@@ -1728,6 +1731,7 @@
     "specialInstructionsPlaceholder": "Add any special instructions for this order (optional)",
     "stats": {
       "active": "Active",
+      "byStatus": "Orders by status",
       "delivered": "Delivered",
       "pending": "Pending",
       "total": "Total Orders"
@@ -1806,7 +1810,7 @@
       "success": "Updated",
       "failed": "Failed",
       "orderSummary": "Status: {{status}} • Created: {{date}}",
-      "notSupported": "Batch processing is only available for business and agent accounts.",
+      "notSupported": "Batch processing is only available for business accounts.",
       "loadError": "Failed to load orders.",
       "genericError": "Failed to apply batch action. Please try again.",
       "actions": {

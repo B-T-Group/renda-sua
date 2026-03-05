@@ -47,6 +47,24 @@ import OrderCard from '../common/OrderCard';
 
 import SEOHead from '../seo/SEOHead';
 
+const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
+  pending: '#fff3e0',
+  pending_payment: '#fff8e1',
+  confirmed: '#e3f2fd',
+  preparing: '#e3f2fd',
+  ready_for_pickup: '#e8eaf6',
+  assigned_to_agent: '#e8eaf6',
+  picked_up: '#e1f5fe',
+  in_transit: '#e1f5fe',
+  out_for_delivery: '#e0f7fa',
+  delivered: '#e8f5e9',
+  complete: '#e8f5e9',
+  completed: '#e8f5e9',
+};
+
+const getOrderStatusBoxColor = (status: string): string =>
+  ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
+
 // Loading Skeleton Components
 const OrderCardSkeleton: React.FC = () => (
   <Card sx={{ mb: 2 }}>
@@ -387,10 +405,16 @@ const OrdersPage: React.FC = () => {
     }
   };
 
-  // Calculate order stats
+  // Calculate order stats (excluding cancelled from total; breakdown by status)
   const orderStats = useMemo(() => {
-    const total = orders.length;
-    const activeOrders = orders.filter((o) =>
+    const nonCancelled = orders.filter((o) => o.current_status !== 'cancelled');
+    const total = nonCancelled.length;
+    const byStatus: Record<string, number> = {};
+    nonCancelled.forEach((o) => {
+      const s = o.current_status || '';
+      byStatus[s] = (byStatus[s] ?? 0) + 1;
+    });
+    const activeOrders = nonCancelled.filter((o) =>
       [
         'confirmed',
         'preparing',
@@ -401,14 +425,11 @@ const OrdersPage: React.FC = () => {
         'out_for_delivery',
       ].includes(o.current_status || '')
     );
-    const pending = orders.filter((o) =>
+    const pending = nonCancelled.filter((o) =>
       ['pending', 'pending_payment'].includes(o.current_status || '')
     );
-    const delivered = orders.filter((o) =>
+    const delivered = nonCancelled.filter((o) =>
       ['delivered', 'complete'].includes(o.current_status || '')
-    );
-    const cancelled = orders.filter((o) =>
-      ['cancelled', 'failed', 'refunded'].includes(o.current_status || '')
     );
 
     return {
@@ -416,7 +437,7 @@ const OrdersPage: React.FC = () => {
       active: activeOrders.length,
       pending: pending.length,
       delivered: delivered.length,
-      cancelled: cancelled.length,
+      byStatus,
     };
   }, [orders]);
 
@@ -549,7 +570,7 @@ const OrdersPage: React.FC = () => {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {(profile?.business || profile?.agent) && (
+              {profile?.business && (
                 <Button
                   variant="contained"
                   color="primary"
@@ -739,6 +760,35 @@ const OrdersPage: React.FC = () => {
               </Card>
             </Grid>
           </Grid>
+        )}
+
+        {/* Orders by status breakdown (excluding cancelled) */}
+        {!loading && Object.keys(orderStats.byStatus).length > 0 && (
+          <Paper sx={{ p: 2, mb: 4 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              {t('orders.stats.byStatus', 'Orders by status')}
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {Object.entries(orderStats.byStatus)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([status, n]) => (
+                  <Box
+                    key={status}
+                    sx={{
+                      bgcolor: getOrderStatusBoxColor(status),
+                      color: 'text.primary',
+                      px: 1.25,
+                      py: 0.75,
+                      borderRadius: 1,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {t(`common.orderStatus.${status}`, status)}: {n}
+                  </Box>
+                ))}
+            </Box>
+          </Paper>
         )}
 
         {/* Desktop Filters */}

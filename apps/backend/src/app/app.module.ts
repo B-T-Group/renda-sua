@@ -20,6 +20,7 @@ import { BusinessImagesModule } from '../business-images/business-images.module'
 import { CategoriesModule } from '../categories/categories.module';
 import configuration from '../config/configuration';
 import { createWinstonConfig } from '../config/logging.config';
+import { DashboardModule } from '../dashboard/dashboard.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { GoogleModule } from '../google/google.module';
 import { HasuraModule } from '../hasura/hasura.module';
@@ -103,6 +104,7 @@ import { AppService } from './app.service';
     CategoriesModule,
     SubcategoriesModule,
     AiModule,
+    DashboardModule,
     DeliveryModule,
     SupportModule,
   ],

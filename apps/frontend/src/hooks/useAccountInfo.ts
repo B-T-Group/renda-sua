@@ -1,36 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccountSubscription } from './useAccountSubscription';
+import { useApiClient } from './useApiClient';
 import { useGraphQLRequest } from './useGraphQLRequest';
-
-const GET_ACCOUNT_INFO = `
-  query GetAccountInfo {
-    accounts {
-      id
-      user_id
-      currency
-      available_balance
-      withheld_balance
-      total_balance
-      is_active
-      created_at
-      updated_at
-      account_transactions {
-        id
-        account_id
-        transaction_type
-        amount
-        memo
-        created_at
-      }
-    }
-    clients {
-      id
-      user_id
-      created_at
-      updated_at
-    }
-  }
-`;
 
 const GET_ACCOUNT_BY_ID = `
   query GetAccountById($accountId: uuid!) {
@@ -96,31 +67,51 @@ export interface ClientInfo {
 }
 
 export const useAccountInfo = () => {
-  const { data, loading, error, execute, refetch } = useGraphQLRequest<{
+  const apiClient = useApiClient();
+  const [data, setData] = useState<{
     accounts: Account[];
     clients: ClientInfo[];
-  }>(GET_ACCOUNT_INFO);
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const hasExecuted = useRef(false);
+  const fetchAccountInfo = useCallback(async () => {
+    if (!apiClient) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get<{
+        success: boolean;
+        data: { accounts: Account[]; clients: ClientInfo[] };
+      }>('/accounts/info');
+      if (response.data.success && response.data.data) {
+        setData(response.data.data);
+      } else {
+        setData(null);
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.error ?? err?.message ?? 'Failed to load account info'
+      );
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient]);
 
   useEffect(() => {
-    if (!hasExecuted.current) {
-      hasExecuted.current = true;
-      setTimeout(() => {
-        execute();
-      }, 0);
-    }
-  }, []); // Empty dependency array
+    fetchAccountInfo();
+  }, [fetchAccountInfo]);
 
-  const accounts: Account[] = data?.accounts || [];
-  const clientInfo: ClientInfo[] = data?.clients || [];
+  const accounts: Account[] = data?.accounts ?? [];
+  const clientInfo: ClientInfo[] = data?.clients ?? [];
 
   return {
     accounts,
     clientInfo,
     loading,
     error,
-    refetch: () => refetch(),
+    refetch: fetchAccountInfo,
   };
 };
 

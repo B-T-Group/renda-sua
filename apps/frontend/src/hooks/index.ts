@@ -37,6 +37,8 @@ export { useAgentOnboarding } from './useAgentOnboarding';
 export { useAgentOrders } from './useAgentOrders';
 
 // Business hooks
+export { useDashboardAggregates } from './useDashboardAggregates';
+export type { DashboardAggregates } from './useDashboardAggregates';
 export { useBusinessItemsPageData } from './useBusinessItemsPageData';
 export type { BusinessItemsPageData } from './useBusinessItemsPageData';
 export { useBusinessInventory } from './useBusinessInventory';

@@ -205,7 +205,7 @@ const BatchOrdersPage: React.FC = () => {
     );
   };
 
-  if (!isBusiness && !isAgent) {
+  if (!isBusiness) {
     return (
       <Container
         maxWidth="lg"
@@ -215,7 +215,7 @@ const BatchOrdersPage: React.FC = () => {
         <Alert severity="info">
           {t(
             'orders.batch.notSupported',
-            'Batch processing is only available for business and agent accounts.'
+            'Batch processing is only available for business accounts.'
           )}
         </Alert>
       </Container>

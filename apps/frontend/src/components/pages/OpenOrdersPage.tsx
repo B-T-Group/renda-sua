@@ -209,23 +209,13 @@ const OpenOrdersPage: React.FC = () => {
             )}
           </Alert>
         )}
-        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="h4" component="h1" gutterBottom>
-              {getPageTitle()}
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              {getPageSubtitle()}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            component={Link}
-            to="/orders/batch"
-            sx={{ alignSelf: 'center' }}
-          >
-            {t('orders.batch.button', 'Batch processing')}
-          </Button>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            {getPageTitle()}
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            {getPageSubtitle()}
+          </Typography>
         </Box>
 
         {/* Filters */}

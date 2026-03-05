@@ -25,6 +25,134 @@ export class AccountsController {
     private readonly accountsService: AccountsService
   ) {}
 
+  @Get('info')
+  @ApiOperation({
+    summary: 'Get account info (accounts with transactions and clients)',
+    description:
+      'Returns accounts with account_transactions and client info for the current user. Matches the former frontend GetAccountInfo GraphQL shape.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account info retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            accounts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  user_id: { type: 'string' },
+                  currency: { type: 'string' },
+                  available_balance: { type: 'number' },
+                  withheld_balance: { type: 'number' },
+                  total_balance: { type: 'number' },
+                  is_active: { type: 'boolean' },
+                  created_at: { type: 'string' },
+                  updated_at: { type: 'string' },
+                  business_location_id: { type: 'string', nullable: true },
+                  business_location: { type: 'object', nullable: true },
+                  account_transactions: { type: 'array' },
+                },
+              },
+            },
+            clients: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  user_id: { type: 'string' },
+                  created_at: { type: 'string' },
+                  updated_at: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAccountInfo() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) {
+        throw new HttpException(
+          { success: false, error: 'User not found' },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+
+      const query = `
+        query GetAccountInfo($userId: uuid!) {
+          accounts(
+            where: { user_id: { _eq: $userId } }
+            order_by: { created_at: desc }
+          ) {
+            id
+            user_id
+            currency
+            available_balance
+            withheld_balance
+            total_balance
+            is_active
+            created_at
+            updated_at
+            business_location_id
+            business_location {
+              id
+              name
+              phone
+            }
+            account_transactions {
+              id
+              account_id
+              transaction_type
+              amount
+              memo
+              created_at
+            }
+          }
+          clients(where: { user_id: { _eq: $userId } }) {
+            id
+            user_id
+            created_at
+            updated_at
+          }
+        }
+      `;
+
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        userId: user.id,
+      });
+
+      const accounts = result.accounts || [];
+      const clients = result.clients || [];
+
+      return {
+        success: true,
+        data: { accounts, clients },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch account info',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get active accounts for the current user' })
   @ApiResponse({

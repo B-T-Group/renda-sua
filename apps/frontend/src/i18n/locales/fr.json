@@ -518,7 +518,10 @@
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
       "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
       "failedDeliveries": "Livraisons échouées",
-      "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise"
+      "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "verified": "Vérifié",
+      "unverified": "Non vérifié",
+      "notVerified": "Non vérifié"
     },
     "failedDeliveries": {
       "title": "Livraisons échouées",
@@ -1700,6 +1703,7 @@
     "specialInstructionsPlaceholder": "Ajoutez des instructions spéciales pour cette commande (optionnel)",
     "stats": {
       "active": "Actif",
+      "byStatus": "Commandes par statut",
       "delivered": "Livré",
       "pending": "En Attente",
       "total": "Total des Commandes"
@@ -1778,7 +1782,7 @@
       "success": "Mis à jour",
       "failed": "Échec",
       "orderSummary": "Statut : {{status}} • Créée le : {{date}}",
-      "notSupported": "Le traitement par lot est uniquement disponible pour les comptes entreprise et agent.",
+      "notSupported": "Le traitement par lot est uniquement disponible pour les comptes entreprise.",
       "loadError": "Échec du chargement des commandes.",
       "genericError": "Échec de l'application de l'action par lot. Veuillez réessayer.",
       "actions": {

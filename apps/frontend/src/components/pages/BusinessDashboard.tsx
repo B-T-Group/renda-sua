@@ -31,15 +31,29 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
-import { useBusinessInventory } from '../../hooks/useBusinessInventory';
-import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import { useBusinessOrders } from '../../hooks/useBusinessOrders';
-import { useFailedDeliveries } from '../../hooks/useFailedDeliveries';
-import { useItems } from '../../hooks/useItems';
+import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
+
+const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
+  pending: '#fff3e0',
+  pending_payment: '#fff8e1',
+  confirmed: '#e3f2fd',
+  preparing: '#e3f2fd',
+  ready_for_pickup: '#e8eaf6',
+  assigned_to_agent: '#e8eaf6',
+  picked_up: '#e1f5fe',
+  in_transit: '#e1f5fe',
+  out_for_delivery: '#e0f7fa',
+  delivered: '#e8f5e9',
+  complete: '#e8f5e9',
+  completed: '#e8f5e9',
+};
+
+const getOrderStatusBoxColor = (status: string): string =>
+  ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
 
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -47,60 +61,30 @@ const BusinessDashboard: React.FC = () => {
   const { profile } = useUserProfileContext();
 
   const { accounts } = useAccountInfo();
-  const { orders, loading: ordersLoading } = useBusinessOrders(
-    profile?.business?.id
-  );
-  const { inventory, loading: inventoryLoading } = useBusinessInventory(
-    profile?.business?.id
-  );
-  const { locations, loading: locationsLoading } = useBusinessLocations(
-    profile?.business?.id
-  );
-  const { items, loading: itemsLoading } = useItems(profile?.business?.id);
-  const { getFailedDeliveries, loading: failedDeliveriesLoading } =
-    useFailedDeliveries();
+  const {
+    aggregates,
+    loading: aggregatesLoading,
+    error: aggregatesError,
+  } = useDashboardAggregates(profile?.business?.id);
 
-  const [pendingFailedDeliveriesCount, setPendingFailedDeliveriesCount] =
-    React.useState<number | null>(null);
+  const isLoading = aggregatesLoading;
 
-  React.useEffect(() => {
-    if (profile?.business?.id) {
-      getFailedDeliveries({ status: 'pending' })
-        .then((deliveries) => {
-          setPendingFailedDeliveriesCount(deliveries.length);
-        })
-        .catch(() => {
-          setPendingFailedDeliveriesCount(0);
-        });
-    }
-  }, [profile?.business?.id, getFailedDeliveries]);
-
-  const isLoading =
-    ordersLoading ||
-    inventoryLoading ||
-    locationsLoading ||
-    itemsLoading ||
-    failedDeliveriesLoading;
-
-  // Debug logging
-  console.log('Business Dashboard Data:', {
-    profile: profile?.business,
-    ordersCount: orders.length,
-    inventoryCount: inventory.length,
-    locationsCount: locations.length,
-    itemsCount: items.length,
-    profileLoading: profile === null,
-    businessId: profile?.business?.id,
-  });
+  const ordersTotalNonCancelled = aggregates?.ordersTotal ?? 0;
+  const orderCountByStatus = aggregates?.ordersByStatus ?? {};
+  const itemCount = aggregates?.itemCount ?? 0;
+  const locationCount = aggregates?.locationCount ?? 0;
+  const inventoryCount = aggregates?.inventoryCount ?? 0;
+  const pendingFailedDeliveriesCount = aggregates?.pendingFailedDeliveriesCount ?? 0;
 
   const businessCards = [
     {
       title: t('common.orders'),
       description: t('business.dashboard.ordersDescription'),
       icon: <OrdersIcon sx={{ fontSize: 40 }} />,
-      count: orders.length,
+      count: ordersTotalNonCancelled,
       color: '#1976d2',
       path: '/orders',
+      orderCountByStatus,
     },
     {
       title: t('business.dashboard.batchOrdersTitle', 'Batch process orders'),
@@ -117,7 +101,7 @@ const BusinessDashboard: React.FC = () => {
       title: t('common.items'),
       description: t('business.dashboard.itemsDescription'),
       icon: <ItemsIcon sx={{ fontSize: 40 }} />,
-      count: items.length,
+      count: itemCount,
       color: '#7b1fa2',
       path: '/business/items',
     },
@@ -136,7 +120,7 @@ const BusinessDashboard: React.FC = () => {
       title: t('common.locations'),
       description: t('business.dashboard.locationsDescription'),
       icon: <LocationsIcon sx={{ fontSize: 40 }} />,
-      count: locations.length,
+      count: locationCount,
       color: '#f57c00',
       path: '/business/locations',
     },
@@ -147,9 +131,7 @@ const BusinessDashboard: React.FC = () => {
       count: pendingFailedDeliveriesCount,
       color: '#d32f2f',
       path: '/business/failed-deliveries',
-      showBadge:
-        pendingFailedDeliveriesCount !== null &&
-        pendingFailedDeliveriesCount > 0,
+      showBadge: pendingFailedDeliveriesCount > 0,
     },
     {
       title: t('business.dashboard.documents'),
@@ -169,12 +151,26 @@ const BusinessDashboard: React.FC = () => {
     },
   ];
 
+  const agentsTotal =
+    (aggregates?.agentsVerified ?? 0) + (aggregates?.agentsUnverified ?? 0);
+  const businessesTotal =
+    (aggregates?.businessesVerified ?? 0) +
+    (aggregates?.businessesNotVerified ?? 0);
+
   const adminCards = [
     {
       title: t('business.dashboard.manageAgents'),
       description: t('business.dashboard.manageAgentsDescription'),
       icon: <AgentIcon sx={{ fontSize: 40 }} />,
-      count: null,
+      count: agentsTotal > 0 ? agentsTotal : null,
+      countBreakdown:
+        agentsTotal > 0
+          ? {
+              verified: aggregates?.agentsVerified ?? 0,
+              other: aggregates?.agentsUnverified ?? 0,
+              otherLabel: t('business.dashboard.unverified', 'Unverified'),
+            }
+          : undefined,
       color: '#2e7d32',
       path: '/admin/agents',
     },
@@ -182,7 +178,7 @@ const BusinessDashboard: React.FC = () => {
       title: t('business.dashboard.manageClients'),
       description: t('business.dashboard.manageClientsDescription'),
       icon: <UsersIcon sx={{ fontSize: 40 }} />,
-      count: null,
+      count: aggregates?.clientCount ?? null,
       color: '#0288d1',
       path: '/admin/clients',
     },
@@ -190,7 +186,18 @@ const BusinessDashboard: React.FC = () => {
       title: t('business.dashboard.manageBusinesses'),
       description: t('business.dashboard.manageBusinessesDescription'),
       icon: <BizIcon sx={{ fontSize: 40 }} />,
-      count: null,
+      count: businessesTotal > 0 ? businessesTotal : null,
+      countBreakdown:
+        businessesTotal > 0
+          ? {
+              verified: aggregates?.businessesVerified ?? 0,
+              other: aggregates?.businessesNotVerified ?? 0,
+              otherLabel: t(
+                'business.dashboard.notVerified',
+                'Not verified'
+              ),
+            }
+          : undefined,
       color: '#6d4c41',
       path: '/admin/businesses',
     },
@@ -300,6 +307,41 @@ const BusinessDashboard: React.FC = () => {
               </Typography>
             </Badge>
           )}
+          {'countBreakdown' in card && card.countBreakdown && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 1 }}
+              component="div"
+            >
+              {t('business.dashboard.verified', 'Verified')}:{' '}
+              {card.countBreakdown.verified} · {card.countBreakdown.otherLabel}:{' '}
+              {card.countBreakdown.other}
+            </Typography>
+          )}
+          {card.orderCountByStatus &&
+            Object.keys(card.orderCountByStatus).length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1, justifyContent: 'center' }}>
+                {Object.entries(card.orderCountByStatus)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([status, n]) => (
+                    <Box
+                      key={status}
+                      sx={{
+                        bgcolor: getOrderStatusBoxColor(status),
+                        color: 'text.primary',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {t(`common.orderStatus.${status}`, status)}: {n}
+                    </Box>
+                  ))}
+              </Box>
+            )}
         </CardContent>
         <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
           <Button
@@ -377,6 +419,12 @@ const BusinessDashboard: React.FC = () => {
       {/* Address Alert */}
       <AddressAlert />
 
+      {aggregatesError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {aggregatesError}
+        </Alert>
+      )}
+
       {/* Account Summary Section */}
       <Box sx={{ mb: 4 }}>
         <Typography
@@ -448,7 +496,7 @@ const BusinessDashboard: React.FC = () => {
               {isLoading ? (
                 <Skeleton variant="text" width={60} height={40} />
               ) : (
-                <Typography variant="h4">{orders.length}</Typography>
+                <Typography variant="h4">{ordersTotalNonCancelled}</Typography>
               )}
             </CardContent>
           </Card>
@@ -468,7 +516,7 @@ const BusinessDashboard: React.FC = () => {
               {isLoading ? (
                 <Skeleton variant="text" width={60} height={40} />
               ) : (
-                <Typography variant="h4">{items.length}</Typography>
+                <Typography variant="h4">{itemCount}</Typography>
               )}
             </CardContent>
           </Card>
@@ -488,7 +536,7 @@ const BusinessDashboard: React.FC = () => {
               {isLoading ? (
                 <Skeleton variant="text" width={60} height={40} />
               ) : (
-                <Typography variant="h4">{locations.length}</Typography>
+                <Typography variant="h4">{locationCount}</Typography>
               )}
             </CardContent>
           </Card>
@@ -508,7 +556,7 @@ const BusinessDashboard: React.FC = () => {
               {isLoading ? (
                 <Skeleton variant="text" width={60} height={40} />
               ) : (
-                <Typography variant="h4">{inventory.length}</Typography>
+                <Typography variant="h4">{inventoryCount}</Typography>
               )}
             </CardContent>
           </Card>
