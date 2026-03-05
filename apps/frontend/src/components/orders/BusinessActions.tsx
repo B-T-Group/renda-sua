@@ -56,7 +56,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const { t } = useTranslation();
   const {
     confirmOrder,
-    startPreparing,
     completePreparation,
     refundOrder,
     generateDeliveryOverwriteCode,
@@ -121,32 +120,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       );
       onActionComplete?.();
       setConfirmModalOpen(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStartPreparing = async () => {
-    setLoading(true);
-    try {
-      await startPreparing({ orderId: order.id });
-      onShowNotification?.(
-        t(
-          'messages.orderStartPreparingSuccess',
-          'Order preparation started successfully'
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t(
-              'messages.orderStartPreparingError',
-              'Failed to start preparation'
-            );
-      onShowNotification?.(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -252,9 +225,9 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'confirmed':
         actions.push({
-          label: t('orderActions.startPreparing', 'Start Preparing'),
-          action: handleStartPreparing,
-          color: 'primary' as const,
+          label: t('orderActions.readyForPickup', 'Ready for Pickup'),
+          action: handleCompletePreparation,
+          color: 'success' as const,
           icon: <CheckCircle />,
         });
         actions.push({

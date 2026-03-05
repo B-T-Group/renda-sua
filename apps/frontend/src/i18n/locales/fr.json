@@ -1353,7 +1353,7 @@
     "pickUp": "Récupérer",
     "printLabel": "Imprimer l'étiquette",
     "refundOrder": "Rembourser la Commande",
-    "startPreparing": "Commencer la Préparation"
+    "readyForPickup": "Prêt pour enlèvement"
   },
   "orderHistory": {
     "changedBy": "Modifié par",
@@ -1407,7 +1407,8 @@
       "actionRequired": {
         "delivered": "Action Requise : Terminer la commande",
         "pending": "Action Requise : Confirmer cette commande",
-        "preparing": "Action Requise : Terminer la préparation"
+        "preparing": "Action Requise : Terminer la préparation",
+        "readyForPickup": "Action Requise : Marquer comme prêt pour enlèvement"
       }
     },
     "businessInfo": "Informations sur l'Entreprise",
@@ -1745,8 +1746,7 @@
       "loadError": "Échec du chargement des commandes.",
       "genericError": "Échec de l'application de l'action par lot. Veuillez réessayer.",
       "actions": {
-        "startPreparing": "Commencer la préparation (confirmée → en préparation)",
-        "completePreparation": "Terminer la préparation (en préparation → prête pour enlèvement)",
+        "completePreparation": "Prêt pour enlèvement (confirmée → prête pour enlèvement)",
         "pickUp": "Récupérer (assignée → récupérée)",
         "startTransit": "Démarrer le transit (récupérée → en transit)",
         "outForDelivery": "En livraison (récupérée / en transit → en livraison)",

@@ -57,6 +57,17 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
               ),
               action: 'confirm',
             };
+          case 'confirmed':
+            return {
+              required: true,
+              severity: 'info' as const,
+              icon: <Info />,
+              message: t(
+                'orders.business.actionRequired.readyForPickup',
+                'Action Required: Mark as ready for pickup'
+              ),
+              action: 'complete_preparation',
+            };
           case 'preparing':
             return {
               required: true,

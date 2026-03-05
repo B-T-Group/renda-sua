@@ -4,7 +4,7 @@
 
 Successfully implemented comprehensive order status management APIs with the following key features:
 
-- **4 New API Endpoints** for specific order status transitions
+- **3 Business workflow API Endpoints** for order confirmation and ready-for-pickup (start_preparing step removed)
 - **Financial Hold System** with agent hold by type (internal 0%, verified 80%, unverified 100%)
 - **Complete Order History** tracking all status changes
 - **Role-Based Access Control** for business and agent users
@@ -23,27 +23,17 @@ Successfully implemented comprehensive order status management APIs with the fol
   - Logs status change to history
   - Supports optional notes
 
-### 2. `POST /orders/start_preparing`
+### 2. `POST /orders/complete_preparation`
 
-- **Purpose**: Starts order preparation
+- **Purpose**: Marks order ready for pickup
 - **Access**: Business users only
-- **Status Transition**: `confirmed` → `preparing`
+- **Status Transition**: `confirmed` (or `preparing`) → `ready_for_pickup`
 - **Features**:
-  - Validates order is in confirmed status
-  - Tracks preparation start time
-  - Logs to order history
-
-### 3. `POST /orders/complete_preparation`
-
-- **Purpose**: Completes order preparation
-- **Access**: Business users only
-- **Status Transition**: `preparing` → `ready_for_pickup`
-- **Features**:
-  - Validates order is in preparing status
+  - Validates order is in confirmed or preparing status
   - Marks order ready for agent pickup
   - Logs completion to history
 
-### 4. `POST /orders/get_order`
+### 3. `POST /orders/get_order`
 
 - **Purpose**: Assigns order to agent with financial hold
 - **Access**: Agent users only
@@ -71,14 +61,12 @@ Agents fetch their current hold via `GET /agents/hold-percentage`. Business admi
 ### Service Layer (`OrdersService`)
 
 - **confirmOrder()**: Handles order confirmation logic
-- **startPreparing()**: Manages preparation start
-- **completePreparation()**: Handles preparation completion
+- **completePreparation()**: Marks order ready for pickup (from confirmed or preparing)
 - **getOrder()**: Manages agent assignment with financial holds
 
 ### Controller Layer (`OrdersController`)
 
 - **confirmOrder()**: `POST /orders/confirm`
-- **startPreparing()**: `POST /orders/start_preparing`
 - **completePreparation()**: `POST /orders/complete_preparation`
 - **getOrder()**: `POST /orders/get_order`
 
@@ -118,14 +106,16 @@ Agents fetch their current hold via `GET /agents/hold-percentage`. Business admi
 ## 📊 Order Status Flow
 
 ```
-pending → confirmed → preparing → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
+pending → confirmed → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
 ```
+
+(Note: `preparing` status exists for backward compatibility but is no longer in the default flow.)
 
 ### Status Descriptions
 
 - **pending**: Order created, waiting for confirmation
-- **confirmed**: Order confirmed by business
-- **preparing**: Items being prepared/packed
+- **confirmed**: Order confirmed by business (next: ready for pickup)
+- **preparing**: (Legacy) Items being prepared/packed
 - **ready_for_pickup**: Order ready for agent pickup
 - **assigned_to_agent**: Order assigned to delivery agent
 - **picked_up**: Agent has picked up the order
@@ -172,8 +162,7 @@ CREATE TABLE account_transactions (
 ### Unit Tests (`orders.service.spec.ts`)
 
 - ✅ **confirmOrder()**: Success and error cases
-- ✅ **startPreparing()**: Status validation
-- ✅ **completePreparation()**: Business workflow
+- ✅ **completePreparation()**: From confirmed or preparing to ready_for_pickup
 - ✅ **getOrder()**: Agent assignment with financial holds
 - ✅ **Helper Methods**: Database operations
 - ✅ **Error Handling**: Permission and validation errors

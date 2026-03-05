@@ -11,9 +11,7 @@ describe('OrdersController', () => {
   beforeEach(async () => {
     const mockOrdersService = {
       confirmOrder: jest.fn(),
-      startPreparing: jest.fn(),
       completePreparation: jest.fn(),
-      startPreparingBatch: jest.fn(),
       completePreparationBatch: jest.fn(),
       getOrder: jest.fn(),
       pickUpOrder: jest.fn(),
@@ -109,24 +107,6 @@ describe('OrdersController', () => {
     });
   });
 
-  describe('startPreparing', () => {
-    it('should start preparing an order successfully', async () => {
-      const request = { orderId: 'order-123', notes: 'Started preparation' };
-      const expectedResult = {
-        success: true,
-        order: { id: 'order-123', current_status: 'preparing' },
-        message: 'Order preparation started successfully',
-      };
-
-      ordersService.startPreparing.mockResolvedValue(expectedResult);
-
-      const result = await controller.startPreparing(request);
-
-      expect(result).toEqual(expectedResult);
-      expect(ordersService.startPreparing).toHaveBeenCalledWith(request);
-    });
-  });
-
   describe('completePreparation', () => {
     it('should complete preparation successfully', async () => {
       const request = { orderId: 'order-123', notes: 'Preparation completed' };
@@ -142,32 +122,6 @@ describe('OrdersController', () => {
 
       expect(result).toEqual(expectedResult);
       expect(ordersService.completePreparation).toHaveBeenCalledWith(request);
-    });
-  });
-
-  describe('startPreparingBatch', () => {
-    it('should start preparing multiple orders successfully', async () => {
-      const request = {
-        orderIds: ['order-123', 'order-456'],
-        notes: 'Batch start preparing',
-      };
-      const expectedResult = {
-        success: true,
-        results: [
-          {
-            orderId: 'order-123',
-            success: true,
-            message: 'Order preparation started successfully',
-          },
-        ],
-      };
-
-      ordersService.startPreparingBatch.mockResolvedValue(expectedResult);
-
-      const result = await controller.startPreparingBatch(request);
-
-      expect(result).toEqual(expectedResult);
-      expect(ordersService.startPreparingBatch).toHaveBeenCalledWith(request);
     });
   });
 

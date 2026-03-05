@@ -213,42 +213,21 @@ export class OrdersController {
     return this.ordersService.confirmOrder(request);
   }
 
-  @Post('start_preparing')
-  async startPreparing(@Body() request: OrderStatusChangeRequest) {
-    return this.ordersService.startPreparing(request);
-  }
-
   @Post('complete_preparation')
+  @ApiOperation({
+    summary: 'Mark order ready for pickup',
+    description:
+      'Business users can transition confirmed (or preparing) orders to ready_for_pickup in a single operation.',
+  })
   async completePreparation(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.completePreparation(request);
   }
 
-  @Post('batch/start_preparing')
-  @ApiOperation({
-    summary: 'Start preparing multiple orders',
-    description:
-      'Business users can transition multiple confirmed orders to preparing status in a single operation.',
-  })
-  @ApiBody({
-    description: 'Batch start preparing request',
-    type: Object,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Batch start preparing completed with per-order results',
-    type: Object,
-  })
-  async startPreparingBatch(
-    @Body() request: BatchOrderStatusChangeRequest
-  ): Promise<BatchOrderStatusChangeResult> {
-    return this.ordersService.startPreparingBatch(request);
-  }
-
   @Post('batch/complete_preparation')
   @ApiOperation({
-    summary: 'Complete preparation for multiple orders',
+    summary: 'Mark multiple orders ready for pickup',
     description:
-      'Business users can mark multiple preparing orders as ready_for_pickup in a single operation.',
+      'Business users can mark multiple confirmed or preparing orders as ready_for_pickup in a single operation.',
   })
   @ApiBody({
     description: 'Batch complete preparation request',

@@ -37,28 +37,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 2: Start Preparing
-    console.log('\n2️⃣ Testing POST /orders/start_preparing');
-    try {
-      const startResponse = await axios.post(
-        `${API_BASE}/orders/start_preparing`,
-        {
-          orderId: TEST_ORDER_ID,
-          notes: 'Test start preparation',
-        },
-        { headers }
-      );
-
-      console.log('✅ Start preparing response:', startResponse.data);
-    } catch (error) {
-      console.log(
-        '❌ Start preparing error:',
-        error.response?.data || error.message
-      );
-    }
-
-    // Test 3: Complete Preparation
-    console.log('\n3️⃣ Testing POST /orders/complete_preparation');
+    // Test 2: Complete Preparation (confirmed → ready_for_pickup)
+    console.log('\n2️⃣ Testing POST /orders/complete_preparation');
     try {
       const completeResponse = await axios.post(
         `${API_BASE}/orders/complete_preparation`,
@@ -77,8 +57,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 4: Get Order (Agent Assignment)
-    console.log('\n4️⃣ Testing POST /orders/get_order');
+    // Test 3: Get Order (Agent Assignment)
+    console.log('\n3️⃣ Testing POST /orders/get_order');
     try {
       const getOrderResponse = await axios.post(
         `${API_BASE}/orders/get_order`,
@@ -93,8 +73,8 @@ async function testOrderAPIs() {
       console.log('❌ Get order error:', error.response?.data || error.message);
     }
 
-    // Test 5: Pick Up Order
-    console.log('\n5️⃣ Testing POST /orders/pick_up');
+    // Test 4: Pick Up Order
+    console.log('\n4️⃣ Testing POST /orders/pick_up');
     try {
       const pickUpResponse = await axios.post(
         `${API_BASE}/orders/pick_up`,
@@ -113,8 +93,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 6: Start Transit
-    console.log('\n6️⃣ Testing POST /orders/start_transit');
+    // Test 5: Start Transit
+    console.log('\n5️⃣ Testing POST /orders/start_transit');
     try {
       const startTransitResponse = await axios.post(
         `${API_BASE}/orders/start_transit`,
@@ -133,8 +113,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 7: Out for Delivery
-    console.log('\n7️⃣ Testing POST /orders/out_for_delivery');
+    // Test 6: Out for Delivery
+    console.log('\n6️⃣ Testing POST /orders/out_for_delivery');
     try {
       const outForDeliveryResponse = await axios.post(
         `${API_BASE}/orders/out_for_delivery`,
@@ -153,8 +133,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 8: Deliver Order
-    console.log('\n8️⃣ Testing POST /orders/deliver');
+    // Test 7: Deliver Order
+    console.log('\n7️⃣ Testing POST /orders/deliver');
     try {
       const deliverResponse = await axios.post(
         `${API_BASE}/orders/deliver`,
@@ -173,8 +153,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 9: Fail Delivery
-    console.log('\n9️⃣ Testing POST /orders/fail_delivery');
+    // Test 8: Fail Delivery
+    console.log('\n8️⃣ Testing POST /orders/fail_delivery');
     try {
       const failDeliveryResponse = await axios.post(
         `${API_BASE}/orders/fail_delivery`,
@@ -193,8 +173,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 10: Cancel Order
-    console.log('\n🔟 Testing POST /orders/cancel');
+    // Test 9: Cancel Order
+    console.log('\n9️⃣ Testing POST /orders/cancel');
     try {
       const cancelResponse = await axios.post(
         `${API_BASE}/orders/cancel`,
@@ -213,8 +193,8 @@ async function testOrderAPIs() {
       );
     }
 
-    // Test 11: Refund Order
-    console.log('\n1️⃣1️⃣ Testing POST /orders/refund');
+    // Test 10: Refund Order
+    console.log('\n🔟 Testing POST /orders/refund');
     try {
       const refundResponse = await axios.post(
         `${API_BASE}/orders/refund`,

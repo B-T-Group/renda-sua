@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-Successfully implemented **11 comprehensive order status management APIs** covering the complete order lifecycle from creation to delivery and beyond. All APIs include financial hold management, complete audit trails, and role-based access control.
+Successfully implemented **10 comprehensive order status management APIs** covering the complete order lifecycle from creation to delivery and beyond. All APIs include financial hold management, complete audit trails, and role-based access control.
 
 ## 📋 Complete API Endpoints
 
@@ -14,28 +14,22 @@ Successfully implemented **11 comprehensive order status management APIs** cover
 - **Status Transition**: `pending` → `confirmed`
 - **Features**: Business ownership validation, status history logging
 
-#### 2. `POST /orders/start_preparing`
+#### 2. `POST /orders/complete_preparation`
 
-- **Purpose**: Starts order preparation
-- **Status Transition**: `confirmed` → `preparing`
-- **Features**: Preparation tracking, business validation
+- **Purpose**: Marks order ready for pickup
+- **Status Transition**: `confirmed` (or `preparing`) → `ready_for_pickup`
+- **Features**: Business can go directly from confirmed to ready for pickup; backward compat for orders in preparing
 
-#### 3. `POST /orders/complete_preparation`
-
-- **Purpose**: Completes order preparation
-- **Status Transition**: `preparing` → `ready_for_pickup`
-- **Features**: Marks order ready for agent pickup
-
-#### 4. `POST /orders/cancel`
+#### 3. `POST /orders/cancel`
 
 - **Purpose**: Cancels an order
-- **Status Transition**: `pending/confirmed/preparing` → `cancelled`
+- **Status Transition**: `pending/confirmed` (and `preparing` for backward compat) → `cancelled`
 - **Features**:
   - Validates cancellable statuses
   - Releases agent holds if assigned
   - Business ownership validation
 
-#### 5. `POST /orders/refund`
+#### 4. `POST /orders/refund`
 
 - **Purpose**: Refunds a completed order
 - **Status Transition**: `delivered/failed/cancelled` → `refunded`
@@ -45,7 +39,7 @@ Successfully implemented **11 comprehensive order status management APIs** cover
 
 ### **Agent Workflow APIs** (Agent Users Only)
 
-#### 6. `POST /orders/get_order`
+#### 5. `POST /orders/get_order`
 
 - **Purpose**: Assigns order to agent with financial hold
 - **Status Transition**: `ready_for_pickup` → `assigned_to_agent`
@@ -54,7 +48,7 @@ Successfully implemented **11 comprehensive order status management APIs** cover
   - **Balance Validation**: Returns 403 if insufficient funds
   - **Account Management**: Updates available and withheld balances
 
-#### 7. `POST /orders/pick_up`
+#### 6. `POST /orders/pick_up`
 
 - **Purpose**: Agent picks up the order
 - **Status Transition**: `assigned_to_agent` → `picked_up`
@@ -62,19 +56,19 @@ Successfully implemented **11 comprehensive order status management APIs** cover
   - Assigned agent validation
   - Pickup confirmation logging
 
-#### 8. `POST /orders/start_transit`
+#### 7. `POST /orders/start_transit`
 
 - **Purpose**: Starts transit to customer
 - **Status Transition**: `picked_up` → `in_transit`
 - **Features**: Transit tracking, agent validation
 
-#### 9. `POST /orders/out_for_delivery`
+#### 8. `POST /orders/out_for_delivery`
 
 - **Purpose**: Marks agent as out for delivery
 - **Status Transition**: `in_transit` → `out_for_delivery`
 - **Features**: Delivery status tracking
 
-#### 10. `POST /orders/deliver`
+#### 9. `POST /orders/deliver`
 
 - **Purpose**: Delivers order to customer
 - **Status Transition**: `out_for_delivery` → `delivered`
@@ -83,7 +77,7 @@ Successfully implemented **11 comprehensive order status management APIs** cover
   - **Transaction Logging**: Creates release and payment transactions
   - **Balance Updates**: Updates agent account balances
 
-#### 11. `POST /orders/fail_delivery`
+#### 10. `POST /orders/fail_delivery`
 
 - **Purpose**: Marks delivery as failed
 - **Status Transition**: `out_for_delivery` → `failed`
@@ -94,22 +88,24 @@ Successfully implemented **11 comprehensive order status management APIs** cover
 ## 🔄 Complete Order Status Flow
 
 ```
-pending → confirmed → preparing → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
-                                                                                    ↓
-                                                                                failed
-                                                                                    ↓
-                                                                                cancelled
-                                                                                    ↓
-                                                                                refunded
+pending → confirmed → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
+                                                                        ↓
+                                                                    failed
+                                                                        ↓
+                                                                    cancelled
+                                                                        ↓
+                                                                    refunded
 ```
+
+(Note: `preparing` status remains for backward compatibility; new flow skips it.)
 
 ### **Status Descriptions & Transitions**
 
 | Status              | Description                             | Can Transition To               | Who Can Transition |
 | ------------------- | --------------------------------------- | ------------------------------- | ------------------ |
 | `pending`           | Order created, waiting for confirmation | `confirmed`, `cancelled`        | Business           |
-| `confirmed`         | Order confirmed by business             | `preparing`, `cancelled`        | Business           |
-| `preparing`         | Items being prepared/packed             | `ready_for_pickup`, `cancelled` | Business           |
+| `confirmed`         | Order confirmed by business             | `ready_for_pickup`, `cancelled` | Business           |
+| `preparing`         | (Legacy) Items being prepared/packed    | `ready_for_pickup`, `cancelled` | Business           |
 | `ready_for_pickup`  | Order ready for agent pickup            | `assigned_to_agent`             | Agent              |
 | `assigned_to_agent` | Order assigned to delivery agent        | `picked_up`                     | Assigned Agent     |
 | `picked_up`         | Agent has picked up the order           | `in_transit`                    | Assigned Agent     |

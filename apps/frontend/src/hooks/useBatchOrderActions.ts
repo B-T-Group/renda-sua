@@ -13,7 +13,6 @@ export interface BatchActionResult extends BatchOrderStatusChangeResponse {
 
 export const useBatchOrderActions = () => {
   const {
-    startPreparingBatch,
     completePreparationBatch,
     pickUpOrderBatch,
     startTransitBatch,
@@ -34,12 +33,6 @@ export const useBatchOrderActions = () => {
       return response;
     },
     [refreshOrders]
-  );
-
-  const batchStartPreparing = useCallback(
-    (orderIds: string[], notes?: string) =>
-      runBatchAction({ orderIds, notes }, startPreparingBatch),
-    [runBatchAction, startPreparingBatch]
   );
 
   const batchCompletePreparation = useCallback(
@@ -73,7 +66,6 @@ export const useBatchOrderActions = () => {
   );
 
   return {
-    batchStartPreparing,
     batchCompletePreparation,
     batchPickUp,
     batchStartTransit,

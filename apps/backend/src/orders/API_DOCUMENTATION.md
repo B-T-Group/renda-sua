@@ -211,10 +211,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /orders/start_preparing:
+  /orders/complete_preparation:
     post:
-      summary: Start preparing an order
-      description: Transitions an order from confirmed to preparing status.
+      summary: Mark order ready for pickup
+      description: Transitions an order from confirmed (or preparing) to ready_for_pickup status.
       security:
         - bearerAuth: []
       requestBody:
@@ -225,10 +225,10 @@ paths:
               $ref: '#/components/schemas/OrderStatusChangeRequest'
             example:
               orderId: '550e8400-e29b-41d4-a716-446655440000'
-              notes: 'Started preparing items'
+              notes: 'All items prepared and packed'
       responses:
         '200':
-          description: Order preparation started successfully
+          description: Order marked ready for pickup successfully
           content:
             application/json:
               schema:
@@ -238,11 +238,11 @@ paths:
                 order:
                   id: '550e8400-e29b-41d4-a716-446655440000'
                   order_number: 'ORD-20241201-000001'
-                  current_status: 'preparing'
+                  current_status: 'ready_for_pickup'
                   total_amount: 150.00
                   currency: 'USD'
-                  updated_at: '2024-12-01T10:35:00Z'
-                message: 'Order preparation started successfully'
+                  updated_at: '2024-12-01T10:40:00Z'
+                message: 'Order preparation completed successfully'
         '400':
           description: Bad request
           content:
@@ -251,7 +251,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 success: false
-                error: 'Cannot start preparing order in pending status'
+                error: 'Cannot complete preparation for order in pending status'
         '403':
           description: Forbidden
           content:
@@ -260,7 +260,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 success: false
-                error: 'Only business users can start preparing orders'
+                error: 'Only business users can complete order preparation'
         '404':
           description: Order not found
           content:
@@ -268,58 +268,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /orders/complete_preparation:
-  /orders/batch/start_preparing:
-    post:
-      summary: Start preparing multiple orders
-      description: >
-        Business users can transition multiple confirmed orders to preparing
-        status in a single operation. Partial success is supported; each order
-        is validated individually and the response includes per-order results.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BatchOrderStatusChangeRequest'
-            example:
-              orderIds:
-                - '550e8400-e29b-41d4-a716-446655440000'
-                - '550e8400-e29b-41d4-a716-446655440001'
-              notes: 'Batch start preparing'
-      responses:
-        '200':
-          description: Batch start preparing completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BatchOrderStatusChangeResult'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: One or more orders not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /orders/batch/complete_preparation:
     post:
-      summary: Complete preparation for multiple orders
+      summary: Mark multiple orders ready for pickup
       description: >
-        Business users can transition multiple preparing orders to
+        Business users can transition multiple confirmed or preparing orders to
         ready_for_pickup status in a single operation. Partial success is
         supported; each order is validated individually and the response
         includes per-order results.
@@ -546,61 +499,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-    post:
-      summary: Complete order preparation
-      description: Transitions an order from preparing to ready_for_pickup status.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OrderStatusChangeRequest'
-            example:
-              orderId: '550e8400-e29b-41d4-a716-446655440000'
-              notes: 'All items prepared and packed'
-      responses:
-        '200':
-          description: Order preparation completed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderResponse'
-              example:
-                success: true
-                order:
-                  id: '550e8400-e29b-41d4-a716-446655440000'
-                  order_number: 'ORD-20241201-000001'
-                  current_status: 'ready_for_pickup'
-                  total_amount: 150.00
-                  currency: 'USD'
-                  updated_at: '2024-12-01T10:40:00Z'
-                message: 'Order preparation completed successfully'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error: 'Cannot complete preparation for order in confirmed status'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error: 'Only business users can complete order preparation'
-        '404':
-          description: Order not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /orders/get_order:
     post:
@@ -750,30 +648,7 @@ async function confirmOrder(orderId, notes) {
   }
 }
 
-// Start preparing an order
-async function startPreparing(orderId, notes) {
-  try {
-    const response = await axios.post(
-      `${API_BASE}/orders/start_preparing`,
-      {
-        orderId,
-        notes,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Error starting preparation:', error.response.data);
-    throw error;
-  }
-}
-
-// Complete preparation
+// Complete preparation (confirmed → ready_for_pickup)
 async function completePreparation(orderId, notes) {
   try {
     const response = await axios.post(
@@ -824,7 +699,6 @@ async function processOrder() {
 
   // Business workflow
   await confirmOrder(orderId, 'Confirmed by business owner');
-  await startPreparing(orderId, 'Started preparing items');
   await completePreparation(orderId, 'All items prepared and packed');
 
   // Agent workflow
@@ -858,19 +732,8 @@ def confirm_order(order_id, notes=None):
     response.raise_for_status()
     return response.json()
 
-def start_preparing(order_id, notes=None):
-    """Start preparing an order."""
-    data = {'orderId': order_id}
-    if notes:
-        data['notes'] = notes
-
-    response = requests.post(f'{API_BASE}/orders/start_preparing',
-                           json=data, headers=headers)
-    response.raise_for_status()
-    return response.json()
-
 def complete_preparation(order_id, notes=None):
-    """Complete order preparation."""
+    """Mark order ready for pickup (confirmed or preparing → ready_for_pickup)."""
     data = {'orderId': order_id}
     if notes:
         data['notes'] = notes
@@ -896,7 +759,6 @@ if __name__ == '__main__':
     try:
         # Business workflow
         confirm_order(order_id, 'Confirmed by business owner')
-        start_preparing(order_id, 'Started preparing items')
         complete_preparation(order_id, 'All items prepared and packed')
 
         # Agent workflow
@@ -919,16 +781,7 @@ curl -X POST http://localhost:3000/orders/confirm \
     "notes": "Confirmed by business owner"
   }'
 
-# Start preparing
-curl -X POST http://localhost:3000/orders/start_preparing \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-jwt-token" \
-  -d '{
-    "orderId": "550e8400-e29b-41d4-a716-446655440000",
-    "notes": "Started preparing items"
-  }'
-
-# Complete preparation
+# Complete preparation (mark ready for pickup)
 curl -X POST http://localhost:3000/orders/complete_preparation \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-jwt-token" \

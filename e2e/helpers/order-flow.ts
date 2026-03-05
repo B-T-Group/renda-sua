@@ -145,26 +145,15 @@ export async function businessConfirmAndPrepareOrder(
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(3000);
 
-  // Wait for the order status to update to "confirmed" by checking for the "Start Preparing" button
-  // This button only appears when status is "confirmed"
-  const startPreparingButton = page
-    .getByRole('button', { name: /start preparing/i })
+  // Wait for the order status to update to "confirmed" by checking for the "Ready for Pickup" button
+  // This button appears when status is "confirmed" (no more "Start Preparing" step)
+  const readyForPickupButton = page
+    .getByRole('button', { name: /ready for pickup|complete.*preparation/i })
     .first();
 
   // Wait up to 20 seconds for the button to appear (order confirmation might take time)
-  await startPreparingButton.waitFor({ state: 'visible', timeout: 20000 });
-  await startPreparingButton.click({ timeout: 10000 });
-  await page.waitForLoadState('networkidle');
-
-  // Wait for the order status to update to "preparing" by checking for the "Complete Preparation" button
-  // This button only appears when status is "preparing"
-  const completePrepButton = page
-    .getByRole('button', { name: /finish.*preparing|complete.*preparation/i })
-    .first();
-
-  // Wait up to 20 seconds for the button to appear (status update might take time)
-  await completePrepButton.waitFor({ state: 'visible', timeout: 20000 });
-  await completePrepButton.click({ timeout: 10000 });
+  await readyForPickupButton.waitFor({ state: 'visible', timeout: 20000 });
+  await readyForPickupButton.click({ timeout: 10000 });
   await page.waitForLoadState('networkidle');
   // Navigate to home page
   await page.goto('/');

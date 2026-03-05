@@ -15,8 +15,7 @@ The frontend order management system has been completely updated to use the new 
 - **New APIs Added:**
 
   - `confirmOrder()` - Business can confirm pending orders
-  - `startPreparing()` - Business can start preparing confirmed orders
-  - `completePreparation()` - Business can mark orders as ready for pickup
+  - `completePreparation()` - Business can mark orders as ready for pickup (from confirmed; no separate start-preparing step)
   - `cancelOrder()` - Business/Client can cancel orders
   - `refundOrder()` - Business can refund delivered orders
   - `getOrder()` - Agent can get orders for pickup (with financial hold)

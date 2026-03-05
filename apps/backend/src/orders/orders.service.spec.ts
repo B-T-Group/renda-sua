@@ -217,95 +217,28 @@ describe('OrdersService', () => {
     });
   });
 
-  describe('startPreparing', () => {
-    it('should start preparing an order successfully', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
-      });
-      orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
-        current_status: 'preparing',
-      });
-      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
-
-      const result = await service.startPreparing({
-        orderId: 'order-123',
-        notes: 'Started preparation',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.order.current_status).toBe('preparing');
-    });
-
-    it('should throw error if order is not in confirmed status', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'pending' },
-      });
-
-      await expect(
-        service.startPreparing({ orderId: 'order-123' })
-      ).rejects.toThrow(
-        new HttpException(
-          'Cannot start preparing order in pending status',
-          HttpStatus.BAD_REQUEST
-        )
-      );
-    });
-  });
-
-  describe('startPreparingBatch', () => {
-    it('should start preparing multiple orders successfully', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
-      });
-      orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
-        current_status: 'preparing',
-      });
-      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
-
-      const result = await service.startPreparingBatch({
-        orderIds: ['order-123', 'order-456'],
-        notes: 'Batch start preparing',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(2);
-      expect(result.results.every((r) => r.success)).toBe(true);
-    });
-
-    it('should return partial success when some orders fail', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockUser);
-      hasuraUserService.executeQuery
-        .mockResolvedValueOnce({
-          orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
-        })
-        .mockResolvedValueOnce({
-          orders_by_pk: { ...mockOrder, current_status: 'pending' },
-        });
-      orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...mockOrder,
-        current_status: 'preparing',
-      });
-      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
-
-      const result = await service.startPreparingBatch({
-        orderIds: ['order-123', 'order-456'],
-        notes: 'Batch start preparing',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(2);
-      expect(result.results.filter((r) => r.success)).toHaveLength(1);
-      expect(result.results.filter((r) => !r.success)).toHaveLength(1);
-    });
-  });
-
   describe('completePreparation', () => {
-    it('should complete preparation successfully', async () => {
+    it('should complete preparation successfully from confirmed status', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockUser);
+      hasuraUserService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...mockOrder, current_status: 'confirmed' },
+      });
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...mockOrder,
+        current_status: 'ready_for_pickup',
+      });
+      hasuraUserService.executeMutation.mockResolvedValue({ affected_rows: 1 });
+
+      const result = await service.completePreparation({
+        orderId: 'order-123',
+        notes: 'Preparation completed',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.order.current_status).toBe('ready_for_pickup');
+    });
+
+    it('should complete preparation successfully from preparing status', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
       hasuraUserService.executeQuery.mockResolvedValue({
         orders_by_pk: { ...mockOrder, current_status: 'preparing' },

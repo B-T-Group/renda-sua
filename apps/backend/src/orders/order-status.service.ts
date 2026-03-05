@@ -237,7 +237,7 @@ export class OrderStatusService {
         ? ['cancelled']
         : [],
       confirmed: isBusinessOwner
-        ? ['preparing', 'cancelled']
+        ? ['ready_for_pickup', 'cancelled']
         : isClient
         ? ['cancelled']
         : [],

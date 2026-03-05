@@ -210,7 +210,6 @@ export const useBusinessOrders = (businessId?: string) => {
   // Use backend order management APIs
   const {
     confirmOrder,
-    startPreparing,
     completePreparation,
     cancelOrder,
     refundOrder,
@@ -322,9 +321,6 @@ export const useBusinessOrders = (businessId?: string) => {
           case 'confirmed':
             response = await confirmOrder({ orderId, notes });
             break;
-          case 'preparing':
-            response = await startPreparing({ orderId, notes });
-            break;
           case 'ready_for_pickup':
             response = await completePreparation({ orderId, notes });
             break;
@@ -365,7 +361,6 @@ export const useBusinessOrders = (businessId?: string) => {
     },
     [
       confirmOrder,
-      startPreparing,
       completePreparation,
       cancelOrder,
       refundOrder,

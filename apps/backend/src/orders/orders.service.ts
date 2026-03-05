@@ -996,53 +996,6 @@ export class OrdersService {
     };
   }
 
-  async startPreparing(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
-    if (!user.business)
-      throw new HttpException(
-        'Only business users can start preparing orders',
-        HttpStatus.FORBIDDEN
-      );
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.business.user_id !== user.id)
-      throw new HttpException(
-        'Unauthorized to start preparing this order',
-        HttpStatus.FORBIDDEN
-      );
-    if (order.current_status !== 'confirmed')
-      throw new HttpException(
-        `Cannot start preparing order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
-      request.orderId,
-      'preparing'
-    );
-    await this.createStatusHistoryEntry(
-      request.orderId,
-      'preparing',
-      'Order preparation started',
-      'business',
-      user.id,
-      request.notes
-    );
-    return {
-      success: true,
-      order: updatedOrder,
-      message: 'Order preparation started successfully',
-    };
-  }
-
-  async startPreparingBatch(
-    request: BatchOrderStatusChangeRequest
-  ): Promise<BatchOrderStatusChangeResult> {
-    return this.processBatch(request, (orderId) =>
-      this.startPreparing({ orderId, notes: request.notes })
-    );
-  }
-
   async completePreparation(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business)
@@ -1058,7 +1011,7 @@ export class OrdersService {
         'Unauthorized to complete preparation for this order',
         HttpStatus.FORBIDDEN
       );
-    if (order.current_status !== 'preparing')
+    if (!['confirmed', 'preparing'].includes(order.current_status))
       throw new HttpException(
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST

@@ -230,74 +230,6 @@ export const useBackendOrders = () => {
     }, 'orders.confirming');
   };
 
-  const startPreparing = async (
-    request: OrderStatusChangeRequest
-  ): Promise<OrderStatusChangeResponse> => {
-    if (!apiClient) {
-      throw new Error(
-        'API client not available. Please ensure you are authenticated.'
-      );
-    }
-
-    return callWithLoading(async () => {
-      try {
-        const response = await apiClient.post<OrderStatusChangeResponse>(
-          '/orders/start_preparing',
-          request
-        );
-
-        if (!response.data.success) {
-          throw new Error(
-            response.data.message || 'Failed to start preparing order'
-          );
-        }
-
-        return response.data;
-      } catch (err: any) {
-        const errorMessage =
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to start preparing order';
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    }, 'orders.startingPreparation');
-  };
-
-  const startPreparingBatch = async (
-    request: BatchOrderStatusChangeRequest
-  ): Promise<BatchOrderStatusChangeResponse> => {
-    if (!apiClient) {
-      throw new Error(
-        'API client not available. Please ensure you are authenticated.'
-      );
-    }
-
-    return callWithLoading(async () => {
-      try {
-        const response = await apiClient.post<BatchOrderStatusChangeResponse>(
-          '/orders/batch/start_preparing',
-          request
-        );
-
-        if (!response.data.success && !response.data.results?.length) {
-          throw new Error(
-            response.data.message || 'Failed to start preparing orders'
-          );
-        }
-
-        return response.data;
-      } catch (err: any) {
-        const errorMessage =
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to start preparing orders';
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    }, 'orders.batch.startingPreparation');
-  };
-
   const completePreparation = async (
     request: OrderStatusChangeRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -866,8 +798,6 @@ export const useBackendOrders = () => {
 
     // Business methods
     confirmOrder,
-    startPreparing,
-    startPreparingBatch,
     completePreparation,
     completePreparationBatch,
     cancelOrder,

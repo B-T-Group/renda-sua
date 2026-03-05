@@ -68,8 +68,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const theme = useTheme();
   const { profile } = useUserProfileContext();
   const { enqueueSnackbar } = useSnackbar();
-  const { confirmOrder, startPreparing, completePreparation, completeOrder } =
-    useBackendOrders();
+  const { confirmOrder, completePreparation, completeOrder } = useBackendOrders();
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
   const [showItems, setShowItems] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -200,34 +199,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
     }
   };
 
-  // Handle start preparing
-  const handleStartPreparing = async () => {
-    setLoadingAction('startPreparing');
-    try {
-      await startPreparing({ orderId: order.id });
-      enqueueSnackbar(
-        t(
-          'messages.orderStartPreparingSuccess',
-          'Order preparation started successfully'
-        ),
-        { variant: 'success' }
-      );
-      onActionComplete?.();
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t(
-              'messages.orderStartPreparingError',
-              'Failed to start preparation'
-            );
-      enqueueSnackbar(errorMessage, { variant: 'error' });
-    } finally {
-      setLoadingAction(null);
-    }
-  };
-
-  // Handle finish preparing
+  // Handle ready for pickup (from confirmed or preparing)
   const handleFinishPreparing = async () => {
     setLoadingAction('finishPreparing');
     try {
@@ -316,16 +288,9 @@ const OrderCard: React.FC<OrderCardProps> = ({
           color: 'success',
           loading: loadingAction === 'confirm',
         });
-      } else if (currentStatus === 'confirmed') {
+      } else if (currentStatus === 'confirmed' || currentStatus === 'preparing') {
         actions.push({
-          label: t('orders.actions.startPreparing', 'Start Preparing'),
-          onClick: handleStartPreparing,
-          color: 'primary',
-          loading: loadingAction === 'startPreparing',
-        });
-      } else if (currentStatus === 'preparing') {
-        actions.push({
-          label: t('orders.actions.finishPreparing', 'Finish Preparing'),
+          label: t('orders.actions.readyForPickup', 'Ready for Pickup'),
           onClick: handleFinishPreparing,
           color: 'success',
           loading: loadingAction === 'finishPreparing',

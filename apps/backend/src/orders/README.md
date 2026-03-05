@@ -71,54 +71,11 @@ curl -X POST http://localhost:3000/orders/confirm \
   }'
 ```
 
-### 2. Start Preparing Order
-
-**Endpoint:** `POST /orders/start_preparing`
-
-**Description:** Transitions an order from confirmed to preparing status.
-
-**Request Body:**
-
-```typescript
-{
-  orderId: string;
-  notes?: string;
-}
-```
-
-**Response:**
-
-```typescript
-{
-  success: boolean;
-  order: Order;
-  message: string;
-}
-```
-
-**Status Transitions:**
-
-- `confirmed` → `preparing`
-
-**Permissions:** Business users only
-
-**Example:**
-
-```bash
-curl -X POST http://localhost:3000/orders/start_preparing \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{
-    "orderId": "order-123",
-    "notes": "Started preparing items"
-  }'
-```
-
-### 3. Complete Preparation
+### 2. Complete Preparation (Ready for Pickup)
 
 **Endpoint:** `POST /orders/complete_preparation`
 
-**Description:** Transitions an order from preparing to ready_for_pickup status.
+**Description:** Transitions an order from confirmed (or preparing, for backward compatibility) to ready_for_pickup status.
 
 **Request Body:**
 
@@ -141,7 +98,7 @@ curl -X POST http://localhost:3000/orders/start_preparing \
 
 **Status Transitions:**
 
-- `preparing` → `ready_for_pickup`
+- `confirmed` → `ready_for_pickup` (or `preparing` → `ready_for_pickup` for existing orders)
 
 **Permissions:** Business users only
 
@@ -157,7 +114,7 @@ curl -X POST http://localhost:3000/orders/complete_preparation \
   }'
 ```
 
-### 4. Get Order (Agent Assignment)
+### 3. Get Order (Agent Assignment)
 
 **Endpoint:** `POST /orders/get_order`
 
@@ -208,14 +165,16 @@ curl -X POST http://localhost:3000/orders/get_order \
 ## Order Status Flow
 
 ```
-pending → confirmed → preparing → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
+pending → confirmed → ready_for_pickup → assigned_to_agent → picked_up → in_transit → out_for_delivery → delivered
 ```
+
+(Note: `preparing` status exists for backward compatibility but is no longer used in the default flow.)
 
 ### Status Descriptions
 
 - **pending**: Order created, waiting for business confirmation
-- **confirmed**: Order confirmed by business
-- **preparing**: Items being prepared/packed
+- **confirmed**: Order confirmed by business (next step: ready for pickup)
+- **preparing**: (Legacy) Items being prepared/packed
 - **ready_for_pickup**: Order ready for agent pickup
 - **assigned_to_agent**: Order assigned to delivery agent
 - **picked_up**: Agent has picked up the order

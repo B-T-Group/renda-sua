@@ -6,7 +6,7 @@ import { useBatchOrderActions } from './useBatchOrderActions';
 describe('useBatchOrderActions', () => {
   it('calls backend batch API and refreshes orders', async () => {
     const refreshOrders = jest.fn().mockResolvedValue(undefined);
-    const startPreparingBatch = jest.fn().mockResolvedValue({
+    const completePreparationBatch = jest.fn().mockResolvedValue({
       success: true,
       results: [],
     });
@@ -17,15 +17,15 @@ describe('useBatchOrderActions', () => {
 
     jest
       .spyOn(BackendOrdersHook, 'useBackendOrders')
-      .mockReturnValue({ startPreparingBatch } as any);
+      .mockReturnValue({ completePreparationBatch } as any);
 
     const { result } = renderHook(() => useBatchOrderActions());
 
     await act(async () => {
-      await result.current.batchStartPreparing(['order-1'], 'notes');
+      await result.current.batchCompletePreparation(['order-1'], 'notes');
     });
 
-    expect(startPreparingBatch).toHaveBeenCalledWith({
+    expect(completePreparationBatch).toHaveBeenCalledWith({
       orderIds: ['order-1'],
       notes: 'notes',
     });

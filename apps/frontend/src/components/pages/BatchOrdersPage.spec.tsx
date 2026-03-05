@@ -11,7 +11,6 @@ jest.mock('../../contexts/UserProfileContext', () => ({
 jest.mock('../../hooks', () => ({
   useOrders: () => ({ orders: [], loading: false, error: null }),
   useBatchOrderActions: () => ({
-    batchStartPreparing: jest.fn(),
     batchCompletePreparation: jest.fn(),
     batchPickUp: jest.fn(),
     batchStartTransit: jest.fn(),

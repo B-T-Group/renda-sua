@@ -22,7 +22,6 @@ import type { Order } from '../../hooks';
 import SEOHead from '../seo/SEOHead';
 
 type BatchAction =
-  | 'start_preparing'
   | 'complete_preparation'
   | 'pick_up'
   | 'start_transit'
@@ -41,8 +40,7 @@ interface PerOrderResult {
 }
 
 const getValidStatusesForAction = (action: BatchAction | ''): string[] => {
-  if (action === 'start_preparing') return ['confirmed'];
-  if (action === 'complete_preparation') return ['preparing'];
+  if (action === 'complete_preparation') return ['confirmed', 'preparing'];
   if (action === 'pick_up') return ['assigned_to_agent'];
   if (action === 'start_transit') return ['picked_up'];
   if (action === 'out_for_delivery') return ['picked_up', 'in_transit'];
@@ -61,7 +59,6 @@ const BatchOrdersPage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const { orders, loading, error, refreshOrders } = useOrders();
   const {
-    batchStartPreparing,
     batchCompletePreparation,
     batchPickUp,
     batchStartTransit,
@@ -130,9 +127,7 @@ const BatchOrdersPage: React.FC = () => {
     try {
       let response;
 
-      if (selectedAction === 'start_preparing') {
-        response = await batchStartPreparing(selectedOrderIds, notes);
-      } else if (selectedAction === 'complete_preparation') {
+      if (selectedAction === 'complete_preparation') {
         response = await batchCompletePreparation(selectedOrderIds, notes);
       } else if (selectedAction === 'pick_up') {
         response = await batchPickUp(selectedOrderIds, notes);
@@ -230,22 +225,13 @@ const BatchOrdersPage: React.FC = () => {
   const availableActions: Array<{ value: BatchAction; label: string }> = [];
 
   if (isBusiness) {
-    availableActions.push(
-      {
-        value: 'start_preparing',
-        label: t(
-          'orders.batch.actions.startPreparing',
-          'Start preparing (confirmed → preparing)'
-        ),
-      },
-      {
-        value: 'complete_preparation',
-        label: t(
-          'orders.batch.actions.completePreparation',
-          'Complete preparation (preparing → ready for pickup)'
-        ),
-      }
-    );
+    availableActions.push({
+      value: 'complete_preparation',
+      label: t(
+        'orders.batch.actions.completePreparation',
+        'Ready for pickup (confirmed → ready for pickup)'
+      ),
+    });
   }
 
   if (isAgent) {

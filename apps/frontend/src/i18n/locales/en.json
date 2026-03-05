@@ -1365,7 +1365,7 @@
     "pickUp": "Pick Up",
     "printLabel": "Print label",
     "refundOrder": "Refund Order",
-    "startPreparing": "Start Preparing"
+    "readyForPickup": "Ready for Pickup"
   },
   "orderHistory": {
     "changedBy": "Changed by",
@@ -1419,7 +1419,8 @@
       "actionRequired": {
         "delivered": "Action Required: Complete order",
         "pending": "Action Required: Confirm this order",
-        "preparing": "Action Required: Complete preparation"
+        "preparing": "Action Required: Complete preparation",
+        "readyForPickup": "Action Required: Mark as ready for pickup"
       }
     },
     "businessInfo": "Business Information",
@@ -1773,8 +1774,7 @@
       "loadError": "Failed to load orders.",
       "genericError": "Failed to apply batch action. Please try again.",
       "actions": {
-        "startPreparing": "Start preparing (confirmed → preparing)",
-        "completePreparation": "Complete preparation (preparing → ready for pickup)",
+        "completePreparation": "Ready for pickup (confirmed → ready for pickup)",
         "pickUp": "Pick up (assigned → picked up)",
         "startTransit": "Start transit (picked up → in transit)",
         "outForDelivery": "Out for delivery (picked up / in transit → out for delivery)",
