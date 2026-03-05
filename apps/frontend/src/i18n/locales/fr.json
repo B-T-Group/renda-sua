@@ -280,11 +280,15 @@
       "withheldBalance": "Solde Retenu"
     },
     "agents": {
+      "filterAll": "Tous les agents",
+      "filterUnverified": "Non vérifiés uniquement",
       "idDocumentsList": "Documents d'identité (consulter et vérifier, puis marquer comme vérifié ci-dessous)",
       "noIdDocument": "Aucun document d'identité téléversé. Demandez à l'agent de téléverser un permis de conduire, un passeport ou une carte d'identité nationale depuis ses Documents.",
+      "presignedUrlNote": "Voir et Télécharger demandent une URL présignée temporaire au serveur.",
       "setAsVerified": "Marquer comme vérifié",
       "verification": "Vérification",
       "verificationTitle": "Vérification de l'Agent",
+      "verifiedFilter": "Filtrer",
       "verifying": "Vérification..."
     },
     "loading": {

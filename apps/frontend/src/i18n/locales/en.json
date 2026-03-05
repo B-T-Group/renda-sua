@@ -280,11 +280,15 @@
       "withheldBalance": "Withheld Balance"
     },
     "agents": {
+      "filterAll": "All agents",
+      "filterUnverified": "Unverified only",
       "idDocumentsList": "ID documents (view and verify, then set as verified below)",
       "noIdDocument": "No ID document uploaded. Ask the agent to upload a driver's license, passport, or national ID from their Documents.",
+      "presignedUrlNote": "View and Download request a temporary presigned URL from the server.",
       "setAsVerified": "Set as verified",
       "verification": "Verification",
       "verificationTitle": "Agent Verification",
+      "verifiedFilter": "Filter",
       "verifying": "Verifying..."
     },
     "loading": {

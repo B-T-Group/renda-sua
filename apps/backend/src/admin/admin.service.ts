@@ -190,22 +190,30 @@ const UPDATE_BUSINESS_MUTATION = `
 export class AdminService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
-  private buildAgentWhere(search: string): any {
-    if (!search) return {};
-    const pattern = `%${search}%`;
-    return {
-      _or: [
-        { user: { email: { _ilike: pattern } } },
-        { user: { first_name: { _ilike: pattern } } },
-        { user: { last_name: { _ilike: pattern } } },
-        {
-          _and: [
-            { user: { first_name: { _ilike: pattern } } },
-            { user: { last_name: { _ilike: pattern } } },
-          ],
-        },
-      ],
-    };
+  private buildAgentWhere(search: string, unverifiedOnly?: boolean): any {
+    const conditions: any[] = [];
+    if (search) {
+      const pattern = `%${search}%`;
+      conditions.push({
+        _or: [
+          { user: { email: { _ilike: pattern } } },
+          { user: { first_name: { _ilike: pattern } } },
+          { user: { last_name: { _ilike: pattern } } },
+          {
+            _and: [
+              { user: { first_name: { _ilike: pattern } } },
+              { user: { last_name: { _ilike: pattern } } },
+            ],
+          },
+        ],
+      });
+    }
+    if (unverifiedOnly) {
+      conditions.push({ is_verified: { _eq: false } });
+    }
+    if (conditions.length === 0) return {};
+    if (conditions.length === 1) return conditions[0];
+    return { _and: conditions };
   }
 
   private buildClientWhere(search: string): any {
@@ -243,8 +251,9 @@ export class AdminService {
     page: number;
     limit: number;
     search: string;
+    unverifiedOnly?: boolean;
   }) {
-    const { page, limit, search } = params;
+    const { page, limit, search, unverifiedOnly } = params;
     const offset = (page - 1) * limit;
     const query = `
       query GetAgents($where: agents_bool_exp, $limit: Int!, $offset: Int!) {
@@ -257,7 +266,7 @@ export class AdminService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      where: this.buildAgentWhere(search),
+      where: this.buildAgentWhere(search, unverifiedOnly),
       limit,
       offset,
     });

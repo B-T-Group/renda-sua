@@ -35,7 +35,7 @@ const OpenOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
   const { openOrders: orders, loading, error, refetch } = useOpenOrders();
-  const { hasIdDocument } = useAgentHasIdDocument(profile?.id, profile?.user_type_id);
+  const { hasIdDocument } = useAgentHasIdDocument(profile?.user_type_id);
 
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',

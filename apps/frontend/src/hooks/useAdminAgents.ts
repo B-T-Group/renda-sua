@@ -42,6 +42,7 @@ export const useAdminAgents = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
+  const [unverifiedOnly, setUnverifiedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +64,7 @@ export const useAdminAgents = () => {
         limit: String(limit),
       });
       if (search) params.set('search', search);
+      if (unverifiedOnly) params.set('unverified', 'true');
       const { data } = await callWithLoading(
         () => client.get(`/admin/agents?${params.toString()}`),
         'admin.loading.fetchAgents'
@@ -81,7 +83,7 @@ export const useAdminAgents = () => {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, callWithLoading, ensureClient, page, limit, search]);
+  }, [apiClient, callWithLoading, ensureClient, page, limit, search, unverifiedOnly]);
 
   const updateAgent = useCallback(
     async (id: string, updates: UpdateAgentPayload) => {
@@ -118,9 +120,11 @@ export const useAdminAgents = () => {
       page,
       limit,
       search,
+      unverifiedOnly,
       setPage,
       setLimit,
       setSearch,
+      setUnverifiedOnly,
       loading,
       error,
       fetchAgents,
@@ -133,6 +137,7 @@ export const useAdminAgents = () => {
       page,
       limit,
       search,
+      unverifiedOnly,
       loading,
       error,
       fetchAgents,

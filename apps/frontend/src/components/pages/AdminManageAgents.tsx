@@ -52,9 +52,11 @@ const AdminManageAgents: React.FC = () => {
     page,
     limit,
     search,
+    unverifiedOnly,
     setPage,
     setLimit,
     setSearch,
+    setUnverifiedOnly,
     loading,
     error,
     fetchAgents,
@@ -72,6 +74,7 @@ const AdminManageAgents: React.FC = () => {
   const [idDocuments, setIdDocuments] = useState<AgentIdDocument[]>([]);
   const [idDocumentsLoading, setIdDocumentsLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [presignedUrlLoadingId, setPresignedUrlLoadingId] = useState<string | null>(null);
 
   const verificationAgent = agents.find((a) => a.id === verificationAgentId);
 
@@ -105,6 +108,7 @@ const AdminManageAgents: React.FC = () => {
   const handleViewUpload = useCallback(
     async (uploadId: string) => {
       if (!apiClient) return;
+      setPresignedUrlLoadingId(uploadId);
       try {
         const { data } = await apiClient.get<{
           success: boolean;
@@ -114,7 +118,9 @@ const AdminManageAgents: React.FC = () => {
           window.open(data.presigned_url, '_blank');
         }
       } catch (err) {
-        console.error('Failed to get view URL:', err);
+        console.error('Failed to get presigned view URL:', err);
+      } finally {
+        setPresignedUrlLoadingId(null);
       }
     },
     [apiClient]
@@ -123,6 +129,7 @@ const AdminManageAgents: React.FC = () => {
   const handleDownloadUpload = useCallback(
     async (uploadId: string, fileName: string) => {
       if (!apiClient) return;
+      setPresignedUrlLoadingId(uploadId);
       try {
         const { data } = await apiClient.get<{
           success: boolean;
@@ -130,7 +137,7 @@ const AdminManageAgents: React.FC = () => {
         }>(`/uploads/${uploadId}/view`);
         if (data.success && data.presigned_url) {
           const link = document.createElement('a');
-          link.href = data.presigned_url!;
+          link.href = data.presigned_url;
           link.download = fileName || 'document';
           link.target = '_blank';
           document.body.appendChild(link);
@@ -138,7 +145,9 @@ const AdminManageAgents: React.FC = () => {
           document.body.removeChild(link);
         }
       } catch (err) {
-        console.error('Failed to get download URL:', err);
+        console.error('Failed to get presigned download URL:', err);
+      } finally {
+        setPresignedUrlLoadingId(null);
       }
     },
     [apiClient]
@@ -220,6 +229,27 @@ const AdminManageAgents: React.FC = () => {
               setSearch(e.target.value);
             }}
           />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="agents-verified-filter">
+              {t('admin.agents.verifiedFilter', 'Filter')}
+            </InputLabel>
+            <Select
+              labelId="agents-verified-filter"
+              label={t('admin.agents.verifiedFilter', 'Filter')}
+              value={unverifiedOnly ? 'unverified' : 'all'}
+              onChange={(e) => {
+                setPage(1);
+                setUnverifiedOnly(e.target.value === 'unverified');
+              }}
+            >
+              <MenuItem value="all">
+                {t('admin.agents.filterAll', 'All agents')}
+              </MenuItem>
+              <MenuItem value="unverified">
+                {t('admin.agents.filterUnverified', 'Unverified only')}
+              </MenuItem>
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel id="agents-page-size">
               {t('common.pageSize', 'Page size')}
@@ -460,6 +490,9 @@ const AdminManageAgents: React.FC = () => {
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 {t('admin.agents.idDocumentsList', 'ID documents (view and verify, then set as verified below)')}
               </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                {t('admin.agents.presignedUrlNote', 'View and Download request a temporary presigned URL from the server.')}
+              </Typography>
               <List dense>
                 {idDocuments.map((doc) => (
                   <ListItem key={doc.id}>
@@ -470,15 +503,17 @@ const AdminManageAgents: React.FC = () => {
                     <ListItemSecondaryAction>
                       <Button
                         size="small"
-                        startIcon={<VisibilityIcon />}
+                        startIcon={presignedUrlLoadingId === doc.id ? <CircularProgress size={16} /> : <VisibilityIcon />}
                         onClick={() => handleViewUpload(doc.id)}
+                        disabled={presignedUrlLoadingId !== null}
                       >
                         {t('common.view', 'View')}
                       </Button>
                       <Button
                         size="small"
-                        startIcon={<DownloadIcon />}
+                        startIcon={presignedUrlLoadingId === doc.id ? <CircularProgress size={16} /> : <DownloadIcon />}
                         onClick={() => handleDownloadUpload(doc.id, doc.file_name)}
+                        disabled={presignedUrlLoadingId !== null}
                       >
                         {t('common.download', 'Download')}
                       </Button>

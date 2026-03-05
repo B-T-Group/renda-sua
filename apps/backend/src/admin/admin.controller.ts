@@ -113,13 +113,15 @@ export class AdminController {
   async getAgents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('unverified') unverified?: string
   ) {
     try {
       const result = await this.adminService.getAgentsPaginated({
         page: Number(page) || 1,
         limit: Number(limit) || 10,
         search: search || '',
+        unverifiedOnly: unverified === 'true',
       });
       return { success: true, ...result };
     } catch (error: any) {

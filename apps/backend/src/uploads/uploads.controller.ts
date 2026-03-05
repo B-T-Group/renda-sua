@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UploadService } from '../services/upload.service';
@@ -28,6 +29,25 @@ export class UploadsController {
     private readonly permissionService: PermissionService,
     private readonly uploadService: UploadService
   ) {}
+
+  @Get('me/has-id-document')
+  @ApiOperation({
+    summary: 'Check if current user (agent) has an ID document',
+    description:
+      'Returns whether the authenticated agent has at least one upload of type id_card, passport, or driver_license.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Success',
+    schema: { type: 'object', properties: { hasIdDocument: { type: 'boolean' } } },
+  })
+  async getMeHasIdDocument(): Promise<{ hasIdDocument: boolean }> {
+    const user = await this.hasuraUserService.getUser();
+    if (user.user_type_id !== 'agent') {
+      return { hasIdDocument: false };
+    }
+    return this.uploadService.hasIdDocument(user.id);
+  }
 
   @Post('get_upload_url')
   async getUploadUrl(@Body() uploadData: UploadData) {

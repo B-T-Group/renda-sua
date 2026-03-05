@@ -26,6 +26,8 @@ export interface UploadRecord {
   created_at: string;
 }
 
+const ID_DOCUMENT_TYPE_NAMES = ['id_card', 'passport', 'driver_license'];
+
 @Injectable()
 export class UploadService {
   constructor(
@@ -33,6 +35,32 @@ export class UploadService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly awsService: AwsService
   ) {}
+
+  /**
+   * Returns whether the user has at least one upload with document type
+   * id_card, passport, or driver_license. Used for agent ID verification.
+   */
+  async hasIdDocument(userId: string): Promise<{ hasIdDocument: boolean }> {
+    const query = `
+      query AgentHasIdDocument($userId: uuid!, $documentTypeNames: [String!]) {
+        user_uploads(
+          where: {
+            user_id: { _eq: $userId }
+            document_type: { name: { _in: $documentTypeNames } }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const result = await this.hasuraUserService.executeQuery(query, {
+      userId,
+      documentTypeNames: ID_DOCUMENT_TYPE_NAMES,
+    });
+    const uploads = (result?.user_uploads as { id: string }[] | undefined) ?? [];
+    return { hasIdDocument: uploads.length > 0 };
+  }
 
   /**
    * Generate a presigned URL for viewing/downloading a user upload
@@ -358,7 +386,6 @@ export class UploadService {
     }
 
     // If this is an ID-type document for an agent, set agent is_verified = true
-    const ID_DOCUMENT_TYPES = ['id_card', 'passport', 'driver_license'];
     const fetchUploadQuery = `
       query GetUploadWithType($uploadId: uuid!) {
         user_uploads_by_pk(id: $uploadId) {
@@ -378,7 +405,7 @@ export class UploadService {
       | undefined;
     if (
       upload?.document_type?.name &&
-      ID_DOCUMENT_TYPES.includes(upload.document_type.name)
+      ID_DOCUMENT_TYPE_NAMES.includes(upload.document_type.name)
     ) {
       const agentByUserQuery = `
         query GetAgentByUserId($userId: uuid!) {
