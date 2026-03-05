@@ -527,6 +527,8 @@
       "manageCommissionAccountsDescription": "View company account and partner accounts with commission transactions",
       "noBusinessProfile": "No business profile found",
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
+      "batchOrdersTitle": "Batch process orders",
+      "batchOrdersDescription": "Quickly update the status of multiple orders at once",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",

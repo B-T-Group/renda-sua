@@ -516,6 +516,8 @@
       "manageCommissionAccountsDescription": "Voir le compte entreprise et les comptes partenaires avec les transactions de commission",
       "noBusinessProfile": "Aucun profil d'entreprise trouvé",
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
+      "batchOrdersTitle": "Traitement des commandes par lot",
+      "batchOrdersDescription": "Mettez à jour rapidement le statut de plusieurs commandes à la fois",
       "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
