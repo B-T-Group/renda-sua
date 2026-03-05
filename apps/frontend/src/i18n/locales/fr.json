@@ -1883,7 +1883,15 @@
         "button": "Se connecter",
         "description": "Créez un compte pour parcourir et commander des articles.",
         "title": "Connectez-vous pour passer des commandes"
-      }
+      },
+      "sort": {
+        "relevance": "Pour vous",
+        "fastest": "Plus rapide",
+        "cheapest": "Moins cher",
+        "topRated": "Mieux notés",
+        "deals": "Offres"
+      },
+      "showUnavailable": "Afficher les indisponibles"
     },
     "deals": {
       "title": "Offres en cours",

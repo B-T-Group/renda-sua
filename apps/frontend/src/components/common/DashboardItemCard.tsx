@@ -92,6 +92,8 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
   const primaryImage = getPrimaryImage(inventory);
 
+  const isUnavailable = inventory.computed_available_quantity <= 0;
+
   return (
     <Card
       sx={{
@@ -104,6 +106,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         borderColor: hasDealPrices ? 'secondary.main' : 'divider',
         borderWidth: hasDealPrices ? 2 : 1,
         boxShadow: hasDealPrices ? '0 8px 20px rgba(156, 39, 176, 0.25)' : 'none',
+        ...(isUnavailable && {
+          opacity: 0.88,
+          bgcolor: 'action.hover',
+        }),
         '&:hover': {
           transform: 'translateY(-4px)',
           boxShadow: hasDealPrices
@@ -411,6 +417,23 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 </Typography>
               </Box>
             )}
+
+            {/* Rating */}
+            {inventory.avg_rating != null &&
+              inventory.avg_rating > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.7rem' }}
+                  >
+                    {inventory.avg_rating.toFixed(1)} ★
+                    {typeof inventory.rating_count === 'number' &&
+                      inventory.rating_count > 0 &&
+                      ` (${inventory.rating_count})`}
+                  </Typography>
+                </Box>
+              )}
           </Box>
 
           {/* Compact Info Row */}

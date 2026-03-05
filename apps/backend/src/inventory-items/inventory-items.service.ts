@@ -9,6 +9,13 @@ import {
   type ItemImageShape,
 } from './item-images-merge.service';
 
+export type InventorySortMode =
+  | 'relevance'
+  | 'fastest'
+  | 'cheapest'
+  | 'top_rated'
+  | 'deals';
+
 export interface InventoryItem {
   id: string;
   business_location_id: string;
@@ -26,6 +33,8 @@ export interface InventoryItem {
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
+  avg_rating?: number | null;
+  rating_count?: number | null;
     item: {
       id: string;
       name: string;
@@ -105,6 +114,8 @@ export interface GetInventoryItemsQuery {
   is_active?: boolean;
   country_code?: string;
   state?: string;
+  sort?: InventorySortMode;
+  include_unavailable?: boolean;
 }
 
 export interface PaginatedInventoryItems {
@@ -150,13 +161,17 @@ export class InventoryItemsService {
       is_active = true,
       country_code: queryCountryCode,
       state: queryState,
+      sort = 'relevance',
+      include_unavailable = false,
     } = query;
 
     // Resolve country_code and state: prefer logged-in user's address when JWT present
     let country_code = queryCountryCode;
     let state = queryState;
+    let clientId: string | null = null;
     try {
       const user = await this.hasuraUserService.getUser();
+      clientId = user?.client?.id ?? null;
       const addresses = user.addresses;
       if (addresses?.length) {
         const primary =
@@ -182,6 +197,11 @@ export class InventoryItemsService {
         business: { is_verified: { _eq: true } },
       },
     });
+
+    // Hide unavailable (zero stock) unless explicitly requested
+    if (!include_unavailable) {
+      whereConditions.push({ computed_available_quantity: { _gt: 0 } });
+    }
 
     // Search filter
     if (search) {
@@ -424,8 +444,14 @@ export class InventoryItemsService {
         };
       });
 
-      const finalItems = await this.enrichWithDistanceAndSort(
+      const withDistance = await this.enrichWithDistanceOnly(
         itemsWithViewsAndDeals
+      );
+      const withRatings = await this.attachRatingAggregates(withDistance);
+      const finalItems = await this.applySortByMode(
+        withRatings,
+        sort,
+        clientId
       );
 
       return {
@@ -849,10 +875,10 @@ export class InventoryItemsService {
   }
 
   /**
-   * Enrich items with distance from user's primary address and sort by distance.
+   * Enrich items with distance from user's primary address (no sort).
    * Returns items unchanged on any error or when user has no primary address.
    */
-  private async enrichWithDistanceAndSort(
+  private async enrichWithDistanceOnly(
     items: InventoryItem[]
   ): Promise<InventoryItem[]> {
     try {
@@ -890,7 +916,7 @@ export class InventoryItemsService {
         );
 
       const destinationIds = destFormatted.map((d) => d.id);
-      return this.attachDistanceAndSort(items, matrix, destinationIds);
+      return this.attachDistanceToItems(items, matrix, destinationIds);
     } catch (error: any) {
       this.logger.warn(
         `Distance enrichment skipped: ${error?.message ?? String(error)}`
@@ -900,9 +926,9 @@ export class InventoryItemsService {
   }
 
   /**
-   * Attach distance/duration to each item and sort by distance (asc), then created_at (desc).
+   * Attach distance/duration to each item (no sort).
    */
-  private attachDistanceAndSort(
+  private attachDistanceToItems(
     items: InventoryItem[],
     matrix: {
       rows: Array<{
@@ -916,8 +942,7 @@ export class InventoryItemsService {
     destinationIds: string[]
   ): InventoryItem[] {
     const elements = matrix.rows?.[0]?.elements || [];
-
-    const enriched = items.map((item) => {
+    return items.map((item) => {
       const addressId = item.business_location?.address?.id;
       const idx = addressId ? destinationIds.indexOf(addressId) : -1;
       const el = idx >= 0 ? elements[idx] : null;
@@ -931,17 +956,310 @@ export class InventoryItemsService {
         distance_value: hasDistance && el?.distance ? el.distance.value : undefined,
       };
     });
+  }
 
-    enriched.sort((a, b) => {
-      const aVal = a.distance_value ?? Infinity;
-      const bVal = b.distance_value ?? Infinity;
-      if (aVal !== bVal) return aVal - bVal;
+  /**
+   * Batch-fetch rating aggregates for items and attach avg_rating, rating_count.
+   */
+  private async attachRatingAggregates(
+    items: InventoryItem[]
+  ): Promise<InventoryItem[]> {
+    const itemIds = Array.from(
+      new Set(items.map((i) => i.item?.id).filter(Boolean) as string[])
+    );
+    if (itemIds.length === 0) return items;
+
+    const query = `
+      query GetRatingAggregatesForItems($entityType: String!, $entityIds: [uuid!]!) {
+        rating_aggregates(where: { entity_type: { _eq: $entityType }, entity_id: { _in: $entityIds } }) {
+          entity_id
+          average_rating
+          total_ratings
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        entityType: 'item',
+        entityIds: itemIds,
+      });
+      const aggregates = (response.rating_aggregates as Array<{
+        entity_id: string;
+        average_rating: string | number;
+        total_ratings: number;
+      }>) ?? [];
+      const ratingByItemId: Record<
+        string,
+        { avg_rating: number; rating_count: number }
+      > = {};
+      aggregates.forEach((row) => {
+        const avg =
+          typeof row.average_rating === 'string'
+            ? parseFloat(row.average_rating)
+            : Number(row.average_rating);
+        ratingByItemId[row.entity_id] = {
+          avg_rating: Number.isFinite(avg) ? avg : 0,
+          rating_count: row.total_ratings ?? 0,
+        };
+      });
+
+      return items.map((item) => {
+        const itemId = item.item?.id;
+        const rating = itemId ? ratingByItemId[itemId] : null;
+        return {
+          ...item,
+          avg_rating: rating?.avg_rating ?? null,
+          rating_count: rating?.rating_count ?? null,
+        };
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Rating aggregates skipped: ${error?.message ?? String(error)}`
+      );
+      return items;
+    }
+  }
+
+  private static readonly RELEVANCE_WEIGHT_ORDERED_INVENTORY = 500;
+  private static readonly RELEVANCE_WEIGHT_ORDERED_ITEM = 100;
+  private static readonly RELEVANCE_WEIGHT_ORDERED_BRAND = 30;
+  private static readonly RELEVANCE_WEIGHT_ORDERED_CATEGORY = 20;
+  private static readonly RELEVANCE_WEIGHT_DEAL = 5;
+  private static readonly RELEVANCE_DISTANCE_MAX_BOOST = 50;
+
+  private computeRelevanceScore(
+    item: InventoryItem,
+    orderedInventoryIds: Set<string>,
+    orderedItemIds: Set<string>,
+    orderedBrandIds: Set<string>,
+    orderedCategoryIds: Set<number>
+  ): number {
+    const viewsCount = item.viewsCount ?? 0;
+    let score = 1 + viewsCount;
+
+    if (item.id && orderedInventoryIds.has(item.id)) {
+      score += InventoryItemsService.RELEVANCE_WEIGHT_ORDERED_INVENTORY;
+    }
+    if (item.item_id && orderedItemIds.has(item.item_id)) {
+      score += InventoryItemsService.RELEVANCE_WEIGHT_ORDERED_ITEM;
+    }
+    const brandId = item.item?.brand?.id;
+    if (brandId && orderedBrandIds.has(brandId)) {
+      score += InventoryItemsService.RELEVANCE_WEIGHT_ORDERED_BRAND;
+    }
+    const categoryId = item.item?.item_sub_category?.item_category?.id;
+    if (
+      categoryId !== undefined &&
+      orderedCategoryIds.has(categoryId)
+    ) {
+      score += InventoryItemsService.RELEVANCE_WEIGHT_ORDERED_CATEGORY;
+    }
+    if (item.hasActiveDeal) {
+      score += InventoryItemsService.RELEVANCE_WEIGHT_DEAL;
+    }
+    const dist = item.distance_value;
+    if (dist != null && Number.isFinite(dist)) {
+      score += Math.max(
+        0,
+        InventoryItemsService.RELEVANCE_DISTANCE_MAX_BOOST - dist / 1000
+      );
+    }
+    return score;
+  }
+
+  private async getRelevanceSignalsFromPastOrders(
+    clientId: string | null
+  ): Promise<{
+    orderedInventoryIds: Set<string>;
+    orderedItemIds: Set<string>;
+    orderedBrandIds: Set<string>;
+    orderedCategoryIds: Set<number>;
+  }> {
+    const empty = {
+      orderedInventoryIds: new Set<string>(),
+      orderedItemIds: new Set<string>(),
+      orderedBrandIds: new Set<string>(),
+      orderedCategoryIds: new Set<number>(),
+    };
+    if (!clientId) return empty;
+
+    const query = `
+      query GetPastOrderSignals($clientId: uuid!, $status: String!) {
+        orders(
+          where: { client_id: { _eq: $clientId }, current_status: { _eq: $status } }
+          order_by: { created_at: desc }
+          limit: 200
+        ) {
+          order_items {
+            business_inventory_id
+            business_inventory {
+              item_id
+              item {
+                brand { id }
+                item_sub_category { item_category { id } }
+              }
+            }
+          }
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraSystemService.executeQuery(query, {
+        clientId,
+        status: 'complete',
+      });
+      const orders = (response.orders as Array<{
+        order_items: Array<{
+          business_inventory_id: string;
+          business_inventory: {
+            item_id: string;
+            item?: {
+              brand?: { id: string };
+              item_sub_category?: { item_category?: { id: number } };
+            };
+          };
+        }>;
+      }>) ?? [];
+
+      const orderedInventoryIds = new Set<string>();
+      const orderedItemIds = new Set<string>();
+      const orderedBrandIds = new Set<string>();
+      const orderedCategoryIds = new Set<number>();
+
+      orders.forEach((order) => {
+        (order.order_items || []).forEach((oi) => {
+          if (oi.business_inventory_id) {
+            orderedInventoryIds.add(oi.business_inventory_id);
+          }
+          const inv = oi.business_inventory;
+          if (inv?.item_id) orderedItemIds.add(inv.item_id);
+          const brandId = inv?.item?.brand?.id;
+          if (brandId) orderedBrandIds.add(brandId);
+          const catId = inv?.item?.item_sub_category?.item_category?.id;
+          if (catId !== undefined) orderedCategoryIds.add(catId);
+        });
+      });
+
+      return {
+        orderedInventoryIds,
+        orderedItemIds,
+        orderedBrandIds,
+        orderedCategoryIds,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Past order signals skipped: ${error?.message ?? String(error)}`
+      );
+      return empty;
+    }
+  }
+
+  /**
+   * Apply sort (or filter+sort for deals) based on sort mode.
+   */
+  private async applySortByMode(
+    items: InventoryItem[],
+    sort: InventorySortMode,
+    clientId: string | null
+  ): Promise<InventoryItem[]> {
+    switch (sort) {
+      case 'relevance': {
+        return this.applyRelevanceSort(items, clientId);
+      }
+      case 'fastest': {
+        const sorted = [...items];
+        sorted.sort((a, b) => {
+          const aVal = a.distance_value ?? Infinity;
+          const bVal = b.distance_value ?? Infinity;
+          if (aVal !== bVal) return aVal - bVal;
+          return (
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+          );
+        });
+        return sorted;
+      }
+      case 'cheapest': {
+        const sorted = [...items];
+        sorted.sort((a, b) => {
+          const aPrice = a.discounted_price ?? a.selling_price;
+          const bPrice = b.discounted_price ?? b.selling_price;
+          if (aPrice !== bPrice) return aPrice - bPrice;
+          const aDist = a.distance_value ?? Infinity;
+          const bDist = b.distance_value ?? Infinity;
+          if (aDist !== bDist) return aDist - bDist;
+          return (
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+          );
+        });
+        return sorted;
+      }
+      case 'top_rated': {
+        const sorted = [...items];
+        sorted.sort((a, b) => {
+          const aAvg = a.avg_rating ?? 0;
+          const bAvg = b.avg_rating ?? 0;
+          if (bAvg !== aAvg) return bAvg - aAvg;
+          const aCount = a.rating_count ?? 0;
+          const bCount = b.rating_count ?? 0;
+          if (bCount !== aCount) return bCount - aCount;
+          return (
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+          );
+        });
+        return sorted;
+      }
+      case 'deals': {
+        const withDeals = items.filter((i) => i.hasActiveDeal === true);
+        withDeals.sort((a, b) => {
+          const aOrig = a.original_price ?? a.selling_price;
+          const bOrig = b.original_price ?? b.selling_price;
+          const aDisc = a.discounted_price ?? a.selling_price;
+          const bDisc = b.discounted_price ?? b.selling_price;
+          const aPct = aOrig > 0 ? ((aOrig - aDisc) / aOrig) * 100 : 0;
+          const bPct = bOrig > 0 ? ((bOrig - bDisc) / bOrig) * 100 : 0;
+          if (bPct !== aPct) return bPct - aPct;
+          return (
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+          );
+        });
+        return withDeals;
+      }
+      default:
+        return items;
+    }
+  }
+
+  private async applyRelevanceSort(
+    items: InventoryItem[],
+    clientId: string | null
+  ): Promise<InventoryItem[]> {
+    const signals = await this.getRelevanceSignalsFromPastOrders(clientId);
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      const scoreA = this.computeRelevanceScore(
+        a,
+        signals.orderedInventoryIds,
+        signals.orderedItemIds,
+        signals.orderedBrandIds,
+        signals.orderedCategoryIds
+      );
+      const scoreB = this.computeRelevanceScore(
+        b,
+        signals.orderedInventoryIds,
+        signals.orderedItemIds,
+        signals.orderedBrandIds,
+        signals.orderedCategoryIds
+      );
+      if (scoreB !== scoreA) return scoreB - scoreA;
       return (
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     });
-
-    return enriched;
+    return sorted;
   }
 
   /**

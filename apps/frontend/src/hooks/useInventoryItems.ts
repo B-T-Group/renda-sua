@@ -21,6 +21,8 @@ export interface InventoryItem {
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
+  avg_rating?: number | null;
+  rating_count?: number | null;
   item: {
     id: string;
     name: string;
@@ -88,6 +90,13 @@ export interface InventoryItem {
   };
 }
 
+export type InventorySortMode =
+  | 'relevance'
+  | 'fastest'
+  | 'cheapest'
+  | 'top_rated'
+  | 'deals';
+
 export interface GetInventoryItemsQuery {
   page?: number;
   limit?: number;
@@ -100,6 +109,8 @@ export interface GetInventoryItemsQuery {
   is_active?: boolean;
   country_code?: string;
   state?: string;
+  sort?: InventorySortMode;
+  include_unavailable?: boolean;
 }
 
 export interface PaginatedInventoryItems {
@@ -177,6 +188,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.currency && { currency: query.currency }),
           ...(country_code && { country_code }),
           ...(state && { state }),
+          ...(query.sort && { sort: query.sort }),
+          ...(query.include_unavailable !== undefined && {
+            include_unavailable: query.include_unavailable,
+          }),
         },
         signal: controller.signal,
       });
@@ -216,7 +231,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
         abortControllerRef.current = null;
       }
     }
-  }, [isAuthenticated, query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency]);
+  }, [isAuthenticated, query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency, query.sort, query.include_unavailable]);
 
   useEffect(() => {
     fetchInventoryItems();

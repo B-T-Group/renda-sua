@@ -1911,7 +1911,15 @@
         "button": "Sign In",
         "description": "Create an account to browse and order items.",
         "title": "Sign in to place orders"
-      }
+      },
+      "sort": {
+        "relevance": "Relevance",
+        "fastest": "Fastest",
+        "cheapest": "Cheapest",
+        "topRated": "Top rated",
+        "deals": "Deals"
+      },
+      "showUnavailable": "Show unavailable"
     },
     "deals": {
       "title": "Current Deals",

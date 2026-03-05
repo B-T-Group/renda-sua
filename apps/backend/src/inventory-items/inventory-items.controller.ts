@@ -28,6 +28,8 @@ interface GetInventoryItemsQueryParams {
   is_active?: string;
   country_code?: string;
   state?: string;
+  sort?: string;
+  include_unavailable?: string;
 }
 
 @ApiTags('Inventory Items')
@@ -43,7 +45,7 @@ export class InventoryItemsController {
   @ApiResponse({
     status: 200,
     description:
-      'Successfully retrieved inventory items. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters) from the user to the business location; results are ordered by distance when available.',
+      'Successfully retrieved inventory items. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters). Items may include avg_rating and rating_count for display. Results are ordered by the requested sort (relevance, fastest, cheapest, top_rated, or deals).',
     schema: {
       type: 'object',
       properties: {
@@ -56,7 +58,7 @@ export class InventoryItemsController {
               items: {
                 type: 'object',
                 description:
-                  'Item may include optional distance_text, duration_text, distance_value when user is logged in',
+                  'Item may include distance_text, duration_text, distance_value, avg_rating, rating_count',
               },
             },
             total: { type: 'number' },
@@ -137,6 +139,20 @@ export class InventoryItemsController {
     description: 'Filter by state/province name',
     example: 'Littoral',
   })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['relevance', 'fastest', 'cheapest', 'top_rated', 'deals'],
+    description:
+      'Sort order: relevance (views + past orders), fastest (by distance), cheapest, top_rated, or deals only',
+  })
+  @ApiQuery({
+    name: 'include_unavailable',
+    required: false,
+    type: Boolean,
+    description:
+      'Include items with zero stock (default: false). When false, only items with computed_available_quantity > 0 are returned.',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -146,6 +162,19 @@ export class InventoryItemsController {
   }> {
     try {
       // Convert string query parameters to proper types
+      const validSorts = [
+        'relevance',
+        'fastest',
+        'cheapest',
+        'top_rated',
+        'deals',
+      ] as const;
+      const sortParam = query.sort;
+      const sort =
+        sortParam && validSorts.includes(sortParam as any)
+          ? (sortParam as (typeof validSorts)[number])
+          : undefined;
+
       const processedQuery: GetInventoryItemsQuery = {
         page: query.page ? Number(query.page) : undefined,
         limit: query.limit ? Number(query.limit) : undefined,
@@ -161,6 +190,11 @@ export class InventoryItemsController {
             : undefined,
         country_code: query.country_code,
         state: query.state,
+        sort,
+        include_unavailable:
+          query.include_unavailable !== undefined
+            ? query.include_unavailable === 'true'
+            : undefined,
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

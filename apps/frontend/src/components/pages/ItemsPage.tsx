@@ -12,10 +12,13 @@ import {
     Button,
     Card,
     CardContent,
+    Chip,
     Container,
+    FormControlLabel,
     Pagination,
     Paper,
     Skeleton,
+    Switch,
     Typography,
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -24,7 +27,11 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
-import { InventoryItem, useInventoryItems } from '../../hooks/useInventoryItems';
+import {
+    InventoryItem,
+    InventorySortMode,
+    useInventoryItems,
+} from '../../hooks/useInventoryItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
@@ -67,6 +74,8 @@ const ItemsPage: React.FC = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [sort, setSort] = useState<InventorySortMode>('relevance');
+  const [showUnavailable, setShowUnavailable] = useState(false);
   const itemsPerPage = 12;
 
   // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
@@ -74,6 +83,8 @@ const ItemsPage: React.FC = () => {
     page: 1,
     limit: 1000, // Get all items for client-side filtering
     is_active: true,
+    sort,
+    include_unavailable: showUnavailable,
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
@@ -110,10 +121,10 @@ const ItemsPage: React.FC = () => {
     return [];
   }, [filteredItems, inventoryItems, searchTerm, filters]);
 
-  // Reset to first page when filters change
+  // Reset to first page when filters or sort change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filters.category, filters.subcategory, filters.brand]);
+  }, [searchTerm, filters.category, filters.subcategory, filters.brand, sort, showUnavailable]);
 
   // Pagination
   const totalPages = Math.ceil(displayItems.length / itemsPerPage);
@@ -502,6 +513,45 @@ const ItemsPage: React.FC = () => {
             ? t('dashboard.availableItems', 'Available Items')
             : t('public.items.availableItems', 'Available Items')}
         </Typography>
+
+        {/* Sort / filter bar */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+          {(
+            [
+              'relevance',
+              'fastest',
+              'cheapest',
+              'top_rated',
+              'deals',
+            ] as const
+          ).map((mode) => (
+            <Chip
+              key={mode}
+              label={t(
+                `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
+                mode === 'top_rated' ? 'Top rated' : mode
+              )}
+              onClick={() => setSort(mode)}
+              color={sort === mode ? 'primary' : 'default'}
+              variant={sort === mode ? 'filled' : 'outlined'}
+              size="medium"
+            />
+          ))}
+        </Box>
+
+        {/* Show unavailable toggle */}
+        <Box sx={{ mb: 2 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showUnavailable}
+                onChange={(_, checked) => setShowUnavailable(checked)}
+                color="primary"
+              />
+            }
+            label={t('public.items.showUnavailable', 'Show unavailable')}
+          />
+        </Box>
 
         {/* Unified filter for all users */}
         <ItemsPageFilter
