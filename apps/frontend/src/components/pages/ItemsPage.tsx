@@ -418,19 +418,48 @@ const ItemsPage: React.FC = () => {
               'top_rated',
               'deals',
             ] as const
-          ).map((mode) => (
-            <Chip
-              key={mode}
-              label={t(
-                `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
-                mode === 'top_rated' ? 'Top rated' : mode
-              )}
-              onClick={() => setSort(mode)}
-              color={sort === mode ? 'primary' : 'default'}
-              variant={sort === mode ? 'filled' : 'outlined'}
-              size="medium"
-            />
-          ))}
+          ).map((mode) => {
+            const isDeals = mode === 'deals';
+            const isSelected = sort === mode;
+            const isDealsSelected = isDeals && isSelected;
+            return (
+              <Chip
+                key={mode}
+                label={t(
+                  `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
+                  mode === 'top_rated' ? 'Top rated' : mode
+                )}
+                onClick={() => setSort(mode)}
+                color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
+                variant={isSelected ? 'filled' : 'outlined'}
+                size="medium"
+                sx={
+                  isDeals
+                    ? {
+                        ...(isDealsSelected
+                          ? {
+                              backgroundColor: '#c9972a',
+                              color: '#1a1a1a',
+                              border: '2px solid #b8860b',
+                              fontWeight: 600,
+                              '&:hover': {
+                                backgroundColor: '#d4a84b',
+                              },
+                            }
+                          : {
+                              border: '2px solid #c9972a',
+                              color: '#b8860b',
+                              '&:hover': {
+                                borderColor: '#d4a84b',
+                                bgcolor: 'rgba(201, 151, 42, 0.08)',
+                              },
+                            }),
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
         </Box>
 
         {/* Show unavailable toggle */}
