@@ -2243,6 +2243,49 @@
     "step8": {
       "title": "Voir les Transactions",
       "description": "Vous pouvez consulter toutes vos transactions, y compris les gains, les dépôts de caution et les retraits, dans la section de votre compte. Suivez facilement vos revenus et gérez vos fonds."
+    },
+    "interactive": {
+      "appTitle": "Rendasua Agent",
+      "ordersTab": "Commandes",
+      "accountTab": "Compte",
+      "ordersTitle": "Commandes disponibles",
+      "pickup": "Retrait",
+      "dropoff": "Livraison",
+      "commission": "Vous gagnez",
+      "caution": "Dépôt de caution",
+      "tapHere": "Appuyez ici",
+      "status": {
+        "available": "Prête pour le retrait",
+        "claimed": "Réclamée",
+        "pickedUp": "Retirée",
+        "inDelivery": "En livraison",
+        "delivered": "Livrée"
+      },
+      "instructions": {
+        "viewOrders": "Cliquez sur la commande en surbrillance pour voir plus de détails.",
+        "orderDetails": "Vérifiez la commande, puis cliquez sur « Réclamer la commande ».",
+        "confirmCaution": "Confirmez le dépôt de caution pour réserver cette commande.",
+        "enRoute": "Mettez à jour le statut de la commande lorsque vous la récupérez et commencez la livraison.",
+        "delivered": "La commande est livrée. Cliquez sur l’onglet Compte pour voir vos gains.",
+        "accountSummary": "Consultez votre solde mis à jour et vos transactions, puis terminez le guide."
+      },
+      "claimOrder": "Réclamer la commande",
+      "cautionTitle": "Confirmez votre dépôt de caution",
+      "cautionText": "Pour sécuriser cette commande, une caution remboursable de {{amount}} XAF sera bloquée jusqu’à la fin de la livraison.",
+      "confirmCaution": "Confirmer la caution",
+      "enRouteTitle": "Mettre à jour le statut de la commande",
+      "enRouteText": "Lorsque vous récupérez la commande et commencez la livraison, gardez le statut à jour pour que le client puisse suivre la progression.",
+      "currentStatus": "Statut actuel",
+      "currentBalance": "Solde actuel",
+      "balanceHint": "Inclut votre caution remboursée et la commission de livraison.",
+      "recentTransactions": "Transactions récentes",
+      "updated": "Mis à jour",
+      "txCautionHold": "Blocage de caution pour la commande RS-12345",
+      "txCautionRefund": "Remboursement de caution pour la commande RS-12345",
+      "txCommission": "Commission de livraison pour la commande RS-12345",
+      "markPickedUp": "Marquer comme retirée",
+      "startDelivery": "Commencer la livraison",
+      "markDelivered": "Marquer comme livrée"
     }
   }
 }

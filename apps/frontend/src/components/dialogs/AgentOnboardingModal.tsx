@@ -1,88 +1,23 @@
-import {
-  Close as CloseIcon,
-  NavigateBefore,
-  NavigateNext,
-} from '@mui/icons-material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import {
   Box,
   Button,
+  Chip,
   Container,
   Dialog,
   DialogContent,
+  Divider,
   IconButton,
-  MobileStepper,
   Paper,
+  Tab,
+  Tabs,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-// Import onboarding images
-import step1Image from '../../assets/agent_onboarding/step - 1.png';
-import step2Image from '../../assets/agent_onboarding/step - 2.png';
-import step3Image from '../../assets/agent_onboarding/step - 3.png';
-import step3_2Image from '../../assets/agent_onboarding/step - 3 - 2.png';
-import step4Image from '../../assets/agent_onboarding/step - 4.png';
-import step5Image from '../../assets/agent_onboarding/step - 5.png';
-import step6Image from '../../assets/agent_onboarding/step - 6.png';
-import step7Image from '../../assets/agent_onboarding/step - 7.png';
-import step8Image from '../../assets/agent_onboarding/step - 8.png';
-
-interface OnboardingStep {
-  image: string;
-  titleKey: string;
-  descriptionKey: string;
-}
-
-const onboardingSteps: OnboardingStep[] = [
-  {
-    image: step1Image,
-    titleKey: 'agentOnboarding.step1.title',
-    descriptionKey: 'agentOnboarding.step1.description',
-  },
-  {
-    image: step2Image,
-    titleKey: 'agentOnboarding.step2.title',
-    descriptionKey: 'agentOnboarding.step2.description',
-  },
-  {
-    image: step3Image,
-    titleKey: 'agentOnboarding.step3.title',
-    descriptionKey: 'agentOnboarding.step3.description',
-  },
-  {
-    image: step3_2Image,
-    titleKey: 'agentOnboarding.step3_2.title',
-    descriptionKey: 'agentOnboarding.step3_2.description',
-  },
-  {
-    image: step4Image,
-    titleKey: 'agentOnboarding.step4.title',
-    descriptionKey: 'agentOnboarding.step4.description',
-  },
-  {
-    image: step5Image,
-    titleKey: 'agentOnboarding.step5.title',
-    descriptionKey: 'agentOnboarding.step5.description',
-  },
-  {
-    image: step6Image,
-    titleKey: 'agentOnboarding.step6.title',
-    descriptionKey: 'agentOnboarding.step6.description',
-  },
-  {
-    image: step7Image,
-    titleKey: 'agentOnboarding.step7.title',
-    descriptionKey: 'agentOnboarding.step7.description',
-  },
-  {
-    image: step8Image,
-    titleKey: 'agentOnboarding.step8.title',
-    descriptionKey: 'agentOnboarding.step8.description',
-  },
-];
+import type { TFunction } from 'i18next';
 
 interface AgentOnboardingModalProps {
   open: boolean;
@@ -90,31 +25,909 @@ interface AgentOnboardingModalProps {
   loading?: boolean;
 }
 
-/**
- * Shared onboarding content used by both mobile dialog and desktop page
- */
-const OnboardingContent: React.FC<{
-  activeStep: number;
-  maxSteps: number;
-  currentStep: OnboardingStep;
-  isLastStep: boolean;
-  loading: boolean;
-  isMobile: boolean;
-  onNext: () => void;
-  onBack: () => void;
-  onQuit: () => void;
-}> = ({
-  activeStep,
-  maxSteps,
-  currentStep,
-  isLastStep,
-  loading,
-  isMobile,
-  onNext,
-  onBack,
-  onQuit,
+type DemoStage =
+  | 'viewOrders'
+  | 'orderDetails'
+  | 'confirmCaution'
+  | 'enRoute'
+  | 'delivered'
+  | 'accountSummary';
+
+type DemoOrderStatus =
+  | 'AVAILABLE'
+  | 'CLAIMED'
+  | 'PICKED_UP'
+  | 'IN_DELIVERY'
+  | 'DELIVERED';
+
+interface DemoOrder {
+  id: string;
+  customerName: string;
+  businessName: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  commission: number;
+  caution: number;
+  status: DemoOrderStatus;
+}
+
+interface DemoTransaction {
+  id: string;
+  label: string;
+  amount: number;
+  type: 'credit' | 'debit';
+}
+
+interface DemoAccount {
+  balance: number;
+  pendingCaution: number;
+  transactions: DemoTransaction[];
+}
+
+const initialOrder: DemoOrder = {
+  id: 'RS-12345',
+  customerName: 'John Doe',
+  businessName: 'SuperMart – Bonamoussadi',
+  pickupAddress: 'Bonamoussadi, Douala',
+  deliveryAddress: 'Makepe, Douala',
+  commission: 800,
+  caution: 5000,
+  status: 'AVAILABLE',
+};
+
+const initialAccount: DemoAccount = {
+  balance: 0,
+  pendingCaution: 0,
+  transactions: [],
+};
+
+const demoStages: DemoStage[] = [
+  'viewOrders',
+  'orderDetails',
+  'confirmCaution',
+  'enRoute',
+  'delivered',
+  'accountSummary',
+];
+
+const getStatusLabel = (status: DemoOrderStatus, t: TFunction) => {
+  if (status === 'AVAILABLE') {
+    return t(
+      'agentOnboarding.interactive.status.available',
+      'Ready for pickup',
+    );
+  }
+  if (status === 'CLAIMED') {
+    return t(
+      'agentOnboarding.interactive.status.claimed',
+      'Claimed',
+    );
+  }
+  if (status === 'PICKED_UP') {
+    return t(
+      'agentOnboarding.interactive.status.pickedUp',
+      'Picked up',
+    );
+  }
+  if (status === 'IN_DELIVERY') {
+    return t(
+      'agentOnboarding.interactive.status.inDelivery',
+      'In delivery',
+    );
+  }
+  return t(
+    'agentOnboarding.interactive.status.delivered',
+    'Delivered',
+  );
+};
+
+const getStageInstruction = (stage: DemoStage, t: TFunction) => {
+  if (stage === 'viewOrders') {
+    return t(
+      'agentOnboarding.interactive.instructions.viewOrders',
+      'Click the highlighted order to see more details.',
+    );
+  }
+  if (stage === 'orderDetails') {
+    return t(
+      'agentOnboarding.interactive.instructions.orderDetails',
+      'Review the order, then click “Claim order”.',
+    );
+  }
+  if (stage === 'confirmCaution') {
+    return t(
+      'agentOnboarding.interactive.instructions.confirmCaution',
+      'Confirm the caution deposit to reserve this order.',
+    );
+  }
+  if (stage === 'enRoute') {
+    return t(
+      'agentOnboarding.interactive.instructions.enRoute',
+      'Update the order status as you pick up and start delivery.',
+    );
+  }
+  if (stage === 'delivered') {
+    return t(
+      'agentOnboarding.interactive.instructions.delivered',
+      'The order is delivered. Click the Account tab to see your earnings.',
+    );
+  }
+  return t(
+    'agentOnboarding.interactive.instructions.accountSummary',
+    'Review your updated balance and transactions, then finish the guide.',
+  );
+};
+
+interface PhoneFrameProps {
+  children: React.ReactNode;
+}
+
+const PhoneFrame: React.FC<PhoneFrameProps> = ({ children }) => (
+  <Box
+    sx={{
+      mx: 'auto',
+      my: 2,
+      width: 360,
+      maxWidth: '100%',
+      border: 1,
+      borderColor: 'grey.300',
+      boxShadow: 4,
+      overflow: 'hidden',
+      bgcolor: 'background.paper',
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+  >
+    {children}
+  </Box>
+);
+
+interface OrdersScreenProps {
+  order: DemoOrder;
+  stage: DemoStage;
+  onOpenOrder: () => void;
+  t: TFunction;
+}
+
+const OrdersScreen: React.FC<OrdersScreenProps> = ({
+  order,
+  stage,
+  onOpenOrder,
+  t,
 }) => {
+  const isHighlight = stage === 'viewOrders';
+  const statusLabel = getStatusLabel(order.status, t);
+
+  return (
+    <Box sx={{ p: 2 }}>
+      <Typography
+        variant="subtitle2"
+        color="text.secondary"
+        sx={{ mb: 1 }}
+      >
+        {t(
+          'agentOnboarding.interactive.ordersTitle',
+          'Available orders',
+        )}
+      </Typography>
+      <Paper
+        elevation={isHighlight ? 6 : 1}
+        onClick={stage === 'viewOrders' ? onOpenOrder : undefined}
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          border: 2,
+          borderColor: isHighlight ? 'primary.main' : 'grey.200',
+          cursor: stage === 'viewOrders' ? 'pointer' : 'default',
+          position: 'relative',
+        }}
+      >
+        {isHighlight && (
+          <Chip
+            color="primary"
+            label={t(
+              'agentOnboarding.interactive.tapHere',
+              'Tap here',
+            )}
+            size="small"
+            sx={{ position: 'absolute', top: 8, right: 8 }}
+          />
+        )}
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 600 }}
+        >
+          {order.businessName}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 0.5 }}
+        >
+          {order.customerName} • {order.id}
+        </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mt: 1.5,
+          }}
+        >
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              {t(
+                'agentOnboarding.interactive.pickup',
+                'Pickup',
+              )}
+            </Typography>
+            <Typography variant="body2">
+              {order.pickupAddress}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+            >
+              {t(
+                'agentOnboarding.interactive.dropoff',
+                'Delivery',
+              )}
+            </Typography>
+            <Typography variant="body2">
+              {order.deliveryAddress}
+            </Typography>
+          </Box>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mt: 1.5,
+          }}
+        >
+          <Typography
+            variant="body2"
+            color="primary"
+          >
+            {t(
+              'agentOnboarding.interactive.commission',
+              'You earn',
+            )}{' '}
+            {order.commission.toLocaleString()} XAF
+          </Typography>
+          <Chip
+            label={statusLabel}
+            size="small"
+            color={order.status === 'AVAILABLE' ? 'default' : 'success'}
+          />
+        </Box>
+      </Paper>
+    </Box>
+  );
+};
+
+interface OrderDetailsScreenProps {
+  order: DemoOrder;
+  stage: DemoStage;
+  onClaim: () => void;
+  t: TFunction;
+}
+
+const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
+  order,
+  stage,
+  onClaim,
+  t,
+}) => {
+  const showHighlight = stage === 'orderDetails';
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Box>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 600 }}
+        >
+          {order.businessName}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+        >
+          {order.customerName} • {order.id}
+        </Typography>
+      </Box>
+      <Divider />
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+        }}
+      >
+        <Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            {t(
+              'agentOnboarding.interactive.pickup',
+              'Pickup',
+            )}
+          </Typography>
+          <Typography variant="body2">
+            {order.pickupAddress}
+          </Typography>
+        </Box>
+        <Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            {t(
+              'agentOnboarding.interactive.dropoff',
+              'Delivery',
+            )}
+          </Typography>
+          <Typography variant="body2">
+            {order.deliveryAddress}
+          </Typography>
+        </Box>
+        <Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            {t(
+              'agentOnboarding.interactive.caution',
+              'Caution deposit',
+            )}
+          </Typography>
+          <Typography variant="body2">
+            {order.caution.toLocaleString()} XAF
+          </Typography>
+        </Box>
+      </Box>
+      <Box sx={{ mt: 'auto', pt: 1 }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          onClick={stage === 'orderDetails' ? onClaim : undefined}
+          sx={{
+            position: 'relative',
+            borderWidth: showHighlight ? 2 : 0,
+            borderStyle: showHighlight ? 'solid' : 'none',
+            borderColor: showHighlight ? 'primary.light' : 'transparent',
+          }}
+        >
+          {t(
+            'agentOnboarding.interactive.claimOrder',
+            'Claim order',
+          )}
+          {showHighlight && (
+            <Chip
+              color="secondary"
+              label={t(
+                'agentOnboarding.interactive.tapHere',
+                'Tap here',
+              )}
+              size="small"
+              sx={{ position: 'absolute', top: -18, right: 8 }}
+            />
+          )}
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
+interface CautionScreenProps {
+  order: DemoOrder;
+  stage: DemoStage;
+  onConfirm: () => void;
+  t: TFunction;
+}
+
+const CautionScreen: React.FC<CautionScreenProps> = ({
+  order,
+  stage,
+  onConfirm,
+  t,
+}) => {
+  const showHighlight = stage === 'confirmCaution';
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Typography
+        variant="subtitle1"
+        sx={{ fontWeight: 600 }}
+      >
+        {t(
+          'agentOnboarding.interactive.cautionTitle',
+          'Confirm your caution deposit',
+        )}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+      >
+        {t(
+          'agentOnboarding.interactive.cautionText',
+          'To secure this order, a refundable caution of {{amount}} XAF will be held until delivery is completed.',
+          { amount: order.caution.toLocaleString() },
+        )}
+      </Typography>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          bgcolor: 'grey.50',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mb: 1,
+          }}
+        >
+          <Typography variant="body2">
+            {t(
+              'agentOnboarding.interactive.caution',
+              'Caution deposit',
+            )}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 600 }}
+          >
+            {order.caution.toLocaleString()} XAF
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Typography variant="body2">
+            {t(
+              'agentOnboarding.interactive.commission',
+              'You earn',
+            )}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 600 }}
+          >
+            {order.commission.toLocaleString()} XAF
+          </Typography>
+        </Box>
+      </Paper>
+      <Box sx={{ mt: 'auto', pt: 1 }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          onClick={stage === 'confirmCaution' ? onConfirm : undefined}
+          sx={{
+            position: 'relative',
+            borderWidth: showHighlight ? 2 : 0,
+            borderStyle: showHighlight ? 'solid' : 'none',
+            borderColor: showHighlight ? 'primary.light' : 'transparent',
+          }}
+        >
+          {t(
+            'agentOnboarding.interactive.confirmCaution',
+            'Confirm caution',
+          )}
+          {showHighlight && (
+            <Chip
+              color="secondary"
+              label={t(
+                'agentOnboarding.interactive.tapHere',
+                'Tap here',
+              )}
+              size="small"
+              sx={{ position: 'absolute', top: -18, right: 8 }}
+            />
+          )}
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
+interface EnRouteScreenProps {
+  order: DemoOrder;
+  stage: DemoStage;
+  onAdvanceStatus: () => void;
+  t: TFunction;
+}
+
+const EnRouteScreen: React.FC<EnRouteScreenProps> = ({
+  order,
+  stage,
+  onAdvanceStatus,
+  t,
+}) => {
+  const buttonLabel = useMemo(() => {
+    if (order.status === 'CLAIMED') {
+      return t(
+        'agentOnboarding.interactive.markPickedUp',
+        'Mark as picked up',
+      );
+    }
+    if (order.status === 'PICKED_UP') {
+      return t(
+        'agentOnboarding.interactive.startDelivery',
+        'Start delivery',
+      );
+    }
+    if (order.status === 'IN_DELIVERY') {
+      return t(
+        'agentOnboarding.interactive.markDelivered',
+        'Mark as delivered',
+      );
+    }
+    return t(
+      'agentOnboarding.interactive.markDelivered',
+      'Mark as delivered',
+    );
+  }, [order.status, t]);
+
+  const isHighlight = stage === 'enRoute';
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Typography
+        variant="subtitle1"
+        sx={{ fontWeight: 600 }}
+      >
+        {t(
+          'agentOnboarding.interactive.enRouteTitle',
+          'Update the order status',
+        )}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+      >
+        {t(
+          'agentOnboarding.interactive.enRouteText',
+          'As you pick up and start delivery, keep the order status updated so the customer can track progress.',
+        )}
+      </Typography>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          bgcolor: 'grey.50',
+        }}
+      >
+        <Typography
+          variant="body2"
+          sx={{ mb: 1 }}
+        >
+          {t(
+            'agentOnboarding.interactive.currentStatus',
+            'Current status',
+          )}
+        </Typography>
+        <Chip
+          label={getStatusLabel(order.status, t)}
+          color="success"
+          size="small"
+        />
+      </Paper>
+      <Box sx={{ mt: 'auto', pt: 1 }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          onClick={stage === 'enRoute' ? onAdvanceStatus : undefined}
+          sx={{
+            position: 'relative',
+            borderWidth: isHighlight ? 2 : 0,
+            borderStyle: isHighlight ? 'solid' : 'none',
+            borderColor: isHighlight ? 'primary.light' : 'transparent',
+          }}
+        >
+          {buttonLabel}
+          {isHighlight && (
+            <Chip
+              color="secondary"
+              label={t(
+                'agentOnboarding.interactive.tapHere',
+                'Tap here',
+              )}
+              size="small"
+              sx={{ position: 'absolute', top: -18, right: 8 }}
+            />
+          )}
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
+interface AccountScreenProps {
+  account: DemoAccount;
+  stage: DemoStage;
+  onFinish: () => void;
+  t: TFunction;
+}
+
+const AccountScreen: React.FC<AccountScreenProps> = ({
+  account,
+  stage,
+  onFinish,
+  t,
+}) => {
+  const isSummary = stage === 'accountSummary';
+  const balanceLabel = `${account.balance.toLocaleString()} XAF`;
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Paper
+        elevation={isSummary ? 4 : 1}
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          border: 2,
+          borderColor: isSummary ? 'primary.main' : 'grey.200',
+          position: 'relative',
+        }}
+      >
+        {isSummary && (
+          <Chip
+            color="primary"
+            label={t(
+              'agentOnboarding.interactive.updated',
+              'Updated',
+            )}
+            size="small"
+            sx={{ position: 'absolute', top: 8, right: 8 }}
+          />
+        )}
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          {t(
+            'agentOnboarding.interactive.currentBalance',
+            'Current balance',
+          )}
+        </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          {balanceLabel}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 0.5 }}
+        >
+          {t(
+            'agentOnboarding.interactive.balanceHint',
+            'Includes your refunded caution and delivery commission.',
+          )}
+        </Typography>
+      </Paper>
+      <Typography variant="subtitle2">
+        {t(
+          'agentOnboarding.interactive.recentTransactions',
+          'Recent transactions',
+        )}
+      </Typography>
+      <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
+        {account.transactions.map((tx) => (
+          <Box
+            key={tx.id}
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              py: 1,
+              borderBottom: 1,
+              borderColor: 'grey.100',
+            }}
+          >
+            <Typography variant="body2">
+              {tx.label}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color:
+                  tx.type === 'credit' ? 'success.main' : 'error.main',
+                fontWeight: 600,
+              }}
+            >
+              {tx.type === 'credit' ? '+' : '-'}
+              {tx.amount.toLocaleString()} XAF
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+      <Box sx={{ mt: 'auto', pt: 1 }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          onClick={stage === 'accountSummary' ? onFinish : undefined}
+        >
+          {t('agentOnboarding.complete', 'Get Started')}
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
+interface InteractiveOnboardingContentProps {
+  loading: boolean;
+  onComplete: () => void;
+}
+
+const InteractiveOnboardingContent: React.FC<
+  InteractiveOnboardingContentProps
+> = ({ loading, onComplete }) => {
   const { t } = useTranslation();
+  const [stageIndex, setStageIndex] = useState(0);
+  const [order, setOrder] = useState<DemoOrder>(initialOrder);
+  const [account, setAccount] = useState<DemoAccount>(initialAccount);
+  const [activeTab, setActiveTab] = useState<'orders' | 'account'>('orders');
+
+  const stage = demoStages[stageIndex];
+  const isAccountTabRequired =
+    stage === 'accountSummary' || stage === 'delivered';
+
+  const handleQuit = () => {
+    if (!loading) {
+      onComplete();
+    }
+  };
+
+  const goToNextStage = () => {
+    setStageIndex((prev) => Math.min(prev + 1, demoStages.length - 1));
+  };
+
+  const handleOpenOrder = () => {
+    if (stage !== 'viewOrders') {
+      return;
+    }
+    setActiveTab('orders');
+    goToNextStage();
+  };
+
+  const handleClaimOrder = () => {
+    if (stage !== 'orderDetails') {
+      return;
+    }
+    goToNextStage();
+  };
+
+  const handleConfirmCaution = () => {
+    if (stage !== 'confirmCaution') {
+      return;
+    }
+
+    setOrder((prev) => ({
+      ...prev,
+      status: 'CLAIMED',
+    }));
+    setAccount({
+      balance: 0,
+      pendingCaution: initialOrder.caution,
+      transactions: [
+        {
+          id: 'tx-1',
+          label: t(
+            'agentOnboarding.interactive.txCautionHold',
+            'Caution hold for order RS-12345',
+          ),
+          amount: initialOrder.caution,
+          type: 'debit',
+        },
+      ],
+    });
+    goToNextStage();
+  };
+
+  const handleAdvanceStatus = () => {
+    if (stage !== 'enRoute') {
+      return;
+    }
+
+    setOrder((prev) => {
+      if (prev.status === 'CLAIMED') {
+        return { ...prev, status: 'PICKED_UP' };
+      }
+      if (prev.status === 'PICKED_UP') {
+        return { ...prev, status: 'IN_DELIVERY' };
+      }
+      if (prev.status === 'IN_DELIVERY') {
+        const newAccount: DemoAccount = {
+          balance: initialOrder.caution + initialOrder.commission,
+          pendingCaution: 0,
+          transactions: [
+            {
+              id: 'tx-1',
+              label: t(
+                'agentOnboarding.interactive.txCautionRefund',
+                'Caution refund for order RS-12345',
+              ),
+              amount: initialOrder.caution,
+              type: 'credit',
+            },
+            {
+              id: 'tx-2',
+              label: t(
+                'agentOnboarding.interactive.txCommission',
+                'Delivery commission for order RS-12345',
+              ),
+              amount: initialOrder.commission,
+              type: 'credit',
+            },
+          ],
+        };
+        setAccount(newAccount);
+        setStageIndex(demoStages.indexOf('delivered'));
+        return { ...prev, status: 'DELIVERED' };
+      }
+      return prev;
+    });
+  };
+
+  const handleTabChange = (
+    _: React.SyntheticEvent,
+    value: 'orders' | 'account',
+  ) => {
+    setActiveTab(value);
+    if (stage === 'delivered' && value === 'account') {
+      setStageIndex(demoStages.indexOf('accountSummary'));
+    }
+  };
+
+  const instruction = getStageInstruction(stage, t);
+  const currentStepNumber = stageIndex + 1;
+  const totalSteps = demoStages.length;
+
+  const showOrders =
+    activeTab === 'orders' || (!isAccountTabRequired && activeTab === 'account');
 
   return (
     <Box
@@ -125,7 +938,6 @@ const OnboardingContent: React.FC<{
         overflow: 'hidden',
       }}
     >
-      {/* Header with quit button */}
       <Box
         sx={{
           display: 'flex',
@@ -141,7 +953,7 @@ const OnboardingContent: React.FC<{
           {t('agentOnboarding.title', 'How Deliveries Work')}
         </Typography>
         <IconButton
-          onClick={onQuit}
+          onClick={handleQuit}
           disabled={loading}
           size="small"
           aria-label={t('agentOnboarding.quit', 'Skip Guide')}
@@ -150,110 +962,129 @@ const OnboardingContent: React.FC<{
         </IconButton>
       </Box>
 
-      {/* Step indicator */}
       <Box sx={{ px: 2, py: 1, bgcolor: 'grey.50' }}>
-        <Typography variant="body2" color="text.secondary" textAlign="center">
-          {t('agentOnboarding.stepOf', 'Step {{current}} of {{total}}', {
-            current: activeStep + 1,
-            total: maxSteps,
-          })}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          textAlign="center"
+        >
+          {t(
+            'agentOnboarding.stepOf',
+            'Step {{current}} of {{total}}',
+            {
+              current: currentStepNumber,
+              total: totalSteps,
+            },
+          )}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.primary"
+          textAlign="center"
+          sx={{ mt: 0.5 }}
+        >
+          {instruction}
         </Typography>
       </Box>
 
-      {/* Main content area */}
       <Box
         sx={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'auto',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
         }}
       >
-        {/* Image container */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            p: 2,
-            minHeight: 300,
-            maxHeight: isMobile ? '50vh' : '60vh',
-          }}
-        >
+        <PhoneFrame>
           <Box
-            component="img"
-            src={currentStep.image}
-            alt={t(currentStep.titleKey)}
             sx={{
-              width: '80%',
-              maxWidth: 500,
-              maxHeight: '100%',
-              objectFit: 'contain',
-              borderRadius: 2,
-              boxShadow: 2,
+              px: 2,
+              py: 1,
+              borderBottom: 1,
+              borderColor: 'divider',
             }}
-          />
-        </Box>
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 600 }}
+            >
+              {t(
+                'agentOnboarding.interactive.appTitle',
+                'Rendasua Agent',
+              )}
+            </Typography>
+          </Box>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Tab
+              value="orders"
+              label={t(
+                'agentOnboarding.interactive.ordersTab',
+                'Orders',
+              )}
+            />
+            <Tab
+              value="account"
+              label={t(
+                'agentOnboarding.interactive.accountTab',
+                'Account',
+              )}
+            />
+          </Tabs>
 
-        {/* Text content */}
-        <Box sx={{ px: 3, pb: 2 }}>
-          <Typography
-            variant="h6"
-            gutterBottom
-            textAlign="center"
-            fontWeight="bold"
-          >
-            {t(currentStep.titleKey)}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            textAlign="center"
-            sx={{ lineHeight: 1.6, maxWidth: 600, mx: 'auto' }}
-          >
-            {t(currentStep.descriptionKey)}
-          </Typography>
-        </Box>
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            {showOrders && stage === 'viewOrders' && (
+              <OrdersScreen
+                order={order}
+                stage={stage}
+                onOpenOrder={handleOpenOrder}
+                t={t}
+              />
+            )}
+            {showOrders && stage === 'orderDetails' && (
+              <OrderDetailsScreen
+                order={order}
+                stage={stage}
+                onClaim={handleClaimOrder}
+                t={t}
+              />
+            )}
+            {showOrders && stage === 'confirmCaution' && (
+              <CautionScreen
+                order={order}
+                stage={stage}
+                onConfirm={handleConfirmCaution}
+                t={t}
+              />
+            )}
+            {showOrders && (stage === 'enRoute' || stage === 'delivered') && (
+              <EnRouteScreen
+                order={order}
+                stage={stage}
+                onAdvanceStatus={handleAdvanceStatus}
+                t={t}
+              />
+            )}
+            {!showOrders && (
+              <AccountScreen
+                account={account}
+                stage={stage}
+                onFinish={onComplete}
+                t={t}
+              />
+            )}
+          </Box>
+        </PhoneFrame>
       </Box>
-
-      {/* Navigation stepper */}
-      <MobileStepper
-        variant="dots"
-        steps={maxSteps}
-        position="static"
-        activeStep={activeStep}
-        sx={{
-          flexGrow: 0,
-          borderTop: 1,
-          borderColor: 'divider',
-          bgcolor: 'background.paper',
-        }}
-        nextButton={
-          <Button
-            size="large"
-            onClick={onNext}
-            disabled={loading}
-            variant={isLastStep ? 'contained' : 'text'}
-            endIcon={!isLastStep && <NavigateNext />}
-          >
-            {loading
-              ? '...'
-              : isLastStep
-                ? t('agentOnboarding.complete', 'Get Started')
-                : t('agentOnboarding.next', 'Next')}
-          </Button>
-        }
-        backButton={
-          <Button
-            size="large"
-            onClick={onBack}
-            disabled={activeStep === 0 || loading}
-            startIcon={<NavigateBefore />}
-          >
-            {t('agentOnboarding.previous', 'Previous')}
-          </Button>
-        }
-      />
     </Box>
   );
 };
@@ -265,33 +1096,11 @@ const AgentOnboardingModal: React.FC<AgentOnboardingModalProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [activeStep, setActiveStep] = useState(0);
-
-  const maxSteps = onboardingSteps.length;
-  const currentStep = onboardingSteps[activeStep];
-  const isLastStep = activeStep === maxSteps - 1;
-
-  const handleNext = () => {
-    if (isLastStep) {
-      onComplete();
-    } else {
-      setActiveStep((prevStep) => prevStep + 1);
-    }
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
-  };
-
-  const handleQuit = () => {
-    onComplete();
-  };
 
   if (!open) {
     return null;
   }
 
-  // Mobile: Render as fullscreen dialog
   if (isMobile) {
     return (
       <Dialog open={open} fullScreen>
@@ -303,23 +1112,15 @@ const AgentOnboardingModal: React.FC<AgentOnboardingModalProps> = ({
             overflow: 'hidden',
           }}
         >
-          <OnboardingContent
-            activeStep={activeStep}
-            maxSteps={maxSteps}
-            currentStep={currentStep}
-            isLastStep={isLastStep}
+          <InteractiveOnboardingContent
             loading={loading}
-            isMobile={isMobile}
-            onNext={handleNext}
-            onBack={handleBack}
-            onQuit={handleQuit}
+            onComplete={onComplete}
           />
         </DialogContent>
       </Dialog>
     );
   }
 
-  // Desktop: Render as fullscreen page overlay
   return (
     <Box
       sx={{
@@ -352,19 +1153,12 @@ const AgentOnboardingModal: React.FC<AgentOnboardingModalProps> = ({
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            borderRadius: 2,
+            borderRadius: 0,
           }}
         >
-          <OnboardingContent
-            activeStep={activeStep}
-            maxSteps={maxSteps}
-            currentStep={currentStep}
-            isLastStep={isLastStep}
+          <InteractiveOnboardingContent
             loading={loading}
-            isMobile={isMobile}
-            onNext={handleNext}
-            onBack={handleBack}
-            onQuit={handleQuit}
+            onComplete={onComplete}
           />
         </Paper>
       </Container>

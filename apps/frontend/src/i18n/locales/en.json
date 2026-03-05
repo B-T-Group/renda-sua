@@ -2271,6 +2271,49 @@
     "step8": {
       "title": "View Transactions",
       "description": "You can view all your transactions including earnings, caution deposits, and withdrawals in your account section. Track your income and manage your funds easily."
+    },
+    "interactive": {
+      "appTitle": "Rendasua Agent",
+      "ordersTab": "Orders",
+      "accountTab": "Account",
+      "ordersTitle": "Available orders",
+      "pickup": "Pickup",
+      "dropoff": "Delivery",
+      "commission": "You earn",
+      "caution": "Caution deposit",
+      "tapHere": "Tap here",
+      "status": {
+        "available": "Ready for pickup",
+        "claimed": "Claimed",
+        "pickedUp": "Picked up",
+        "inDelivery": "In delivery",
+        "delivered": "Delivered"
+      },
+      "instructions": {
+        "viewOrders": "Click the highlighted order to see more details.",
+        "orderDetails": "Review the order, then click “Claim order”.",
+        "confirmCaution": "Confirm the caution deposit to reserve this order.",
+        "enRoute": "Update the order status as you pick up and start delivery.",
+        "delivered": "The order is delivered. Click the Account tab to see your earnings.",
+        "accountSummary": "Review your updated balance and transactions, then finish the guide."
+      },
+      "claimOrder": "Claim order",
+      "cautionTitle": "Confirm your caution deposit",
+      "cautionText": "To secure this order, a refundable caution of {{amount}} XAF will be held until delivery is completed.",
+      "confirmCaution": "Confirm caution",
+      "enRouteTitle": "Update the order status",
+      "enRouteText": "As you pick up and start delivery, keep the order status updated so the customer can track progress.",
+      "currentStatus": "Current status",
+      "currentBalance": "Current balance",
+      "balanceHint": "Includes your refunded caution and delivery commission.",
+      "recentTransactions": "Recent transactions",
+      "updated": "Updated",
+      "txCautionHold": "Caution hold for order RS-12345",
+      "txCautionRefund": "Caution refund for order RS-12345",
+      "txCommission": "Delivery commission for order RS-12345",
+      "markPickedUp": "Mark as picked up",
+      "startDelivery": "Start delivery",
+      "markDelivered": "Mark as delivered"
     }
   }
 }
