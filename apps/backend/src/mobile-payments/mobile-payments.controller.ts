@@ -774,7 +774,7 @@ export class MobilePaymentsController {
         if (
           callbackData.status === 'SUCCESS' &&
           transaction.account_id &&
-          transaction.transaction_type === 'DEPOSIT'
+          transaction.transaction_type === 'PAYMENT'
         ) {
           try {
             const creditResult = await this.accountsService.registerTransaction(
