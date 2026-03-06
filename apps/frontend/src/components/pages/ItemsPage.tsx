@@ -75,7 +75,7 @@ const ItemsPage: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [showUnavailable, setShowUnavailable] = useState(false);
-  const itemsPerPage = 12;
+  const itemsPerPage = 100;
 
   // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
   const { inventoryItems, loading, error } = useInventoryItems({
