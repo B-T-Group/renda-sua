@@ -260,7 +260,7 @@ const CheckoutPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { cartItems } = useCart();
-  const { profile } = useUserProfileContext();
+  const { profile, refetch: refetchProfile } = useUserProfileContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -301,6 +301,7 @@ const CheckoutPage: React.FC = () => {
   } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
+    onAddressesChanged: refetchProfile,
   });
 
   // Get fast delivery configuration

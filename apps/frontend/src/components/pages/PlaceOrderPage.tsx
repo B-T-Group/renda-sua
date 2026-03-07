@@ -450,6 +450,7 @@ const PlaceOrderPage: React.FC = () => {
   } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
+    onAddressesChanged: refetchProfile,
   });
 
   // Get fast delivery configuration
@@ -633,10 +634,7 @@ const PlaceOrderPage: React.FC = () => {
       // Close the dialog
       handleCloseAddressDialog();
 
-      // Refresh the user profile to get updated addresses
-      await refetchProfile();
-
-      // The addresses will be automatically updated through the useAddressManager hook
+      // Addresses and profile context are refreshed by useAddressManager on success.
       // If this was the first address, it will be automatically selected by the useEffect
     } catch (error) {
       console.error('Error saving address:', error);

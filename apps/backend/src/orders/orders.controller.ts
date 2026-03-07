@@ -12,6 +12,7 @@ import {
 import {
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -767,6 +768,63 @@ export class OrdersController {
     }
   }
 
+  @Get(':orderId/claim-availability')
+  @ApiOperation({
+    summary: 'Check if order is available to claim',
+    description:
+      'Returns pre-claim eligibility details for an agent including open status, hold amount, and top-up requirement.',
+  })
+  @ApiParam({
+    name: 'orderId',
+    required: true,
+    type: String,
+    description: 'Order ID to validate claim availability',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Claim availability computed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        orderOpenStatus: { type: 'boolean', example: true },
+        hasEnoughFundsForHold: { type: 'boolean', example: true },
+        needsTopUpToClaim: { type: 'boolean', example: false },
+        holdAmount: { type: 'number', example: 1200 },
+        message: {
+          type: 'string',
+          example: 'Order is open and available to claim',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only agents can claim orders',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Only agent users can claim orders' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Order not found' },
+      },
+    },
+  })
+  async checkOrderClaimAvailability(@Param('orderId') orderId: string) {
+    return this.ordersService.checkOrderClaimAvailability(orderId);
+  }
+
   @Get(':id')
   async getOrderById(@Param('id') orderId: string) {
     try {
@@ -900,6 +958,30 @@ export class OrdersController {
   })
   async claimOrderWithTopup(@Body() request: GetOrderRequest) {
     return this.ordersService.claimOrderWithTopup(request);
+  }
+
+  @Post('cancel-claim-request')
+  @ApiOperation({
+    summary: 'Cancel pending claim request',
+    description:
+      'Cancels an in-flight claim_order top-up payment request for the authenticated agent and order.',
+  })
+  @ApiBody({
+    description: 'Order claim cancellation request',
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: {
+        orderId: {
+          type: 'string',
+          description: 'The ID of the order whose pending claim should be cancelled',
+          example: '123e4567-e89b-12d3-a456-426614174000',
+        },
+      },
+    },
+  })
+  async cancelClaimRequest(@Body() request: GetOrderRequest) {
+    return this.ordersService.cancelClaimRequest(request);
   }
 
   @Get('item/:itemId/deliveryFee')

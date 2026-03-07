@@ -19,6 +19,7 @@ import {
 import { Country, State } from 'country-state-city';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   Address,
   AddressFormData,
@@ -71,8 +72,15 @@ const AddressManager: React.FC<AddressManagerProps> = ({
   embedded = false,
 }) => {
   const { t } = useTranslation();
+  const { refetch } = useUserProfileContext();
 
   // Address manager hook
+  const addressManager = useAddressManager({
+    entityType,
+    entityId,
+    onAccountCreated,
+    onAddressesChanged: refetch,
+  });
   const {
     addresses,
     loading,
@@ -83,7 +91,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     updateAddress,
     deleteAddress,
     clearMessages,
-  } = useAddressManager({ entityType, entityId, onAccountCreated });
+  } = addressManager;
 
   // Dialog states
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);

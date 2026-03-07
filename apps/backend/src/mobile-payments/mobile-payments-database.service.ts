@@ -45,6 +45,16 @@ export interface UpdateTransactionData {
   error_code?: string;
 }
 
+export interface PendingClaimOrderTransaction {
+  id: string;
+  entity_id: string;
+  transaction_id?: string;
+  provider?: string;
+  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  created_at: string;
+  account_id?: string;
+}
+
 @Injectable()
 export class MobilePaymentsDatabaseService {
   private readonly logger = new Logger(MobilePaymentsDatabaseService.name);
@@ -358,6 +368,96 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to check pending claim order for order number:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get pending claim_order transactions for a specific customer email.
+   * Used to include claim-in-progress orders in agent /orders responses.
+   */
+  async getPendingClaimOrderTransactionsByCustomerEmail(
+    customerEmail: string
+  ): Promise<PendingClaimOrderTransaction[]> {
+    try {
+      const query = `
+        query GetPendingClaimOrderTransactionsByCustomerEmail($customerEmail: String!) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              customer_email: { _eq: $customerEmail }
+              entity_id: { _is_null: false }
+            }
+            order_by: { created_at: desc }
+          ) {
+            id
+            entity_id
+            transaction_id
+            provider
+            status
+            created_at
+            account_id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: PendingClaimOrderTransaction[];
+      }>(query, { customerEmail });
+      return response.mobile_payment_transactions ?? [];
+    } catch (error) {
+      this.logger.error(
+        'Failed to get pending claim order transactions for customer email:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single pending claim_order transaction for customer email + order number.
+   * Used by order claim cancellation flow.
+   */
+  async getPendingClaimOrderTransactionByCustomerEmailAndOrderNumber(
+    customerEmail: string,
+    orderNumber: string
+  ): Promise<PendingClaimOrderTransaction | null> {
+    try {
+      const query = `
+        query GetPendingClaimOrderTransactionByCustomerEmailAndOrderNumber(
+          $customerEmail: String!
+          $orderNumber: String!
+        ) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: claim_order }
+              status: { _eq: "pending" }
+              customer_email: { _eq: $customerEmail }
+              entity_id: { _eq: $orderNumber }
+            }
+            order_by: { created_at: desc }
+            limit: 1
+          ) {
+            id
+            entity_id
+            transaction_id
+            provider
+            status
+            created_at
+            account_id
+          }
+        }
+      `;
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: PendingClaimOrderTransaction[];
+      }>(query, { customerEmail, orderNumber });
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows[0] ?? null;
+    } catch (error) {
+      this.logger.error(
+        'Failed to get pending claim order transaction by customer email and order number:',
         error
       );
       throw error;

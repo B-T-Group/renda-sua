@@ -75,6 +75,15 @@ export interface GetOrderRequest {
   phone_number?: string;
 }
 
+export interface ClaimAvailabilityResponse {
+  success: boolean;
+  orderOpenStatus: boolean;
+  hasEnoughFundsForHold: boolean;
+  needsTopUpToClaim: boolean;
+  holdAmount: number;
+  message: string;
+}
+
 export interface CompleteDeliveryRequest {
   orderId: string;
   pin?: string;
@@ -559,6 +568,51 @@ export class OrdersService {
       // Return original orders if transformation fails
       return orders;
     }
+  }
+
+  private extractOrderCurrencies(orders: any[]): string[] {
+    const currencies = orders
+      .map((order) => order.currency)
+      .filter((currency): currency is string => Boolean(currency));
+    return Array.from(new Set(currencies));
+  }
+
+  private async getAgentCautionByCurrencies(
+    userId: string,
+    currencies: string[]
+  ): Promise<Map<string, number>> {
+    if (currencies.length === 0) {
+      return new Map();
+    }
+
+    const cautionEntries = await Promise.all(
+      currencies.map(async (currency) => {
+        const account = await this.hasuraSystemService.getAccount(userId, currency);
+        return [currency, Number(account?.available_balance ?? 0)] as const;
+      })
+    );
+
+    return new Map(cautionEntries);
+  }
+
+  private async attachAgentCautionAmounts(
+    userId: string,
+    orders: any[]
+  ): Promise<any[]> {
+    if (!orders.length) {
+      return orders;
+    }
+
+    const currencies = this.extractOrderCurrencies(orders);
+    const cautionByCurrency = await this.getAgentCautionByCurrencies(
+      userId,
+      currencies
+    );
+
+    return orders.map((order) => ({
+      ...order,
+      agent_caution_amount: cautionByCurrency.get(order.currency) ?? 0,
+    }));
   }
 
   /**
@@ -1372,6 +1426,84 @@ export class OrdersService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  async cancelClaimRequest(request: GetOrderRequest) {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
+      throw new HttpException(
+        'Only agent users can cancel claim requests',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const order = await this.getOrderWithItems(request.orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        `Cannot cancel claim request for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (order.assigned_agent_id && order.assigned_agent_id !== user.agent.id) {
+      throw new HttpException(
+        'You are not authorized to cancel this claim request',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const pendingClaimTransaction =
+      await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionByCustomerEmailAndOrderNumber(
+        user.email,
+        order.order_number
+      );
+
+    if (!pendingClaimTransaction) {
+      throw new HttpException(
+        'No pending claim request found for this order',
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    if (pendingClaimTransaction.transaction_id) {
+      try {
+        const cancelledAtProvider =
+          await this.mobilePaymentsService.cancelTransaction(
+            pendingClaimTransaction.transaction_id,
+            pendingClaimTransaction.provider
+          );
+
+        if (!cancelledAtProvider) {
+          this.logger.warn(
+            `Provider cancellation failed for pending claim transaction ${pendingClaimTransaction.transaction_id}. Marking local transaction as cancelled.`
+          );
+        }
+      } catch (providerError: any) {
+        this.logger.warn(
+          `Provider cancellation threw for pending claim transaction ${pendingClaimTransaction.transaction_id}: ${providerError?.message ?? providerError}`
+        );
+      }
+    }
+
+    await this.mobilePaymentsDatabaseService.updateTransaction(
+      pendingClaimTransaction.id,
+      {
+        status: 'cancelled',
+        error_message: 'Cancelled by agent',
+        error_code: 'CLAIM_REQUEST_CANCELLED',
+      }
+    );
+
+    return {
+      success: true,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      message: 'Claim request cancelled successfully',
+    };
   }
 
   async pickUpOrder(request: OrderStatusChangeRequest) {
@@ -2288,10 +2420,41 @@ export class OrdersService {
   async getOrders(filters?: any): Promise<Orders[]> {
     const user = await this.hasuraUserService.getUser();
     let personaFilter: any = {};
+    const pendingClaimTransactionsByOrderNumber = new Map<
+      string,
+      { id: string; transaction_id?: string }
+    >();
     if (user.user_type_id === 'client' && user.client) {
       personaFilter = { client_id: { _eq: user.client.id } };
     } else if (user.user_type_id === 'agent' && user.agent) {
-      personaFilter = { assigned_agent_id: { _eq: user.agent.id } };
+      const pendingClaimTransactions =
+        await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionsByCustomerEmail(
+          user.email
+        );
+      const pendingClaimOrderNumbers = pendingClaimTransactions
+        .map((transaction) => transaction.entity_id)
+        .filter((orderNumber) => !!orderNumber);
+
+      pendingClaimTransactions.forEach((transaction) => {
+        pendingClaimTransactionsByOrderNumber.set(transaction.entity_id, {
+          id: transaction.id,
+          transaction_id: transaction.transaction_id,
+        });
+      });
+
+      if (pendingClaimOrderNumbers.length > 0) {
+        personaFilter = {
+          _or: [
+            { assigned_agent_id: { _eq: user.agent.id } },
+            {
+              order_number: { _in: pendingClaimOrderNumbers },
+              current_status: { _eq: 'ready_for_pickup' },
+            },
+          ],
+        };
+      } else {
+        personaFilter = { assigned_agent_id: { _eq: user.agent.id } };
+      }
     } else if (user.user_type_id === 'business' && user.business) {
       personaFilter = { business_id: { _eq: user.business.id } };
     } else {
@@ -2475,6 +2638,24 @@ export class OrdersService {
       variables
     );
 
+    const ordersWithPendingClaimMetadata = (result.orders as any[]).map(
+      (order) => {
+        const pendingClaimTransaction =
+          pendingClaimTransactionsByOrderNumber.get(order.order_number);
+        if (!pendingClaimTransaction) {
+          return order;
+        }
+
+        return {
+          ...order,
+          is_claim_pending: true,
+          claim_transaction_id:
+            pendingClaimTransaction.transaction_id ??
+            pendingClaimTransaction.id,
+        };
+      }
+    );
+
     // Transform orders for agents to show commission amounts
     const agentInfo = await this.getAgentInfo();
     if (agentInfo?.isAgent) {
@@ -2483,14 +2664,14 @@ export class OrdersService {
         await this.commissionsService.getCommissionConfigs();
       const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
       return this.transformOrdersForAgentSync(
-        result.orders,
+        ordersWithPendingClaimMetadata,
         agentInfo.isVerified,
         commissionConfig,
         holdPercentage
       );
     }
 
-    return result.orders;
+    return ordersWithPendingClaimMetadata;
   }
 
   async getOpenOrders() {
@@ -2627,7 +2808,102 @@ export class OrdersService {
       holdPercentage
     );
 
-    return { success: true, orders: transformedOrders };
+    const ordersWithAgentCaution = await this.attachAgentCautionAmounts(
+      user.id,
+      transformedOrders
+    );
+
+    return { success: true, orders: ordersWithAgentCaution };
+  }
+
+  async checkOrderClaimAvailability(
+    orderId: string
+  ): Promise<ClaimAvailabilityResponse> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.agent) {
+      throw new HttpException(
+        'Only agent users can claim orders',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const order = await this.getOrderWithItems(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
+
+    const agentStatus = await this.getAgentStatus(user.agent.id);
+    if (agentStatus === 'suspended') {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'Your account is suspended. You cannot claim orders. Contact support.'
+      );
+    }
+
+    if (order.current_status !== 'ready_for_pickup') {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'This order is no longer open for claim.'
+      );
+    }
+
+    if (order.assigned_agent_id) {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'This order is no longer open for claim.'
+      );
+    }
+
+    if (order.verified_agent_delivery && !user.agent.is_internal) {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'This order requires an internal agent. Contact support to become an internal agent.'
+      );
+    }
+
+    const hasPendingClaim =
+      await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
+        order.order_number
+      );
+    if (hasPendingClaim) {
+      return this.createClaimAvailabilityFailure(
+        holdAmount,
+        'This order has a pending claim. Another agent may be completing payment. Please choose another order.'
+      );
+    }
+
+    if (holdAmount <= 0) {
+      return {
+        success: true,
+        orderOpenStatus: true,
+        hasEnoughFundsForHold: true,
+        needsTopUpToClaim: false,
+        holdAmount,
+        message: 'Order is open and available to claim',
+      };
+    }
+
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      order.currency
+    );
+    const availableBalance = Number(agentAccount?.available_balance ?? 0);
+    const hasEnoughFundsForHold = availableBalance >= holdAmount;
+
+    return {
+      success: true,
+      orderOpenStatus: true,
+      hasEnoughFundsForHold,
+      needsTopUpToClaim: !hasEnoughFundsForHold,
+      holdAmount,
+      message: hasEnoughFundsForHold
+        ? 'Order is open and available to claim'
+        : 'Top up is required before claiming this order',
+    };
   }
 
   /**
@@ -4170,6 +4446,20 @@ export class OrdersService {
       orderId,
     });
     return result.orders_by_pk;
+  }
+
+  private createClaimAvailabilityFailure(
+    holdAmount: number,
+    message: string
+  ): ClaimAvailabilityResponse {
+    return {
+      success: true,
+      orderOpenStatus: false,
+      hasEnoughFundsForHold: false,
+      needsTopUpToClaim: false,
+      holdAmount,
+      message,
+    };
   }
 
   /**

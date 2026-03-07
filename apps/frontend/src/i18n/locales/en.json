@@ -424,6 +424,8 @@
       "inTransitByYou": "Order in transit. You're almost there! Complete the delivery to earn {{deliveryFee}}. Update the customer on your ETA.",
       "outForDeliveryByOther": "Order is out for delivery and should reach the customer soon.",
       "outForDeliveryByYou": "Final step! You're out for delivery. Complete this delivery to earn {{deliveryFee}}. Make sure to get confirmation from the customer.",
+      "orderNoLongerOpenTitle": "Order Not Available",
+      "orderNoLongerOpenMessage": "This order is no longer open for claim.",
       "pendingNotice": "This order is waiting for business confirmation. You cannot claim it yet.",
       "pickedUpByOther": "This order has been picked up by the assigned agent and is on its way to the customer.",
       "preparingNotice": "Business is currently preparing this order. It will be ready for pickup shortly.",
@@ -1498,6 +1500,12 @@
     "claimOrderHoldAmountInfo": "Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.",
     "confirmClaimOrder": "Confirm Claim Order",
     "confirmClaimOrderMessage": "Are you sure you want to claim order #{{orderNumber}}?",
+    "claimPending": {
+      "waitingApproval": "Waiting for payment approval",
+      "cancelRequest": "Cancel claim request",
+      "cancelRequestSuccess": "Claim request cancelled successfully",
+      "cancelRequestFailed": "Failed to cancel claim request"
+    },
     "refreshAfterHoldPayment": "If you have confirmed the hold payment, please click the refresh button at the top to update the order status and your account balance.",
     "confirmOrder": "Confirm Order",
     "confirmOrderCompletion": "Confirm Order Completion",

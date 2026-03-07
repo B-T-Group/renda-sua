@@ -16,7 +16,10 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_FEATURES } from '../../constants/appFeatures';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAgentOrders } from '../../hooks/useAgentOrders';
+import {
+  type ClaimAvailabilityResult,
+  useAgentOrders,
+} from '../../hooks/useAgentOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
 import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
@@ -58,6 +61,9 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const [showFailDeliveryDialog, setShowFailDeliveryDialog] = useState(false);
   const [showCompleteDeliveryDialog, setShowCompleteDeliveryDialog] =
     useState(false);
+  const [claimHoldAmount, setClaimHoldAmount] = useState(
+    order.agent_hold_amount || 0
+  );
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -123,13 +129,43 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    // Check if agent has sufficient funds
-    if (hasSufficientFunds()) {
-      // Show confirmation dialog before claiming
-      setShowClaimConfirmation(true);
-    } else {
-      // Show dialog for claim with topup
-      setShowClaimDialog(true);
+    setLoading(true);
+    try {
+      const claimAvailability: ClaimAvailabilityResult =
+        await agentOrders.checkClaimAvailability(order.id);
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+      if (!claimAvailability.orderOpenStatus) {
+        onShowNotification?.(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            ),
+          'warning'
+        );
+        onActionComplete?.();
+        return;
+      }
+
+      if (claimAvailability.hasEnoughFundsForHold) {
+        setShowClaimConfirmation(true);
+      } else {
+        setShowClaimDialog(true);
+      }
+    } catch (error: any) {
+      if (hasSufficientFunds()) {
+        setShowClaimConfirmation(true);
+      } else {
+        setShowClaimDialog(true);
+      }
+      onShowNotification?.(
+        error.message ||
+          t('messages.orderClaimError', 'Failed to check claim availability'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -145,6 +181,27 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     setShowClaimConfirmation(false);
     setLoading(true);
     try {
+      const claimAvailability = await agentOrders.checkClaimAvailability(
+        order.id
+      );
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+      if (!claimAvailability.orderOpenStatus) {
+        onShowNotification?.(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            ),
+          'warning'
+        );
+        onActionComplete?.();
+        return;
+      }
+      if (claimAvailability.needsTopUpToClaim) {
+        setShowClaimDialog(true);
+        return;
+      }
+
       const result = await agentOrders.getOrderForPickup(order.id);
       onShowNotification?.(
         t(
@@ -170,6 +227,31 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     setClaimSuccess(false);
 
     try {
+      const claimAvailability = await agentOrders.checkClaimAvailability(
+        order.id
+      );
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+      if (!claimAvailability.orderOpenStatus) {
+        setShowClaimDialog(false);
+        onShowNotification?.(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            ),
+          'warning'
+        );
+        onActionComplete?.();
+        return;
+      }
+
+      if (claimAvailability.hasEnoughFundsForHold) {
+        setShowClaimDialog(false);
+        setShowClaimConfirmation(true);
+        return;
+      }
+
       await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
       setClaimSuccess(true);
       onActionComplete?.();
@@ -577,8 +659,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         confirmColor="primary"
         loading={loading}
         additionalContent={
-          (order.agent_hold_amount !== undefined &&
-            order.agent_hold_amount > 0) ||
+          claimHoldAmount > 0 ||
           order.delivery_commission !== undefined ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Stack spacing={0.75}>
@@ -593,15 +674,14 @@ const AgentActions: React.FC<AgentActionsProps> = ({
                     )}
                   </Typography>
                 )}
-                {order.agent_hold_amount !== undefined &&
-                  order.agent_hold_amount > 0 && (
+                {claimHoldAmount > 0 && (
                     <Typography variant="body2">
                       {t(
                         'orders.claimOrderHoldAmountInfo',
                         'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
                         {
                           holdAmount: formatCurrency(
-                            order.agent_hold_amount,
+                            claimHoldAmount,
                             order.currency
                           ),
                         }

@@ -40,6 +40,15 @@ interface AvailableOrderCardProps {
   onClaimSuccess?: () => void;
 }
 
+interface ClaimAvailabilityResult {
+  success: boolean;
+  orderOpenStatus: boolean;
+  hasEnoughFundsForHold: boolean;
+  needsTopUpToClaim: boolean;
+  holdAmount: number;
+  message: string;
+}
+
 const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   order,
   onClaimSuccess,
@@ -48,15 +57,21 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   const theme = useTheme();
   const navigate = useNavigate();
   const apiClient = useApiClient();
-  const { profile, accounts: agentAccounts } = useUserProfileContext();
+  const { profile } = useUserProfileContext();
 
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
   const [showPaymentApprovalConfirmation, setShowPaymentApprovalConfirmation] = useState(false);
+  const [showOrderUnavailableDialog, setShowOrderUnavailableDialog] =
+    useState(false);
+  const [orderUnavailableMessage, setOrderUnavailableMessage] = useState('');
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimError, setClaimError] = useState<string | undefined>();
+  const [claimHoldAmount, setClaimHoldAmount] = useState(
+    order.agent_hold_amount || 0
+  );
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -67,27 +82,18 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
 
   // Calculate cost to claim order (hold amount + service charge)
   const getClaimCost = () => {
-    const holdAmount = order.agent_hold_amount || 0;
+    const holdAmount = claimHoldAmount;
     const chargePercentage = 3.5;
     const chargeAmount = (holdAmount * chargePercentage) / 100;
     return holdAmount + chargeAmount;
   };
 
-  // Check if agent has sufficient funds to claim the order
-  const hasSufficientFunds = () => {
-    if (!agentAccounts?.length) return false; // Assume insufficient if no account data
-
-    // Use hold amount from order (calculated by backend)
-    const requiredHoldAmount = order.agent_hold_amount || 0;
-
-    // Check if agent has sufficient balance in the order's currency
-    const accountForCurrency = agentAccounts.find(
-      (account) => account.currency === order.currency
+  const checkClaimAvailability = async (): Promise<ClaimAvailabilityResult> => {
+    if (!apiClient) throw new Error('API client not available');
+    const response = await apiClient.get<ClaimAvailabilityResult>(
+      `/orders/${order.id}/claim-availability`
     );
-
-    if (!accountForCurrency) return false; // No account for this currency
-
-    return accountForCurrency.available_balance >= requiredHoldAmount;
+    return response.data;
   };
 
   // Calculate total item quantity
@@ -139,13 +145,39 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
       return;
     }
 
-    // Check if agent has sufficient funds
-    if (hasSufficientFunds()) {
-      // Show confirmation dialog before claiming
-      setShowClaimConfirmation(true);
-    } else {
-      // Show dialog for claim with topup
-      setShowClaimDialog(true);
+    setClaimLoading(true);
+    setClaimError(undefined);
+    try {
+      const claimAvailability = await checkClaimAvailability();
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+      if (!claimAvailability.orderOpenStatus) {
+        setOrderUnavailableMessage(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            )
+        );
+        setShowOrderUnavailableDialog(true);
+        onClaimSuccess?.();
+        return;
+      }
+
+      if (claimAvailability.hasEnoughFundsForHold) {
+        setShowClaimConfirmation(true);
+      } else {
+        setShowClaimDialog(true);
+      }
+    } catch (error: any) {
+      setClaimError(
+        error.response?.data?.error ||
+          error.response?.data?.message ||
+          error.message ||
+          t('messages.orderClaimError', 'Failed to claim order')
+      );
+    } finally {
+      setClaimLoading(false);
     }
   };
 
@@ -162,6 +194,27 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     setClaimLoading(true);
     setClaimError(undefined);
     try {
+      const claimAvailability = await checkClaimAvailability();
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+      if (!claimAvailability.orderOpenStatus) {
+        setOrderUnavailableMessage(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            )
+        );
+        setShowOrderUnavailableDialog(true);
+        onClaimSuccess?.();
+        return;
+      }
+
+      if (claimAvailability.needsTopUpToClaim) {
+        setShowClaimDialog(true);
+        return;
+      }
+
       if (!apiClient) {
         throw new Error('API client not available');
       }
@@ -193,6 +246,29 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     setClaimSuccess(false);
 
     try {
+      const claimAvailability = await checkClaimAvailability();
+      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+      if (!claimAvailability.orderOpenStatus) {
+        setShowClaimDialog(false);
+        setOrderUnavailableMessage(
+          claimAvailability.message ||
+            t(
+              'orders.orderNoLongerOpenMessage',
+              'This order is no longer open for claim.'
+            )
+        );
+        setShowOrderUnavailableDialog(true);
+        onClaimSuccess?.();
+        return;
+      }
+
+      if (claimAvailability.hasEnoughFundsForHold) {
+        setShowClaimDialog(false);
+        setShowClaimConfirmation(true);
+        return;
+      }
+
       if (!apiClient) {
         throw new Error('API client not available');
       }
@@ -658,8 +734,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         confirmColor="primary"
         loading={claimLoading}
         additionalContent={
-          (order.agent_hold_amount !== undefined &&
-            order.agent_hold_amount > 0) ||
+          claimHoldAmount > 0 ||
           order.delivery_commission !== undefined ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Stack spacing={0.75}>
@@ -674,15 +749,14 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
                     )}
                   </Typography>
                 )}
-                {order.agent_hold_amount !== undefined &&
-                  order.agent_hold_amount > 0 && (
+                {claimHoldAmount > 0 && (
                     <Typography variant="body2">
                       {t(
                         'orders.claimOrderHoldAmountInfo',
                         'Please note: {{holdAmount}} will be withheld from your account as a guarantee. This amount will be released upon successful delivery.',
                         {
                           holdAmount: formatCurrency(
-                            order.agent_hold_amount,
+                            claimHoldAmount,
                             order.currency
                           ),
                         }
@@ -694,6 +768,31 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           ) : undefined
         }
       />
+
+      <Dialog
+        open={showOrderUnavailableDialog}
+        onClose={() => setShowOrderUnavailableDialog(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('orders.orderNoLongerOpenTitle', 'Order Not Available')}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {orderUnavailableMessage ||
+              t(
+                'orders.orderNoLongerOpenMessage',
+                'This order is no longer open for claim.'
+              )}
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowOrderUnavailableDialog(false)}>
+            {t('common.ok', 'OK')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Payment Approval Confirmation Dialog */}
       <Dialog

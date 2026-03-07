@@ -32,6 +32,7 @@ import {
   ConfirmOrderData,
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
+import { useApiClient } from '../../hooks/useApiClient';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
@@ -67,6 +68,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const navigate = useNavigate();
   const theme = useTheme();
   const { profile } = useUserProfileContext();
+  const apiClient = useApiClient();
   const { enqueueSnackbar } = useSnackbar();
   const { confirmOrder, completePreparation, completeOrder } = useBackendOrders();
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
@@ -270,12 +272,61 @@ const OrderCard: React.FC<OrderCardProps> = ({
     }
   };
 
+  const handleCancelClaimRequest = async () => {
+    if (!apiClient) {
+      enqueueSnackbar(t('messages.apiClientUnavailable', 'API client not available'), {
+        variant: 'error',
+      });
+      return;
+    }
+
+    setLoadingAction('cancelClaimRequest');
+    try {
+      const response = await apiClient.post('/orders/cancel-claim-request', {
+        orderId: order.id,
+      });
+
+      if (!response.data?.success) {
+        throw new Error(
+          response.data?.error ||
+            response.data?.message ||
+            t(
+              'orders.claimPending.cancelRequestFailed',
+              'Failed to cancel claim request'
+            )
+        );
+      }
+
+      enqueueSnackbar(
+        t(
+          'orders.claimPending.cancelRequestSuccess',
+          'Claim request cancelled successfully'
+        ),
+        { variant: 'success' }
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      enqueueSnackbar(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          t(
+            'orders.claimPending.cancelRequestFailed',
+            'Failed to cancel claim request'
+          ),
+        { variant: 'error' }
+      );
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   // Get available quick actions based on status and user type
   const getAvailableActions = () => {
     const actions: Array<{
       label: string;
       onClick: () => void;
-      color: 'primary' | 'success';
+      color: 'primary' | 'success' | 'error';
       loading: boolean;
       icon?: React.ReactNode;
     }> = [];
@@ -321,6 +372,20 @@ const OrderCard: React.FC<OrderCardProps> = ({
           loading: loadingAction === 'completeOrder',
         });
       }
+    } else if (
+      userType === 'agent' &&
+      currentStatus === 'ready_for_pickup' &&
+      order.is_claim_pending
+    ) {
+      actions.push({
+        label: t(
+          'orders.claimPending.cancelRequest',
+          'Cancel claim request'
+        ),
+        onClick: handleCancelClaimRequest,
+        color: 'error',
+        loading: loadingAction === 'cancelClaimRequest',
+      });
     }
 
     return actions;
@@ -439,6 +504,20 @@ const OrderCard: React.FC<OrderCardProps> = ({
                   icon={<FlashOn sx={{ fontSize: 14 }} />}
                 />
               )}
+              {userType === 'agent' &&
+                currentStatus === 'ready_for_pickup' &&
+                order.is_claim_pending && (
+                  <Chip
+                    label={t(
+                      'orders.claimPending.waitingApproval',
+                      'Waiting for payment approval'
+                    )}
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 22, fontWeight: 600 }}
+                  />
+                )}
             </Stack>
             <Stack
               direction="row"

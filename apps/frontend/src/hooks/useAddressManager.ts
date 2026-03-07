@@ -74,6 +74,7 @@ interface AddressManagerConfig {
   entityId: string;
   autoFetch?: boolean;
   onAccountCreated?: (account: any) => void;
+  onAddressesChanged?: () => Promise<void> | void;
 }
 
 export interface GetAddressesResponse {
@@ -85,7 +86,13 @@ export interface GetAddressesResponse {
 }
 
 export const useAddressManager = (config: AddressManagerConfig) => {
-  const { entityType, entityId, autoFetch = true, onAccountCreated } = config;
+  const {
+    entityType,
+    entityId,
+    autoFetch = true,
+    onAccountCreated,
+    onAddressesChanged,
+  } = config;
 
   const [addresses, setAddresses] = useState<{ address: Address }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,7 +177,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
 
         if (result.success) {
           setSuccessMessage(result.message);
-          
+
           // Set warning if present
           if (result.data.warning) {
             setWarning(result.data.warning);
@@ -180,6 +187,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
 
           // Refresh the addresses list
           await fetchAddresses();
+          await onAddressesChanged?.();
 
           // If an account was created, notify the parent component
           if (result.data.accountCreated && onAccountCreated) {
@@ -210,7 +218,13 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         setLoading(false);
       }
     },
-    [entityId, apiClient, fetchAddresses, onAccountCreated]
+    [
+      entityId,
+      apiClient,
+      fetchAddresses,
+      onAccountCreated,
+      onAddressesChanged,
+    ]
   );
 
   // Update existing address using REST API
@@ -269,7 +283,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
 
         if (result.success) {
           setSuccessMessage(result.message);
-          
+
           // Set warning if present
           if (result.data.warning) {
             setWarning(result.data.warning);
@@ -278,6 +292,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
           }
 
           await fetchAddresses(); // Refresh the list
+          await onAddressesChanged?.();
           return {
             address: result.data.address,
             warning: result.data.warning,
@@ -301,7 +316,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         setLoading(false);
       }
     },
-    [apiClient, fetchAddresses]
+    [apiClient, fetchAddresses, onAddressesChanged]
   );
 
   // Delete address using REST API
@@ -326,6 +341,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         if (result.success) {
           setSuccessMessage(result.message);
           await fetchAddresses(); // Refresh the list
+          await onAddressesChanged?.();
           return { success: true };
         } else {
           throw new Error(result.message || 'Failed to delete address');
@@ -346,7 +362,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         setLoading(false);
       }
     },
-    [apiClient, fetchAddresses]
+    [apiClient, fetchAddresses, onAddressesChanged]
   );
 
   // Clear messages

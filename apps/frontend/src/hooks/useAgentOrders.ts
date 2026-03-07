@@ -153,6 +153,15 @@ export interface PickUpOrderResponse {
   message: string;
 }
 
+export interface ClaimAvailabilityResult {
+  success: boolean;
+  orderOpenStatus: boolean;
+  hasEnoughFundsForHold: boolean;
+  needsTopUpToClaim: boolean;
+  holdAmount: number;
+  message: string;
+}
+
 // Helper function to categorize orders by status
 const categorizeOrders = <T extends Order>(orders: T[]) => {
   const categorized = {
@@ -393,9 +402,41 @@ export const useAgentOrders = () => {
     [apiClient, fetchAllOrders]
   );
 
+  const checkClaimAvailability = useCallback(
+    async (orderId: string): Promise<ClaimAvailabilityResult> => {
+      if (!apiClient) throw new Error('API client not available');
+      const response = await apiClient.get<ClaimAvailabilityResult>(
+        `/orders/${orderId}/claim-availability`
+      );
+      if (response.data.success) {
+        return response.data;
+      }
+      const errorResponse = response.data as ClaimAvailabilityResult & {
+        error?: string;
+      };
+      throw new Error(
+        errorResponse.error ||
+          errorResponse.message ||
+          'Failed to check claim availability'
+      );
+    },
+    [apiClient]
+  );
+
   const getOrderForPickup = useCallback(
     async (orderId: string) => {
       if (!apiClient) throw new Error('API client not available');
+      const claimAvailability = await checkClaimAvailability(orderId);
+      if (!claimAvailability.orderOpenStatus) {
+        throw new Error(
+          claimAvailability.message || 'This order is no longer open for claim'
+        );
+      }
+      if (!claimAvailability.hasEnoughFundsForHold) {
+        throw new Error(
+          claimAvailability.message || 'Top up is required before claiming'
+        );
+      }
       const response = await apiClient.post('/orders/claim_order', { orderId });
       if (response.data.success) {
         await fetchAllOrders(); // Refresh orders after claiming
@@ -403,12 +444,24 @@ export const useAgentOrders = () => {
       }
       throw new Error(response.data.error || 'Failed to claim order');
     },
-    [apiClient, fetchAllOrders]
+    [apiClient, checkClaimAvailability, fetchAllOrders]
   );
 
   const claimOrderWithTopup = useCallback(
     async (orderId: string, phoneNumber?: string) => {
       if (!apiClient) throw new Error('API client not available');
+      const claimAvailability = await checkClaimAvailability(orderId);
+      if (!claimAvailability.orderOpenStatus) {
+        throw new Error(
+          claimAvailability.message || 'This order is no longer open for claim'
+        );
+      }
+      if (!claimAvailability.needsTopUpToClaim) {
+        throw new Error(
+          claimAvailability.message ||
+            'This order can now be claimed without top up'
+        );
+      }
       const payload: { orderId: string; phone_number?: string } = { orderId };
       if (phoneNumber) {
         payload.phone_number = phoneNumber;
@@ -425,7 +478,7 @@ export const useAgentOrders = () => {
         response.data.error || 'Failed to claim order with topup'
       );
     },
-    [apiClient, fetchAllOrders]
+    [apiClient, checkClaimAvailability, fetchAllOrders]
   );
 
   const { fetchDistanceMatrix } = useDistanceMatrix();
@@ -521,6 +574,7 @@ export const useAgentOrders = () => {
     refetch: fetchAllOrders,
     pickUpOrder,
     updateOrderStatusAction,
+    checkClaimAvailability,
     getOrderForPickup,
     claimOrderWithTopup,
     dropOrder,
