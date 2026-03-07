@@ -123,6 +123,7 @@ insert_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
   - role: business
@@ -139,6 +140,7 @@ insert_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
   - role: client
@@ -155,6 +157,7 @@ insert_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
   - role: partner
@@ -171,6 +174,7 @@ insert_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
   - role: user
@@ -187,6 +191,7 @@ insert_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
 select_permissions:
@@ -203,6 +208,7 @@ select_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
       filter:
@@ -221,6 +227,7 @@ select_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
       filter:
@@ -239,6 +246,7 @@ select_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
       filter:
@@ -257,6 +265,7 @@ select_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
       filter:
@@ -275,6 +284,7 @@ select_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - created_at
         - updated_at
       filter:
@@ -290,6 +300,7 @@ update_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - updated_at
       filter:
         identifier:
@@ -304,6 +315,7 @@ update_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - updated_at
       filter:
         identifier:
@@ -318,6 +330,7 @@ update_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - updated_at
       filter:
         identifier:
@@ -332,6 +345,7 @@ update_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - updated_at
       filter:
         identifier:
@@ -346,6 +360,7 @@ update_permissions:
         - phone_number_verified
         - email_verified
         - profile_picture_url
+        - preferred_language
         - updated_at
       filter:
         identifier:
