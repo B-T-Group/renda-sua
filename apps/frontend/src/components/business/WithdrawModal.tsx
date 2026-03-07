@@ -71,10 +71,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   }, [open]);
 
-  const getPhoneNumberHint = () => {
-    if (withdrawalPhoneNote) return withdrawalPhoneNote;
-    return t('accounts.phoneNumberHint');
-  };
+  const getPhoneNumberHint = () => withdrawalPhoneNote ?? '';
 
   const handleConfirm = async () => {
     if (!phoneNumber.trim()) {
@@ -162,32 +159,13 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </Typography>
             </Box>
 
-            {/* Payment Method - Locked to Airtel Money */}
-            <Box
-              sx={{
-                p: 2,
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                borderRadius: 1,
-                mb: 3,
-              }}
-            >
-              <Typography variant="subtitle2" color="inherit" gutterBottom>
-                {t('accounts.paymentMethod')}
-              </Typography>
-              <Typography variant="body2" color="inherit" sx={{ opacity: 0.9 }}>
-                {t('accounts.paymentMethods.airtelMoney')} (Only supported
-                method)
-              </Typography>
-            </Box>
-
             {/* Phone Number Input */}
             <PhoneInput
               value={phoneNumber}
               onChange={(value) => setPhoneNumber(value || '')}
               label={t('accounts.phoneNumber')}
               placeholder={t('accounts.phoneNumberPlaceholder')}
-              helperText={getPhoneNumberHint()}
+              helperText={getPhoneNumberHint() || undefined}
               disabled={loading}
               defaultCountry="CM"
             />
