@@ -161,7 +161,8 @@ export class FreemopayService {
   }
 
   /**
-   * Initialize a withdrawal transaction (POST /api/v2/withdrawal)
+   * Initialize a withdrawal (POST /api/v2/payment/direct-withdraw).
+   * Request: receiver (phone), amount, externalId, callback. Basic Auth.
    */
   async withdraw(
     withdrawalRequest: FreemopayWithdrawalRequest,
@@ -170,30 +171,32 @@ export class FreemopayService {
     try {
       const externalId = reference || withdrawalRequest.externalId;
       this.logger.log(
-        `Initiating Freemopay withdrawal for payee: ${withdrawalRequest.payee}, externalId: ${externalId}, callback: ${withdrawalRequest.callback}`
+        `Initiating Freemopay withdrawal for receiver: ${withdrawalRequest.payee}, externalId: ${externalId}, callback: ${withdrawalRequest.callback}`
       );
 
       const payload = {
-        payee: withdrawalRequest.payee,
+        receiver: withdrawalRequest.payee,
         amount: withdrawalRequest.amount,
         externalId,
-        description: withdrawalRequest.description || 'Withdrawal',
         callback: withdrawalRequest.callback,
       };
 
       const response = await this.httpClient.post(
-        '/api/v2/withdrawal',
+        '/api/v2/payment/direct-withdraw',
         payload
       );
 
       const data = response.data;
       this.logger.log(`Freemopay withdrawal API Response: ${JSON.stringify(data)}`);
 
-      if (response.status === 200 && data?.reference) {
+      const success =
+        response.status === 200 &&
+        (data?.reference || data?.status === 'CREATED');
+      if (success) {
         return {
           success: true,
-          transactionId: data.reference,
-          reference: data.reference,
+          transactionId: data.reference ?? externalId,
+          reference: data.reference ?? externalId,
           status: data.status,
           message: data.message,
         };
