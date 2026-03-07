@@ -37,7 +37,7 @@ export const theme = createTheme({
       dark: '#0e7490',
     },
     background: {
-      default: '#fbfbfd', // Apple-like light background
+      default: '#f1f5f9', // Soft blue-grey; easier on the eyes and ties to primary blue
       paper: '#ffffff',
     },
     text: {
