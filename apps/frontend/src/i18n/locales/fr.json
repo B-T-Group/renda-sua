@@ -1226,38 +1226,76 @@
     "ordersRequiringAction": "Commandes nécessitant une action"
   },
   "faq": {
+    "sections": {
+      "client": "Pour les clients",
+      "deliveryAgent": "Pour les agents de livraison",
+      "business": "Pour les entreprises"
+    },
+    "client": {
+      "howToOrder": {
+        "q": "Comment passer une commande ?",
+        "a": "Parcourez les articles, ajoutez-les à votre panier et passez au paiement. Choisissez votre adresse de livraison et confirmez. Une demande de paiement sera envoyée sur votre téléphone pour finaliser la commande."
+      },
+      "paymentMethods": {
+        "q": "Quels moyens de paiement sont acceptés ?",
+        "a": "Nous acceptons l'argent mobile : Airtel Money, MTN Mobile Money et Moov Money. Au paiement, une demande de paiement est envoyée sur votre téléphone—acceptez-la pour confirmer votre commande."
+      },
+      "trackOrder": {
+        "q": "Comment suivre ma commande ?",
+        "a": "Vous pouvez suivre votre commande depuis votre tableau de bord ou la page de confirmation. Vous verrez les mises à jour de statut de la confirmation jusqu'à la livraison."
+      },
+      "deliveryTime": {
+        "q": "Combien de temps prend la livraison ?",
+        "a": "Les délais dépendent de votre localisation et du vendeur. La livraison standard est généralement sous 24–48 heures. Des options de livraison rapide peuvent être proposées au paiement."
+      },
+      "cancelOrder": {
+        "q": "Puis-je annuler ma commande ?",
+        "a": "Les commandes peuvent être annulées peu après la passation si elles n'ont pas encore été confirmées par l'entreprise. Ensuite, contactez le support ou l'entreprise pour toute demande d'annulation."
+      },
+      "deliveryCompletion": {
+        "q": "Comment ma livraison est-elle finalisée ?",
+        "a": "Vous pouvez ajouter des instructions de livraison (ex. nom du bâtiment, point de repère, étage) lors de la commande ou dans votre adresse pour que l'agent vous trouve facilement. L'agent peut aussi vous appeler si besoin. À son arrivée, il vous demandera un code PIN. Vous recevez ce code dans les détails de votre commande ou via l'application—communiquez-le à l'agent pour qu'il puisse finaliser la livraison. Une fois le PIN saisi, la livraison est marquée comme terminée et les paiements sont débloqués pour l'entreprise et l'agent."
+      }
+    },
     "agent": {
       "hold": {
-        "a": "Un pourcentage de vos gains est retenu pour la sécurité : agents non vérifiés 100 %, agents vérifiés 80 %, agents internes 0 %. Vérifiez votre compte et ajoutez une photo de profil pour réduire le montant retenu.",
-        "q": "Combien est retenu de mes gains ?"
+        "q": "Combien est retenu de mes gains ?",
+        "a": "Un pourcentage de vos gains est retenu en garantie : agents non vérifiés 100 %, agents vérifiés 80 %, agents internes 0 %. Vérifiez votre compte et ajoutez une photo de profil pour réduire le montant retenu."
       },
       "verifiedLessHold": {
-        "a": "Les agents non vérifiés ont 100 % retenu ; les agents vérifiés 80 % ; les agents internes (Rendasua) 0 %. Vérifiez votre compte et ajoutez une photo de profil pour bénéficier de montants de retenue réduits.",
-        "q": "Pourquoi les agents vérifiés ont-ils moins de retenue ?"
+        "q": "Pourquoi les agents vérifiés ont-ils moins de retenue ?",
+        "a": "Les agents vérifiés ont une retenue plus faible (80 %) car ils ont complété la vérification d'identité. Les agents non vérifiés ont 100 % retenu ; les agents internes (Rendasua) 0 %. La retenue est libérée lorsque la commande est livrée avec succès."
+      },
+      "claimOrder": {
+        "q": "Comment réclamer une commande à livrer ?",
+        "a": "Ouvrez la liste des commandes disponibles et choisissez une commande à réclamer. Pour la sécuriser, vous recevrez une demande de paiement sur votre téléphone pour le montant de la retenue—acceptez-la pour réclamer. Une fois la commande livrée, la retenue est libérée et vous recevez vos frais de livraison."
+      },
+      "whenReleased": {
+        "q": "Quand ma retenue est-elle libérée ?",
+        "a": "Votre retenue est libérée lorsque la commande est marquée comme livrée. Les frais de livraison sont alors crédités sur votre compte. En cas d'échec de livraison, la résolution (ex. faute agent, faute client) détermine le traitement des fonds."
+      },
+      "completeDelivery": {
+        "q": "Comment finaliser une livraison ?",
+        "a": "Utilisez l'adresse de livraison et les éventuelles instructions du client (ex. bâtiment, point de repère) pour le trouver. Vous pouvez aussi appeler le client pour vous orienter. Sur place, demandez-lui son code PIN de livraison—il l'obtient dans les détails de sa commande ou via l'application. Saisissez le PIN dans l'application pour marquer la livraison comme terminée. Une fois le PIN confirmé, la commande est clôturée et les paiements sont transférés à l'entreprise et à vous (votre retenue est libérée et vos frais de livraison sont crédités)."
       }
     },
     "business": {
       "verification": {
-        "a": "La vérification d'entreprise prend généralement 2-3 jours ouvrables après soumission de tous les documents requis.",
-        "q": "Combien de temps prend la vérification d'entreprise ?"
+        "q": "Combien de temps prend la vérification d'entreprise ?",
+        "a": "La vérification d'entreprise prend généralement 2–3 jours ouvrables après soumission de tous les documents requis. Vous pouvez consulter votre statut dans le tableau de bord entreprise."
+      },
+      "settlementRelease": {
+        "q": "Quand mes règlements sont-ils libérés ?",
+        "a": "Les règlements sont libérés sous 24–48 heures après l'achèvement de la commande, selon le traitement des paiements. Vous pouvez voir les paiements et le solde du compte dans la section Comptes de votre entreprise."
+      },
+      "failedDeliveries": {
+        "q": "Comment sont gérées les livraisons échouées ?",
+        "a": "Lorsqu'une livraison échoue, l'agent indique une raison. Dans votre tableau de bord, allez dans Livraisons échouées pour la résoudre. Options : Faute de l'agent (client remboursé, retenue à l'entreprise) ; Problème d'article (client et agent remboursés, restauration d'inventaire optionnelle) ; Faute du client (tous deux remboursés, frais de livraison échouée à la charge du client, partagés 50/50 entre agent et entreprise)."
+      },
+      "addProducts": {
+        "q": "Comment ajouter des produits à vendre ?",
+        "a": "Depuis votre tableau de bord entreprise, allez dans Articles. Vous pouvez créer des articles (nom, prix, catégorie, images, étiquettes) puis les ajouter à vos points de vente avec le stock et le prix. Vous pouvez aussi importer en masse via CSV."
       }
-    },
-    "client": {
-      "topup": {
-        "a": "Vous pouvez recharger votre compte via diverses méthodes de paiement incluant l'argent mobile, le virement bancaire ou la carte de crédit.",
-        "q": "Comment recharger mon compte ?"
-      }
-    },
-    "settlement": {
-      "release": {
-        "a": "Les règlements sont libérés dans les 24-48 heures suivant l'achèvement de la commande, selon votre méthode de paiement.",
-        "q": "Quand les règlements sont-ils libérés ?"
-      }
-    },
-    "failedDeliveries": {
-      "title": "Gestion des livraisons échouées",
-      "q": "Comment les livraisons échouées sont-elles gérées ?",
-      "a": "Lorsqu'une livraison échoue, l'agent la marque avec une raison d'échec spécifique. Le propriétaire de l'entreprise peut ensuite résoudre la livraison échouée en utilisant l'une des trois options de résolution : 1) Faute de l'agent - Le client est remboursé, la retenue de l'agent va à l'entreprise ; 2) Problème d'article - Le client et l'agent sont remboursés, l'inventaire peut être restauré en option ; 3) Faute du client - Les deux sont remboursés, mais le client est facturé des frais de livraison échouée (divisés 50/50 entre l'agent et l'entreprise). Toutes les résolutions sont suivies et peuvent être consultées dans la section Livraisons échouées du tableau de bord de l'entreprise."
     },
     "subtitle": "Trouvez des réponses aux questions courantes",
     "title": "Questions fréquemment posées"
