@@ -29,7 +29,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ open, message }) => {
       >
         <CircularProgress color="inherit" size={60} />
         <Typography variant="h6" color="inherit">
-          {message || t('common.loading')}
+          {message ? t(message, 'Loading...') : t('common.loading')}
         </Typography>
       </Box>
     </Backdrop>
