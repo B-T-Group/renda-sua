@@ -54,7 +54,12 @@ interface AccountTransaction {
   account: { currency: string };
 }
 
-const MobileBalanceChip: React.FC = () => {
+interface MobileBalanceChipProps {
+  /** Use light colors for use on a dark header */
+  inverted?: boolean;
+}
+
+const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const {
@@ -250,17 +255,17 @@ const MobileBalanceChip: React.FC = () => {
           minWidth: 44,
           py: 1,
           px: 1.5,
-          color: '#1d1d1f',
+          color: inverted ? '#ffffff' : '#1d1d1f',
           textTransform: 'none',
           fontWeight: 600,
           fontSize: '0.8rem',
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: inverted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
           },
         }}
       >
         {accountsLoading ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: inverted ? 'rgba(255,255,255,0.8)' : undefined }} color={inverted ? undefined : 'text.secondary'}>
             …
           </Typography>
         ) : (

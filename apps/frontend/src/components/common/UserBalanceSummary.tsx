@@ -8,11 +8,14 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 interface UserBalanceSummaryProps {
   compact?: boolean;
   showIcon?: boolean;
+  /** Use light colors for use on a dark header */
+  inverted?: boolean;
 }
 
 const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
   compact = true,
   showIcon = true,
+  inverted,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -43,9 +46,9 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
           transition: 'opacity 0.2s ease-in-out',
         }}
       >
-        {showIcon && <AccountBalance color="primary" />}
-        <CircularProgress size={16} />
-        <Typography variant="body2" color="text.secondary">
+        {showIcon && <AccountBalance sx={inverted ? { color: '#ffffff' } : undefined} color={inverted ? undefined : 'primary'} />}
+        <CircularProgress size={16} sx={inverted ? { color: '#ffffff' } : undefined} color={inverted ? 'inherit' : 'primary'} />
+        <Typography variant="body2" color={inverted ? undefined : 'text.secondary'} sx={inverted ? { color: 'rgba(255,255,255,0.9)' } : undefined}>
           {t('common.loading', 'Loading...')}
         </Typography>
       </Box>
@@ -94,8 +97,8 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
             transition: 'opacity 0.2s ease-in-out',
           }}
         >
-          {showIcon && <AccountBalance color="primary" />}
-          <Typography variant="body2" fontWeight="medium">
+          {showIcon && <AccountBalance sx={inverted ? { color: '#ffffff' } : undefined} color={inverted ? undefined : 'primary'} />}
+          <Typography variant="body2" fontWeight="medium" sx={inverted ? { color: '#ffffff' } : undefined}>
             {t('accounts.balance', 'Balance')}:{' '}
             {formatCurrency(totalBalance, currencies[0])}
           </Typography>
@@ -117,8 +120,8 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
             transition: 'opacity 0.2s ease-in-out',
           }}
         >
-          {showIcon && <AccountBalance color="primary" />}
-          <Typography variant="body2" fontWeight="medium">
+          {showIcon && <AccountBalance sx={inverted ? { color: '#ffffff' } : undefined} color={inverted ? undefined : 'primary'} />}
+          <Typography variant="body2" fontWeight="medium" sx={inverted ? { color: '#ffffff' } : undefined}>
             {t('accounts.balance', 'Balance')}:
           </Typography>
           <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
@@ -134,7 +137,15 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
                   size="small"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 20 }}
+                  sx={{
+                    fontSize: '0.75rem',
+                    height: 20,
+                    ...(inverted && {
+                      color: '#ffffff',
+                      borderColor: 'rgba(255,255,255,0.5)',
+                      '& .MuiChip-label': { color: '#ffffff' },
+                    }),
+                  }}
                 />
               );
             })}
@@ -157,9 +168,9 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
           },
           transition: 'opacity 0.2s ease-in-out',
         }}
-      >
-        {showIcon && <AccountBalance color="primary" />}
-        <Typography variant="body2" fontWeight="medium">
+        >
+          {showIcon && <AccountBalance sx={inverted ? { color: '#ffffff' } : undefined} color={inverted ? undefined : 'primary'} />}
+        <Typography variant="body2" fontWeight="medium" sx={inverted ? { color: '#ffffff' } : undefined}>
           {t('accounts.balance', 'Balance')}:
         </Typography>
         <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
@@ -170,7 +181,15 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
               size="small"
               color="primary"
               variant="outlined"
-              sx={{ fontSize: '0.75rem', height: 20 }}
+              sx={{
+                fontSize: '0.75rem',
+                height: 20,
+                ...(inverted && {
+                  color: '#ffffff',
+                  borderColor: 'rgba(255,255,255,0.5)',
+                  '& .MuiChip-label': { color: '#ffffff' },
+                }),
+              }}
             />
           ))}
         </Stack>

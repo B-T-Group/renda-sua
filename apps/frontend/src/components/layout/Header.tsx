@@ -191,7 +191,7 @@ const Header: React.FC = () => {
       to={item.path}
       startIcon={item.icon}
       sx={{
-        color: isActiveRoute(item.path) ? '#000' : '#1d1d1f',
+        color: '#ffffff',
         textTransform: 'none',
         fontWeight: 400,
         fontSize: '0.875rem',
@@ -203,8 +203,8 @@ const Header: React.FC = () => {
         borderRadius: 0,
         transition: 'color 0.2s ease-in-out',
         '&:hover': {
-          color: '#000',
-          backgroundColor: 'transparent',
+          color: '#ffffff',
+          backgroundColor: 'rgba(255, 255, 255, 0.08)',
         },
         '&:after': {
           content: '""',
@@ -214,7 +214,7 @@ const Header: React.FC = () => {
           transform: 'translateX(-50%)',
           width: isActiveRoute(item.path) ? '100%' : '0%',
           height: '2px',
-          backgroundColor: '#007aff',
+          backgroundColor: '#93c5fd',
           transition: 'width 0.3s ease-in-out',
         },
         position: 'relative',
@@ -406,10 +406,9 @@ const Header: React.FC = () => {
         position="sticky"
         elevation={0}
         sx={{
-          backgroundColor: 'rgba(251, 251, 253, 0.8)',
-          backdropFilter: 'saturate(180%) blur(20px)',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
-          color: '#1d1d1f',
+          backgroundColor: theme.palette.primary.dark,
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          color: '#ffffff',
           '& .MuiToolbar-root': {
             backgroundColor: 'transparent',
           },
@@ -427,7 +426,7 @@ const Header: React.FC = () => {
             {/* Logo Section */}
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <RouterLink to="/" style={{ textDecoration: 'none' }}>
-                <Logo variant="compact" color="primary" size="small" />
+                <Logo variant="compact" color="white" size="small" />
               </RouterLink>
             </Box>
 
@@ -452,7 +451,7 @@ const Header: React.FC = () => {
                     onClick={handleSubmenuOpen}
                     startIcon={<MoreVert />}
                     sx={{
-                      color: '#1d1d1f',
+                      color: '#ffffff',
                       textTransform: 'none',
                       fontWeight: 400,
                       fontSize: '0.875rem',
@@ -464,8 +463,8 @@ const Header: React.FC = () => {
                       borderRadius: 0,
                       transition: 'color 0.2s ease-in-out',
                       '&:hover': {
-                        color: '#000',
-                        backgroundColor: 'transparent',
+                        color: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
                       },
                     }}
                   >
@@ -479,25 +478,25 @@ const Header: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               {/* Search */}
               <Box sx={{ position: 'relative' }}>
-                <HeaderSearch />
+                <HeaderSearch inverted />
               </Box>
 
               {/* XAF balance (view transactions, withdraw) - client/agent only; mobile + desktop */}
               {isAuthenticated &&
                 (userType === 'client' || userType === 'agent') && (
-                  <MobileBalanceChip />
+                  <MobileBalanceChip inverted />
                 )}
 
               {/* User Balance - business only, desktop; navigates to profile */}
               {isAuthenticated &&
                 userType === 'business' && (
                   <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                    <UserBalanceSummary compact={true} showIcon={false} />
+                    <UserBalanceSummary compact={true} showIcon={false} inverted />
                   </Box>
                 )}
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
-              {!isMobile && <LanguageSwitcher />}
+              {!isMobile && <LanguageSwitcher inverted />}
 
               {/* Cart Icon - Only show for clients */}
               {isAuthenticated && userType === 'client' && (
@@ -505,14 +504,14 @@ const Header: React.FC = () => {
                   onClick={() => navigate('/cart')}
                   size="small"
                   sx={{
-                    color: '#1d1d1f',
+                    color: '#ffffff',
                     padding: '6px',
                     '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
                     },
                   }}
                 >
-                  <Badge badgeContent={getCartItemCount()} color="primary">
+                  <Badge badgeContent={getCartItemCount()} color="secondary">
                     <ShoppingCart />
                   </Badge>
                 </IconButton>
@@ -525,10 +524,10 @@ const Header: React.FC = () => {
                     onClick={handleUserMenuOpen}
                     size="small"
                     sx={{
-                      color: '#1d1d1f',
+                      color: '#ffffff',
                       padding: '6px',
                       '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
                       },
                     }}
                   >
@@ -683,7 +682,7 @@ const Header: React.FC = () => {
                   </MenuComponent>
                 </>
               ) : (
-                <LoginButton />
+                <LoginButton inverted />
               )}
 
               {/* Mobile Menu Button */}
@@ -692,10 +691,10 @@ const Header: React.FC = () => {
                   onClick={handleDrawerToggle}
                   size="small"
                   sx={{
-                    color: '#1d1d1f',
+                    color: '#ffffff',
                     padding: '8px',
                     '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
                     },
                   }}
                 >

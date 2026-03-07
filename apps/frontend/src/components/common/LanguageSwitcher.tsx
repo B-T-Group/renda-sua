@@ -5,8 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 
-const LanguageSwitcher: React.FC = () => {
-  const { i18n, t } = useTranslation();
+interface LanguageSwitcherProps {
+  /** Use light colors for use on a dark header */
+  inverted?: boolean;
+}
+
+const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ inverted }) => {
+  const { i18n } = useTranslation();
   const apiClient = useApiClient();
   const { profile, refetch } = useUserProfileContext();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -56,14 +61,20 @@ const LanguageSwitcher: React.FC = () => {
         onClick={handleClick}
         startIcon={<Language />}
         sx={{
-          color: '#1e40af',
+          color: inverted ? '#ffffff' : '#1e40af',
           textTransform: 'none',
           '&:hover': {
-            backgroundColor: 'rgba(30, 64, 175, 0.1)',
+            backgroundColor: inverted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(30, 64, 175, 0.1)',
           },
         }}
       >
-        <Typography variant="body2" sx={{ color: '#1e40af', fontWeight: 500 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: inverted ? '#ffffff' : '#1e40af',
+            fontWeight: 500,
+          }}
+        >
           {getCurrentLanguageName()}
         </Typography>
       </Button>

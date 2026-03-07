@@ -3,7 +3,12 @@ import { Login } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import React from 'react';
 
-const LoginButton: React.FC = () => {
+interface LoginButtonProps {
+  /** Use light/outlined style for use on a dark header */
+  inverted?: boolean;
+}
+
+const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
   const { loginWithRedirect, isAuthenticated } = useAuth0();
 
   const handleLogin = () => {
@@ -18,7 +23,7 @@ const LoginButton: React.FC = () => {
 
   return (
     <Button
-      variant="contained"
+      variant={inverted ? 'outlined' : 'contained'}
       color="primary"
       startIcon={<Login />}
       onClick={handleLogin}
@@ -27,6 +32,14 @@ const LoginButton: React.FC = () => {
         py: 1,
         fontSize: '1rem',
         fontWeight: 600,
+        ...(inverted && {
+          color: '#ffffff',
+          borderColor: 'rgba(255,255,255,0.8)',
+          '&:hover': {
+            borderColor: '#ffffff',
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          },
+        }),
       }}
     >
       Sign In

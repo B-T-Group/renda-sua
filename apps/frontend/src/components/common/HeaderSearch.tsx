@@ -12,9 +12,11 @@ import { useItemSearch } from '../../hooks/useItemSearch';
 
 interface HeaderSearchProps {
   onClose?: () => void;
+  /** Use light colors for use on a dark header */
+  inverted?: boolean;
 }
 
-const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose }) => {
+const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose, inverted }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { searchTerm, setSearchTerm, handleSearchSubmit, clearSearch } = useItemSearch();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,10 +54,10 @@ const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose }) => {
         size="small"
         onClick={handleSearchClick}
         sx={{
-          color: '#1d1d1f',
+          color: inverted ? '#ffffff' : '#1d1d1f',
           padding: '8px',
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: inverted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
           },
         }}
       >
