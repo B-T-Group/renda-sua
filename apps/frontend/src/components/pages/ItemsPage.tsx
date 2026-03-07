@@ -240,8 +240,9 @@ const ItemsPage: React.FC = () => {
 
   return (
     <Container
-      maxWidth="lg"
-      sx={{ mt: 4, mb: 4, px: { xs: 0, sm: 2 } }}
+      maxWidth={false}
+      disableGutters
+      sx={{ mt: 2, mb: 2, px: 0 }}
     >
       <SEOHead
         title={t('seo.public-items.title')}
@@ -391,7 +392,7 @@ const ItemsPage: React.FC = () => {
       </Box>
 
       {/* Items Section */}
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Paper sx={{ p: { xs: 1, sm: 2 } }}>
         <Typography
           variant="h6"
           gutterBottom

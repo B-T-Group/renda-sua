@@ -135,6 +135,8 @@ export interface PushConfig {
   vapidPublicKey: string;
   vapidPrivateKey: string;
   enabled: boolean;
+  /** Optional EAS access token for Expo push API auth (recommended for production) */
+  expoAccessToken?: string;
 }
 
 export interface SmsConfig {
@@ -336,6 +338,7 @@ export default (): Configuration => {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
       enabled: process.env.PUSH_NOTIFICATIONS_ENABLED === 'true',
+      expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
     },
     sms: {
       enabled: process.env.SMS_ENABLED === 'true',

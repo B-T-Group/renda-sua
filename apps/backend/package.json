@@ -27,6 +27,7 @@
     "class-validator": "^0.14.2",
     "country-currency-map": "^2.1.7",
     "country-to-currency": "^2.0.2",
+    "expo-server-sdk": "^4.0.0",
     "express": "^4.21.0",
     "form-data": "^4.0.5",
     "google-libphonenumber": "^3.2.34",

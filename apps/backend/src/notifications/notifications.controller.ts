@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import type { NotificationData } from './notifications.service';
@@ -45,6 +45,40 @@ export class NotificationsController {
       endpoint: body.endpoint,
       keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
     });
+  }
+
+  @Post('push-token')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Register Expo push token for the current user (mobile)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['expoPushToken'],
+      properties: {
+        expoPushToken: { type: 'string', description: 'Expo push token (ExponentPushToken[...])' },
+        deviceId: { type: 'string', description: 'Optional device identifier for upsert' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Token saved or already registered' })
+  @ApiResponse({ status: 400, description: 'Invalid or missing expoPushToken' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async registerPushToken(
+    @Body() body: { expoPushToken?: string; deviceId?: string },
+    @Req() request: RequestWithUser
+  ) {
+    const userIdentifier = request.user?.sub ?? request.user?.id;
+    if (!userIdentifier) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!body?.expoPushToken || typeof body.expoPushToken !== 'string') {
+      return { success: false, error: 'expoPushToken is required' };
+    }
+    return this.notificationsService.saveMobilePushToken(
+      userIdentifier,
+      body.expoPushToken
+    );
   }
 
   @Post('test-push')
