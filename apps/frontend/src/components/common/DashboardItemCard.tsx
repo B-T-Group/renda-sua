@@ -343,6 +343,29 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Box>
             )}
 
+            {/* Tags */}
+            {inventory.item.tags && inventory.item.tags.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {inventory.item.tags.slice(0, 3).map((tag) => (
+                  <Chip
+                    key={tag.id}
+                    label={tag.name}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.65rem', height: 20 }}
+                  />
+                ))}
+                {inventory.item.tags.length > 3 && (
+                  <Chip
+                    label={`+${inventory.item.tags.length - 3}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.65rem', height: 20 }}
+                  />
+                )}
+              </Box>
+            )}
+
             {/* Weight */}
             {inventory.item.weight && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

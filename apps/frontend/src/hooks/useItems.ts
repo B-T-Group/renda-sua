@@ -48,6 +48,10 @@ export interface Item {
     };
   };
   item_images?: ItemImage[];
+  item_tags?: Array<{
+    tag_id: string;
+    tag: { id: string; name: string };
+  }>;
   business_inventories?: {
     id: string;
     item_id: string;

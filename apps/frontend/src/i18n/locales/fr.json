@@ -908,6 +908,10 @@
       "items": "Articles",
       "statsTotal": "Total : {{count}} article(s)",
       "subtitle": "Gérez votre catalogue · {{count}} articles dans {{categories}} catégories",
+      "tags": "Étiquettes",
+      "addTag": "Ajouter une étiquette",
+      "createNewTag": "Créer une nouvelle étiquette",
+      "failedToCreateTag": "Échec de la création de l'étiquette",
       "export": "Exporter",
       "allItems": "Tous les articles",
       "viewLowStock": "Voir les articles en rupture",
@@ -1835,7 +1839,10 @@
     "itemCard": {
       "views": "{{count}} vues"
     },
-    "dealEndsOn": "Se termine le {{date}}"
+    "dealEndsOn": "Se termine le {{date}}",
+    "similarItems": "Articles similaires",
+    "outOfStock": "Rupture de stock",
+    "notAvailable": "Non disponible"
   },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",

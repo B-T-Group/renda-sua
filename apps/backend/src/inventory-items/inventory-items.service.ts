@@ -78,6 +78,7 @@ export interface InventoryItem {
       caption?: string;
       display_order: number;
     }>;
+    tags?: Array<{ id: string; name: string }>;
   };
   business_location: {
     id: string;
@@ -364,6 +365,12 @@ export class InventoryItemsService {
               caption
               display_order
             }
+            item_tags {
+              tag {
+                id
+                name
+              }
+            }
           }
           business_location {
             id
@@ -402,7 +409,10 @@ export class InventoryItemsService {
         offset,
       });
 
-      const items: InventoryItem[] = result.business_inventory || [];
+      const rawItems = result.business_inventory || [];
+      const items: InventoryItem[] = rawItems.map((inv: any) =>
+        this.mapItemTagsToTags(inv)
+      );
       const total = result.business_inventory_aggregate?.aggregate?.count || 0;
       const totalPages = Math.ceil(total / limit);
 
@@ -468,6 +478,17 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /**
+   * Maps item_tags from GraphQL response to item.tags for API response.
+   */
+  private mapItemTagsToTags(inv: any): InventoryItem {
+    if (!inv?.item) return inv;
+    const itemTags = inv.item.item_tags ?? [];
+    const tags = itemTags.map((it: any) => it.tag);
+    const { item_tags: _omit, ...restItem } = inv.item;
+    return { ...inv, item: { ...restItem, tags } };
   }
 
   /**
@@ -583,6 +604,12 @@ export class InventoryItemsService {
               caption
               display_order
             }
+            item_tags {
+              tag {
+                id
+                name
+              }
+            }
           }
           business_location {
             id
@@ -623,6 +650,7 @@ export class InventoryItemsService {
         );
       }
 
+      item = this.mapItemTagsToTags(item);
       const [itemWithMergedImages] =
         await this.mergeTaggedBusinessImagesIntoItems([item]);
       item = itemWithMergedImages;
@@ -666,6 +694,176 @@ export class InventoryItemsService {
         'Failed to fetch inventory item',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  /**
+   * Get similar inventory items (same tags) for a given inventory item ID.
+   * Returns up to limit items (default 12) that share at least one tag.
+   */
+  async getSimilarInventoryItems(
+    inventoryItemId: string,
+    limit = 12
+  ): Promise<InventoryItem[]> {
+    const tagQuery = `
+      query GetItemTags($id: uuid!) {
+        business_inventory_by_pk(id: $id) {
+          item_id
+          item {
+            item_tags {
+              tag_id
+            }
+          }
+        }
+      }
+    `;
+    try {
+      const tagResult = await this.hasuraSystemService.executeQuery(tagQuery, {
+        id: inventoryItemId,
+      });
+      const row = tagResult.business_inventory_by_pk;
+      if (!row?.item?.item_tags?.length) {
+        return [];
+      }
+      const tagIds = row.item.item_tags.map((it: any) => it.tag_id);
+      const itemId = row.item_id;
+
+      const similarQuery = `
+        query GetSimilarInventoryItems($where: business_inventory_bool_exp!, $limit: Int!) {
+          business_inventory(where: $where, limit: $limit, order_by: { created_at: desc }) {
+            id
+            business_location_id
+            item_id
+            computed_available_quantity
+            selling_price
+            is_active
+            created_at
+            updated_at
+            item {
+              id
+              name
+              description
+              price
+              currency
+              weight
+              weight_unit
+              dimensions
+              item_sub_category_id
+              sku
+              brand { id name }
+              model
+              color
+              is_fragile
+              is_perishable
+              requires_special_handling
+              max_delivery_distance
+              estimated_delivery_time
+              min_order_quantity
+              max_order_quantity
+              is_active
+              created_at
+              updated_at
+              item_sub_category { id name item_category { id name } }
+              item_images {
+                id
+                image_url
+                image_type
+                alt_text
+                caption
+                display_order
+              }
+              item_tags {
+                tag { id name }
+              }
+            }
+            business_location {
+              id
+              business_id
+              name
+              location_type
+              is_primary
+              business { id name is_verified }
+              address {
+                id
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+              }
+            }
+          }
+        }
+      `;
+      const where = {
+        _and: [
+          { id: { _neq: inventoryItemId } },
+          { item_id: { _neq: itemId } },
+          { is_active: { _eq: true } },
+          { computed_available_quantity: { _gt: 0 } },
+          {
+            business_location: {
+              business: { is_verified: { _eq: true } },
+            },
+          },
+          {
+            item: {
+              item_tags: {
+                tag_id: { _in: tagIds },
+              },
+            },
+          },
+        ],
+      };
+      const similarResult = await this.hasuraSystemService.executeQuery(
+        similarQuery,
+        { where, limit }
+      );
+      const rawItems = similarResult.business_inventory || [];
+      const items: InventoryItem[] = rawItems.map((inv: any) =>
+        this.mapItemTagsToTags(inv)
+      );
+      const withMergedImages =
+        await this.mergeTaggedBusinessImagesIntoItems(items);
+      const ids = withMergedImages.map((i) => i.id);
+      const viewsMap = await this.getViewCountsByInventoryIds(ids);
+      const dealsMap = await this.getActiveDealsByInventoryIds(ids);
+
+      return withMergedImages.map((item) => {
+        const viewsCount = viewsMap[item.id] ?? 0;
+        const deal = dealsMap[item.id];
+        const originalPrice = item.selling_price;
+        if (!deal) {
+          return {
+            ...item,
+            viewsCount,
+            hasActiveDeal: false,
+            original_price: originalPrice,
+            discounted_price: originalPrice,
+            deal_end_at: undefined,
+          };
+        }
+        const discounted = this.applyDealPrice(
+          originalPrice,
+          deal.discount_type,
+          deal.discount_value
+        );
+        return {
+          ...item,
+          viewsCount,
+          hasActiveDeal: true,
+          original_price: originalPrice,
+          discounted_price: discounted,
+          deal_end_at: deal.end_at,
+        };
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch similar items for ${inventoryItemId}:`,
+        error
+      );
+      return [];
     }
   }
 

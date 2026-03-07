@@ -223,6 +223,44 @@ export class InventoryItemsController {
   }
 
   @Public()
+  @Get(':id/similar')
+  @ApiOperation({
+    summary: 'Get similar inventory items by shared tags',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of similar inventory items (share at least one tag)',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'array',
+          items: { type: 'object' },
+        },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async getSimilarInventoryItems(
+    @Param('id') id: string,
+    @Query('limit') limit?: string
+  ): Promise<{
+    success: boolean;
+    data: InventoryItem[];
+    message: string;
+  }> {
+    const limitNum = limit ? Math.min(parseInt(limit, 10) || 12, 24) : 12;
+    const data =
+      await this.inventoryItemsService.getSimilarInventoryItems(id, limitNum);
+    return {
+      success: true,
+      data,
+      message: 'Similar items retrieved successfully',
+    };
+  }
+
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific inventory item by ID' })
   @ApiResponse({

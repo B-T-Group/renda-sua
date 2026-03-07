@@ -1,0 +1,67 @@
+table:
+  name: item_tags
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: tag
+    using:
+      foreign_key_constraint_on: tag_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      columns:
+        - item_id
+        - tag_id
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - item_id
+        - tag_id
+        - created_at
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - item_id
+        - tag_id
+        - created_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - item_id
+        - tag_id
+        - created_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - item_id
+        - tag_id
+        - created_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - item_id
+        - tag_id
+        - created_at
+      filter: {}

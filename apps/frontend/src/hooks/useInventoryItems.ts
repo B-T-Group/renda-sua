@@ -66,6 +66,7 @@ export interface InventoryItem {
       caption?: string;
       display_order: number;
     }>;
+    tags?: Array<{ id: string; name: string }>;
   };
   business_location: {
     id: string;

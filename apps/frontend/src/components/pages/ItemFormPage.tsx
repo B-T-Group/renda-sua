@@ -44,6 +44,7 @@ import {
 } from '../../hooks/useCategory';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
+import { Tag, useTags } from '../../hooks/useTags';
 import SEOHead from '../seo/SEOHead';
 
 // Extended types for create options
@@ -190,11 +191,19 @@ const ItemFormPage: React.FC = () => {
     createSubcategory,
   } = useCategories();
 
+  const { tags, fetchTags, createTag, setItemTags } = useTags();
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+
   useEffect(() => {
     if (profile?.business?.id) {
       fetchBrandsFromItems();
     }
   }, [profile?.business?.id, fetchBrandsFromItems]);
+
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
 
   // Auto-select a default subcategory if none chosen (for add mode)
   useEffect(() => {
@@ -254,6 +263,10 @@ const ItemFormPage: React.FC = () => {
               setSelectedSubCategoryId(foundItem.item_sub_category_id);
             }
 
+            setSelectedTags(
+              (foundItem.item_tags ?? []).map((it: { tag: Tag }) => it.tag)
+            );
+
             // Open optional details if color is set
             if (foundItem.color) {
               setOptionalDetailsOpen(true);
@@ -307,6 +320,26 @@ const ItemFormPage: React.FC = () => {
     // Validate SKU when it changes
     if (field === 'sku' && typeof value === 'string') {
       validateSku(value);
+    }
+  };
+
+  const handleCreateTag = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    try {
+      const newTag = await createTag(name);
+      if (newTag) {
+        setSelectedTags((prev) =>
+          [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        setNewTagName('');
+      }
+    } catch (err) {
+      console.error('Failed to create tag:', err);
+      enqueueSnackbar(
+        t('business.items.failedToCreateTag', 'Failed to create tag'),
+        { variant: 'error' }
+      );
     }
   };
 
@@ -377,6 +410,7 @@ const ItemFormPage: React.FC = () => {
           itemId,
           updateData as unknown as Partial<CreateItemData>
         );
+        await setItemTags(itemId, selectedTags.map((t) => t.id));
         enqueueSnackbar(t('business.items.itemUpdated'), {
           variant: 'success',
         });
@@ -397,6 +431,9 @@ const ItemFormPage: React.FC = () => {
         };
 
         result = await createItem(createData as unknown as CreateItemData);
+        if (result && selectedTags.length > 0) {
+          await setItemTags(result.id, selectedTags.map((t) => t.id));
+        }
         enqueueSnackbar(t('business.items.itemCreated'), {
           variant: 'success',
         });
@@ -1192,6 +1229,54 @@ const ItemFormPage: React.FC = () => {
                       disabled={loading}
                       placeholder="Pro Max, XL, v2..."
                     />
+                  </Grid>
+                </Grid>
+
+                <Grid container spacing={2} sx={{ mt: 0 }}>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {t('business.items.tags', 'Tags')}
+                    </Typography>
+                    <Autocomplete
+                      multiple
+                      options={tags}
+                      getOptionLabel={(option) =>
+                        typeof option === 'string' ? option : option.name
+                      }
+                      value={selectedTags}
+                      onChange={(_, newValue) => setSelectedTags(newValue)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label={t('business.items.addTag', 'Add tag')}
+                          placeholder={t('business.items.addTag', 'Add tag')}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                      <TextField
+                        size="small"
+                        placeholder={t('business.items.createNewTag', 'Create new tag')}
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCreateTag();
+                          }
+                        }}
+                        disabled={loading}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={handleCreateTag}
+                        disabled={!newTagName.trim() || loading}
+                      >
+                        {t('business.items.createNewTag', 'Create new tag')}
+                      </Button>
+                    </Stack>
                   </Grid>
                 </Grid>
 

@@ -55,6 +55,7 @@ interface Item {
     };
   };
   item_images?: ItemImage[];
+  item_tags?: Array<{ tag: { id: string; name: string } }>;
   business_inventories?: BusinessInventory[];
 }
 
@@ -300,6 +301,28 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               {item.item_sub_category.item_category?.name} ›{' '}
               {item.item_sub_category.name}
             </Typography>
+          )}
+          {/* Tags */}
+          {item.item_tags && item.item_tags.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              {item.item_tags.slice(0, 5).map((it) => (
+                <Chip
+                  key={it.tag.id}
+                  label={it.tag.name}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              ))}
+              {item.item_tags.length > 5 && (
+                <Chip
+                  label={`+${item.item_tags.length - 5}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              )}
+            </Box>
           )}
         </Stack>
 

@@ -30,9 +30,10 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
-import { useItemRatings } from '../../hooks/useItemRatings';
-import { useTrackItemView } from '../../hooks/useTrackItemView';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
+import { useItemRatings } from '../../hooks/useItemRatings';
+import { useSimilarItems } from '../../hooks/useSimilarItems';
+import { useTrackItemView } from '../../hooks/useTrackItemView';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import SEOHead from '../seo/SEOHead';
 
@@ -53,6 +54,9 @@ export default function ItemDetailPage() {
   const { addToCart } = useCart();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const { items: similarItems, loading: similarLoading } = useSimilarItems(
+    id || null
+  );
   const { ratings, loading: ratingsLoading } = useItemRatings(
     inventoryItem?.item?.id ?? null
   );
@@ -283,6 +287,9 @@ export default function ItemDetailPage() {
               {item.requires_special_handling && (
                 <Chip label={t('items.specialHandling', 'Special')} size="small" color="info" />
               )}
+              {item.tags && item.tags.length > 0 && item.tags.map((tag) => (
+                <Chip key={tag.id} label={tag.name} size="small" variant="outlined" />
+              ))}
             </Box>
 
             {/* CTAs */}
@@ -465,6 +472,65 @@ export default function ItemDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Similar items */}
+      {similarItems.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            {t('items.similarItems', 'Similar Items')}
+          </Typography>
+          {similarLoading ? (
+            <Grid container spacing={2}>
+              {[1, 2, 3].map((i) => (
+                <Grid size={{ xs: 6, sm: 4 }} key={i}>
+                  <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 1 }} />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Grid container spacing={2}>
+              {similarItems.slice(0, 6).map((sim) => (
+                <Grid size={{ xs: 6, sm: 4 }} key={sim.id}>
+                  <Card
+                    component={RouterLink}
+                    to={`/items/${sim.id}`}
+                    sx={{
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      display: 'block',
+                      height: '100%',
+                      '&:hover': { boxShadow: theme.shadows[4] },
+                    }}
+                  >
+                    <CardMedia
+                      component="img"
+                      height="120"
+                      image={
+                        sim.item?.item_images?.[0]?.image_url || NoImage
+                      }
+                      alt={sim.item?.name}
+                      sx={{ objectFit: 'cover' }}
+                    />
+                    <CardContent sx={{ py: 1 }}>
+                      <Typography variant="subtitle2" noWrap>
+                        {sim.item?.name}
+                      </Typography>
+                      <Typography variant="body2" color="primary" fontWeight={600}>
+                        {formatCurrency(
+                          sim.hasActiveDeal && typeof sim.discounted_price === 'number'
+                            ? sim.discounted_price
+                            : sim.selling_price,
+                          sim.item?.currency
+                        )}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
+      )}
 
       {/* Reviews */}
       <Box sx={{ mt: 4 }}>

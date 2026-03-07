@@ -59,6 +59,13 @@ const GET_ITEMS = `
         display_order
         created_at
       }
+      item_tags {
+        tag_id
+        tag {
+          id
+          name
+        }
+      }
       business_inventories {
         id
         item_id
@@ -159,6 +166,13 @@ const GET_SINGLE_ITEM = `
         alt_text
         display_order
         created_at
+      }
+      item_tags {
+        tag_id
+        tag {
+          id
+          name
+        }
       }
       business_inventories {
         id

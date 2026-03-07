@@ -46,6 +46,9 @@ export { useBusinessLocations } from './useBusinessLocations';
 export { useBusinessOrders } from './useBusinessOrders';
 export { useEditItemFlow } from './useEditItemFlow';
 export { useItems } from './useItems';
+export { useTags } from './useTags';
+export type { Tag } from './useTags';
+export { useSimilarItems } from './useSimilarItems';
 
 // Client hooks
 export { useClientOrders } from './useClientOrders';

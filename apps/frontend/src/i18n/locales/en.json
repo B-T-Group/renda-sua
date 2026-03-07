@@ -919,6 +919,10 @@
       "items": "Items",
       "statsTotal": "Total: {{count}} item(s)",
       "subtitle": "Manage your product catalogue · {{count}} items across {{categories}} categories",
+      "tags": "Tags",
+      "addTag": "Add tag",
+      "createNewTag": "Create new tag",
+      "failedToCreateTag": "Failed to create tag",
       "export": "Export",
       "allItems": "All Items",
       "viewLowStock": "View low stock items",
@@ -1863,7 +1867,10 @@
     "itemCard": {
       "views": "{{count}} views"
     },
-    "dealEndsOn": "Ends on {{date}}"
+    "dealEndsOn": "Ends on {{date}}",
+    "similarItems": "Similar Items",
+    "outOfStock": "Out of Stock",
+    "notAvailable": "Not Available"
   },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",

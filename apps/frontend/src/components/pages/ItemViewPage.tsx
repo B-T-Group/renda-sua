@@ -546,6 +546,31 @@ export default function ItemViewPage() {
                     </Box>
                   )}
 
+                  {item.item_tags && item.item_tags.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('business.items.tags', 'Tags')}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 0.5,
+                          mt: 0.5,
+                        }}
+                      >
+                        {item.item_tags.map((it) => (
+                          <Chip
+                            key={it.tag.id}
+                            label={it.tag.name}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
                   {item.model && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">

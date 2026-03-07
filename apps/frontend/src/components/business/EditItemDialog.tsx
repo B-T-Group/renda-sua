@@ -6,6 +6,7 @@
 
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -29,6 +30,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WEIGHT_UNITS } from '../../constants/enums';
 import { Item, useItems } from '../../hooks/useItems';
+import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
 
 interface EditItemDialogProps {
@@ -56,7 +58,10 @@ export default function EditItemDialog({
     updateItem,
   } = useItems(businessId);
 
+  const { tags, fetchTags, createTag, setItemTags } = useTags();
   const [formData, setFormData] = useState<Partial<Item>>({});
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState('');
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<
@@ -67,12 +72,16 @@ export default function EditItemDialog({
     if (open) {
       fetchBrands();
       fetchItemSubCategories();
+      fetchTags();
       setValidationErrors({});
     }
-  }, [open, fetchBrands, fetchItemSubCategories]);
+  }, [open, fetchBrands, fetchItemSubCategories, fetchTags]);
 
   useEffect(() => {
     if (item) {
+      setSelectedTags(
+        (item.item_tags ?? []).map((it) => it.tag)
+      );
       setFormData({
         name: item.name,
         description: item.description,
@@ -153,6 +162,25 @@ export default function EditItemDialog({
     }
   };
 
+  const handleCreateTag = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    try {
+      const newTag = await createTag(name);
+      if (newTag) {
+        setSelectedTags((prev) =>
+          [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        setNewTagName('');
+      }
+    } catch (error) {
+      console.error('Failed to create tag:', error);
+      enqueueSnackbar(t('business.items.failedToCreateTag', 'Failed to create tag'), {
+        variant: 'error',
+      });
+    }
+  };
+
   const handleSave = async () => {
     if (!item) return;
 
@@ -182,6 +210,7 @@ export default function EditItemDialog({
       };
 
       await updateItem(item.id, updateData);
+      await setItemTags(item.id, selectedTags.map((t) => t.id));
       enqueueSnackbar(t('business.inventory.itemUpdatedSuccessfully'), {
         variant: 'success',
       });
@@ -453,6 +482,50 @@ export default function EditItemDialog({
                   )}
                 </Select>
               </FormControl>
+
+              <Stack spacing={1} sx={{ mt: 2 }}>
+                <Typography variant="subtitle2">
+                  {t('business.items.tags', 'Tags')}
+                </Typography>
+                <Autocomplete
+                  multiple
+                  options={tags}
+                  getOptionLabel={(option) =>
+                    typeof option === 'string' ? option : option.name
+                  }
+                  value={selectedTags}
+                  onChange={(_, newValue) => setSelectedTags(newValue)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={t('business.items.addTag', 'Add tag')}
+                      placeholder={t('business.items.addTag', 'Add tag')}
+                    />
+                  )}
+                />
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <TextField
+                    size="small"
+                    placeholder={t('business.items.createNewTag', 'Create new tag')}
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateTag();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleCreateTag}
+                    disabled={!newTagName.trim()}
+                  >
+                    {t('business.items.createNewTag', 'Create new tag')}
+                  </Button>
+                </Stack>
+              </Stack>
             </Box>
 
             {/* Special Properties */}
