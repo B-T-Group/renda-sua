@@ -48,6 +48,7 @@ export const GET_ORDERS = gql`
           state
           postal_code
           country
+          instructions
         }
       }
       delivery_address {
@@ -58,6 +59,7 @@ export const GET_ORDERS = gql`
         state
         postal_code
         country
+        instructions
       }
       assigned_agent {
         id
@@ -227,6 +229,7 @@ export const GET_ORDER_BY_ID = gql`
           country
           latitude
           longitude
+          instructions
         }
       }
       delivery_address {
@@ -239,6 +242,7 @@ export const GET_ORDER_BY_ID = gql`
         country
         latitude
         longitude
+        instructions
       }
       assigned_agent {
         id
@@ -433,6 +437,7 @@ export const GET_ORDER_BY_NUMBER = gql`
           state
           postal_code
           country
+          instructions
         }
       }
       delivery_address {
@@ -443,6 +448,7 @@ export const GET_ORDER_BY_NUMBER = gql`
         state
         postal_code
         country
+        instructions
       }
       order_items {
         id
@@ -585,6 +591,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
           state
           postal_code
           country
+          instructions
         }
       }
       delivery_address {
@@ -595,6 +602,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
         state
         postal_code
         country
+        instructions
       }
       order_items {
         id
@@ -669,6 +677,7 @@ export const GET_OPEN_ORDERS = gql`
           state
           country
           postal_code
+          instructions
         }
       }
       delivery_address {
@@ -679,6 +688,7 @@ export const GET_OPEN_ORDERS = gql`
         state
         postal_code
         country
+        instructions
       }
       order_items {
         id
@@ -766,6 +776,7 @@ export const GET_ORDER_FOR_RECEIPT = gql`
           state
           postal_code
           country
+          instructions
         }
       }
       assigned_agent {
@@ -785,6 +796,7 @@ export const GET_ORDER_FOR_RECEIPT = gql`
         state
         postal_code
         country
+        instructions
       }
       order_items {
         id
@@ -831,6 +843,7 @@ export const GET_ORDER_FOR_SHIPPING_LABEL = gql`
           state
           postal_code
           country
+          instructions
         }
       }
       delivery_address {
@@ -840,6 +853,7 @@ export const GET_ORDER_FOR_SHIPPING_LABEL = gql`
         state
         postal_code
         country
+        instructions
       }
       delivery_time_windows(limit: 5, order_by: { preferred_date: asc }) {
         id

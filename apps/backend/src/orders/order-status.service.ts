@@ -307,6 +307,7 @@ export class OrderStatusService {
               state
               postal_code
               country
+              instructions
             }
             order_items {
               item_name

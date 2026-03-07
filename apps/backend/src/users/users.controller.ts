@@ -75,15 +75,16 @@ export class UsersController {
       firstName: string;
       lastName: string;
       phoneNumber?: string;
+      preferredLanguage?: 'en' | 'fr';
     }
   ) {
     try {
       const currentUser = await this.hasuraUserService.getUser();
       const mutation = `
-        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String) {
+        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String, $preferred_language: String) {
           update_users_by_pk(
             pk_columns: { id: $id }
-            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number }
+            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, preferred_language: $preferred_language }
           ) {
             id
             identifier
@@ -93,6 +94,7 @@ export class UsersController {
             phone_number
             user_type_id
             profile_picture_url
+            preferred_language
             created_at
             updated_at
           }
@@ -103,6 +105,10 @@ export class UsersController {
         first_name: body.firstName,
         last_name: body.lastName,
         phone_number: body.phoneNumber ?? null,
+        preferred_language:
+          body.preferredLanguage !== undefined
+            ? body.preferredLanguage
+            : (currentUser as any).preferred_language ?? 'fr',
       });
       return {
         success: true,

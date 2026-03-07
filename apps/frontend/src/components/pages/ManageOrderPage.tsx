@@ -961,6 +961,12 @@ const ManageOrderPage: React.FC = () => {
                               <Typography variant="body1">
                                 {formatAddress(order.business_location.address)}
                               </Typography>
+                              {order.business_location.address?.instructions && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                  <strong>{t('addresses.howToFind', 'How to find')}:</strong>{' '}
+                                  {order.business_location.address.instructions}
+                                </Typography>
+                              )}
                             </Box>
                           </Box>
                         </Paper>
@@ -979,6 +985,12 @@ const ManageOrderPage: React.FC = () => {
                             <Box sx={{ flex: 1 }}>
                               <Typography variant="body1" component="div">
                                 {formatAddress(order.delivery_address)}
+                                {order.delivery_address.instructions && (
+                                  <Typography variant="body2" color="text.secondary" component="span" display="block" sx={{ mt: 1 }}>
+                                    <strong>{t('addresses.howToFind', 'How to find')}:</strong>{' '}
+                                    {order.delivery_address.instructions}
+                                  </Typography>
+                                )}
                                 {profile?.agent?.id &&
                                   order.assigned_agent_id &&
                                   order.assigned_agent_id ===

@@ -67,6 +67,7 @@ export interface Address {
   state: string;
   postal_code: string;
   country: string;
+  instructions?: string;
 }
 
 export interface Order {

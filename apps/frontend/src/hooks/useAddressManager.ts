@@ -13,6 +13,7 @@ export interface Address {
   address_type: string;
   latitude?: number;
   longitude?: number;
+  instructions?: string;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +29,7 @@ export interface AddressFormData {
   is_primary: boolean;
   latitude?: number;
   longitude?: number;
+  instructions?: string;
 }
 
 export interface AddressApiResponse {
@@ -165,6 +167,7 @@ export const useAddressManager = (config: AddressManagerConfig) => {
           address_type: addressData.address_type,
           latitude: addressData.latitude,
           longitude: addressData.longitude,
+          instructions: addressData.instructions || undefined,
         };
 
         // Make the API call using useApiClient
@@ -271,6 +274,9 @@ export const useAddressManager = (config: AddressManagerConfig) => {
         }
         if (addressData.longitude !== undefined) {
           requestData.longitude = addressData.longitude;
+        }
+        if (addressData.instructions !== undefined) {
+          requestData.instructions = addressData.instructions;
         }
 
         // Use PATCH for partial update

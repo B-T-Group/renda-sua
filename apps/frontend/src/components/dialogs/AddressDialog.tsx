@@ -33,6 +33,7 @@ export interface AddressFormData {
   is_primary?: boolean;
   latitude?: number;
   longitude?: number;
+  instructions?: string;
 }
 
 interface AddressDialogProps {
@@ -368,6 +369,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           is_primary: addressData?.is_primary || false,
           latitude: location.latitude,
           longitude: location.longitude,
+          instructions: addressData?.instructions,
         });
       } else {
         // If no address but we have coordinates, just update coordinates
@@ -382,6 +384,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           is_primary: addressData?.is_primary || false,
           latitude: addressData?.latitude,
           longitude: addressData?.longitude,
+          instructions: addressData?.instructions,
         });
       }
     } catch (error) {
@@ -415,6 +418,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           is_primary: addressData?.is_primary || false,
           latitude: addressData?.latitude,
           longitude: addressData?.longitude,
+          instructions: addressData?.instructions,
         });
       }
     } else {
@@ -448,6 +452,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             is_primary: addressData?.is_primary || false,
             latitude: addressData?.latitude,
             longitude: addressData?.longitude,
+            instructions: addressData?.instructions,
           });
         }
       } else {
@@ -474,6 +479,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
         is_primary: addressData?.is_primary || false,
         latitude: addressData?.latitude,
         longitude: addressData?.longitude,
+        instructions: addressData?.instructions,
         [field]: value,
       });
     },
@@ -589,6 +595,28 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
               value={addressData?.address_line_2 || ''}
               onChange={(e) =>
                 handleInputChange('address_line_2', e.target.value)
+              }
+            />
+          </Box>
+
+          {/* Instructions (how to find the location) */}
+          <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              maxRows={3}
+              label={t(
+                'addresses.addressDialog.instructionsLabel',
+                'How to find this location (optional)'
+              )}
+              placeholder={t(
+                'addresses.instructionsPlaceholder',
+                'E.g. landmarks, building name, floor, or extra directions to help locate this address'
+              )}
+              value={addressData?.instructions || ''}
+              onChange={(e) =>
+                handleInputChange('instructions', e.target.value)
               }
             />
           </Box>

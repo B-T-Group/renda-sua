@@ -424,6 +424,12 @@ const OrderView: React.FC<OrderViewProps> = ({
                 >
                   {formatAddress(order.delivery_address)}
                 </Typography>
+                {order.delivery_address?.instructions && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1, lineHeight: 1.6 }}>
+                    <strong>{t('addresses.howToFind', 'How to find')}:</strong>{' '}
+                    {order.delivery_address.instructions}
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>

@@ -31,6 +31,7 @@ export interface DeliveryTrackingMapProps {
     country?: string;
     latitude?: number;
     longitude?: number;
+    instructions?: string;
   };
   deliveryAddress?: {
     address_line_1?: string;
@@ -41,6 +42,7 @@ export interface DeliveryTrackingMapProps {
     country?: string;
     latitude?: number;
     longitude?: number;
+    instructions?: string;
   };
 }
 
@@ -153,6 +155,11 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
                 <Typography variant="body2">
                   {formatAddress(pickupAddress)}
                 </Typography>
+                {pickupAddress.instructions && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    <strong>{t('addresses.howToFind', 'How to find')}:</strong> {pickupAddress.instructions}
+                  </Typography>
+                )}
               </Box>
             </Box>
           )}
@@ -167,6 +174,11 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
                 <Typography variant="body2">
                   {formatAddress(deliveryAddress)}
                 </Typography>
+                {deliveryAddress.instructions && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    <strong>{t('addresses.howToFind', 'How to find')}:</strong> {deliveryAddress.instructions}
+                  </Typography>
+                )}
               </Box>
             </Box>
           )}

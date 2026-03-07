@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../hooks/useApiClient';
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 
@@ -20,6 +21,7 @@ export interface Address {
   country: string;
   is_primary: boolean;
   address_type: string;
+  instructions?: string;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +46,7 @@ export interface UserProfile {
   last_name: string;
   phone_number?: string;
   profile_picture_url?: string;
+  preferred_language?: string;
   user_type_id: string;
   client?: {
     id: string;
@@ -125,6 +128,7 @@ const INSERT_AGENT_ADDRESS = `
         address_type
         latitude
         longitude
+        instructions
         created_at
         updated_at
       }
@@ -152,6 +156,7 @@ const INSERT_CLIENT_ADDRESS = `
         address_type
         latitude
         longitude
+        instructions
         created_at
         updated_at
       }
@@ -179,6 +184,7 @@ const INSERT_BUSINESS_ADDRESS = `
         address_type
         latitude
         longitude
+        instructions
         created_at
         updated_at
       }
@@ -203,6 +209,7 @@ const UPDATE_ADDRESS = `
       address_type
       latitude
       longitude
+      instructions
       created_at
       updated_at
     }
@@ -218,6 +225,7 @@ interface AddressFormData {
   country: string;
   address_type: string;
   is_primary: boolean;
+  instructions?: string;
 }
 
 interface UserProfileContextType {
@@ -280,6 +288,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
 
   const { isAuthenticated, isLoading } = useAuth0();
   const apiClient = useApiClient();
+  const { i18n } = useTranslation();
 
   // GraphQL hooks for mutations
   const { execute: updateUserProfilePicture } = useGraphQLRequest(
@@ -312,6 +321,12 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
       if (response.data.success) {
         const userProfile = response.data.user;
         setProfile(userProfile);
+
+        // Apply user preferred language when logged in
+        const lang = userProfile.preferred_language;
+        if (lang === 'en' || lang === 'fr') {
+          i18n.changeLanguage(lang);
+        }
 
         // Determine user type based on user_type_id
         const typeMap: Record<string, UserType> = {
@@ -361,7 +376,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [apiClient, isAuthenticated]);
+  }, [apiClient, isAuthenticated, i18n]);
 
   const checkAccounts = useCallback(async () => {
     if (!isAuthenticated) {

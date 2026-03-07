@@ -75,6 +75,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     state: '',
     postal_code: '00000',
     country: '',
+    instructions: '',
   });
 
   // Address dialog state
@@ -107,6 +108,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         state: state?.name ?? location.address.state,
         postal_code: location.address.postal_code,
         country: location.address.country,
+        instructions: location.address.instructions || '',
       });
     } else {
       // Reset form for new location; country comes from business primary address
@@ -127,6 +129,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         state: '',
         postal_code: '00000',
         country: businessPrimaryCountry ?? '',
+        instructions: '',
       });
     }
   }, [location, open, businessPrimaryCountry]);

@@ -2521,6 +2521,7 @@ export class OrdersService {
               state
               postal_code
               country
+              instructions
             }
           }
           delivery_address {
@@ -2531,6 +2532,7 @@ export class OrdersService {
             state
             postal_code
             country
+            instructions
           }
           assigned_agent {
             id
@@ -2738,6 +2740,7 @@ export class OrdersService {
               state
               country
               postal_code
+              instructions
             }
           }
           
@@ -2747,6 +2750,7 @@ export class OrdersService {
             state
             country
             postal_code
+            instructions
           }
           currency
           current_status
@@ -3026,6 +3030,7 @@ export class OrdersService {
               country
               latitude
               longitude
+              instructions
             }
           }
           delivery_address {
@@ -3038,6 +3043,7 @@ export class OrdersService {
             country
             latitude
             longitude
+            instructions
           }
           assigned_agent {
             id
@@ -3909,6 +3915,7 @@ export class OrdersService {
               state
               postal_code
               country
+              instructions
             }
           }
           delivery_address {
@@ -3919,6 +3926,7 @@ export class OrdersService {
             state
             postal_code
             country
+            instructions
           }
           assigned_agent_id
           assigned_agent {

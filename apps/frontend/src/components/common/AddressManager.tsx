@@ -109,6 +109,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     country: '',
     address_type: 'home',
     is_primary: false,
+    instructions: '',
   });
 
   // Handle add address
@@ -123,6 +124,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       country: '',
       address_type: 'home',
       is_primary: false,
+      instructions: '',
     });
     setEditingAddress(null);
     setAddressDialogOpen(true);
@@ -142,6 +144,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       is_primary: address.is_primary,
       latitude: address.latitude,
       longitude: address.longitude,
+      instructions: address.instructions || '',
     });
     setEditingAddress(address);
     setAddressDialogOpen(true);
@@ -168,6 +171,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
         is_primary: addressForm.is_primary || false,
         latitude: addressForm.latitude,
         longitude: addressForm.longitude,
+        instructions: addressForm.instructions,
       };
 
       if (editingAddress) {

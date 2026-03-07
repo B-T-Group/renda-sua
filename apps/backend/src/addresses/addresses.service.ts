@@ -21,6 +21,7 @@ export interface CreateAddressDto {
   address_type?: string;
   latitude?: number;
   longitude?: number;
+  instructions?: string;
 }
 
 export interface AddressResponse {
@@ -35,6 +36,7 @@ export interface AddressResponse {
   address_type?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  instructions?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -50,6 +52,7 @@ export interface UpdateAddressDto {
   address_type?: string;
   latitude?: number;
   longitude?: number;
+  instructions?: string;
 }
 
 @Injectable()
@@ -385,7 +388,8 @@ export class AddressesService {
           $isPrimary: Boolean!,
           $addressType: String!,
           $latitude: numeric,
-          $longitude: numeric
+          $longitude: numeric,
+          $instructions: String
         ) {
           insert_addresses_one(object: {
             address_line_1: $addressLine1,
@@ -397,7 +401,8 @@ export class AddressesService {
             is_primary: $isPrimary,
             address_type: $addressType,
             latitude: $latitude,
-            longitude: $longitude
+            longitude: $longitude,
+            instructions: $instructions
           }) {
             id
             address_line_1
@@ -410,6 +415,7 @@ export class AddressesService {
             address_type
             latitude
             longitude
+            instructions
             created_at
             updated_at
           }
@@ -429,6 +435,7 @@ export class AddressesService {
           addressType: addressData.address_type || 'home',
           latitude: coordinates?.latitude || addressData.latitude,
           longitude: coordinates?.longitude || addressData.longitude,
+          instructions: addressData.instructions ?? null,
         }
       );
 
@@ -929,6 +936,9 @@ export class AddressesService {
       if (addressData.longitude !== undefined && !coordinates) {
         updateData.longitude = addressData.longitude;
       }
+      if (addressData.instructions !== undefined) {
+        updateData.instructions = addressData.instructions;
+      }
 
       // Update address
       const updateMutation = `
@@ -943,7 +953,8 @@ export class AddressesService {
           $isPrimary: Boolean,
           $addressType: String,
           $latitude: numeric,
-          $longitude: numeric
+          $longitude: numeric,
+          $instructions: String
         ) {
           update_addresses_by_pk(
             pk_columns: { id: $addressId },
@@ -957,7 +968,8 @@ export class AddressesService {
               is_primary: $isPrimary,
               address_type: $addressType,
               latitude: $latitude,
-              longitude: $longitude
+              longitude: $longitude,
+              instructions: $instructions
             }
           ) {
             id
@@ -971,6 +983,7 @@ export class AddressesService {
             address_type
             latitude
             longitude
+            instructions
             created_at
             updated_at
           }
@@ -991,6 +1004,7 @@ export class AddressesService {
           addressType: updateData.address_type,
           latitude: updateData.latitude,
           longitude: updateData.longitude,
+          instructions: updateData.instructions ?? undefined,
         }
       );
 
@@ -1073,6 +1087,7 @@ export class AddressesService {
           address_type
           latitude
           longitude
+          instructions
           created_at
           updated_at
         }
@@ -1130,6 +1145,7 @@ export class AddressesService {
             address_type
             latitude
             longitude
+            instructions
             created_at
             updated_at
           }
@@ -1242,7 +1258,8 @@ export class AddressesService {
         $country: String!,
         $addressType: String!,
         $latitude: numeric,
-        $longitude: numeric
+        $longitude: numeric,
+        $instructions: String
       ) {
         insert_addresses_one(object: {
           address_line_1: $addressLine1,
@@ -1253,7 +1270,8 @@ export class AddressesService {
           country: $country,
           address_type: $addressType,
           latitude: $latitude,
-          longitude: $longitude
+          longitude: $longitude,
+          instructions: $instructions
         }) {
           id
           address_line_1
@@ -1266,6 +1284,7 @@ export class AddressesService {
           address_type
           latitude
           longitude
+          instructions
           created_at
           updated_at
         }
@@ -1284,6 +1303,7 @@ export class AddressesService {
         addressType: addressData.address_type || 'store',
         latitude: coordinates?.latitude,
         longitude: coordinates?.longitude,
+        instructions: addressData.instructions ?? null,
       }
     );
 
@@ -1458,6 +1478,9 @@ export class AddressesService {
     if (addressData.longitude !== undefined && !coordinates) {
       updateData.longitude = addressData.longitude;
     }
+    if (addressData.instructions !== undefined) {
+      updateData.instructions = addressData.instructions;
+    }
 
     // Update address
     const updateMutation = `
@@ -1471,7 +1494,8 @@ export class AddressesService {
         $country: String,
         $addressType: String,
         $latitude: numeric,
-        $longitude: numeric
+        $longitude: numeric,
+        $instructions: String
       ) {
         update_addresses_by_pk(
           pk_columns: { id: $addressId },
@@ -1484,7 +1508,8 @@ export class AddressesService {
             country: $country,
             address_type: $addressType,
             latitude: $latitude,
-            longitude: $longitude
+            longitude: $longitude,
+            instructions: $instructions
           }
         ) {
           id
@@ -1498,6 +1523,7 @@ export class AddressesService {
           address_type
           latitude
           longitude
+          instructions
           created_at
           updated_at
         }
@@ -1517,6 +1543,7 @@ export class AddressesService {
         addressType: updateData.address_type,
         latitude: updateData.latitude,
         longitude: updateData.longitude,
+        instructions: updateData.instructions ?? undefined,
       }
     );
 

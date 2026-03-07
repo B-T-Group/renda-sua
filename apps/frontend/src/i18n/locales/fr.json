@@ -88,6 +88,7 @@
       "country": "Pays",
       "defaultTitle": "Adresse",
       "hasPostalCode": "Avez-vous un code postal ?",
+      "instructionsLabel": "Comment trouver ce lieu (optionnel)",
       "latitude": "Latitude (Optionnel)",
       "longitude": "Longitude (Optionnel)",
       "postalCode": "Code postal",
@@ -99,6 +100,8 @@
       "yes": "Oui",
       "no": "Non"
     },
+    "instructionsPlaceholder": "Ex. repères, nom du bâtiment, étage ou indications pour localiser cette adresse",
+    "howToFind": "Comment s'y rendre",
     "saveError": "Échec de l'enregistrement de l'adresse. Veuillez réessayer.",
     "addressTypes": {
       "billing": "Facturation",

@@ -68,6 +68,7 @@ export interface OrderData {
       country: string;
       latitude?: number;
       longitude?: number;
+      instructions?: string;
     };
   };
   delivery_address: {
@@ -80,6 +81,7 @@ export interface OrderData {
     country: string;
     latitude?: number;
     longitude?: number;
+    instructions?: string;
   };
   assigned_agent?: {
     id: string;

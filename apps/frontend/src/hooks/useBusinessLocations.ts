@@ -13,6 +13,7 @@ export interface BusinessLocation {
     state: string;
     postal_code: string;
     country: string;
+    instructions?: string;
   };
   phone?: string;
   email?: string;
@@ -43,6 +44,7 @@ export interface AddBusinessLocationData {
     state: string;
     postal_code: string;
     country: string;
+    instructions?: string;
   };
 }
 
@@ -63,6 +65,7 @@ export interface UpdateBusinessLocationData {
     state?: string;
     postal_code?: string;
     country?: string;
+    instructions?: string;
   };
 }
 
@@ -161,6 +164,7 @@ export const useBusinessLocations = (
             city: data.address.city,
             state: data.address.state,
             postal_code: data.address.postal_code,
+            instructions: data.address.instructions,
           },
           phone: data.phone,
           email: data.email,
@@ -260,6 +264,9 @@ export const useBusinessLocations = (
           }
           if (address.longitude !== undefined) {
             addressUpdateData.longitude = address.longitude;
+          }
+          if (address.instructions !== undefined) {
+            addressUpdateData.instructions = address.instructions;
           }
 
           // Use PATCH endpoint for business location address

@@ -434,34 +434,48 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               color="primary"
               sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }}
             />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
-            >
-              <strong>{t('orders.pickupAddress', 'Pickup')}:</strong>{' '}
-              {formatAddress(order.business_location?.address)}
-            </Typography>
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
+              >
+                <strong>{t('orders.pickupAddress', 'Pickup')}:</strong>{' '}
+                {formatAddress(order.business_location?.address)}
+              </Typography>
+              {order.business_location?.address?.instructions && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', lineHeight: 1.3, mt: 0.25 }}>
+                  {t('addresses.howToFind', 'How to find')}: {order.business_location.address.instructions}
+                </Typography>
+              )}
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
             <LocationIcon
               color="secondary"
               sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }}
             />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
-            >
-              <strong>{t('orders.deliveryAddress', 'Deliver')}:</strong>{' '}
-              {formatAddress(order.delivery_address)}
-              {profile?.agent?.id &&
-                order.assigned_agent_id &&
-                order.assigned_agent_id === profile.agent.id &&
-                order.client?.user?.phone_number && (
-                  <> • 📞 {order.client.user.phone_number}</>
-                )}
-            </Typography>
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: '0.7rem', lineHeight: 1.4 }}
+              >
+                <strong>{t('orders.deliveryAddress', 'Deliver')}:</strong>{' '}
+                {formatAddress(order.delivery_address)}
+                {profile?.agent?.id &&
+                  order.assigned_agent_id &&
+                  order.assigned_agent_id === profile.agent.id &&
+                  order.client?.user?.phone_number && (
+                    <> • 📞 {order.client.user.phone_number}</>
+                  )}
+              </Typography>
+              {order.delivery_address?.instructions && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', lineHeight: 1.3, mt: 0.25 }}>
+                  {t('addresses.howToFind', 'How to find')}: {order.delivery_address.instructions}
+                </Typography>
+              )}
+            </Box>
           </Box>
         </Box>
 

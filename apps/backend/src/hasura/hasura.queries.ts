@@ -14,6 +14,7 @@ export const GET_USER_BY_IDENTIFIER = gql`
       email_verified
       user_type_id
       profile_picture_url
+      preferred_language
       created_at
       updated_at
     }
@@ -35,6 +36,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
       email_verified
       user_type_id
       profile_picture_url
+      preferred_language
       created_at
       updated_at
       client {

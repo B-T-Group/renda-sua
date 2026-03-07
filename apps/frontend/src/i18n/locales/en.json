@@ -88,6 +88,7 @@
       "country": "Country",
       "defaultTitle": "Address",
       "hasPostalCode": "Do you have a postal code?",
+      "instructionsLabel": "How to find this location (optional)",
       "latitude": "Latitude (Optional)",
       "longitude": "Longitude (Optional)",
       "postalCode": "Postal Code",
@@ -99,6 +100,8 @@
       "yes": "Yes",
       "no": "No"
     },
+    "instructionsPlaceholder": "E.g. landmarks, building name, floor, or extra directions to help locate this address",
+    "howToFind": "How to find",
     "saveError": "Failed to save address. Please try again.",
     "addressTypes": {
       "billing": "Billing",
