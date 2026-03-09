@@ -283,6 +283,81 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
             </CardContent>
           </Card>
 
+          {/* Order Items List */}
+          {order.order_items.length > 0 && (
+            <Card>
+              <CardContent sx={{ py: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  {t('orders.orderItems', 'Order Items')}
+                </Typography>
+                <Stack spacing={1.5}>
+                  {order.order_items.map((item) => (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        p: 1,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          bgcolor: 'grey.100',
+                          flexShrink: 0,
+                          mr: 1.5,
+                        }}
+                      >
+                        {item.item?.item_images?.[0]?.image_url ? (
+                          <img
+                            src={item.item.item_images[0].image_url}
+                            alt={item.item_name}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
+                        ) : null}
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          noWrap
+                        >
+                          {item.item_name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('orders.quantity', 'Quantity')}: {item.quantity}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        variant="body2"
+                        fontWeight="medium"
+                        sx={{ ml: 2, whiteSpace: 'nowrap' }}
+                      >
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: order.currency || 'USD',
+                        }).format(
+                          item.total_price ??
+                            (item.unit_price || 0) * (item.quantity || 0)
+                        )}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Delivery Window Selection */}
           <Card>
             <CardContent sx={{ py: 2 }}>

@@ -1,28 +1,13 @@
 import {
   ArrowForward,
   CheckCircle,
-  ExpandLess,
-  ExpandMore,
   FlashOn,
   LocalShipping as LocalShippingIcon,
   LocationOn,
   Schedule as ScheduleIcon,
   ShoppingBag,
 } from '@mui/icons-material';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Collapse,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { Box, Button, Card, CardContent, Chip, CircularProgress, Stack, Tooltip, Typography, useTheme } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -72,7 +57,6 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const { confirmOrder, completePreparation, completeOrder } = useBackendOrders();
   const { printLabelAndPrint, loading: printLabelLoading } = useShippingLabels();
-  const [showItems, setShowItems] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
@@ -393,10 +377,14 @@ const OrderCard: React.FC<OrderCardProps> = ({
 
   const availableActions = getAvailableActions();
   const primaryAction = availableActions[0];
-  const statusBarColor =
-    theme.palette[getStatusColor(currentStatus) as keyof typeof theme.palette]?.main ??
-    theme.palette.divider;
-  const itemCount = order.order_items?.length ?? 0;
+  const statusColorKey = getStatusColor(currentStatus) as keyof typeof theme.palette;
+  const statusPalette = theme.palette[statusColorKey] as { main?: string } | undefined;
+  const statusBarColor = statusPalette?.main ?? theme.palette.divider;
+  const itemCount =
+    order.order_items?.reduce(
+      (sum: number, item: OrderItem) => sum + (item.quantity ?? 0),
+      0
+    ) ?? 0;
   const deliveryFee = getDeliveryFee();
   const addressShort = order.delivery_address
     ? [order.delivery_address.address_line_1, order.delivery_address.city].filter(Boolean).join(', ')
@@ -643,64 +631,6 @@ const OrderCard: React.FC<OrderCardProps> = ({
           </Stack>
         </Box>
       </CardContent>
-
-      {/* Expandable order items (multi-item) */}
-      {order.order_items && order.order_items.length > 1 && (
-        <>
-          <Button
-            fullWidth
-            size="small"
-            onClick={() => setShowItems(!showItems)}
-            endIcon={showItems ? <ExpandLess /> : <ExpandMore />}
-            sx={{ textTransform: 'none', py: 0.5 }}
-          >
-            {t('orders.orderItems', 'Order Items')}
-          </Button>
-          <Collapse in={showItems}>
-            <Box sx={{ px: 2, pb: 1.5, pt: 0 }}>
-              <Stack spacing={1}>
-                {order.order_items.map((item: OrderItem, index: number) => (
-                  <Paper key={item.id || index} variant="outlined" sx={{ p: 1 }}>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          bgcolor: 'grey.100',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {item.item?.item_images?.[0]?.image_url ? (
-                          <img
-                            src={item.item.item_images[0].image_url}
-                            alt=""
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        ) : (
-                          <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">📦</Typography>
-                          </Box>
-                        )}
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight="medium" noWrap>
-                          {item.item_name ?? item.item?.item_sub_category?.name ?? t('orders.unknownItem', 'Unknown Item')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {t('orders.quantity', 'Qty')}: {item.quantity}
-                          {item.total_price != null && order.currency && ` · ${formatCurrency(item.total_price, order.currency)}`}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            </Box>
-          </Collapse>
-        </>
-      )}
 
       {/* Confirm Order Modal */}
       <ConfirmOrderModal
