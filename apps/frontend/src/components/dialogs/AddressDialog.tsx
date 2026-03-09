@@ -111,6 +111,34 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
     error: locationError,
   } = useCurrentLocation();
 
+  const normalizeString = (value: string): string =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const findBestOptionLabel = (
+    raw: string | undefined,
+    options: string[]
+  ): string => {
+    if (!raw) return '';
+    const normalizedRaw = normalizeString(raw);
+    const exactMatch = options.find(
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+      (option) => normalizeString(option) === normalizedRaw
+    );
+    if (exactMatch) return exactMatch;
+    const partialMatch = options.find((option) => {
+      const normalizedOption = normalizeString(option);
+      return (
+        normalizedOption.includes(normalizedRaw) ||
+        normalizedRaw.includes(normalizedOption)
+      );
+    });
+    return partialMatch || raw;
+  };
+
   // Helper function to find country code by name
   const findCountryCode = (countryName: string): string => {
     if (!countryName) return '';
@@ -351,6 +379,30 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
         // Convert country name to code
         const countryCode = findCountryCode(location.country || '');
 
+        const matchedState =
+          countryCode && location.state
+            ? findBestOptionLabel(
+                location.state,
+                State.getStatesOfCountry(countryCode).map(
+                  (state) => state.name
+                )
+              )
+            : location.state || '';
+
+        let matchedCity = location.city || '';
+
+        if (countryCode && matchedState) {
+          const stateCodeForCities = findStateCode(matchedState, countryCode);
+          if (stateCodeForCities) {
+            matchedCity = findBestOptionLabel(
+              location.city,
+              City.getCitiesOfState(countryCode, stateCodeForCities).map(
+                (city) => city.name
+              )
+            );
+          }
+        }
+
         console.log('Conversion results:', {
           originalCountry: location.country,
           countryCode,
@@ -361,8 +413,8 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
         onAddressChange({
           address_line_1: location.address || '',
           address_line_2: addressData?.address_line_2 || '',
-          city: location.city || '',
-          state: location.state || '', // Use state name directly
+          city: matchedCity,
+          state: matchedState, // Use best-matched state name directly
           country: countryCode, // Use country code instead of name
           postal_code: location.postalCode || '',
           address_type: addressData?.address_type || 'home',
