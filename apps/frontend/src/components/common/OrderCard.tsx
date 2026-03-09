@@ -180,6 +180,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
           ? error.message
           : t('messages.orderConfirmError', 'Failed to confirm order');
       enqueueSnackbar(errorMessage, { variant: 'error' });
+      throw new Error(errorMessage);
     } finally {
       setLoadingAction(null);
     }
