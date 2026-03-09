@@ -4850,6 +4850,8 @@ export class OrdersService {
     const payment_status = canPayWithWallet || isZeroOrNegativeOrder
       ? 'paid'
       : 'pending';
+    const payment_source: 'wallet' | 'mobile_payment' =
+      canPayWithWallet || isZeroOrNegativeOrder ? 'wallet' : 'mobile_payment';
     const special_instructions = orderData.special_instructions || '';
     const estimated_delivery_time = null;
     const preferred_delivery_time = null;
@@ -4876,6 +4878,7 @@ export class OrdersService {
         $currentStatus: order_status!,
         $paymentMethod: String!,
         $paymentStatus: String!,
+        $paymentSource: payment_source_enum!,
         $specialInstructions: String!,
         $estimatedDeliveryTime: timestamptz,
         $preferredDeliveryTime: timestamptz,
@@ -4893,6 +4896,7 @@ export class OrdersService {
           order_number: $orderNumber,
           payment_method: $paymentMethod,
           payment_status: $paymentStatus,
+          payment_source: $paymentSource,
           base_delivery_fee: $baseDeliveryFee,
           per_km_delivery_fee: $perKmDeliveryFee,
           subtotal: $subTotal,
@@ -4915,6 +4919,7 @@ export class OrdersService {
           order_number
           payment_method
           payment_status
+          payment_source
           base_delivery_fee
           per_km_delivery_fee
           subtotal
@@ -4985,6 +4990,7 @@ export class OrdersService {
         currentStatus: current_status,
         paymentMethod: payment_method,
         paymentStatus: payment_status,
+        paymentSource: payment_source,
         specialInstructions: special_instructions,
         estimatedDeliveryTime: estimated_delivery_time,
         preferredDeliveryTime: preferred_delivery_time,

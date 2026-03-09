@@ -96,6 +96,7 @@ insert_permissions:
         - order_number
         - payment_method
         - payment_status
+        - payment_source
         - base_delivery_fee
         - per_km_delivery_fee
         - subtotal
@@ -135,6 +136,7 @@ select_permissions:
         - preferred_delivery_time
         - payment_method
         - payment_status
+        - payment_source
         - created_at
         - updated_at
         - requires_fast_delivery
@@ -169,6 +171,7 @@ select_permissions:
         - preferred_delivery_time
         - payment_method
         - payment_status
+        - payment_source
         - created_at
         - updated_at
         - requires_fast_delivery
@@ -202,6 +205,7 @@ select_permissions:
         - preferred_delivery_time
         - payment_method
         - payment_status
+        - payment_source
         - created_at
         - updated_at
         - requires_fast_delivery
