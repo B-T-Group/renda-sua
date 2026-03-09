@@ -5082,10 +5082,12 @@ export class OrdersService {
         ...order,
         total_amount: total_amount,
         delivery_window: deliveryWindow,
+        payment_source: 'mobile_money' as const,
         payment_transaction: {
           success: paymentTransaction.success,
           transaction_id: paymentTransaction.transactionId,
           message: paymentTransaction.message,
+          mode: 'mobile_money' as const,
         },
         database_transaction: {
           id: transaction.id,
@@ -5095,18 +5097,21 @@ export class OrdersService {
       };
     }
 
-    // For wallet-funded or zero-amount orders, finalize payment immediately
-    await this.finalizeClientOrderPayment(order, account.id);
+    // For wallet-funded or zero-amount orders, finalize payment immediately.
+    // Fetch full order (with business_location, delivery_address, client) so notifications have required data.
+    const orderWithDetails = await this.getOrderByNumber(order.order_number);
+    await this.finalizeClientOrderPayment(orderWithDetails, account.id);
 
     return {
       ...order,
       total_amount: total_amount,
       delivery_window: deliveryWindow,
+      payment_source: 'wallet' as const,
       payment_transaction: {
         success: true,
         transaction_id: null,
         message: 'Paid from Rendasua account',
-        mode: 'wallet',
+        mode: 'wallet' as const,
       },
       database_transaction: null,
     };

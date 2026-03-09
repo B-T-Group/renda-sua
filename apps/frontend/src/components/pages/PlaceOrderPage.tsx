@@ -60,6 +60,7 @@ import DeliveryTimeWindowSelector, {
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
+import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 // Loading Skeleton Component
@@ -2744,6 +2745,9 @@ const PlaceOrderPage: React.FC = () => {
         onSave={handleSaveAddress}
         onAddressChange={handleAddressChange}
       />
+
+      {/* Placing order overlay with animation */}
+      <PlacingOrderOverlay open={loading} />
     </>
   );
 };

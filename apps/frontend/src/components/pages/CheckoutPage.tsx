@@ -37,6 +37,7 @@ import DeliveryTimeWindowSelector, {
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import PhoneInput from '../common/PhoneInput';
+import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 // Loading Skeleton Component
@@ -859,6 +860,9 @@ const CheckoutPage: React.FC = () => {
         addressData={addressFormData}
         onAddressChange={setAddressFormData}
       />
+
+      {/* Placing order overlay with animation */}
+      <PlacingOrderOverlay open={checkoutLoading} />
       </Container>
     </Box>
   );
