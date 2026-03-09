@@ -1783,6 +1783,10 @@
     "step2": "Confirmez la demande de paiement pour autoriser la transaction",
     "step3": "Votre commande sera transmise au marchand dans les 24 heures",
     "step4": "Vous recevrez des mises à jour sur le statut de votre commande par e-mail et notifications dans l'application",
+    "paidFromWalletTitle": "Commande confirmée et payée",
+    "paidFromWalletMessage": "Votre commande a été payée depuis votre compte Rendasua. Aucune action supplémentaire n'est requise.",
+    "walletStep1": "Votre commande a été envoyée au marchand",
+    "walletStep2": "Vous recevrez des mises à jour sur le statut de votre commande par e-mail et dans l'application. Suivez l'avancement dans Mes commandes.",
     "subtotal": "Sous-total",
     "items": "Articles",
     "table": {

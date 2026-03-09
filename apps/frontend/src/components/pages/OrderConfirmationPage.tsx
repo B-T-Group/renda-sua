@@ -19,6 +19,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+type PaymentSource = 'wallet' | 'mobile_payment' | 'credit_card';
+
 interface OrderConfirmationData {
   order?: {
     id: string;
@@ -27,16 +29,18 @@ interface OrderConfirmationData {
     currency: string;
     current_status: string;
     created_at: string;
+    payment_source?: PaymentSource;
     payment_transaction: {
-      transaction_id: string;
+      transaction_id: string | null;
       success: boolean;
       message: string;
+      mode?: string;
     };
     database_transaction: {
       id: string;
       reference: string;
       status: string;
-    };
+    } | null;
   };
   orders?: Array<{
     id: string;
@@ -45,16 +49,18 @@ interface OrderConfirmationData {
     currency: string;
     current_status: string;
     created_at: string;
+    payment_source?: PaymentSource;
     payment_transaction: {
-      transaction_id: string;
+      transaction_id: string | null;
       success: boolean;
       message: string;
+      mode?: string;
     };
     database_transaction: {
       id: string;
       reference: string;
       status: string;
-    };
+    } | null;
   }>;
   multipleOrders?: boolean;
 }
@@ -96,6 +102,11 @@ const OrderConfirmationPage: React.FC = () => {
     0
   );
   const currency = orders[0]?.currency || 'USD';
+
+  // Use payment_source to choose confirmation: wallet = simple; mobile_payment = confirm on phone
+  const showMobilePaymentConfirmation = isMultipleOrders
+    ? orders.some((o) => o.payment_source === 'mobile_payment')
+    : (orders[0]?.payment_source ?? 'mobile_payment') === 'mobile_payment';
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');
@@ -155,74 +166,117 @@ const OrderConfirmationPage: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Payment Confirmation Alert */}
-      <Card
-        sx={{
-          mb: { xs: 3, sm: 4 },
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
-          boxShadow: '0 4px 20px rgba(25, 118, 210, 0.3)',
-          border: '1px solid #1565c0',
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              mb: 2,
-              flexDirection: { xs: 'column', sm: 'row' },
-              textAlign: { xs: 'center', sm: 'left' },
-            }}
-          >
-            <Phone
+      {/* Payment confirmation: wallet = simple; mobile_payment = confirm on phone */}
+      {showMobilePaymentConfirmation ? (
+        <Card
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+            color: 'white',
+            boxShadow: '0 4px 20px rgba(25, 118, 210, 0.3)',
+            border: '1px solid #1565c0',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box
               sx={{
-                mr: { xs: 0, sm: 1 },
-                mb: { xs: 1, sm: 0 },
-                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                mb: 2,
+                flexDirection: { xs: 'column', sm: 'row' },
+                textAlign: { xs: 'center', sm: 'left' },
               }}
-            />
+            >
+              <Phone
+                sx={{
+                  mr: { xs: 0, sm: 1 },
+                  mb: { xs: 1, sm: 0 },
+                  color: 'white',
+                }}
+              />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: 'white',
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                }}
+              >
+                {t(
+                  'orders.paymentConfirmationRequired',
+                  'Payment Confirmation Required'
+                )}
+              </Typography>
+            </Box>
+            <Typography
+              variant="body1"
+              sx={{ mb: 2, color: 'white', lineHeight: 1.6 }}
+            >
+              {t(
+                'orders.paymentConfirmationMessage',
+                'A payment request has been sent to your mobile phone. Please confirm the payment to complete your order.'
+              )}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 'medium',
+                color: 'rgba(255, 255, 255, 0.9)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+              }}
+            >
+              {t(
+                'orders.paymentConfirmationDeadline',
+                'Your order will be transmitted to the merchant within 24 hours once payment is confirmed.'
+              )}
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            bgcolor: 'success.50',
+            border: '1px solid',
+            borderColor: 'success.main',
+            boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography
               variant="h6"
               sx={{
                 fontWeight: 'bold',
-                color: 'white',
+                color: 'success.dark',
                 fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                textAlign: 'center',
               }}
             >
               {t(
-                'orders.paymentConfirmationRequired',
-                'Payment Confirmation Required'
+                'orders.paidFromWalletTitle',
+                'Order confirmed and paid'
               )}
             </Typography>
-          </Box>
-          <Typography
-            variant="body1"
-            sx={{ mb: 2, color: 'white', lineHeight: 1.6 }}
-          >
-            {t(
-              'orders.paymentConfirmationMessage',
-              'A payment request has been sent to your mobile phone. Please confirm the payment to complete your order.'
-            )}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 'medium',
-              color: 'rgba(255, 255, 255, 0.9)',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-            }}
-          >
-            {t(
-              'orders.paymentConfirmationDeadline',
-              'Your order will be transmitted to the merchant within 24 hours once payment is confirmed.'
-            )}
-          </Typography>
-        </CardContent>
-      </Card>
+            <Typography
+              variant="body1"
+              sx={{
+                mt: 1,
+                color: 'text.secondary',
+                lineHeight: 1.6,
+                textAlign: 'center',
+              }}
+            >
+              {t(
+                'orders.paidFromWalletMessage',
+                'Your order was paid from your Rendasua account. No further action is required.'
+              )}
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Order Details */}
       <Card sx={{ mb: { xs: 3, sm: 4 } }}>
@@ -670,7 +724,7 @@ const OrderConfirmationPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Next Steps */}
+      {/* Next Steps: different copy for wallet vs mobile payment */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -680,40 +734,61 @@ const OrderConfirmationPage: React.FC = () => {
             </Typography>
           </Box>
 
-          <Box component="ol" sx={{ pl: 2 }}>
-            <Box component="li" sx={{ mb: 2 }}>
-              <Typography variant="body1">
-                {t(
-                  'orders.step1',
-                  'Check your mobile phone for a payment request notification'
-                )}
-              </Typography>
+          {showMobilePaymentConfirmation ? (
+            <Box component="ol" sx={{ pl: 2 }}>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.step1',
+                    'Check your mobile phone for a payment request notification'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.step2',
+                    'Confirm the payment request to authorize the transaction'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.step3',
+                    'Your order will be transmitted to the merchant within 24 hours'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li">
+                <Typography variant="body1">
+                  {t(
+                    'orders.step4',
+                    'You will receive updates on your order status via email and in-app notifications'
+                  )}
+                </Typography>
+              </Box>
             </Box>
-            <Box component="li" sx={{ mb: 2 }}>
-              <Typography variant="body1">
-                {t(
-                  'orders.step2',
-                  'Confirm the payment request to authorize the transaction'
-                )}
-              </Typography>
+          ) : (
+            <Box component="ol" sx={{ pl: 2 }}>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.walletStep1',
+                    'Your order has been sent to the merchant'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li">
+                <Typography variant="body1">
+                  {t(
+                    'orders.walletStep2',
+                    'You will receive updates on your order status via email and in-app notifications. Track progress in My Orders.'
+                  )}
+                </Typography>
+              </Box>
             </Box>
-            <Box component="li" sx={{ mb: 2 }}>
-              <Typography variant="body1">
-                {t(
-                  'orders.step3',
-                  'Your order will be transmitted to the merchant within 24 hours'
-                )}
-              </Typography>
-            </Box>
-            <Box component="li">
-              <Typography variant="body1">
-                {t(
-                  'orders.step4',
-                  'You will receive updates on your order status via email and in-app notifications'
-                )}
-              </Typography>
-            </Box>
-          </Box>
+          )}
         </CardContent>
       </Card>
 

@@ -1811,6 +1811,10 @@
     "step2": "Confirm the payment request to authorize the transaction",
     "step3": "Your order will be transmitted to the merchant within 24 hours",
     "step4": "You will receive updates on your order status via email and in-app notifications",
+    "paidFromWalletTitle": "Order confirmed and paid",
+    "paidFromWalletMessage": "Your order was paid from your Rendasua account. No further action is required.",
+    "walletStep1": "Your order has been sent to the merchant",
+    "walletStep2": "You will receive updates on your order status via email and in-app notifications. Track progress in My Orders.",
     "amountBreakdown": "Amount Breakdown",
     "subtotal": "Subtotal",
     "table": {
