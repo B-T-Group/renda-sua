@@ -4029,110 +4029,8 @@ export class OrdersService {
    */
   async processOrderPayment(transaction: any): Promise<void> {
     try {
-      // Get order details by order number (reference)
       const order = await this.getOrderByNumber(transaction.reference);
-
-      // Register hold transactions for order amount and delivery fee
-      await this.accountsService.registerTransaction({
-        accountId: transaction.account_id,
-        amount: order.subtotal,
-        transactionType: 'hold',
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-
-      // Calculate total delivery fees (base delivery fee + per-km delivery fee)
-      const totalDeliveryFees =
-        order.base_delivery_fee + order.per_km_delivery_fee;
-
-      await this.accountsService.registerTransaction({
-        accountId: transaction.account_id,
-        amount: totalDeliveryFees,
-        transactionType: 'hold',
-        memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee}, per-km: ${order.per_km_delivery_fee})`,
-        referenceId: order.id,
-      });
-
-      // Create or update order hold
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-      await this.updateOrderHold(orderHold.id, {
-        client_hold_amount: order.subtotal,
-        delivery_fees: totalDeliveryFees,
-      });
-
-      // Update order status from pending_payment to pending and payment_status to paid
-      await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
-
-      // Generate 4-digit delivery PIN (hashed on order); plain PIN in cache for client retrieval
-      const deliveryPin = this.deliveryPinService.generatePin();
-      const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
-      await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
-      this.deliveryPinService.setPinForClient(order.id, deliveryPin);
-
-      // Send order creation notifications
-      try {
-        // Check if notifications are enabled
-        const notificationsEnabled =
-          this.configService.get('notification').orderStatusChangeEnabled;
-
-        if (notificationsEnabled) {
-        // Validate required data before creating notification data
-        if (!order.business_location?.business?.name) {
-          throw new Error('Business name is undefined');
-        }
-        if (!order.business_location?.business?.user?.email) {
-          throw new Error('Business email is undefined');
-        }
-        if (!order.delivery_address) {
-          throw new Error('Delivery address is undefined');
-        }
-
-        const notificationData: NotificationData = {
-          orderId: order.id,
-          orderNumber: order.order_number,
-          clientName: `${order.client?.user?.first_name || ''} ${
-            order.client?.user?.last_name || ''
-          }`.trim(),
-          clientEmail: order.client?.user?.email,
-          businessName: order.business_location.business.name,
-          businessEmail: order.business_location.business.user.email,
-            businessVerified:
-              order.business_location.business.is_verified || false,
-          orderStatus: order.current_status,
-          orderItems:
-            order.order_items?.map((item: any) => ({
-              name: item.item_name || 'Unknown Item',
-              quantity: item.quantity || 0,
-              unitPrice: item.unit_price || 0,
-              totalPrice: item.total_price || 0,
-            })) || [],
-          subtotal: order.subtotal || 0,
-            deliveryFee: order.base_delivery_fee || 0,
-            fastDeliveryFee: order.per_km_delivery_fee || 0,
-          taxAmount: order.tax_amount || 0,
-          totalAmount: order.total_amount || 0,
-          currency: order.currency || 'USD',
-          deliveryAddress: this.formatAddress(order.delivery_address),
-            estimatedDeliveryTime: order.estimated_delivery_time || undefined,
-            specialInstructions: order.special_instructions || undefined,
-        };
-
-        await this.notificationsService.sendOrderCreatedNotifications(
-          notificationData
-        );
-        } else {
-          this.logger.log(
-            `Order creation notifications disabled for order ${order.order_number}`
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Failed to send order creation notifications: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-        // Don't fail the order processing if notifications fail
-      }
+      await this.finalizeClientOrderPayment(order, transaction.account_id);
     } catch (error) {
       this.logger.error(
         `Failed to process order payment: ${
@@ -4140,6 +4038,106 @@ export class OrdersService {
         }`
       );
       throw error;
+    }
+  }
+
+  /**
+   * Finalize client order payment using internal account funds.
+   */
+  private async finalizeClientOrderPayment(
+    order: Orders,
+    accountId: string
+  ): Promise<void> {
+    await this.accountsService.registerTransaction({
+      accountId,
+      amount: order.subtotal,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+
+    const totalDeliveryFees =
+      order.base_delivery_fee + order.per_km_delivery_fee;
+
+    await this.accountsService.registerTransaction({
+      accountId,
+      amount: totalDeliveryFees,
+      transactionType: 'hold',
+      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee}, per-km: ${order.per_km_delivery_fee})`,
+      referenceId: order.id,
+    });
+
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: order.subtotal,
+      delivery_fees: totalDeliveryFees,
+    });
+
+    await this.updateOrderStatusAndPaymentStatus(order.id, 'pending', 'paid');
+
+    const deliveryPin = this.deliveryPinService.generatePin();
+    const deliveryPinHash =
+      this.deliveryPinService.hashPin(order.id, deliveryPin);
+    await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
+    this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+
+    try {
+      const notificationsEnabled =
+        this.configService.get('notification').orderStatusChangeEnabled;
+
+      if (!notificationsEnabled) {
+        return;
+      }
+
+      if (!order.business_location?.business?.name) {
+        throw new Error('Business name is undefined');
+      }
+      if (!order.business_location?.business?.user?.email) {
+        throw new Error('Business email is undefined');
+      }
+      if (!order.delivery_address) {
+        throw new Error('Delivery address is undefined');
+      }
+
+      const notificationData: NotificationData = {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        clientName: `${order.client?.user?.first_name || ''} ${
+          order.client?.user?.last_name || ''
+        }`.trim(),
+        clientEmail: order.client?.user?.email,
+        businessName: order.business_location.business.name,
+        businessEmail: order.business_location.business.user.email,
+        businessVerified:
+          order.business_location.business.is_verified || false,
+        orderStatus: order.current_status,
+        orderItems:
+          order.order_items?.map((item: any) => ({
+            name: item.item_name || 'Unknown Item',
+            quantity: item.quantity || 0,
+            unitPrice: item.unit_price || 0,
+            totalPrice: item.total_price || 0,
+          })) || [],
+        subtotal: order.subtotal || 0,
+        deliveryFee: order.base_delivery_fee || 0,
+        fastDeliveryFee: order.per_km_delivery_fee || 0,
+        taxAmount: order.tax_amount || 0,
+        totalAmount: order.total_amount || 0,
+        currency: order.currency || 'USD',
+        deliveryAddress: this.formatAddress(order.delivery_address),
+        estimatedDeliveryTime: order.estimated_delivery_time || undefined,
+        specialInstructions: order.special_instructions || undefined,
+      };
+
+      await this.notificationsService.sendOrderCreatedNotifications(
+        notificationData
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send order creation notifications: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -4700,141 +4698,158 @@ export class OrdersService {
     const total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     const phoneNumber = orderData.phone_number || user.phone_number || '';
     const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const requiredAmountForHold = total_amount;
+    const availableBalance = Number(account.available_balance ?? 0);
+    const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
-    // Create transaction record before initiating payment
-    let paymentTransaction = null;
-    let transaction = null;
-    try {
-      // Create transaction record in database
-      transaction = await this.mobilePaymentsDatabaseService.createTransaction({
-        reference: orderNumber,
-        amount: total_amount,
-        currency: currency,
-        description: `order ${orderNumber}`,
-        provider: provider,
-        payment_method: 'mobile_money',
-        customer_phone: phoneNumber,
-        customer_email: user.email,
-        account_id: account.id,
-        transaction_type: 'PAYMENT',
-        payment_entity: 'order' as const,
-        entity_id: orderNumber,
-      });
-
-      const paymentRequest = {
-        amount: total_amount,
-        currency: currency,
-        description: `Order ${orderNumber}`,
-        customerPhone: phoneNumber,
-        provider: provider,
-        ownerCharge: 'MERCHANT' as const,
-        transactionType: 'PAYMENT' as const,
-        payment_entity: 'order' as const,
-      };
-
-      paymentTransaction = await this.mobilePaymentsService.initiatePayment(
-        paymentRequest,
-        orderNumber
+    if (!isZeroOrNegativeOrder && availableBalance < 0) {
+      throw new HttpException(
+        `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
+        HttpStatus.FORBIDDEN
       );
+    }
 
-      if (!paymentTransaction.success) {
-        // Update transaction status to failed
-        await this.mobilePaymentsDatabaseService.updateTransaction(
-          transaction.id,
-          {
-            status: 'failed',
-            error_message: paymentTransaction.message,
-            error_code: paymentTransaction.errorCode,
-          }
-        );
+    const canPayWithWallet =
+      !isZeroOrNegativeOrder && availableBalance >= requiredAmountForHold;
 
-        throw new HttpException(
-          {
-            success: false,
-            message: paymentTransaction.message || 'Failed to initiate payment',
-            error: paymentTransaction.errorCode || 'PAYMENT_INITIATION_FAILED',
-            data: {
-              orderNumber,
-              error: paymentTransaction.message,
-              errorCode: paymentTransaction.errorCode,
-            },
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
+    let paymentTransaction: any = null;
+    let transaction: any = null;
 
-      // Update transaction with provider response
-      if (paymentTransaction.success && paymentTransaction.transactionId) {
-        await this.mobilePaymentsDatabaseService.updateTransaction(
-          transaction.id,
-          {
-            transaction_id: paymentTransaction.transactionId,
-          }
-        );
-      }
+    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+      try {
+        transaction =
+          await this.mobilePaymentsDatabaseService.createTransaction({
+            reference: orderNumber,
+            amount: total_amount,
+            currency,
+            description: `order ${orderNumber}`,
+            provider,
+            payment_method: 'mobile_money',
+            customer_phone: phoneNumber,
+            customer_email: user.email,
+            account_id: account.id,
+            transaction_type: 'PAYMENT',
+            payment_entity: 'order' as const,
+            entity_id: orderNumber,
+          });
 
-      this.logger.log(
-        `Payment initiated successfully for order ${orderNumber}, transaction ID: ${paymentTransaction.transactionId}`
-      );
-    } catch (paymentError: any) {
-      this.logger.error(
-        `Failed to initiate payment for order ${orderNumber}:`,
-        paymentError
-      );
+        const paymentRequest = {
+          amount: total_amount,
+          currency,
+          description: `Order ${orderNumber}`,
+          customerPhone: phoneNumber,
+          provider,
+          ownerCharge: 'MERCHANT' as const,
+          transactionType: 'PAYMENT' as const,
+          payment_entity: 'order' as const,
+        };
 
-      // Only update transaction if it hasn't been updated yet
-      // (i.e., if this is an unexpected error, not the HttpException we threw above)
-      if (transaction && !(paymentError instanceof HttpException)) {
-        try {
+        paymentTransaction =
+          await this.mobilePaymentsService.initiatePayment(
+            paymentRequest,
+            orderNumber
+          );
+
+        if (!paymentTransaction.success) {
           await this.mobilePaymentsDatabaseService.updateTransaction(
             transaction.id,
             {
               status: 'failed',
-              error_message: paymentError instanceof Error 
-                ? paymentError.message 
-                : String(paymentError),
-              error_code: 'PAYMENT_INITIATION_ERROR',
+              error_message: paymentTransaction.message,
+              error_code: paymentTransaction.errorCode,
             }
           );
-        } catch (updateError) {
-          this.logger.error(
-            'Failed to update transaction status:',
-            updateError
+
+          throw new HttpException(
+            {
+              success: false,
+              message:
+                paymentTransaction.message || 'Failed to initiate payment',
+              error:
+                paymentTransaction.errorCode || 'PAYMENT_INITIATION_FAILED',
+              data: {
+                orderNumber,
+                error: paymentTransaction.message,
+                errorCode: paymentTransaction.errorCode,
+              },
+            },
+            HttpStatus.BAD_REQUEST
           );
         }
-      }
 
-      // Re-throw HttpException as-is to preserve error details
-      if (paymentError instanceof HttpException) {
-        throw paymentError;
-      }
+        if (paymentTransaction.success && paymentTransaction.transactionId) {
+          await this.mobilePaymentsDatabaseService.updateTransaction(
+            transaction.id,
+            {
+              transaction_id: paymentTransaction.transactionId,
+            }
+          );
+        }
 
-      // For unexpected errors, throw a generic error
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to initiate payment for order',
-          error: 'PAYMENT_INITIATION_ERROR',
-          data: {
-            orderNumber,
-            error:
-              paymentError instanceof Error
-                ? paymentError.message
-                : String(paymentError),
+        this.logger.log(
+          `Payment initiated successfully for order ${orderNumber}, transaction ID: ${paymentTransaction.transactionId}`
+        );
+      } catch (paymentError: any) {
+        this.logger.error(
+          `Failed to initiate payment for order ${orderNumber}:`,
+          paymentError
+        );
+
+        if (transaction && !(paymentError instanceof HttpException)) {
+          try {
+            await this.mobilePaymentsDatabaseService.updateTransaction(
+              transaction.id,
+              {
+                status: 'failed',
+                error_message:
+                  paymentError instanceof Error
+                    ? paymentError.message
+                    : String(paymentError),
+                error_code: 'PAYMENT_INITIATION_ERROR',
+              }
+            );
+          } catch (updateError) {
+            this.logger.error(
+              'Failed to update transaction status:',
+              updateError
+            );
+          }
+        }
+
+        if (paymentError instanceof HttpException) {
+          throw paymentError;
+        }
+
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Failed to initiate payment for order',
+            error: 'PAYMENT_INITIATION_ERROR',
+            data: {
+              orderNumber,
+              error:
+                paymentError instanceof Error
+                  ? paymentError.message
+                  : String(paymentError),
+            },
           },
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
     }
 
     const business_location_id = businessInventories[0].business_location_id;
     const delivery_address_id = address.id;
     const subtotal = totalAmount;
     const tax_amount = 0;
-    const current_status = 'pending_payment';
+    const current_status = canPayWithWallet || isZeroOrNegativeOrder
+      ? 'pending'
+      : 'pending_payment';
     const business_id = businessInventories[0].business_location.business_id;
     const payment_method = 'online';
-    const payment_status = 'pending';
+    const payment_status = canPayWithWallet || isZeroOrNegativeOrder
+      ? 'paid'
+      : 'pending';
     const special_instructions = orderData.special_instructions || '';
     const estimated_delivery_time = null;
     const preferred_delivery_time = null;
@@ -5004,8 +5019,11 @@ export class OrdersService {
       createStatusHistoryMutation,
       {
         orderId: order.id,
-        status: 'pending_payment',
-        notes: 'Order created, awaiting payment',
+        status: current_status,
+        notes:
+          current_status === 'pending_payment'
+            ? 'Order created, awaiting payment'
+            : 'Order created and paid from Rendasua account',
         changedByType: 'client',
         changedByUserId: user.id,
       }
@@ -5045,34 +5063,52 @@ export class OrdersService {
       );
     }
 
-    // Schedule payment timeout (wait-and-execute state machine)
-    try {
-      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
-        'order.created',
-        { order_id: order.id, transaction_id: transaction.id }
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to schedule payment timeout for order ${order.id}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+      // For mobile payments, schedule payment timeout
+      try {
+        await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+          'order.created',
+          { order_id: order.id, transaction_id: transaction.id }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to schedule payment timeout for order ${order.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
+      return {
+        ...order,
+        total_amount: total_amount,
+        delivery_window: deliveryWindow,
+        payment_transaction: {
+          success: paymentTransaction.success,
+          transaction_id: paymentTransaction.transactionId,
+          message: paymentTransaction.message,
+        },
+        database_transaction: {
+          id: transaction.id,
+          reference: transaction.reference,
+          status: transaction.status,
+        },
+      };
     }
+
+    // For wallet-funded or zero-amount orders, finalize payment immediately
+    await this.finalizeClientOrderPayment(order, account.id);
 
     return {
       ...order,
       total_amount: total_amount,
       delivery_window: deliveryWindow,
       payment_transaction: {
-        success: paymentTransaction.success,
-        transaction_id: paymentTransaction.transactionId,
-        message: paymentTransaction.message,
+        success: true,
+        transaction_id: null,
+        message: 'Paid from Rendasua account',
+        mode: 'wallet',
       },
-      database_transaction: {
-        id: transaction.id,
-        reference: transaction.reference,
-        status: transaction.status,
-      },
+      database_transaction: null,
     };
   }
 
