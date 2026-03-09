@@ -182,6 +182,7 @@ export const GET_USER_CLIENT = gql`
           country
           is_primary
           address_type
+          status
           created_at
         }
       }
@@ -211,6 +212,7 @@ export const GET_USER_BUSINESS = gql`
           country
           is_primary
           address_type
+          status
           created_at
         }
       }
@@ -241,6 +243,7 @@ export const GET_USER_AGENT = gql`
           country
           is_primary
           address_type
+          status
           created_at
         }
       }
@@ -290,46 +293,11 @@ export const GET_AGENT_BY_ID = gql`
 // Query for getting agent addresses
 export const GET_AGENT_ADDRESSES = gql`
   query GetAgentAddresses($agentId: uuid!) {
-    addresses(where: { agent_addresses: { agent_id: { _eq: $agentId } } }) {
-      id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-      is_primary
-      address_type
-      created_at
-      updated_at
-    }
-  }
-`;
-
-// Query for getting client addresses
-export const GET_CLIENT_ADDRESSES = gql`
-  query GetClientAddresses($clientId: uuid!) {
-    addresses(where: { client_addresses: { client_id: { _eq: $clientId } } }) {
-      id
-      address_line_1
-      address_line_2
-      city
-      state
-      postal_code
-      country
-      is_primary
-      address_type
-      created_at
-      updated_at
-    }
-  }
-`;
-
-// Query for getting business addresses
-export const GET_BUSINESS_ADDRESSES = gql`
-  query GetBusinessAddresses($businessId: uuid!) {
     addresses(
-      where: { business_addresses: { business_id: { _eq: $businessId } } }
+      where: {
+        agent_addresses: { agent_id: { _eq: $agentId } }
+        status: { _eq: active }
+      }
     ) {
       id
       address_line_1
@@ -340,16 +308,22 @@ export const GET_BUSINESS_ADDRESSES = gql`
       country
       is_primary
       address_type
+      status
       created_at
       updated_at
     }
   }
 `;
 
-// Query for getting address by ID
-export const GET_ADDRESS_BY_ID = gql`
-  query GetAddressById($addressId: uuid!) {
-    addresses_by_pk(id: $addressId) {
+// Query for getting client addresses
+export const GET_CLIENT_ADDRESSES = gql`
+  query GetClientAddresses($clientId: uuid!) {
+    addresses(
+      where: {
+        client_addresses: { client_id: { _eq: $clientId } }
+        status: { _eq: active }
+      }
+    ) {
       id
       address_line_1
       address_line_2
@@ -359,6 +333,55 @@ export const GET_ADDRESS_BY_ID = gql`
       country
       is_primary
       address_type
+      status
+      created_at
+      updated_at
+    }
+  }
+`;
+
+// Query for getting business addresses
+export const GET_BUSINESS_ADDRESSES = gql`
+  query GetBusinessAddresses($businessId: uuid!) {
+    addresses(
+      where: {
+        business_addresses: { business_id: { _eq: $businessId } }
+        status: { _eq: active }
+      }
+    ) {
+      id
+      address_line_1
+      address_line_2
+      city
+      state
+      postal_code
+      country
+      is_primary
+      address_type
+      status
+      created_at
+      updated_at
+    }
+  }
+`;
+
+// Query for getting address by ID
+export const GET_ADDRESS_BY_ID = gql`
+  query GetAddressById($addressId: uuid!) {
+    addresses(
+      where: { id: { _eq: $addressId }, status: { _eq: active } }
+      limit: 1
+    ) {
+      id
+      address_line_1
+      address_line_2
+      city
+      state
+      postal_code
+      country
+      is_primary
+      address_type
+      status
       created_at
       updated_at
     }

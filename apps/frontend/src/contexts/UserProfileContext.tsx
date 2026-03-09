@@ -187,6 +187,7 @@ const INSERT_BUSINESS_ADDRESS = `
         instructions
         created_at
         updated_at
+        status
       }
     }
   }
@@ -212,6 +213,7 @@ const UPDATE_ADDRESS = `
       instructions
       created_at
       updated_at
+      status
     }
   }
 `;

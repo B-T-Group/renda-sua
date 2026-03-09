@@ -207,7 +207,7 @@ export class GoogleCacheService {
     if (addressIds.length === 0) return new Map();
     const query = `
       query GetAddressUpdatedAts($ids: [uuid!]!) {
-        addresses(where: { id: { _in: $ids } }) {
+        addresses(where: { id: { _in: $ids }, status: { _eq: active } }) {
           id
           updated_at
         }

@@ -39,6 +39,7 @@ export interface AddressResponse {
   instructions?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  status?: 'active' | 'deleted' | null;
 }
 
 export interface UpdateAddressDto {
@@ -418,6 +419,7 @@ export class AddressesService {
             instructions
             created_at
             updated_at
+            status
           }
         }
       `;
@@ -618,6 +620,7 @@ export class AddressesService {
           longitude
           created_at
           updated_at
+          status
         }
       }
     `;
@@ -1039,9 +1042,13 @@ export class AddressesService {
       await this.getAddress(addressId);
 
       const deleteMutation = `
-        mutation DeleteAddress($addressId: uuid!) {
-          delete_addresses_by_pk(id: $addressId) {
+        mutation SoftDeleteAddress($addressId: uuid!) {
+          update_addresses_by_pk(
+            pk_columns: { id: $addressId },
+            _set: { status: deleted }
+          ) {
             id
+            status
           }
         }
       `;
@@ -1075,7 +1082,7 @@ export class AddressesService {
     if (!addressIds || addressIds.length === 0) return [];
     const query = `
       query GetAddressesByIds($ids: [uuid!]!) {
-        addresses(where: {id: {_in: $ids}}) {
+        addresses(where: {id: {_in: $ids}, status: {_eq: active}}) {
           id
           address_line_1
           address_line_2
@@ -1090,6 +1097,7 @@ export class AddressesService {
           instructions
           created_at
           updated_at
+          status
         }
       }
     `;
@@ -1148,6 +1156,7 @@ export class AddressesService {
             instructions
             created_at
             updated_at
+            status
           }
         }
       }
@@ -1287,6 +1296,7 @@ export class AddressesService {
           instructions
           created_at
           updated_at
+          status
         }
       }
     `;
@@ -1526,6 +1536,7 @@ export class AddressesService {
           instructions
           created_at
           updated_at
+          status
         }
       }
     `;
@@ -1611,9 +1622,13 @@ export class AddressesService {
 
     // Delete address
     const deleteMutation = `
-      mutation DeleteAddress($addressId: uuid!) {
-        delete_addresses_by_pk(id: $addressId) {
+      mutation SoftDeleteAddress($addressId: uuid!) {
+        update_addresses_by_pk(
+          pk_columns: { id: $addressId },
+          _set: { status: deleted }
+        ) {
           id
+          status
         }
       }
     `;

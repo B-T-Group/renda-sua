@@ -73,6 +73,7 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
   - role: business
@@ -90,6 +91,7 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
   - role: client
@@ -107,6 +109,7 @@ insert_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
 select_permissions:
@@ -124,20 +127,24 @@ select_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
       filter:
-        _or:
-          - agent_addresses:
-              agent:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
-          - orders:
-              assigned_agent:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
+        _and:
+          - status:
+              _eq: active
+          - _or:
+              - agent_addresses:
+                  agent:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+              - orders:
+                  assigned_agent:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
   - role: anonymous
     permission:
       columns:
@@ -152,12 +159,16 @@ select_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
       filter:
-        business_location:
-          is_active:
-            _eq: true
+        _and:
+          - status:
+              _eq: active
+          - business_location:
+              is_active:
+                _eq: true
   - role: business
     permission:
       columns:
@@ -172,25 +183,29 @@ select_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
       filter:
-        _or:
-          - business_addresses:
-              business:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
-          - business_location:
-              business:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
-          - orders:
-              business:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
+        _and:
+          - status:
+              _eq: active
+          - _or:
+              - business_addresses:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+              - business_location:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+              - orders:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -205,26 +220,30 @@ select_permissions:
         - longitude
         - is_primary
         - address_type
+        - status
         - created_at
         - updated_at
       filter:
-        _or:
-          - client_addresses:
-              client:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
-          - orders:
-              client:
-                user:
-                  identifier:
-                    _eq: X-Hasura-User-Id
-          - business_location:
-              orders:
-                client:
-                  user:
-                    identifier:
-                      _eq: X-Hasura-User-Id
+        _and:
+          - status:
+              _eq: active
+          - _or:
+              - client_addresses:
+                  client:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+              - orders:
+                  client:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+              - business_location:
+                  orders:
+                    client:
+                      user:
+                        identifier:
+                          _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
     permission:

@@ -16,6 +16,7 @@ export interface Address {
   instructions?: string;
   created_at: string;
   updated_at: string;
+  status?: 'active' | 'deleted';
 }
 
 export interface AddressFormData {
