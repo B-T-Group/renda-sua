@@ -31,6 +31,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import ClaimingOrderOverlay from '../common/ClaimingOrderOverlay';
 import PhoneInput from '../common/PhoneInput';
 
 interface ClaimOrderDialogProps {
@@ -107,6 +108,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -539,6 +541,8 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
         )}
       </DialogActions>
     </Dialog>
+    <ClaimingOrderOverlay open={loading} />
+    </>
   );
 };
 

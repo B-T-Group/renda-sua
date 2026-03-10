@@ -33,6 +33,7 @@ import type { Order } from '../../hooks/useAgentOrders';
 import { useApiClient } from '../../hooks/useApiClient';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
+import ClaimingOrderOverlay from './ClaimingOrderOverlay';
 import ConfirmationModal from './ConfirmationModal';
 
 interface AvailableOrderCardProps {
@@ -348,6 +349,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   };
 
   return (
+    <>
     <Card
       sx={{
         mb: 1.5,
@@ -896,6 +898,8 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         </DialogActions>
       </Dialog>
     </Card>
+    <ClaimingOrderOverlay open={claimLoading} />
+    </>
   );
 };
 
