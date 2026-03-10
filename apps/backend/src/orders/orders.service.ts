@@ -2,9 +2,9 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
-import { AgentHoldService } from '../agents/agent-hold.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
+import { AgentHoldService } from '../agents/agent-hold.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -5112,12 +5112,11 @@ export class OrdersService {
       ...order,
       total_amount: total_amount,
       delivery_window: deliveryWindow,
-      payment_source: 'wallet' as const,
       payment_transaction: {
         success: true,
         transaction_id: null,
         message: 'Paid from Rendasua account',
-        mode: 'wallet' as const,
+        mode: order.payment_source as 'wallet' | 'mobile_money',
       },
       database_transaction: null,
     };
