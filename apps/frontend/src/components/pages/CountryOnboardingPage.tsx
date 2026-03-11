@@ -479,7 +479,7 @@ const CountryOnboardingPage: React.FC = () => {
                                     {
                                       config_key: 'timezone',
                                       config_value: value,
-                                      data_type: 'string',
+                                      data_type: 'string' as const,
                                     },
                                   ]
                                 : current.map((c, i) =>
@@ -487,7 +487,7 @@ const CountryOnboardingPage: React.FC = () => {
                                       ? {
                                           ...c,
                                           config_value: value,
-                                          data_type: 'string',
+                                          data_type: 'string' as const,
                                         }
                                       : c
                                   );
@@ -555,7 +555,7 @@ const CountryOnboardingPage: React.FC = () => {
                                 {
                                   config_key: 'fast_delivery_service_hours',
                                   config_value: jsonValue,
-                                  data_type: 'json',
+                                  data_type: 'json' as const,
                                 },
                               ]
                             : current.map((c, i) =>
@@ -563,7 +563,7 @@ const CountryOnboardingPage: React.FC = () => {
                                   ? {
                                       ...c,
                                       config_value: jsonValue,
-                                      data_type: 'json',
+                                      data_type: 'json' as const,
                                     }
                                   : c
                               );
@@ -815,18 +815,24 @@ const CountryOnboardingPage: React.FC = () => {
                         {workingConfig.supportedStates.map((state, index) => (
                           <TableRow key={state.id ?? state.state_name}>
                             <TableCell>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                value={state.state_name}
-                                onChange={(e) =>
-                                  updateSupportedState(
-                                    index,
-                                    'state_name',
-                                    e.target.value
-                                  )
-                                }
-                              />
+                              <FormControl size="small" fullWidth>
+                                <Select
+                                  value={state.state_name}
+                                  onChange={(e) =>
+                                    updateSupportedState(
+                                      index,
+                                      'state_name',
+                                      e.target.value as string
+                                    )
+                                  }
+                                >
+                                  {statesForCountry.map((name) => (
+                                    <MenuItem key={name} value={name}>
+                                      {name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
                             </TableCell>
                             <TableCell>
                               <FormControl size="small" fullWidth>
@@ -907,7 +913,7 @@ const CountryOnboardingPage: React.FC = () => {
               </Card>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <Card>
                 <CardContent>
                   <Typography variant="h6" sx={{ mb: 2 }}>
@@ -927,31 +933,169 @@ const CountryOnboardingPage: React.FC = () => {
                       }
                     )}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {t(
-                      'admin.countryOnboarding.reviewConfigs',
-                      'Country configs: {{count}} entries',
-                      {
-                        count:
-                          workingConfig.countryDeliveryConfig?.configs.length ??
-                          0,
-                      }
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewCountryConfigs',
+                        'Country delivery configuration'
+                      )}
+                    </Typography>
+                    {workingConfig.countryDeliveryConfig &&
+                    workingConfig.countryDeliveryConfig.configs.filter(
+                      (config) =>
+                        config.config_key !== 'fast_delivery_service_hours' &&
+                        config.config_key !== 'timezone'
+                    ).length > 0 ? (
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>
+                              {t(
+                                'admin.countryOnboarding.configDescription',
+                                'Configuration'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {t(
+                                'admin.countryOnboarding.configValue',
+                                'Value'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {workingConfig.countryDeliveryConfig.configs
+                            .filter(
+                              (config) =>
+                                config.config_key !==
+                                  'fast_delivery_service_hours' &&
+                                config.config_key !== 'timezone'
+                            )
+                            .map((config) => (
+                              <TableRow key={config.config_key}>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {config.description || config.config_key}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {config.config_key === 'currency'
+                                      ? config.config_value
+                                      : config.config_value}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                      >
+                        {t(
+                          'admin.countryOnboarding.noCountryConfigs',
+                          'No country delivery configurations found for this country.'
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {t(
-                      'admin.countryOnboarding.reviewTimeSlots',
-                      'Delivery time slots: {{count}}',
-                      { count: workingConfig.deliveryTimeSlots.length }
+                  </Box>
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewFastHours',
+                        'Fast delivery service hours'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      {t(
+                        'admin.countryOnboarding.timezoneLabel',
+                        'Timezone (IANA)'
+                      )}
+                      :{' '}
+                      {workingConfig.countryDeliveryConfig?.configs.find(
+                        (c) => c.config_key === 'timezone'
+                      )?.config_value || 'Africa/Libreville'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {workingConfig.countryDeliveryConfig?.configs.find(
+                        (c) => c.config_key === 'fast_delivery_service_hours'
+                      )
+                        ? t(
+                            'admin.countryOnboarding.fastHoursConfigured',
+                            'Custom fast delivery hours configured.'
+                          )
+                        : t(
+                            'admin.countryOnboarding.fastHoursNotConfigured',
+                            'No custom fast delivery hours configured.'
+                          )}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewTimeSlots',
+                        'Delivery time slots'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewTimeSlotsCount',
+                        'Total time slots: {{count}}',
+                        { count: workingConfig.deliveryTimeSlots.length }
+                      )}
+                    </Typography>
+                    {workingConfig.deliveryTimeSlots.length > 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'admin.countryOnboarding.reviewTimeSlotsStates',
+                          'Distinct states with slots: {{count}}',
+                          {
+                            count: Array.from(
+                              new Set(
+                                workingConfig.deliveryTimeSlots
+                                  .map((s) => s.state || '')
+                                  .filter((s) => s)
+                              )
+                            ).length,
+                          }
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t(
-                      'admin.countryOnboarding.reviewStates',
-                      'Supported states: {{count}}',
-                      { count: workingConfig.supportedStates.length }
+                  </Box>
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewStates',
+                        'Supported states'
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      {t(
+                        'admin.countryOnboarding.reviewStatesCount',
+                        'Total supported states: {{count}}',
+                        { count: workingConfig.supportedStates.length }
+                      )}
+                    </Typography>
+                    {workingConfig.supportedStates.length > 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        {t(
+                          'admin.countryOnboarding.reviewStatesActive',
+                          'Active states: {{count}}',
+                          {
+                            count: workingConfig.supportedStates.filter(
+                              (s) => s.service_status === 'active'
+                            ).length,
+                          }
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             )}
