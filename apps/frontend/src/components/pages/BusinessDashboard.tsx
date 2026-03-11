@@ -13,6 +13,7 @@ import {
   Settings as SettingsIcon,
   Group as UsersIcon,
   Image as ImageIcon,
+  Public as PublicIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -235,6 +236,20 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#00695c',
       path: '/admin/application-setup',
+    },
+    {
+      title: t(
+        'business.dashboard.countryOnboarding',
+        'Country onboarding'
+      ),
+      description: t(
+        'business.dashboard.countryOnboardingDescription',
+        'Multi-step wizard to configure delivery slots and supported states for a country'
+      ),
+      icon: <PublicIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00838f',
+      path: '/admin/country-onboarding',
     },
     {
       title: t('business.dashboard.manageCommissionAccounts'),

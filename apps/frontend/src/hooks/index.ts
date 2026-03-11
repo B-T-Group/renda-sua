@@ -150,3 +150,6 @@ export type { SearchResult } from './useItemSearch';
 
 // Push notifications
 export { usePushSubscription } from './usePushSubscription';
+
+// Country onboarding
+export { useCountryOnboardingConfig } from './useCountryOnboardingConfig';

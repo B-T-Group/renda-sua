@@ -5,6 +5,7 @@ import { AdminMessageService } from './admin-message.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { ApplicationSetupService } from './application-setup.service';
+import { CountryOnboardingService } from './country-onboarding.service';
 import { ConfigurationsController } from './configurations.controller';
 import { ConfigurationsService } from './configurations.service';
 
@@ -16,12 +17,14 @@ import { ConfigurationsService } from './configurations.service';
     AdminService,
     ConfigurationsService,
     ApplicationSetupService,
+    CountryOnboardingService,
   ],
   exports: [
     AdminMessageService,
     AdminService,
     ConfigurationsService,
     ApplicationSetupService,
+    CountryOnboardingService,
   ],
 })
 export class AdminModule {}

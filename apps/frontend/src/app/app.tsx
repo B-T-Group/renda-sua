@@ -19,6 +19,7 @@ import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
+import CountryOnboardingPage from '../components/pages/CountryOnboardingPage';
 import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
@@ -273,6 +274,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ApplicationSetupPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/country-onboarding"
+              element={
+                <ProtectedRoute>
+                  <CountryOnboardingPage />
                 </ProtectedRoute>
               }
             />
