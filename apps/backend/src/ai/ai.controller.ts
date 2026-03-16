@@ -150,6 +150,8 @@ export class AiController {
             subCategoryName: { type: 'string' },
             brandName: { type: 'string' },
             descriptionSuggestion: { type: 'string' },
+            price: { type: 'number' },
+            currency: { type: 'string' },
           },
         },
       },
@@ -176,26 +178,23 @@ export class AiController {
       body.imageId
     );
 
-    const name =
-      image.caption ||
-      image.alt_text ||
-      'New product from image';
-
-    const dto: GenerateDescriptionDto = {
-      name,
-      language: 'en',
-    };
-
-    const result = await this.aiService.generateProductDescription(dto);
+    const suggestion = await this.aiService.generateImageItemSuggestions({
+      imageUrl: image.image_url,
+      caption: image.caption,
+      altText: image.alt_text,
+      defaultCurrency: 'XAF',
+    });
 
     return {
       success: true,
       data: {
-        name,
-        categoryName: undefined,
-        subCategoryName: undefined,
-        brandName: undefined,
-        descriptionSuggestion: result.description,
+        name: suggestion.name,
+        categoryName: suggestion.categoryName,
+        subCategoryName: suggestion.subCategoryName,
+        brandName: suggestion.brandName,
+        descriptionSuggestion: suggestion.description,
+        price: suggestion.price ?? undefined,
+        currency: suggestion.currency || 'XAF',
       },
     };
   }

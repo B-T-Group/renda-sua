@@ -7,6 +7,8 @@ export interface ImageItemSuggestions {
   subCategoryName?: string;
   brandName?: string;
   descriptionSuggestion?: string;
+  price?: number;
+  currency?: string;
 }
 
 export const useImageItemSuggestions = (

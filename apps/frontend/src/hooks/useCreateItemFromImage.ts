@@ -8,6 +8,8 @@ export interface CreateItemFromImagePayload {
   subCategoryName?: string;
   brandName?: string;
   description?: string;
+   price?: number;
+   currency?: string;
 }
 
 export const useCreateItemFromImage = () => {

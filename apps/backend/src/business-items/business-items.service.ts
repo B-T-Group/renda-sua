@@ -1209,11 +1209,22 @@ export class BusinessItemsService {
     const baseSku = this.buildSkuBase(name);
     const sku = await this.generateUniqueSku(businessId, baseSku);
 
+    const hasPrice = dto.price != null && !Number.isNaN(dto.price as number);
+    const price = hasPrice ? (dto.price as number) : undefined;
+    const currency =
+      hasPrice && dto.currency
+        ? dto.currency
+        : hasPrice
+        ? 'XAF'
+        : undefined;
+
     const insertData = {
       business_id: businessId,
       name,
       description: dto.description ?? '',
       sku,
+      ...(hasPrice && { price }),
+      ...(currency && { currency }),
       min_order_quantity: 1,
       max_order_quantity: 1,
       is_active: false,

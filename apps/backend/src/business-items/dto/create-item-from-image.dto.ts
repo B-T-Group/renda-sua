@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateItemFromImageDto {
   @ApiProperty({
@@ -48,5 +54,22 @@ export class CreateItemFromImageDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiProperty({
+    description: 'Item price extracted from image (numeric value only)',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  price?: number;
+
+  @ApiProperty({
+    description:
+      'Currency code for the price (defaults to XAF when not provided and price is present)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  currency?: string;
 }
 

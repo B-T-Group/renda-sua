@@ -862,7 +862,9 @@
           "category": "Category",
           "subcategory": "Subcategory",
           "brand": "Brand",
-          "description": "Description"
+          "description": "Description",
+          "price": "Price",
+          "currency": "Currency"
         },
         "nameRequired": "Please provide a name for the item",
         "submit": "Create item",

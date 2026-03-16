@@ -851,7 +851,9 @@
           "category": "Catégorie",
           "subcategory": "Sous-catégorie",
           "brand": "Marque",
-          "description": "Description"
+          "description": "Description",
+          "price": "Prix",
+          "currency": "Devise"
         },
         "nameRequired": "Veuillez renseigner un nom pour l'article",
         "submit": "Créer l'article",

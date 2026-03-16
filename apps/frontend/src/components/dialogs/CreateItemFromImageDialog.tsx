@@ -33,6 +33,8 @@ export const CreateItemFromImageDialog: React.FC<
   const [subCategoryName, setSubCategoryName] = useState('');
   const [brandName, setBrandName] = useState('');
   const [description, setDescription] = useState('');
+  const [price, setPrice] = useState<string>('');
+  const [currency, setCurrency] = useState<string>('XAF');
   const [showSummary, setShowSummary] = useState(false);
   const [createdItem, setCreatedItem] = useState<any | null>(null);
 
@@ -57,12 +59,20 @@ export const CreateItemFromImageDialog: React.FC<
       setSubCategoryName(suggestions.subCategoryName || '');
       setBrandName(suggestions.brandName || '');
       setDescription(suggestions.descriptionSuggestion || '');
+      setPrice(
+        suggestions.price != null && !Number.isNaN(suggestions.price)
+          ? String(suggestions.price)
+          : ''
+      );
+      setCurrency(suggestions.currency || 'XAF');
     } else {
       setName(image.caption || '');
       setCategoryName('');
       setSubCategoryName('');
       setBrandName('');
       setDescription('');
+      setPrice('');
+      setCurrency('XAF');
     }
   }, [open, image, suggestions]);
 
@@ -109,6 +119,9 @@ export const CreateItemFromImageDialog: React.FC<
       );
       return;
     }
+    const numericPrice =
+      price.trim() === '' ? undefined : Number(price.trim()) || undefined;
+
     const result = await createItemFromImage({
       imageId: image.id,
       name: name.trim(),
@@ -116,6 +129,11 @@ export const CreateItemFromImageDialog: React.FC<
       subCategoryName: subCategoryName.trim() || undefined,
       brandName: brandName.trim() || undefined,
       description: description.trim() || undefined,
+      price: numericPrice,
+      currency:
+        numericPrice != null && !Number.isNaN(numericPrice)
+          ? currency.trim() || 'XAF'
+          : undefined,
     });
     if (!result) return;
     setCreatedItem(result);
@@ -220,6 +238,29 @@ export const CreateItemFromImageDialog: React.FC<
         fullWidth
         value={brandName}
         onChange={(e) => setBrandName(e.target.value)}
+        disabled={createLoading || suggestionsLoading}
+      />
+
+      <TextField
+        label={t(
+          'business.images.createItemFromImage.fields.price',
+          'Price'
+        )}
+        fullWidth
+        type="number"
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+        disabled={createLoading || suggestionsLoading}
+      />
+
+      <TextField
+        label={t(
+          'business.images.createItemFromImage.fields.currency',
+          'Currency'
+        )}
+        fullWidth
+        value={currency}
+        onChange={(e) => setCurrency(e.target.value.toUpperCase())}
         disabled={createLoading || suggestionsLoading}
       />
 

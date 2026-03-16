@@ -5,20 +5,22 @@ import { GenerateDescriptionDto } from './dto/generate-description.dto';
 
 export interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  // For vision requests, content can be rich (text + image_url).
+  // For simple chat, it will be a string.
+  content: any;
 }
 
 export interface OpenAIRequest {
   model: string;
   messages: OpenAIMessage[];
-  max_tokens: number;
-  temperature: number;
+  max_tokens?: number;
+  temperature?: number;
 }
 
 export interface OpenAIResponse {
   choices: Array<{
     message: {
-      content: string;
+      content: any;
     };
   }>;
 }
@@ -36,6 +38,17 @@ export interface CleanupProductImageResponse {
 
 interface OpenAIImageEditResponse {
   data?: Array<{ b64_json?: string; url?: string }>;
+}
+
+export interface ImageItemSuggestionResult {
+  name?: string;
+  categoryName?: string;
+  subCategoryName?: string;
+  brandName?: string;
+  description?: string;
+  price?: number | null;
+  currency?: string | null;
+  barcodeValues?: string[] | null;
 }
 
 @Injectable()
@@ -310,5 +323,156 @@ export class AiService {
     - Clear, concise, and persuasive language
     - Natural keyword integration
     - Professional tone appropriate for business customers`;
+  }
+
+  async generateImageItemSuggestions(input: {
+    imageUrl: string;
+    caption?: string | null;
+    altText?: string | null;
+    defaultCurrency?: string;
+  }): Promise<ImageItemSuggestionResult> {
+    const apiKey = this.configService.get<string>('openai.apiKey');
+    if (!apiKey) {
+      this.logger.error('OpenAI API key not configured');
+      throw new HttpException(
+        'OpenAI API key not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    const defaultCurrency = input.defaultCurrency || 'XAF';
+    const textContextParts: string[] = [];
+    if (input.caption) {
+      textContextParts.push(`Caption: ${input.caption}`);
+    }
+    if (input.altText) {
+      textContextParts.push(`Alt text: ${input.altText}`);
+    }
+    const textContext = textContextParts.join('\n');
+
+    const systemPrompt =
+      'You are an AI assistant that performs OCR on product images and extracts structured product data for e-commerce.';
+
+    const userText = `
+You are given a product image. Use OCR on the image and any visible labels, price tags, and barcodes to extract:
+- Product name
+- Category name
+- Subcategory name
+- Brand name
+- A short 2–3 sentence e-commerce description in English
+- The product price as a number (no currency symbol)
+- The currency code (3-letter code). If no currency symbol or code is visible, default to "${defaultCurrency}".
+- Any decoded barcode values (EAN/UPC/etc) if readable.
+
+Additional text context from the image record (may be empty):
+${textContext || 'N/A'}
+
+Return ONLY a single JSON object with this exact shape:
+{
+  "name": string | null,
+  "categoryName": string | null,
+  "subCategoryName": string | null,
+  "brandName": string | null,
+  "description": string | null,
+  "price": number | null,
+  "currency": string | null,
+  "barcodeValues": string[] | null
+}
+
+Do not include any explanation outside of the JSON.`;
+
+    const request: OpenAIRequest = {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userText },
+            {
+              type: 'image_url',
+              image_url: { url: input.imageUrl },
+            },
+          ],
+        },
+      ],
+      max_tokens: 400,
+      temperature: 0.1,
+    };
+
+    try {
+      this.logger.log(
+        `Generating image item suggestions for image: ${input.imageUrl}`
+      );
+      const response = await axios.post<OpenAIResponse>(
+        this.openaiApiUrl,
+        request,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          timeout: 40000,
+        }
+      );
+
+      const rawContent = response.data.choices?.[0]?.message?.content;
+      const contentString =
+        typeof rawContent === 'string'
+          ? rawContent
+          : Array.isArray(rawContent)
+          ? rawContent.map((p: any) => p?.text || '').join('\n')
+          : String(rawContent ?? '');
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(contentString);
+      } catch (parseError: any) {
+        this.logger.error(
+          'Failed to parse JSON from image item suggestions',
+          parseError
+        );
+        parsed = {};
+      }
+
+      const suggestion: ImageItemSuggestionResult = {
+        name: parsed.name ?? undefined,
+        categoryName: parsed.categoryName ?? undefined,
+        subCategoryName: parsed.subCategoryName ?? undefined,
+        brandName: parsed.brandName ?? undefined,
+        description: parsed.description ?? undefined,
+        price:
+          typeof parsed.price === 'number'
+            ? parsed.price
+            : parsed.price != null
+            ? Number(parsed.price) || null
+            : null,
+        currency: parsed.currency ?? defaultCurrency,
+        barcodeValues: Array.isArray(parsed.barcodeValues)
+          ? parsed.barcodeValues
+          : null,
+      };
+
+      return suggestion;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to generate image item suggestions for image: ${input.imageUrl}`,
+        error
+      );
+      // Fallback: minimal suggestion using caption/alt text only
+      return {
+        name: input.caption || input.altText || undefined,
+        categoryName: undefined,
+        subCategoryName: undefined,
+        brandName: undefined,
+        description: undefined,
+        price: null,
+        currency: defaultCurrency,
+        barcodeValues: null,
+      };
+    }
   }
 }
