@@ -152,6 +152,10 @@ export class AiController {
             descriptionSuggestion: { type: 'string' },
             price: { type: 'number' },
             currency: { type: 'string' },
+            barcodeValues: { type: 'array', items: { type: 'string' } },
+            weight: { type: 'number' },
+            weightUnit: { type: 'string' },
+            dimensions: { type: 'string' },
           },
         },
       },
@@ -185,6 +189,14 @@ export class AiController {
       defaultCurrency: 'XAF',
     });
 
+    if (suggestion.barcodeValues?.length) {
+      await this.businessImagesService.storeBarcodeValuesOnImage(
+        businessId,
+        image.id,
+        suggestion.barcodeValues
+      );
+    }
+
     return {
       success: true,
       data: {
@@ -195,6 +207,10 @@ export class AiController {
         descriptionSuggestion: suggestion.description,
         price: suggestion.price ?? undefined,
         currency: suggestion.currency || 'XAF',
+        barcodeValues: suggestion.barcodeValues ?? undefined,
+        weight: suggestion.weight ?? undefined,
+        weightUnit: suggestion.weightUnit ?? undefined,
+        dimensions: suggestion.dimensions ?? undefined,
       },
     };
   }

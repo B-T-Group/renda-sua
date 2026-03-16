@@ -322,6 +322,29 @@ export class BusinessImagesService {
     });
   }
 
+  async storeBarcodeValuesOnImage(
+    businessId: string,
+    imageId: string,
+    barcodeValues: string[]
+  ): Promise<void> {
+    const values = (barcodeValues || [])
+      .map((v) => String(v || '').trim())
+      .filter(Boolean);
+    if (!values.length) {
+      return;
+    }
+    const current = await this.fetchImageForBusiness(businessId, imageId);
+    const existingTags = current.tags ?? [];
+    const toAdd = values.map((v) => `barcode:${v}`);
+    const merged = [...existingTags];
+    toAdd.forEach((tag) => {
+      if (!merged.includes(tag)) {
+        merged.push(tag);
+      }
+    });
+    await this.updateBusinessImage(businessId, imageId, { tags: merged });
+  }
+
   async removeTagFromImage(
     businessId: string,
     imageId: string,

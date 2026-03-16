@@ -49,6 +49,9 @@ export interface ImageItemSuggestionResult {
   price?: number | null;
   currency?: string | null;
   barcodeValues?: string[] | null;
+  weight?: number | null;
+  weightUnit?: string | null;
+  dimensions?: string | null;
 }
 
 @Injectable()
@@ -354,7 +357,8 @@ export class AiService {
       'You are an AI assistant that performs OCR on product images and extracts structured product data for e-commerce.';
 
     const userText = `
-You are given a product image. Use OCR on the image and any visible labels, price tags, and barcodes to extract:
+You are given a product image. First, try to decode any barcode(s) visible on the image. If a barcode is decoded, use it as the strongest signal for identifying the product.
+Then, use OCR on the image and any visible labels/price tags to extract:
 - Product name
 - Category name
 - Subcategory name
@@ -363,6 +367,9 @@ You are given a product image. Use OCR on the image and any visible labels, pric
 - The product price as a number (no currency symbol)
 - The currency code (3-letter code). If no currency symbol or code is visible, default to "${defaultCurrency}".
 - Any decoded barcode values (EAN/UPC/etc) if readable.
+- Product weight as a number (if visible)
+- Weight unit (e.g. g, kg, ml, l)
+- Product dimensions string (e.g. 20x10x5 cm) if visible.
 
 Additional text context from the image record (may be empty):
 ${textContext || 'N/A'}
@@ -376,7 +383,10 @@ Return ONLY a single JSON object with this exact shape:
   "description": string | null,
   "price": number | null,
   "currency": string | null,
-  "barcodeValues": string[] | null
+  "barcodeValues": string[] | null,
+  "weight": number | null,
+  "weightUnit": string | null,
+  "dimensions": string | null
 }
 
 Do not include any explanation outside of the JSON.`;
@@ -454,9 +464,35 @@ Do not include any explanation outside of the JSON.`;
         barcodeValues: Array.isArray(parsed.barcodeValues)
           ? parsed.barcodeValues
           : null,
+        weight:
+          typeof parsed.weight === 'number'
+            ? parsed.weight
+            : parsed.weight != null
+            ? Number(parsed.weight) || null
+            : null,
+        weightUnit: parsed.weightUnit ?? null,
+        dimensions: parsed.dimensions ?? null,
       };
+      const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
+      if (!barcode) {
+        return suggestion;
+      }
 
-      return suggestion;
+      const lookup = await this.lookupProductByBarcode(barcode);
+      if (!lookup) {
+        return suggestion;
+      }
+
+      return {
+        ...suggestion,
+        name: lookup.name || suggestion.name,
+        brandName: lookup.brandName || suggestion.brandName,
+        categoryName: lookup.categoryName || suggestion.categoryName,
+        subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
+        weight: lookup.weight ?? suggestion.weight,
+        weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
+        dimensions: lookup.dimensions ?? suggestion.dimensions,
+      };
     } catch (error: any) {
       this.logger.error(
         `Failed to generate image item suggestions for image: ${input.imageUrl}`,
@@ -472,7 +508,79 @@ Do not include any explanation outside of the JSON.`;
         price: null,
         currency: defaultCurrency,
         barcodeValues: null,
+        weight: null,
+        weightUnit: null,
+        dimensions: null,
       };
+    }
+  }
+
+  private async lookupProductByBarcode(
+    barcode: string
+  ): Promise<
+    | {
+        name?: string;
+        brandName?: string;
+        categoryName?: string;
+        subCategoryName?: string;
+        weight?: number | null;
+        weightUnit?: string | null;
+        dimensions?: string | null;
+      }
+    | null
+  > {
+    const normalized = barcode.replace(/\s+/g, '');
+    if (!normalized) return null;
+    try {
+      // Best-effort public lookup (works mainly for food/packaged goods).
+      const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(
+        normalized
+      )}.json`;
+      const resp = await axios.get(url, { timeout: 15000 });
+      const product = resp.data?.product;
+      if (!product) return null;
+
+      const name: string | undefined =
+        product.product_name || product.generic_name || undefined;
+      const brandName: string | undefined =
+        typeof product.brands === 'string' && product.brands.trim()
+          ? product.brands.split(',')[0].trim()
+          : undefined;
+
+      const categories: string[] =
+        typeof product.categories === 'string'
+          ? product.categories
+              .split(',')
+              .map((c: string) => c.trim())
+              .filter(Boolean)
+          : [];
+      const categoryName = categories[0];
+      const subCategoryName = categories.length > 1 ? categories[1] : undefined;
+
+      // Try to infer weight from quantity like "500 g" or "1L"
+      let weight: number | null = null;
+      let weightUnit: string | null = null;
+      const quantity: string =
+        typeof product.quantity === 'string' ? product.quantity : '';
+      const qtyMatch = quantity.match(
+        /(\d+(?:[.,]\d+)?)\s*(kg|g|mg|l|ml|cl)\b/i
+      );
+      if (qtyMatch) {
+        weight = Number(qtyMatch[1].replace(',', '.')) || null;
+        weightUnit = qtyMatch[2].toLowerCase();
+      }
+
+      return {
+        name,
+        brandName,
+        categoryName,
+        subCategoryName,
+        weight,
+        weightUnit,
+        dimensions: null,
+      };
+    } catch {
+      return null;
     }
   }
 }
