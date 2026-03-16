@@ -4,11 +4,11 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { BusinessImagesService } from '../business-images/business-images.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
-import { BusinessImagesService } from '../business-images/business-images.service';
+import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -365,6 +365,66 @@ const GET_ITEM_SUB_CATEGORY_IDS = `
   query GetItemSubCategoryIds {
     item_sub_categories {
       id
+    }
+  }
+`;
+
+const FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME = `
+  query FindCategoryAndSubcategory(
+    $categoryName: String!,
+    $subCategoryName: String!
+  ) {
+    item_sub_categories(
+      where: {
+        name: { _eq: $subCategoryName },
+        item_category: {
+          name: { _eq: $categoryName }
+        }
+      },
+      limit: 1
+    ) {
+      id
+      item_category_id
+      item_category {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const FIND_CATEGORY_BY_NAME = `
+  query FindCategoryByName($categoryName: String!) {
+    item_categories(
+      where: { name: { _eq: $categoryName } },
+      limit: 1
+    ) {
+      id
+      name
+    }
+  }
+`;
+
+const FIND_BRAND_BY_NAME = `
+  query FindBrandByName($name: String!) {
+    brands(where: { name: { _ilike: $name } }, limit: 1) {
+      id
+      name
+    }
+  }
+`;
+
+const INSERT_BRAND = `
+  mutation InsertBrand($name: String!) {
+    insert_brands_one(
+      object: { name: $name, description: $name, approved: true },
+      on_conflict: {
+        constraint: brands_name_key,
+        update_columns: [name]
+      }
+    ) {
+      id
+      name
     }
   }
 `;
@@ -1218,11 +1278,29 @@ export class BusinessItemsService {
         ? 'XAF'
         : undefined;
 
+    const categoryName = dto.categoryName?.trim();
+    const subCategoryName = dto.subCategoryName?.trim();
+    const brandName = dto.brandName?.trim();
+
+    const subCategoryId =
+      categoryName && subCategoryName
+        ? await this.ensureSubCategoryId(
+            categoryName,
+            subCategoryName
+          )
+        : null;
+
+    const brandId = brandName
+      ? await this.ensureBrandId(brandName)
+      : null;
+
     const insertData = {
       business_id: businessId,
       name,
       description: dto.description ?? '',
       sku,
+      ...(subCategoryId != null && { item_sub_category_id: subCategoryId }),
+      ...(brandId && { brand_id: brandId }),
       ...(hasPrice && { price }),
       ...(currency && { currency }),
       min_order_quantity: 1,
@@ -1300,5 +1378,125 @@ export class BusinessItemsService {
       }
       counter++;
     }
+  }
+
+  private async ensureSubCategoryId(
+    categoryName: string,
+    subCategoryName: string
+  ): Promise<number> {
+    const existingSub =
+      await this.hasuraSystemService.executeQuery<{
+        item_sub_categories: {
+          id: number;
+          item_category_id: number;
+        }[];
+      }>(FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME, {
+        categoryName,
+        subCategoryName,
+      });
+    const existing = existingSub.item_sub_categories?.[0];
+    if (existing) {
+      return existing.id;
+    }
+
+    const categoryLookup =
+      await this.hasuraSystemService.executeQuery<{
+        item_categories: { id: number }[];
+      }>(FIND_CATEGORY_BY_NAME, { categoryName });
+    const existingCategory = categoryLookup.item_categories?.[0];
+
+    let categoryId = existingCategory?.id ?? null;
+    if (categoryId == null) {
+      try {
+        const categoryResult =
+          await this.hasuraSystemService.executeMutation<{
+            insert_item_categories_one: { id: number };
+          }>(
+            `
+            mutation InsertCategory($categoryName: String!) {
+              insert_item_categories_one(
+                object: { name: $categoryName, status: active }
+              ) {
+                id
+              }
+            }
+          `,
+            { categoryName }
+          );
+        categoryId = categoryResult.insert_item_categories_one?.id ?? null;
+      } catch (error: any) {
+        const message: string =
+          error?.response?.errors?.[0]?.message || String(error?.message || '');
+        const isConstraintViolation = message.includes('constraint-violation');
+        if (!isConstraintViolation) {
+          throw error;
+        }
+        const retryLookup =
+          await this.hasuraSystemService.executeQuery<{
+            item_categories: { id: number }[];
+          }>(FIND_CATEGORY_BY_NAME, { categoryName });
+        categoryId = retryLookup.item_categories?.[0]?.id ?? null;
+      }
+    }
+    if (categoryId == null) {
+      throw new HttpException(
+        { success: false, error: 'Failed to ensure item category' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    const subResult =
+      await this.hasuraSystemService.executeMutation<{
+        insert_item_sub_categories_one: { id: number };
+      }>(
+        `
+        mutation InsertSubcategory(
+          $categoryId: Int!,
+          $subCategoryName: String!
+        ) {
+          insert_item_sub_categories_one(
+            object: {
+              item_category_id: $categoryId,
+              name: $subCategoryName,
+              status: active
+            }
+          ) {
+            id
+          }
+        }
+      `,
+        { categoryId, subCategoryName }
+      );
+    const subId = subResult.insert_item_sub_categories_one?.id;
+    if (subId == null) {
+      throw new HttpException(
+        { success: false, error: 'Failed to ensure item subcategory' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return subId;
+  }
+
+  private async ensureBrandId(name: string): Promise<string> {
+    const searchResult =
+      await this.hasuraSystemService.executeQuery<{
+        brands: { id: string }[];
+      }>(FIND_BRAND_BY_NAME, { name });
+    const existing = searchResult.brands?.[0];
+    if (existing?.id) {
+      return existing.id;
+    }
+    const insertResult =
+      await this.hasuraSystemService.executeMutation<{
+        insert_brands_one: { id: string };
+      }>(INSERT_BRAND, { name });
+    const brand = insertResult.insert_brands_one;
+    if (!brand?.id) {
+      throw new HttpException(
+        { success: false, error: 'Failed to ensure brand' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return brand.id;
   }
 }
