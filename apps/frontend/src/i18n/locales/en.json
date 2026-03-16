@@ -852,6 +852,24 @@
         "success": "Image replaced with cleaned version",
         "error": "Failed to cleanup image",
         "alreadyCleaned": "Image was already cleaned with AI"
+      },
+      "createItemFromImage": {
+        "title": "Create item from image",
+        "imageTitle": "Image {{id}}",
+        "noCaption": "No caption provided",
+        "fields": {
+          "name": "Item name",
+          "category": "Category",
+          "subcategory": "Subcategory",
+          "brand": "Brand",
+          "description": "Description"
+        },
+        "nameRequired": "Please provide a name for the item",
+        "submit": "Create item",
+        "success": "Item created from image successfully",
+        "suggestionsError": "Failed to get suggestions from image",
+        "createError": "Failed to create item from image",
+        "summaryTitle": "Item created from image"
       }
     },
     "items": {

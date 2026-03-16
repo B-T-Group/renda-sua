@@ -11,7 +11,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CsvUploadRequestDto } from './dto/csv-upload.dto';
@@ -20,6 +26,7 @@ import { ItemDealsService } from '../item-deals/item-deals.service';
 import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -214,6 +221,33 @@ export class BusinessItemsController {
   async getAvailableItems() {
     const items = await this.businessItemsService.getAvailableItems();
     return { success: true, data: { items } };
+  }
+
+  @Post('create-from-image')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create a new item for the current business from a business image',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Item created from image successfully',
+  })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiBody({ type: CreateItemFromImageDto })
+  async createItemFromImage(@Body() body: CreateItemFromImageDto) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const item = await this.businessItemsService.createItemFromImage(
+      businessId,
+      body
+    );
+    return { success: true, data: { item } };
   }
 
   @Patch('inventory/:inventoryId')

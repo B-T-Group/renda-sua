@@ -7,6 +7,8 @@ import {
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
+import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
+import { BusinessImagesService } from '../business-images/business-images.service';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -446,7 +448,8 @@ export class BusinessItemsService {
 
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly businessImagesService: BusinessImagesService
   ) {}
 
   async getItems(businessId: string) {
@@ -1191,5 +1194,100 @@ export class BusinessItemsService {
       errors: errorCount,
       details,
     };
+  }
+
+  async createItemFromImage(
+    businessId: string,
+    dto: CreateItemFromImageDto
+  ): Promise<any> {
+    const image = await this.businessImagesService.getImageForBusiness(
+      businessId,
+      dto.imageId
+    );
+
+    const name = dto.name.trim();
+    const baseSku = this.buildSkuBase(name);
+    const sku = await this.generateUniqueSku(businessId, baseSku);
+
+    const insertData = {
+      business_id: businessId,
+      name,
+      description: dto.description ?? '',
+      sku,
+      min_order_quantity: 1,
+      max_order_quantity: 1,
+      is_active: false,
+    };
+
+    const insertResult = await this.hasuraUserService.executeMutation<{
+      insert_items_one: { id: string; name: string; sku: string | null };
+    }>(INSERT_ITEM, { itemData: insertData });
+    const newItem = insertResult?.insert_items_one;
+    if (!newItem?.id) {
+      throw new HttpException(
+        { success: false, error: 'Failed to create item from image' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    await this.businessImagesService.associateImageToItem(
+      businessId,
+      image.id,
+      sku
+    );
+
+    return {
+      id: newItem.id,
+      name: newItem.name,
+      sku: newItem.sku,
+    };
+  }
+
+  private buildSkuBase(name: string): string {
+    const cleaned = name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!cleaned) {
+      return 'ITEM';
+    }
+    return cleaned.length > 12 ? cleaned.slice(0, 12) : cleaned;
+  }
+
+  private async generateUniqueSku(
+    businessId: string,
+    base: string
+  ): Promise<string> {
+    const query = `
+      query CheckItemSkus($businessId: uuid!, $prefix: String!) {
+        items(
+          where: {
+            business_id: { _eq: $businessId },
+            sku: { _ilike: $prefix }
+          }
+        ) {
+          sku
+        }
+      }
+    `;
+    const prefix = `${base}%`;
+    const result = await this.hasuraSystemService.executeQuery<{
+      items: { sku: string | null }[];
+    }>(query, { businessId, prefix });
+    const existingSkus = (result.items ?? [])
+      .map((i) => i.sku)
+      .filter((s): s is string => !!s);
+    if (!existingSkus.includes(base)) {
+      return base;
+    }
+    let counter = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const candidate = `${base}-${counter}`;
+      if (!existingSkus.includes(candidate)) {
+        return candidate;
+      }
+      counter++;
+    }
   }
 }

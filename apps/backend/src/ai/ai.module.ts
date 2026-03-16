@@ -1,11 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { BusinessImagesModule } from '../business-images/business-images.module';
 
 @Module({
-  imports: [ConfigModule, AuthModule],
+  imports: [ConfigModule, AuthModule, forwardRef(() => BusinessImagesModule)],
   controllers: [AiController],
   providers: [AiService],
   exports: [AiService],

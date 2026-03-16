@@ -841,6 +841,24 @@
         "success": "Image remplacée par la version nettoyée",
         "error": "Échec du nettoyage de l'image",
         "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA"
+      },
+      "createItemFromImage": {
+        "title": "Créer un article à partir de l'image",
+        "imageTitle": "Image {{id}}",
+        "noCaption": "Aucune légende fournie",
+        "fields": {
+          "name": "Nom de l'article",
+          "category": "Catégorie",
+          "subcategory": "Sous-catégorie",
+          "brand": "Marque",
+          "description": "Description"
+        },
+        "nameRequired": "Veuillez renseigner un nom pour l'article",
+        "submit": "Créer l'article",
+        "success": "Article créé à partir de l'image avec succès",
+        "suggestionsError": "Échec de la récupération des suggestions à partir de l'image",
+        "createError": "Échec de la création de l'article à partir de l'image",
+        "summaryTitle": "Article créé à partir de l'image"
       }
     },
     "items": {

@@ -42,6 +42,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
+import { CreateItemFromImageDialog } from '../dialogs/CreateItemFromImageDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessImages, type BusinessImage } from '../../hooks/useBusinessImages';
 import { useBusinessItemSearch } from '../../hooks/useBusinessItemSearch';
@@ -297,6 +298,9 @@ const BusinessImagesPage: React.FC = () => {
   const [imageToAssociate, setImageToAssociate] = useState<BusinessImage | null>(
     null
   );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [imageToCreateFrom, setImageToCreateFrom] =
+    useState<BusinessImage | null>(null);
   const [captionEdits, setCaptionEdits] = useState<Record<string, string>>({});
   const [altEdits, setAltEdits] = useState<Record<string, string>>({});
   const [imageToDelete, setImageToDelete] = useState<BusinessImage | null>(null);
@@ -544,6 +548,16 @@ const BusinessImagesPage: React.FC = () => {
   const handleCloseAssociateDialog = () => {
     setAssociateDialogOpen(false);
     setImageToAssociate(null);
+  };
+
+  const handleOpenCreateFromImage = (img: BusinessImage) => {
+    setImageToCreateFrom(img);
+    setCreateDialogOpen(true);
+  };
+
+  const handleCloseCreateFromImage = () => {
+    setCreateDialogOpen(false);
+    setImageToCreateFrom(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -1439,6 +1453,19 @@ const BusinessImagesPage: React.FC = () => {
                               'Associate item'
                             )}
                           </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ImageIcon />}
+                            onClick={() => handleOpenCreateFromImage(img)}
+                            disabled={submitting}
+                            fullWidth
+                          >
+                            {t(
+                              'business.images.actions.createItemFromImage',
+                              'Create item from image'
+                            )}
+                          </Button>
                           {profile?.business?.image_cleanup_enabled && (
                             <Button
                               size="small"
@@ -1539,6 +1566,13 @@ const BusinessImagesPage: React.FC = () => {
         image={imageToAssociate}
         onClose={handleCloseAssociateDialog}
         onAssociated={handleRefresh}
+      />
+
+      <CreateItemFromImageDialog
+        open={createDialogOpen}
+        image={imageToCreateFrom}
+        onClose={handleCloseCreateFromImage}
+        onCreated={handleRefresh}
       />
 
       <ConfirmationModal

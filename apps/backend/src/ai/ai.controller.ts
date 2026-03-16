@@ -16,13 +16,19 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import { AiService } from './ai.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import { BusinessImagesService } from '../business-images/business-images.service';
 
 @ApiTags('ai')
 @Controller('ai')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly businessImagesService: BusinessImagesService
+  ) {}
 
   @Post('generate-description')
   @ApiOperation({
@@ -114,5 +120,83 @@ export class AiController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Post('image-item-suggestions')
+  @ApiOperation({
+    summary: 'Get AI-based item field suggestions from a business image',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['imageId'],
+      properties: {
+        imageId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Suggestions generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            categoryName: { type: 'string' },
+            subCategoryName: { type: 'string' },
+            brandName: { type: 'string' },
+            descriptionSuggestion: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  async getImageItemSuggestions(@Body() body: { imageId: string }) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!body?.imageId) {
+      throw new HttpException(
+        { success: false, error: 'imageId is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const image = await this.businessImagesService.getImageForBusiness(
+      businessId,
+      body.imageId
+    );
+
+    const name =
+      image.caption ||
+      image.alt_text ||
+      'New product from image';
+
+    const dto: GenerateDescriptionDto = {
+      name,
+      language: 'en',
+    };
+
+    const result = await this.aiService.generateProductDescription(dto);
+
+    return {
+      success: true,
+      data: {
+        name,
+        categoryName: undefined,
+        subCategoryName: undefined,
+        brandName: undefined,
+        descriptionSuggestion: result.description,
+      },
+    };
   }
 }
