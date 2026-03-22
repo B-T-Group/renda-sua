@@ -92,11 +92,8 @@ def _prepare_variables(data: Dict[str, Any], user_type: str, locale: str) -> Dic
         "totalAmount": data.get("totalAmount", 0),
         "currency": _esc(cur),
         "deliveryAddress": _esc(str(data.get("deliveryAddress", "Unknown Address"))),
-        "estimatedDeliveryTime": _esc(data.get("estimatedDeliveryTime") or ""),
-        "deliveryTimeWindow": _esc(data.get("estimatedDeliveryTime") or ""),
         "specialInstructions": _esc(data.get("specialInstructions") or ""),
         "notes": _esc(data.get("notes") or ""),
-        "businessVerified": "true" if data.get("businessVerified") else "false",
         "currentYear": year,
         "ORDER_ITEMS_HTML": "",
         "ESTIMATED_DELIVERY_SECTION_HTML": "",
@@ -104,6 +101,11 @@ def _prepare_variables(data: Dict[str, Any], user_type: str, locale: str) -> Dic
         "NOTES_SECTION_HTML": notes_html,
         "AGENT_NAME_SECTION_HTML": "",
     }
+    raw_est = data.get("estimatedDeliveryTime")
+    if raw_est is not None and str(raw_est).strip():
+        est = _esc(str(raw_est).strip())
+        base["estimatedDeliveryTime"] = est
+        base["deliveryTimeWindow"] = est
     if user_type == "client":
         if not data.get("clientName") or not data.get("businessName"):
             raise ValueError("Client/business name required")

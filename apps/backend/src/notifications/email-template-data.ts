@@ -141,20 +141,25 @@ export function buildResendTemplateVariables(
     totalAmount: data.totalAmount || 0,
     currency: esc(cur),
     deliveryAddress: esc(data.deliveryAddress || 'Unknown Address'),
-    estimatedDeliveryTime: data.estimatedDeliveryTime
-      ? esc(data.estimatedDeliveryTime)
-      : '',
-    deliveryTimeWindow: data.estimatedDeliveryTime
-      ? esc(data.estimatedDeliveryTime)
-      : '',
     specialInstructions: data.specialInstructions
       ? esc(data.specialInstructions)
       : '',
     notes: data.notes ? esc(data.notes) : '',
-    businessVerified: data.businessVerified ? 'true' : 'false',
     currentYear: new Date().getFullYear(),
     ...htmlBlocks,
   };
+
+  const estRaw = data.estimatedDeliveryTime;
+  const est =
+    estRaw !== null &&
+    estRaw !== undefined &&
+    String(estRaw).trim() !== ''
+      ? esc(String(estRaw).trim())
+      : null;
+  if (est !== null) {
+    base.estimatedDeliveryTime = est;
+    base.deliveryTimeWindow = est;
+  }
 
   switch (userType) {
     case 'client':
