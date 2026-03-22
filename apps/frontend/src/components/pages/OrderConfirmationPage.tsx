@@ -19,7 +19,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-type PaymentSource = 'wallet' | 'mobile_payment' | 'credit_card';
+type PaymentSource =
+  | 'wallet'
+  | 'mobile_payment'
+  | 'mobile_money'
+  | 'credit_card';
 
 interface OrderConfirmationData {
   order?: {
@@ -103,10 +107,11 @@ const OrderConfirmationPage: React.FC = () => {
   );
   const currency = orders[0]?.currency || 'USD';
 
-  // Use payment_source to choose confirmation: wallet = simple; mobile_payment = confirm on phone
+  // Wallet = paid from balance (no phone step). API uses mobile_money for MM; DB enum may use mobile_payment.
+  const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
   const showMobilePaymentConfirmation = isMultipleOrders
-    ? orders.some((o) => o.payment_source === 'mobile_payment')
-    : (orders[0]?.payment_source ?? 'mobile_payment') === 'mobile_payment';
+    ? orders.some((o) => !isWalletPayment(o.payment_source))
+    : !isWalletPayment(orders[0]?.payment_source);
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');
@@ -166,7 +171,7 @@ const OrderConfirmationPage: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Payment confirmation: wallet = simple; mobile_payment = confirm on phone */}
+      {/* Payment confirmation: wallet only for Rendasua balance; otherwise confirm on phone / provider */}
       {showMobilePaymentConfirmation ? (
         <Card
           sx={{
