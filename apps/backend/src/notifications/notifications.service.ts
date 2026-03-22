@@ -751,13 +751,13 @@ export class NotificationsService {
    * Send email using Resend transactional template
    */
   /**
-   * Resend requires each template variable to match its declared type (e.g. strings
-   * cannot be JSON null — use "").
+   * Resend validates each variable against the template's declared types in the
+   * dashboard (e.g. money fields are often `string`). Coerce numbers to strings.
    */
   private serializeResendVariables(
     variables: Record<string, string | number | boolean | null | undefined>
-  ): Record<string, string | number> {
-    const out: Record<string, string | number> = {};
+  ): Record<string, string> {
+    const out: Record<string, string> = {};
     for (const [key, value] of Object.entries(variables)) {
       if (value === undefined) continue;
       if (value === null) {
@@ -766,6 +766,10 @@ export class NotificationsService {
       }
       if (typeof value === 'boolean') {
         out[key] = value ? 'true' : 'false';
+        continue;
+      }
+      if (typeof value === 'number') {
+        out[key] = String(value);
         continue;
       }
       out[key] = value;
@@ -799,7 +803,7 @@ export class NotificationsService {
         to: [to],
         template: {
           id: templateId,
-          variables: templateVariables,
+          variables: templateVariables as Record<string, string | number>,
         },
       });
       if (error) {
