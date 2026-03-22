@@ -753,7 +753,7 @@ export class NotificationsService {
   private async sendEmail(params: {
     to: string;
     templateKey: string;
-    variables: Record<string, string | number>;
+    variables: Record<string, string | number | boolean>;
   }): Promise<void> {
     this.initializeResend();
     if (!this.resendClient) {
@@ -769,11 +769,17 @@ export class NotificationsService {
       );
       return;
     }
+    const stringVariables: Record<string, string> = Object.fromEntries(
+      Object.entries(variables).map(([key, value]) => [
+        key,
+        value === null || value === undefined ? '' : String(value),
+      ])
+    );
     try {
       const { error } = await this.resendClient.emails.send({
         from: this.fromEmail,
         to: [to],
-        template: { id: templateId, variables },
+        template: { id: templateId, variables: stringVariables },
       });
       if (error) {
         throw new Error(JSON.stringify(error));

@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 import requests
 
 RESEND_EMAILS_URL = "https://api.resend.com/emails"
 
 
-def _serialize_variables(variables: Dict[str, Any]) -> Dict[str, Union[str, int, float, bool]]:
-    out: Dict[str, Union[str, int, float, bool]] = {}
+def _serialize_variables(variables: Dict[str, Any]) -> Dict[str, str]:
+    """Resend validates template variables against dashboard types; use strings for all."""
+    out: Dict[str, str] = {}
     for key, val in variables.items():
         if val is None:
             out[key] = ""
-        elif isinstance(val, (str, int, float, bool)):
-            out[key] = val
         else:
             out[key] = str(val)
     return out
