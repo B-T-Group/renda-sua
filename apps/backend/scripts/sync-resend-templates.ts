@@ -74,6 +74,11 @@ function subjectForTemplate(name: string): string {
       ? 'Commande à proximité — Rendasua'
       : 'Order near you — Rendasua';
   }
+  if (name.includes('rental_period_ended')) {
+    return name.endsWith('_fr')
+      ? 'Location — fin de période — Rendasua'
+      : 'Rental period ended — Rendasua';
+  }
   return name.endsWith('_fr')
     ? 'Mise à jour de commande — Rendasua'
     : 'Rendasua — order update';

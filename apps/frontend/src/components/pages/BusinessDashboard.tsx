@@ -8,6 +8,7 @@ import {
   Description as DocumentsIcon,
   Error as ErrorIcon,
   Inventory2 as ItemsIcon,
+  Handshake as RentalsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
@@ -116,6 +117,31 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#8e24aa',
       path: '/business/images',
+    },
+    {
+      title: t('business.dashboard.rentalsTitle', 'Rentals'),
+      description: t(
+        'business.dashboard.rentalsDescription',
+        'Manage rental catalog, location listings, and client requests.'
+      ),
+      icon: <RentalsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00695c',
+      path: '/business/rentals',
+    },
+    {
+      title: t(
+        'business.rentalImages.dashboardTitle',
+        'Rental image library'
+      ),
+      description: t(
+        'business.rentalImages.dashboardDescription',
+        'Upload rental photos, run AI cleanup, and link or create rental items.'
+      ),
+      icon: <ImageIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00838f',
+      path: '/business/rental-images',
     },
     {
       title: t('common.locations'),

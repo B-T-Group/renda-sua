@@ -89,13 +89,17 @@ const Header: React.FC = () => {
 
   const getMainNavigationItems = () => {
     if (!isAuthenticated) {
-      return [{ label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> }];
+      return [
+        { label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> },
+        { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
+      ];
     }
 
     // For authenticated users, show different navigation based on user type
     if (userType === 'client') {
       return [
         { label: t('common.items', 'Items'), path: '/items', icon: <Assignment /> },
+        { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
         { label: t('common.orders', 'Orders'), path: '/orders', icon: <Assignment /> },
       ];
     }
@@ -127,6 +131,11 @@ const Header: React.FC = () => {
       submenuItems.push(
         { label: t('common.items', 'Items'), path: '/business/items', icon: <Assignment /> },
         {
+          label: t('business.dashboard.rentalsTitle', 'Rentals'),
+          path: '/business/rentals',
+          icon: <Assignment />,
+        },
+        {
           label: t('common.locations', 'Locations'),
           path: '/business/locations',
           icon: <Assignment />,
@@ -136,6 +145,11 @@ const Header: React.FC = () => {
       );
     } else if (userType === 'client') {
       submenuItems.push(
+        {
+          label: t('rentals.myRequests', 'My rental requests'),
+          path: '/rentals/requests',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );

@@ -33,6 +33,8 @@ import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
+import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
+import { RentalsModule } from '../rentals/rentals.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
 import { ServicesModule } from '../services/services.module';
 import { SubcategoriesModule } from '../subcategories/subcategories.module';
@@ -89,6 +91,8 @@ import { AppService } from './app.service';
     AddressesModule,
     OrdersModule,
     RatingsModule,
+    RentalsModule,
+    RentalItemImagesModule,
     ItemViewsModule,
     AgentsModule,
     AwsModule,

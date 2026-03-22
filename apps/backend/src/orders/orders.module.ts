@@ -43,6 +43,6 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     FailedDeliveriesService,
     DeliveryPinService,
   ],
-  exports: [OrdersService, OrderStatusService],
+  exports: [OrdersService, OrderStatusService, DeliveryPinService],
 })
 export class OrdersModule {}

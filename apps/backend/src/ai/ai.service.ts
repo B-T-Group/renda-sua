@@ -54,6 +54,15 @@ export interface ImageItemSuggestionResult {
   dimensions?: string | null;
 }
 
+/** AI extraction for rental catalog items (vision). */
+export interface RentalImageSuggestionResult {
+  name?: string;
+  description?: string;
+  rentalCategoryName?: string;
+  suggestedTags?: string[];
+  currency?: string | null;
+}
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -513,6 +522,173 @@ Do not include any explanation outside of the JSON.`;
         dimensions: null,
       };
     }
+  }
+
+  async generateRentalImageSuggestions(input: {
+    imageUrl: string;
+    caption?: string | null;
+    altText?: string | null;
+    defaultCurrency?: string;
+  }): Promise<RentalImageSuggestionResult> {
+    const apiKey = this.configService.get<string>('openai.apiKey');
+    if (!apiKey) {
+      throw new HttpException(
+        'OpenAI API key not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    const defaultCurrency = input.defaultCurrency || 'XAF';
+    const textContext = this.buildRentalSuggestionTextContext(input);
+    const userText = this.buildRentalSuggestionUserPrompt(
+      textContext,
+      defaultCurrency
+    );
+    try {
+      return await this.requestRentalImageSuggestions(
+        apiKey,
+        input.imageUrl,
+        userText,
+        defaultCurrency
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Rental image suggestions failed for ${input.imageUrl}`,
+        error
+      );
+      return this.fallbackRentalSuggestion(input, defaultCurrency);
+    }
+  }
+
+  private buildRentalSuggestionTextContext(input: {
+    caption?: string | null;
+    altText?: string | null;
+  }): string {
+    const parts: string[] = [];
+    if (input.caption) parts.push(`Caption: ${input.caption}`);
+    if (input.altText) parts.push(`Alt text: ${input.altText}`);
+    return parts.join('\n') || 'N/A';
+  }
+
+  private buildRentalSuggestionUserPrompt(
+    textContext: string,
+    defaultCurrency: string
+  ): string {
+    return `
+You analyze photos of assets that could be rented (tools, equipment, vehicles, event items, apparel, etc.).
+Infer a concise rental listing from the image and any visible text.
+
+Context from the image record (may be empty):
+${textContext}
+
+Return ONLY a JSON object with this exact shape:
+{
+  "name": string | null,
+  "description": string | null,
+  "rentalCategoryName": string | null,
+  "suggestedTags": string[] | null,
+  "currency": string | null
+}
+
+- name: short title for the rental item (not a full sentence).
+- description: 2–4 sentences for renters (condition, typical use, what is included if visible).
+- rentalCategoryName: the best-matching category label in plain English (e.g. "Power tools", "Vehicles", "Event equipment") — a human name, not an id.
+- suggestedTags: a few lowercase keywords for search (e.g. ["drill", "cordless", "dewalt"]).
+- currency: 3-letter ISO code for pricing context if inferable; otherwise "${defaultCurrency}".
+
+No markdown, no explanation outside JSON.`;
+  }
+
+  private async requestRentalImageSuggestions(
+    apiKey: string,
+    imageUrl: string,
+    userText: string,
+    defaultCurrency: string
+  ): Promise<RentalImageSuggestionResult> {
+    const request: OpenAIRequest = {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You extract structured rental catalog data from images for a rentals marketplace.',
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userText },
+            { type: 'image_url', image_url: { url: imageUrl } },
+          ],
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
+    };
+    const response = await axios.post<OpenAIResponse>(
+      this.openaiApiUrl,
+      request,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        timeout: 45000,
+      }
+    );
+    const rawContent = response.data.choices?.[0]?.message?.content;
+    const contentString = this.normalizeOpenAiTextContent(rawContent);
+    return this.parseRentalSuggestionJson(contentString, defaultCurrency);
+  }
+
+  private normalizeOpenAiTextContent(rawContent: unknown): string {
+    if (typeof rawContent === 'string') return rawContent;
+    if (Array.isArray(rawContent)) {
+      return rawContent.map((p: any) => p?.text || '').join('\n');
+    }
+    return String(rawContent ?? '');
+  }
+
+  private parseRentalSuggestionJson(
+    contentString: string,
+    defaultCurrency: string
+  ): RentalImageSuggestionResult {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(contentString) as Record<string, unknown>;
+    } catch (parseError: any) {
+      this.logger.error('Failed to parse rental suggestion JSON', parseError);
+      return { currency: defaultCurrency };
+    }
+    const tags = parsed.suggestedTags;
+    return {
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      description:
+        typeof parsed.description === 'string' ? parsed.description : undefined,
+      rentalCategoryName:
+        typeof parsed.rentalCategoryName === 'string'
+          ? parsed.rentalCategoryName
+          : undefined,
+      suggestedTags: Array.isArray(tags)
+        ? tags.filter((t): t is string => typeof t === 'string')
+        : undefined,
+      currency:
+        typeof parsed.currency === 'string' ? parsed.currency : defaultCurrency,
+    };
+  }
+
+  private fallbackRentalSuggestion(
+    input: {
+      caption?: string | null;
+      altText?: string | null;
+    },
+    defaultCurrency: string
+  ): RentalImageSuggestionResult {
+    return {
+      name: input.caption || input.altText || undefined,
+      description: undefined,
+      rentalCategoryName: undefined,
+      suggestedTags: undefined,
+      currency: defaultCurrency,
+    };
   }
 
   private async lookupProductByBarcode(

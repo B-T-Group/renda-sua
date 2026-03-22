@@ -13,10 +13,16 @@ import {
   normalizeLanguage,
   type EmailLocale,
 } from './email-template-data';
-import type { NotificationData } from './notification-types';
+import type {
+  NotificationData,
+  RentalPeriodEndedEmailPayload,
+} from './notification-types';
 import twilio = require('twilio');
 
-export type { NotificationData } from './notification-types';
+export type {
+  NotificationData,
+  RentalPeriodEndedEmailPayload,
+} from './notification-types';
 
 export interface EmailTemplate {
   id: string;
@@ -136,6 +142,60 @@ export class NotificationsService {
       );
       throw error;
     }
+  }
+
+  async sendRentalPeriodEndedEmails(
+    payload: RentalPeriodEndedEmailPayload
+  ): Promise<void> {
+    try {
+      const vars = {
+        bookingId: payload.bookingId,
+        rentalItemName: payload.rentalItemName,
+        endAt: payload.endAt,
+      };
+      const [cu, bu] = await Promise.all([
+        this.getUserRowForEmail(payload.clientUserId),
+        this.getUserRowForEmail(payload.businessUserId),
+      ]);
+      if (!cu?.email || !bu?.email) {
+        this.logger.warn('Rental period ended email skipped: missing email');
+        return;
+      }
+      const clientLocale = normalizeLanguage(cu.preferred_language);
+      const businessLocale = normalizeLanguage(bu.preferred_language);
+      await this.sendEmail({
+        to: bu.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_rental_period_ended',
+          businessLocale
+        ),
+        variables: vars,
+      });
+      await this.sendEmail({
+        to: cu.email,
+        templateKey: this.mapKeyForLanguage(
+          'client_rental_period_ended',
+          clientLocale
+        ),
+        variables: vars,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendRentalPeriodEndedEmails: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async getUserRowForEmail(userId: string): Promise<{
+    email: string;
+    preferred_language?: string;
+  } | null> {
+    const q = `query U($id: uuid!) { users_by_pk(id: $id) { email preferred_language } }`;
+    const r = await this.hasuraSystemService.executeQuery<{ users_by_pk: any }>(
+      q,
+      { id: userId }
+    );
+    return r.users_by_pk ?? null;
   }
 
   /**

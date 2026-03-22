@@ -29,3 +29,11 @@ export interface NotificationData {
   businessPreferredLanguage?: string;
   agentPreferredLanguage?: string;
 }
+
+export interface RentalPeriodEndedEmailPayload {
+  bookingId: string;
+  rentalItemName: string;
+  endAt: string;
+  clientUserId: string;
+  businessUserId: string;
+}

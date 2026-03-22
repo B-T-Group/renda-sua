@@ -27,7 +27,10 @@ import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
 import BusinessImagesPage from '../components/pages/BusinessImagesPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
+import BusinessRentalsPage from '../components/pages/BusinessRentalsPage';
+import RentalItemImagesPage from '../components/pages/RentalItemImagesPage';
 import CartPage from '../components/pages/CartPage';
+import ClientRentalRequestsPage from '../components/pages/ClientRentalRequestsPage';
 import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
 import CheckoutPage from '../components/pages/CheckoutPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
@@ -42,6 +45,9 @@ import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 import AgentDashboard from '../components/pages/AgentDashboard';
 import FAQ from '../components/pages/FAQ';
 import ItemDetailPage from '../components/pages/ItemDetailPage';
+import RentalBookingDetailPage from '../components/pages/RentalBookingDetailPage';
+import RentalListingDetailPage from '../components/pages/RentalListingDetailPage';
+import RentalsPage from '../components/pages/RentalsPage';
 import ItemsPage from '../components/pages/ItemsPage';
 import ItemViewPage from '../components/pages/ItemViewPage';
 import DealsPage from '../components/pages/DealsPage';
@@ -168,6 +174,24 @@ function App() {
             <Route path="/" element={<LandingPage />} />
 
             {/* Public routes */}
+            <Route
+              path="/rentals/requests"
+              element={
+                <ProtectedRoute>
+                  <ClientRentalRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rentals/bookings/:bookingId"
+              element={
+                <ProtectedRoute>
+                  <RentalBookingDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/rentals" element={<RentalsPage />} />
+            <Route path="/rentals/:listingId" element={<RentalListingDetailPage />} />
             <Route path="/items" element={<ItemsPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/support" element={<SupportPage />} />
@@ -423,6 +447,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessImagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals"
+              element={
+                <ProtectedRoute>
+                  <BusinessRentalsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rental-images"
+              element={
+                <ProtectedRoute>
+                  <RentalItemImagesPage />
                 </ProtectedRoute>
               }
             />

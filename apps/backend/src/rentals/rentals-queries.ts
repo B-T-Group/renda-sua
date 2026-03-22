@@ -1,0 +1,309 @@
+export const GET_LISTING_FOR_REQUEST = `
+  query GetRentalListingForRequest($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      id
+      is_active
+      min_rental_days
+      max_rental_days
+      units_available
+      base_price_per_day
+      rental_item {
+        id
+        business_id
+        currency
+        is_active
+        business { id user_id is_verified }
+      }
+      business_location_id
+    }
+  }
+`;
+
+export const INSERT_RENTAL_REQUEST = `
+  mutation InsertRentalRequest($object: rental_requests_insert_input!) {
+    insert_rental_requests_one(object: $object) {
+      id
+      status
+      requested_start_at
+      requested_end_at
+    }
+  }
+`;
+
+export const GET_RENTAL_REQUEST_FULL = `
+  query GetRentalRequestFull($id: uuid!) {
+    rental_requests_by_pk(id: $id) {
+      id
+      client_id
+      status
+      requested_start_at
+      requested_end_at
+      rental_pricing_snapshot
+      rental_location_listing_id
+      rental_location_listing {
+        id
+        units_available
+        rental_item { id business_id currency is_active }
+      }
+      client { id user_id }
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_REQUEST_RESPOND = `
+  mutation UpdateRentalRequestRespond(
+    $id: uuid!
+    $status: rental_request_status_enum!
+    $snapshot: jsonb
+    $note: String
+    $respondedAt: timestamptz!
+    $userId: uuid!
+  ) {
+    update_rental_requests_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        status: $status
+        rental_pricing_snapshot: $snapshot
+        business_response_note: $note
+        responded_at: $respondedAt
+        responded_by_user_id: $userId
+      }
+    ) {
+      id
+      status
+    }
+  }
+`;
+
+export const COUNT_OVERLAPPING_BOOKINGS = `
+  query CountOverlappingBookings(
+    $listingId: uuid!
+    $start: timestamptz!
+    $end: timestamptz!
+  ) {
+    rental_bookings_aggregate(
+      where: {
+        rental_location_listing_id: { _eq: $listingId }
+        status: { _in: [confirmed, active, awaiting_return] }
+        _and: [
+          { start_at: { _lt: $end } }
+          { end_at: { _gt: $start } }
+        ]
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const INSERT_RENTAL_BOOKING = `
+  mutation InsertRentalBooking($object: rental_bookings_insert_input!) {
+    insert_rental_bookings_one(object: $object) {
+      id
+      status
+      total_amount
+      currency
+      start_at
+      end_at
+    }
+  }
+`;
+
+export const INSERT_RENTAL_HOLD = `
+  mutation InsertRentalHold($object: rental_holds_insert_input!) {
+    insert_rental_holds_one(object: $object) {
+      id
+      rental_booking_id
+      client_hold_amount
+      status
+    }
+  }
+`;
+
+export const GET_RENTAL_BOOKING_FULL = `
+  query GetRentalBookingFull($id: uuid!) {
+    rental_bookings_by_pk(id: $id) {
+      id
+      rental_request_id
+      client_id
+      business_id
+      rental_location_listing_id
+      start_at
+      end_at
+      total_amount
+      currency
+      status
+      rental_pricing_snapshot
+      rental_start_pin_hash
+      rental_start_pin_attempts
+      rental_start_overwrite_code_hash
+      rental_start_overwrite_code_used_at
+      period_ended_notified_at
+      client { id user_id }
+      business { id user_id name }
+      rental_location_listing {
+        business_location_id
+        rental_item { name }
+      }
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_BOOKING_STATUS = `
+  mutation UpdateRentalBookingStatus(
+    $id: uuid!
+    $status: rental_booking_status_enum!
+    $actualStart: timestamptz
+    $actualEnd: timestamptz
+    $pinHash: String
+    $overwriteHash: String
+    $overwriteUsedAt: timestamptz
+    $notifiedAt: timestamptz
+  ) {
+    update_rental_bookings_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        status: $status
+        actual_start_at: $actualStart
+        actual_end_at: $actualEnd
+        rental_start_pin_hash: $pinHash
+        rental_start_pin_attempts: 0
+        rental_start_overwrite_code_hash: $overwriteHash
+        rental_start_overwrite_code_used_at: $overwriteUsedAt
+        period_ended_notified_at: $notifiedAt
+      }
+    ) {
+      id
+      status
+    }
+  }
+`;
+
+export const INCREMENT_RENTAL_PIN_ATTEMPTS = `
+  mutation IncRentalPinAttempts($id: uuid!, $attempts: Int!) {
+    update_rental_bookings_by_pk(
+      pk_columns: { id: $id }
+      _set: { rental_start_pin_attempts: $attempts }
+    ) {
+      id
+      rental_start_pin_attempts
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_HOLD_STATUS = `
+  mutation UpdateRentalHoldStatus($bookingId: uuid!, $status: rental_hold_status_enum!) {
+    update_rental_holds(
+      where: { rental_booking_id: { _eq: $bookingId } }
+      _set: { status: $status }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const INSERT_RENTAL_STATUS_HISTORY = `
+  mutation InsertRentalStatusHistory($object: rental_status_history_insert_input!) {
+    insert_rental_status_history_one(object: $object) {
+      id
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_REQUEST_STATUS = `
+  mutation UpdateRentalRequestStatus($id: uuid!, $status: rental_request_status_enum!) {
+    update_rental_requests_by_pk(pk_columns: { id: $id }, _set: { status: $status }) {
+      id
+      status
+    }
+  }
+`;
+
+export const LIST_ACTIVE_BOOKINGS_PAST_END = `
+  query ListActiveBookingsPastEnd($now: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: active }
+        end_at: { _lte: $now }
+        period_ended_notified_at: { _is_null: true }
+      }
+    ) {
+      id
+      end_at
+      period_ended_notified_at
+    }
+  }
+`;
+
+export const GET_BUSINESS_RENTAL_ITEMS = `
+  query GetBusinessRentalItems {
+    rental_items(order_by: { updated_at: desc }) {
+      id
+      name
+      description
+      currency
+      rental_category_id
+      rental_location_listings {
+        id
+        business_location_id
+        base_price_per_day
+      }
+    }
+  }
+`;
+
+export const GET_BUSINESS_RENTAL_REQUESTS = `
+  query GetBusinessRentalRequests {
+    rental_requests(order_by: { created_at: desc }, limit: 50) {
+      id
+      status
+      requested_start_at
+      requested_end_at
+      rental_pricing_snapshot
+      rental_location_listing {
+        id
+        base_price_per_day
+        rental_item {
+          name
+          currency
+        }
+      }
+    }
+  }
+`;
+
+export const INSERT_BUSINESS_RENTAL_ITEM = `
+  mutation InsertBusinessRentalItem($object: rental_items_insert_input!) {
+    insert_rental_items_one(object: $object) {
+      id
+    }
+  }
+`;
+
+export const INSERT_BUSINESS_RENTAL_LISTING = `
+  mutation InsertBusinessRentalListing($object: rental_location_listings_insert_input!) {
+    insert_rental_location_listings_one(object: $object) {
+      id
+    }
+  }
+`;
+
+export const GET_RENTAL_ITEM_BUSINESS_CHECK = `
+  query RentalItemBusinessCheck($id: uuid!) {
+    rental_items_by_pk(id: $id) {
+      id
+      business_id
+    }
+  }
+`;
+
+export const GET_BUSINESS_LOCATION_OWNER = `
+  query BusinessLocationOwner($id: uuid!) {
+    business_locations_by_pk(id: $id) {
+      id
+      business_id
+    }
+  }
+`;
