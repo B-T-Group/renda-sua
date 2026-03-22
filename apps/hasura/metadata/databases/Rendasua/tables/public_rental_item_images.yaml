@@ -1,0 +1,147 @@
+table:
+  name: rental_item_images
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: rental_category
+    using:
+      foreign_key_constraint_on: rental_category_id
+  - name: rental_item
+    using:
+      foreign_key_constraint_on: rental_item_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        _and:
+          - business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+          - _or:
+              - rental_item_id:
+                  _is_null: true
+              - rental_item:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
+      columns:
+        - business_id
+        - rental_item_id
+        - rental_category_id
+        - image_url
+        - s3_key
+        - file_size
+        - width
+        - height
+        - format
+        - caption
+        - alt_text
+        - tags
+        - status
+        - display_order
+        - is_ai_cleaned
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - rental_item_id
+        - image_url
+        - alt_text
+        - display_order
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - rental_item_id:
+              _is_null: false
+          - rental_item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - rental_item_id
+        - rental_category_id
+        - image_url
+        - s3_key
+        - file_size
+        - width
+        - height
+        - format
+        - caption
+        - alt_text
+        - tags
+        - status
+        - display_order
+        - is_ai_cleaned
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_item_id
+        - image_url
+        - alt_text
+        - display_order
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - rental_item_id:
+              _is_null: false
+          - rental_item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - rental_item_id
+        - rental_category_id
+        - image_url
+        - s3_key
+        - file_size
+        - width
+        - height
+        - format
+        - caption
+        - alt_text
+        - tags
+        - status
+        - display_order
+        - is_ai_cleaned
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

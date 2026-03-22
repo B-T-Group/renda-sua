@@ -42,6 +42,33 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: rental_bookings
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: rental_bookings
+          schema: public
+  - name: rental_items
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: rental_items
+          schema: public
+  - name: rental_item_images
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_id
+        insertion_order: null
+        remote_table:
+          name: rental_item_images
+          schema: public
 insert_permissions:
   - role: agent
     permission:

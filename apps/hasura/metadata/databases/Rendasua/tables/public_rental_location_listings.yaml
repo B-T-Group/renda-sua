@@ -1,0 +1,144 @@
+table:
+  name: rental_location_listings
+  schema: public
+object_relationships:
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: rental_item
+    using:
+      foreign_key_constraint_on: rental_item_id
+array_relationships:
+  - name: rental_requests
+    using:
+      foreign_key_constraint_on:
+        column: rental_location_listing_id
+        table:
+          name: rental_requests
+          schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        _and:
+          - rental_item:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+          - business_location:
+              business:
+                user:
+                  identifier:
+                    _eq: X-Hasura-User-Id
+      columns:
+        - rental_item_id
+        - business_location_id
+        - pickup_instructions
+        - dropoff_instructions
+        - base_price_per_day
+        - min_rental_days
+        - max_rental_days
+        - units_available
+        - is_active
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - rental_item_id
+        - business_location_id
+        - pickup_instructions
+        - dropoff_instructions
+        - base_price_per_day
+        - min_rental_days
+        - max_rental_days
+        - units_available
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - is_active:
+              _eq: true
+          - rental_item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - rental_item_id
+        - business_location_id
+        - pickup_instructions
+        - dropoff_instructions
+        - base_price_per_day
+        - min_rental_days
+        - max_rental_days
+        - units_available
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        rental_item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_item_id
+        - business_location_id
+        - pickup_instructions
+        - dropoff_instructions
+        - base_price_per_day
+        - min_rental_days
+        - max_rental_days
+        - units_available
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - is_active:
+              _eq: true
+          - rental_item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - pickup_instructions
+        - dropoff_instructions
+        - base_price_per_day
+        - min_rental_days
+        - max_rental_days
+        - units_available
+        - is_active
+      filter:
+        rental_item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        rental_item:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id

@@ -33,6 +33,24 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: rental_bookings
+    using:
+      manual_configuration:
+        column_mapping:
+          id: client_id
+        insertion_order: null
+        remote_table:
+          name: rental_bookings
+          schema: public
+  - name: rental_requests
+    using:
+      manual_configuration:
+        column_mapping:
+          id: client_id
+        insertion_order: null
+        remote_table:
+          name: rental_requests
+          schema: public
   - name: ratings_received
     using:
       manual_configuration:

@@ -1,0 +1,84 @@
+table:
+  name: rental_bookings
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: rental_hold
+    using:
+      foreign_key_constraint_on:
+        column: rental_booking_id
+        table:
+          name: rental_holds
+          schema: public
+  - name: rental_location_listing
+    using:
+      foreign_key_constraint_on: rental_location_listing_id
+  - name: rental_request
+    using:
+      foreign_key_constraint_on: rental_request_id
+array_relationships:
+  - name: rental_status_histories
+    using:
+      foreign_key_constraint_on:
+        column: rental_booking_id
+        table:
+          name: rental_status_history
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - rental_request_id
+        - client_id
+        - business_id
+        - rental_location_listing_id
+        - start_at
+        - end_at
+        - total_amount
+        - currency
+        - rental_pricing_snapshot
+        - status
+        - rental_start_pin_hash
+        - rental_start_pin_attempts
+        - rental_start_overwrite_code_hash
+        - rental_start_overwrite_code_used_at
+        - period_ended_notified_at
+        - actual_start_at
+        - actual_end_at
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_request_id
+        - client_id
+        - business_id
+        - rental_location_listing_id
+        - start_at
+        - end_at
+        - total_amount
+        - currency
+        - rental_pricing_snapshot
+        - status
+        - period_ended_notified_at
+        - actual_start_at
+        - actual_end_at
+        - created_at
+        - updated_at
+      filter:
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

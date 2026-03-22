@@ -1,0 +1,129 @@
+table:
+  name: rental_items
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: rental_category
+    using:
+      foreign_key_constraint_on: rental_category_id
+array_relationships:
+  - name: rental_item_images
+    using:
+      foreign_key_constraint_on:
+        column: rental_item_id
+        table:
+          name: rental_item_images
+          schema: public
+  - name: rental_location_listings
+    using:
+      foreign_key_constraint_on:
+        column: rental_item_id
+        table:
+          name: rental_location_listings
+          schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      columns:
+        - business_id
+        - rental_category_id
+        - name
+        - description
+        - tags
+        - currency
+        - operation_mode
+        - is_active
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - business_id
+        - rental_category_id
+        - name
+        - description
+        - tags
+        - currency
+        - operation_mode
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - is_active:
+              _eq: true
+          - business:
+              is_verified:
+                _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - rental_category_id
+        - name
+        - description
+        - tags
+        - currency
+        - operation_mode
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_id
+        - rental_category_id
+        - name
+        - description
+        - tags
+        - currency
+        - operation_mode
+        - is_active
+        - created_at
+        - updated_at
+      filter:
+        _and:
+          - is_active:
+              _eq: true
+          - business:
+              is_verified:
+                _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - rental_category_id
+        - name
+        - description
+        - tags
+        - currency
+        - operation_mode
+        - is_active
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

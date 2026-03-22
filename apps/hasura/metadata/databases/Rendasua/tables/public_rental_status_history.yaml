@@ -1,0 +1,45 @@
+table:
+  name: rental_status_history
+  schema: public
+object_relationships:
+  - name: changed_by_user
+    using:
+      foreign_key_constraint_on: changed_by_user_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - rental_booking_id
+        - status
+        - previous_status
+        - changed_by_user_id
+        - changed_by_type
+        - notes
+        - created_at
+      filter:
+        rental_booking:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_booking_id
+        - status
+        - previous_status
+        - changed_by_user_id
+        - changed_by_type
+        - notes
+        - created_at
+      filter:
+        rental_booking:
+          client:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id

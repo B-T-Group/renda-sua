@@ -27,6 +27,15 @@ array_relationships:
         remote_table:
           name: orders
           schema: public
+  - name: rental_location_listings
+    using:
+      manual_configuration:
+        column_mapping:
+          id: business_location_id
+        insertion_order: null
+        remote_table:
+          name: rental_location_listings
+          schema: public
 insert_permissions:
   - role: business
     permission:

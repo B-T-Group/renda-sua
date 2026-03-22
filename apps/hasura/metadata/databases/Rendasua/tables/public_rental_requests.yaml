@@ -1,0 +1,65 @@
+table:
+  name: rental_requests
+  schema: public
+object_relationships:
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on:
+        column: rental_request_id
+        table:
+          name: rental_bookings
+          schema: public
+  - name: rental_location_listing
+    using:
+      foreign_key_constraint_on: rental_location_listing_id
+  - name: responded_by_user
+    using:
+      foreign_key_constraint_on: responded_by_user_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - client_id
+        - rental_location_listing_id
+        - requested_start_at
+        - requested_end_at
+        - status
+        - rental_pricing_snapshot
+        - business_response_note
+        - responded_at
+        - responded_by_user_id
+        - expires_at
+        - created_at
+        - updated_at
+      filter:
+        rental_location_listing:
+          rental_item:
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - client_id
+        - rental_location_listing_id
+        - requested_start_at
+        - requested_end_at
+        - status
+        - rental_pricing_snapshot
+        - business_response_note
+        - responded_at
+        - responded_by_user_id
+        - expires_at
+        - created_at
+        - updated_at
+      filter:
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id

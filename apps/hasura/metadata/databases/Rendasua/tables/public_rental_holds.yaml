@@ -1,0 +1,44 @@
+table:
+  name: rental_holds
+  schema: public
+object_relationships:
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - rental_booking_id
+        - client_id
+        - client_hold_amount
+        - currency
+        - status
+        - created_at
+        - updated_at
+      filter:
+        rental_booking:
+          business:
+            user:
+              identifier:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_booking_id
+        - client_id
+        - client_hold_amount
+        - currency
+        - status
+        - created_at
+        - updated_at
+      filter:
+        client:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
