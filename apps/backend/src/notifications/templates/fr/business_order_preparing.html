@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Préparation de Commande Commencée - Rendasua</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: #f39c12;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .content {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 8px 8px;
+      }
+      .order-details {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .status-badge {
+        background: #f39c12;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>👨‍🍳 Préparation de Commande Commencée !</h1>
+      <p>Il est temps de cuisiner</p>
+    </div>
+
+    <div class="content">
+      <h2>Bonjour {{{recipientName}},</h2>
+
+      <p>
+        Vous avez commencé à préparer la commande de {{{clientName}}. Continuez le
+        bon travail !
+      </p>
+
+      <div class="order-details">
+        <h3>Mise à Jour de la Commande</h3>
+        <p><strong>Numéro de Commande :</strong> {{{orderNumber}}}</p>
+        <p>
+          <strong>Statut :</strong>
+          <span class="status-badge">{{{orderStatus}}}</span>
+        </p>
+        <p><strong>Client :</strong> {{{clientName}}}</p>
+        {{{ESTIMATED_DELIVERY_SECTION_HTML}}}
+      </div>
+
+      <p><strong>Prochaines Étapes :</strong></p>
+      <ul>
+        <li>Continuez à préparer les articles de la commande</li>
+        <li>Mettez à jour le statut de la commande à "prête pour la collecte" une fois terminée</li>
+        <li>Assurez la qualité et la fraîcheur</li>
+      </ul>
+
+      <p>Merci d'utiliser Rendasua !</p>
+
+      <p>Meilleures salutations,<br />L'Équipe Rendasua</p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; {{{currentYear}}} Rendasua. Tous droits réservés.</p>
+    </div>
+  </body>
+</html>
+

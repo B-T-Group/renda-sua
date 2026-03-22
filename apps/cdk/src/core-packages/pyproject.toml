@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "requests>=2.31.0",
-    "sendgrid>=6.10.0",
     "pydantic>=2.0.0",
 ]
 

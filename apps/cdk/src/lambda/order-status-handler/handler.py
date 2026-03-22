@@ -22,7 +22,6 @@ from rendasua_core_packages.hasura_client import (
 from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
 from rendasua_core_packages.commission_handler import distribute_commissions
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
-from notifications import send_notifications_to_nearby_agents
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
 
 @dataclass
@@ -97,7 +96,6 @@ def ready_for_pickup_handler(
     hasura_admin_secret: str,
     environment: str,
     proximity_radius_km: float,
-    template_id: str
 ) -> Dict[str, Any]:
     """
     Handle ready_for_pickup status by creating a pending notification record.
@@ -111,7 +109,6 @@ def ready_for_pickup_handler(
         hasura_admin_secret: Hasura admin secret
         environment: Environment name
         proximity_radius_km: Proximity radius in kilometers (not used here, kept for compatibility)
-        template_id: SendGrid template ID (not used here, kept for compatibility)
         
     Returns:
         Result dictionary with success status and details
@@ -203,13 +200,10 @@ def process_order_event(
         # Get configuration
         hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
         proximity_radius_km = float(os.environ.get("PROXIMITY_RADIUS_KM", "10"))
-        template_id = os.environ.get("SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID", "")
-        
         log_info(
             "Loaded configuration",
             hasura_endpoint=hasura_endpoint,
             proximity_radius_km=proximity_radius_km,
-            template_id=template_id[:10] + "..." if template_id else "not_set",
         )
         
         if not hasura_endpoint:
@@ -279,7 +273,6 @@ def process_order_event(
                 hasura_admin_secret,
                 environment,
                 proximity_radius_km,
-                template_id
             )
         else:
             # No handler for this status - do nothing

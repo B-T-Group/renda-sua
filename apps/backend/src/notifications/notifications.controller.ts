@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
-import type { NotificationData } from './notifications.service';
+import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
 
 interface RequestWithUser extends Request {

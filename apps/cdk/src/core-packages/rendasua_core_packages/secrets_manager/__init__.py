@@ -9,14 +9,14 @@ from .client import (
     get_secret,
     get_hasura_admin_secret,
     get_google_maps_api_key,
-    get_sendgrid_api_key,
+    get_resend_api_key,
 )
 
 __all__ = [
     "get_secret",
     "get_hasura_admin_secret",
     "get_google_maps_api_key",
-    "get_sendgrid_api_key",
+    "get_resend_api_key",
 ]
 
 

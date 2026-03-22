@@ -11,7 +11,6 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "requests>=2.31.0",
-        "sendgrid>=6.10.0",
         "pydantic>=2.0.0",
     ],
     extras_require={

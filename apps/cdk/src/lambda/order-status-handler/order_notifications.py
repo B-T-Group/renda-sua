@@ -1,317 +1,206 @@
-"""Order status notifications using SendGrid."""
+"""Order cancellation emails via Resend."""
 import os
-from typing import Optional, Dict, Any, List
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-from rendasua_core_packages.secrets_manager import get_sendgrid_api_key
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from rendasua_core_packages.notification_handler.resend_client import (
+    send_resend_template_email,
+)
+from rendasua_core_packages.secrets_manager import get_resend_api_key
 
 
-def log_info(message: str, **kwargs):
-    """Log info message with optional context."""
-    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
-    print(f"[INFO] [order_notifications] {message}" + (f" | {context_str}" if context_str else ""))
+def log_info(message: str, **kwargs: Any) -> None:
+    ctx = " ".join(f"{k}={v}" for k, v in kwargs.items())
+    print(f"[INFO] [order_notifications] {message}" + (f" | {ctx}" if ctx else ""))
 
 
-def log_error(message: str, error: Exception | None = None, **kwargs):
-    """Log error message with optional context and exception."""
-    context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
-    error_str = f" | error={str(error)}" if error else ""
-    print(f"[ERROR] [order_notifications] {message}" + (f" | {context_str}" if context_str else "") + error_str)
+def log_error(message: str, error: Exception | None = None, **kwargs: Any) -> None:
+    ctx = " ".join(f"{k}={v}" for k, v in kwargs.items())
+    err = f" | error={str(error)}" if error else ""
+    print(
+        f"[ERROR] [order_notifications] {message}"
+        + (f" | {ctx}" if ctx else "")
+        + err
+    )
 
 
-# Email template IDs - SendGrid dynamic templates (French versions)
-TEMPLATE_IDS = {
-    'client_order_cancelled': 'd-9daf143cf57c4976bc9ab294305e4ee1',  # French version
-    'business_order_cancelled': 'd-cd12b86e97eb4d57b8d0e1112e55149a',  # French version
-    'agent_order_cancelled': 'd-f4c2934d86ac4b0181b0ab20837714ce',  # French version
-}
-
-
-def escape_handlebars_content(content: Any) -> Any:
-    """
-    Escape special characters for Handlebars templates.
-    
-    Args:
-        content: Content to escape
-        
-    Returns:
-        Escaped content
-    """
+def _esc(content: Any) -> Any:
     if isinstance(content, str):
-        # Escape HTML entities and special characters
-        return content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;').replace('/', '&#x2F;')
+        return (
+            content.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#x27;")
+            .replace("/", "&#x2F;")
+        )
     if isinstance(content, list):
-        return [escape_handlebars_content(item) for item in content]
-    if content and isinstance(content, dict):
-        return {key: escape_handlebars_content(value) for key, value in content.items()}
+        return [_esc(item) for item in content]
+    if isinstance(content, dict):
+        return {k: _esc(v) for k, v in content.items()}
     return content
 
 
-def prepare_template_data(data: Dict[str, Any], user_type: str) -> Dict[str, Any]:
-    """
-    Prepare template data for different user types.
-    
-    Args:
-        data: Notification data dictionary
-        user_type: Type of user ('client', 'business', 'agent')
-        
-    Returns:
-        Prepared template data
-    """
-    if not data:
-        raise ValueError('Notification data is undefined')
-    
-    base_data = {
-        'orderId': data.get('orderId', 'Unknown'),
-        'orderNumber': data.get('orderNumber', 'Unknown'),
-        'orderStatus': data.get('orderStatus', 'Unknown'),
-        'orderItems': data.get('orderItems', []),
-        'subtotal': data.get('subtotal', 0),
-        'deliveryFee': data.get('deliveryFee', 0),
-        'taxAmount': data.get('taxAmount', 0),
-        'totalAmount': data.get('totalAmount', 0),
-        'currency': data.get('currency', 'USD'),
-        'deliveryAddress': data.get('deliveryAddress', 'Unknown Address'),
-        'estimatedDeliveryTime': data.get('estimatedDeliveryTime'),
-        'deliveryTimeWindow': data.get('estimatedDeliveryTime'),
-        'specialInstructions': data.get('specialInstructions'),
-        'notes': data.get('notes'),
-        'businessVerified': data.get('businessVerified', False),
-        'currentYear': 2025,  # Will be updated dynamically
+def _locale_for_recipient(data: Dict[str, Any], recipient_type: str) -> str:
+    keys = {
+        "client": "clientPreferredLanguage",
+        "business": "businessPreferredLanguage",
+        "agent": "agentPreferredLanguage",
     }
-    
-    from datetime import datetime
-    base_data['currentYear'] = datetime.now().year
-    
-    if user_type == 'client':
-        if not data.get('clientName'):
-            raise ValueError('Client name is undefined')
-        if not data.get('businessName'):
-            raise ValueError('Business name is undefined')
-        return escape_handlebars_content({
-            **base_data,
-            'recipientName': data.get('clientName'),
-            'businessName': data.get('businessName'),
-            'agentName': data.get('agentName', 'Delivery Agent'),
-        })
-    elif user_type == 'business':
-        if not data.get('businessName'):
-            raise ValueError('Business name is undefined')
-        if not data.get('clientName'):
-            raise ValueError('Client name is undefined')
-        return escape_handlebars_content({
-            **base_data,
-            'recipientName': data.get('businessName'),
-            'clientName': data.get('clientName'),
-            'agentName': data.get('agentName', 'Delivery Agent'),
-        })
-    elif user_type == 'agent':
-        if not data.get('agentName'):
-            raise ValueError('Agent name is undefined')
-        if not data.get('clientName'):
-            raise ValueError('Client name is undefined')
-        if not data.get('businessName'):
-            raise ValueError('Business name is undefined')
-        return escape_handlebars_content({
-            **base_data,
-            'recipientName': data.get('agentName'),
-            'clientName': data.get('clientName'),
-            'businessName': data.get('businessName'),
-        })
-    else:
-        return escape_handlebars_content(base_data)
+    raw = data.get(keys.get(recipient_type, ""))
+    if not raw or not str(raw).strip():
+        return "fr"
+    return "fr" if str(raw).lower().startswith("fr") else "en"
+
+
+def _notes_section(notes: Optional[str], locale: str) -> str:
+    if not notes or not str(notes).strip():
+        return ""
+    label = "Raison :" if locale == "fr" else "Reason:"
+    return f"<p><strong>{label}</strong> {_esc(str(notes))}</p>"
+
+
+def _cancellation_template_id(recipient_type: str, locale: str) -> str:
+    env_names = {
+        ("client", "en"): "RESEND_CLIENT_ORDER_CANCELLED_TEMPLATE_ID",
+        ("client", "fr"): "RESEND_CLIENT_ORDER_CANCELLED_TEMPLATE_ID_FR",
+        ("business", "en"): "RESEND_BUSINESS_ORDER_CANCELLED_TEMPLATE_ID",
+        ("business", "fr"): "RESEND_BUSINESS_ORDER_CANCELLED_TEMPLATE_ID_FR",
+        ("agent", "en"): "RESEND_AGENT_ORDER_CANCELLED_TEMPLATE_ID",
+        ("agent", "fr"): "RESEND_AGENT_ORDER_CANCELLED_TEMPLATE_ID_FR",
+    }
+    en_key = env_names[(recipient_type, "en")]
+    fr_key = env_names[(recipient_type, "fr")]
+    if locale == "fr":
+        return (os.environ.get(fr_key) or os.environ.get(en_key) or "").strip()
+    return (os.environ.get(en_key) or "").strip()
+
+
+def _prepare_variables(data: Dict[str, Any], user_type: str, locale: str) -> Dict[str, Any]:
+    if not data:
+        raise ValueError("Notification data is undefined")
+    cur = str(data.get("currency") or "USD")
+    notes_html = _notes_section(data.get("notes"), locale)
+    year = datetime.now().year
+    base: Dict[str, Any] = {
+        "orderId": _esc(str(data.get("orderId", "Unknown"))),
+        "orderNumber": _esc(str(data.get("orderNumber", "Unknown"))),
+        "orderStatus": _esc(str(data.get("orderStatus", "Unknown"))),
+        "subtotal": data.get("subtotal", 0),
+        "deliveryFee": data.get("deliveryFee", 0),
+        "taxAmount": data.get("taxAmount", 0),
+        "totalAmount": data.get("totalAmount", 0),
+        "currency": _esc(cur),
+        "deliveryAddress": _esc(str(data.get("deliveryAddress", "Unknown Address"))),
+        "estimatedDeliveryTime": _esc(data.get("estimatedDeliveryTime") or ""),
+        "deliveryTimeWindow": _esc(data.get("estimatedDeliveryTime") or ""),
+        "specialInstructions": _esc(data.get("specialInstructions") or ""),
+        "notes": _esc(data.get("notes") or ""),
+        "businessVerified": "true" if data.get("businessVerified") else "false",
+        "currentYear": year,
+        "ORDER_ITEMS_HTML": "",
+        "ESTIMATED_DELIVERY_SECTION_HTML": "",
+        "SPECIAL_INSTRUCTIONS_SECTION_HTML": "",
+        "NOTES_SECTION_HTML": notes_html,
+        "AGENT_NAME_SECTION_HTML": "",
+    }
+    if user_type == "client":
+        if not data.get("clientName") or not data.get("businessName"):
+            raise ValueError("Client/business name required")
+        base.update(
+            {
+                "recipientName": _esc(data.get("clientName")),
+                "businessName": _esc(data.get("businessName")),
+                "agentName": _esc(data.get("agentName") or "Delivery Agent"),
+            }
+        )
+    elif user_type == "business":
+        if not data.get("businessName") or not data.get("clientName"):
+            raise ValueError("Business/client name required")
+        base.update(
+            {
+                "recipientName": _esc(data.get("businessName")),
+                "clientName": _esc(data.get("clientName")),
+                "agentName": _esc(data.get("agentName") or "Delivery Agent"),
+            }
+        )
+    elif user_type == "agent":
+        if not data.get("agentName") or not data.get("clientName"):
+            raise ValueError("Agent/client name required")
+        base.update(
+            {
+                "recipientName": _esc(data.get("agentName")),
+                "clientName": _esc(data.get("clientName")),
+                "businessName": _esc(data.get("businessName")),
+            }
+        )
+    return base
 
 
 def get_recipients_for_cancellation(data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """
-    Get recipients for cancellation notification.
-    
-    Args:
-        data: Notification data dictionary
-        
-    Returns:
-        List of recipients with email and type
-    """
-    recipients = []
-    
-    # Always notify client and business
-    if data.get('clientEmail'):
-        recipients.append({'email': data['clientEmail'], 'type': 'client'})
-    if data.get('businessEmail'):
-        recipients.append({'email': data['businessEmail'], 'type': 'business'})
-    
-    # Notify agent if assigned
-    if data.get('agentEmail'):
-        recipients.append({'email': data['agentEmail'], 'type': 'agent'})
-    
+    recipients: List[Dict[str, str]] = []
+    if data.get("clientEmail"):
+        recipients.append({"email": data["clientEmail"], "type": "client"})
+    if data.get("businessEmail"):
+        recipients.append({"email": data["businessEmail"], "type": "business"})
+    if data.get("agentEmail"):
+        recipients.append({"email": data["agentEmail"], "type": "agent"})
     return recipients
 
 
-def send_email(
+def send_email_resend(
     to: str,
     template_id: str,
-    dynamic_template_data: Dict[str, Any],
-    sendgrid_api_key: str,
-    from_email: str = 'noreply@rendasua.com'
+    variables: Dict[str, Any],
+    api_key: str,
+    from_email: str,
 ) -> bool:
-    """
-    Send email using SendGrid.
-    
-    Args:
-        to: Recipient email address
-        template_id: SendGrid template ID
-        dynamic_template_data: Template data
-        sendgrid_api_key: SendGrid API key
-        from_email: From email address
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if not to:
-        log_error('Recipient email address is required')
+    if not all([to, template_id, api_key, from_email]):
+        log_error("Missing email, template, key, or from address")
         return False
-    
-    if not template_id:
-        log_error('Template ID is required')
-        return False
-    
-    if not dynamic_template_data:
-        log_error('Template data is required')
-        return False
-    
-    if not sendgrid_api_key:
-        log_error('SendGrid API key not available')
-        return False
-    
-    try:
-        message = Mail(
-            from_email=from_email,
-            to_emails=to,
-        )
-        message.template_id = template_id
-        message.dynamic_template_data = dynamic_template_data
-        
-        # Validate API key format
-        if not sendgrid_api_key.startswith('SG.'):
-            log_error(
-                'Invalid SendGrid API key format',
-                to=to,
-                key_preview=sendgrid_api_key[:8] + '...' if len(sendgrid_api_key) > 8 else '***',
-            )
-            return False
-        
-        log_info(
-            'Sending email via SendGrid',
-            to=to,
-            template_id=template_id[:10] + '...',
-            api_key_preview=sendgrid_api_key[:8] + '...',
-        )
-        
-        sg = SendGridAPIClient(sendgrid_api_key)
-        response = sg.send(message)
-        
-        if 200 <= response.status_code < 300:
-            log_info(
-                'Notification sent successfully',
-                to=to,
-                status_code=response.status_code,
-            )
-            return True
-        else:
-            response_body = ''
-            try:
-                response_body = response.body.decode('utf-8') if response.body else ''
-            except:
-                pass
-            
-            log_error(
-                'SendGrid API returned error status',
-                status_code=response.status_code,
-                to=to,
-                response_body=response_body[:200] if response_body else 'no body',
-            )
-            return False
-            
-    except Exception as e:
-        log_error(
-            'Error sending SendGrid notification',
-            error=e,
-            to=to,
-        )
-        import traceback
-        traceback.print_exc()
-        return False
+    ok, detail = send_resend_template_email(api_key, from_email, to, template_id, variables)
+    if ok:
+        log_info("Resend email sent", to=to)
+        return True
+    log_error("Resend send failed", error=None, detail=detail, to=to)
+    return False
 
 
-def send_cancellation_notifications(
-    data: Dict[str, Any],
-    environment: str
-) -> int:
-    """
-    Send cancellation notifications to all relevant recipients.
-    
-    Args:
-        data: Notification data dictionary
-        environment: Environment name for secrets
-        
-    Returns:
-        Number of successful notifications sent
-    """
+def send_cancellation_notifications(data: Dict[str, Any], environment: str) -> int:
     log_info(
-        'Starting cancellation notification sending',
-        order_id=data.get('orderId'),
-        order_number=data.get('orderNumber'),
+        "Cancellation notifications",
+        order_id=data.get("orderId"),
+        order_number=data.get("orderNumber"),
     )
-    
-    sendgrid_api_key = get_sendgrid_api_key(environment)
-    if not sendgrid_api_key:
-        log_error('SendGrid API key not available', environment=environment)
+    api_key = get_resend_api_key(environment)
+    if not api_key:
+        log_error("Resend API key not available", environment=environment)
         return 0
-    
-    from_email = os.environ.get('SENDGRID_FROM_EMAIL', 'noreply@rendasua.com')
-    
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "Rendasua <noreply@rendasua.com>")
     recipients = get_recipients_for_cancellation(data)
     success_count = 0
-    
     for recipient in recipients:
-        recipient_type = recipient['type']
-        recipient_email = recipient['email']
-        template_key = f'{recipient_type}_order_cancelled'
-        template_id = TEMPLATE_IDS.get(template_key)
-        
-        if not template_id:
-            log_error(
-                'Template ID not found',
-                template_key=template_key,
-                recipient_type=recipient_type,
-            )
+        rtype = recipient["type"]
+        email = recipient["email"]
+        loc = _locale_for_recipient(data, rtype)
+        tid = _cancellation_template_id(rtype, loc)
+        if not tid:
+            log_error("Template id not configured", recipient_type=rtype, locale=loc)
             continue
-        
         try:
-            template_data = prepare_template_data(data, recipient_type)
-            success = send_email(
-                recipient_email,
-                template_id,
-                template_data,
-                sendgrid_api_key,
-                from_email
-            )
-            if success:
+            variables = _prepare_variables(data, rtype, loc)
+            if send_email_resend(email, tid, variables, api_key, from_email):
                 success_count += 1
-        except Exception as e:
+        except Exception as exc:
             log_error(
-                'Error preparing or sending notification',
-                error=e,
-                recipient_type=recipient_type,
-                recipient_email=recipient_email,
+                "Send failed",
+                error=exc,
+                recipient_type=rtype,
+                recipient_email=email,
             )
-    
     log_info(
-        'Cancellation notification sending completed',
+        "Cancellation batch done",
         success_count=success_count,
-        total_count=len(recipients),
-        order_id=data.get('orderId'),
+        total=len(recipients),
     )
-    
     return success_count
-

@@ -27,6 +27,7 @@ class User(BaseModel):
     last_name: str
     phone_number: Optional[str] | None = None
     phone_number_verified: Optional[bool] | None = None
+    preferred_language: Optional[str] | None = None
     updated_at: datetime.datetime
     user_type: Optional[UserType] | None = None
     user_type_id: Optional[UserTypeEnum] | None = None

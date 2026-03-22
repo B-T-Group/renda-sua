@@ -284,6 +284,7 @@ export class OrderStatusService {
                 first_name
                 last_name
                 email
+                preferred_language
               }
             }
             business {
@@ -291,6 +292,7 @@ export class OrderStatusService {
               is_verified
               user {
                 email
+                preferred_language
               }
             }
             assigned_agent {
@@ -298,6 +300,7 @@ export class OrderStatusService {
                 first_name
                 last_name
                 email
+                preferred_language
               }
             }
             delivery_address {
@@ -398,11 +401,14 @@ export class OrderStatusService {
         orderNumber: order.order_number,
         clientName,
         clientEmail,
+        clientPreferredLanguage: order.client?.user?.preferred_language,
         businessName,
         businessEmail,
+        businessPreferredLanguage: order.business?.user?.preferred_language,
         businessVerified,
         agentName,
         agentEmail,
+        agentPreferredLanguage: order.assigned_agent?.user?.preferred_language,
         orderStatus: order.current_status,
         orderItems: (order.order_items || []).map((item: any) => ({
           name: item.item_name || 'Unknown Item',

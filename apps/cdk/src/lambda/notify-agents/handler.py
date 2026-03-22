@@ -12,7 +12,10 @@ from rendasua_core_packages.hasura_client.orders_service import (
 )
 from rendasua_core_packages.utilities import calculate_haversine_distance, format_distance
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret, get_google_maps_api_key
-from notifications import send_aggregated_notifications_to_agents, send_notifications_to_nearby_agents
+from rendasua_core_packages.notification_handler import (
+    send_aggregated_notifications_to_agents,
+    send_notifications_to_nearby_agents,
+)
 from rendasua_core_packages.models import Order, OrderAgentNotification
 
 
@@ -35,7 +38,8 @@ def process_all_notifications_aggregated(
     hasura_admin_secret: str,
     environment: str,
     proximity_radius_km: float,
-    template_id: str,
+    summary_template_id_en: str,
+    summary_template_id_fr: str,
     google_maps_api_key: Optional[str]
 ) -> Dict[str, Any]:
     """
@@ -47,7 +51,8 @@ def process_all_notifications_aggregated(
         hasura_admin_secret: Hasura admin secret
         environment: Environment name
         proximity_radius_km: Proximity radius in kilometers
-        template_id: SendGrid template ID
+        summary_template_id_en: Resend template id (English summary email)
+        summary_template_id_fr: Resend template id (French summary email)
         google_maps_api_key: Google Maps API key
         
     Returns:
@@ -266,7 +271,8 @@ def process_all_notifications_aggregated(
             agent_order_counts,
             proximity_radius_km,
             environment,
-            template_id
+            summary_template_id_en,
+            summary_template_id_fr,
         )
         
         log_info(
@@ -328,7 +334,8 @@ def process_notification(
     hasura_admin_secret: str,
     environment: str,
     proximity_radius_km: float,
-    template_id: str,
+    proximity_template_id_en: str,
+    proximity_template_id_fr: str,
     google_maps_api_key: Optional[str]
 ) -> Dict[str, Any]:
     """
@@ -340,7 +347,8 @@ def process_notification(
         hasura_admin_secret: Hasura admin secret
         environment: Environment name
         proximity_radius_km: Proximity radius in kilometers
-        template_id: SendGrid template ID
+        proximity_template_id_en: Resend template id (English proximity email)
+        proximity_template_id_fr: Resend template id (French proximity email)
         google_maps_api_key: Google Maps API key
         
     Returns:
@@ -514,7 +522,8 @@ def process_notification(
             order,
             distances,
             environment,
-            template_id
+            proximity_template_id_en,
+            proximity_template_id_fr,
         )
         
         log_info(
@@ -578,14 +587,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         environment = os.environ.get("ENVIRONMENT", "development")
         hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
         proximity_radius_km = float(os.environ.get("PROXIMITY_RADIUS_KM", "20"))
-        template_id = os.environ.get("SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID", "")
+        proximity_en = os.environ.get("RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID", "")
+        proximity_fr = os.environ.get("RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR", "")
+        summary_en = os.environ.get("RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID", "")
+        summary_fr = os.environ.get("RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID_FR", "")
         
         log_info(
             "Loaded configuration",
             environment=environment,
             hasura_endpoint=hasura_endpoint,
             proximity_radius_km=proximity_radius_km,
-            template_id=template_id[:10] + "..." if template_id else "not_set",
+            proximity_en_set=bool(proximity_en),
+            proximity_fr_set=bool(proximity_fr),
+            summary_en_set=bool(summary_en),
+            summary_fr_set=bool(summary_fr),
         )
         
         if not hasura_endpoint:
@@ -637,7 +652,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             hasura_admin_secret=hasura_admin_secret,
             environment=environment,
             proximity_radius_km=proximity_radius_km,
-            template_id=template_id,
+            summary_template_id_en=summary_en,
+            summary_template_id_fr=summary_fr,
             google_maps_api_key=google_maps_api_key
         )
         

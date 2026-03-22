@@ -38,21 +38,6 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Create Lambda layer for SendGrid dependency
-    const sendgridLayer = new lambda.LayerVersion(
-      this,
-      `SendGridLayer-${environment}`,
-      {
-        layerVersionName: `sendgrid-layer-${environment}`,
-        description: 'Lambda layer containing SendGrid library',
-        code: lambda.Code.fromAsset('src/lambda-layer/sendgrid-layer.zip'),
-        compatibleRuntimes: [
-          lambda.Runtime.PYTHON_3_9,
-          lambda.Runtime.PYTHON_3_11,
-        ],
-      }
-    );
-
     // Core shared layer for models, handlers, Hasura client, and deps
     const corePackagesLayer = new lambda.LayerVersion(
       this,
@@ -60,7 +45,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       {
         layerVersionName: `core-packages-layer-${environment}`,
         description:
-          'Core Python packages (models, commission/notification handlers, secrets manager, hasura_client, requests, sendgrid, pydantic)',
+          'Core Python packages (models, commission/notification handlers, secrets manager, hasura_client, requests, pydantic)',
         code: lambda.Code.fromAsset('src/lambda-layer/core-packages-layer.zip'),
         compatibleRuntimes: [
           lambda.Runtime.PYTHON_3_9,
@@ -114,13 +99,31 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/order-status-handler'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
-        layers: [requestsLayer, sendgridLayer, corePackagesLayer],
+        layers: [requestsLayer, corePackagesLayer],
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '20',
-          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
-            'd-3c3d59c19cfa4da2b8d1e072f416a06a', // French version
+          RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
+            'dc4461e3-4cd2-485b-8c9c-755e36205f30',
+          RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR:
+            '724f37bc-4730-4452-ba12-63142b9f45d9',
+          RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID:
+            'ef9aa9fa-abab-4e11-9ee0-a7ff4e7a5a2c',
+          RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID_FR:
+            '2980279e-9026-442d-9539-031a842c2657',
+          RESEND_CLIENT_ORDER_CANCELLED_TEMPLATE_ID:
+            '56396cb4-1208-4dbd-a814-f128d1bfa980',
+          RESEND_CLIENT_ORDER_CANCELLED_TEMPLATE_ID_FR:
+            '0ac655d8-4690-438a-83cc-d824f5c6f4cd',
+          RESEND_BUSINESS_ORDER_CANCELLED_TEMPLATE_ID:
+            'ba0d8af6-fc9c-439b-b0cd-7bbf061ec23f',
+          RESEND_BUSINESS_ORDER_CANCELLED_TEMPLATE_ID_FR:
+            '56f4b6ae-c034-4a2b-a0c8-761b05e81c0f',
+          RESEND_AGENT_ORDER_CANCELLED_TEMPLATE_ID:
+            'f7d21404-c231-4d48-8253-a4a98bbc222a',
+          RESEND_AGENT_ORDER_CANCELLED_TEMPLATE_ID_FR:
+            '61a58586-3e09-4867-8417-7c6b9647fd09',
         },
       }
     );
@@ -234,13 +237,19 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         code: lambda.Code.fromAsset('src/lambda/notify-agents'),
         timeout: cdk.Duration.minutes(15),
         memorySize: 512,
-        layers: [requestsLayer, sendgridLayer, corePackagesLayer],
+        layers: [requestsLayer, corePackagesLayer],
         environment: {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           PROXIMITY_RADIUS_KM: '20',
-          SENDGRID_ORDER_PROXIMITY_TEMPLATE_ID:
-            'd-3c3d59c19cfa4da2b8d1e072f416a06a', // French version
+          RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
+            'dc4461e3-4cd2-485b-8c9c-755e36205f30',
+          RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR:
+            '724f37bc-4730-4452-ba12-63142b9f45d9',
+          RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID:
+            'ef9aa9fa-abab-4e11-9ee0-a7ff4e7a5a2c',
+          RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID_FR:
+            '2980279e-9026-442d-9539-031a842c2657',
         },
       }
     );

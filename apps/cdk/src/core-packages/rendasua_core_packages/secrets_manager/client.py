@@ -81,26 +81,26 @@ def get_google_maps_api_key(environment: str) -> Optional[str]:
     return secrets.get("GOOGLE_MAPS_API_KEY")
 
 
-def get_sendgrid_api_key(environment: str) -> Optional[str]:
-    _log_info("Retrieving SendGrid API key", environment=environment)
+def get_resend_api_key(environment: str) -> Optional[str]:
+    _log_info("Retrieving Resend API key", environment=environment)
     try:
         secret_name = f"{environment}-rendasua-backend-secrets"
         secrets = get_secret(secret_name)
-        api_key = secrets.get("SENDGRID_API_KEY")
+        api_key = secrets.get("RESEND_API_KEY")
         if not api_key:
             _log_error(
-                "SendGrid API key not found in secrets",
+                "Resend API key not found in secrets",
                 environment=environment,
                 secret_name=secret_name,
             )
             _log_info("Available secret keys", keys=list(secrets.keys())[:10])
             return None
         preview = api_key[:8] + "..." if len(api_key) > 8 else "***"
-        _log_info("SendGrid API key retrieved successfully", key_preview=preview)
+        _log_info("Resend API key retrieved successfully", key_preview=preview)
         return api_key
     except Exception as exc:  # noqa: BLE001
         _log_error(
-            "Failed to retrieve SendGrid API key",
+            "Failed to retrieve Resend API key",
             error=exc,
             environment=environment,
         )

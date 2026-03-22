@@ -17,7 +17,7 @@ A comprehensive email notification system has been implemented for the Rendasua 
 
 **Features:**
 
-- SendGrid integration for reliable email delivery
+- Resend integration for reliable email delivery
 - Template-based email system
 - Multi-recipient support (client, business, agent)
 - Error handling that doesn't break order operations
@@ -53,16 +53,16 @@ A comprehensive email notification system has been implemented for the Rendasua 
 - `rendasua/apps/backend/src/orders/order-status.service.ts` - Added notification on status changes
 - `rendasua/apps/backend/src/orders/orders.module.ts` - Imported notifications module
 - `rendasua/apps/backend/src/app/app.module.ts` - Added notifications module
-- `rendasua/apps/backend/src/config/configuration.ts` - Added SendGrid configuration
-- `rendasua/apps/backend/package.json` - Added SendGrid dependency
+- `rendasua/apps/backend/src/config/configuration.ts` - Resend configuration (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
+- `rendasua/apps/backend/package.json` - `resend` dependency
 
 ### 4. Configuration Updates
 
 **Environment Variables Added:**
 
 ```bash
-SENDGRID_API_KEY=your_sendgrid_api_key_here
-SENDGRID_FROM_EMAIL=noreply@rendasua.com
+RESEND_API_KEY=re_your_resend_api_key_here
+RESEND_FROM_EMAIL=Rendasua <noreply@rendasua.com>
 ```
 
 **Configuration Interface Updated:**
@@ -73,8 +73,8 @@ export interface EmailConfig {
   port: number;
   user: string;
   pass: string;
-  sendGridApiKey?: string;
-  sendGridFromEmail?: string;
+  resendApiKey?: string;
+  resendFromEmail?: string;
 }
 ```
 
@@ -109,41 +109,37 @@ When order status changes via `OrderStatusService.updateOrderStatus()`:
 
 ## Required Setup Steps
 
-### 1. SendGrid Account Setup
+### 1. Resend account setup
 
-1. Create SendGrid account at [sendgrid.com](https://sendgrid.com)
-2. Generate API key with mail send permissions
-3. Set up domain authentication for `rendasua.com`
+1. Create a Resend account and API key with send permission.
+2. Verify the sending domain in Resend for production.
 
-### 2. Template Creation in SendGrid
+### 2. Template sync (NestJS)
 
-1. Upload all HTML templates to SendGrid as dynamic templates
-2. Get the template IDs from SendGrid dashboard
-3. Update the `templateIds` object in `notifications.service.ts`:
+1. HTML sources: `apps/backend/src/notifications/templates/{en,fr}`.
+2. From the monorepo root: `npm run sync:resend-templates` (requires `RESEND_API_KEY`).
+3. UUIDs are written to `apps/backend/src/notifications/resend-template-ids.json`.
 
-```typescript
-private readonly templateIds = {
-  client_order_created: 'd-actual-template-id-here',
-  business_order_created: 'd-actual-template-id-here',
-  // ... update all template IDs
-};
-```
+### 3. Environment configuration
 
-### 3. Environment Configuration
-
-Add to your environment variables:
+**Backend (local and production):**
 
 ```bash
-SENDGRID_API_KEY=SG.your_actual_api_key_here
-SENDGRID_FROM_EMAIL=noreply@rendasua.com
+RESEND_API_KEY=re_your_actual_api_key_here
+RESEND_FROM_EMAIL=Rendasua <noreply@rendasua.com>
 ```
 
-### 4. DNS Records (Already Added)
+**AWS Secrets Manager** (`{environment}-rendasua-backend-secrets` JSON) should include `RESEND_API_KEY` for Lambdas that send email.
 
-The following DNS records were already added to Route 53:
+**Lambda environment (CDK)** — set Resend template UUIDs after sync, for example:
 
-- CNAME records for SendGrid domain authentication
-- TXT record for DMARC policy
+- `RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID` / `_FR`
+- `RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID` / `_FR`
+- Cancellation: `RESEND_CLIENT_ORDER_CANCELLED_TEMPLATE_ID`, `_FR`, and business/agent variants (order-status handler).
+
+### 4. DNS
+
+Configure SPF/DKIM per Resend’s domain verification (replacing any prior provider-specific records as needed).
 
 ## Testing
 
@@ -186,26 +182,26 @@ POST /notifications/test-status-change
 
 ## Error Handling
 
-- **Graceful Degradation**: If SendGrid is unavailable, order operations continue normally
-- **Logging**: All notification failures are logged for debugging
-- **Non-blocking**: Email sending doesn't block order processing
-- **Retry Logic**: SendGrid handles retries automatically
+- **Graceful degradation**: If Resend is unavailable or template IDs are missing, order operations continue normally
+- **Logging**: Notification failures are logged for debugging
+- **Non-blocking**: Email sending does not block order processing
+- **Retries**: Rely on Resend delivery behavior and your infrastructure retries where applicable
 
 ## Security Considerations
 
 - API keys stored in environment variables
 - Email addresses validated before sending
 - Templates sanitized to prevent injection
-- Rate limiting handled by SendGrid
+- Rate limits per Resend plan
 - Domain authentication prevents spoofing
 
 ## Monitoring
 
 Monitor the system through:
 
-- SendGrid dashboard for delivery statistics
+- Resend dashboard for delivery statistics
 - Application logs for error tracking
-- SendGrid webhook events for detailed status
+- Resend webhooks for detailed status (optional)
 
 ## Future Enhancements
 
@@ -221,7 +217,7 @@ Potential improvements:
 
 ## Dependencies Added
 
-- `@sendgrid/mail@^8.1.0` - SendGrid email service integration
+- `resend` (npm) — transactional email API
 
 ## Files Modified Summary
 
@@ -247,11 +243,11 @@ Potential improvements:
 - `orders/order-status.service.ts` - Added notification integration
 - `orders/orders.module.ts` - Imported notifications module
 - `app/app.module.ts` - Added notifications module
-- `config/configuration.ts` - Added SendGrid config
-- `package.json` - Added SendGrid dependency
+- `config/configuration.ts` - Resend config
+- `package.json` - `resend` dependency
 
 ## Conclusion
 
 The email notification system is now fully implemented and integrated with the order management system. It provides comprehensive email notifications for all order lifecycle events, ensuring all stakeholders are kept informed throughout the delivery process.
 
-The system is production-ready and includes proper error handling, logging, and documentation. The next step is to set up the SendGrid account and configure the actual template IDs.
+The system is production-ready with proper error handling, logging, and documentation. Configure `RESEND_API_KEY`, run the template sync, and set Lambda template UUIDs in CDK where applicable.

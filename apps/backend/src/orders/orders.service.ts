@@ -3893,6 +3893,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              preferred_language
             }
           }
           business_location {
@@ -3905,6 +3906,7 @@ export class OrdersService {
               user {
                 id
                 email
+                preferred_language
               }
             }
             address {
@@ -3936,6 +3938,7 @@ export class OrdersService {
               first_name
               last_name
               email
+              preferred_language
               profile_picture_url
             }
           }
@@ -4106,10 +4109,18 @@ export class OrdersService {
           order.client?.user?.last_name || ''
         }`.trim(),
         clientEmail: order.client?.user?.email,
+        clientPreferredLanguage: (order.client?.user as { preferred_language?: string })
+          ?.preferred_language,
         businessName: order.business_location.business.name,
         businessEmail: order.business_location.business.user.email,
+        businessPreferredLanguage: (
+          order.business_location.business.user as { preferred_language?: string }
+        )?.preferred_language,
         businessVerified:
           order.business_location.business.is_verified || false,
+        agentPreferredLanguage: (
+          order.assigned_agent?.user as { preferred_language?: string }
+        )?.preferred_language,
         orderStatus: order.current_status,
         orderItems:
           order.order_items?.map((item: any) => ({

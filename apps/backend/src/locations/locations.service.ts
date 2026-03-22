@@ -19,6 +19,7 @@ interface AgentLocation {
       email: string;
       first_name: string;
       last_name: string;
+      preferred_language?: string;
     };
   };
 }
@@ -225,6 +226,7 @@ export class LocationsService {
                 email
                 first_name
                 last_name
+                preferred_language
               }
             }
           }
@@ -392,7 +394,8 @@ export class LocationsService {
             orderNumber: order.order_number,
             businessName: businessLocation.business.name,
             businessAddress: businessAddress,
-          }
+          },
+          agentLocation.agent.user.preferred_language
         );
       });
 

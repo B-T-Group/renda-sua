@@ -38,8 +38,8 @@ export interface EmailConfig {
   port: number;
   user: string;
   pass: string;
-  sendGridApiKey?: string;
-  sendGridFromEmail?: string;
+  resendApiKey?: string;
+  resendFromEmail?: string;
 }
 
 export interface RedisConfig {
@@ -275,8 +275,9 @@ export default (): Configuration => {
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       user: process.env.SMTP_USER || '',
       pass: process.env.SMTP_PASS || '',
-      sendGridApiKey: process.env.SENDGRID_API_KEY,
-      sendGridFromEmail: 'noreply@rendasua.com',
+      resendApiKey: process.env.RESEND_API_KEY,
+      resendFromEmail:
+        process.env.RESEND_FROM_EMAIL || 'Rendasua <noreply@rendasua.com>',
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
@@ -332,7 +333,8 @@ export default (): Configuration => {
       apiKey: process.env.OPENAI_API_KEY || '',
     },
     notification: {
-      orderStatusChangeEnabled: true,
+      orderStatusChangeEnabled:
+        process.env.ORDER_STATUS_NOTIFICATIONS_ENABLED !== 'false',
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

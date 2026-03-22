@@ -30,7 +30,7 @@ echo "Installing core-packages as a package..."
 cd "${ROOT_DIR}/../core-packages"
 pip install . -t "${ROOT_DIR}/python/lib/python3.11/site-packages/" --no-deps --upgrade
 
-echo "Installing core-packages dependencies (requests, sendgrid, pydantic)..."
+echo "Installing core-packages dependencies (requests, pydantic)..."
 pip install -r "${ROOT_DIR}/../core-packages/requirements.txt" \
     -t "${ROOT_DIR}/python/lib/python3.11/site-packages/" \
     --upgrade

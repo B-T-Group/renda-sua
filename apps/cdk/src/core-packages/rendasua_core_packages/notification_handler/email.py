@@ -1,59 +1,38 @@
 """
-Email notification helpers built on SendGrid.
-
-This module is intentionally small and focused so that most of the
-business logic stays within the order-status Lambda while SendGrid
-integration details live in the shared core package.
+Email notification helpers using Resend transactional templates.
 """
+
+from __future__ import annotations
 
 from typing import Any, Dict
 
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from .resend_client import send_resend_template_email
 
 
-def send_dynamic_template_email(
-    to_email: str,
-    template_id: str,
-    dynamic_template_data: Dict[str, Any],
-    api_key: str,
-    from_email: str,
-) -> bool:
-    if not to_email or not template_id or not dynamic_template_data or not api_key:
-        return False
-    message = Mail(from_email=from_email, to_emails=to_email)
-    message.template_id = template_id
-    message.dynamic_template_data = dynamic_template_data
-    client = SendGridAPIClient(api_key)
-    response = client.send(message)
-    return 200 <= response.status_code < 300
-
-
-def send_cancellation_notifications(
-    notifications: Dict[str, Any],
-) -> int:
+def send_cancellation_notifications(notifications: Dict[str, Any]) -> int:
     """
-    Thin wrapper that expects pre-computed notification payloads.
+    Send emails using pre-built payloads.
 
-    The existing order-status Lambda remains responsible for building
-    the dynamic template data; this function just loops and sends.
+    Expected keys: api_key, from_email, recipients (list of
+    { email, template_id, data }).
     """
     api_key = notifications.get("api_key")
     from_email = notifications.get("from_email")
-    template_id = notifications.get("template_id")
+    if not api_key or not from_email:
+        return 0
     recipients = notifications.get("recipients", [])
     success_count = 0
     for item in recipients:
         email = item.get("email")
+        template_id = item.get("template_id")
         data = item.get("data") or {}
-        if send_dynamic_template_email(
-            email,
-            template_id,
+        ok, _ = send_resend_template_email(
+            api_key or "",
+            from_email or "",
+            email or "",
+            template_id or "",
             data,
-            api_key,
-            from_email,
-        ):
+        )
+        if ok:
             success_count += 1
     return success_count
-
-

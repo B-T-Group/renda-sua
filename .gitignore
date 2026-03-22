@@ -6,6 +6,8 @@ tmp
 out-tsc
 cdk.out
 build
+.env
+.vscode/settings.json
 
 # Python
 __pycache__/

@@ -42,6 +42,7 @@
     "cdk:diff": "cd apps/cdk && cdk diff",
     "cdk:synth": "cd apps/cdk && cdk synth",
     "cdk:bootstrap": "cd apps/cdk && cdk bootstrap",
+    "sync:resend-templates": "tsx apps/backend/scripts/sync-resend-templates.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
@@ -128,6 +129,7 @@
     "ts-jest": "^29.1.0",
     "ts-node": "10.9.1",
     "tslib": "^2.3.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.29.0",
     "webpack-cli": "^5.1.4"
