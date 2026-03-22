@@ -84,6 +84,11 @@ export type UnavailableRentalReasonCode =
   | 'pricing_mismatch'
   | 'other';
 
+export interface RentalTakenWindow {
+  startAt: string;
+  endAt: string;
+}
+
 export interface RespondRentalRequestBody {
   status: 'available' | 'unavailable';
   rentalPricingSnapshot?: RentalPricingSnapshotBody;
@@ -99,6 +104,7 @@ export interface BusinessRentalRequestRow {
   requested_end_at: string;
   rental_pricing_snapshot: unknown;
   business_response_note?: string | null;
+  client_request_note?: string | null;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;
@@ -117,6 +123,7 @@ export interface ClientRentalRequestRow {
   created_at: string;
   business_response_note?: string | null;
   unavailable_reason_code?: string | null;
+  client_request_note?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
   expires_at?: string | null;
@@ -182,6 +189,22 @@ export function useRentalApi() {
       return data as { success: boolean };
     },
     [api]
+  );
+
+  const fetchListingBookedWindows = useCallback(
+    async (listingId: string): Promise<RentalTakenWindow[]> => {
+      try {
+        const { data } = await api.get<{
+          success: boolean;
+          data: { windows: RentalTakenWindow[] };
+        }>(`/rentals/listings/${listingId}/booked-windows`, { params: rentalCatalogGeo });
+        if (!data.success) return [];
+        return data.data?.windows ?? [];
+      } catch {
+        return [];
+      }
+    },
+    [api, rentalCatalogGeo]
   );
 
   const fetchPublicRentalListing = useCallback(
@@ -260,6 +283,7 @@ export function useRentalApi() {
       rentalLocationListingId: string;
       requestedStartAt: string;
       requestedEndAt: string;
+      clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);
       return data as { success: boolean; requestId: string };
@@ -345,6 +369,7 @@ export function useRentalApi() {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
     updateBusinessRentalListing,
+    fetchListingBookedWindows,
     fetchPublicRentalListing,
     fetchBusinessRentalRequests,
     fetchClientRentalRequests,

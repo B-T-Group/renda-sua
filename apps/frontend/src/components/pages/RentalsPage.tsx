@@ -24,9 +24,8 @@ import {
 } from '../../hooks/useRentalListings';
 import LoadingPage from '../common/LoadingPage';
 import { RentalItemCard } from '../rentals/RentalItemCard';
+import { RENTAL_REQUEST_SECTION_ID } from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
-
-const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
 
 /** Prevents MUI Select labels from collapsing to a single character in flex/grid layouts. */
 const rentalFilterFormControlSx = {

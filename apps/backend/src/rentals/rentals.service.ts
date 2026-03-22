@@ -116,6 +116,7 @@ export interface ClientRentalRequestRow {
   requested_end_at: string;
   created_at: string;
   business_response_note?: string | null;
+  client_request_note?: string | null;
   unavailable_reason_code?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
@@ -226,6 +227,23 @@ export class RentalsService {
     return enriched[0] ?? row;
   }
 
+  async listTakenRentalBookingWindowsForPublicListing(
+    listingId: string,
+    query: ListPublicRentalListingsQuery = {}
+  ): Promise<Array<{ startAt: string; endAt: string }> | null> {
+    const visible = await this.getPublicRentalListingById(listingId, query);
+    if (!visible) {
+      return null;
+    }
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ start_at: string; end_at: string }>;
+    }>(Q.LIST_TAKEN_RENTAL_BOOKING_WINDOWS, { listingId });
+    return (res.rental_bookings ?? []).map((b) => ({
+      startAt: b.start_at,
+      endAt: b.end_at,
+    }));
+  }
+
   async createRentalRequest(dto: CreateRentalRequestDto) {
     const user = await this.hasuraUserService.getUser();
     if (!user.client) {
@@ -236,11 +254,13 @@ export class RentalsService {
     if (!(end > start)) {
       throw new HttpException('End must be after start', HttpStatus.BAD_REQUEST);
     }
+    this.assertRentalRequestStartsInFuture(start);
     const listing = await this.fetchListing(dto.rentalLocationListingId);
     this.assertListingBookable(listing);
     const days = rentalDayCount(start, end);
     this.assertDuration(listing, days);
     await this.assertCapacity(listing.id, start, end, listing.units_available);
+    const note = dto.clientRequestNote?.trim();
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
     }>(Q.INSERT_RENTAL_REQUEST, {
@@ -250,6 +270,7 @@ export class RentalsService {
         requested_start_at: dto.requestedStartAt,
         requested_end_at: dto.requestedEndAt,
         status: 'pending',
+        client_request_note: note || null,
       },
     });
     return { success: true, requestId: row.insert_rental_requests_one.id };
@@ -998,6 +1019,12 @@ export class RentalsService {
     }
     if (listing.max_rental_days != null && days > listing.max_rental_days) {
       throw new HttpException('Above maximum rental days', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private assertRentalRequestStartsInFuture(start: Date) {
+    if (start.getTime() <= Date.now()) {
+      throw new HttpException('Start must be in the future', HttpStatus.BAD_REQUEST);
     }
   }
 

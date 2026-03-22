@@ -190,6 +190,21 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
   }
 `;
 
+export const LIST_TAKEN_RENTAL_BOOKING_WINDOWS = `
+  query ListTakenRentalBookingWindows($listingId: uuid!) {
+    rental_bookings(
+      where: {
+        rental_location_listing_id: { _eq: $listingId }
+        status: { _in: [confirmed, active, awaiting_return, proposed] }
+      }
+      order_by: { start_at: asc }
+    ) {
+      start_at
+      end_at
+    }
+  }
+`;
+
 export const COUNT_OVERLAPPING_BOOKINGS = `
   query CountOverlappingBookings(
     $listingId: uuid!
@@ -457,6 +472,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       requested_end_at
       created_at
       business_response_note
+      client_request_note
       unavailable_reason_code
       rental_pricing_snapshot
       responded_at
@@ -490,6 +506,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       requested_end_at
       rental_pricing_snapshot
       business_response_note
+      client_request_note
       unavailable_reason_code
       expires_at
       responded_at

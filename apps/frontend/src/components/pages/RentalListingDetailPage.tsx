@@ -14,15 +14,10 @@ import {
   CardContent,
   Chip,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   Grid,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -33,6 +28,10 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { RentalListingRow } from '../../hooks/useRentalListings';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import LoadingPage from '../common/LoadingPage';
+import {
+  RENTAL_REQUEST_SECTION_ID,
+  RentalListingRequestSection,
+} from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
 
 function formatMoney(amount: string | number, currency: string): string {
@@ -335,8 +334,6 @@ const InstructionBlock: React.FC<InstructionBlockProps> = ({ icon, title, body }
   );
 };
 
-const RENTAL_REQUEST_HASH = 'rental-request-section';
-
 const RentalListingDetailPage: React.FC = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const location = useLocation();
@@ -344,14 +341,10 @@ const RentalListingDetailPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth0();
-  const { createRequest, fetchPublicRentalListing } = useRentalApi();
+  const { fetchPublicRentalListing } = useRentalApi();
   const [row, setRow] = useState<RentalListingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!listingId) return;
@@ -376,34 +369,10 @@ const RentalListingDetailPage: React.FC = () => {
   }, [load]);
 
   useEffect(() => {
-    if (location.hash !== `#${RENTAL_REQUEST_HASH}` || !row) return;
-    const el = document.getElementById(RENTAL_REQUEST_HASH);
+    if (location.hash !== `#${RENTAL_REQUEST_SECTION_ID}` || !row) return;
+    const el = document.getElementById(RENTAL_REQUEST_SECTION_ID);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [location.hash, row]);
-
-  const submitRequest = async () => {
-    setMsg(null);
-    if (!listingId || !start || !end) {
-      setMsg(t('rentals.fillDates', 'Choose start and end'));
-      return;
-    }
-    try {
-      const isoStart = new Date(start).toISOString();
-      const isoEnd = new Date(end).toISOString();
-      await createRequest({
-        rentalLocationListingId: listingId,
-        requestedStartAt: isoStart,
-        requestedEndAt: isoEnd,
-      });
-      setSuccessModalOpen(true);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      setMsg(
-        err?.response?.data?.message ||
-          (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
-      );
-    }
-  };
 
   if (loading || !listingId) {
     return (
@@ -502,7 +471,7 @@ const RentalListingDetailPage: React.FC = () => {
             {t('rentals.detail.backToRentals', 'Back to rentals')}
           </Button>
 
-          <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+          <Grid container spacing={{ xs: 2, sm: 3, md: 4 }} sx={{ width: '100%', maxWidth: '100%' }}>
             <Grid item xs={12} md={7}>
               <RentalListingGallery
                 listingKey={row.id}
@@ -648,28 +617,39 @@ const RentalListingDetailPage: React.FC = () => {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>
-                {t('rentals.detail.overview', 'About this rental')}
-              </Typography>
-              <Typography
-                variant="body1"
-                color="text.secondary"
-                sx={{ lineHeight: 1.75, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+              <Paper
+                variant="outlined"
+                elevation={0}
+                sx={{
+                  p: { xs: 2, sm: 2.5, md: 3 },
+                  borderRadius: { xs: 2, sm: 2.5 },
+                  borderColor: alpha(theme.palette.primary.main, 0.15),
+                  bgcolor: alpha(theme.palette.primary.main, 0.03),
+                }}
               >
-                {row.rental_item.description || '—'}
-              </Typography>
-              {tags.length > 0 && (
-                <Box sx={{ mt: 2.5 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    {t('rentals.detail.tagsLabel', 'Tags')}
-                  </Typography>
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
-                    {tags.map((tag) => (
-                      <Chip key={tag} label={tag} size="small" variant="outlined" />
-                    ))}
-                  </Stack>
-                </Box>
-              )}
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  {t('rentals.detail.overview', 'About this rental')}
+                </Typography>
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.75, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                >
+                  {row.rental_item.description || '—'}
+                </Typography>
+                {tags.length > 0 && (
+                  <Box sx={{ mt: 2.5 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      {t('rentals.detail.tagsLabel', 'Tags')}
+                    </Typography>
+                    <Stack direction="row" flexWrap="wrap" gap={1}>
+                      {tags.map((tag) => (
+                        <Chip key={tag} label={tag} size="small" variant="outlined" />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+              </Paper>
             </Grid>
 
             <Grid item xs={12}>
@@ -730,158 +710,24 @@ const RentalListingDetailPage: React.FC = () => {
               <HowItWorksNotes />
             </Grid>
 
-            <Grid item xs={12}>
-              <Card
-                id={RENTAL_REQUEST_HASH}
-                elevation={0}
-                sx={{
-                  borderRadius: 3,
-                  border: 1,
-                  borderColor: 'divider',
-                  overflow: 'visible',
-                  scrollMarginTop: { xs: 16, sm: 24 },
-                }}
-              >
-                <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-                  {isAuthenticated ? (
-                    <Stack spacing={2.5}>
-                      <Box>
-                        <Typography variant="h6" fontWeight={700}>
-                          {t('rentals.requestRental', 'Request this rental')}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {t(
-                            'rentals.detail.requestSubtitle',
-                            'Choose your dates. The business will confirm availability.'
-                          )}
-                        </Typography>
-                      </Box>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            label={t('rentals.start', 'Start')}
-                            type="datetime-local"
-                            value={start}
-                            onChange={(e) => setStart(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            fullWidth
-                            size="small"
-                            inputProps={{
-                              style: { fontSize: 16 },
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            label={t('rentals.end', 'End')}
-                            type="datetime-local"
-                            value={end}
-                            onChange={(e) => setEnd(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            fullWidth
-                            size="small"
-                            inputProps={{
-                              style: { fontSize: 16 },
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-                        <Button
-                          variant="contained"
-                          size="large"
-                          fullWidth
-                          onClick={() => void submitRequest()}
-                          sx={{
-                            px: 4,
-                            py: 1.25,
-                            minHeight: 48,
-                            fontWeight: 700,
-                            borderRadius: 2,
-                            maxWidth: { sm: 320 },
-                            touchAction: 'manipulation',
-                          }}
-                        >
-                          {t('rentals.submitRequest', 'Submit request')}
-                        </Button>
-                        <Button
-                          variant="text"
-                          fullWidth
-                          sx={{ minHeight: 44, maxWidth: { sm: 'none' } }}
-                          onClick={() => navigate('/rentals/requests')}
-                        >
-                          {t('rentals.myRequests', 'My rental requests')}
-                        </Button>
-                      </Stack>
-                      {msg ? (
-                        <Alert
-                          severity="error"
-                          sx={{
-                            borderRadius: 2,
-                            '& .MuiAlert-message': { overflowWrap: 'anywhere' },
-                          }}
-                        >
-                          {msg}
-                        </Alert>
-                      ) : null}
-                    </Stack>
-                  ) : (
-                    <Stack spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-start' }}>
-                      <Typography variant="h6" fontWeight={700}>
-                        {t('rentals.requestRental', 'Request this rental')}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('rentals.loginToRequest', 'Log in to request')}
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        fullWidth
-                        onClick={() => navigate('/app')}
-                        sx={{
-                          px: 4,
-                          py: 1.25,
-                          minHeight: 48,
-                          fontWeight: 700,
-                          borderRadius: 2,
-                          maxWidth: { sm: 320 },
-                          touchAction: 'manipulation',
-                        }}
-                      >
-                        {t('rentals.loginToRequest', 'Log in to request')}
-                      </Button>
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
+            <Grid
+              item
+              xs={12}
+              sx={{
+                width: '100%',
+                maxWidth: '100%',
+                flexBasis: '100%',
+                minWidth: 0,
+              }}
+            >
+              {listingId ? (
+                <RentalListingRequestSection listingId={listingId} isAuthenticated={isAuthenticated} />
+              ) : null}
             </Grid>
           </Grid>
         </Container>
       </Box>
 
-      <Dialog open={successModalOpen} onClose={() => setSuccessModalOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{t('rentals.requestSuccessModal.title', 'Request sent')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" color="text.secondary">
-            {t(
-              'rentals.requestSuccessModal.body',
-              'The business will review your dates. When they respond, open My rental requests to complete the booking before the offer expires.'
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSuccessModalOpen(false)}>{t('rentals.requestSuccessModal.close', 'Close')}</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setSuccessModalOpen(false);
-              navigate('/rentals/requests');
-            }}
-          >
-            {t('rentals.requestSuccessModal.viewRequests', 'View my requests')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };

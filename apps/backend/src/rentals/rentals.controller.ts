@@ -72,6 +72,36 @@ export class RentalsController {
   }
 
   @Public()
+  @Get('listings/:listingId/booked-windows')
+  @ApiOperation({
+    summary:
+      'List start/end instants of bookings that block this listing (public catalog only)',
+  })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiQuery({ name: 'country_code', required: false })
+  @ApiQuery({ name: 'state', required: false })
+  @ApiResponse({
+    status: 200,
+    description:
+      '{ success: true, data: { windows: Array<{ startAt: string, endAt: string }> } }',
+  })
+  @ApiResponse({ status: 404, description: 'Listing not found or not visible' })
+  async listListingBookedWindows(
+    @Param('listingId') listingId: string,
+    @Query('country_code') country_code?: string,
+    @Query('state') state?: string
+  ) {
+    const windows = await this.rentalsService.listTakenRentalBookingWindowsForPublicListing(
+      listingId,
+      { country_code, state }
+    );
+    if (windows === null) {
+      throw new NotFoundException('Listing not found');
+    }
+    return { success: true, data: { windows } };
+  }
+
+  @Public()
   @Get('listings/:listingId')
   @ApiOperation({
     summary:

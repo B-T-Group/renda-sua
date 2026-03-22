@@ -149,6 +149,13 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           </Box>
         </Stack>
 
+        {row.client_request_note?.trim() ? (
+          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+            <strong>{t('rentals.clientRequests.yourNote', 'Your note')}:</strong>{' '}
+            {row.client_request_note.trim()}
+          </Typography>
+        ) : null}
+
         {quote ? (
           <Box
             sx={{

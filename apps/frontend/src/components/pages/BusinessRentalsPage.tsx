@@ -228,6 +228,11 @@ const BusinessRentalsPage: React.FC = () => {
                 <Typography variant="body2">
                   {req.requested_start_at} → {req.requested_end_at}
                 </Typography>
+                {req.client_request_note?.trim() ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                    {t('business.rentals.clientRequestNote', 'Client note')}: {req.client_request_note.trim()}
+                  </Typography>
+                ) : null}
                 <Typography>Status: {req.status}</Typography>
                 {req.status === 'pending' && (
                   <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
