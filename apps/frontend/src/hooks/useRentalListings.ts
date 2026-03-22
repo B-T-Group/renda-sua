@@ -1,49 +1,13 @@
-import { useAuth0 } from '@auth0/auth0-react';
-import { gql } from 'graphql-request';
 import { useCallback, useEffect, useState } from 'react';
-import useGraphQLClient from './useGraphQLClient';
+import { useApiClient } from './useApiClient';
+import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
 
-const LIST_RENTAL_LISTINGS = gql`
-  query ListRentalListings {
-    rental_location_listings(order_by: { updated_at: desc }) {
-      id
-      base_price_per_day
-      min_rental_days
-      max_rental_days
-      pickup_instructions
-      dropoff_instructions
-      rental_item {
-        id
-        name
-        description
-        tags
-        currency
-        operation_mode
-        rental_category {
-          id
-          name
-        }
-        rental_item_images(order_by: { display_order: asc }) {
-          id
-          image_url
-          alt_text
-        }
-        business {
-          id
-          name
-        }
-      }
-      business_location {
-        id
-        name
-        address {
-          city
-          country
-        }
-      }
-    }
-  }
-`;
+export type RentalListingsSortMode =
+  | 'relevance'
+  | 'newest'
+  | 'fastest'
+  | 'cheapest'
+  | 'expensive';
 
 export interface RentalListingRow {
   id: string;
@@ -52,6 +16,7 @@ export interface RentalListingRow {
   max_rental_days: number | null;
   pickup_instructions: string;
   dropoff_instructions: string;
+  updated_at?: string;
   rental_item: {
     id: string;
     name: string;
@@ -61,18 +26,34 @@ export interface RentalListingRow {
     operation_mode: string;
     rental_category: { id: string; name: string };
     rental_item_images: Array<{ id: string; image_url: string; alt_text?: string }>;
-    business: { id: string; name: string };
+    business: { id: string; name: string; is_verified?: boolean };
   };
   business_location: {
     id: string;
     name: string;
-    address: { city?: string; country?: string };
+    address: {
+      id?: string;
+      address_line_1?: string;
+      address_line_2?: string | null;
+      city?: string;
+      state?: string;
+      postal_code?: string;
+      country?: string;
+    };
   };
+  distance_text?: string;
+  duration_text?: string;
+  distance_value?: number;
 }
 
-export function useRentalListings() {
-  const { isAuthenticated } = useAuth0();
-  const { baseClient, client } = useGraphQLClient();
+export interface UseRentalListingsOptions {
+  sort?: RentalListingsSortMode;
+}
+
+export function useRentalListings(options: UseRentalListingsOptions = {}) {
+  const api = useApiClient();
+  const geo = useRentalCatalogGeoParams();
+  const sort = options.sort ?? 'relevance';
   const [listings, setListings] = useState<RentalListingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,19 +62,27 @@ export function useRentalListings() {
     setLoading(true);
     setError(null);
     try {
-      const gqlClient =
-        isAuthenticated && client ? client : baseClient;
-      const res = await gqlClient.request<{
-        rental_location_listings: RentalListingRow[];
-      }>(LIST_RENTAL_LISTINGS);
-      setListings(res.rental_location_listings ?? []);
+      const { data } = await api.get<{
+        success: boolean;
+        data: { listings: RentalListingRow[] };
+      }>('/rentals/listings', {
+        params: {
+          sort,
+          ...geo,
+        },
+      });
+      if (!data.success) {
+        setListings([]);
+        return;
+      }
+      setListings(data.data.listings ?? []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load rentals');
       setListings([]);
     } finally {
       setLoading(false);
     }
-  }, [baseClient, client, isAuthenticated]);
+  }, [api, sort, geo]);
 
   useEffect(() => {
     void fetchListings();

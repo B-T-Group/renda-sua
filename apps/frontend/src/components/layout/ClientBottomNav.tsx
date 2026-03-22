@@ -1,4 +1,4 @@
-import { Assignment, ShoppingBag } from '@mui/icons-material';
+import { Assignment, CarRental, ShoppingBag } from '@mui/icons-material';
 import { Box, Paper, useTheme, useMediaQuery } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,8 @@ const ClientBottomNav: React.FC = () => {
   const isItemsActive =
     location.pathname === '/items' ||
     location.pathname.startsWith('/items/');
+
+  const isRentalsActive = location.pathname.startsWith('/rentals');
 
   const isOrdersActive =
     location.pathname === '/orders' ||
@@ -97,6 +99,48 @@ const ClientBottomNav: React.FC = () => {
             }}
           >
             {t('common.browseItems', 'Browse Items')}
+          </Box>
+        </Box>
+
+        {/* Rentals Tab */}
+        <Box
+          onClick={() => handleNavigate('/rentals')}
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 0.5,
+            cursor: 'pointer',
+            minHeight: 48,
+            color: isRentalsActive ? 'primary.main' : 'text.secondary',
+            backgroundColor: 'transparent',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            },
+            '&:active': {
+              backgroundColor: 'action.hover',
+            },
+          }}
+        >
+          <CarRental
+            sx={{
+              fontSize: 24,
+              color: isRentalsActive ? 'primary.main' : 'text.secondary',
+            }}
+          />
+          <Box
+            component="span"
+            sx={{
+              fontSize: '0.75rem',
+              fontWeight: isRentalsActive ? 600 : 400,
+              textAlign: 'center',
+              lineHeight: 1.2,
+            }}
+          >
+            {t('rentals.title', 'Rentals')}
           </Box>
         </Box>
 

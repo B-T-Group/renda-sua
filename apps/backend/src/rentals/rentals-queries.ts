@@ -19,6 +19,111 @@ export const GET_LISTING_FOR_REQUEST = `
   }
 `;
 
+export const LIST_PUBLIC_RENTAL_LISTINGS = `
+  query ListPublicRentalListings(
+    $where: rental_location_listings_bool_exp!
+    $order_by: [rental_location_listings_order_by!]!
+  ) {
+    rental_location_listings(where: $where, order_by: $order_by) {
+      id
+      base_price_per_day
+      min_rental_days
+      max_rental_days
+      pickup_instructions
+      dropoff_instructions
+      updated_at
+      rental_item {
+        id
+        name
+        description
+        tags
+        currency
+        operation_mode
+        rental_category {
+          id
+          name
+        }
+        rental_item_images(order_by: { display_order: asc }) {
+          id
+          image_url
+          alt_text
+        }
+        business {
+          id
+          name
+          is_verified
+        }
+      }
+      business_location {
+        id
+        name
+        address {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          latitude
+          longitude
+        }
+      }
+    }
+  }
+`;
+
+export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
+  query GetPublicRentalListingByPk($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      id
+      base_price_per_day
+      min_rental_days
+      max_rental_days
+      pickup_instructions
+      dropoff_instructions
+      updated_at
+      rental_item {
+        id
+        name
+        description
+        tags
+        currency
+        operation_mode
+        rental_category {
+          id
+          name
+        }
+        rental_item_images(order_by: { display_order: asc }) {
+          id
+          image_url
+          alt_text
+        }
+        business {
+          id
+          name
+          is_verified
+        }
+      }
+      business_location {
+        id
+        name
+        address {
+          id
+          address_line_1
+          address_line_2
+          city
+          state
+          postal_code
+          country
+          latitude
+          longitude
+        }
+      }
+    }
+  }
+`;
+
 export const INSERT_RENTAL_REQUEST = `
   mutation InsertRentalRequest($object: rental_requests_insert_input!) {
     insert_rental_requests_one(object: $object) {
@@ -245,10 +350,119 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
       description
       currency
       rental_category_id
+      rental_item_images(order_by: { display_order: asc }) {
+        id
+        image_url
+        display_order
+      }
       rental_location_listings {
         id
         business_location_id
         base_price_per_day
+      }
+    }
+  }
+`;
+
+export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
+  query GetBusinessRentalItemDetail($id: uuid!) {
+    rental_items_by_pk(id: $id) {
+      id
+      name
+      description
+      rental_category_id
+      currency
+      tags
+      is_active
+      operation_mode
+      rental_item_images(order_by: { display_order: asc }) {
+        id
+        image_url
+        display_order
+      }
+      rental_location_listings(order_by: { created_at: desc }) {
+        id
+        business_location_id
+        base_price_per_day
+        min_rental_days
+        max_rental_days
+        units_available
+        is_active
+        pickup_instructions
+        dropoff_instructions
+        business_location {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+export const UPDATE_BUSINESS_RENTAL_ITEM = `
+  mutation UpdateBusinessRentalItem($id: uuid!, $_set: rental_items_set_input!) {
+    update_rental_items_by_pk(pk_columns: { id: $id }, _set: $_set) {
+      id
+    }
+  }
+`;
+
+export const UPDATE_BUSINESS_RENTAL_LISTING = `
+  mutation UpdateBusinessRentalListing(
+    $id: uuid!
+    $_set: rental_location_listings_set_input!
+  ) {
+    update_rental_location_listings_by_pk(pk_columns: { id: $id }, _set: $_set) {
+      id
+    }
+  }
+`;
+
+export const GET_RENTAL_LISTING_BUSINESS_CHECK = `
+  query RentalListingBusinessCheck($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      id
+      rental_item {
+        business_id
+      }
+    }
+  }
+`;
+
+export const GET_RENTAL_LISTING_MIN_MAX = `
+  query GetRentalListingMinMax($id: uuid!) {
+    rental_location_listings_by_pk(id: $id) {
+      min_rental_days
+      max_rental_days
+    }
+  }
+`;
+
+export const GET_CLIENT_RENTAL_REQUESTS = `
+  query GetClientRentalRequests {
+    rental_requests(order_by: { created_at: desc }, limit: 30) {
+      id
+      status
+      requested_start_at
+      requested_end_at
+      created_at
+      business_response_note
+      rental_pricing_snapshot
+      responded_at
+      rental_location_listing {
+        id
+        base_price_per_day
+        business_location {
+          name
+        }
+        rental_item {
+          name
+          currency
+        }
+      }
+      rental_booking {
+        id
+        status
       }
     }
   }

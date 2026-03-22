@@ -45,6 +45,7 @@
 5. **Translations**: Use i18n translation keys, never hardcode strings
 6. **State Management**: Use appropriate state management patterns (useState, useEffect, custom hooks)
 7. **Self-Contained Components**: Prioritize self-contained components that manage their own data and dependencies
+8. **Backend APIs over direct GraphQL**: Load data via Nest REST APIs (`useApiClient`, domain hooks such as `useRentalApi`) instead of adding new `graphql-request` / `useGraphQLClient` queries from the app, unless the user explicitly requests direct Hasura GraphQL from the frontend. See `.cursor/rules/backend-api-first.mdc`.
 
 ### Translation Key Organization Rules
 
@@ -211,6 +212,8 @@ t('orders.orderCard.items');
    - `@ApiBody()` - For complex request bodies
    - `@ApiParam()` - For path parameters
      - `@ApiQuery()` - For query parameters
+
+7. **REST API for app clients**: Prefer new HTTP endpoints in this backend for data the web app needs; the frontend should call them with `useApiClient` or domain hooks—not new direct Hasura GraphQL from `apps/frontend`—unless the user explicitly asks to query GraphQL from the client. See `.cursor/rules/backend-api-first.mdc`.
 
 ### GraphQL Type Safety Rules
 

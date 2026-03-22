@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -16,6 +17,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import {
@@ -36,6 +38,7 @@ function rentalDays(start: string, end: string): number {
 
 const BusinessRentalsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { categories } = useRentalCategories();
@@ -177,18 +180,75 @@ const BusinessRentalsPage: React.FC = () => {
             <Button variant="outlined" onClick={() => setListOpen(true)}>
               {t('business.rentals.addListing', 'Add location listing')}
             </Button>
-            {items.map((it) => (
-              <Box key={it.id} sx={{ border: 1, borderColor: 'divider', p: 2, mt: 2 }}>
-                <Typography variant="h6">{it.name}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {it.description}
-                </Typography>
-                <Typography variant="caption">
-                  {t('business.rentals.listingsCount', 'Listings')}:{' '}
-                  {it.rental_location_listings?.length ?? 0}
-                </Typography>
-              </Box>
-            ))}
+            {items.map((it) => {
+              const thumb = it.rental_item_images?.[0]?.image_url;
+              return (
+                <Box
+                  key={it.id}
+                  sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    p: 2,
+                    mt: 2,
+                    display: 'flex',
+                    gap: 2,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  {thumb ? (
+                    <Box
+                      component="img"
+                      src={thumb}
+                      alt=""
+                      sx={{
+                        width: 88,
+                        height: 88,
+                        objectFit: 'cover',
+                        borderRadius: 1,
+                        flexShrink: 0,
+                        bgcolor: 'action.hover',
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: 88,
+                        height: 88,
+                        flexShrink: 0,
+                        borderRadius: 1,
+                        bgcolor: 'action.hover',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        px: 0.5,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        {t('rentals.noImage', 'No image')}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="h6">{it.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {it.description}
+                    </Typography>
+                    <Typography variant="caption" display="block" sx={{ mb: 1 }}>
+                      {t('business.rentals.listingsCount', 'Listings')}:{' '}
+                      {it.rental_location_listings?.length ?? 0}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => navigate(`/business/rentals/items/${it.id}`)}
+                    >
+                      {t('business.rentals.edit', 'Edit')}
+                    </Button>
+                  </Box>
+                </Box>
+              );
+            })}
           </Box>
         )}
         {tab === 1 && (
@@ -269,20 +329,21 @@ const BusinessRentalsPage: React.FC = () => {
       <Dialog open={listOpen} onClose={() => setListOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('business.rentals.addListing', 'Add location listing')}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <FormControl fullWidth>
-            <InputLabel>{t('business.rentals.item', 'Rental item')}</InputLabel>
-            <Select
-              value={selItem}
-              label={t('business.rentals.item', 'Rental item')}
-              onChange={(e) => setSelItem(e.target.value as string)}
-            >
-              {items.map((it) => (
-                <MenuItem key={it.id} value={it.id}>
-                  {it.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            sx={{ mt: 2 }}
+            options={items}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            value={items.find((it) => it.id === selItem) ?? null}
+            onChange={(_, option) => setSelItem(option?.id ?? '')}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label={t('business.rentals.item', 'Rental item')}
+              />
+            )}
+          />
           <FormControl fullWidth>
             <InputLabel>{t('common.locations', 'Location')}</InputLabel>
             <Select

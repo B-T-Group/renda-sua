@@ -1460,6 +1460,18 @@ export class InventoryItemsService {
     return sorted;
   }
 
+  /** Public rentals catalog shares the same geo rules as inventory. */
+  async isCatalogLocationSupported(
+    countryCode?: string,
+    state?: string
+  ): Promise<boolean> {
+    return this.validateLocationSupport(countryCode, state);
+  }
+
+  async getActiveSupportedCountryCodes(): Promise<string[]> {
+    return this.getSupportedCountryCodes();
+  }
+
   /**
    * Get list of supported country codes from supported_country_states table
    */

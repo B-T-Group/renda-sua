@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { useApiClient } from './useApiClient';
+import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
+import type { RentalListingRow } from './useRentalListings';
 
 export interface RentalPricingSnapshotBody {
   version: number;
@@ -10,17 +12,69 @@ export interface RentalPricingSnapshotBody {
   computedAt: string;
 }
 
+export interface BusinessRentalItemImageRow {
+  id: string;
+  image_url: string;
+  display_order: number;
+}
+
 export interface BusinessRentalItemRow {
   id: string;
   name: string;
   description: string;
   currency: string;
   rental_category_id: string;
+  rental_item_images?: BusinessRentalItemImageRow[];
   rental_location_listings: {
     id: string;
     business_location_id: string;
     base_price_per_day: number;
   }[];
+}
+
+export interface BusinessRentalListingDetail {
+  id: string;
+  business_location_id: string;
+  base_price_per_day: number;
+  min_rental_days: number;
+  max_rental_days: number | null;
+  units_available: number;
+  is_active: boolean;
+  pickup_instructions?: string | null;
+  dropoff_instructions?: string | null;
+  business_location?: { id: string; name: string } | null;
+}
+
+export interface BusinessRentalItemDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  rental_category_id: string;
+  currency: string;
+  tags?: string[] | null;
+  is_active: boolean;
+  operation_mode?: string;
+  rental_item_images: BusinessRentalItemImageRow[];
+  rental_location_listings: BusinessRentalListingDetail[];
+}
+
+export interface UpdateBusinessRentalItemBody {
+  rental_category_id?: string;
+  name?: string;
+  description?: string;
+  tags?: string[];
+  currency?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateBusinessRentalListingBody {
+  pickup_instructions?: string;
+  dropoff_instructions?: string;
+  base_price_per_day?: number;
+  min_rental_days?: number;
+  max_rental_days?: number | null;
+  units_available?: number;
+  is_active?: boolean;
 }
 
 export interface BusinessRentalRequestRow {
@@ -36,8 +90,27 @@ export interface BusinessRentalRequestRow {
   };
 }
 
+export interface ClientRentalRequestRow {
+  id: string;
+  status: string;
+  requested_start_at: string;
+  requested_end_at: string;
+  created_at: string;
+  business_response_note?: string | null;
+  rental_pricing_snapshot?: unknown;
+  responded_at?: string | null;
+  rental_location_listing: {
+    id: string;
+    base_price_per_day: number | string;
+    business_location?: { name: string } | null;
+    rental_item: { name: string; currency: string };
+  } | null;
+  rental_booking?: { id: string; status: string } | null;
+}
+
 export function useRentalApi() {
   const api = useApiClient();
+  const rentalCatalogGeo = useRentalCatalogGeoParams();
 
   const fetchBusinessRentalItems = useCallback(async () => {
     const { data } = await api.get<{
@@ -48,11 +121,74 @@ export function useRentalApi() {
     return data.data.items ?? [];
   }, [api]);
 
+  const fetchBusinessRentalItem = useCallback(
+    async (itemId: string): Promise<BusinessRentalItemDetail | null> => {
+      try {
+        const { data } = await api.get<{
+          success: boolean;
+          data: { item: BusinessRentalItemDetail };
+        }>(`/rentals/business/items/${itemId}`);
+        if (!data.success) return null;
+        return data.data.item ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [api]
+  );
+
+  const updateBusinessRentalItem = useCallback(
+    async (itemId: string, body: UpdateBusinessRentalItemBody) => {
+      const { data } = await api.patch<{ success: boolean }>(
+        `/rentals/business/items/${itemId}`,
+        body
+      );
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
+  const updateBusinessRentalListing = useCallback(
+    async (listingId: string, body: UpdateBusinessRentalListingBody) => {
+      const { data } = await api.patch<{ success: boolean }>(
+        `/rentals/business/listings/${listingId}`,
+        body
+      );
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
+  const fetchPublicRentalListing = useCallback(
+    async (listingId: string): Promise<RentalListingRow | null> => {
+      try {
+        const { data } = await api.get<{
+          success: boolean;
+          data: { listing: RentalListingRow };
+        }>(`/rentals/listings/${listingId}`, { params: rentalCatalogGeo });
+        if (!data.success) return null;
+        return data.data.listing ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [api, rentalCatalogGeo]
+  );
+
   const fetchBusinessRentalRequests = useCallback(async () => {
     const { data } = await api.get<{
       success: boolean;
       data: { requests: BusinessRentalRequestRow[] };
     }>('/rentals/business/requests');
+    if (!data.success) return [];
+    return data.data.requests ?? [];
+  }, [api]);
+
+  const fetchClientRentalRequests = useCallback(async () => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { requests: ClientRentalRequestRow[] };
+    }>('/rentals/client/requests');
     if (!data.success) return [];
     return data.data.requests ?? [];
   }, [api]);
@@ -129,6 +265,16 @@ export function useRentalApi() {
     [api]
   );
 
+  const cancelClientRentalRequest = useCallback(
+    async (requestId: string) => {
+      const { data } = await api.post<{ success: boolean }>(
+        `/rentals/requests/${requestId}/cancel`
+      );
+      return data;
+    },
+    [api]
+  );
+
   const cancelBooking = useCallback(
     async (bookingId: string) => {
       const { data } = await api.post(`/rentals/bookings/${bookingId}/cancel`);
@@ -178,12 +324,18 @@ export function useRentalApi() {
 
   return {
     fetchBusinessRentalItems,
+    fetchBusinessRentalItem,
+    updateBusinessRentalItem,
+    updateBusinessRentalListing,
+    fetchPublicRentalListing,
     fetchBusinessRentalRequests,
+    fetchClientRentalRequests,
     createBusinessRentalItem,
     createBusinessRentalListing,
     createRequest,
     respondRequest,
     createBooking,
+    cancelClientRentalRequest,
     cancelBooking,
     getStartPin,
     verifyStartPin,

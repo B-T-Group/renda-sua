@@ -1,0 +1,27 @@
+---
+description: Prefer NestJS REST APIs over direct Hasura GraphQL from the frontend
+alwaysApply: true
+---
+
+# Backend API first (frontend data access)
+
+## Default
+
+- Expose new data reads and writes through **NestJS REST endpoints** under `apps/backend`. The frontend should call them with **`useApiClient`** or domain hooks (e.g. `useRentalApi`, `useRentalListings`) that wrap the HTTP client.
+
+## Avoid (unless overridden)
+
+- Do **not** add new **`graphql-request`** / **`useGraphQLClient`** usage in the app for work that can be done through the backend API.
+
+## Backend implementation
+
+- Prefer **`HasuraUserService`** for request-scoped queries/mutations that must respect RLS.
+- Use **`HasuraSystemService`** only for admin/system jobs or when the task explicitly requires bypassing user scope (see project Hasura guidelines).
+
+## Migrating existing GraphQL
+
+- Move the query/mutation into the appropriate Nest module, add a route (use **`@Public()`** when anonymous access must match previous behavior), then replace the frontend call with the HTTP client.
+
+## Exception
+
+If the user **explicitly** asks to query Hasura GraphQL from the frontend (or names a specific direct GraphQL approach), follow that for that task instead of this default.
