@@ -51,6 +51,7 @@ select_permissions:
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at
+        - contract_expires_at
         - created_at
         - updated_at
       filter:
@@ -75,6 +76,7 @@ select_permissions:
         - period_ended_notified_at
         - actual_start_at
         - actual_end_at
+        - contract_expires_at
         - created_at
         - updated_at
       filter:

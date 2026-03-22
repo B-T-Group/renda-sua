@@ -77,12 +77,31 @@ export interface UpdateBusinessRentalListingBody {
   is_active?: boolean;
 }
 
+export type UnavailableRentalReasonCode =
+  | 'fully_booked'
+  | 'dates_not_available'
+  | 'item_unavailable'
+  | 'pricing_mismatch'
+  | 'other';
+
+export interface RespondRentalRequestBody {
+  status: 'available' | 'unavailable';
+  rentalPricingSnapshot?: RentalPricingSnapshotBody;
+  contractExpiryHours?: number;
+  unavailableReasonCode?: UnavailableRentalReasonCode;
+  businessResponseNote?: string;
+}
+
 export interface BusinessRentalRequestRow {
   id: string;
   status: string;
   requested_start_at: string;
   requested_end_at: string;
   rental_pricing_snapshot: unknown;
+  business_response_note?: string | null;
+  unavailable_reason_code?: string | null;
+  expires_at?: string | null;
+  responded_at?: string | null;
   rental_location_listing: {
     id: string;
     base_price_per_day: number;
@@ -97,15 +116,21 @@ export interface ClientRentalRequestRow {
   requested_end_at: string;
   created_at: string;
   business_response_note?: string | null;
+  unavailable_reason_code?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
+  expires_at?: string | null;
   rental_location_listing: {
     id: string;
     base_price_per_day: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
-  rental_booking?: { id: string; status: string } | null;
+  rental_booking?: {
+    id: string;
+    status: string;
+    contract_expires_at?: string | null;
+  } | null;
 }
 
 export function useRentalApi() {
@@ -243,14 +268,7 @@ export function useRentalApi() {
   );
 
   const respondRequest = useCallback(
-    async (
-      requestId: string,
-      body: {
-        status: 'available' | 'unavailable';
-        rentalPricingSnapshot?: RentalPricingSnapshotBody;
-        businessResponseNote?: string;
-      }
-    ) => {
+    async (requestId: string, body: RespondRentalRequestBody) => {
       const { data } = await api.post(`/rentals/requests/${requestId}/respond`, body);
       return data as { success: boolean };
     },

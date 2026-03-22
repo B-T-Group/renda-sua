@@ -19,4 +19,16 @@ export class RentalsCronService {
       this.logger.error(error?.message ?? String(error));
     }
   }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleExpiredProposedRentalContracts(): Promise<void> {
+    try {
+      const n = await this.rentalsService.expireProposedRentalContracts();
+      if (n > 0) {
+        this.logger.log(`Expired ${n} proposed rental contract(s)`);
+      }
+    } catch (error: any) {
+      this.logger.error(error?.message ?? String(error));
+    }
+  }
 }

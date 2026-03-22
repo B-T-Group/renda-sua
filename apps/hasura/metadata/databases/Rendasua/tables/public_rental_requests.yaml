@@ -30,6 +30,7 @@ select_permissions:
         - status
         - rental_pricing_snapshot
         - business_response_note
+        - unavailable_reason_code
         - responded_at
         - responded_by_user_id
         - expires_at
@@ -53,6 +54,7 @@ select_permissions:
         - status
         - rental_pricing_snapshot
         - business_response_note
+        - unavailable_reason_code
         - responded_at
         - responded_by_user_id
         - expires_at

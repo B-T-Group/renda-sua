@@ -14,6 +14,10 @@ import {
   CardContent,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Grid,
   Paper,
@@ -347,7 +351,7 @@ const RentalListingDetailPage: React.FC = () => {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!listingId) return;
@@ -379,7 +383,6 @@ const RentalListingDetailPage: React.FC = () => {
 
   const submitRequest = async () => {
     setMsg(null);
-    setSubmitSuccess(false);
     if (!listingId || !start || !end) {
       setMsg(t('rentals.fillDates', 'Choose start and end'));
       return;
@@ -392,15 +395,13 @@ const RentalListingDetailPage: React.FC = () => {
         requestedStartAt: isoStart,
         requestedEndAt: isoEnd,
       });
-      setMsg(t('rentals.requestSent', 'Request sent. The business will respond.'));
-      setSubmitSuccess(true);
+      setSuccessModalOpen(true);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       setMsg(
         err?.response?.data?.message ||
           (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
       );
-      setSubmitSuccess(false);
     }
   };
 
@@ -812,9 +813,9 @@ const RentalListingDetailPage: React.FC = () => {
                           {t('rentals.myRequests', 'My rental requests')}
                         </Button>
                       </Stack>
-                      {msg && (
+                      {msg ? (
                         <Alert
-                          severity={submitSuccess ? 'success' : 'error'}
+                          severity="error"
                           sx={{
                             borderRadius: 2,
                             '& .MuiAlert-message': { overflowWrap: 'anywhere' },
@@ -822,7 +823,7 @@ const RentalListingDetailPage: React.FC = () => {
                         >
                           {msg}
                         </Alert>
-                      )}
+                      ) : null}
                     </Stack>
                   ) : (
                     <Stack spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-start' }}>
@@ -857,6 +858,30 @@ const RentalListingDetailPage: React.FC = () => {
           </Grid>
         </Container>
       </Box>
+
+      <Dialog open={successModalOpen} onClose={() => setSuccessModalOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('rentals.requestSuccessModal.title', 'Request sent')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" color="text.secondary">
+            {t(
+              'rentals.requestSuccessModal.body',
+              'The business will review your dates. When they respond, open My rental requests to complete the booking before the offer expires.'
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSuccessModalOpen(false)}>{t('rentals.requestSuccessModal.close', 'Close')}</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setSuccessModalOpen(false);
+              navigate('/rentals/requests');
+            }}
+          >
+            {t('rentals.requestSuccessModal.viewRequests', 'View my requests')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

@@ -1,0 +1,275 @@
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from '@mui/material';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type {
+  BusinessRentalRequestRow,
+  RentalPricingSnapshotBody,
+  RespondRentalRequestBody,
+  UnavailableRentalReasonCode,
+} from '../../hooks/useRentalApi';
+
+const REASON_CODES: UnavailableRentalReasonCode[] = [
+  'fully_booked',
+  'dates_not_available',
+  'item_unavailable',
+  'pricing_mismatch',
+  'other',
+];
+
+function rentalDays(start: string, end: string): number {
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  return Math.max(1, Math.ceil((e - s) / 86400000));
+}
+
+function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
+  const days = rentalDays(req.requested_start_at, req.requested_end_at);
+  const rate = Number(req.rental_location_listing.base_price_per_day);
+  const total = days * rate;
+  const cur = req.rental_location_listing.rental_item.currency;
+  return {
+    version: 1,
+    currency: cur,
+    total,
+    ratePerDay: rate,
+    days,
+    computedAt: new Date().toISOString(),
+  };
+}
+
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency.length === 3 ? currency : 'XAF',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+export interface BusinessRentalRespondDialogProps {
+  open: boolean;
+  mode: 'available' | 'unavailable' | null;
+  request: BusinessRentalRequestRow | null;
+  onClose: () => void;
+  onSuccess: () => void;
+  respondRequest: (id: string, body: RespondRentalRequestBody) => Promise<{ success: boolean }>;
+}
+
+export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogProps> = ({
+  open,
+  mode,
+  request,
+  onClose,
+  onSuccess,
+  respondRequest,
+}) => {
+  const { t } = useTranslation();
+  const [contractHours, setContractHours] = useState('48');
+  const [availableNote, setAvailableNote] = useState('');
+  const [reasonCode, setReasonCode] = useState<UnavailableRentalReasonCode | ''>('');
+  const [unavailableNote, setUnavailableNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setContractHours('48');
+    setAvailableNote('');
+    setReasonCode('');
+    setUnavailableNote('');
+    setError(null);
+  }, [open, request?.id, mode]);
+
+  const submitAvailable = useCallback(async () => {
+    if (!request) return;
+    const h = parseInt(contractHours, 10);
+    if (!Number.isInteger(h) || h < 1 || h > 168) {
+      setError(t('business.rentals.respondValidationHours', 'Enter a whole number of hours between 1 and 168.'));
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const snap = buildPricingSnapshot(request);
+      await respondRequest(request.id, {
+        status: 'available',
+        rentalPricingSnapshot: snap,
+        contractExpiryHours: h,
+        businessResponseNote: availableNote.trim() || undefined,
+      });
+      onSuccess();
+      onClose();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        t('business.rentals.respondFailed', 'Could not send response');
+      setError(typeof msg === 'string' ? msg : String(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [availableNote, contractHours, onClose, onSuccess, request, respondRequest, t]);
+
+  const submitUnavailable = useCallback(async () => {
+    if (!request) return;
+    if (!reasonCode) {
+      setError(t('business.rentals.respondValidationReason', 'Choose a reason.'));
+      return;
+    }
+    if (reasonCode === 'other' && !unavailableNote.trim()) {
+      setError(t('business.rentals.respondValidationOtherNote', 'Please add a short explanation.'));
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await respondRequest(request.id, {
+        status: 'unavailable',
+        unavailableReasonCode: reasonCode,
+        businessResponseNote: unavailableNote.trim() || undefined,
+      });
+      onSuccess();
+      onClose();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        t('business.rentals.respondFailed', 'Could not send response');
+      setError(typeof msg === 'string' ? msg : String(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [onClose, onSuccess, reasonCode, request, respondRequest, t, unavailableNote]);
+
+  if (!open || !mode || !request) return null;
+
+  const days = rentalDays(request.requested_start_at, request.requested_end_at);
+  const rate = Number(request.rental_location_listing.base_price_per_day);
+  const total = days * rate;
+  const cur = request.rental_location_listing.rental_item.currency;
+
+  const title =
+    mode === 'available'
+      ? t('business.rentals.respondDialogTitleAvailable', 'Confirm availability')
+      : t('business.rentals.respondDialogTitleUnavailable', 'Mark unavailable');
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          {request.rental_location_listing.rental_item.name}
+        </Typography>
+        <Typography variant="body2">
+          {request.requested_start_at} → {request.requested_end_at}
+        </Typography>
+
+        {mode === 'available' ? (
+          <>
+            <Typography variant="subtitle2">
+              {t('business.rentals.contractSummary', 'Offer summary')}
+            </Typography>
+            <Typography variant="body2">
+              {t('business.rentals.contractDays', '{{count}} day(s)', { count: days })}
+            </Typography>
+            <Typography variant="body2">
+              {t('business.rentals.contractRate', '{{amount}} / day', {
+                amount: formatMoney(rate, cur),
+              })}
+            </Typography>
+            <Typography variant="h6" fontWeight={700}>
+              {t('business.rentals.contractTotal', 'Total')}: {formatMoney(total, cur)}
+            </Typography>
+            <TextField
+              label={t(
+                'business.rentals.contractExpiryHoursLabel',
+                'Client must confirm within (hours)'
+              )}
+              type="number"
+              value={contractHours}
+              onChange={(e) => setContractHours(e.target.value)}
+              inputProps={{ min: 1, max: 168 }}
+              helperText={t(
+                'business.rentals.contractExpiryHelper',
+                'Between 1 and 168 hours (1 week).'
+              )}
+              fullWidth
+            />
+            <TextField
+              label={t('business.rentals.optionalMessage', 'Optional message to the client')}
+              value={availableNote}
+              onChange={(e) => setAvailableNote(e.target.value)}
+              multiline
+              minRows={2}
+              fullWidth
+            />
+          </>
+        ) : (
+          <>
+            <FormControl fullWidth>
+              <InputLabel id="unavail-reason-label">
+                {t('business.rentals.unavailableReasonLabel', 'Reason')}
+              </InputLabel>
+              <Select
+                labelId="unavail-reason-label"
+                label={t('business.rentals.unavailableReasonLabel', 'Reason')}
+                value={reasonCode}
+                onChange={(e) => setReasonCode(e.target.value as UnavailableRentalReasonCode)}
+              >
+                {REASON_CODES.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {t(`rentals.unavailableReasons.${c}`, c)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label={
+                reasonCode === 'other'
+                  ? t('business.rentals.otherReasonNote', 'Please explain')
+                  : t('business.rentals.optionalMessage', 'Optional message to the client')
+              }
+              value={unavailableNote}
+              onChange={(e) => setUnavailableNote(e.target.value)}
+              multiline
+              minRows={reasonCode === 'other' ? 3 : 2}
+              required={reasonCode === 'other'}
+              fullWidth
+            />
+          </>
+        )}
+
+        {error ? (
+          <Typography variant="body2" color="error">
+            {error}
+          </Typography>
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={submitting}>
+          {t('common.cancel', 'Cancel')}
+        </Button>
+        <Button
+          variant="contained"
+          disabled={submitting}
+          onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
+        >
+          {t('business.rentals.submitResponse', 'Send response')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};

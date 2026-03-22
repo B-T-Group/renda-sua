@@ -145,12 +145,18 @@ export const GET_RENTAL_REQUEST_FULL = `
       requested_end_at
       rental_pricing_snapshot
       rental_location_listing_id
+      expires_at
       rental_location_listing {
         id
         units_available
         rental_item { id business_id currency is_active }
       }
       client { id user_id }
+      rental_booking {
+        id
+        status
+        contract_expires_at
+      }
     }
   }
 `;
@@ -161,6 +167,8 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
     $status: rental_request_status_enum!
     $snapshot: jsonb
     $note: String
+    $unavailableReasonCode: String
+    $requestExpiresAt: timestamptz
     $respondedAt: timestamptz!
     $userId: uuid!
   ) {
@@ -170,6 +178,8 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
         status: $status
         rental_pricing_snapshot: $snapshot
         business_response_note: $note
+        unavailable_reason_code: $unavailableReasonCode
+        expires_at: $requestExpiresAt
         responded_at: $respondedAt
         responded_by_user_id: $userId
       }
@@ -447,8 +457,10 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       requested_end_at
       created_at
       business_response_note
+      unavailable_reason_code
       rental_pricing_snapshot
       responded_at
+      expires_at
       rental_location_listing {
         id
         base_price_per_day
@@ -463,6 +475,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       rental_booking {
         id
         status
+        contract_expires_at
       }
     }
   }
@@ -476,6 +489,10 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       requested_start_at
       requested_end_at
       rental_pricing_snapshot
+      business_response_note
+      unavailable_reason_code
+      expires_at
+      responded_at
       rental_location_listing {
         id
         base_price_per_day
@@ -484,6 +501,36 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
           currency
         }
       }
+    }
+  }
+`;
+
+export const COUNT_ACTIVE_PROPOSED_BOOKINGS_FOR_LISTING = `
+  query CountActiveProposedBookingsForListing($listingId: uuid!, $now: timestamptz!) {
+    rental_bookings_aggregate(
+      where: {
+        rental_location_listing_id: { _eq: $listingId }
+        status: { _eq: proposed }
+        contract_expires_at: { _gt: $now }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS = `
+  query ListExpiredProposedRentalBookings($now: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: proposed }
+        contract_expires_at: { _lte: $now }
+      }
+    ) {
+      id
+      rental_request_id
     }
   }
 `;

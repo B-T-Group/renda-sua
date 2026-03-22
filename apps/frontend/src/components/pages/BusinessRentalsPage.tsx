@@ -20,21 +20,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import {
-  useRentalApi,
-  RentalPricingSnapshotBody,
-  type BusinessRentalItemRow,
-  type BusinessRentalRequestRow,
-} from '../../hooks/useRentalApi';
+import { useRentalApi, type BusinessRentalItemRow, type BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
+import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
 import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
-
-function rentalDays(start: string, end: string): number {
-  const s = new Date(start).getTime();
-  const e = new Date(end).getTime();
-  return Math.max(1, Math.ceil((e - s) / 86400000));
-}
 
 const BusinessRentalsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -68,7 +58,10 @@ const BusinessRentalsPage: React.FC = () => {
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [units, setUnits] = useState('1');
-  const [note, setNote] = useState('');
+  const [respondTarget, setRespondTarget] = useState<{
+    req: BusinessRentalRequestRow;
+    mode: 'available' | 'unavailable';
+  } | null>(null);
 
   const loadItems = useCallback(async () => {
     const list = await fetchBusinessRentalItems();
@@ -121,32 +114,6 @@ const BusinessRentalsPage: React.FC = () => {
     });
     setListOpen(false);
     void loadItems();
-  };
-
-  const respond = async (req: BusinessRentalRequestRow, available: boolean) => {
-    if (!available) {
-      await respondRequest(req.id, { status: 'unavailable', businessResponseNote: note });
-    } else {
-      const days = rentalDays(req.requested_start_at, req.requested_end_at);
-      const rate = Number(req.rental_location_listing.base_price_per_day);
-      const total = days * rate;
-      const cur = req.rental_location_listing.rental_item.currency;
-      const snap: RentalPricingSnapshotBody = {
-        version: 1,
-        currency: cur,
-        total,
-        ratePerDay: rate,
-        days,
-        computedAt: new Date().toISOString(),
-      };
-      await respondRequest(req.id, {
-        status: 'available',
-        rentalPricingSnapshot: snap,
-        businessResponseNote: note,
-      });
-    }
-    setNote('');
-    void loadRequests();
   };
 
   if (!businessId) {
@@ -264,10 +231,14 @@ const BusinessRentalsPage: React.FC = () => {
                 <Typography>Status: {req.status}</Typography>
                 {req.status === 'pending' && (
                   <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                    <Button size="small" onClick={() => void respond(req, true)}>
+                    <Button size="small" onClick={() => setRespondTarget({ req, mode: 'available' })}>
                       {t('business.rentals.markAvailable', 'Available')}
                     </Button>
-                    <Button size="small" color="warning" onClick={() => void respond(req, false)}>
+                    <Button
+                      size="small"
+                      color="warning"
+                      onClick={() => setRespondTarget({ req, mode: 'unavailable' })}
+                    >
                       {t('business.rentals.markUnavailable', 'Unavailable')}
                     </Button>
                   </Box>
@@ -276,16 +247,16 @@ const BusinessRentalsPage: React.FC = () => {
             ))}
           </Box>
         )}
-        {tab === 1 && (
-          <TextField
-            fullWidth
-            sx={{ mt: 2 }}
-            label={t('business.rentals.responseNote', 'Response note (optional)')}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        )}
       </Box>
+
+      <BusinessRentalRespondDialog
+        open={!!respondTarget}
+        mode={respondTarget?.mode ?? null}
+        request={respondTarget?.req ?? null}
+        onClose={() => setRespondTarget(null)}
+        onSuccess={() => void loadRequests()}
+        respondRequest={respondRequest}
+      />
 
       <Dialog open={itemOpen} onClose={() => setItemOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('business.rentals.addItem', 'Add rental item')}</DialogTitle>

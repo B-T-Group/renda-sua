@@ -54,6 +54,21 @@ function statusChipColor(
   }
 }
 
+function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
+  if (row.status !== 'available') return false;
+  const b = row.rental_booking;
+  if (!b || b.status !== 'proposed') return true;
+  const exp = b.contract_expires_at;
+  if (!exp) return true;
+  return new Date(exp) > new Date();
+}
+
+function proposedContractDeadline(row: ClientRentalRequestRow): string | null {
+  const b = row.rental_booking;
+  if (b?.status !== 'proposed' || !b.contract_expires_at) return null;
+  return b.contract_expires_at;
+}
+
 export interface ClientRentalRequestRowCardProps {
   row: ClientRentalRequestRow;
   bookingLoading: boolean;
@@ -78,6 +93,9 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const locName = listing?.business_location?.name;
   const quote = parseSnapshot(row.rental_pricing_snapshot);
   const statusLabel = t(`rentals.requestStatus.${row.status}`, row.status);
+  const deadlineIso = proposedContractDeadline(row);
+  const canBookNow = row.status === 'available' && isProposedContractOpen(row);
+  const reasonCode = row.unavailable_reason_code?.trim();
 
   return (
     <Paper
@@ -151,6 +169,27 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           </Box>
         ) : null}
 
+        {row.status === 'available' && deadlineIso ? (
+          <Typography
+            variant="body2"
+            color={canBookNow ? 'text.secondary' : 'error'}
+            fontWeight={canBookNow ? 400 : 600}
+          >
+            {canBookNow
+              ? t('rentals.clientRequests.contractCompleteBy', 'Complete booking by {{date}}', {
+                  date: formatLocalDateTime(deadlineIso),
+                })
+              : t('rentals.clientRequests.contractExpiredHint', 'This offer has expired. Send a new request from the listing.')}
+          </Typography>
+        ) : null}
+
+        {row.status === 'unavailable' && reasonCode ? (
+          <Typography variant="body2" color="text.secondary">
+            <strong>{t('rentals.clientRequests.unavailableReason', 'Reason')}:</strong>{' '}
+            {t(`rentals.unavailableReasons.${reasonCode}`, reasonCode)}
+          </Typography>
+        ) : null}
+
         {row.business_response_note?.trim() ? (
           <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
             {t('rentals.clientRequests.businessNote', 'Business note')}: {row.business_response_note}
@@ -172,7 +211,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             <Button
               size="small"
               variant="contained"
-              disabled={bookingLoading}
+              disabled={bookingLoading || !canBookNow}
               onClick={() => onBook(row.id)}
             >
               {t('rentals.bookNow', 'Book now')}

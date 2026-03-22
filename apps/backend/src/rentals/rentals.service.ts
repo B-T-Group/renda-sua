@@ -22,6 +22,7 @@ import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import {
   RespondRentalRequestDto,
   RespondRentalRequestStatusDto,
+  UnavailableRentalReasonCode,
 } from './dto/respond-rental-request.dto';
 import {
   isValidRentalPricingSnapshot,
@@ -115,15 +116,21 @@ export interface ClientRentalRequestRow {
   requested_end_at: string;
   created_at: string;
   business_response_note?: string | null;
+  unavailable_reason_code?: string | null;
   rental_pricing_snapshot?: unknown;
   responded_at?: string | null;
+  expires_at?: string | null;
   rental_location_listing: {
     id: string;
     base_price_per_day: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
-  rental_booking?: { id: string; status: string } | null;
+  rental_booking?: {
+    id: string;
+    status: string;
+    contract_expires_at?: string | null;
+  } | null;
 }
 
 function rentalListingUpdatedAtMs(row: PublicRentalListingRow): number {
@@ -163,12 +170,13 @@ export class RentalsService {
       );
       if (!ok) return [];
     }
-    const where = await this.buildRentalListingWhere(
+    const baseWhere = await this.buildRentalListingWhere(
       geo.filterMode,
       geo.country,
       geo.state
     );
-    const r = await this.hasuraUserService.executeQuery<{
+    const where = this.whereExcludingActiveProposedContracts(baseWhere);
+    const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
     }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, {
       where,
@@ -195,11 +203,14 @@ export class RentalsService {
       geo.filterMode === 'supported_only'
         ? await this.inventoryItemsService.getActiveSupportedCountryCodes()
         : [];
-    const r = await this.hasuraUserService.executeQuery<{
+    const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings_by_pk: PublicRentalListingRow | null;
     }>(Q.GET_PUBLIC_RENTAL_LISTING_BY_PK, { id: listingId });
     const row = r.rental_location_listings_by_pk;
     if (!row) return null;
+    if (await this.listingHasActiveProposedContract(listingId)) {
+      return null;
+    }
     if (
       !this.listingMatchesCatalogGeo(
         row,
@@ -256,28 +267,100 @@ export class RentalsService {
     if (req.rental_location_listing.rental_item.business_id !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+    const respondedAt = new Date().toISOString();
     if (dto.status === RespondRentalRequestStatusDto.available) {
-      if (!dto.rentalPricingSnapshot || !isValidRentalPricingSnapshot(dto.rentalPricingSnapshot)) {
+      await this.respondRentalRequestAvailable(requestId, dto, user.id, req, respondedAt);
+    } else {
+      await this.respondRentalRequestUnavailable(requestId, dto, user.id, respondedAt);
+    }
+    return { success: true };
+  }
+
+  private async respondRentalRequestUnavailable(
+    requestId: string,
+    dto: RespondRentalRequestDto,
+    userId: string,
+    respondedAt: string
+  ) {
+    if (dto.unavailableReasonCode == null) {
+      throw new HttpException('unavailableReasonCode is required', HttpStatus.BAD_REQUEST);
+    }
+    if (dto.unavailableReasonCode === UnavailableRentalReasonCode.other) {
+      const note = dto.businessResponseNote?.trim() ?? '';
+      if (!note) {
         throw new HttpException(
-          'rentalPricingSnapshot is required when available',
+          'businessResponseNote is required when reason is other',
           HttpStatus.BAD_REQUEST
         );
       }
-      this.assertSnapshotCurrency(dto.rentalPricingSnapshot, req);
     }
-    const snapshot =
-      dto.status === RespondRentalRequestStatusDto.available
-        ? dto.rentalPricingSnapshot
-        : null;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
       id: requestId,
       status: dto.status,
-      snapshot,
-      note: dto.businessResponseNote ?? null,
-      respondedAt: new Date().toISOString(),
-      userId: user.id,
+      snapshot: null,
+      note: dto.businessResponseNote?.trim() ?? null,
+      unavailableReasonCode: dto.unavailableReasonCode,
+      requestExpiresAt: null,
+      respondedAt,
+      userId,
     });
-    return { success: true };
+  }
+
+  private async respondRentalRequestAvailable(
+    requestId: string,
+    dto: RespondRentalRequestDto,
+    userId: string,
+    req: any,
+    respondedAt: string
+  ) {
+    if (!dto.rentalPricingSnapshot || !isValidRentalPricingSnapshot(dto.rentalPricingSnapshot)) {
+      throw new HttpException(
+        'rentalPricingSnapshot is required when available',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (dto.contractExpiryHours == null) {
+      throw new HttpException('contractExpiryHours is required when available', HttpStatus.BAD_REQUEST);
+    }
+    this.assertSnapshotCurrency(dto.rentalPricingSnapshot, req);
+    const hours = dto.contractExpiryHours;
+    if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
+      throw new HttpException('contractExpiryHours must be between 1 and 168', HttpStatus.BAD_REQUEST);
+    }
+    const listingId = req.rental_location_listing_id;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const activeProposed = await this.countActiveProposedBookingsForListing(listingId, nowIso);
+    if (activeProposed > 0) {
+      throw new HttpException(
+        'This listing already has an active rental contract',
+        HttpStatus.CONFLICT
+      );
+    }
+    const snap = dto.rentalPricingSnapshot;
+    const total = Number(snap.total);
+    const contractExpiresAt = new Date(now.getTime() + hours * 3600000).toISOString();
+    const clientId = req.client_id;
+    let bookingId: string | null = null;
+    try {
+      const ins = await this.insertProposedBookingRow(req, clientId, snap, total, contractExpiresAt);
+      bookingId = ins.insert_rental_bookings_one.id;
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
+        id: requestId,
+        status: dto.status,
+        snapshot: snap,
+        note: dto.businessResponseNote?.trim() ?? null,
+        unavailableReasonCode: null,
+        requestExpiresAt: contractExpiresAt,
+        respondedAt,
+        userId,
+      });
+    } catch (e: any) {
+      if (bookingId) await this.deleteBooking(bookingId);
+      throw e instanceof HttpException
+        ? e
+        : new HttpException(e?.message || 'Failed to respond', HttpStatus.BAD_REQUEST);
+    }
   }
 
   async getBusinessRentalItems(): Promise<any[]> {
@@ -619,6 +702,62 @@ export class RentalsService {
     if (!req.rental_pricing_snapshot || !isValidRentalPricingSnapshot(req.rental_pricing_snapshot)) {
       throw new HttpException('Invalid pricing on request', HttpStatus.BAD_REQUEST);
     }
+    const existing = req.rental_booking;
+    const clientId = user.client.id;
+    const userId = user.id;
+    if (existing?.status === 'proposed') {
+      return this.confirmProposedRentalBooking(
+        dto.rentalRequestId,
+        req,
+        userId,
+        clientId
+      );
+    }
+    return this.createLegacyRentalBooking(dto.rentalRequestId, req, userId, clientId);
+  }
+
+  async expireProposedRentalContracts(): Promise<number> {
+    const now = new Date().toISOString();
+    const res = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{ id: string; rental_request_id: string }>;
+    }>(Q.LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS, { now });
+    const rows = res.rental_bookings ?? [];
+    for (const b of rows) {
+      try {
+        await this.patchBooking(b.id, {
+          status: 'cancelled',
+          contract_expires_at: null,
+        });
+        await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+          id: b.rental_request_id,
+          status: 'expired',
+        });
+        await this.logHistory(
+          b.id,
+          'cancelled',
+          'proposed',
+          null,
+          'system',
+          'Rental contract expired'
+        );
+      } catch (error: any) {
+        this.logger.error(`expireProposedRentalContracts ${b.id}: ${error.message}`);
+      }
+    }
+    return rows.length;
+  }
+
+  private async confirmProposedRentalBooking(
+    requestId: string,
+    req: any,
+    userId: string,
+    clientId: string
+  ) {
+    const bookingId = req.rental_booking?.id as string;
+    const exp = req.rental_booking?.contract_expires_at as string | null | undefined;
+    if (!exp || new Date(exp) <= new Date()) {
+      throw new HttpException('Contract has expired', HttpStatus.GONE);
+    }
     const start = new Date(req.requested_start_at);
     const end = new Date(req.requested_end_at);
     await this.assertCapacity(
@@ -629,23 +768,57 @@ export class RentalsService {
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
-    const bookingRow = await this.insertBookingRow(req, user.client.id, snap, total);
-    const bookingId = bookingRow.insert_rental_bookings_one.id;
     try {
-      await this.placeHoldForBooking(bookingId, user.client.id, total, snap.currency);
+      await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
     } catch (e: any) {
-      await this.deleteBooking(bookingId);
       throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
     }
+    await this.patchBooking(bookingId, { status: 'confirmed', contract_expires_at: null });
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-      id: dto.rentalRequestId,
+      id: requestId,
       status: 'booked',
     });
     const pin = this.deliveryPinService.generatePin();
     const hash = this.deliveryPinService.hashPin(bookingId, pin);
     await this.setBookingPinHash(bookingId, hash);
     this.deliveryPinService.setPinForClient(bookingId, pin);
-    await this.logHistory(bookingId, 'confirmed', null, user.id, 'client', 'Booking created');
+    await this.logHistory(bookingId, 'confirmed', 'proposed', userId, 'client', 'Booking confirmed');
+    return { success: true, bookingId };
+  }
+
+  private async createLegacyRentalBooking(
+    requestId: string,
+    req: any,
+    userId: string,
+    clientId: string
+  ) {
+    const start = new Date(req.requested_start_at);
+    const end = new Date(req.requested_end_at);
+    await this.assertCapacity(
+      req.rental_location_listing_id,
+      start,
+      end,
+      req.rental_location_listing.units_available
+    );
+    const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
+    const total = Number(snap.total);
+    const bookingRow = await this.insertBookingRow(req, clientId, snap, total);
+    const bookingId = bookingRow.insert_rental_bookings_one.id;
+    try {
+      await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
+    } catch (e: any) {
+      await this.deleteBooking(bookingId);
+      throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
+    }
+    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+      id: requestId,
+      status: 'booked',
+    });
+    const pin = this.deliveryPinService.generatePin();
+    const hash = this.deliveryPinService.hashPin(bookingId, pin);
+    await this.setBookingPinHash(bookingId, hash);
+    this.deliveryPinService.setPinForClient(bookingId, pin);
+    await this.logHistory(bookingId, 'confirmed', null, userId, 'client', 'Booking created');
     return { success: true, bookingId };
   }
 
@@ -889,6 +1062,42 @@ export class RentalsService {
     });
   }
 
+  private async insertProposedBookingRow(
+    req: any,
+    clientId: string,
+    snap: RentalPricingSnapshotDto,
+    total: number,
+    contractExpiresAt: string
+  ) {
+    return this.hasuraSystemService.executeMutation<{
+      insert_rental_bookings_one: { id: string };
+    }>(Q.INSERT_RENTAL_BOOKING, {
+      object: {
+        rental_request_id: req.id,
+        client_id: clientId,
+        business_id: req.rental_location_listing.rental_item.business_id,
+        rental_location_listing_id: req.rental_location_listing_id,
+        start_at: req.requested_start_at,
+        end_at: req.requested_end_at,
+        total_amount: total,
+        currency: snap.currency,
+        rental_pricing_snapshot: snap,
+        status: 'proposed',
+        contract_expires_at: contractExpiresAt,
+      },
+    });
+  }
+
+  private async countActiveProposedBookingsForListing(
+    listingId: string,
+    nowIso: string
+  ): Promise<number> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings_aggregate: { aggregate: { count: number } };
+    }>(Q.COUNT_ACTIVE_PROPOSED_BOOKINGS_FOR_LISTING, { listingId, now: nowIso });
+    return r.rental_bookings_aggregate?.aggregate?.count ?? 0;
+  }
+
   private async placeHoldForBooking(
     bookingId: string,
     clientId: string,
@@ -1122,6 +1331,35 @@ export class RentalsService {
     return {
       business_location: { address: { country: { _in: codes } } },
     };
+  }
+
+  private whereExcludingActiveProposedContracts(
+    base: Record<string, unknown>
+  ): Record<string, unknown> {
+    const nowIso = new Date().toISOString();
+    return {
+      _and: [
+        base,
+        {
+          _not: {
+            rental_bookings: {
+              _and: [
+                { status: { _eq: 'proposed' } },
+                { contract_expires_at: { _gt: nowIso } },
+              ],
+            },
+          },
+        },
+      ],
+    };
+  }
+
+  private async listingHasActiveProposedContract(listingId: string): Promise<boolean> {
+    const n = await this.countActiveProposedBookingsForListing(
+      listingId,
+      new Date().toISOString()
+    );
+    return n > 0;
   }
 
   private listingMatchesCatalogGeo(
