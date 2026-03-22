@@ -7,6 +7,10 @@ export function normalizeLanguage(lang?: string | null): EmailLocale {
   return lang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
+function emptyToNull(s: string): string | null {
+  return s.trim() === '' ? null : s;
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -115,23 +119,38 @@ export function buildResendTemplateVariables(
   userType: string,
   locale: EmailLocale,
   options?: { orderItemsVariant?: 'default' | 'agentAssigned' }
-): Record<string, string | number> {
+): Record<string, string | number | null> {
   const variant = options?.orderItemsVariant ?? 'default';
   const cur = data.currency || 'USD';
   const htmlBlocks = {
-    ORDER_ITEMS_HTML: buildOrderItemsHtml(data.orderItems || [], cur, variant),
-    ESTIMATED_DELIVERY_SECTION_HTML: buildEstimatedDeliverySection(
-      data.estimatedDeliveryTime,
-      locale
+    ORDER_ITEMS_HTML: emptyToNull(
+      buildOrderItemsHtml(data.orderItems || [], cur, variant)
     ),
-    SPECIAL_INSTRUCTIONS_SECTION_HTML: buildSpecialInstructionsSection(
-      data.specialInstructions,
-      locale
+    ESTIMATED_DELIVERY_SECTION_HTML: emptyToNull(
+      buildEstimatedDeliverySection(data.estimatedDeliveryTime, locale)
     ),
-    NOTES_SECTION_HTML: buildNotesSection(data.notes, locale),
-    AGENT_NAME_SECTION_HTML: buildAgentNameSection(data.agentName, locale),
+    SPECIAL_INSTRUCTIONS_SECTION_HTML: emptyToNull(
+      buildSpecialInstructionsSection(data.specialInstructions, locale)
+    ),
+    NOTES_SECTION_HTML: emptyToNull(buildNotesSection(data.notes, locale)),
+    AGENT_NAME_SECTION_HTML: emptyToNull(
+      buildAgentNameSection(data.agentName, locale)
+    ),
   };
-  const base: Record<string, string | number> = {
+  const estRaw = data.estimatedDeliveryTime;
+  const est =
+    estRaw !== null &&
+    estRaw !== undefined &&
+    String(estRaw).trim() !== ''
+      ? esc(String(estRaw).trim())
+      : null;
+
+  const businessVerified =
+    typeof data.businessVerified === 'boolean'
+      ? String(data.businessVerified)
+      : null;
+
+  const base: Record<string, string | number | null> = {
     orderId: esc(data.orderId || 'Unknown'),
     orderNumber: esc(data.orderNumber || 'Unknown'),
     orderStatus: esc(data.orderStatus || 'Unknown'),
@@ -141,25 +160,16 @@ export function buildResendTemplateVariables(
     totalAmount: data.totalAmount || 0,
     currency: esc(cur),
     deliveryAddress: esc(data.deliveryAddress || 'Unknown Address'),
-    specialInstructions: data.specialInstructions
-      ? esc(data.specialInstructions)
-      : '',
-    notes: data.notes ? esc(data.notes) : '',
+    specialInstructions: data.specialInstructions?.trim()
+      ? esc(data.specialInstructions.trim())
+      : null,
+    notes: data.notes?.trim() ? esc(data.notes.trim()) : null,
+    estimatedDeliveryTime: est,
+    deliveryTimeWindow: est,
+    businessVerified,
     currentYear: new Date().getFullYear(),
     ...htmlBlocks,
   };
-
-  const estRaw = data.estimatedDeliveryTime;
-  const est =
-    estRaw !== null &&
-    estRaw !== undefined &&
-    String(estRaw).trim() !== ''
-      ? esc(String(estRaw).trim())
-      : null;
-  if (est !== null) {
-    base.estimatedDeliveryTime = est;
-    base.deliveryTimeWindow = est;
-  }
 
   switch (userType) {
     case 'client':

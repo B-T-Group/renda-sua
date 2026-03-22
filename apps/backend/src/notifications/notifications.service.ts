@@ -750,10 +750,29 @@ export class NotificationsService {
   /**
    * Send email using Resend transactional template
    */
+  private serializeResendVariables(
+    variables: Record<string, string | number | boolean | null | undefined>
+  ): Record<string, string | number | null> {
+    const out: Record<string, string | number | null> = {};
+    for (const [key, value] of Object.entries(variables)) {
+      if (value === undefined) continue;
+      if (value === null) {
+        out[key] = null;
+        continue;
+      }
+      if (typeof value === 'boolean') {
+        out[key] = value ? 'true' : 'false';
+        continue;
+      }
+      out[key] = value;
+    }
+    return out;
+  }
+
   private async sendEmail(params: {
     to: string;
     templateKey: string;
-    variables: Record<string, string | number | boolean>;
+    variables: Record<string, string | number | boolean | null | undefined>;
   }): Promise<void> {
     this.initializeResend();
     if (!this.resendClient) {
@@ -769,17 +788,15 @@ export class NotificationsService {
       );
       return;
     }
-    const stringVariables: Record<string, string> = Object.fromEntries(
-      Object.entries(variables).map(([key, value]) => [
-        key,
-        value === null || value === undefined ? '' : String(value),
-      ])
-    );
+    const templateVariables = this.serializeResendVariables(variables);
     try {
       const { error } = await this.resendClient.emails.send({
         from: this.fromEmail,
         to: [to],
-        template: { id: templateId, variables: stringVariables },
+        template: {
+          id: templateId,
+          variables: templateVariables as Record<string, string | number>,
+        },
       });
       if (error) {
         throw new Error(JSON.stringify(error));
