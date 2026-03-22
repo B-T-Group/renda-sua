@@ -7,10 +7,6 @@ export function normalizeLanguage(lang?: string | null): EmailLocale {
   return lang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
-function emptyToNull(s: string): string | null {
-  return s.trim() === '' ? null : s;
-}
-
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -119,23 +115,21 @@ export function buildResendTemplateVariables(
   userType: string,
   locale: EmailLocale,
   options?: { orderItemsVariant?: 'default' | 'agentAssigned' }
-): Record<string, string | number | null> {
+): Record<string, string | number> {
   const variant = options?.orderItemsVariant ?? 'default';
   const cur = data.currency || 'USD';
   const htmlBlocks = {
-    ORDER_ITEMS_HTML: emptyToNull(
-      buildOrderItemsHtml(data.orderItems || [], cur, variant)
+    ORDER_ITEMS_HTML: buildOrderItemsHtml(data.orderItems || [], cur, variant),
+    ESTIMATED_DELIVERY_SECTION_HTML: buildEstimatedDeliverySection(
+      data.estimatedDeliveryTime,
+      locale
     ),
-    ESTIMATED_DELIVERY_SECTION_HTML: emptyToNull(
-      buildEstimatedDeliverySection(data.estimatedDeliveryTime, locale)
+    SPECIAL_INSTRUCTIONS_SECTION_HTML: buildSpecialInstructionsSection(
+      data.specialInstructions,
+      locale
     ),
-    SPECIAL_INSTRUCTIONS_SECTION_HTML: emptyToNull(
-      buildSpecialInstructionsSection(data.specialInstructions, locale)
-    ),
-    NOTES_SECTION_HTML: emptyToNull(buildNotesSection(data.notes, locale)),
-    AGENT_NAME_SECTION_HTML: emptyToNull(
-      buildAgentNameSection(data.agentName, locale)
-    ),
+    NOTES_SECTION_HTML: buildNotesSection(data.notes, locale),
+    AGENT_NAME_SECTION_HTML: buildAgentNameSection(data.agentName, locale),
   };
   const estRaw = data.estimatedDeliveryTime;
   const est =
@@ -143,14 +137,14 @@ export function buildResendTemplateVariables(
     estRaw !== undefined &&
     String(estRaw).trim() !== ''
       ? esc(String(estRaw).trim())
-      : null;
+      : '';
 
   const businessVerified =
     typeof data.businessVerified === 'boolean'
       ? String(data.businessVerified)
-      : null;
+      : '';
 
-  const base: Record<string, string | number | null> = {
+  const base: Record<string, string | number> = {
     orderId: esc(data.orderId || 'Unknown'),
     orderNumber: esc(data.orderNumber || 'Unknown'),
     orderStatus: esc(data.orderStatus || 'Unknown'),
@@ -162,8 +156,8 @@ export function buildResendTemplateVariables(
     deliveryAddress: esc(data.deliveryAddress || 'Unknown Address'),
     specialInstructions: data.specialInstructions?.trim()
       ? esc(data.specialInstructions.trim())
-      : null,
-    notes: data.notes?.trim() ? esc(data.notes.trim()) : null,
+      : '',
+    notes: data.notes?.trim() ? esc(data.notes.trim()) : '',
     estimatedDeliveryTime: est,
     deliveryTimeWindow: est,
     businessVerified,
