@@ -9,6 +9,8 @@ import * as crypto from 'crypto';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
+import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
+import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { DeliveryPinService } from '../orders/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -151,6 +153,8 @@ export class RentalsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly accountsService: AccountsService,
+    private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly deliveryPinService: DeliveryPinService,
     private readonly notificationsService: NotificationsService,
     private readonly inventoryItemsService: InventoryItemsService,
@@ -747,7 +751,7 @@ export class RentalsService {
     }
     const rowBooking = await this.fetchBookingSummaryByRentalRequestId(dto.rentalRequestId);
     const nested = req.rental_booking as
-      | { id?: string; status?: string; contract_expires_at?: string | null }
+      | { id?: string; booking_number?: string; status?: string; contract_expires_at?: string | null }
       | null
       | undefined;
     const existing = rowBooking ?? nested;
@@ -756,6 +760,7 @@ export class RentalsService {
     if (existing?.status === 'proposed' && existing.id) {
       req.rental_booking = {
         id: existing.id,
+        booking_number: existing.booking_number,
         status: existing.status,
         contract_expires_at: existing.contract_expires_at ?? null,
       };
@@ -763,7 +768,9 @@ export class RentalsService {
         dto.rentalRequestId,
         req,
         userId,
-        clientId
+        clientId,
+        user.phone_number || '',
+        user.email
       );
     }
     if (existing?.id) {
@@ -772,7 +779,14 @@ export class RentalsService {
         HttpStatus.CONFLICT
       );
     }
-    return this.createLegacyRentalBooking(dto.rentalRequestId, req, userId, clientId);
+    return this.createLegacyRentalBooking(
+      dto.rentalRequestId,
+      req,
+      userId,
+      clientId,
+      user.phone_number || '',
+      user.email
+    );
   }
 
   async expireProposedRentalContracts(): Promise<number> {
@@ -810,9 +824,12 @@ export class RentalsService {
     requestId: string,
     req: any,
     userId: string,
-    clientId: string
+    clientId: string,
+    phoneNumber: string,
+    email: string
   ) {
     const bookingId = req.rental_booking?.id as string;
+    const bookingNumber = req.rental_booking?.booking_number as string | undefined;
     const exp = req.rental_booking?.contract_expires_at as string | null | undefined;
     if (!exp || new Date(exp) <= new Date()) {
       throw new HttpException('Contract has expired', HttpStatus.GONE);
@@ -827,21 +844,38 @@ export class RentalsService {
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
-    try {
+
+    const clientAccount = await this.hasuraSystemService.getAccount(userId, snap.currency);
+    const availableBalance = Number(clientAccount?.available_balance ?? 0);
+
+    if (availableBalance >= total) {
       await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
-    } catch (e: any) {
-      throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
+      await this.finalizeRentalBookingConfirmation(bookingId, requestId, userId);
+      return { success: true, bookingId };
     }
-    await this.patchBooking(bookingId, { status: 'confirmed', contract_expires_at: null });
-    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-      id: requestId,
-      status: 'booked',
+
+    if (!bookingNumber) {
+      throw new HttpException('Missing booking_number for this rental booking', HttpStatus.BAD_REQUEST);
+    }
+
+    const hasPending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(bookingNumber);
+    if (hasPending) {
+      return { success: true, bookingId };
+    }
+
+    await this.initiateRentalBookingPayment({
+      bookingNumber,
+      amount: total,
+      currency: snap.currency,
+      clientAccountId: clientAccount.id,
+      userId,
+      phoneNumber,
+      email,
+      reference: bookingNumber,
+      paymentEntity: 'rental_booking',
     });
-    const pin = this.deliveryPinService.generatePin();
-    const hash = this.deliveryPinService.hashPin(bookingId, pin);
-    await this.setBookingPinHash(bookingId, hash);
-    this.deliveryPinService.setPinForClient(bookingId, pin);
-    await this.logHistory(bookingId, 'confirmed', 'proposed', userId, 'client', 'Booking confirmed');
+
+    // Keep booking in `proposed` until the payment callback confirms it.
     return { success: true, bookingId };
   }
 
@@ -849,7 +883,9 @@ export class RentalsService {
     requestId: string,
     req: any,
     userId: string,
-    clientId: string
+    clientId: string,
+    phoneNumber: string,
+    email: string
   ) {
     const start = new Date(req.requested_start_at);
     const end = new Date(req.requested_end_at);
@@ -861,14 +897,81 @@ export class RentalsService {
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
-    const bookingRow = await this.insertBookingRow(req, clientId, snap, total);
-    const bookingId = bookingRow.insert_rental_bookings_one.id;
-    try {
-      await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
-    } catch (e: any) {
-      await this.deleteBooking(bookingId);
-      throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
+    const clientAccount = await this.hasuraSystemService.getAccount(userId, snap.currency);
+    const availableBalance = Number(clientAccount?.available_balance ?? 0);
+
+    // Wallet path: insert a confirmed booking immediately.
+    if (availableBalance >= total) {
+      const bookingRow = await this.insertBookingRow(req, clientId, snap, total);
+      const bookingId = bookingRow.insert_rental_bookings_one.id;
+      try {
+        await this.placeHoldForBooking(bookingId, clientId, total, snap.currency);
+      } catch (e: any) {
+        await this.deleteBooking(bookingId);
+        throw new HttpException(e.message || 'Hold failed', HttpStatus.BAD_REQUEST);
+      }
+
+      await this.finalizeRentalBookingConfirmation(
+        bookingId,
+        requestId,
+        userId,
+        null,
+        'Booking created'
+      );
+      return { success: true, bookingId };
     }
+
+    // Payment path: insert a proposed booking and initiate mobile payment.
+    const contractExpiresAt = req.expires_at as string | null | undefined;
+    if (!contractExpiresAt) {
+      throw new HttpException('Missing contract_expires_at', HttpStatus.BAD_REQUEST);
+    }
+
+    const bookingRow = await this.insertProposedBookingRow(
+      req,
+      clientId,
+      snap,
+      total,
+      contractExpiresAt
+    );
+    const bookingId = bookingRow.insert_rental_bookings_one.id;
+    const bookingNumber = bookingRow.insert_rental_bookings_one.booking_number;
+
+    const hasPending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(bookingNumber);
+    if (!hasPending) {
+      try {
+        await this.initiateRentalBookingPayment({
+          bookingNumber,
+          amount: total,
+          currency: snap.currency,
+          clientAccountId: clientAccount.id,
+          userId,
+          phoneNumber,
+          email,
+          reference: bookingNumber,
+          paymentEntity: 'rental_booking',
+        });
+      } catch (e: any) {
+        await this.deleteBooking(bookingId);
+        throw e;
+      }
+    }
+
+    // Keep booking in `proposed` until payment callback confirms it.
+    return { success: true, bookingId };
+  }
+
+  private async finalizeRentalBookingConfirmation(
+    bookingId: string,
+    requestId: string,
+    clientUserId: string,
+    previousStatus: string | null = 'proposed',
+    notes: string = 'Booking confirmed'
+  ): Promise<void> {
+    await this.patchBooking(bookingId, {
+      status: 'confirmed',
+      contract_expires_at: null,
+    });
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'booked',
@@ -877,8 +980,145 @@ export class RentalsService {
     const hash = this.deliveryPinService.hashPin(bookingId, pin);
     await this.setBookingPinHash(bookingId, hash);
     this.deliveryPinService.setPinForClient(bookingId, pin);
-    await this.logHistory(bookingId, 'confirmed', null, userId, 'client', 'Booking created');
-    return { success: true, bookingId };
+    await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
+  }
+
+  private async initiateRentalBookingPayment(params: {
+    bookingNumber: string;
+    amount: number;
+    currency: string;
+    clientAccountId: string;
+    userId: string;
+    phoneNumber: string;
+    email: string;
+    reference: string;
+    paymentEntity: 'rental_booking';
+  }): Promise<void> {
+    if (!params.phoneNumber.trim()) {
+      throw new HttpException(
+        'Phone number is required for payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const provider = this.mobilePaymentsService.getProvider(params.phoneNumber);
+
+    const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: params.reference,
+      amount: params.amount,
+      currency: params.currency,
+      description: `rental booking ${params.bookingNumber}`,
+      provider,
+      payment_method: 'mobile_money',
+      customer_phone: params.phoneNumber,
+      customer_email: params.email,
+      account_id: params.clientAccountId,
+      transaction_type: 'PAYMENT',
+      payment_entity: params.paymentEntity,
+      entity_id: params.bookingNumber,
+    });
+
+    const paymentRequest = {
+      amount: params.amount,
+      currency: params.currency,
+      description: `rental booking ${params.bookingNumber}`,
+      customerPhone: params.phoneNumber,
+      provider,
+      ownerCharge: 'CUSTOMER' as const,
+      transactionType: 'PAYMENT' as const,
+      payment_entity: params.paymentEntity,
+    };
+
+    const paymentResponse = await this.mobilePaymentsService.initiatePayment(
+      paymentRequest,
+      params.reference,
+      params.userId
+    );
+
+    if (!paymentResponse.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transaction.id, {
+        status: 'failed',
+        error_message: paymentResponse.message,
+        error_code: paymentResponse.errorCode,
+      });
+
+      throw new HttpException(
+        {
+          success: false,
+          message: paymentResponse.message || 'Failed to initiate payment',
+          error: paymentResponse.errorCode || 'PAYMENT_INITIATION_FAILED',
+          data: {
+            bookingNumber: params.bookingNumber,
+            errorCode: paymentResponse.errorCode,
+          },
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (paymentResponse.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transaction.id, {
+        transaction_id: paymentResponse.transactionId,
+      });
+    }
+  }
+
+  private async fetchBookingByBookingNumber(bookingNumber: string): Promise<any | null> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: any[];
+    }>(Q.GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER, { bookingNumber });
+
+    return r.rental_bookings?.[0] ?? null;
+  }
+
+  /**
+   * Called from mobile payment webhooks after the client account is credited.
+   * It confirms the existing `rental_bookings` proposed row, places a hold,
+   * and generates the client PIN.
+   */
+  async processRentalBookingPayment(transaction: any): Promise<void> {
+    const bookingNumber = transaction?.entity_id || transaction?.reference;
+    if (!bookingNumber) {
+      this.logger.warn('processRentalBookingPayment: missing bookingNumber');
+      return;
+    }
+
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking) {
+      this.logger.warn(
+        `processRentalBookingPayment: booking not found (${bookingNumber})`
+      );
+      return;
+    }
+
+    if (booking.status !== 'proposed') {
+      // Idempotency: already confirmed/cancelled.
+      return;
+    }
+
+    const hold = await this.getHold(booking.id);
+    if (!hold || hold.status !== 'active') {
+      await this.placeHoldForBooking(
+        booking.id,
+        booking.client_id,
+        Number(booking.total_amount),
+        booking.currency
+      );
+    }
+
+    const clientUserId = booking.client?.user_id as string | undefined;
+    if (!clientUserId) {
+      this.logger.warn(
+        `processRentalBookingPayment: missing booking client user_id for ${bookingNumber}`
+      );
+      return;
+    }
+
+    await this.finalizeRentalBookingConfirmation(
+      booking.id,
+      booking.rental_request_id,
+      clientUserId
+    );
   }
 
   async cancelRentalBooking(bookingId: string) {
@@ -1105,17 +1345,27 @@ export class RentalsService {
 
   private async fetchBookingSummaryByRentalRequestId(rentalRequestId: string): Promise<{
     id: string;
+    booking_number?: string | null;
     status: string;
     contract_expires_at?: string | null;
   } | null> {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_bookings: Array<{
         id: string;
+        booking_number?: string | null;
         status: string;
         contract_expires_at?: string | null;
       }>;
     }>(Q.GET_RENTAL_BOOKING_BY_RENTAL_REQUEST_ID, { rid: rentalRequestId });
     return r.rental_bookings?.[0] ?? null;
+  }
+
+  /**
+   * Creates a human-readable rental booking number for client display and
+   * for routing mobile payment callbacks (see `mobile_payment_transactions.entity_id`).
+   */
+  private createRentalBookingNumber(): string {
+    return `RB-${Math.floor(10000000 + Math.random() * 90000000).toString()}`;
   }
 
   private async insertBookingRow(
@@ -1125,7 +1375,7 @@ export class RentalsService {
     total: number
   ) {
     return this.hasuraSystemService.executeMutation<{
-      insert_rental_bookings_one: { id: string };
+      insert_rental_bookings_one: { id: string; booking_number: string };
     }>(Q.INSERT_RENTAL_BOOKING, {
       object: {
         rental_request_id: req.id,
@@ -1137,6 +1387,7 @@ export class RentalsService {
         total_amount: total,
         currency: snap.currency,
         rental_pricing_snapshot: snap,
+        booking_number: this.createRentalBookingNumber(),
         status: 'confirmed',
       },
     });
@@ -1150,7 +1401,7 @@ export class RentalsService {
     contractExpiresAt: string
   ) {
     return this.hasuraSystemService.executeMutation<{
-      insert_rental_bookings_one: { id: string };
+      insert_rental_bookings_one: { id: string; booking_number: string };
     }>(Q.INSERT_RENTAL_BOOKING, {
       object: {
         rental_request_id: req.id,
@@ -1162,6 +1413,7 @@ export class RentalsService {
         total_amount: total,
         currency: snap.currency,
         rental_pricing_snapshot: snap,
+        booking_number: this.createRentalBookingNumber(),
         status: 'proposed',
         contract_expires_at: contractExpiresAt,
       },

@@ -17,7 +17,7 @@ export interface MobilePaymentTransaction {
   error_code?: string;
   account_id?: string;
   transaction_type: 'PAYMENT' | 'GIVE_CHANGE' | 'DEPOSIT';
-  payment_entity?: 'order' | 'account' | 'claim_order';
+  payment_entity?: 'order' | 'account' | 'claim_order' | 'rental_booking';
   entity_id?: string;
   created_at: string;
   updated_at: string;
@@ -34,7 +34,7 @@ export interface CreateTransactionData {
   customer_email?: string;
   account_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
-  payment_entity?: 'order' | 'account' | 'claim_order';
+  payment_entity?: 'order' | 'account' | 'claim_order' | 'rental_booking';
   entity_id?: string;
 }
 
@@ -138,6 +138,7 @@ export class MobilePaymentsDatabaseService {
             account_id
             transaction_type
             payment_entity
+            entity_id
             customer_phone
             customer_email
             error_message
@@ -368,6 +369,44 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to check pending claim order for order number:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Check if there is a pending rental_booking mobile payment for the given booking number.
+   * Used to prevent duplicate booking confirmation payment initiation.
+   */
+  async hasPendingRentalBookingPayment(
+    bookingNumber: string
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query HasPendingRentalBookingPayment($bookingNumber: String!) {
+          mobile_payment_transactions(
+            where: {
+              payment_entity: { _eq: rental_booking }
+              status: { _eq: "pending" }
+              entity_id: { _eq: $bookingNumber }
+            }
+            limit: 1
+          ) {
+            id
+          }
+        }
+      `;
+
+      const response = await this.hasuraService.executeQuery<{
+        mobile_payment_transactions: Array<{ id: string }>;
+      }>(query, { bookingNumber });
+
+      const rows = response.mobile_payment_transactions ?? [];
+      return rows.length > 0;
+    } catch (error) {
+      this.logger.error(
+        'Failed to check pending rental booking payment:',
         error
       );
       throw error;

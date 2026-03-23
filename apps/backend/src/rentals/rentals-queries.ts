@@ -154,6 +154,7 @@ export const GET_RENTAL_REQUEST_FULL = `
       client { id user_id }
       rental_booking {
         id
+        booking_number
         status
         contract_expires_at
       }
@@ -166,6 +167,7 @@ export const GET_RENTAL_BOOKING_BY_RENTAL_REQUEST_ID = `
   query GetRentalBookingByRentalRequestId($rid: uuid!) {
     rental_bookings(where: { rental_request_id: { _eq: $rid } }, limit: 1) {
       id
+      booking_number
       status
       contract_expires_at
     }
@@ -243,6 +245,7 @@ export const INSERT_RENTAL_BOOKING = `
   mutation InsertRentalBooking($object: rental_bookings_insert_input!) {
     insert_rental_bookings_one(object: $object) {
       id
+      booking_number
       status
       total_amount
       currency
@@ -267,6 +270,40 @@ export const GET_RENTAL_BOOKING_FULL = `
   query GetRentalBookingFull($id: uuid!) {
     rental_bookings_by_pk(id: $id) {
       id
+      booking_number
+      rental_request_id
+      client_id
+      business_id
+      rental_location_listing_id
+      start_at
+      end_at
+      total_amount
+      currency
+      status
+      rental_pricing_snapshot
+      rental_start_pin_hash
+      rental_start_pin_attempts
+      rental_start_overwrite_code_hash
+      rental_start_overwrite_code_used_at
+      period_ended_notified_at
+      client { id user_id }
+      business { id user_id name }
+      rental_location_listing {
+        business_location_id
+        rental_item { name }
+      }
+    }
+  }
+`;
+
+export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
+  query GetRentalBookingFullByBookingNumber($bookingNumber: String!) {
+    rental_bookings(
+      where: { booking_number: { _eq: $bookingNumber } }
+      limit: 1
+    ) {
+      id
+      booking_number
       rental_request_id
       client_id
       business_id

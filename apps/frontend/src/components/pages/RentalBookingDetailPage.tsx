@@ -21,6 +21,7 @@ const BOOKING_Q = gql`
   query RentalBookingDetail($id: uuid!) {
     rental_bookings_by_pk(id: $id) {
       id
+      booking_number
       status
       start_at
       end_at
@@ -112,6 +113,11 @@ const RentalBookingDetailPage: React.FC = () => {
         <Typography variant="h5" gutterBottom>
           {title}
         </Typography>
+        {booking.booking_number && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {t('rentals.bookingNumber', 'Booking')}: <strong>{booking.booking_number}</strong>
+          </Typography>
+        )}
         <Typography color="text.secondary">
           {booking.rental_location_listing?.business_location?.name}
         </Typography>

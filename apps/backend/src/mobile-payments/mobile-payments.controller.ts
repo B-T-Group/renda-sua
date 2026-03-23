@@ -14,6 +14,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from '../orders/orders.service';
+import { RentalsService } from '../rentals/rentals.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -75,6 +76,7 @@ export class MobilePaymentsController {
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
     private readonly ordersService: OrdersService,
+    private readonly rentalsService: RentalsService,
     private readonly hasuraUserService: HasuraUserService
   ) {}
 
@@ -238,7 +240,7 @@ export class MobilePaymentsController {
       try {
         const user = await this.hasuraUserService.getUser();
         userId = user.id;
-      } catch (error) {
+      } catch {
         // User may not be authenticated or may not exist yet
         // This is okay for non-MTN providers, but MTN will need userId
         this.logger.warn('Could not get user ID for payment initiation');
@@ -586,6 +588,26 @@ export class MobilePaymentsController {
   }
 
   /**
+   * Common rental booking payment callback handler.
+   * Note: booking should remain retryable on payment failure (no auto-expire).
+   */
+  private async handleRentalBookingCallback(
+    transaction: { entity_id?: string; reference?: string; payment_entity?: string },
+    wasSuccess: boolean
+  ): Promise<void> {
+    const bookingNumber = transaction.entity_id || transaction.reference || 'unknown';
+
+    if (!wasSuccess) {
+      this.logger.log(
+        `Rental booking payment callback FAILED for booking ${bookingNumber} (will keep booking retryable).`
+      );
+      return;
+    }
+
+    await this.rentalsService.processRentalBookingPayment(transaction);
+  }
+
+  /**
    * Payment callback endpoint for MyPVIT
    */
   @Public()
@@ -666,6 +688,8 @@ export class MobilePaymentsController {
               } else if (transaction.payment_entity === 'claim_order') {
                 // Process claim order payment
                 await this.ordersService.processClaimOrderPayment(transaction);
+              } else if (transaction.payment_entity === 'rental_booking') {
+                await this.handleRentalBookingCallback(transaction, true);
               }
             } else {
               this.logger.error(
@@ -703,6 +727,11 @@ export class MobilePaymentsController {
         this.logger.log(
           `Claim order payment failed for order ${transaction.reference}`
         );
+      } else if (
+        callbackData.status === 'FAILED' &&
+        transaction?.payment_entity === 'rental_booking'
+      ) {
+        await this.handleRentalBookingCallback(transaction, false);
       }
 
       // Return success response
@@ -796,6 +825,8 @@ export class MobilePaymentsController {
                 await this.ordersService.processOrderPayment(transaction);
               } else if (transaction.payment_entity === 'claim_order') {
                 await this.ordersService.processClaimOrderPayment(transaction);
+              } else if (transaction.payment_entity === 'rental_booking') {
+                await this.handleRentalBookingCallback(transaction, true);
               }
             } else {
               this.logger.error(
@@ -831,6 +862,11 @@ export class MobilePaymentsController {
           this.logger.log(
             `Claim order payment failed for order ${transaction.reference}`
           );
+        } else if (
+          callbackData.status === 'FAILED' &&
+          transaction.payment_entity === 'rental_booking'
+        ) {
+          await this.handleRentalBookingCallback(transaction, false);
         }
       }
 
