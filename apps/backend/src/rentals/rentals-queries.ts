@@ -161,6 +161,17 @@ export const GET_RENTAL_REQUEST_FULL = `
   }
 `;
 
+/** One row per request (UNIQUE rental_request_id); explicit fetch avoids missing nested booking. */
+export const GET_RENTAL_BOOKING_BY_RENTAL_REQUEST_ID = `
+  query GetRentalBookingByRentalRequestId($rid: uuid!) {
+    rental_bookings(where: { rental_request_id: { _eq: $rid } }, limit: 1) {
+      id
+      status
+      contract_expires_at
+    }
+  }
+`;
+
 export const UPDATE_RENTAL_REQUEST_RESPOND = `
   mutation UpdateRentalRequestRespond(
     $id: uuid!

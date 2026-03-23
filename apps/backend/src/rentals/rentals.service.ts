@@ -745,15 +745,31 @@ export class RentalsService {
     if (!req.rental_pricing_snapshot || !isValidRentalPricingSnapshot(req.rental_pricing_snapshot)) {
       throw new HttpException('Invalid pricing on request', HttpStatus.BAD_REQUEST);
     }
-    const existing = req.rental_booking;
+    const rowBooking = await this.fetchBookingSummaryByRentalRequestId(dto.rentalRequestId);
+    const nested = req.rental_booking as
+      | { id?: string; status?: string; contract_expires_at?: string | null }
+      | null
+      | undefined;
+    const existing = rowBooking ?? nested;
     const clientId = user.client.id;
     const userId = user.id;
-    if (existing?.status === 'proposed') {
+    if (existing?.status === 'proposed' && existing.id) {
+      req.rental_booking = {
+        id: existing.id,
+        status: existing.status,
+        contract_expires_at: existing.contract_expires_at ?? null,
+      };
       return this.confirmProposedRentalBooking(
         dto.rentalRequestId,
         req,
         userId,
         clientId
+      );
+    }
+    if (existing?.id) {
+      throw new HttpException(
+        'A booking already exists for this request',
+        HttpStatus.CONFLICT
       );
     }
     return this.createLegacyRentalBooking(dto.rentalRequestId, req, userId, clientId);
@@ -1085,6 +1101,21 @@ export class RentalsService {
       throw new HttpException('Request not found', HttpStatus.NOT_FOUND);
     }
     return req;
+  }
+
+  private async fetchBookingSummaryByRentalRequestId(rentalRequestId: string): Promise<{
+    id: string;
+    status: string;
+    contract_expires_at?: string | null;
+  } | null> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{
+        id: string;
+        status: string;
+        contract_expires_at?: string | null;
+      }>;
+    }>(Q.GET_RENTAL_BOOKING_BY_RENTAL_REQUEST_ID, { rid: rentalRequestId });
+    return r.rental_bookings?.[0] ?? null;
   }
 
   private async insertBookingRow(

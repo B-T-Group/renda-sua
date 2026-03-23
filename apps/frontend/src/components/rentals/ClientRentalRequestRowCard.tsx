@@ -4,38 +4,12 @@ import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
-
-function formatLocalDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function parseSnapshot(snap: unknown): { total: number; currency: string } | null {
-  if (!snap || typeof snap !== 'object') return null;
-  const o = snap as Record<string, unknown>;
-  const total = o.total;
-  const currency = o.currency;
-  if (typeof total !== 'number' || typeof currency !== 'string') return null;
-  return { total, currency };
-}
-
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'XAF',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-}
+import {
+  formatRentalMoney,
+  formatRentalRequestLocalDateTime,
+  parseRentalPricingSnapshot,
+  proposedContractDeadlineIso,
+} from '../../utils/rentalRequestDisplay';
 
 function statusChipColor(
   status: string
@@ -63,12 +37,6 @@ export function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
   return new Date(exp) > new Date();
 }
 
-function proposedContractDeadline(row: ClientRentalRequestRow): string | null {
-  const b = row.rental_booking;
-  if (b?.status !== 'proposed' || !b.contract_expires_at) return null;
-  return b.contract_expires_at;
-}
-
 export interface ClientRentalRequestRowCardProps {
   row: ClientRentalRequestRow;
   bookingLoading: boolean;
@@ -92,9 +60,9 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
   const locName = listing?.business_location?.name;
-  const quote = parseSnapshot(row.rental_pricing_snapshot);
+  const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const statusLabel = t(`rentals.requestStatus.${row.status}`, row.status);
-  const deadlineIso = proposedContractDeadline(row);
+  const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
   const reasonCode = row.unavailable_reason_code?.trim();
 
@@ -144,8 +112,8 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.requestedPeriod', 'Requested period')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
-              {formatLocalDateTime(row.requested_start_at)} —{' '}
-              {formatLocalDateTime(row.requested_end_at)}
+              {formatRentalRequestLocalDateTime(row.requested_start_at)} —{' '}
+              {formatRentalRequestLocalDateTime(row.requested_end_at)}
             </Typography>
           </Box>
         </Stack>
@@ -172,7 +140,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.quotedTotal', 'Quoted total')}
             </Typography>
             <Typography variant="subtitle1" fontWeight={800} color="success.dark">
-              {formatMoney(quote.total, quote.currency)}
+              {formatRentalMoney(quote.total, quote.currency)}
             </Typography>
           </Box>
         ) : null}
@@ -185,7 +153,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
           >
             {canBookNow
               ? t('rentals.clientRequests.contractCompleteBy', 'Complete booking by {{date}}', {
-                  date: formatLocalDateTime(deadlineIso),
+                  date: formatRentalRequestLocalDateTime(deadlineIso),
                 })
               : t('rentals.clientRequests.contractExpiredHint', 'This offer has expired. Send a new request from the listing.')}
           </Typography>

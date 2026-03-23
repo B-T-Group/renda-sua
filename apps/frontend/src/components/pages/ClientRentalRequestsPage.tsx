@@ -23,6 +23,7 @@ import {
 } from '../../hooks/useRentalApi';
 import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
+import { RentalBookConfirmSummary } from '../rentals/RentalBookConfirmSummary';
 import {
   ClientRentalRequestRowCard,
   isProposedContractOpen,
@@ -193,6 +194,10 @@ const ClientRentalRequestsPage: React.FC = () => {
     : undefined;
   const cancelModalIsOffer = cancelTargetRow?.status === 'available';
 
+  const bookConfirmRow = bookConfirmRequestId
+    ? rows.find((r) => r.id === bookConfirmRequestId)
+    : undefined;
+
   if (!isAuthenticated) {
     return (
       <Box sx={{ minHeight: '50vh', bgcolor: alpha(theme.palette.divider, 0.04), py: 4 }}>
@@ -337,11 +342,18 @@ const ClientRentalRequestsPage: React.FC = () => {
 
       <ConfirmationModal
         open={Boolean(bookConfirmRequestId)}
-        title={t('rentals.clientRequests.bookConfirmTitle', 'Confirm your reservation?')}
+        maxWidth="md"
+        title={t(
+          'rentals.clientRequests.bookConfirmTitle',
+          'Review and confirm your reservation'
+        )}
         message={t(
           'rentals.clientRequests.bookConfirmMessage',
-          'You will receive a payment request on the mobile number we have on file. Once you approve it, your reservation will be confirmed. Until then, it is not final.'
+          'By continuing, you authorize us to send a secure payment request to the mobile number on your profile. Your reservation is only confirmed after you approve that request. If you do not approve it in time, this offer may lapse.'
         )}
+        additionalContent={
+          bookConfirmRow ? <RentalBookConfirmSummary row={bookConfirmRow} /> : null
+        }
         confirmText={t('rentals.clientRequests.bookConfirmButton', 'Continue')}
         confirmColor="primary"
         loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}

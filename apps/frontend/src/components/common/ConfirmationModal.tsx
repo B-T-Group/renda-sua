@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   CircularProgress,
   Dialog,
@@ -7,6 +8,7 @@ import {
   DialogContentText,
   DialogTitle,
 } from '@mui/material';
+import type { Breakpoint } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +29,8 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   additionalContent?: React.ReactNode;
+  /** Wider dialog when showing structured details (e.g. booking summary). */
+  maxWidth?: false | Breakpoint;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -40,6 +44,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
   additionalContent,
+  maxWidth = 'sm',
 }) => {
   const { t } = useTranslation();
 
@@ -49,15 +54,19 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       onClose={onCancel}
       aria-labelledby="confirmation-dialog-title"
       aria-describedby="confirmation-dialog-description"
-      maxWidth="sm"
+      maxWidth={maxWidth}
       fullWidth
     >
       <DialogTitle id="confirmation-dialog-title">{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="confirmation-dialog-description">
-          {message}
-        </DialogContentText>
-        {additionalContent}
+        {additionalContent ? (
+          <Box sx={{ mb: message ? 2.5 : 0 }}>{additionalContent}</Box>
+        ) : null}
+        {message ? (
+          <DialogContentText id="confirmation-dialog-description" component="div">
+            {message}
+          </DialogContentText>
+        ) : null}
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={loading} color="inherit">
