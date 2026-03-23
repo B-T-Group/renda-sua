@@ -863,6 +863,7 @@ export class RentalsService {
       return { success: true, bookingId };
     }
 
+    const paymentReference = this.createRentalPaymentReference();
     await this.initiateRentalBookingPayment({
       bookingNumber,
       amount: total,
@@ -871,7 +872,7 @@ export class RentalsService {
       userId,
       phoneNumber,
       email,
-      reference: bookingNumber,
+      reference: paymentReference,
       paymentEntity: 'rental_booking',
     });
 
@@ -940,6 +941,7 @@ export class RentalsService {
     const hasPending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(bookingNumber);
     if (!hasPending) {
       try {
+        const paymentReference = this.createRentalPaymentReference();
         await this.initiateRentalBookingPayment({
           bookingNumber,
           amount: total,
@@ -948,7 +950,7 @@ export class RentalsService {
           userId,
           phoneNumber,
           email,
-          reference: bookingNumber,
+          reference: paymentReference,
           paymentEntity: 'rental_booking',
         });
       } catch (e: any) {
@@ -966,7 +968,7 @@ export class RentalsService {
     requestId: string,
     clientUserId: string,
     previousStatus: string | null = 'proposed',
-    notes: string = 'Booking confirmed'
+    notes = 'Booking confirmed'
   ): Promise<void> {
     await this.patchBooking(bookingId, {
       status: 'confirmed',
@@ -1003,11 +1005,25 @@ export class RentalsService {
 
     const provider = this.mobilePaymentsService.getProvider(params.phoneNumber);
 
+    const isMyPVitLike =
+      provider === 'mypvit' || provider === 'airtel' || provider === 'moov';
+
+    // MyPVit-style providers validate:
+    // - `reference` must be alphanumeric
+    // - `free_info` (mapped from our `description`) must be <= 15 chars
+    const providerReference = isMyPVitLike
+      ? params.reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15)
+      : params.reference;
+
+    const descriptionShort = isMyPVitLike
+      ? providerReference
+      : `rental booking ${params.bookingNumber}`;
+
     const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
-      reference: params.reference,
+      reference: providerReference,
       amount: params.amount,
       currency: params.currency,
-      description: `rental booking ${params.bookingNumber}`,
+      description: descriptionShort,
       provider,
       payment_method: 'mobile_money',
       customer_phone: params.phoneNumber,
@@ -1021,7 +1037,7 @@ export class RentalsService {
     const paymentRequest = {
       amount: params.amount,
       currency: params.currency,
-      description: `rental booking ${params.bookingNumber}`,
+      description: descriptionShort,
       customerPhone: params.phoneNumber,
       provider,
       ownerCharge: 'CUSTOMER' as const,
@@ -1031,7 +1047,7 @@ export class RentalsService {
 
     const paymentResponse = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      params.reference,
+      providerReference,
       params.userId
     );
 
@@ -1366,6 +1382,17 @@ export class RentalsService {
    */
   private createRentalBookingNumber(): string {
     return `RB-${Math.floor(10000000 + Math.random() * 90000000).toString()}`;
+  }
+
+  /**
+   * Provider reference used for mobile-money initiation/callback lookups.
+   * MyPVit requires alphanumeric and a max `free_info` length (handled via description).
+   * This mirrors the reference style used for orders.
+   */
+  private createRentalPaymentReference(): string {
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.random().toString(36).substr(2, 4);
+    return `R${timestamp}${random}`;
   }
 
   private async insertBookingRow(
