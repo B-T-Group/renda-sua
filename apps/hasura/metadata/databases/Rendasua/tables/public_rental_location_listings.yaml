@@ -9,6 +9,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: rental_item_id
 array_relationships:
+  - name: weekly_availability
+    using:
+      foreign_key_constraint_on:
+        column: listing_id
+        table:
+          name: rental_listing_weekly_availability
+          schema: public
   - name: rental_bookings
     using:
       foreign_key_constraint_on:
@@ -43,9 +50,9 @@ insert_permissions:
         - business_location_id
         - pickup_instructions
         - dropoff_instructions
-        - base_price_per_day
-        - min_rental_days
-        - max_rental_days
+        - base_price_per_hour
+        - min_rental_hours
+        - max_rental_hours
         - units_available
         - is_active
 select_permissions:
@@ -57,9 +64,9 @@ select_permissions:
         - business_location_id
         - pickup_instructions
         - dropoff_instructions
-        - base_price_per_day
-        - min_rental_days
-        - max_rental_days
+        - base_price_per_hour
+        - min_rental_hours
+        - max_rental_hours
         - units_available
         - is_active
         - created_at
@@ -83,9 +90,9 @@ select_permissions:
         - business_location_id
         - pickup_instructions
         - dropoff_instructions
-        - base_price_per_day
-        - min_rental_days
-        - max_rental_days
+        - base_price_per_hour
+        - min_rental_hours
+        - max_rental_hours
         - units_available
         - is_active
         - created_at
@@ -128,9 +135,9 @@ update_permissions:
       columns:
         - pickup_instructions
         - dropoff_instructions
-        - base_price_per_day
-        - min_rental_days
-        - max_rental_days
+        - base_price_per_hour
+        - min_rental_hours
+        - max_rental_hours
         - units_available
         - is_active
       filter:

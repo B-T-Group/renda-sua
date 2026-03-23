@@ -54,6 +54,7 @@
 - "!include public_rental_holds.yaml"
 - "!include public_rental_item_images.yaml"
 - "!include public_rental_items.yaml"
+- "!include public_rental_listing_weekly_availability.yaml"
 - "!include public_rental_location_listings.yaml"
 - "!include public_rental_requests.yaml"
 - "!include public_rental_status_history.yaml"

@@ -1,0 +1,113 @@
+table:
+  name: rental_listing_weekly_availability
+  schema: public
+object_relationships:
+  - name: rental_location_listing
+    using:
+      foreign_key_constraint_on: listing_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        rental_location_listing:
+          rental_item:
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - listing_id
+        - weekday
+        - is_available
+        - start_time
+        - end_time
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - listing_id
+        - weekday
+        - is_available
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        rental_location_listing:
+          _and:
+            - is_active:
+                _eq: true
+            - rental_item:
+                _and:
+                  - is_active:
+                      _eq: true
+                  - business:
+                      is_verified:
+                        _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - listing_id
+        - weekday
+        - is_available
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        rental_location_listing:
+          rental_item:
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - listing_id
+        - weekday
+        - is_available
+        - start_time
+        - end_time
+        - created_at
+        - updated_at
+      filter:
+        rental_location_listing:
+          _and:
+            - is_active:
+                _eq: true
+            - rental_item:
+                _and:
+                  - is_active:
+                      _eq: true
+                  - business:
+                      is_verified:
+                        _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - is_available
+        - start_time
+        - end_time
+      filter:
+        rental_location_listing:
+          rental_item:
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        rental_location_listing:
+          rental_item:
+            business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
