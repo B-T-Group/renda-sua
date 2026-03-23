@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
 import {
   bookedSegmentsForLocalDay,
   dayHasNoBookedOverlap,
@@ -35,13 +36,12 @@ import {
   freeSlotStartsLocal,
   listingDayBoundsLocal,
   maximalFreeHourRangesLocal,
-  localDateKey,
   mergeRangeIntoSelections,
   rangesOverlapMs,
   rentalBillableHours,
   totalBillableHours,
   type SelectionRange,
-  type WeeklyRow,
+  type WeeklyRow
 } from './rentalRequestScheduleUtils';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
@@ -251,17 +251,23 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     }
     setSubmitting(true);
     setMsg(null);
-    const windows = selections.map((r) => ({
-      requestedStartAt: new Date(r.startMs).toISOString(),
-      requestedEndAt: new Date(r.endMs).toISOString(),
-    }));
-    const starts = windows.map((w) => new Date(w.requestedStartAt).getTime());
-    const ends = windows.map((w) => new Date(w.requestedEndAt).getTime());
+    const windows = selections.map((r) => {
+      const s = localPickerInstantToRequestParts(r.startMs);
+      const e = localPickerInstantToRequestParts(r.endMs);
+      return {
+        requestedStartAt: requestedSlotUtcIso(s.dateKey, s.hour, s.minute),
+        requestedEndAt: requestedSlotUtcIso(e.dateKey, e.hour, e.minute),
+      };
+    });
+    const starts = selections.map((r) => r.startMs);
+    const ends = selections.map((r) => r.endMs);
+    const envS = localPickerInstantToRequestParts(Math.min(...starts));
+    const envE = localPickerInstantToRequestParts(Math.max(...ends));
     try {
       await createRequest({
         rentalLocationListingId: listingId,
-        requestedStartAt: new Date(Math.min(...starts)).toISOString(),
-        requestedEndAt: new Date(Math.max(...ends)).toISOString(),
+        requestedStartAt: requestedSlotUtcIso(envS.dateKey, envS.hour, envS.minute),
+        requestedEndAt: requestedSlotUtcIso(envE.dateKey, envE.hour, envE.minute),
         windows,
         clientRequestNote: notes.trim() || undefined,
       });
