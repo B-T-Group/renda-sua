@@ -1,0 +1,7 @@
+table:
+  name: rental_booking_windows
+  schema: public
+object_relationships:
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id

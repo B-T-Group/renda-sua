@@ -49,6 +49,7 @@
 - "!include public_push_subscriptions.yaml"
 - "!include public_rating_aggregates.yaml"
 - "!include public_ratings.yaml"
+- "!include public_rental_booking_windows.yaml"
 - "!include public_rental_bookings.yaml"
 - "!include public_rental_categories.yaml"
 - "!include public_rental_holds.yaml"

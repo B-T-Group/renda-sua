@@ -27,6 +27,7 @@ select_permissions:
         - rental_location_listing_id
         - requested_start_at
         - requested_end_at
+        - rental_selection_windows
         - status
         - rental_pricing_snapshot
         - business_response_note
@@ -52,6 +53,7 @@ select_permissions:
         - rental_location_listing_id
         - requested_start_at
         - requested_end_at
+        - rental_selection_windows
         - status
         - rental_pricing_snapshot
         - business_response_note
