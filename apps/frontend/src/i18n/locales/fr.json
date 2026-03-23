@@ -2046,11 +2046,21 @@
     "confirmReturn": "Confirmer le retour",
     "completed": "Terminé et réglé",
     "bookNow": "Réserver",
-    "requestSuccessModal": {
-      "title": "Demande envoyée",
-      "body": "L’entreprise examinera vos dates. Lorsqu’elle répondra, ouvrez Mes demandes de location pour finaliser la réservation avant l’expiration de l’offre.",
-      "viewRequests": "Voir mes demandes",
-      "close": "Fermer"
+    "requestSubmitted": {
+      "pageTitle": "Demande envoyée",
+      "metaDescription": "Votre demande de location a été envoyée. Découvrez la suite : contrat, paiement, code PIN et versement.",
+      "headline": "Votre demande de location a été envoyée",
+      "intro": "Voici la suite du processus sur Rendasua.",
+      "contractTitle": "Contrat et paiement",
+      "contractBody": "Le propriétaire examinera votre demande et, si l’article est disponible aux dates choisies, vous proposera un contrat. Vous pourrez refuser cette offre ou l’accepter et poursuivre vers le paiement de la location.",
+      "pinTitle": "Début de la location",
+      "pinBody": "Lorsque vous rencontrerez le propriétaire pour commencer la location, vous devrez lui communiquer votre code PIN de démarrage afin qu’il puisse confirmer la remise dans l’application.",
+      "payoutTitle": "Versement au propriétaire",
+      "payoutBody": "Le paiement est versé automatiquement au propriétaire une fois la période de location terminée, conformément aux conditions de votre réservation.",
+      "ratingsTitle": "Après la fin de la location",
+      "ratingsBody": "Vous pourrez noter le propriétaire, il pourra vous noter, et chacun pourra noter l’article loué — pour une communauté plus transparente et fiable.",
+      "viewRequests": "Mes demandes de location",
+      "goHome": "Accueil"
     },
     "unavailableReasons": {
       "fully_booked": "Complet pour ces dates",

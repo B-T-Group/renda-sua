@@ -32,6 +32,7 @@ import BusinessRentalsPage from '../components/pages/BusinessRentalsPage';
 import RentalItemImagesPage from '../components/pages/RentalItemImagesPage';
 import CartPage from '../components/pages/CartPage';
 import ClientRentalRequestsPage from '../components/pages/ClientRentalRequestsPage';
+import RentalRequestSubmittedPage from '../components/pages/RentalRequestSubmittedPage';
 import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
 import CheckoutPage from '../components/pages/CheckoutPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
@@ -180,6 +181,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ClientRentalRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rentals/request-submitted"
+              element={
+                <ProtectedRoute>
+                  <RentalRequestSubmittedPage />
                 </ProtectedRoute>
               }
             />

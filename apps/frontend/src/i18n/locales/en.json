@@ -2074,11 +2074,21 @@
     "confirmReturn": "Confirm return",
     "completed": "Completed and settled",
     "bookNow": "Book now",
-    "requestSuccessModal": {
-      "title": "Request sent",
-      "body": "The business will review your dates. When they respond, open My rental requests to complete the booking before the offer expires.",
-      "viewRequests": "View my requests",
-      "close": "Close"
+    "requestSubmitted": {
+      "pageTitle": "Request sent",
+      "metaDescription": "Your rental request was submitted. Learn what happens next: contract, payment, PIN, and payouts.",
+      "headline": "Your rental request was submitted",
+      "intro": "Here is what happens next on Rendasua.",
+      "contractTitle": "Contract and payment",
+      "contractBody": "The owner will review your request and, if the item is available for the dates you chose, propose a contract. You can reject that offer or accept it and continue to rental payment.",
+      "pinTitle": "Starting the rental",
+      "pinBody": "When you meet the owner to begin the rental, you will need to give them your start PIN so they can confirm the handover in the app.",
+      "payoutTitle": "Funds to the owner",
+      "payoutBody": "Payment is released to the owner automatically once the end of the rental period is reached, according to your booking terms.",
+      "ratingsTitle": "After the rental ends",
+      "ratingsBody": "You will be able to rate the owner, they can rate you, and both of you can rate the rented item—so the community stays transparent and trustworthy.",
+      "viewRequests": "My rental requests",
+      "goHome": "Home"
     },
     "unavailableReasons": {
       "fully_booked": "Fully booked for those dates",

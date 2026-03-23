@@ -1,17 +1,4 @@
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Stack, TextField, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -86,7 +73,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   const [end, setEnd] = useState('');
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [windows, setWindows] = useState<RentalTakenWindow[]>([]);
 
   const minStartValue = useMemo(() => formatDatetimeLocal(nextLocalHalfHourAfterNow()), []);
@@ -168,8 +154,8 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         requestedEndAt: new Date(end).toISOString(),
         clientRequestNote: notes.trim() || undefined,
       });
-      setSuccessModalOpen(true);
       void loadWindows();
+      navigate('/rentals/request-submitted');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       setMsg(
@@ -376,32 +362,6 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           </CardContent>
         </Card>
       </Box>
-
-      <Dialog open={successModalOpen} onClose={() => setSuccessModalOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{t('rentals.requestSuccessModal.title', 'Request sent')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" color="text.secondary">
-            {t(
-              'rentals.requestSuccessModal.body',
-              'The business will review your dates. When they respond, open My rental requests to complete the booking before the offer expires.'
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSuccessModalOpen(false)}>
-            {t('rentals.requestSuccessModal.close', 'Close')}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setSuccessModalOpen(false);
-              navigate('/rentals/requests');
-            }}
-          >
-            {t('rentals.requestSuccessModal.viewRequests', 'View my requests')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };
