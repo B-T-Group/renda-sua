@@ -248,10 +248,12 @@ export class RentalsController {
 
   @Post('requests/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel own pending rental request (client)' })
+  @ApiOperation({
+    summary: 'Cancel own rental request (client): pending, or available before confirming',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Request cancelled' })
-  @ApiResponse({ status: 400, description: 'Request is not pending' })
+  @ApiResponse({ status: 400, description: 'Request cannot be cancelled' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Request not found' })
   async cancelClientRequest(@Param('id') requestId: string) {

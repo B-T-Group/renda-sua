@@ -23,13 +23,21 @@ import {
 } from '../../hooks/useRentalApi';
 import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
-import { ClientRentalRequestRowCard } from '../rentals/ClientRentalRequestRowCard';
+import {
+  ClientRentalRequestRowCard,
+  isProposedContractOpen,
+} from '../rentals/ClientRentalRequestRowCard';
 import SEOHead from '../seo/SEOHead';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   const m = (err as { response?: { data?: { message?: string } } })?.response?.data
     ?.message;
   return typeof m === 'string' && m.trim() ? m : fallback;
+}
+
+function rentalBookingErrorIsExpired(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 410 || /expired/i.test(apiErrorMessage(err, ''));
 }
 
 const RENTAL_REQUEST_STATUSES = [
@@ -63,6 +71,7 @@ const ClientRentalRequestsPage: React.FC = () => {
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [cancelModalId, setCancelModalId] = useState<string | null>(null);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [bookConfirmRequestId, setBookConfirmRequestId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RentalRequestStatusValue | ''>('');
 
   const filteredRows = useMemo(() => {
@@ -93,22 +102,67 @@ const ClientRentalRequestsPage: React.FC = () => {
     if (isAuthenticated) void load();
   }, [isAuthenticated, load]);
 
-  const handleBook = async (requestId: string) => {
+  const openBookConfirm = (requestId: string) => {
+    const row = rows.find((r) => r.id === requestId);
+    if (!row || row.status !== 'available' || !isProposedContractOpen(row)) {
+      enqueueSnackbar(
+        t(
+          'rentals.clientRequests.contractExpiredBookError',
+          'This offer has expired. Send a new request from the listing.'
+        ),
+        { variant: 'error' }
+      );
+      void load();
+      return;
+    }
+    setBookConfirmRequestId(requestId);
+  };
+
+  const finalizeBookingFromModal = async (requestId: string) => {
     setBookingId(requestId);
     try {
       const res = await createBooking(requestId);
+      setBookConfirmRequestId(null);
       enqueueSnackbar(t('rentals.clientRequests.bookSuccess', 'Booking created'), {
         variant: 'success',
       });
       navigate(`/rentals/bookings/${res.bookingId}`);
     } catch (e: unknown) {
       enqueueSnackbar(
-        apiErrorMessage(e, t('rentals.clientRequests.bookError', 'Could not complete booking')),
+        rentalBookingErrorIsExpired(e)
+          ? t(
+              'rentals.clientRequests.contractExpiredBookError',
+              'This offer has expired. Send a new request from the listing.'
+            )
+          : apiErrorMessage(
+              e,
+              t('rentals.clientRequests.bookError', 'Could not complete booking')
+            ),
         { variant: 'error' }
       );
+      setBookConfirmRequestId(null);
+      void load();
     } finally {
       setBookingId(null);
     }
+  };
+
+  const confirmBook = async () => {
+    if (!bookConfirmRequestId) return;
+    const row = rows.find((r) => r.id === bookConfirmRequestId);
+    if (!row || row.status !== 'available' || !isProposedContractOpen(row)) {
+      enqueueSnackbar(
+        t(
+          'rentals.clientRequests.contractExpiredBookError',
+          'This offer has expired. Send a new request from the listing.'
+        ),
+        { variant: 'error' }
+      );
+      setBookConfirmRequestId(null);
+      void load();
+      return;
+    }
+    await finalizeBookingFromModal(bookConfirmRequestId);
   };
 
   const confirmCancel = async () => {
@@ -133,6 +187,11 @@ const ClientRentalRequestsPage: React.FC = () => {
       setCancelSubmitting(false);
     }
   };
+
+  const cancelTargetRow = cancelModalId
+    ? rows.find((r) => r.id === cancelModalId)
+    : undefined;
+  const cancelModalIsOffer = cancelTargetRow?.status === 'available';
 
   if (!isAuthenticated) {
     return (
@@ -241,7 +300,7 @@ const ClientRentalRequestsPage: React.FC = () => {
                 key={req.id}
                 row={req}
                 bookingLoading={bookingId === req.id}
-                onBook={handleBook}
+                onBookRequest={openBookConfirm}
                 onCancel={(id) => setCancelModalId(id)}
                 onViewListing={(listingId) => navigate(`/rentals/${listingId}`)}
                 onViewBooking={(bId) => navigate(`/rentals/bookings/${bId}`)}
@@ -277,13 +336,45 @@ const ClientRentalRequestsPage: React.FC = () => {
       </Box>
 
       <ConfirmationModal
-        open={Boolean(cancelModalId)}
-        title={t('rentals.clientRequests.cancelConfirmTitle', 'Cancel this request?')}
+        open={Boolean(bookConfirmRequestId)}
+        title={t('rentals.clientRequests.bookConfirmTitle', 'Confirm your reservation?')}
         message={t(
-          'rentals.clientRequests.cancelConfirmMessage',
-          'The business will no longer see this request. You can send a new request later if you change your mind.'
+          'rentals.clientRequests.bookConfirmMessage',
+          'You will receive a payment request on the mobile number we have on file. Once you approve it, your reservation will be confirmed. Until then, it is not final.'
         )}
-        confirmText={t('rentals.clientRequests.cancelRequest', 'Cancel request')}
+        confirmText={t('rentals.clientRequests.bookConfirmButton', 'Continue')}
+        confirmColor="primary"
+        loading={Boolean(bookingId && bookingId === bookConfirmRequestId)}
+        onConfirm={() => void confirmBook()}
+        onCancel={() => {
+          if (bookingId && bookingId === bookConfirmRequestId) return;
+          setBookConfirmRequestId(null);
+        }}
+      />
+
+      <ConfirmationModal
+        open={Boolean(cancelModalId)}
+        title={
+          cancelModalIsOffer
+            ? t('rentals.clientRequests.cancelOfferTitle', 'Cancel this reservation?')
+            : t('rentals.clientRequests.cancelConfirmTitle', 'Cancel this request?')
+        }
+        message={
+          cancelModalIsOffer
+            ? t(
+                'rentals.clientRequests.cancelOfferMessage',
+                'You will withdraw from this offer. The proposed contract will be cancelled and you can send a new request later if you wish.'
+              )
+            : t(
+                'rentals.clientRequests.cancelConfirmMessage',
+                'The business will no longer see this request. You can send a new request later if you change your mind.'
+              )
+        }
+        confirmText={
+          cancelModalIsOffer
+            ? t('rentals.clientRequests.cancelOffer', 'Cancel reservation')
+            : t('rentals.clientRequests.cancelRequest', 'Cancel request')
+        }
         confirmColor="error"
         loading={cancelSubmitting}
         onConfirm={() => void confirmCancel()}

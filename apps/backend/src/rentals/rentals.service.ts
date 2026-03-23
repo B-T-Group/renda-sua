@@ -417,17 +417,39 @@ export class RentalsService {
     if (req.client_id !== user.client.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
-    if (req.status !== 'pending') {
-      throw new HttpException(
-        'Only pending requests can be cancelled',
-        HttpStatus.BAD_REQUEST
-      );
+    if (req.status === 'pending') {
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+        id: requestId,
+        status: 'cancelled',
+      });
+      return { success: true };
     }
-    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
-      id: requestId,
-      status: 'cancelled',
-    });
-    return { success: true };
+    if (req.status === 'available') {
+      const booking = req.rental_booking as { id?: string; status?: string } | null | undefined;
+      if (booking?.id && booking.status === 'proposed') {
+        await this.patchBooking(booking.id, {
+          status: 'cancelled',
+          contract_expires_at: null,
+        });
+        await this.logHistory(
+          booking.id,
+          'cancelled',
+          'proposed',
+          user.id,
+          'client',
+          'Client withdrew before confirming'
+        );
+      }
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
+        id: requestId,
+        status: 'cancelled',
+      });
+      return { success: true };
+    }
+    throw new HttpException(
+      'This request cannot be cancelled',
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   async createBusinessRentalItem(dto: CreateBusinessRentalItemDto): Promise<string> {

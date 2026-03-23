@@ -54,7 +54,7 @@ function statusChipColor(
   }
 }
 
-function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
+export function isProposedContractOpen(row: ClientRentalRequestRow): boolean {
   if (row.status !== 'available') return false;
   const b = row.rental_booking;
   if (!b || b.status !== 'proposed') return true;
@@ -72,7 +72,8 @@ function proposedContractDeadline(row: ClientRentalRequestRow): string | null {
 export interface ClientRentalRequestRowCardProps {
   row: ClientRentalRequestRow;
   bookingLoading: boolean;
-  onBook: (id: string) => void;
+  /** Opens booking confirmation (parent validates expiry). */
+  onBookRequest: (id: string) => void;
   onCancel: (id: string) => void;
   onViewListing: (listingId: string) => void;
   onViewBooking: (bookingId: string) => void;
@@ -81,7 +82,7 @@ export interface ClientRentalRequestRowCardProps {
 export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProps> = ({
   row,
   bookingLoading,
-  onBook,
+  onBookRequest,
   onCancel,
   onViewListing,
   onViewBooking,
@@ -215,14 +216,24 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
             </Button>
           ) : null}
           {row.status === 'available' ? (
-            <Button
-              size="small"
-              variant="contained"
-              disabled={bookingLoading || !canBookNow}
-              onClick={() => onBook(row.id)}
-            >
-              {t('rentals.bookNow', 'Book now')}
-            </Button>
+            <>
+              <Button
+                size="small"
+                variant="contained"
+                disabled={bookingLoading}
+                onClick={() => onBookRequest(row.id)}
+              >
+                {t('rentals.bookNow', 'Book now')}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={() => onCancel(row.id)}
+              >
+                {t('rentals.clientRequests.cancelOffer', 'Cancel reservation')}
+              </Button>
+            </>
           ) : null}
           {row.status === 'pending' ? (
             <Button
