@@ -41,6 +41,7 @@ select_permissions:
         - start_at
         - end_at
         - total_amount
+        - booking_number
         - currency
         - rental_pricing_snapshot
         - status
@@ -70,6 +71,7 @@ select_permissions:
         - start_at
         - end_at
         - total_amount
+        - booking_number
         - currency
         - rental_pricing_snapshot
         - status
