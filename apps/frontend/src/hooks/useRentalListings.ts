@@ -11,11 +11,17 @@ export type RentalListingsSortMode =
 
 export interface RentalListingRow {
   id: string;
-  base_price_per_day: string | number;
-  min_rental_days: number;
-  max_rental_days: number | null;
+  base_price_per_hour: string | number;
+  min_rental_hours: number;
+  max_rental_hours: number | null;
   pickup_instructions: string;
   dropoff_instructions: string;
+  weekly_availability: Array<{
+    weekday: number;
+    is_available: boolean;
+    start_time: string | null;
+    end_time: string | null;
+  }>;
   updated_at?: string;
   rental_item: {
     id: string;

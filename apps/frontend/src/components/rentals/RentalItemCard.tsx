@@ -64,7 +64,7 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
   const imgUrl = firstImg?.image_url;
   const addr = listing.business_location.address;
   const { line1, line2 } = formatLocationAddressLines(addr);
-  const price = formatListingPrice(listing.base_price_per_day, item.currency);
+  const price = formatListingPrice(listing.base_price_per_hour, item.currency);
   const hasRoute =
     Boolean(listing.distance_text?.trim()) &&
     Boolean(listing.duration_text?.trim());
@@ -160,7 +160,7 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
               fontWeight={600}
               sx={{ ml: 0.5 }}
             >
-              {t('rentals.perDay', '/ day')}
+              {t('rentals.perHour', '/ hour')}
             </Typography>
           </Typography>
         </Box>

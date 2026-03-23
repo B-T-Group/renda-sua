@@ -18,9 +18,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CreateBusinessRentalItemDto } from './dto/create-business-rental-item.dto';
 import { CreateBusinessRentalListingDto } from './dto/create-business-rental-listing.dto';
 import { UpdateBusinessRentalItemDto } from './dto/update-business-rental-item.dto';
-import { UpdateBusinessRentalListingDto } from './dto/update-business-rental-listing.dto';
+import {
+  UpdateBusinessRentalListingDto,
+  UpdateRentalWeeklyAvailabilityDto,
+} from './dto/update-business-rental-listing.dto';
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
+import { RentalWeeklyAvailabilityDto } from './dto/create-business-rental-listing.dto';
 import {
   RespondRentalRequestDto,
   RespondRentalRequestStatusDto,
@@ -65,19 +69,35 @@ function normalizeRentalSort(raw?: string): RentalSortNormalized {
     : 'relevance';
 }
 
-function rentalDayCount(start: Date, end: Date): number {
+function rentalHoursCount(start: Date, end: Date): number {
   const ms = end.getTime() - start.getTime();
-  return Math.max(1, Math.ceil(ms / 86400000));
+  return Math.max(1, Math.ceil(ms / 3600000));
+}
+
+interface WeeklyAvailabilityRow {
+  weekday: number;
+  is_available: boolean;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+interface RentalRequestWindowPlan {
+  envelopeStartIso: string;
+  envelopeEndIso: string;
+  selectionWindowsJson: Array<{ start_at: string; end_at: string }>;
+  windows: Array<{ start: Date; end: Date }>;
+  totalHours: number;
 }
 
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
 export interface PublicRentalListingRow {
   id: string;
-  base_price_per_day: number;
-  min_rental_days: number;
-  max_rental_days: number | null;
+  base_price_per_hour: number;
+  min_rental_hours: number;
+  max_rental_hours: number | null;
   pickup_instructions: string;
   dropoff_instructions: string;
+  weekly_availability: WeeklyAvailabilityRow[];
   updated_at?: string;
   rental_item: {
     id: string;
@@ -125,7 +145,7 @@ export interface ClientRentalRequestRow {
   expires_at?: string | null;
   rental_location_listing: {
     id: string;
-    base_price_per_day: number | string;
+    base_price_per_hour: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
@@ -140,8 +160,8 @@ function rentalListingUpdatedAtMs(row: PublicRentalListingRow): number {
   return new Date(row.updated_at ?? 0).getTime();
 }
 
-function rentalPricePerDay(row: PublicRentalListingRow): number {
-  const v = row.base_price_per_day;
+function rentalPricePerHour(row: PublicRentalListingRow): number {
+  const v = row.base_price_per_hour;
   return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
 }
 
@@ -240,9 +260,9 @@ export class RentalsService {
       return null;
     }
     const res = await this.hasuraSystemService.executeQuery<{
-      rental_bookings: Array<{ start_at: string; end_at: string }>;
+      rental_booking_windows: Array<{ start_at: string; end_at: string }>;
     }>(Q.LIST_TAKEN_RENTAL_BOOKING_WINDOWS, { listingId });
-    return (res.rental_bookings ?? []).map((b) => ({
+    return (res.rental_booking_windows ?? []).map((b) => ({
       startAt: b.start_at,
       endAt: b.end_at,
     }));
@@ -253,17 +273,10 @@ export class RentalsService {
     if (!user.client) {
       throw new HttpException('Only clients can create requests', HttpStatus.FORBIDDEN);
     }
-    const start = new Date(dto.requestedStartAt);
-    const end = new Date(dto.requestedEndAt);
-    if (!(end > start)) {
-      throw new HttpException('End must be after start', HttpStatus.BAD_REQUEST);
-    }
-    this.assertRentalRequestStartsInFuture(start);
     const listing = await this.fetchListing(dto.rentalLocationListingId);
     this.assertListingBookable(listing);
-    const days = rentalDayCount(start, end);
-    this.assertDuration(listing, days);
-    await this.assertCapacity(listing.id, start, end, listing.units_available);
+    const plan = this.buildCreateRentalRequestPlan(dto);
+    await this.validateRentalRequestWindowsPlan(plan, listing);
     const note = dto.clientRequestNote?.trim();
     const row = await this.hasuraSystemService.executeMutation<{
       insert_rental_requests_one: { id: string };
@@ -271,8 +284,9 @@ export class RentalsService {
       object: {
         client_id: user.client.id,
         rental_location_listing_id: listing.id,
-        requested_start_at: dto.requestedStartAt,
-        requested_end_at: dto.requestedEndAt,
+        requested_start_at: plan.envelopeStartIso,
+        requested_end_at: plan.envelopeEndIso,
+        rental_selection_windows: plan.selectionWindowsJson,
         status: 'pending',
         client_request_note: note || null,
       },
@@ -338,16 +352,11 @@ export class RentalsService {
     req: any,
     respondedAt: string
   ) {
-    if (!dto.rentalPricingSnapshot || !isValidRentalPricingSnapshot(dto.rentalPricingSnapshot)) {
-      throw new HttpException(
-        'rentalPricingSnapshot is required when available',
-        HttpStatus.BAD_REQUEST
-      );
-    }
     if (dto.contractExpiryHours == null) {
       throw new HttpException('contractExpiryHours is required when available', HttpStatus.BAD_REQUEST);
     }
-    this.assertSnapshotCurrency(dto.rentalPricingSnapshot, req);
+    const computedSnapshot = this.computePricingSnapshotForRequest(req);
+    this.assertSnapshotCurrency(computedSnapshot, req);
     const hours = dto.contractExpiryHours;
     if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
       throw new HttpException('contractExpiryHours must be between 1 and 168', HttpStatus.BAD_REQUEST);
@@ -362,7 +371,7 @@ export class RentalsService {
         HttpStatus.CONFLICT
       );
     }
-    const snap = dto.rentalPricingSnapshot;
+    const snap = computedSnapshot;
     const total = Number(snap.total);
     const contractExpiresAt = new Date(now.getTime() + hours * 3600000).toISOString();
     const clientId = req.client_id;
@@ -488,19 +497,20 @@ export class RentalsService {
     const businessId = await this.requireBusinessId();
     await this.assertRentalItemForBusiness(dto.rental_item_id, businessId);
     await this.assertLocationForBusiness(dto.business_location_id, businessId);
-    const minDays = dto.min_rental_days ?? 1;
-    const maxDays =
-      dto.max_rental_days === undefined ? null : dto.max_rental_days;
-    if (maxDays != null && maxDays < minDays) {
+    const minHours = dto.min_rental_hours ?? 1;
+    const maxHours =
+      dto.max_rental_hours === undefined ? null : dto.max_rental_hours;
+    if (maxHours != null && maxHours < minHours) {
       throw new HttpException(
-        'max_rental_days must be >= min_rental_days',
+        'max_rental_hours must be >= min_rental_hours',
         HttpStatus.BAD_REQUEST
       );
     }
-    const price = Number(dto.base_price_per_day);
+    const price = Number(dto.base_price_per_hour);
     if (Number.isNaN(price) || price < 0) {
-      throw new HttpException('Invalid base_price_per_day', HttpStatus.BAD_REQUEST);
+      throw new HttpException('Invalid base_price_per_hour', HttpStatus.BAD_REQUEST);
     }
+    const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
     const row = await this.hasuraUserService.executeMutation<{
       insert_rental_location_listings_one: { id: string } | null;
     }>(Q.INSERT_BUSINESS_RENTAL_LISTING, {
@@ -509,9 +519,9 @@ export class RentalsService {
         business_location_id: dto.business_location_id,
         pickup_instructions: dto.pickup_instructions?.trim() ?? '',
         dropoff_instructions: dto.dropoff_instructions?.trim() ?? '',
-        base_price_per_day: price,
-        min_rental_days: minDays,
-        max_rental_days: maxDays,
+        base_price_per_hour: price,
+        min_rental_hours: minHours,
+        max_rental_hours: maxHours,
         units_available: dto.units_available ?? 1,
         is_active: true,
       },
@@ -523,6 +533,7 @@ export class RentalsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+    await this.upsertWeeklyAvailability(id, availability);
     return id;
   }
 
@@ -564,14 +575,21 @@ export class RentalsService {
     await this.assertRentalListingForBusiness(listingId, businessId);
     const changes = this.buildListingUpdateSet(dto);
     if (!Object.keys(changes).length) {
-      return;
+      const availabilityOnly = dto.weekly_availability !== undefined;
+      if (!availabilityOnly) return;
     }
-    await this.assertListingMinMaxAfterPatch(listingId, changes);
-    const result = await this.hasuraUserService.executeMutation<{
-      update_rental_location_listings_by_pk: { id: string } | null;
-    }>(Q.UPDATE_BUSINESS_RENTAL_LISTING, { id: listingId, _set: changes });
-    if (!result.update_rental_location_listings_by_pk) {
-      throw new HttpException('Update failed', HttpStatus.BAD_REQUEST);
+    if (Object.keys(changes).length) {
+      await this.assertListingMinMaxAfterPatch(listingId, changes);
+      const result = await this.hasuraUserService.executeMutation<{
+        update_rental_location_listings_by_pk: { id: string } | null;
+      }>(Q.UPDATE_BUSINESS_RENTAL_LISTING, { id: listingId, _set: changes });
+      if (!result.update_rental_location_listings_by_pk) {
+        throw new HttpException('Update failed', HttpStatus.BAD_REQUEST);
+      }
+    }
+    if (dto.weekly_availability !== undefined) {
+      const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
+      await this.upsertWeeklyAvailability(listingId, availability);
     }
   }
 
@@ -610,21 +628,21 @@ export class RentalsService {
     if (dto.dropoff_instructions !== undefined) {
       out.dropoff_instructions = dto.dropoff_instructions.trim();
     }
-    if (dto.base_price_per_day !== undefined) {
-      const p = Number(dto.base_price_per_day);
+    if (dto.base_price_per_hour !== undefined) {
+      const p = Number(dto.base_price_per_hour);
       if (Number.isNaN(p) || p < 0) {
         throw new HttpException(
-          'Invalid base_price_per_day',
+          'Invalid base_price_per_hour',
           HttpStatus.BAD_REQUEST
         );
       }
-      out.base_price_per_day = p;
+      out.base_price_per_hour = p;
     }
-    if (dto.min_rental_days !== undefined) {
-      out.min_rental_days = dto.min_rental_days;
+    if (dto.min_rental_hours !== undefined) {
+      out.min_rental_hours = dto.min_rental_hours;
     }
-    if (dto.max_rental_days !== undefined) {
-      out.max_rental_days = dto.max_rental_days;
+    if (dto.max_rental_hours !== undefined) {
+      out.max_rental_hours = dto.max_rental_hours;
     }
     if (dto.units_available !== undefined) {
       out.units_available = dto.units_available;
@@ -640,15 +658,15 @@ export class RentalsService {
     set: Record<string, unknown>
   ): Promise<void> {
     if (
-      set.min_rental_days === undefined &&
-      set.max_rental_days === undefined
+      set.min_rental_hours === undefined &&
+      set.max_rental_hours === undefined
     ) {
       return;
     }
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings_by_pk: {
-        min_rental_days: number;
-        max_rental_days: number | null;
+        min_rental_hours: number;
+        max_rental_hours: number | null;
       } | null;
     }>(Q.GET_RENTAL_LISTING_MIN_MAX, { id: listingId });
     const cur = r.rental_location_listings_by_pk;
@@ -656,14 +674,14 @@ export class RentalsService {
       return;
     }
     const min =
-      (set.min_rental_days as number) ?? cur.min_rental_days;
+      (set.min_rental_hours as number) ?? cur.min_rental_hours;
     const max =
-      set.max_rental_days === undefined
-        ? cur.max_rental_days
-        : (set.max_rental_days as number | null);
+      set.max_rental_hours === undefined
+        ? cur.max_rental_hours
+        : (set.max_rental_hours as number | null);
     if (max != null && max < min) {
       throw new HttpException(
-        'max_rental_days must be >= min_rental_days',
+        'max_rental_hours must be >= min_rental_hours',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -834,13 +852,10 @@ export class RentalsService {
     if (!exp || new Date(exp) <= new Date()) {
       throw new HttpException('Contract has expired', HttpStatus.GONE);
     }
-    const start = new Date(req.requested_start_at);
-    const end = new Date(req.requested_end_at);
-    await this.assertCapacity(
+    await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
-      start,
-      end,
-      req.rental_location_listing.units_available
+      req.rental_location_listing.units_available,
+      req
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
@@ -888,13 +903,10 @@ export class RentalsService {
     phoneNumber: string,
     email: string
   ) {
-    const start = new Date(req.requested_start_at);
-    const end = new Date(req.requested_end_at);
-    await this.assertCapacity(
+    await this.assertCapacityForRequestWindows(
       req.rental_location_listing_id,
-      start,
-      end,
-      req.rental_location_listing.units_available
+      req.rental_location_listing.units_available,
+      req
     );
     const snap = req.rental_pricing_snapshot as RentalPricingSnapshotDto;
     const total = Number(snap.total);
@@ -1307,12 +1319,12 @@ export class RentalsService {
     }
   }
 
-  private assertDuration(listing: any, days: number) {
-    if (days < listing.min_rental_days) {
-      throw new HttpException('Below minimum rental days', HttpStatus.BAD_REQUEST);
+  private assertDurationHours(listing: any, hours: number) {
+    if (hours < listing.min_rental_hours) {
+      throw new HttpException('Below minimum rental hours', HttpStatus.BAD_REQUEST);
     }
-    if (listing.max_rental_days != null && days > listing.max_rental_days) {
-      throw new HttpException('Above maximum rental days', HttpStatus.BAD_REQUEST);
+    if (listing.max_rental_hours != null && hours > listing.max_rental_hours) {
+      throw new HttpException('Above maximum rental hours', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -1327,6 +1339,208 @@ export class RentalsService {
     if (snap.currency !== itemCurrency) {
       throw new HttpException('Snapshot currency must match listing currency', HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private buildCreateRentalRequestPlan(dto: CreateRentalRequestDto): RentalRequestWindowPlan {
+    if (!dto.windows?.length && (!dto.requestedStartAt || !dto.requestedEndAt)) {
+      throw new HttpException(
+        'requestedStartAt and requestedEndAt are required when windows are omitted',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const windows = this.dtoToRequestDateWindows(dto);
+    this.assertValidRequestDateWindows(windows);
+    return this.planFromDateWindows(windows);
+  }
+
+  private dtoToRequestDateWindows(dto: CreateRentalRequestDto): Array<{ start: Date; end: Date }> {
+    if (dto.windows?.length) {
+      return dto.windows.map((w) => ({
+        start: new Date(w.requestedStartAt),
+        end: new Date(w.requestedEndAt),
+      }));
+    }
+    return [
+      { start: new Date(dto.requestedStartAt!), end: new Date(dto.requestedEndAt!) },
+    ];
+  }
+
+  private assertValidRequestDateWindows(windows: Array<{ start: Date; end: Date }>) {
+    for (const w of windows) {
+      if (Number.isNaN(w.start.getTime()) || Number.isNaN(w.end.getTime()) || !(w.end > w.start)) {
+        throw new HttpException('Each window must have a valid end after start', HttpStatus.BAD_REQUEST);
+      }
+    }
+  }
+
+  private planFromDateWindows(windows: Array<{ start: Date; end: Date }>): RentalRequestWindowPlan {
+    const starts = windows.map((w) => w.start.getTime());
+    const ends = windows.map((w) => w.end.getTime());
+    let totalHours = 0;
+    for (const w of windows) {
+      totalHours += rentalHoursCount(w.start, w.end);
+    }
+    return {
+      envelopeStartIso: new Date(Math.min(...starts)).toISOString(),
+      envelopeEndIso: new Date(Math.max(...ends)).toISOString(),
+      selectionWindowsJson: windows.map((w) => ({
+        start_at: w.start.toISOString(),
+        end_at: w.end.toISOString(),
+      })),
+      windows,
+      totalHours,
+    };
+  }
+
+  private async validateRentalRequestWindowsPlan(
+    plan: RentalRequestWindowPlan,
+    listing: any
+  ): Promise<void> {
+    const earliest = new Date(
+      Math.min(...plan.windows.map((w) => w.start.getTime()))
+    );
+    this.assertRentalRequestStartsInFuture(earliest);
+    this.assertDurationHours(listing, plan.totalHours);
+    const weekly = listing.weekly_availability ?? [];
+    for (const w of plan.windows) {
+      this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
+    }
+    for (const w of plan.windows) {
+      await this.assertCapacity(listing.id, w.start, w.end, listing.units_available);
+    }
+  }
+
+  private parseRentalSelectionWindows(req: any): Array<{ start: Date; end: Date }> {
+    const raw = req.rental_selection_windows;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((w: { start_at: string; end_at: string }) => ({
+        start: new Date(w.start_at),
+        end: new Date(w.end_at),
+      }));
+    }
+    return [
+      {
+        start: new Date(req.requested_start_at),
+        end: new Date(req.requested_end_at),
+      },
+    ];
+  }
+
+  private async assertCapacityForRequestWindows(
+    listingId: string,
+    units: number,
+    req: any
+  ): Promise<void> {
+    for (const { start, end } of this.parseRentalSelectionWindows(req)) {
+      await this.assertCapacity(listingId, start, end, units);
+    }
+  }
+
+  private normalizeWeeklyAvailability(
+    rows?: RentalWeeklyAvailabilityDto[] | UpdateRentalWeeklyAvailabilityDto[]
+  ): WeeklyAvailabilityRow[] {
+    const defaults: WeeklyAvailabilityRow[] = [
+      { weekday: 0, is_available: false, start_time: null, end_time: null },
+      { weekday: 1, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+      { weekday: 2, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+      { weekday: 3, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+      { weekday: 4, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+      { weekday: 5, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+      { weekday: 6, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    ];
+    if (!rows?.length) return defaults;
+    const byDay = new Map<number, WeeklyAvailabilityRow>();
+    for (const row of rows) {
+      const weekday = Number(row.weekday);
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+        throw new HttpException('weekday must be between 0 and 6', HttpStatus.BAD_REQUEST);
+      }
+      const normalized: WeeklyAvailabilityRow = {
+        weekday,
+        is_available: !!row.is_available,
+        start_time: row.is_available ? (row.start_time ?? null) : null,
+        end_time: row.is_available ? (row.end_time ?? null) : null,
+      };
+      if (normalized.is_available && (!normalized.start_time || !normalized.end_time)) {
+        throw new HttpException(
+          'start_time and end_time are required for available weekdays',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (
+        normalized.is_available &&
+        normalized.start_time &&
+        normalized.end_time &&
+        normalized.end_time <= normalized.start_time
+      ) {
+        throw new HttpException('end_time must be greater than start_time', HttpStatus.BAD_REQUEST);
+      }
+      byDay.set(weekday, normalized);
+    }
+    return defaults.map((d) => byDay.get(d.weekday) ?? d);
+  }
+
+  private async upsertWeeklyAvailability(listingId: string, rows: WeeklyAvailabilityRow[]) {
+    await this.hasuraSystemService.executeMutation(Q.UPSERT_RENTAL_LISTING_WEEKLY_AVAILABILITY, {
+      objects: rows.map((row) => ({
+        listing_id: listingId,
+        weekday: row.weekday,
+        is_available: row.is_available,
+        start_time: row.is_available ? row.start_time : null,
+        end_time: row.is_available ? row.end_time : null,
+      })),
+    });
+  }
+
+  private assertRequestedWindowInAvailability(
+    start: Date,
+    end: Date,
+    weekly: WeeklyAvailabilityRow[]
+  ): void {
+    const availabilityByDay = new Map<number, WeeklyAvailabilityRow>();
+    for (const row of weekly ?? []) availabilityByDay.set(row.weekday, row);
+    let cursor = new Date(start.getTime());
+    while (cursor < end) {
+      const day = cursor.getUTCDay();
+      const row = availabilityByDay.get(day);
+      if (!row?.is_available || !row.start_time || !row.end_time) {
+        throw new HttpException('Requested time is outside listing availability', HttpStatus.BAD_REQUEST);
+      }
+      const dayStart = new Date(cursor);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const [sh, sm] = row.start_time.split(':').map(Number);
+      const [eh, em] = row.end_time.split(':').map(Number);
+      const windowStart = new Date(dayStart);
+      windowStart.setUTCHours(sh, sm || 0, 0, 0);
+      const windowEnd = new Date(dayStart);
+      windowEnd.setUTCHours(eh, em || 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+      const sliceStart = cursor;
+      const until = end < dayEnd ? end : dayEnd;
+      if (sliceStart < windowStart || until > windowEnd) {
+        throw new HttpException('Requested time is outside listing availability', HttpStatus.BAD_REQUEST);
+      }
+      cursor = dayEnd;
+    }
+  }
+
+  private computePricingSnapshotForRequest(req: any): RentalPricingSnapshotDto {
+    const parts = this.parseRentalSelectionWindows(req);
+    let hours = 0;
+    for (const { start, end } of parts) {
+      hours += rentalHoursCount(start, end);
+    }
+    const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
+    const total = Number((hours * ratePerHour).toFixed(2));
+    return {
+      version: 2,
+      currency: req.rental_location_listing.rental_item.currency,
+      ratePerHour,
+      hours,
+      total,
+      computedAt: new Date().toISOString(),
+    };
   }
 
   private async assertCapacity(
@@ -1395,6 +1609,15 @@ export class RentalsService {
     return `R${timestamp}${random}`;
   }
 
+  private bookingWindowsNestedInput(req: any) {
+    return {
+      data: this.parseRentalSelectionWindows(req).map(({ start, end }) => ({
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
+      })),
+    };
+  }
+
   private async insertBookingRow(
     req: any,
     clientId: string,
@@ -1416,6 +1639,7 @@ export class RentalsService {
         rental_pricing_snapshot: snap,
         booking_number: this.createRentalBookingNumber(),
         status: 'confirmed',
+        rental_booking_windows: this.bookingWindowsNestedInput(req),
       },
     });
   }
@@ -1443,6 +1667,7 @@ export class RentalsService {
         booking_number: this.createRentalBookingNumber(),
         status: 'proposed',
         contract_expires_at: contractExpiresAt,
+        rental_booking_windows: this.bookingWindowsNestedInput(req),
       },
     });
   }
@@ -1749,11 +1974,11 @@ export class RentalsService {
       return copy;
     }
     if (sort === 'cheapest') {
-      copy.sort((a, b) => rentalPricePerDay(a) - rentalPricePerDay(b));
+      copy.sort((a, b) => rentalPricePerHour(a) - rentalPricePerHour(b));
       return copy;
     }
     if (sort === 'expensive') {
-      copy.sort((a, b) => rentalPricePerDay(b) - rentalPricePerDay(a));
+      copy.sort((a, b) => rentalPricePerHour(b) - rentalPricePerHour(a));
       return copy;
     }
     copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a));

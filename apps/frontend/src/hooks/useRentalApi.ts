@@ -7,9 +7,17 @@ export interface RentalPricingSnapshotBody {
   version: number;
   currency: string;
   total: number;
-  ratePerDay?: number;
-  days?: number;
+  ratePerHour?: number;
+  hours?: number;
   computedAt: string;
+}
+
+export interface RentalWeeklyAvailabilityRow {
+  id?: string;
+  weekday: number;
+  is_available: boolean;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 export interface BusinessRentalItemImageRow {
@@ -28,20 +36,21 @@ export interface BusinessRentalItemRow {
   rental_location_listings: {
     id: string;
     business_location_id: string;
-    base_price_per_day: number;
+    base_price_per_hour: number;
   }[];
 }
 
 export interface BusinessRentalListingDetail {
   id: string;
   business_location_id: string;
-  base_price_per_day: number;
-  min_rental_days: number;
-  max_rental_days: number | null;
+  base_price_per_hour: number;
+  min_rental_hours: number;
+  max_rental_hours: number | null;
   units_available: number;
   is_active: boolean;
   pickup_instructions?: string | null;
   dropoff_instructions?: string | null;
+  weekly_availability: RentalWeeklyAvailabilityRow[];
   business_location?: { id: string; name: string } | null;
 }
 
@@ -70,11 +79,12 @@ export interface UpdateBusinessRentalItemBody {
 export interface UpdateBusinessRentalListingBody {
   pickup_instructions?: string;
   dropoff_instructions?: string;
-  base_price_per_day?: number;
-  min_rental_days?: number;
-  max_rental_days?: number | null;
+  base_price_per_hour?: number;
+  min_rental_hours?: number;
+  max_rental_hours?: number | null;
   units_available?: number;
   is_active?: boolean;
+  weekly_availability?: RentalWeeklyAvailabilityRow[];
 }
 
 export type UnavailableRentalReasonCode =
@@ -102,6 +112,7 @@ export interface BusinessRentalRequestRow {
   status: string;
   requested_start_at: string;
   requested_end_at: string;
+  rental_selection_windows?: unknown;
   rental_pricing_snapshot: unknown;
   business_response_note?: string | null;
   client_request_note?: string | null;
@@ -110,7 +121,8 @@ export interface BusinessRentalRequestRow {
   responded_at?: string | null;
   rental_location_listing: {
     id: string;
-    base_price_per_day: number;
+    base_price_per_hour: number;
+    weekly_availability?: RentalWeeklyAvailabilityRow[];
     rental_item: { name: string; currency: string };
   };
 }
@@ -129,7 +141,7 @@ export interface ClientRentalRequestRow {
   expires_at?: string | null;
   rental_location_listing: {
     id: string;
-    base_price_per_day: number | string;
+    base_price_per_hour: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
@@ -264,10 +276,11 @@ export function useRentalApi() {
       business_location_id: string;
       pickup_instructions?: string;
       dropoff_instructions?: string;
-      base_price_per_day: number;
-      min_rental_days?: number;
-      max_rental_days?: number | null;
+      base_price_per_hour: number;
+      min_rental_hours?: number;
+      max_rental_hours?: number | null;
       units_available?: number;
+      weekly_availability?: RentalWeeklyAvailabilityRow[];
     }) => {
       const { data } = await api.post<{
         success: boolean;
@@ -283,6 +296,7 @@ export function useRentalApi() {
       rentalLocationListingId: string;
       requestedStartAt: string;
       requestedEndAt: string;
+      windows?: Array<{ requestedStartAt: string; requestedEndAt: string }>;
       clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);

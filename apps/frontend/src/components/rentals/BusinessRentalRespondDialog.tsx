@@ -28,23 +28,35 @@ const REASON_CODES: UnavailableRentalReasonCode[] = [
   'other',
 ];
 
-function rentalDays(start: string, end: string): number {
+function rentalHours(start: string, end: string): number {
   const s = new Date(start).getTime();
   const e = new Date(end).getTime();
-  return Math.max(1, Math.ceil((e - s) / 86400000));
+  return Math.max(1, Math.ceil((e - s) / 3600000));
+}
+
+function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
+  const raw = req.rental_selection_windows;
+  if (Array.isArray(raw) && raw.length > 0) {
+    let sum = 0;
+    for (const w of raw as { start_at: string; end_at: string }[]) {
+      sum += rentalHours(w.start_at, w.end_at);
+    }
+    return sum;
+  }
+  return rentalHours(req.requested_start_at, req.requested_end_at);
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
-  const days = rentalDays(req.requested_start_at, req.requested_end_at);
-  const rate = Number(req.rental_location_listing.base_price_per_day);
-  const total = days * rate;
+  const hours = totalRentalHoursForRequest(req);
+  const rate = Number(req.rental_location_listing.base_price_per_hour);
+  const total = Number((hours * rate).toFixed(2));
   const cur = req.rental_location_listing.rental_item.currency;
   return {
-    version: 1,
+    version: 2,
     currency: cur,
     total,
-    ratePerDay: rate,
-    days,
+    ratePerHour: rate,
+    hours,
     computedAt: new Date().toISOString(),
   };
 }
@@ -156,9 +168,9 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
 
   if (!open || !mode || !request) return null;
 
-  const days = rentalDays(request.requested_start_at, request.requested_end_at);
-  const rate = Number(request.rental_location_listing.base_price_per_day);
-  const total = days * rate;
+  const hours = totalRentalHoursForRequest(request);
+  const rate = Number(request.rental_location_listing.base_price_per_hour);
+  const total = Number((hours * rate).toFixed(2));
   const cur = request.rental_location_listing.rental_item.currency;
 
   const title =
@@ -183,10 +195,10 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
               {t('business.rentals.contractSummary', 'Offer summary')}
             </Typography>
             <Typography variant="body2">
-              {t('business.rentals.contractDays', '{{count}} day(s)', { count: days })}
+              {t('business.rentals.contractHours', '{{count}} hour(s)', { count: hours })}
             </Typography>
             <Typography variant="body2">
-              {t('business.rentals.contractRate', '{{amount}} / day', {
+              {t('business.rentals.contractRate', '{{amount}} / hour', {
                 amount: formatMoney(rate, cur),
               })}
             </Typography>

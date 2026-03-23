@@ -1,171 +1,283 @@
-import { Alert, Box, Button, Card, CardContent, Stack, TextField, Typography } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  IconButton,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
+import {
+  bookedSegmentsForLocalDay,
+  dayHasNoBookedOverlap,
+  formatSelectionLabel,
+  freeSlotEndsLocal,
+  freeSlotStartsLocal,
+  listingDayBoundsLocal,
+  maximalFreeHourRangesLocal,
+  localDateKey,
+  mergeRangeIntoSelections,
+  rangesOverlapMs,
+  rentalBillableHours,
+  totalBillableHours,
+  type SelectionRange,
+  type WeeklyRow,
+} from './rentalRequestScheduleUtils';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
 
-function formatDatetimeLocal(d: Date): string {
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  const h = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${y}-${mo}-${da}T${h}:${mi}`;
+function parseDateInputLocal(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
 }
 
-function snapToHalfHourLocal(d: Date): Date {
-  const out = new Date(d);
-  out.setSeconds(0, 0);
-  const mins = out.getMinutes();
-  const rounded = Math.round(mins / 30) * 30;
-  out.setMinutes(rounded);
-  if (out.getMinutes() === 60) {
-    out.setHours(out.getHours() + 1);
-    out.setMinutes(0);
+function todayDateInputValue(): string {
+  const n = new Date();
+  const mo = String(n.getMonth() + 1).padStart(2, '0');
+  const da = String(n.getDate()).padStart(2, '0');
+  return `${n.getFullYear()}-${mo}-${da}`;
+}
+
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency.length === 3 ? currency : 'XAF',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
   }
-  return out;
-}
-
-function nextLocalHalfHourAfterNow(): Date {
-  const d = new Date();
-  d.setSeconds(0, 0);
-  d.setMilliseconds(0);
-  const m = d.getMinutes();
-  const remainder = m % 30;
-  if (remainder !== 0) {
-    d.setMinutes(m + (30 - remainder));
-  } else {
-    d.setMinutes(m + 30);
-  }
-  while (d.getTime() <= Date.now()) {
-    d.setMinutes(d.getMinutes() + 30);
-  }
-  return d;
-}
-
-function snapDatetimeLocalInput(raw: string): string {
-  if (!raw || raw.length < 16) return raw;
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return raw;
-  return formatDatetimeLocal(snapToHalfHourLocal(d));
-}
-
-function rangesOverlapMs(a0: number, a1: number, b0: number, b1: number): boolean {
-  return a0 < b1 && a1 > b0;
 }
 
 export interface RentalListingRequestSectionProps {
   listingId: string;
   isAuthenticated: boolean;
+  minRentalHours?: number;
+  maxRentalHours?: number | null;
+  weeklyAvailability?: WeeklyRow[];
+  basePricePerHour?: number;
+  currency?: string;
 }
 
 export const RentalListingRequestSection: React.FC<RentalListingRequestSectionProps> = ({
   listingId,
   isAuthenticated,
+  minRentalHours = 1,
+  maxRentalHours = null,
+  weeklyAvailability = [],
+  basePricePerHour = 0,
+  currency = 'XAF',
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { createRequest, fetchListingBookedWindows } = useRentalApi();
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [booked, setBooked] = useState<RentalTakenWindow[]>([]);
+  const [dateStr, setDateStr] = useState(todayDateInputValue());
+  const [startMs, setStartMs] = useState<number | ''>('');
+  const [endMs, setEndMs] = useState<number | ''>('');
+  const [selections, setSelections] = useState<SelectionRange[]>([]);
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  const [windows, setWindows] = useState<RentalTakenWindow[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const minStartValue = useMemo(() => formatDatetimeLocal(nextLocalHalfHourAfterNow()), []);
-
-  const loadWindows = useCallback(async () => {
+  const loadBooked = useCallback(async () => {
     try {
-      const w = await fetchListingBookedWindows(listingId);
-      setWindows(w);
+      setBooked(await fetchListingBookedWindows(listingId));
     } catch {
-      setWindows([]);
+      setBooked([]);
     }
   }, [fetchListingBookedWindows, listingId]);
 
   useEffect(() => {
-    void loadWindows();
-  }, [loadWindows]);
+    void loadBooked();
+  }, [loadBooked]);
+
+  const dayAnchor = useMemo(() => parseDateInputLocal(dateStr), [dateStr]);
+  const dayBounds = useMemo(
+    () => listingDayBoundsLocal(dayAnchor, weeklyAvailability),
+    [dayAnchor, weeklyAvailability]
+  );
+
+  const dayStartEnd = useMemo(() => {
+    const start = new Date(dayAnchor);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { start, end };
+  }, [dayAnchor]);
+
+  const bookedSegs = useMemo(
+    () => bookedSegmentsForLocalDay(dayStartEnd.start, dayStartEnd.end, booked),
+    [booked, dayStartEnd.end, dayStartEnd.start]
+  );
+
+  const nowMs = Date.now();
+  const slotStarts = useMemo(() => {
+    if (!dayBounds) return [];
+    return freeSlotStartsLocal(dayBounds.open, dayBounds.close, bookedSegs, nowMs);
+  }, [bookedSegs, dayBounds, nowMs]);
+
+  const slotEnds = useMemo(() => {
+    if (!dayBounds || startMs === '') return [];
+    return freeSlotEndsLocal(Number(startMs), dayBounds.close, bookedSegs);
+  }, [bookedSegs, dayBounds, startMs]);
+
+  const canAllDay =
+    !!dayBounds && dayHasNoBookedOverlap(dayBounds.open, dayBounds.close, booked);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const s = nextLocalHalfHourAfterNow();
-    const e = new Date(s);
-    e.setDate(e.getDate() + 1);
-    setStart(formatDatetimeLocal(s));
-    setEnd(formatDatetimeLocal(snapToHalfHourLocal(e)));
-  }, [isAuthenticated, listingId]);
+    setStartMs('');
+    setEndMs('');
+  }, [dateStr]);
 
-  const onStartChange = (raw: string) => {
-    const snapped = snapDatetimeLocalInput(raw);
-    setStart(snapped);
-    if (!snapped) return;
-    const s = new Date(snapped);
-    if (Number.isNaN(s.getTime())) return;
-    if (end) {
-      const e = new Date(end);
-      if (!Number.isNaN(e.getTime()) && e <= s) {
-        const next = new Date(s);
-        next.setMinutes(next.getMinutes() + 30);
-        setEnd(formatDatetimeLocal(next));
-      }
-    }
-  };
-
-  const onEndChange = (raw: string) => {
-    setEnd(snapDatetimeLocalInput(raw));
-  };
-
-  const submitRequest = async () => {
+  const pickAllDay = () => {
+    if (!dayBounds || !canAllDay) return;
+    const ranges = maximalFreeHourRangesLocal(dayBounds.open, dayBounds.close, bookedSegs, nowMs);
+    if (ranges.length === 0) return;
     setMsg(null);
-    if (!start || !end) {
-      setMsg(t('rentals.fillDates', 'Choose start and end'));
+    setSelections((prev) => {
+      let next = prev;
+      for (const r of ranges) {
+        next = mergeRangeIntoSelections(next, r.startMs, r.endMs);
+      }
+      return next;
+    });
+    setStartMs('');
+    setEndMs('');
+  };
+
+  const addRange = () => {
+    setMsg(null);
+    if (!dayBounds || startMs === '' || endMs === '') {
+      setMsg(t('rentals.requestForm.pickStartEnd', 'Choose a start and end time.'));
       return;
     }
-    const sMs = new Date(start).getTime();
-    const eMs = new Date(end).getTime();
-    if (Number.isNaN(sMs) || Number.isNaN(eMs)) {
-      setMsg(t('rentals.fillDates', 'Choose start and end'));
-      return;
-    }
-    if (sMs <= Date.now()) {
-      setMsg(t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.'));
-      return;
-    }
-    if (eMs <= sMs) {
+    const s = Number(startMs);
+    const e = Number(endMs);
+    if (!(e > s)) {
       setMsg(t('rentals.requestForm.endAfterStart', 'End must be after start.'));
       return;
     }
-    for (const w of windows) {
+    if (s <= Date.now()) {
+      setMsg(t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.'));
+      return;
+    }
+    for (const w of booked) {
       const w0 = new Date(w.startAt).getTime();
       const w1 = new Date(w.endAt).getTime();
-      if (rangesOverlapMs(sMs, eMs, w0, w1)) {
-        setMsg(t('rentals.requestForm.overlapsTaken', 'Those dates overlap an existing booking. Pick another range.'));
+      if (rangesOverlapMs(s, e, w0, w1)) {
+        setMsg(t('rentals.requestForm.overlapsTaken', 'That time overlaps an existing booking.'));
         return;
       }
     }
+    setSelections((prev) => mergeRangeIntoSelections(prev, s, e));
+    setStartMs('');
+    setEndMs('');
+  };
+
+  const removeSelection = (id: string) => {
+    setSelections((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const hoursTotal = useMemo(() => totalBillableHours(selections), [selections]);
+  const estimatedTotal = useMemo(
+    () => Number((hoursTotal * basePricePerHour).toFixed(2)),
+    [basePricePerHour, hoursTotal]
+  );
+
+  const validateBeforeSubmit = useCallback((): string | null => {
+    if (selections.length === 0) {
+      return t('rentals.requestForm.addOneRange', 'Add at least one time range.');
+    }
+    if (hoursTotal < minRentalHours) {
+      return t('rentals.requestForm.belowMinHours', 'Selected time is below minimum hours.');
+    }
+    if (maxRentalHours != null && hoursTotal > maxRentalHours) {
+      return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
+    }
+    for (const r of selections) {
+      if (r.startMs <= Date.now()) {
+        return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
+      }
+      for (const w of booked) {
+        const w0 = new Date(w.startAt).getTime();
+        const w1 = new Date(w.endAt).getTime();
+        if (rangesOverlapMs(r.startMs, r.endMs, w0, w1)) {
+          return t('rentals.requestForm.overlapsTaken', 'A selection overlaps an existing booking.');
+        }
+      }
+    }
+    return null;
+  }, [booked, hoursTotal, maxRentalHours, minRentalHours, selections, t]);
+
+  const openConfirm = () => {
+    setMsg(null);
+    const err = validateBeforeSubmit();
+    if (err) {
+      setMsg(err);
+      return;
+    }
+    setConfirmOpen(true);
+  };
+
+  const submitRequest = async () => {
+    const err = validateBeforeSubmit();
+    if (err) {
+      setMsg(err);
+      setConfirmOpen(false);
+      return;
+    }
+    setSubmitting(true);
+    setMsg(null);
+    const windows = selections.map((r) => ({
+      requestedStartAt: new Date(r.startMs).toISOString(),
+      requestedEndAt: new Date(r.endMs).toISOString(),
+    }));
+    const starts = windows.map((w) => new Date(w.requestedStartAt).getTime());
+    const ends = windows.map((w) => new Date(w.requestedEndAt).getTime());
     try {
       await createRequest({
         rentalLocationListingId: listingId,
-        requestedStartAt: new Date(start).toISOString(),
-        requestedEndAt: new Date(end).toISOString(),
+        requestedStartAt: new Date(Math.min(...starts)).toISOString(),
+        requestedEndAt: new Date(Math.max(...ends)).toISOString(),
+        windows,
         clientRequestNote: notes.trim() || undefined,
       });
-      void loadWindows();
+      setConfirmOpen(false);
+      void loadBooked();
       navigate('/rentals/request-submitted');
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
+      const http = e as { response?: { data?: { message?: string } } };
       setMsg(
-        err?.response?.data?.message ||
+        http?.response?.data?.message ||
           (e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'))
       );
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  const stepStyle = { step: 1800, style: { fontSize: 16 } };
 
   return (
     <>
@@ -200,65 +312,154 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
           >
             {isAuthenticated ? (
               <Stack spacing={2.5} sx={{ width: '100%', maxWidth: '100%' }}>
-              <Box>
-                <Typography variant="h6" fontWeight={700}>
-                  {t('rentals.requestRental', 'Request this rental')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  {t(
-                    'rentals.detail.requestSubtitle',
-                    'Choose your dates. The business will confirm availability.'
-                  )}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                  {t(
-                    'rentals.requestForm.halfHourHint',
-                    'Times are limited to the hour or half-hour (e.g. 9:00, 9:30).'
-                  )}
-                </Typography>
-              </Box>
-              <Stack spacing={2} sx={{ width: '100%' }}>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={2}
-                  sx={{ width: '100%', alignItems: 'stretch' }}
-                >
-                  <TextField
-                    label={t('rentals.start', 'Start')}
-                    type="datetime-local"
-                    value={start}
-                    onChange={(e) => onStartChange(e.target.value)}
-                    onBlur={() => start && onStartChange(start)}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    size="small"
-                    inputProps={{ ...stepStyle, min: minStartValue }}
-                    sx={{
-                      flex: { sm: '1 1 0' },
-                      minWidth: 0,
-                      width: { xs: '100%', sm: 'auto' },
-                    }}
-                  />
-                  <TextField
-                    label={t('rentals.end', 'End')}
-                    type="datetime-local"
-                    value={end}
-                    onChange={(e) => onEndChange(e.target.value)}
-                    onBlur={() => end && onEndChange(end)}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    size="small"
-                    inputProps={{
-                      ...stepStyle,
-                      min: start || minStartValue,
-                    }}
-                    sx={{
-                      flex: { sm: '1 1 0' },
-                      minWidth: 0,
-                      width: { xs: '100%', sm: 'auto' },
-                    }}
-                  />
-                </Stack>
+                <Box>
+                  <Typography variant="h6" fontWeight={700}>
+                    {t('rentals.requestRental', 'Request this rental')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {t(
+                      'rentals.requestForm.slotSubtitle',
+                      'Pick a day, choose times within open hours, then add each range to your request.'
+                    )}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    {t(
+                      'rentals.requestForm.halfHourHint',
+                      'Times are in full-hour slots (e.g. 9:00–10:00).'
+                    )}
+                  </Typography>
+                </Box>
+
+                {!dayBounds ? (
+                  <Alert severity="info">
+                    {t('rentals.requestForm.closedDay', 'The business is closed on this day. Pick another date.')}
+                  </Alert>
+                ) : (
+                  <Stack spacing={2}>
+                    <TextField
+                      label={t('rentals.requestForm.pickDay', 'Date')}
+                      type="date"
+                      value={dateStr}
+                      onChange={(e) => setDateStr(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ min: todayDateInputValue() }}
+                      size="small"
+                      fullWidth
+                    />
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+                      <FormControl size="small" fullWidth sx={{ flex: 1 }}>
+                        <InputLabel>{t('rentals.requestForm.slotStart', 'Start time')}</InputLabel>
+                        <Select
+                          label={t('rentals.requestForm.slotStart', 'Start time')}
+                          value={startMs === '' ? '' : String(startMs)}
+                          onChange={(e) => {
+                            setStartMs(e.target.value === '' ? '' : Number(e.target.value));
+                            setEndMs('');
+                          }}
+                        >
+                          <MenuItem value="">
+                            <em>{t('rentals.requestForm.selectTime', 'Select')}</em>
+                          </MenuItem>
+                          {slotStarts.map((d) => (
+                            <MenuItem key={d.getTime()} value={String(d.getTime())}>
+                              {new Intl.DateTimeFormat(i18n.language, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }).format(d)}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl size="small" fullWidth sx={{ flex: 1 }}>
+                        <InputLabel>{t('rentals.requestForm.slotEnd', 'End time')}</InputLabel>
+                        <Select
+                          label={t('rentals.requestForm.slotEnd', 'End time')}
+                          value={endMs === '' ? '' : String(endMs)}
+                          onChange={(e) => setEndMs(e.target.value === '' ? '' : Number(e.target.value))}
+                          disabled={startMs === ''}
+                        >
+                          <MenuItem value="">
+                            <em>{t('rentals.requestForm.selectTime', 'Select')}</em>
+                          </MenuItem>
+                          {slotEnds.map((d) => (
+                            <MenuItem key={d.getTime()} value={String(d.getTime())}>
+                              {new Intl.DateTimeFormat(i18n.language, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }).format(d)}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                      <Button
+                        variant="outlined"
+                        onClick={pickAllDay}
+                        disabled={!dayBounds || slotStarts.length === 0 || !canAllDay}
+                        fullWidth
+                      >
+                        {t('rentals.requestForm.allDay', 'Add all available hours')}
+                      </Button>
+                      <Button variant="contained" onClick={addRange} disabled={!dayBounds} fullWidth>
+                        {t('rentals.requestForm.addRange', 'Add to request')}
+                      </Button>
+                    </Stack>
+                    {dayBounds && !canAllDay ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {t(
+                          'rentals.requestForm.allDayDisabledHint',
+                          'Add all available hours is disabled when any time that day is already booked.'
+                        )}
+                      </Typography>
+                    ) : dayBounds && slotStarts.length === 0 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {t(
+                          'rentals.requestForm.noBookableSlotsHint',
+                          'No bookable hours left on this day. Try another date.'
+                        )}
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                )}
+
+                {selections.length > 0 ? (
+                  <>
+                    <Divider />
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      {t('rentals.requestForm.yourRanges', 'Your selected times')}
+                    </Typography>
+                    <List dense disablePadding>
+                      {selections.map((r) => (
+                        <ListItem
+                          key={r.id}
+                          secondaryAction={
+                            <IconButton edge="end" aria-label="remove" onClick={() => removeSelection(r.id)}>
+                              <DeleteOutlineIcon />
+                            </IconButton>
+                          }
+                        >
+                          <ListItemText
+                            primary={formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
+                            secondary={t('rentals.requestForm.rangeHours', '{{h}} h', {
+                              h: rentalBillableHours(r.startMs, r.endMs),
+                            })}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
+                      <strong>{formatMoney(estimatedTotal, currency)}</strong> ({' '}
+                      {t('rentals.requestForm.totalHoursLine', '{{h}} hours at {{rate}} / hour', {
+                        h: hoursTotal,
+                        rate: formatMoney(basePricePerHour, currency),
+                      })}
+                      )
+                    </Typography>
+                  </>
+                ) : null}
+
                 <TextField
                   label={t('rentals.requestForm.optionalNotes', 'Optional notes for the business')}
                   placeholder={t(
@@ -273,95 +474,101 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                   size="small"
                   inputProps={{ maxLength: 2000 }}
                   helperText={t('rentals.requestForm.optionalNotesHelper', 'Max 2000 characters')}
-                  sx={{ width: '100%', alignSelf: 'stretch' }}
                 />
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => openConfirm()}
+                    disabled={selections.length === 0}
+                    sx={{
+                      minHeight: 48,
+                      fontWeight: 700,
+                      borderRadius: 2,
+                      px: 4,
+                    }}
+                  >
+                    {t('rentals.submitRequest', 'Submit request')}
+                  </Button>
+                  <Button variant="text" onClick={() => navigate('/rentals/requests')} sx={{ minHeight: 44 }}>
+                    {t('rentals.myRequests', 'My rental requests')}
+                  </Button>
+                </Stack>
+
+                {msg ? (
+                  <Alert severity="error" sx={{ borderRadius: 2 }}>
+                    {msg}
+                  </Alert>
+                ) : null}
               </Stack>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={2}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                sx={{ width: '100%', maxWidth: '100%' }}
-              >
+            ) : (
+              <Stack spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-start' }}>
+                <Typography variant="h6" fontWeight={700}>
+                  {t('rentals.requestRental', 'Request this rental')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('rentals.loginToRequest', 'Log in to request')}
+                </Typography>
                 <Button
                   variant="contained"
                   size="large"
-                  onClick={() => void submitRequest()}
-                  sx={{
-                    width: { xs: '100%', sm: 'auto' },
-                    flex: { sm: '1 1 auto' },
-                    minWidth: { sm: 220 },
-                    maxWidth: '100%',
-                    px: 4,
-                    py: 1.25,
-                    minHeight: 48,
-                    fontWeight: 700,
-                    borderRadius: 2,
-                    whiteSpace: 'nowrap',
-                    touchAction: 'manipulation',
-                  }}
+                  fullWidth
+                  onClick={() => navigate('/app')}
+                  sx={{ maxWidth: { sm: 320 }, minHeight: 48, fontWeight: 700, borderRadius: 2 }}
                 >
-                  {t('rentals.submitRequest', 'Submit request')}
+                  {t('rentals.loginToRequest', 'Log in to request')}
                 </Button>
-                <Button
-                  variant="text"
-                  onClick={() => navigate('/rentals/requests')}
-                  sx={{
-                    width: { xs: '100%', sm: 'auto' },
-                    minHeight: 44,
-                    flexShrink: 0,
-                    whiteSpace: { sm: 'nowrap' },
-                    alignSelf: { xs: 'stretch', sm: 'center' },
-                  }}
-                >
-                  {t('rentals.myRequests', 'My rental requests')}
-                </Button>
-              </Stack>
-              {msg ? (
-                <Alert
-                  severity="error"
-                  sx={{
-                    borderRadius: 2,
-                    '& .MuiAlert-message': { overflowWrap: 'anywhere' },
-                  }}
-                >
-                  {msg}
-                </Alert>
-              ) : null}
-              </Stack>
-            ) : (
-              <Stack
-                spacing={2}
-                alignItems={{ xs: 'stretch', sm: 'flex-start' }}
-                sx={{ width: '100%', maxWidth: '100%' }}
-              >
-              <Typography variant="h6" fontWeight={700}>
-                {t('rentals.requestRental', 'Request this rental')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('rentals.loginToRequest', 'Log in to request')}
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                onClick={() => navigate('/app')}
-                sx={{
-                  px: 4,
-                  py: 1.25,
-                  minHeight: 48,
-                  fontWeight: 700,
-                  borderRadius: 2,
-                  maxWidth: { sm: 320 },
-                  touchAction: 'manipulation',
-                }}
-              >
-                {t('rentals.loginToRequest', 'Log in to request')}
-              </Button>
               </Stack>
             )}
           </CardContent>
         </Card>
       </Box>
+
+      <Dialog open={confirmOpen} onClose={() => !submitting && setConfirmOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('rentals.requestForm.confirmTitle', 'Confirm your request')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'rentals.requestForm.confirmIntro',
+              'Review your selected times and estimated price before sending.'
+            )}
+          </Typography>
+          <List dense>
+            {selections.map((r) => (
+              <ListItem key={r.id}>
+                <ListItemText
+                  primary={formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
+                  secondary={t('rentals.requestForm.rangeHours', '{{h}} h', {
+                    h: rentalBillableHours(r.startMs, r.endMs),
+                  })}
+                />
+              </ListItem>
+            ))}
+          </List>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="body1" fontWeight={600}>
+            {t('rentals.requestForm.confirmHours', 'Total hours')}: {hoursTotal}
+          </Typography>
+          <Typography variant="h6" fontWeight={800} color="primary" sx={{ mt: 1 }}>
+            {t('rentals.requestForm.confirmPrice', 'Estimated price')}: {formatMoney(estimatedTotal, currency)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+            {t(
+              'rentals.requestForm.confirmPriceNote',
+              'Final price is confirmed when the business accepts your request.'
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button variant="contained" onClick={() => void submitRequest()} disabled={submitting}>
+            {submitting ? t('common.loading', 'Loading...') : t('rentals.requestForm.confirmSend', 'Send request')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

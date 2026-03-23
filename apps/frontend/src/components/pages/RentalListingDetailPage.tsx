@@ -434,7 +434,7 @@ const RentalListingDetailPage: React.FC = () => {
   const images = row.rental_item.rental_item_images ?? [];
   const tags = row.rental_item.tags ?? [];
   const addressLine = formatAddress(row.business_location.address ?? {});
-  const priceLabel = formatMoney(row.base_price_per_day, row.rental_item.currency);
+  const priceLabel = formatMoney(row.base_price_per_hour, row.rental_item.currency);
 
   return (
     <>
@@ -568,7 +568,7 @@ const RentalListingDetailPage: React.FC = () => {
                       {priceLabel}
                     </Typography>
                     <Typography variant="subtitle1" color="text.secondary" sx={{ fontSize: { xs: '0.95rem', sm: undefined } }}>
-                      {t('rentals.detail.dailyRate', 'Daily rate')}
+                      {t('rentals.detail.hourlyRate', 'Hourly rate')}
                     </Typography>
                   </Stack>
                   <Stack direction="row" gap={2} flexWrap="wrap" sx={{ mt: 2 }}>
@@ -577,10 +577,10 @@ const RentalListingDetailPage: React.FC = () => {
                         {t('rentals.detail.minStay', 'Minimum stay')}
                       </Typography>
                       <Typography variant="body1" fontWeight={600}>
-                        {row.min_rental_days}{' '}
-                        {row.min_rental_days === 1
-                          ? t('rentals.detail.dayUnit', 'day')
-                          : t('rentals.detail.daysUnit', 'days')}
+                        {row.min_rental_hours}{' '}
+                        {row.min_rental_hours === 1
+                          ? t('rentals.detail.hourUnit', 'hour')
+                          : t('rentals.detail.hoursUnit', 'hours')}
                       </Typography>
                     </Box>
                     <Box>
@@ -588,8 +588,8 @@ const RentalListingDetailPage: React.FC = () => {
                         {t('rentals.detail.maxStay', 'Maximum stay')}
                       </Typography>
                       <Typography variant="body1" fontWeight={600}>
-                        {row.max_rental_days != null
-                          ? `${row.max_rental_days} ${t('rentals.detail.daysUnit', 'days')}`
+                        {row.max_rental_hours != null
+                          ? `${row.max_rental_hours} ${t('rentals.detail.hoursUnit', 'hours')}`
                           : t('rentals.detail.noMaxStay', 'No maximum')}
                       </Typography>
                     </Box>
@@ -721,7 +721,15 @@ const RentalListingDetailPage: React.FC = () => {
               }}
             >
               {listingId ? (
-                <RentalListingRequestSection listingId={listingId} isAuthenticated={isAuthenticated} />
+                <RentalListingRequestSection
+                  listingId={listingId}
+                  isAuthenticated={isAuthenticated}
+                  minRentalHours={row.min_rental_hours}
+                  maxRentalHours={row.max_rental_hours}
+                  weeklyAvailability={row.weekly_availability ?? []}
+                  basePricePerHour={Number(row.base_price_per_hour)}
+                  currency={row.rental_item.currency}
+                />
               ) : null}
             </Grid>
           </Grid>

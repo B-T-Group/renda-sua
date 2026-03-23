@@ -30,13 +30,19 @@ import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
 
 interface ListingFormState {
-  base_price_per_day: string;
-  min_rental_days: string;
-  max_rental_days: string;
+  base_price_per_hour: string;
+  min_rental_hours: string;
+  max_rental_hours: string;
   units_available: string;
   pickup_instructions: string;
   dropoff_instructions: string;
   is_active: boolean;
+  weekly_availability: Array<{
+    weekday: number;
+    is_available: boolean;
+    start_time: string | null;
+    end_time: string | null;
+  }>;
 }
 
 function listingFormsFromDetail(
@@ -45,13 +51,14 @@ function listingFormsFromDetail(
   const out: Record<string, ListingFormState> = {};
   for (const l of item.rental_location_listings) {
     out[l.id] = {
-      base_price_per_day: String(l.base_price_per_day),
-      min_rental_days: String(l.min_rental_days),
-      max_rental_days: l.max_rental_days != null ? String(l.max_rental_days) : '',
+      base_price_per_hour: String(l.base_price_per_hour),
+      min_rental_hours: String(l.min_rental_hours),
+      max_rental_hours: l.max_rental_hours != null ? String(l.max_rental_hours) : '',
       units_available: String(l.units_available),
       pickup_instructions: l.pickup_instructions ?? '',
       dropoff_instructions: l.dropoff_instructions ?? '',
       is_active: l.is_active,
+      weekly_availability: l.weekly_availability ?? [],
     };
   }
   return out;
@@ -88,18 +95,19 @@ function buildListingUpdateBody(
     pickup_instructions: f.pickup_instructions.trim(),
     dropoff_instructions: f.dropoff_instructions.trim(),
     is_active: f.is_active,
+    weekly_availability: f.weekly_availability,
   };
 }
 
 function parsePriceFields(f: ListingFormState): {
-  base_price_per_day: number;
-  min_rental_days: number;
-  max_rental_days: number | null;
+  base_price_per_hour: number;
+  min_rental_hours: number;
+  max_rental_hours: number | null;
   units_available: number;
 } | null {
-  const base = Number(f.base_price_per_day);
-  const minD = Number(f.min_rental_days);
-  const maxRaw = f.max_rental_days.trim();
+  const base = Number(f.base_price_per_hour);
+  const minD = Number(f.min_rental_hours);
+  const maxRaw = f.max_rental_hours.trim();
   const maxD = maxRaw === '' ? null : Number(maxRaw);
   const units = Number(f.units_available);
   if (Number.isNaN(base) || base < 0) return null;
@@ -108,9 +116,9 @@ function parsePriceFields(f: ListingFormState): {
   if (maxD !== null && maxD < minD) return null;
   if (Number.isNaN(units) || units < 1) return null;
   return {
-    base_price_per_day: base,
-    min_rental_days: minD,
-    max_rental_days: maxD,
+    base_price_per_hour: base,
+    min_rental_hours: minD,
+    max_rental_hours: maxD,
     units_available: units,
   };
 }
@@ -376,34 +384,31 @@ const BusinessRentalItemEditPage: React.FC = () => {
               </Typography>
               <Stack spacing={2}>
                 <TextField
-                  label={t('business.rentals.pricePerDay', 'Price per day')}
-                  value={f.base_price_per_day}
+                  label={t('business.rentals.pricePerHour', 'Price per hour')}
+                  value={f.base_price_per_hour}
                   onChange={(e) =>
-                    patchListingForm(l.id, { base_price_per_day: e.target.value })
+                    patchListingForm(l.id, { base_price_per_hour: e.target.value })
                   }
                   type="number"
                   fullWidth
                 />
                 <TextField
-                  label={t('rentals.minDays', 'Min days')}
-                  value={f.min_rental_days}
+                  label={t('rentals.minHours', 'Min hours')}
+                  value={f.min_rental_hours}
                   onChange={(e) =>
-                    patchListingForm(l.id, { min_rental_days: e.target.value })
+                    patchListingForm(l.id, { min_rental_hours: e.target.value })
                   }
                   type="number"
                   fullWidth
                 />
                 <TextField
-                  label={t('rentals.maxDays', 'Max days')}
-                  value={f.max_rental_days}
+                  label={t('rentals.maxHours', 'Max hours')}
+                  value={f.max_rental_hours}
                   onChange={(e) =>
-                    patchListingForm(l.id, { max_rental_days: e.target.value })
+                    patchListingForm(l.id, { max_rental_hours: e.target.value })
                   }
                   type="number"
-                  helperText={t(
-                    'business.rentals.maxDaysHint',
-                    'Leave empty for no maximum'
-                  )}
+                  helperText={t('business.rentals.maxHoursHint', 'Leave empty for no maximum')}
                   fullWidth
                 />
                 <TextField
@@ -435,6 +440,61 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   minRows={2}
                   fullWidth
                 />
+                <Typography variant="subtitle2">
+                  {t('business.rentals.weeklyAvailability', 'Weekly availability')}
+                </Typography>
+                {f.weekly_availability.map((slot, index) => (
+                  <Box key={`${l.id}-${slot.weekday}`} sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1 }}>
+                    <Typography variant="body2" sx={{ alignSelf: 'center' }}>
+                      {t(`common.days.${['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][slot.weekday]}`, ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][slot.weekday])}
+                    </Typography>
+                    <TextField
+                      type="time"
+                      label={t('rentals.start', 'Start')}
+                      value={(slot.start_time ?? '08:00:00').slice(0, 5)}
+                      disabled={!slot.is_available}
+                      onChange={(e) =>
+                        patchListingForm(l.id, {
+                          weekly_availability: f.weekly_availability.map((r, i) =>
+                            i === index ? { ...r, start_time: `${e.target.value}:00` } : r
+                          ),
+                        })
+                      }
+                    />
+                    <TextField
+                      type="time"
+                      label={t('rentals.end', 'End')}
+                      value={(slot.end_time ?? '20:00:00').slice(0, 5)}
+                      disabled={!slot.is_available}
+                      onChange={(e) =>
+                        patchListingForm(l.id, {
+                          weekly_availability: f.weekly_availability.map((r, i) =>
+                            i === index ? { ...r, end_time: `${e.target.value}:00` } : r
+                          ),
+                        })
+                      }
+                    />
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        patchListingForm(l.id, {
+                          weekly_availability: f.weekly_availability.map((r, i) =>
+                            i === index
+                              ? {
+                                  ...r,
+                                  is_available: !r.is_available,
+                                  start_time: !r.is_available ? '08:00:00' : null,
+                                  end_time: !r.is_available ? '20:00:00' : null,
+                                }
+                              : r
+                          ),
+                        })
+                      }
+                    >
+                      {slot.is_available ? t('common.disable', 'Disable') : t('common.enable', 'Enable')}
+                    </Button>
+                  </Box>
+                ))}
                 <FormControlLabel
                   control={
                     <Switch

@@ -15,17 +15,17 @@ export class RentalPricingSnapshotDto {
   @Min(0)
   total!: number;
 
-  @ApiProperty({ required: false, example: 5000 })
+  @ApiProperty({ required: false, example: 2500 })
   @IsOptional()
   @IsNumber()
   @Min(0)
-  ratePerDay?: number;
+  ratePerHour?: number;
 
-  @ApiProperty({ required: false, example: 3 })
+  @ApiProperty({ required: false, example: 6.5 })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  days?: number;
+  hours?: number;
 
   @ApiProperty({ example: '2025-03-22T12:00:00.000Z' })
   @IsString()

@@ -27,6 +27,16 @@ import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessRentalsPage: React.FC = () => {
+  const defaultWeeklyAvailability = [
+    { weekday: 0, is_available: false, start_time: null, end_time: null },
+    { weekday: 1, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    { weekday: 2, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    { weekday: 3, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    { weekday: 4, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    { weekday: 5, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+    { weekday: 6, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
+  ];
+  const weekdayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
@@ -58,6 +68,7 @@ const BusinessRentalsPage: React.FC = () => {
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [units, setUnits] = useState('1');
+  const [weeklyAvailability, setWeeklyAvailability] = useState(defaultWeeklyAvailability);
   const [respondTarget, setRespondTarget] = useState<{
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
@@ -107,10 +118,11 @@ const BusinessRentalsPage: React.FC = () => {
       business_location_id: selLoc,
       pickup_instructions: pickup,
       dropoff_instructions: dropoff,
-      base_price_per_day: Number(price),
-      min_rental_days: Number(minD) || 1,
-      max_rental_days: maxD ? Number(maxD) : null,
+      base_price_per_hour: Number(price),
+      min_rental_hours: Number(minD) || 1,
+      max_rental_hours: maxD ? Number(maxD) : null,
       units_available: Number(units) || 1,
+      weekly_availability: weeklyAvailability,
     });
     setListOpen(false);
     void loadItems();
@@ -335,14 +347,65 @@ const BusinessRentalsPage: React.FC = () => {
             </Select>
           </FormControl>
           <TextField
-            label={t('business.rentals.pricePerDay', 'Price per day')}
+            label={t('business.rentals.pricePerHour', 'Price per hour')}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             type="number"
           />
-          <TextField label={t('rentals.minDays', 'Min days')} value={minD} onChange={(e) => setMinD(e.target.value)} />
-          <TextField label={t('rentals.maxDays', 'Max days')} value={maxD} onChange={(e) => setMaxD(e.target.value)} />
+          <TextField label={t('rentals.minHours', 'Min hours')} value={minD} onChange={(e) => setMinD(e.target.value)} />
+          <TextField label={t('rentals.maxHours', 'Max hours')} value={maxD} onChange={(e) => setMaxD(e.target.value)} />
           <TextField label={t('business.rentals.units', 'Units available')} value={units} onChange={(e) => setUnits(e.target.value)} />
+          <Typography variant="subtitle2">
+            {t('business.rentals.weeklyAvailability', 'Weekly availability')}
+          </Typography>
+          {weeklyAvailability.map((slot, index) => (
+            <Box key={slot.weekday} sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1 }}>
+              <Typography variant="body2" sx={{ alignSelf: 'center' }}>
+                {weekdayLabels[slot.weekday]}
+              </Typography>
+              <TextField
+                label={t('rentals.start', 'Start')}
+                type="time"
+                value={(slot.start_time ?? '08:00:00').slice(0, 5)}
+                disabled={!slot.is_available}
+                onChange={(e) =>
+                  setWeeklyAvailability((prev) =>
+                    prev.map((s, i) => (i === index ? { ...s, start_time: `${e.target.value}:00` } : s))
+                  )
+                }
+              />
+              <TextField
+                label={t('rentals.end', 'End')}
+                type="time"
+                value={(slot.end_time ?? '20:00:00').slice(0, 5)}
+                disabled={!slot.is_available}
+                onChange={(e) =>
+                  setWeeklyAvailability((prev) =>
+                    prev.map((s, i) => (i === index ? { ...s, end_time: `${e.target.value}:00` } : s))
+                  )
+                }
+              />
+              <Button
+                size="small"
+                onClick={() =>
+                  setWeeklyAvailability((prev) =>
+                    prev.map((s, i) =>
+                      i === index
+                        ? {
+                            ...s,
+                            is_available: !s.is_available,
+                            start_time: !s.is_available ? '08:00:00' : null,
+                            end_time: !s.is_available ? '20:00:00' : null,
+                          }
+                        : s
+                    )
+                  )
+                }
+              >
+                {slot.is_available ? t('common.disable', 'Disable') : t('common.enable', 'Enable')}
+              </Button>
+            </Box>
+          ))}
           <TextField
             label={t('rentals.pickupInstructions', 'Pickup instructions')}
             value={pickup}

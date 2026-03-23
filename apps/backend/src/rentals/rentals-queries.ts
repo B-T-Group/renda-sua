@@ -3,10 +3,16 @@ export const GET_LISTING_FOR_REQUEST = `
     rental_location_listings_by_pk(id: $id) {
       id
       is_active
-      min_rental_days
-      max_rental_days
+      min_rental_hours
+      max_rental_hours
       units_available
-      base_price_per_day
+      base_price_per_hour
+      weekly_availability(order_by: { weekday: asc }) {
+        weekday
+        is_available
+        start_time
+        end_time
+      }
       rental_item {
         id
         business_id
@@ -26,12 +32,18 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
   ) {
     rental_location_listings(where: $where, order_by: $order_by) {
       id
-      base_price_per_day
-      min_rental_days
-      max_rental_days
+      base_price_per_hour
+      min_rental_hours
+      max_rental_hours
       pickup_instructions
       dropoff_instructions
       updated_at
+      weekly_availability(order_by: { weekday: asc }) {
+        weekday
+        is_available
+        start_time
+        end_time
+      }
       rental_item {
         id
         name
@@ -77,12 +89,18 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
   query GetPublicRentalListingByPk($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
       id
-      base_price_per_day
-      min_rental_days
-      max_rental_days
+      base_price_per_hour
+      min_rental_hours
+      max_rental_hours
       pickup_instructions
       dropoff_instructions
       updated_at
+      weekly_availability(order_by: { weekday: asc }) {
+        weekday
+        is_available
+        start_time
+        end_time
+      }
       rental_item {
         id
         name
@@ -143,12 +161,14 @@ export const GET_RENTAL_REQUEST_FULL = `
       status
       requested_start_at
       requested_end_at
+      rental_selection_windows
       rental_pricing_snapshot
       rental_location_listing_id
       expires_at
       rental_location_listing {
         id
         units_available
+        base_price_per_hour
         rental_item { id business_id currency is_active }
       }
       client { id user_id }
@@ -205,10 +225,12 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
 
 export const LIST_TAKEN_RENTAL_BOOKING_WINDOWS = `
   query ListTakenRentalBookingWindows($listingId: uuid!) {
-    rental_bookings(
+    rental_booking_windows(
       where: {
-        rental_location_listing_id: { _eq: $listingId }
-        status: { _in: [confirmed, active, awaiting_return, proposed] }
+        rental_booking: {
+          rental_location_listing_id: { _eq: $listingId }
+          status: { _in: [confirmed, active, awaiting_return, proposed] }
+        }
       }
       order_by: { start_at: asc }
     ) {
@@ -228,10 +250,12 @@ export const COUNT_OVERLAPPING_BOOKINGS = `
       where: {
         rental_location_listing_id: { _eq: $listingId }
         status: { _in: [confirmed, active, awaiting_return] }
-        _and: [
-          { start_at: { _lt: $end } }
-          { end_at: { _gt: $start } }
-        ]
+        rental_booking_windows: {
+          _and: [
+            { start_at: { _lt: $end } }
+            { end_at: { _gt: $start } }
+          ]
+        }
       }
     ) {
       aggregate {
@@ -431,7 +455,7 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
       rental_location_listings {
         id
         business_location_id
-        base_price_per_day
+        base_price_per_hour
       }
     }
   }
@@ -456,13 +480,20 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
       rental_location_listings(order_by: { created_at: desc }) {
         id
         business_location_id
-        base_price_per_day
-        min_rental_days
-        max_rental_days
+        base_price_per_hour
+        min_rental_hours
+        max_rental_hours
         units_available
         is_active
         pickup_instructions
         dropoff_instructions
+        weekly_availability(order_by: { weekday: asc }) {
+          id
+          weekday
+          is_available
+          start_time
+          end_time
+        }
         business_location {
           id
           name
@@ -505,8 +536,8 @@ export const GET_RENTAL_LISTING_BUSINESS_CHECK = `
 export const GET_RENTAL_LISTING_MIN_MAX = `
   query GetRentalListingMinMax($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
-      min_rental_days
-      max_rental_days
+      min_rental_hours
+      max_rental_hours
     }
   }
 `;
@@ -527,7 +558,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       expires_at
       rental_location_listing {
         id
-        base_price_per_day
+        base_price_per_hour
         business_location {
           name
         }
@@ -552,6 +583,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       status
       requested_start_at
       requested_end_at
+      rental_selection_windows
       rental_pricing_snapshot
       business_response_note
       client_request_note
@@ -560,7 +592,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       responded_at
       rental_location_listing {
         id
-        base_price_per_day
+        base_price_per_hour
         rental_item {
           name
           currency
@@ -612,6 +644,20 @@ export const INSERT_BUSINESS_RENTAL_LISTING = `
   mutation InsertBusinessRentalListing($object: rental_location_listings_insert_input!) {
     insert_rental_location_listings_one(object: $object) {
       id
+    }
+  }
+`;
+
+export const UPSERT_RENTAL_LISTING_WEEKLY_AVAILABILITY = `
+  mutation UpsertRentalListingWeeklyAvailability($objects: [rental_listing_weekly_availability_insert_input!]!) {
+    insert_rental_listing_weekly_availability(
+      objects: $objects
+      on_conflict: {
+        constraint: rental_listing_weekly_availability_unique
+        update_columns: [is_available, start_time, end_time, updated_at]
+      }
+    ) {
+      affected_rows
     }
   }
 `;
