@@ -111,9 +111,9 @@ select_permissions:
         - business_location_id
         - pickup_instructions
         - dropoff_instructions
-        - base_price_per_day
-        - min_rental_days
-        - max_rental_days
+        - base_price_per_hour
+        - min_rental_hours
+        - max_rental_hours
         - units_available
         - is_active
         - created_at
