@@ -61,8 +61,8 @@
   "client_order_ready_for_pickup_fr": "f5c20b1e-710d-4eb3-817b-bd57181384ed",
   "client_order_refunded": "d79a3a2d-04f2-4c7e-9f59-b4a1b9b52812",
   "client_order_refunded_fr": "00d0f2bd-1fc4-4fad-86c8-3805b9b61e31",
-  "business_rental_period_ended": "b2800001-0001-4000-8000-000000000001",
-  "business_rental_period_ended_fr": "b2800001-0001-4000-8000-000000000002",
-  "client_rental_period_ended": "b2800001-0001-4000-8000-000000000003",
-  "client_rental_period_ended_fr": "b2800001-0001-4000-8000-000000000004"
+  "business_rental_period_ended": "feeebb0a-3bfa-48df-9813-6229eb20e4cc",
+  "business_rental_period_ended_fr": "c8760692-a3a2-4761-aa23-5066d114876f",
+  "client_rental_period_ended": "c2440b28-627b-4754-b343-f179783139cd",
+  "client_rental_period_ended_fr": "76ef4e14-cd3d-4a5e-ba19-d47a9f676c1f"
 }

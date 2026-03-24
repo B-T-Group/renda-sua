@@ -59,6 +59,12 @@ function extractVariables(html: string): TemplateVariable[] {
       continue;
     }
     map.set(key, { key, type: 'string', fallbackValue: '' });
+    // Some older templates in Resend can report normalized uppercase variable
+    // names (e.g. RECIPIENTNAME). Include an alias to avoid update failures.
+    const upperKey = key.toUpperCase();
+    if (!map.has(upperKey) && !RESERVED.has(upperKey)) {
+      map.set(upperKey, { key: upperKey, type: 'string', fallbackValue: '' });
+    }
   }
   return Array.from(map.values());
 }
