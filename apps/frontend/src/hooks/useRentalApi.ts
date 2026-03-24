@@ -109,6 +109,7 @@ export interface RespondRentalRequestBody {
 
 export interface BusinessRentalRequestRow {
   id: string;
+  created_at: string;
   status: string;
   requested_start_at: string;
   requested_end_at: string;
@@ -125,6 +126,15 @@ export interface BusinessRentalRequestRow {
     weekly_availability?: RentalWeeklyAvailabilityRow[];
     rental_item: { name: string; currency: string };
   };
+  client?: {
+    id: string;
+    user?: {
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface ClientRentalRequestRow {

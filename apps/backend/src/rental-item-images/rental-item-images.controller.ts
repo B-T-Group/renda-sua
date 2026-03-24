@@ -159,11 +159,19 @@ export class RentalItemImagesController {
   @ApiResponse({ status: 400, description: 'Image already linked' })
   @ApiBody({ type: RentalFromImageSuggestionsDto })
   async rentalFromImageSuggestions(@Body() body: RentalFromImageSuggestionsDto) {
-    const businessId = await this.requireBusinessId();
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
     const data =
       await this.rentalItemImagesService.getRentalFromImageSuggestions(
         businessId,
-        body.imageId
+        body.imageId,
+        user?.preferred_language ?? 'en'
       );
     return { success: true, data };
   }
@@ -178,10 +186,18 @@ export class RentalItemImagesController {
   @ApiResponse({ status: 400, description: 'Image already linked or invalid mode data' })
   @ApiBody({ type: CreateRentalFromImageDto })
   async createRentalFromImage(@Body() body: CreateRentalFromImageDto) {
-    const businessId = await this.requireBusinessId();
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
     const item = await this.rentalItemImagesService.createRentalFromImage(
       businessId,
-      body
+      body,
+      user?.preferred_language ?? 'en'
     );
     return { success: true, data: { item } };
   }

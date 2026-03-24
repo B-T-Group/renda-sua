@@ -580,6 +580,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
   query GetBusinessRentalRequests {
     rental_requests(order_by: { created_at: desc }, limit: 50) {
       id
+      created_at
       status
       requested_start_at
       requested_end_at
@@ -590,6 +591,15 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       unavailable_reason_code
       expires_at
       responded_at
+      client {
+        id
+        user {
+          first_name
+          last_name
+          email
+          phone_number
+        }
+      }
       rental_location_listing {
         id
         base_price_per_hour

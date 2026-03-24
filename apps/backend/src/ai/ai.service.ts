@@ -342,6 +342,7 @@ export class AiService {
     caption?: string | null;
     altText?: string | null;
     defaultCurrency?: string;
+    preferredLanguage?: string | null;
   }): Promise<ImageItemSuggestionResult> {
     const apiKey = this.configService.get<string>('openai.apiKey');
     if (!apiKey) {
@@ -353,6 +354,11 @@ export class AiService {
     }
 
     const defaultCurrency = input.defaultCurrency || 'XAF';
+    const descriptionLanguage = this.resolvePreferredLanguage(
+      input.preferredLanguage
+    );
+    const languageLabel =
+      descriptionLanguage === 'fr' ? 'French' : 'English';
     const textContextParts: string[] = [];
     if (input.caption) {
       textContextParts.push(`Caption: ${input.caption}`);
@@ -373,6 +379,7 @@ Then, use OCR on the image and any visible labels/price tags to extract:
 - Subcategory name
 - Brand name
 - A short 2–3 sentence e-commerce description in English
+ - A short 2–3 sentence e-commerce description in ${languageLabel}
 - The product price as a number (no currency symbol)
 - The currency code (3-letter code). If no currency symbol or code is visible, default to "${defaultCurrency}".
 - Any decoded barcode values (EAN/UPC/etc) if readable.
@@ -398,7 +405,8 @@ Return ONLY a single JSON object with this exact shape:
   "dimensions": string | null
 }
 
-Do not include any explanation outside of the JSON.`;
+Do not include any explanation outside of the JSON.
+The "description" field MUST be written in ${languageLabel}.`;
 
     const request: OpenAIRequest = {
       model: 'gpt-4o-mini',
@@ -529,6 +537,7 @@ Do not include any explanation outside of the JSON.`;
     caption?: string | null;
     altText?: string | null;
     defaultCurrency?: string;
+    preferredLanguage?: string | null;
   }): Promise<RentalImageSuggestionResult> {
     const apiKey = this.configService.get<string>('openai.apiKey');
     if (!apiKey) {
@@ -538,10 +547,14 @@ Do not include any explanation outside of the JSON.`;
       );
     }
     const defaultCurrency = input.defaultCurrency || 'XAF';
+    const descriptionLanguage = this.resolvePreferredLanguage(
+      input.preferredLanguage
+    );
     const textContext = this.buildRentalSuggestionTextContext(input);
     const userText = this.buildRentalSuggestionUserPrompt(
       textContext,
-      defaultCurrency
+      defaultCurrency,
+      descriptionLanguage
     );
     try {
       return await this.requestRentalImageSuggestions(
@@ -571,8 +584,10 @@ Do not include any explanation outside of the JSON.`;
 
   private buildRentalSuggestionUserPrompt(
     textContext: string,
-    defaultCurrency: string
+    defaultCurrency: string,
+    descriptionLanguage: 'en' | 'fr'
   ): string {
+    const languageLabel = descriptionLanguage === 'fr' ? 'French' : 'English';
     return `
 You analyze photos of assets that could be rented (tools, equipment, vehicles, event items, apparel, etc.).
 Infer a concise rental listing from the image and any visible text.
@@ -590,12 +605,19 @@ Return ONLY a JSON object with this exact shape:
 }
 
 - name: short title for the rental item (not a full sentence).
-- description: 2–4 sentences for renters (condition, typical use, what is included if visible).
+- description: 2–4 sentences for renters (condition, typical use, what is included if visible) in ${languageLabel}.
 - rentalCategoryName: the best-matching category label in plain English (e.g. "Power tools", "Vehicles", "Event equipment") — a human name, not an id.
 - suggestedTags: a few lowercase keywords for search (e.g. ["drill", "cordless", "dewalt"]).
 - currency: 3-letter ISO code for pricing context if inferable; otherwise "${defaultCurrency}".
 
 No markdown, no explanation outside JSON.`;
+  }
+
+  private resolvePreferredLanguage(
+    preferredLanguage?: string | null
+  ): 'en' | 'fr' {
+    const normalized = preferredLanguage?.trim().toLowerCase();
+    return normalized?.startsWith('fr') ? 'fr' : 'en';
   }
 
   private async requestRentalImageSuggestions(

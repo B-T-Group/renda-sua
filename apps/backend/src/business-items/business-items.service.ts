@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { BusinessImagesService } from '../business-images/business-images.service';
+import { AiService } from '../ai/ai.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
@@ -509,7 +510,8 @@ export class BusinessItemsService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly businessImagesService: BusinessImagesService
+    private readonly businessImagesService: BusinessImagesService,
+    private readonly aiService: AiService
   ) {}
 
   async getItems(businessId: string) {
@@ -1258,11 +1260,19 @@ export class BusinessItemsService {
 
   async createItemFromImage(
     businessId: string,
-    dto: CreateItemFromImageDto
+    dto: CreateItemFromImageDto,
+    preferredLanguage = 'en'
   ): Promise<any> {
     const image = await this.businessImagesService.getImageForBusiness(
       businessId,
       dto.imageId
+    );
+    const generatedDescription = await this.generateDescriptionFromImageIfMissing(
+      dto,
+      image.image_url,
+      image.caption,
+      image.alt_text,
+      preferredLanguage
     );
 
     const name = dto.name.trim();
@@ -1297,7 +1307,7 @@ export class BusinessItemsService {
     const insertData = {
       business_id: businessId,
       name,
-      description: dto.description ?? '',
+      description: generatedDescription,
       sku,
       ...(subCategoryId != null && { item_sub_category_id: subCategoryId }),
       ...(brandId && { brand_id: brandId }),
@@ -1330,6 +1340,27 @@ export class BusinessItemsService {
       name: newItem.name,
       sku: newItem.sku,
     };
+  }
+
+  private async generateDescriptionFromImageIfMissing(
+    dto: CreateItemFromImageDto,
+    imageUrl: string,
+    caption: string | null,
+    altText: string | null,
+    preferredLanguage: string
+  ): Promise<string> {
+    const providedDescription = dto.description?.trim();
+    if (providedDescription) {
+      return providedDescription;
+    }
+    const aiSuggestion = await this.aiService.generateImageItemSuggestions({
+      imageUrl,
+      caption,
+      altText,
+      defaultCurrency: 'XAF',
+      preferredLanguage,
+    });
+    return aiSuggestion.description?.trim() ?? '';
   }
 
   private buildSkuBase(name: string): string {

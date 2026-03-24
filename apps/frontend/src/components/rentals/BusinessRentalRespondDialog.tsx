@@ -8,11 +8,12 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  TextField,
   Typography,
+  TextField,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RichTextEditor } from '../common/RichTextEditor';
 import type {
   BusinessRentalRequestRow,
   RentalPricingSnapshotBody,
@@ -71,6 +72,20 @@ function formatMoney(amount: number, currency: string): string {
   } catch {
     return `${amount} ${currency}`;
   }
+}
+
+function formatDateTimeWithoutTimezone(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export interface BusinessRentalRespondDialogProps {
@@ -186,7 +201,8 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
           {request.rental_location_listing.rental_item.name}
         </Typography>
         <Typography variant="body2">
-          {request.requested_start_at} → {request.requested_end_at}
+          {formatDateTimeWithoutTimezone(request.requested_start_at)} ->{' '}
+          {formatDateTimeWithoutTimezone(request.requested_end_at)}
         </Typography>
 
         {mode === 'available' ? (
@@ -220,13 +236,13 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
               )}
               fullWidth
             />
-            <TextField
-              label={t('business.rentals.optionalMessage', 'Optional message to the client')}
+            <Typography variant="body2" color="text.secondary">
+              {t('business.rentals.optionalMessage', 'Optional message to the client')}
+            </Typography>
+            <RichTextEditor
               value={availableNote}
-              onChange={(e) => setAvailableNote(e.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
+              onChange={setAvailableNote}
+              placeholder={t('business.rentals.optionalMessage', 'Optional message to the client')}
             />
           </>
         ) : (
@@ -248,18 +264,19 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
                 ))}
               </Select>
             </FormControl>
-            <TextField
-              label={
+            <Typography variant="body2" color="text.secondary">
+              {reasonCode === 'other'
+                ? t('business.rentals.otherReasonNote', 'Please explain')
+                : t('business.rentals.optionalMessage', 'Optional message to the client')}
+            </Typography>
+            <RichTextEditor
+              value={unavailableNote}
+              onChange={setUnavailableNote}
+              placeholder={
                 reasonCode === 'other'
                   ? t('business.rentals.otherReasonNote', 'Please explain')
                   : t('business.rentals.optionalMessage', 'Optional message to the client')
               }
-              value={unavailableNote}
-              onChange={(e) => setUnavailableNote(e.target.value)}
-              multiline
-              minRows={reasonCode === 'other' ? 3 : 2}
-              required={reasonCode === 'other'}
-              fullWidth
             />
           </>
         )}

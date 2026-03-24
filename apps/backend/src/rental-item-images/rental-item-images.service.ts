@@ -360,7 +360,8 @@ export class RentalItemImagesService {
 
   async getRentalFromImageSuggestions(
     businessId: string,
-    imageId: string
+    imageId: string,
+    preferredLanguage = 'en'
   ): Promise<RentalFromImageSuggestionsResponse> {
     const image = await this.fetchImageForBusiness(businessId, imageId);
     this.assertImageUnlinked(image);
@@ -369,6 +370,7 @@ export class RentalItemImagesService {
       caption: image.caption,
       altText: image.alt_text,
       defaultCurrency: 'XAF',
+      preferredLanguage,
     });
     const rows = await this.fetchActiveRentalCategories();
     const rental_category_id = this.resolveRentalCategoryId(
@@ -388,14 +390,15 @@ export class RentalItemImagesService {
 
   async createRentalFromImage(
     businessId: string,
-    dto: CreateRentalFromImageDto
+    dto: CreateRentalFromImageDto,
+    preferredLanguage = 'en'
   ): Promise<{ id: string; name: string }> {
     const image = await this.fetchImageForBusiness(businessId, dto.imageId);
     this.assertImageUnlinked(image);
     const mode = dto.mode ?? 'manual';
     const fields =
       mode === 'ai'
-        ? await this.buildCreateFieldsFromAi(dto, image)
+        ? await this.buildCreateFieldsFromAi(dto, image, preferredLanguage)
         : this.buildCreateFieldsManual(dto, image);
     return this.persistRentalItemFromImage(businessId, image, fields);
   }
@@ -445,13 +448,15 @@ export class RentalItemImagesService {
 
   private async buildCreateFieldsFromAi(
     dto: CreateRentalFromImageDto,
-    image: RentalItemImage
+    image: RentalItemImage,
+    preferredLanguage: string
   ): Promise<RentalCreateFields> {
     const ai = await this.aiService.generateRentalImageSuggestions({
       imageUrl: image.image_url,
       caption: image.caption,
       altText: image.alt_text,
       defaultCurrency: 'XAF',
+      preferredLanguage,
     });
     const rows = await this.fetchActiveRentalCategories();
     const catId =

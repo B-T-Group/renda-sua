@@ -187,6 +187,7 @@ export class AiController {
       caption: image.caption,
       altText: image.alt_text,
       defaultCurrency: 'XAF',
+      preferredLanguage: user?.preferred_language ?? 'en',
     });
 
     if (suggestion.barcodeValues?.length) {

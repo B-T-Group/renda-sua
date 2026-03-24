@@ -245,7 +245,8 @@ export class BusinessItemsController {
     }
     const item = await this.businessItemsService.createItemFromImage(
       businessId,
-      body
+      body,
+      user?.preferred_language ?? 'en'
     );
     return { success: true, data: { item } };
   }

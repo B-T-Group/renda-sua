@@ -2,6 +2,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -9,13 +10,16 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
+  Paper,
   Select,
+  Stack,
   Tab,
   Tabs,
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import { Storefront } from '@mui/icons-material';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -23,11 +27,19 @@ import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useRentalApi, type BusinessRentalItemRow, type BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
+import { BusinessRentalRequestCard } from '../rentals/BusinessRentalRequestCard';
 import LoadingPage from '../common/LoadingPage';
 import SEOHead from '../seo/SEOHead';
 
+type WeeklyAvailabilitySlot = {
+  weekday: number;
+  is_available: boolean;
+  start_time: string | null;
+  end_time: string | null;
+};
+
 const BusinessRentalsPage: React.FC = () => {
-  const defaultWeeklyAvailability = [
+  const defaultWeeklyAvailability: WeeklyAvailabilitySlot[] = [
     { weekday: 0, is_available: false, start_time: null, end_time: null },
     { weekday: 1, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
     { weekday: 2, is_available: true, start_time: '08:00:00', end_time: '20:00:00' },
@@ -68,11 +80,20 @@ const BusinessRentalsPage: React.FC = () => {
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [units, setUnits] = useState('1');
-  const [weeklyAvailability, setWeeklyAvailability] = useState(defaultWeeklyAvailability);
+  const [weeklyAvailability, setWeeklyAvailability] = useState<WeeklyAvailabilitySlot[]>(defaultWeeklyAvailability);
   const [respondTarget, setRespondTarget] = useState<{
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
   } | null>(null);
+  const sortedRequests = useMemo(
+    () =>
+      [...requests].sort((a, b) => {
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+      }),
+    [requests]
+  );
 
   const loadItems = useCallback(async () => {
     const list = await fetchBusinessRentalItems();
@@ -91,7 +112,9 @@ const BusinessRentalsPage: React.FC = () => {
     }
     setLoading(true);
     Promise.all([loadItems(), loadRequests()])
-      .catch(() => {})
+      .catch((error: unknown) => {
+        console.error('Failed to load business rentals data', error);
+      })
       .finally(() => setLoading(false));
   }, [businessId, loadItems, loadRequests]);
 
@@ -143,22 +166,85 @@ const BusinessRentalsPage: React.FC = () => {
   return (
     <>
       <SEOHead title={t('business.rentals.pageTitle', 'Rentals')} />
-      <Box sx={{ p: 2 }}>
-        <Typography variant="h4" gutterBottom>
-          {t('business.rentals.pageTitle', 'Rentals')}
-        </Typography>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-          <Tab label={t('business.rentals.catalogTab', 'Catalog')} />
-          <Tab label={t('business.rentals.requestsTab', 'Requests')} />
-        </Tabs>
+      <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 3 },
+            borderRadius: 3,
+            border: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            mb: 2,
+          }}
+        >
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
+            <Box>
+              <Stack direction="row" spacing={1.25} alignItems="center">
+                <Box
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'primary.50',
+                    color: 'primary.main',
+                  }}
+                >
+                  <Storefront fontSize="small" />
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                  {t('business.rentals.pageTitle', 'Rentals')}
+                </Typography>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {t('business.rentals.pageSubtitle', 'Manage rental items, listings, and booking requests in one place.')}
+              </Typography>
+            </Box>
+            <Button variant="outlined" onClick={() => navigate('/dashboard')}>
+              {t('business.rentals.backToDashboard', 'Back to dashboard')}
+            </Button>
+          </Stack>
+        </Paper>
+
+        <Paper elevation={0} sx={{ borderRadius: 3, border: 1, borderColor: 'divider', p: { xs: 1, md: 2 } }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+            <Tab label={t('business.rentals.catalogTab', 'Catalog')} />
+            <Tab label={t('business.rentals.requestsTab', 'Requests')} />
+          </Tabs>
         {tab === 0 && (
-          <Box>
-            <Button variant="contained" sx={{ mr: 1 }} onClick={() => setItemOpen(true)}>
-              {t('business.rentals.addItem', 'Add rental item')}
-            </Button>
-            <Button variant="outlined" onClick={() => setListOpen(true)}>
-              {t('business.rentals.addListing', 'Add location listing')}
-            </Button>
+          <Box sx={{ px: { xs: 1, md: 0.5 }, pb: { xs: 1, md: 0.5 } }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
+              <Button variant="contained" onClick={() => setItemOpen(true)}>
+                {t('business.rentals.addItem', 'Add rental item')}
+              </Button>
+              <Button variant="outlined" onClick={() => setListOpen(true)}>
+                {t('business.rentals.addListing', 'Add location listing')}
+              </Button>
+            </Stack>
+            {items.length === 0 && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  mt: 2,
+                  borderRadius: 2,
+                  border: 1,
+                  borderColor: 'divider',
+                  textAlign: 'center',
+                  bgcolor: 'background.default',
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {t('business.rentals.emptyCatalogTitle', 'No rental items yet')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                  {t('business.rentals.emptyCatalogBody', 'Start by adding your first rental item, then create a listing for a location.')}
+                </Typography>
+              </Paper>
+            )}
             {items.map((it) => {
               const thumb = it.rental_item_images?.[0]?.image_url;
               return (
@@ -169,9 +255,11 @@ const BusinessRentalsPage: React.FC = () => {
                     borderColor: 'divider',
                     p: 2,
                     mt: 2,
+                    borderRadius: 2,
                     display: 'flex',
                     gap: 2,
                     alignItems: 'flex-start',
+                    bgcolor: 'background.paper',
                   }}
                 >
                   {thumb ? (
@@ -213,10 +301,9 @@ const BusinessRentalsPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary">
                       {it.description}
                     </Typography>
-                    <Typography variant="caption" display="block" sx={{ mb: 1 }}>
-                      {t('business.rentals.listingsCount', 'Listings')}:{' '}
-                      {it.rental_location_listings?.length ?? 0}
-                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                      <Chip size="small" label={`${t('business.rentals.listingsCount', 'Listings')}: ${it.rental_location_listings?.length ?? 0}`} />
+                    </Stack>
                     <Button
                       size="small"
                       variant="outlined"
@@ -231,39 +318,38 @@ const BusinessRentalsPage: React.FC = () => {
           </Box>
         )}
         {tab === 1 && (
-          <Box>
-            {requests.map((req) => (
-              <Box key={req.id} sx={{ border: 1, borderColor: 'divider', p: 2, mb: 2 }}>
-                <Typography variant="subtitle1">
-                  {req.rental_location_listing?.rental_item?.name}
+          <Box sx={{ px: { xs: 1, md: 0.5 }, pb: { xs: 1, md: 0.5 } }}>
+            {requests.length === 0 && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: 1,
+                  borderColor: 'divider',
+                  textAlign: 'center',
+                  bgcolor: 'background.default',
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {t('business.rentals.emptyRequestsTitle', 'No booking requests')}
                 </Typography>
-                <Typography variant="body2">
-                  {req.requested_start_at} → {req.requested_end_at}
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                  {t('business.rentals.emptyRequestsBody', 'Incoming rental requests will appear here when clients submit them.')}
                 </Typography>
-                {req.client_request_note?.trim() ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
-                    {t('business.rentals.clientRequestNote', 'Client note')}: {req.client_request_note.trim()}
-                  </Typography>
-                ) : null}
-                <Typography>Status: {req.status}</Typography>
-                {req.status === 'pending' && (
-                  <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                    <Button size="small" onClick={() => setRespondTarget({ req, mode: 'available' })}>
-                      {t('business.rentals.markAvailable', 'Available')}
-                    </Button>
-                    <Button
-                      size="small"
-                      color="warning"
-                      onClick={() => setRespondTarget({ req, mode: 'unavailable' })}
-                    >
-                      {t('business.rentals.markUnavailable', 'Unavailable')}
-                    </Button>
-                  </Box>
-                )}
-              </Box>
+              </Paper>
+            )}
+            {sortedRequests.map((req) => (
+              <BusinessRentalRequestCard
+                key={req.id}
+                request={req}
+                onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
+                onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              />
             ))}
           </Box>
         )}
+        </Paper>
       </Box>
 
       <BusinessRentalRespondDialog
@@ -369,7 +455,7 @@ const BusinessRentalsPage: React.FC = () => {
                 value={(slot.start_time ?? '08:00:00').slice(0, 5)}
                 disabled={!slot.is_available}
                 onChange={(e) =>
-                  setWeeklyAvailability((prev) =>
+                  setWeeklyAvailability((prev: WeeklyAvailabilitySlot[]) =>
                     prev.map((s, i) => (i === index ? { ...s, start_time: `${e.target.value}:00` } : s))
                   )
                 }
@@ -380,7 +466,7 @@ const BusinessRentalsPage: React.FC = () => {
                 value={(slot.end_time ?? '20:00:00').slice(0, 5)}
                 disabled={!slot.is_available}
                 onChange={(e) =>
-                  setWeeklyAvailability((prev) =>
+                  setWeeklyAvailability((prev: WeeklyAvailabilitySlot[]) =>
                     prev.map((s, i) => (i === index ? { ...s, end_time: `${e.target.value}:00` } : s))
                   )
                 }
@@ -388,7 +474,7 @@ const BusinessRentalsPage: React.FC = () => {
               <Button
                 size="small"
                 onClick={() =>
-                  setWeeklyAvailability((prev) =>
+                  setWeeklyAvailability((prev: WeeklyAvailabilitySlot[]) =>
                     prev.map((s, i) =>
                       i === index
                         ? {
