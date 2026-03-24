@@ -8,7 +8,12 @@ ALTER TABLE public.item_images
 UPDATE public.item_images ii
 SET business_id = i.business_id
 FROM public.items i
-WHERE ii.item_id = i.id;
+WHERE ii.item_id = i.id
+  AND i.business_id IS NOT NULL;
+
+-- Orphan rows (no item), items missing business_id, or other gaps cannot get business_id; drop them so NOT NULL succeeds.
+DELETE FROM public.item_images
+WHERE business_id IS NULL;
 
 ALTER TABLE public.item_images
     ALTER COLUMN business_id SET NOT NULL;
@@ -35,7 +40,7 @@ UPDATE public.item_images
 SET status = 'assigned'
 WHERE item_id IS NOT NULL;
 
--- 2) Allow library rows: nullable item_id + ON DELETE SET NULL
+-- 2) Allow library rows: nullable item_id; when set, must reference items (ON DELETE RESTRICT)
 ALTER TABLE public.item_images
     DROP CONSTRAINT IF EXISTS unique_item_main_image;
 
@@ -50,7 +55,7 @@ ALTER TABLE public.item_images
     FOREIGN KEY (item_id)
     REFERENCES public.items(id)
     ON UPDATE RESTRICT
-    ON DELETE SET NULL;
+    ON DELETE RESTRICT;
 
 CREATE UNIQUE INDEX uniq_item_images_one_main_per_item
     ON public.item_images (item_id)
@@ -66,7 +71,7 @@ CREATE INDEX idx_item_images_item_sub_category
     ON public.item_images (item_sub_category_id);
 
 COMMENT ON COLUMN public.item_images.business_id IS 'Owner business; required even when item_id is null (library)';
-COMMENT ON COLUMN public.item_images.item_id IS 'Null while image is only in the library; set when attached to an item';
+COMMENT ON COLUMN public.item_images.item_id IS 'Null in library only; when set, must reference public.items (FK ON DELETE RESTRICT)';
 COMMENT ON COLUMN public.item_images.is_ai_cleaned IS 'True when the displayed image was replaced after AI cleanup';
 COMMENT ON COLUMN public.item_images.migrated_from_business_image_id IS 'Set during migration from business_images; not a FK';
 
