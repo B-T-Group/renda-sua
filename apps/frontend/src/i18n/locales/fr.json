@@ -530,7 +530,28 @@
       "unverified": "Non vérifié",
       "notVerified": "Non vérifié",
       "rentalsTitle": "Locations",
-      "rentalsDescription": "Gérez le catalogue, les annonces par lieu et les demandes clients."
+      "rentalsDescription": "Gérez le catalogue, les annonces par lieu et les demandes clients.",
+      "atAGlance": "En un coup d’œil",
+      "atAGlanceHint": "Chiffres clés pour votre boutique et vos stocks.",
+      "adminManagementHint": "Outils de plateforme visibles uniquement par les administrateurs.",
+      "countryOnboarding": "Intégration pays",
+      "countryOnboardingDescription": "Assistant pour configurer les créneaux de livraison et les régions prises en charge pour un pays",
+      "sections": {
+        "ordersAndDelivery": "Commandes et livraison",
+        "ordersAndDeliveryHint": "Suivi des ventes, mises à jour par lot et livraisons en échec.",
+        "catalog": "Catalogue et emplacements",
+        "catalogHint": "Produits, images et lieux de vente.",
+        "rentals": "Locations",
+        "rentalsHint": "Catalogue de location, annonces et bibliothèque de photos.",
+        "insights": "Analyses et dossiers",
+        "insightsHint": "Statistiques et documents d’entreprise.",
+        "adminPeople": "Personnes et entreprises",
+        "adminPeopleHint": "Agents, clients et comptes entreprise.",
+        "adminCatalog": "Catalogue et comptes",
+        "adminCatalogHint": "Taxonomie, marques et comptes liés aux commissions.",
+        "adminSystem": "Système et intégration",
+        "adminSystemHint": "Configuration, paramétrage pays et valeurs par défaut de l’application."
+      }
     },
     "rentals": {
       "pageTitle": "Locations",

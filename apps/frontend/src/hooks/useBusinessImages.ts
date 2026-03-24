@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
+import { environment } from '../config/environment';
 import { useApiClient } from './useApiClient';
 
 export interface BusinessImage {
   id: string;
   business_id: string;
-  sub_category_id: number | null;
+  item_id: string | null;
+  item_sub_category_id: number | null;
   image_url: string;
   s3_key?: string | null;
   file_size?: number | null;
@@ -17,6 +19,7 @@ export interface BusinessImage {
   status: string;
   is_ai_cleaned?: boolean;
   created_at: string;
+  item?: { id: string; name: string; sku: string | null } | null;
 }
 
 export interface FetchBusinessImagesParams {
@@ -42,7 +45,7 @@ export interface BulkCreateBusinessImagesPayload {
 }
 
 export interface UpdateBusinessImagePayload {
-  sub_category_id?: number | null;
+  item_sub_category_id?: number | null;
   image_url?: string;
   s3_key?: string | null;
   file_size?: number | null;
@@ -135,13 +138,13 @@ export const useBusinessImages = () => {
   );
 
   const associateImageToItem = useCallback(
-    async (imageId: string, sku: string) => {
+    async (imageId: string, itemId: string) => {
       setSubmitting(true);
       setError(null);
       try {
         await apiClient.post<{ success: boolean }>(
           `/business-images/${imageId}/associate-item`,
-          { sku }
+          { item_id: itemId }
         );
         await fetchImages();
       } catch (err: any) {
@@ -149,6 +152,29 @@ export const useBusinessImages = () => {
           err.response?.data?.error ||
             err.message ||
             'Failed to associate image'
+        );
+        throw err;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [apiClient, fetchImages]
+  );
+
+  const disassociateImageFromItem = useCallback(
+    async (imageId: string) => {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await apiClient.post<{ success: boolean }>(
+          `/business-images/${imageId}/disassociate-item`
+        );
+        await fetchImages();
+      } catch (err: any) {
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            'Failed to disassociate image'
         );
         throw err;
       } finally {
@@ -174,7 +200,6 @@ export const useBusinessImages = () => {
             prev.map((img) => (img.id === updated.id ? updated : img))
           );
         } else {
-          // Fallback: refetch if response does not include the updated image
           await fetchImages();
         }
       } catch (err: any) {
@@ -246,7 +271,11 @@ export const useBusinessImages = () => {
         const response = await apiClient.post<{
           success: boolean;
           data: { b64_json: string };
-        }>(`/business-images/${imageId}/cleanup`);
+        }>(
+          `/business-images/${imageId}/cleanup`,
+          undefined,
+          { timeout: environment.imageCleanupRequestTimeoutMs }
+        );
         if (response.data.success && response.data.data?.b64_json) {
           return response.data.data;
         }
@@ -274,6 +303,7 @@ export const useBusinessImages = () => {
     fetchImages,
     bulkCreateImages,
     associateImageToItem,
+    disassociateImageFromItem,
     updateImage,
     deleteImage,
     removeTag,
@@ -282,4 +312,3 @@ export const useBusinessImages = () => {
     setPageSize,
   };
 };
-

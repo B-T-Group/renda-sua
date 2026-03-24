@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
 
 export interface ImageCleanupPreviewDialogProps {
   open: boolean;
@@ -78,26 +79,7 @@ const ImageCleanupPreviewDialog: React.FC<ImageCleanupPreviewDialogProps> = ({
               {t('business.images.cleanup.cleaned', 'Cleaned')}
             </Typography>
             {loading ? (
-              <Box
-                sx={{
-                  width: '100%',
-                  height: 320,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: 'action.hover',
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  {t(
-                    'business.images.cleanup.loading',
-                    'Cleaning up image...'
-                  )}
-                </Typography>
-              </Box>
+              <ImageCleanupLoadingAnimation />
             ) : cleanedB64 ? (
               <Box
                 component="img"

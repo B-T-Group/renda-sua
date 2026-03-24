@@ -54,7 +54,7 @@ const GET_ITEMS = `
           name
         }
       }
-      item_images {
+      item_images(order_by: { display_order: asc }) {
         id
         image_url
         image_type
@@ -162,7 +162,7 @@ const GET_SINGLE_ITEM = `
           name
         }
       }
-      item_images {
+      item_images(order_by: { display_order: asc }) {
         id
         image_url
         image_type
@@ -484,25 +484,6 @@ const UPDATE_ITEM_STATUS = `
   }
 `;
 
-const GET_BUSINESS_IMAGES_FOR_BUSINESS = `
-  query GetBusinessImagesForBusiness($businessId: uuid!) {
-    business_images(
-      where: {
-        business_id: { _eq: $businessId },
-        status: { _neq: archived }
-      }
-    ) {
-      id
-      image_url
-      caption
-      alt_text
-      tags
-      status
-      created_at
-    }
-  }
-`;
-
 @Injectable()
 export class BusinessItemsService {
   private readonly logger = new Logger(BusinessItemsService.name);
@@ -519,11 +500,7 @@ export class BusinessItemsService {
       GET_ITEMS,
       { businessId }
     );
-    const items = result.items ?? [];
-    if (!items.length) {
-      return items;
-    }
-    return this.attachTaggedImagesToItems(businessId, items);
+    return result.items ?? [];
   }
 
   async getItemSubCategoryIds(): Promise<Set<number>> {
@@ -721,11 +698,7 @@ export class BusinessItemsService {
     if (!item || item.business_id !== businessId) {
       throw new Error('Item not found or does not belong to this business');
     }
-    const [itemWithImages] = await this.attachTaggedImagesToItems(
-      businessId,
-      [item]
-    );
-    return itemWithImages;
+    return item;
   }
 
   async getAvailableItems() {
@@ -894,94 +867,6 @@ export class BusinessItemsService {
       itemId,
       status: 'deleted',
     });
-  }
-
-  private async attachTaggedImagesToItems(
-    businessId: string,
-    items: any[]
-  ): Promise<any[]> {
-    const skuSet = new Set<string>();
-    items.forEach((item) => {
-      const sku =
-        typeof item.sku === 'string'
-          ? item.sku.trim().toLowerCase()
-          : '';
-      if (sku) {
-        skuSet.add(sku);
-      }
-    });
-    if (!skuSet.size) {
-      return items;
-    }
-    const imagesBySku = await this.getBusinessImagesBySku(businessId, skuSet);
-    return items.map((item) =>
-      this.mergeItemWithTaggedImages(item, imagesBySku)
-    );
-  }
-
-  private async getBusinessImagesBySku(
-    businessId: string,
-    skuSet: Set<string>
-  ): Promise<Map<string, any[]>> {
-    const result =
-      await this.hasuraSystemService.executeQuery<{
-        business_images: {
-          id: string;
-          image_url: string;
-          caption: string | null;
-          alt_text: string | null;
-          tags: string[];
-          status: string;
-          created_at: string;
-        }[];
-      }>(GET_BUSINESS_IMAGES_FOR_BUSINESS, { businessId });
-    const images = result.business_images ?? [];
-    const map = new Map<string, any[]>();
-    images.forEach((img) => {
-      (img.tags ?? []).forEach((tag) => {
-        if (!tag.startsWith('sku:')) {
-          return;
-        }
-        const sku = tag.slice(4);
-        if (!skuSet.has(sku)) {
-          return;
-        }
-        const list = map.get(sku) ?? [];
-        list.push(img);
-        map.set(sku, list);
-      });
-    });
-    return map;
-  }
-
-  private mergeItemWithTaggedImages(
-    item: any,
-    imagesBySku: Map<string, any[]>
-  ): any {
-    const sku =
-      typeof item.sku === 'string' ? item.sku.trim().toLowerCase() : '';
-    if (!sku) {
-      return item;
-    }
-    const taggedImages = imagesBySku.get(sku) ?? [];
-    if (!taggedImages.length) {
-      return item;
-    }
-    const existingImages = item.item_images ?? [];
-    const baseOrder = existingImages.length;
-    const mappedTaggedImages = taggedImages.map((img, index) => ({
-      id: img.id,
-      image_url: img.image_url,
-      image_type: 'gallery',
-      alt_text: img.alt_text || item.name,
-      caption: img.caption,
-      display_order: baseOrder + index + 1,
-      created_at: img.created_at,
-    }));
-    return {
-      ...item,
-      item_images: [...existingImages, ...mappedTaggedImages],
-    };
   }
 
   async processCsvRows(
@@ -1214,6 +1099,7 @@ export class BusinessItemsService {
             }
             await this.hasuraUserService.executeMutation(INSERT_ITEM_IMAGE, {
               imageData: {
+                business_id: businessId,
                 item_id: itemId,
                 image_url: row.image_url,
                 image_type: 'main',
@@ -1267,6 +1153,15 @@ export class BusinessItemsService {
       businessId,
       dto.imageId
     );
+    if (image.item_id) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Image is already linked to an item',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const generatedDescription = await this.generateDescriptionFromImageIfMissing(
       dto,
       image.image_url,
@@ -1329,10 +1224,10 @@ export class BusinessItemsService {
       );
     }
 
-    await this.businessImagesService.associateImageToItem(
+    await this.businessImagesService.linkLibraryImageToNewItem(
       businessId,
       image.id,
-      sku
+      newItem.id
     );
 
     return {

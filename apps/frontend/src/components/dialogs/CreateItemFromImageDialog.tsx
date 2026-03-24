@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { BusinessImage } from '../../hooks/useBusinessImages';
 import { useCreateItemFromImage } from '../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../hooks/useImageItemSuggestions';
+import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
 
 interface CreateItemFromImageDialogProps {
   open: boolean;
@@ -103,7 +104,7 @@ export const CreateItemFromImageDialog: React.FC<
   }, [createError, enqueueSnackbar, t]);
 
   const handleClose = () => {
-    if (createLoading) return;
+    if (createLoading || suggestionsLoading) return;
     onClose();
   };
 
@@ -346,10 +347,32 @@ export const CreateItemFromImageDialog: React.FC<
         )}
       </DialogTitle>
       <DialogContent>
-        {showSummary ? renderSummary() : renderForm()}
+        {showSummary ? (
+          renderSummary()
+        ) : createLoading || suggestionsLoading ? (
+          <ImageCleanupLoadingAnimation
+            minHeight={180}
+            message={
+              createLoading
+                ? t(
+                    'business.images.createItemFromImage.creating',
+                    'Creating item...'
+                  )
+                : t(
+                    'business.images.createItemFromImage.analyzing',
+                    'Analyzing image...'
+                  )
+            }
+          />
+        ) : (
+          renderForm()
+        )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={createLoading}>
+        <Button
+          onClick={handleClose}
+          disabled={createLoading || suggestionsLoading}
+        >
           {showSummary
             ? t('common.close', 'Close')
             : t('common.cancel', 'Cancel')}

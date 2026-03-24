@@ -18,11 +18,8 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
-  Badge,
   Box,
-  Button,
   Card,
-  CardActions,
   CardContent,
   Container,
   Skeleton,
@@ -30,36 +27,20 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+import BusinessDashboardModuleCard, {
+  BusinessDashboardModule,
+} from '../business/BusinessDashboardModuleCard';
+import BusinessDashboardSection from '../business/BusinessDashboardSection';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import UserAccount from '../common/UserAccount';
 import SEOHead from '../seo/SEOHead';
 
-const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
-  pending: '#fff3e0',
-  pending_payment: '#fff8e1',
-  confirmed: '#e3f2fd',
-  preparing: '#e3f2fd',
-  ready_for_pickup: '#e8eaf6',
-  assigned_to_agent: '#e8eaf6',
-  picked_up: '#e1f5fe',
-  in_transit: '#e1f5fe',
-  out_for_delivery: '#e0f7fa',
-  delivered: '#e8f5e9',
-  complete: '#e8f5e9',
-  completed: '#e8f5e9',
-};
-
-const getOrderStatusBoxColor = (status: string): string =>
-  ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
-
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { profile } = useUserProfileContext();
 
   const { accounts } = useAccountInfo();
@@ -78,7 +59,7 @@ const BusinessDashboard: React.FC = () => {
   const inventoryCount = aggregates?.inventoryCount ?? 0;
   const pendingFailedDeliveriesCount = aggregates?.pendingFailedDeliveriesCount ?? 0;
 
-  const businessCards = [
+  const orderModules: BusinessDashboardModule[] = [
     {
       title: t('common.orders'),
       description: t('business.dashboard.ordersDescription'),
@@ -100,6 +81,18 @@ const BusinessDashboard: React.FC = () => {
       path: '/orders/batch',
     },
     {
+      title: t('business.dashboard.failedDeliveries'),
+      description: t('business.dashboard.failedDeliveriesDescription'),
+      icon: <ErrorIcon sx={{ fontSize: 40 }} />,
+      count: pendingFailedDeliveriesCount,
+      color: '#d32f2f',
+      path: '/business/failed-deliveries',
+      showBadge: pendingFailedDeliveriesCount > 0,
+    },
+  ];
+
+  const catalogModules: BusinessDashboardModule[] = [
+    {
       title: t('common.items'),
       description: t('business.dashboard.itemsDescription'),
       icon: <ItemsIcon sx={{ fontSize: 40 }} />,
@@ -118,6 +111,17 @@ const BusinessDashboard: React.FC = () => {
       color: '#8e24aa',
       path: '/business/images',
     },
+    {
+      title: t('common.locations'),
+      description: t('business.dashboard.locationsDescription'),
+      icon: <LocationsIcon sx={{ fontSize: 40 }} />,
+      count: locationCount,
+      color: '#f57c00',
+      path: '/business/locations',
+    },
+  ];
+
+  const rentalModules: BusinessDashboardModule[] = [
     {
       title: t('business.dashboard.rentalsTitle', 'Rentals'),
       description: t(
@@ -143,22 +147,16 @@ const BusinessDashboard: React.FC = () => {
       color: '#00838f',
       path: '/business/rental-images',
     },
+  ];
+
+  const insightModules: BusinessDashboardModule[] = [
     {
-      title: t('common.locations'),
-      description: t('business.dashboard.locationsDescription'),
-      icon: <LocationsIcon sx={{ fontSize: 40 }} />,
-      count: locationCount,
-      color: '#f57c00',
-      path: '/business/locations',
-    },
-    {
-      title: t('business.dashboard.failedDeliveries'),
-      description: t('business.dashboard.failedDeliveriesDescription'),
-      icon: <ErrorIcon sx={{ fontSize: 40 }} />,
-      count: pendingFailedDeliveriesCount,
-      color: '#d32f2f',
-      path: '/business/failed-deliveries',
-      showBadge: pendingFailedDeliveriesCount > 0,
+      title: t('common.analytics'),
+      description: t('business.dashboard.analyticsDescription'),
+      icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#c62828',
+      path: '/business/analytics',
     },
     {
       title: t('business.dashboard.documents'),
@@ -168,14 +166,6 @@ const BusinessDashboard: React.FC = () => {
       color: '#795548',
       path: '/documents',
     },
-    {
-      title: t('common.analytics'),
-      description: t('business.dashboard.analyticsDescription'),
-      icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
-      count: null,
-      color: '#d32f2f',
-      path: '/business/analytics',
-    },
   ];
 
   const agentsTotal =
@@ -184,7 +174,7 @@ const BusinessDashboard: React.FC = () => {
     (aggregates?.businessesVerified ?? 0) +
     (aggregates?.businessesNotVerified ?? 0);
 
-  const adminCards = [
+  const adminPeopleModules: BusinessDashboardModule[] = [
     {
       title: t('business.dashboard.manageAgents'),
       description: t('business.dashboard.manageAgentsDescription'),
@@ -228,6 +218,9 @@ const BusinessDashboard: React.FC = () => {
       color: '#6d4c41',
       path: '/admin/businesses',
     },
+  ];
+
+  const adminCatalogModules: BusinessDashboardModule[] = [
     {
       title: t('business.dashboard.manageBrands'),
       description: t('business.dashboard.manageBrandsDescription'),
@@ -244,6 +237,17 @@ const BusinessDashboard: React.FC = () => {
       color: '#ff9800',
       path: '/content-management/categories',
     },
+    {
+      title: t('business.dashboard.manageCommissionAccounts'),
+      description: t('business.dashboard.manageCommissionAccountsDescription'),
+      icon: <AccountBalanceIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#1976d2',
+      path: '/admin/commission-accounts',
+    },
+  ];
+
+  const adminSystemModules: BusinessDashboardModule[] = [
     {
       title: t('business.dashboard.manageConfigurations'),
       description: t('business.dashboard.manageConfigurationsDescription'),
@@ -277,132 +281,16 @@ const BusinessDashboard: React.FC = () => {
       color: '#00838f',
       path: '/admin/country-onboarding',
     },
-    {
-      title: t('business.dashboard.manageCommissionAccounts'),
-      description: t('business.dashboard.manageCommissionAccountsDescription'),
-      icon: <AccountBalanceIcon sx={{ fontSize: 40 }} />,
-      count: null,
-      color: '#1976d2',
-      path: '/admin/commission-accounts',
-    },
   ];
 
-  const renderCards = (cards: typeof businessCards) => {
-    return cards.map((card, index) => (
-      <Card
-        key={index}
-        sx={{
-          width: {
-            xs: '100%',
-            sm: 'calc(50% - 12px)',
-            md: 'calc(33.333% - 16px)',
-          },
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'transform 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'translateY(-4px)',
-            boxShadow: 4,
-          },
-        }}
-      >
-        <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              mb: 2,
-              color: card.color,
-            }}
-          >
-            {card.icon}
-          </Box>
-          <Typography variant="h6" component="h2" gutterBottom>
-            {card.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {card.description}
-          </Typography>
-          {card.count !== null && (
-            <Badge
-              badgeContent={card.showBadge ? card.count : 0}
-              color="error"
-              invisible={!card.showBadge}
-            >
-              <Typography
-                variant="h4"
-                component="div"
-                color="primary"
-                sx={{ mb: 1 }}
-              >
-                {isLoading ? (
-                  <Skeleton
-                    variant="text"
-                    width={60}
-                    height={40}
-                    sx={{ mx: 'auto' }}
-                  />
-                ) : (
-                  card.count
-                )}
-              </Typography>
-            </Badge>
-          )}
-          {'countBreakdown' in card && card.countBreakdown && (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mb: 1 }}
-              component="div"
-            >
-              {t('business.dashboard.verified', 'Verified')}:{' '}
-              {card.countBreakdown.verified} · {card.countBreakdown.otherLabel}:{' '}
-              {card.countBreakdown.other}
-            </Typography>
-          )}
-          {card.orderCountByStatus &&
-            Object.keys(card.orderCountByStatus).length > 0 && (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1, justifyContent: 'center' }}>
-                {Object.entries(card.orderCountByStatus)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([status, n]) => (
-                    <Box
-                      key={status}
-                      sx={{
-                        bgcolor: getOrderStatusBoxColor(status),
-                        color: 'text.primary',
-                        px: 1,
-                        py: 0.5,
-                        borderRadius: 1,
-                        fontSize: '0.75rem',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {t(`common.orderStatus.${status}`, status)}: {n}
-                    </Box>
-                  ))}
-              </Box>
-            )}
-        </CardContent>
-        <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
-          <Button
-            variant="contained"
-            onClick={() => navigate(card.path)}
-            disabled={isLoading}
-            sx={{
-              backgroundColor: card.color,
-              '&:hover': {
-                backgroundColor: card.color,
-                opacity: 0.9,
-              },
-            }}
-          >
-            {t('common.manage')}
-          </Button>
-        </CardActions>
-      </Card>
+  const renderModuleRow = (modules: BusinessDashboardModule[]) =>
+    modules.map((mod) => (
+      <BusinessDashboardModuleCard
+        key={mod.path}
+        module={mod}
+        isLoading={isLoading}
+      />
     ));
-  };
 
   if (!profile?.business) {
     return (
@@ -434,7 +322,6 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Account Information */}
       {accounts.length > 0 && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
@@ -453,11 +340,10 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       )}
 
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         {t('business.dashboard.subtitle')}
       </Typography>
 
-      {/* Address Alert */}
       <AddressAlert />
 
       {aggregatesError && (
@@ -466,143 +352,212 @@ const BusinessDashboard: React.FC = () => {
         </Alert>
       )}
 
-      {/* Account Summary Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h5"
-          gutterBottom
-          sx={{ mb: 3, textAlign: 'center' }}
-        >
-          {t('business.dashboard.accountSummary')}
-        </Typography>
-        <Box
+      <BusinessDashboardSection
+        title={t('business.dashboard.atAGlance', 'At a glance')}
+        subtitle={t(
+          'business.dashboard.atAGlanceHint',
+          'Key numbers for your store and stock.'
+        )}
+      >
+        <Card
+          elevation={0}
           sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '100%',
+            flex: {
+              xs: '1 1 100%',
+              sm: '1 1 calc(50% - 12px)',
+              md: '1 1 calc(25% - 18px)',
+            },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
           }}
-        ></Box>
-      </Box>
-
-      {/* Business Management Section */}
-      <Box sx={{ mb: 6 }}>
-        <Typography
-          variant="h5"
-          gutterBottom
-          sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
         >
-          {t('business.dashboard.businessManagement')}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {renderCards(businessCards)}
-        </Box>
-      </Box>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('common.totalOrders')}
+            </Typography>
+            {isLoading ? (
+              <Skeleton variant="text" width={60} height={40} />
+            ) : (
+              <Typography variant="h4">{ordersTotalNonCancelled}</Typography>
+            )}
+          </CardContent>
+        </Card>
+        <Card
+          elevation={0}
+          sx={{
+            flex: {
+              xs: '1 1 100%',
+              sm: '1 1 calc(50% - 12px)',
+              md: '1 1 calc(25% - 18px)',
+            },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
+          }}
+        >
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('common.totalItems')}
+            </Typography>
+            {isLoading ? (
+              <Skeleton variant="text" width={60} height={40} />
+            ) : (
+              <Typography variant="h4">{itemCount}</Typography>
+            )}
+          </CardContent>
+        </Card>
+        <Card
+          elevation={0}
+          sx={{
+            flex: {
+              xs: '1 1 100%',
+              sm: '1 1 calc(50% - 12px)',
+              md: '1 1 calc(25% - 18px)',
+            },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
+          }}
+        >
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('common.totalLocations')}
+            </Typography>
+            {isLoading ? (
+              <Skeleton variant="text" width={60} height={40} />
+            ) : (
+              <Typography variant="h4">{locationCount}</Typography>
+            )}
+          </CardContent>
+        </Card>
+        <Card
+          elevation={0}
+          sx={{
+            flex: {
+              xs: '1 1 100%',
+              sm: '1 1 calc(50% - 12px)',
+              md: '1 1 calc(25% - 18px)',
+            },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
+          }}
+        >
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('common.totalInventory')}
+            </Typography>
+            {isLoading ? (
+              <Skeleton variant="text" width={60} height={40} />
+            ) : (
+              <Typography variant="h4">{inventoryCount}</Typography>
+            )}
+          </CardContent>
+        </Card>
+      </BusinessDashboardSection>
 
-      {/* Admin Management Section */}
+      <BusinessDashboardSection
+        title={t(
+          'business.dashboard.sections.ordersAndDelivery',
+          'Orders & delivery'
+        )}
+        subtitle={t(
+          'business.dashboard.sections.ordersAndDeliveryHint',
+          'Track sales, batch updates, and resolve delivery issues.'
+        )}
+      >
+        {renderModuleRow(orderModules)}
+      </BusinessDashboardSection>
+
+      <BusinessDashboardSection
+        title={t(
+          'business.dashboard.sections.catalog',
+          'Catalog & locations'
+        )}
+        subtitle={t(
+          'business.dashboard.sections.catalogHint',
+          'Products, images, and where you sell from.'
+        )}
+      >
+        {renderModuleRow(catalogModules)}
+      </BusinessDashboardSection>
+
+      <BusinessDashboardSection
+        title={t('business.dashboard.sections.rentals', 'Rentals')}
+        subtitle={t(
+          'business.dashboard.sections.rentalsHint',
+          'Rental catalog, listings, and photo library.'
+        )}
+      >
+        {renderModuleRow(rentalModules)}
+      </BusinessDashboardSection>
+
+      <BusinessDashboardSection
+        title={t(
+          'business.dashboard.sections.insights',
+          'Insights & records'
+        )}
+        subtitle={t(
+          'business.dashboard.sections.insightsHint',
+          'Analytics and business documents.'
+        )}
+      >
+        {renderModuleRow(insightModules)}
+      </BusinessDashboardSection>
+
       {profile.business.is_admin && (
-        <Box sx={{ mb: 6 }}>
-          <Typography
-            variant="h5"
-            gutterBottom
-            sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}
-          >
+        <>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
             {t('business.dashboard.adminManagement')}
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {renderCards(adminCards)}
-          </Box>
-        </Box>
-      )}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'business.dashboard.adminManagementHint',
+              'Platform tools visible to administrators only.'
+            )}
+          </Typography>
 
-      {/* Quick Stats Section */}
-      <Box sx={{ mt: 6 }}>
-        <Typography variant="h5" gutterBottom>
-          {t('common.quickStats')}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          <Card
-            sx={{
-              flex: {
-                xs: '1 1 100%',
-                sm: '1 1 calc(50% - 8px)',
-                md: '1 1 calc(25% - 12px)',
-              },
-            }}
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.adminPeople',
+              'People & businesses'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.adminPeopleHint',
+              'Agents, clients, and business accounts.'
+            )}
           >
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {t('common.totalOrders')}
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="text" width={60} height={40} />
-              ) : (
-                <Typography variant="h4">{ordersTotalNonCancelled}</Typography>
-              )}
-            </CardContent>
-          </Card>
-          <Card
-            sx={{
-              flex: {
-                xs: '1 1 100%',
-                sm: '1 1 calc(50% - 8px)',
-                md: '1 1 calc(25% - 12px)',
-              },
-            }}
+            {renderModuleRow(adminPeopleModules)}
+          </BusinessDashboardSection>
+
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.adminCatalog',
+              'Catalog & accounts'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.adminCatalogHint',
+              'Taxonomy, brands, and commission-related accounts.'
+            )}
           >
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {t('common.totalItems')}
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="text" width={60} height={40} />
-              ) : (
-                <Typography variant="h4">{itemCount}</Typography>
-              )}
-            </CardContent>
-          </Card>
-          <Card
-            sx={{
-              flex: {
-                xs: '1 1 100%',
-                sm: '1 1 calc(50% - 8px)',
-                md: '1 1 calc(25% - 12px)',
-              },
-            }}
+            {renderModuleRow(adminCatalogModules)}
+          </BusinessDashboardSection>
+
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.adminSystem',
+              'System & onboarding'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.adminSystemHint',
+              'Configuration, country setup, and application defaults.'
+            )}
           >
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {t('common.totalLocations')}
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="text" width={60} height={40} />
-              ) : (
-                <Typography variant="h4">{locationCount}</Typography>
-              )}
-            </CardContent>
-          </Card>
-          <Card
-            sx={{
-              flex: {
-                xs: '1 1 100%',
-                sm: '1 1 calc(50% - 8px)',
-                md: '1 1 calc(25% - 12px)',
-              },
-            }}
-          >
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {t('common.totalInventory')}
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="text" width={60} height={40} />
-              ) : (
-                <Typography variant="h4">{inventoryCount}</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+            {renderModuleRow(adminSystemModules)}
+          </BusinessDashboardSection>
+        </>
+      )}
     </Container>
   );
 };

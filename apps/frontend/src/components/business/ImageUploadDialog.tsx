@@ -126,6 +126,16 @@ export default function ImageUploadDialog({
       });
       return;
     }
+    if (!profile?.business?.id) {
+      enqueueSnackbar(
+        t(
+          'business.inventory.businessIdRequired',
+          'Business profile is required to upload images'
+        ),
+        { variant: 'error' }
+      );
+      return;
+    }
 
     const bucketName =
       process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
@@ -137,6 +147,7 @@ export default function ImageUploadDialog({
 
         await uploadItemImage(
           itemId,
+          profile.business.id,
           file,
           profile.id,
           bucketName,

@@ -541,7 +541,28 @@
       "unverified": "Unverified",
       "notVerified": "Not verified",
       "rentalsTitle": "Rentals",
-      "rentalsDescription": "Manage rental catalog, location listings, and client requests."
+      "rentalsDescription": "Manage rental catalog, location listings, and client requests.",
+      "atAGlance": "At a glance",
+      "atAGlanceHint": "Key numbers for your store and stock.",
+      "adminManagementHint": "Platform tools visible to administrators only.",
+      "countryOnboarding": "Country onboarding",
+      "countryOnboardingDescription": "Multi-step wizard to configure delivery slots and supported states for a country",
+      "sections": {
+        "ordersAndDelivery": "Orders & delivery",
+        "ordersAndDeliveryHint": "Track sales, batch updates, and resolve delivery issues.",
+        "catalog": "Catalog & locations",
+        "catalogHint": "Products, images, and where you sell from.",
+        "rentals": "Rentals",
+        "rentalsHint": "Rental catalog, listings, and photo library.",
+        "insights": "Insights & records",
+        "insightsHint": "Analytics and business documents.",
+        "adminPeople": "People & businesses",
+        "adminPeopleHint": "Agents, clients, and business accounts.",
+        "adminCatalog": "Catalog & accounts",
+        "adminCatalogHint": "Taxonomy, brands, and commission-related accounts.",
+        "adminSystem": "System & onboarding",
+        "adminSystemHint": "Configuration, country setup, and application defaults."
+      }
     },
     "rentals": {
       "pageTitle": "Rentals",

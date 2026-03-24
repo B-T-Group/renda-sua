@@ -2572,7 +2572,7 @@ export class OrdersService {
                   name
                 }
               }
-              item_images {
+              item_images(order_by: { display_order: asc }) {
                 id
                 image_url
               }
@@ -3280,7 +3280,7 @@ export class OrdersService {
                   description
                 }
               }
-              item_images {
+              item_images(order_by: { display_order: asc }) {
                 id
                 image_url
                 alt_text

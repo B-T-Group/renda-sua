@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { environment } from '../config/environment';
 import { useApiClient } from './useApiClient';
 
 export interface RentalItemImage {
@@ -245,7 +246,11 @@ export const useRentalItemImages = () => {
         const response = await apiClient.post<{
           success: boolean;
           data: { b64_json: string };
-        }>(`/rental-item-images/${imageId}/cleanup`);
+        }>(
+          `/rental-item-images/${imageId}/cleanup`,
+          undefined,
+          { timeout: environment.imageCleanupRequestTimeoutMs }
+        );
         if (response.data.success && response.data.data?.b64_json) {
           return response.data.data;
         }

@@ -15,6 +15,7 @@ export interface ItemImage {
 }
 
 export interface CreateItemImageData {
+  business_id: string;
   item_id: string;
   image_url: string;
   image_type: ImageType;

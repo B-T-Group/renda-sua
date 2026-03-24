@@ -101,7 +101,7 @@ export const GET_ORDERS = gql`
               name
             }
           }
-          item_images {
+          item_images(order_by: { display_order: asc }) {
             id
             image_url
           }
@@ -295,7 +295,7 @@ export const GET_ORDER_BY_ID = gql`
               description
             }
           }
-          item_images {
+          item_images(order_by: { display_order: asc }) {
             id
             image_url
             alt_text
@@ -481,7 +481,7 @@ export const GET_ORDER_BY_NUMBER = gql`
               name
             }
           }
-          item_images {
+          item_images(order_by: { display_order: asc }) {
             id
             image_url
           }
@@ -635,7 +635,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
               name
             }
           }
-          item_images {
+          item_images(order_by: { display_order: asc }) {
             id
             image_url
           }
@@ -718,7 +718,7 @@ export const GET_OPEN_ORDERS = gql`
               name
             }
           }
-          item_images {
+          item_images(order_by: { display_order: asc }) {
             id
             image_url
           }

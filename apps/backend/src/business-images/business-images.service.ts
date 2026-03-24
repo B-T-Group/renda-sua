@@ -5,7 +5,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 export interface BusinessImage {
   id: string;
   business_id: string;
-  sub_category_id: number | null;
+  item_id: string | null;
+  item_sub_category_id: number | null;
   image_url: string;
   s3_key: string | null;
   file_size: number | null;
@@ -18,6 +19,7 @@ export interface BusinessImage {
   status: string;
   is_ai_cleaned: boolean;
   created_at: string;
+  item?: { id: string; name: string; sku: string | null } | null;
 }
 
 export interface PaginatedBusinessImages {
@@ -37,7 +39,7 @@ export interface CreateBusinessImageInput {
 }
 
 export interface UpdateBusinessImageInput {
-  sub_category_id?: number | null;
+  item_sub_category_id?: number | null;
   image_url?: string;
   s3_key?: string | null;
   file_size?: number | null;
@@ -51,35 +53,45 @@ export interface UpdateBusinessImageInput {
   is_ai_cleaned?: boolean;
 }
 
-const GET_BUSINESS_IMAGES = `
-  query GetBusinessImages(
-    $where: business_images_bool_exp!,
+const LIBRARY_IMAGE_FIELDS = `
+  id
+  business_id
+  item_id
+  item_sub_category_id
+  image_url
+  s3_key
+  file_size
+  width
+  height
+  format
+  caption
+  alt_text
+  tags
+  status
+  is_ai_cleaned
+  created_at
+  item {
+    id
+    name
+    sku
+  }
+`;
+
+const GET_ITEM_IMAGES_PAGE = `
+  query GetItemImagesPage(
+    $where: item_images_bool_exp!,
     $limit: Int!,
     $offset: Int!
   ) {
-    business_images(
+    item_images(
       where: $where,
       order_by: { created_at: desc },
       limit: $limit,
       offset: $offset
     ) {
-      id
-      business_id
-      sub_category_id
-      image_url
-      s3_key
-      file_size
-      width
-      height
-      format
-      caption
-      alt_text
-      tags
-      status
-      is_ai_cleaned
-      created_at
+      ${LIBRARY_IMAGE_FIELDS}
     }
-    business_images_aggregate(where: $where) {
+    item_images_aggregate(where: $where) {
       aggregate {
         count
       }
@@ -87,41 +99,26 @@ const GET_BUSINESS_IMAGES = `
   }
 `;
 
-/** Data-only query when business_images_aggregate is not yet exposed (table not tracked in Hasura). */
-const GET_BUSINESS_IMAGES_DATA_ONLY = `
-  query GetBusinessImagesDataOnly(
-    $where: business_images_bool_exp!,
+const GET_ITEM_IMAGES_PAGE_DATA = `
+  query GetItemImagesPageData(
+    $where: item_images_bool_exp!,
     $limit: Int!,
     $offset: Int!
   ) {
-    business_images(
+    item_images(
       where: $where,
       order_by: { created_at: desc },
       limit: $limit,
       offset: $offset
     ) {
-      id
-      business_id
-      sub_category_id
-      image_url
-      s3_key
-      file_size
-      width
-      height
-      format
-      caption
-      alt_text
-      tags
-      status
-      is_ai_cleaned
-      created_at
+      ${LIBRARY_IMAGE_FIELDS}
     }
   }
 `;
 
-const INSERT_BUSINESS_IMAGES = `
-  mutation InsertBusinessImages($objects: [business_images_insert_input!]!) {
-    insert_business_images(objects: $objects) {
+const INSERT_ITEM_IMAGES = `
+  mutation InsertItemImagesLib($objects: [item_images_insert_input!]!) {
+    insert_item_images(objects: $objects) {
       affected_rows
       returning {
         id
@@ -130,54 +127,23 @@ const INSERT_BUSINESS_IMAGES = `
   }
 `;
 
-const UPDATE_BUSINESS_IMAGE_TAGS = `
-  mutation UpdateBusinessImageTags(
+const UPDATE_ITEM_IMAGE = `
+  mutation UpdateItemImageLib(
     $id: uuid!,
-    $tags: [String!]!,
-    $status: business_image_status_enum!
+    $changes: item_images_set_input!
   ) {
-    update_business_images_by_pk(
-      pk_columns: { id: $id },
-      _set: { tags: $tags, status: $status }
-    ) {
-      id
-      tags
-      status
-    }
-  }
-`;
-
-const UPDATE_BUSINESS_IMAGE = `
-  mutation UpdateBusinessImage(
-    $id: uuid!,
-    $changes: business_images_set_input!
-  ) {
-    update_business_images_by_pk(
+    update_item_images_by_pk(
       pk_columns: { id: $id },
       _set: $changes
     ) {
-      id
-      business_id
-      sub_category_id
-      image_url
-      s3_key
-      file_size
-      width
-      height
-      format
-      caption
-      alt_text
-      tags
-      status
-      is_ai_cleaned
-      created_at
+      ${LIBRARY_IMAGE_FIELDS}
     }
   }
 `;
 
-const DELETE_BUSINESS_IMAGE = `
-  mutation DeleteBusinessImage($id: uuid!) {
-    delete_business_images_by_pk(id: $id) {
+const DELETE_ITEM_IMAGE = `
+  mutation DeleteItemImageLib($id: uuid!) {
+    delete_item_images_by_pk(id: $id) {
       id
     }
   }
@@ -207,6 +173,27 @@ const SEARCH_ITEMS_BY_NAME_OR_SKU = `
   }
 `;
 
+const GET_ITEM_BUSINESS = `
+  query ItemBusinessForImage($id: uuid!) {
+    items_by_pk(id: $id) {
+      id
+      business_id
+    }
+  }
+`;
+
+const NEXT_DISPLAY_ORDER = `
+  query NextItemImageDisplayOrder($itemId: uuid!) {
+    item_images_aggregate(where: { item_id: { _eq: $itemId } }) {
+      aggregate {
+        max {
+          display_order
+        }
+      }
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessImagesService {
   constructor(
@@ -226,7 +213,7 @@ export class BusinessImagesService {
   ): Promise<PaginatedBusinessImages> {
     const where: Record<string, unknown> = { business_id: { _eq: businessId } };
     if (options.subCategoryId != null) {
-      (where as any).sub_category_id = { _eq: options.subCategoryId };
+      (where as any).item_sub_category_id = { _eq: options.subCategoryId };
     }
     if (options.status) {
       (where as any).status = { _eq: options.status };
@@ -247,23 +234,18 @@ export class BusinessImagesService {
     const offset = (options.page - 1) * options.pageSize;
     try {
       const result = await this.hasuraSystemService.executeQuery<{
-        business_images: BusinessImage[];
-        business_images_aggregate: { aggregate: { count: number } };
-      }>(GET_BUSINESS_IMAGES, { where, limit, offset });
-      const images = result.business_images ?? [];
-      const total = result.business_images_aggregate?.aggregate?.count ?? 0;
+        item_images: BusinessImage[];
+        item_images_aggregate: { aggregate: { count: number } };
+      }>(GET_ITEM_IMAGES_PAGE, { where, limit, offset });
+      const images = result.item_images ?? [];
+      const total = result.item_images_aggregate?.aggregate?.count ?? 0;
       return { images, total };
     } catch (error: any) {
-      const isAggregateMissing =
-        error?.message?.includes('business_images_aggregate') ||
-        error?.response?.errors?.some?.((e: any) =>
-          String(e?.message || '').includes('business_images_aggregate')
-        );
-      if (isAggregateMissing) {
-        const dataResult = await this.hasuraSystemService.executeQuery<{
-          business_images: BusinessImage[];
-        }>(GET_BUSINESS_IMAGES_DATA_ONLY, { where, limit, offset });
-        const images = dataResult.business_images ?? [];
+      if (this.isAggregateMissingError(error)) {
+        const data = await this.hasuraSystemService.executeQuery<{
+          item_images: BusinessImage[];
+        }>(GET_ITEM_IMAGES_PAGE_DATA, { where, limit, offset });
+        const images = data.item_images ?? [];
         return { images, total: images.length };
       }
       throw error;
@@ -280,7 +262,8 @@ export class BusinessImagesService {
     }
     const objects = images.map((img) => ({
       business_id: businessId,
-      sub_category_id: subCategoryId,
+      item_id: null,
+      item_sub_category_id: subCategoryId,
       image_url: img.image_url,
       s3_key: img.s3_key ?? null,
       file_size: img.file_size ?? null,
@@ -291,8 +274,11 @@ export class BusinessImagesService {
       alt_text: img.alt_text ?? null,
       tags: [],
       status: 'unassigned',
+      image_type: 'gallery',
+      display_order: 0,
+      is_active: true,
     }));
-    await this.hasuraUserService.executeMutation(INSERT_BUSINESS_IMAGES, {
+    await this.hasuraUserService.executeMutation(INSERT_ITEM_IMAGES, {
       objects,
     });
   }
@@ -300,25 +286,53 @@ export class BusinessImagesService {
   async associateImageToItem(
     businessId: string,
     imageId: string,
-    sku: string
+    itemId: string
   ): Promise<void> {
-    const normalizedSku = sku.trim().toLowerCase();
-    if (!normalizedSku) {
+    await this.ensureItemOwnedByBusiness(businessId, itemId);
+    const image = await this.fetchImageForBusiness(businessId, imageId);
+    if (image.item_id && image.item_id !== itemId) {
       throw new HttpException(
-        { success: false, error: 'SKU is required' },
+        { success: false, error: 'Image is already linked to another item' },
         HttpStatus.BAD_REQUEST
       );
     }
-    const skuTag = `sku:${normalizedSku}`;
-    const current = await this.fetchImageForBusiness(businessId, imageId);
-    const existingTags = current.tags ?? [];
-    const tags = existingTags.includes(skuTag)
-      ? existingTags
-      : [...existingTags, skuTag];
-    await this.hasuraUserService.executeMutation(UPDATE_BUSINESS_IMAGE_TAGS, {
-      id: imageId,
-      tags,
+    const displayOrder = await this.nextDisplayOrderForItem(itemId);
+    await this.applyImageUpdate(businessId, imageId, {
+      item_id: itemId,
       status: 'assigned',
+      display_order: displayOrder,
+    });
+  }
+
+  async disassociateImageFromItem(
+    businessId: string,
+    imageId: string
+  ): Promise<void> {
+    await this.fetchImageForBusiness(businessId, imageId);
+    await this.applyImageUpdate(businessId, imageId, {
+      item_id: null,
+      status: 'unassigned',
+    });
+  }
+
+  async linkLibraryImageToNewItem(
+    businessId: string,
+    imageId: string,
+    itemId: string
+  ): Promise<void> {
+    await this.ensureItemOwnedByBusiness(businessId, itemId);
+    const image = await this.fetchImageForBusiness(businessId, imageId);
+    if (image.item_id) {
+      throw new HttpException(
+        { success: false, error: 'Image is already linked to an item' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const displayOrder = await this.nextDisplayOrderForItem(itemId);
+    await this.applyImageUpdate(businessId, imageId, {
+      item_id: itemId,
+      status: 'assigned',
+      display_order: displayOrder,
     });
   }
 
@@ -351,12 +365,9 @@ export class BusinessImagesService {
     tag: string
   ): Promise<void> {
     const current = await this.fetchImageForBusiness(businessId, imageId);
-    const existingTags = current.tags ?? [];
-    const newTags = existingTags.filter((t) => t !== tag);
-    const hasSkuTags = newTags.some((t) => t.startsWith('sku:'));
-    const status = hasSkuTags ? 'assigned' : 'unassigned';
-    await this.hasuraUserService.executeMutation(UPDATE_BUSINESS_IMAGE_TAGS, {
-      id: imageId,
+    const newTags = (current.tags ?? []).filter((t) => t !== tag);
+    const status = current.item_id ? 'assigned' : 'unassigned';
+    await this.applyImageUpdate(businessId, imageId, {
       tags: newTags,
       status,
     });
@@ -365,9 +376,9 @@ export class BusinessImagesService {
   async deleteBusinessImage(businessId: string, imageId: string): Promise<void> {
     await this.ensureImageBelongsToBusiness(businessId, imageId);
     const result = await this.hasuraUserService.executeMutation<{
-      delete_business_images_by_pk: { id: string } | null;
-    }>(DELETE_BUSINESS_IMAGE, { id: imageId });
-    if (!result.delete_business_images_by_pk) {
+      delete_item_images_by_pk: { id: string } | null;
+    }>(DELETE_ITEM_IMAGE, { id: imageId });
+    if (!result.delete_item_images_by_pk) {
       throw new HttpException(
         { success: false, error: 'Image not found or could not be deleted' },
         HttpStatus.NOT_FOUND
@@ -394,20 +405,7 @@ export class BusinessImagesService {
     if (!Object.keys(cleanedChanges).length) {
       return current;
     }
-    const result = await this.hasuraUserService.executeMutation<{
-      update_business_images_by_pk: BusinessImage | null;
-    }>(UPDATE_BUSINESS_IMAGE, {
-      id: imageId,
-      changes: cleanedChanges,
-    });
-    const updated = result.update_business_images_by_pk;
-    if (!updated) {
-      throw new HttpException(
-        { success: false, error: 'Image not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-    return updated;
+    return this.applyImageUpdate(businessId, imageId, cleanedChanges);
   }
 
   async searchItems(
@@ -429,41 +427,83 @@ export class BusinessImagesService {
     return result.items ?? [];
   }
 
+  async getImageForBusiness(
+    businessId: string,
+    imageId: string
+  ): Promise<BusinessImage> {
+    return this.fetchImageForBusiness(businessId, imageId);
+  }
+
+  private async applyImageUpdate(
+    businessId: string,
+    imageId: string,
+    changes: Record<string, unknown>
+  ): Promise<BusinessImage> {
+    await this.ensureImageBelongsToBusiness(businessId, imageId);
+    const result = await this.hasuraUserService.executeMutation<{
+      update_item_images_by_pk: BusinessImage | null;
+    }>(UPDATE_ITEM_IMAGE, {
+      id: imageId,
+      changes,
+    });
+    const updated = result.update_item_images_by_pk;
+    if (!updated) {
+      throw new HttpException(
+        { success: false, error: 'Image not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return updated;
+  }
+
+  private async nextDisplayOrderForItem(itemId: string): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      item_images_aggregate: {
+        aggregate: { max: { display_order: number | null } | null } | null;
+      };
+    }>(NEXT_DISPLAY_ORDER, { itemId });
+    const max =
+      result.item_images_aggregate?.aggregate?.max?.display_order ?? -1;
+    return max + 1;
+  }
+
+  private async ensureItemOwnedByBusiness(
+    businessId: string,
+    itemId: string
+  ): Promise<void> {
+    const row = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BUSINESS, { id: itemId });
+    const item = row?.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found or access denied' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
   private async fetchImageForBusiness(
     businessId: string,
     imageId: string
   ): Promise<BusinessImage> {
     const query = `
-      query GetBusinessImageById($id: uuid!, $businessId: uuid!) {
-        business_images(
+      query GetItemImageLibById($id: uuid!, $businessId: uuid!) {
+        item_images(
           where: {
             id: { _eq: $id },
             business_id: { _eq: $businessId }
           },
           limit: 1
         ) {
-          id
-          business_id
-          sub_category_id
-          image_url
-          s3_key
-          file_size
-          width
-          height
-          format
-          caption
-          alt_text
-          tags
-          status
-          is_ai_cleaned
-          created_at
+          ${LIBRARY_IMAGE_FIELDS}
         }
       }
     `;
     const result = await this.hasuraSystemService.executeQuery<{
-      business_images: BusinessImage[];
+      item_images: BusinessImage[];
     }>(query, { id: imageId, businessId });
-    const image = result.business_images?.[0];
+    const image = result.item_images?.[0];
     if (!image) {
       throw new HttpException(
         { success: false, error: 'Image not found' },
@@ -473,13 +513,6 @@ export class BusinessImagesService {
     return image;
   }
 
-  async getImageForBusiness(
-    businessId: string,
-    imageId: string
-  ): Promise<BusinessImage> {
-    return this.fetchImageForBusiness(businessId, imageId);
-  }
-
   private async ensureImageBelongsToBusiness(
     businessId: string,
     imageId: string
@@ -487,7 +520,19 @@ export class BusinessImagesService {
     await this.fetchImageForBusiness(businessId, imageId);
   }
 
-  private removeUndefinedKeys<T extends Record<string, unknown>>(
+  private isAggregateMissingError(error: any): boolean {
+    const msg = String(error?.message || '');
+    if (msg.includes('item_images_aggregate')) {
+      return true;
+    }
+    return Boolean(
+      error?.response?.errors?.some?.((e: any) =>
+        String(e?.message || '').includes('item_images_aggregate')
+      )
+    );
+  }
+
+  private removeUndefinedKeys(
     input: Record<string, unknown>
   ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
@@ -499,4 +544,3 @@ export class BusinessImagesService {
     return result;
   }
 }
-

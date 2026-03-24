@@ -12,6 +12,7 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+  address_status_enum: { input: any; output: any; }
   bigint: { input: any; output: any; }
   bpchar: { input: any; output: any; }
   business_image_status_enum: { input: any; output: any; }
@@ -30,7 +31,13 @@ export type Scalars = {
   order_hold_status_enum: { input: any; output: any; }
   order_status: { input: any; output: any; }
   payment_entity_type: { input: any; output: any; }
+  payment_source_enum: { input: any; output: any; }
   rating_type_enum: { input: any; output: any; }
+  rental_booking_status_enum: { input: any; output: any; }
+  rental_hold_status_enum: { input: any; output: any; }
+  rental_item_image_status_enum: { input: any; output: any; }
+  rental_operation_mode_enum: { input: any; output: any; }
+  rental_request_status_enum: { input: any; output: any; }
   support_ticket_status: { input: any; output: any; }
   support_ticket_type: { input: any; output: any; }
   time: { input: any; output: any; }
@@ -1133,6 +1140,19 @@ export type Accounts_Variance_Order_By = {
   withheld_balance?: InputMaybe<Order_By>;
 };
 
+/** Boolean expression to compare columns of type "address_status_enum". All fields are combined with logical 'AND'. */
+export type Address_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _gt?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _gte?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['address_status_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _lte?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _neq?: InputMaybe<Scalars['address_status_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['address_status_enum']['input']>>;
+};
+
 /** Polymorphic address table supporting multiple addresses for users and businesses */
 export type Addresses = {
   __typename?: 'addresses';
@@ -1174,6 +1194,7 @@ export type Addresses = {
   orders_aggregate: Orders_Aggregate;
   postal_code: Scalars['String']['output'];
   state: Scalars['String']['output'];
+  status: Scalars['address_status_enum']['output'];
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
 };
 
@@ -1343,6 +1364,7 @@ export type Addresses_Bool_Exp = {
   orders_aggregate?: InputMaybe<Orders_Aggregate_Bool_Exp>;
   postal_code?: InputMaybe<String_Comparison_Exp>;
   state?: InputMaybe<String_Comparison_Exp>;
+  status?: InputMaybe<Address_Status_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
 };
 
@@ -1382,6 +1404,7 @@ export type Addresses_Insert_Input = {
   orders?: InputMaybe<Orders_Arr_Rel_Insert_Input>;
   postal_code?: InputMaybe<Scalars['String']['input']>;
   state?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['address_status_enum']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -1402,6 +1425,7 @@ export type Addresses_Max_Fields = {
   longitude?: Maybe<Scalars['numeric']['output']>;
   postal_code?: Maybe<Scalars['String']['output']>;
   state?: Maybe<Scalars['String']['output']>;
+  status?: Maybe<Scalars['address_status_enum']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
 };
 
@@ -1422,6 +1446,7 @@ export type Addresses_Min_Fields = {
   longitude?: Maybe<Scalars['numeric']['output']>;
   postal_code?: Maybe<Scalars['String']['output']>;
   state?: Maybe<Scalars['String']['output']>;
+  status?: Maybe<Scalars['address_status_enum']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
 };
 
@@ -1469,6 +1494,7 @@ export type Addresses_Order_By = {
   orders_aggregate?: InputMaybe<Orders_Aggregate_Order_By>;
   postal_code?: InputMaybe<Order_By>;
   state?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
 };
 
@@ -1506,6 +1532,8 @@ export enum Addresses_Select_Column {
   /** column name */
   State = 'state',
   /** column name */
+  Status = 'status',
+  /** column name */
   UpdatedAt = 'updated_at'
 }
 
@@ -1527,6 +1555,7 @@ export type Addresses_Set_Input = {
   longitude?: InputMaybe<Scalars['numeric']['input']>;
   postal_code?: InputMaybe<Scalars['String']['input']>;
   state?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['address_status_enum']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -1577,6 +1606,7 @@ export type Addresses_Stream_Cursor_Value_Input = {
   longitude?: InputMaybe<Scalars['numeric']['input']>;
   postal_code?: InputMaybe<Scalars['String']['input']>;
   state?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['address_status_enum']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -1615,6 +1645,8 @@ export enum Addresses_Update_Column {
   PostalCode = 'postal_code',
   /** column name */
   State = 'state',
+  /** column name */
+  Status = 'status',
   /** column name */
   UpdatedAt = 'updated_at'
 }
@@ -6147,6 +6179,10 @@ export type Business_Locations = {
   phone?: Maybe<Scalars['String']['output']>;
   /** Overrides application default. NULL = use application_configurations value. */
   rendasua_item_commission_percentage?: Maybe<Scalars['numeric']['output']>;
+  /** An array relationship */
+  rental_location_listings: Array<Rental_Location_Listings>;
+  /** An aggregate relationship */
+  rental_location_listings_aggregate: Rental_Location_Listings_Aggregate;
   updated_at: Scalars['timestamptz']['output'];
 };
 
@@ -6194,6 +6230,26 @@ export type Business_LocationsOrders_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Orders_Order_By>>;
   where?: InputMaybe<Orders_Bool_Exp>;
+};
+
+
+/** Stores multiple locations for each business */
+export type Business_LocationsRental_Location_ListingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+/** Stores multiple locations for each business */
+export type Business_LocationsRental_Location_Listings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
 };
 
 /** aggregated selection of "business_locations" */
@@ -6317,6 +6373,8 @@ export type Business_Locations_Bool_Exp = {
   orders_aggregate?: InputMaybe<Orders_Aggregate_Bool_Exp>;
   phone?: InputMaybe<String_Comparison_Exp>;
   rendasua_item_commission_percentage?: InputMaybe<Numeric_Comparison_Exp>;
+  rental_location_listings?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  rental_location_listings_aggregate?: InputMaybe<Rental_Location_Listings_Aggregate_Bool_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
 };
 
@@ -6375,6 +6433,7 @@ export type Business_Locations_Insert_Input = {
   phone?: InputMaybe<Scalars['String']['input']>;
   /** Overrides application default. NULL = use application_configurations value. */
   rendasua_item_commission_percentage?: InputMaybe<Scalars['numeric']['input']>;
+  rental_location_listings?: InputMaybe<Rental_Location_Listings_Arr_Rel_Insert_Input>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -6489,6 +6548,7 @@ export type Business_Locations_Order_By = {
   orders_aggregate?: InputMaybe<Orders_Aggregate_Order_By>;
   phone?: InputMaybe<Order_By>;
   rendasua_item_commission_percentage?: InputMaybe<Order_By>;
+  rental_location_listings_aggregate?: InputMaybe<Rental_Location_Listings_Aggregate_Order_By>;
   updated_at?: InputMaybe<Order_By>;
 };
 
@@ -6769,6 +6829,18 @@ export type Businesses = {
   orders: Array<Orders>;
   /** An aggregate relationship */
   orders_aggregate: Orders_Aggregate;
+  /** An array relationship */
+  rental_bookings: Array<Rental_Bookings>;
+  /** An aggregate relationship */
+  rental_bookings_aggregate: Rental_Bookings_Aggregate;
+  /** An array relationship */
+  rental_item_images: Array<Rental_Item_Images>;
+  /** An aggregate relationship */
+  rental_item_images_aggregate: Rental_Item_Images_Aggregate;
+  /** An array relationship */
+  rental_items: Array<Rental_Items>;
+  /** An aggregate relationship */
+  rental_items_aggregate: Rental_Items_Aggregate;
   updated_at: Scalars['timestamptz']['output'];
   /** An object relationship */
   user: Users;
@@ -6855,6 +6927,66 @@ export type BusinessesOrders_AggregateArgs = {
   where?: InputMaybe<Orders_Bool_Exp>;
 };
 
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_BookingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_Bookings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_Item_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_Item_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_ItemsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+/** columns and relationships of "businesses" */
+export type BusinessesRental_Items_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
 /** aggregated selection of "businesses" */
 export type Businesses_Aggregate = {
   __typename?: 'businesses_aggregate';
@@ -6896,6 +7028,12 @@ export type Businesses_Bool_Exp = {
   name?: InputMaybe<String_Comparison_Exp>;
   orders?: InputMaybe<Orders_Bool_Exp>;
   orders_aggregate?: InputMaybe<Orders_Aggregate_Bool_Exp>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Bool_Exp>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp>;
+  rental_items?: InputMaybe<Rental_Items_Bool_Exp>;
+  rental_items_aggregate?: InputMaybe<Rental_Items_Aggregate_Bool_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   user?: InputMaybe<Users_Bool_Exp>;
   user_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -6924,6 +7062,9 @@ export type Businesses_Insert_Input = {
   items?: InputMaybe<Items_Arr_Rel_Insert_Input>;
   name?: InputMaybe<Scalars['String']['input']>;
   orders?: InputMaybe<Orders_Arr_Rel_Insert_Input>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Arr_Rel_Insert_Input>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Arr_Rel_Insert_Input>;
+  rental_items?: InputMaybe<Rental_Items_Arr_Rel_Insert_Input>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -6984,6 +7125,9 @@ export type Businesses_Order_By = {
   items_aggregate?: InputMaybe<Items_Aggregate_Order_By>;
   name?: InputMaybe<Order_By>;
   orders_aggregate?: InputMaybe<Orders_Aggregate_Order_By>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Order_By>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Order_By>;
+  rental_items_aggregate?: InputMaybe<Rental_Items_Aggregate_Order_By>;
   updated_at?: InputMaybe<Order_By>;
   user?: InputMaybe<Users_Order_By>;
   user_id?: InputMaybe<Order_By>;
@@ -7325,6 +7469,14 @@ export type Clients = {
   ratings_received: Array<Ratings>;
   /** An aggregate relationship */
   ratings_received_aggregate: Ratings_Aggregate;
+  /** An array relationship */
+  rental_bookings: Array<Rental_Bookings>;
+  /** An aggregate relationship */
+  rental_bookings_aggregate: Rental_Bookings_Aggregate;
+  /** An array relationship */
+  rental_requests: Array<Rental_Requests>;
+  /** An aggregate relationship */
+  rental_requests_aggregate: Rental_Requests_Aggregate;
   updated_at: Scalars['timestamptz']['output'];
   /** An object relationship */
   user: Users;
@@ -7411,6 +7563,46 @@ export type ClientsRatings_Received_AggregateArgs = {
   where?: InputMaybe<Ratings_Bool_Exp>;
 };
 
+
+/** columns and relationships of "clients" */
+export type ClientsRental_BookingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "clients" */
+export type ClientsRental_Bookings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "clients" */
+export type ClientsRental_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+/** columns and relationships of "clients" */
+export type ClientsRental_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
 /** aggregated selection of "clients" */
 export type Clients_Aggregate = {
   __typename?: 'clients_aggregate';
@@ -7448,6 +7640,10 @@ export type Clients_Bool_Exp = {
   orders_aggregate?: InputMaybe<Orders_Aggregate_Bool_Exp>;
   ratings_received?: InputMaybe<Ratings_Bool_Exp>;
   ratings_received_aggregate?: InputMaybe<Ratings_Aggregate_Bool_Exp>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Bool_Exp>;
+  rental_requests?: InputMaybe<Rental_Requests_Bool_Exp>;
+  rental_requests_aggregate?: InputMaybe<Rental_Requests_Aggregate_Bool_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   user?: InputMaybe<Users_Bool_Exp>;
   user_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -7469,6 +7665,8 @@ export type Clients_Insert_Input = {
   order_holds?: InputMaybe<Order_Holds_Arr_Rel_Insert_Input>;
   orders?: InputMaybe<Orders_Arr_Rel_Insert_Input>;
   ratings_received?: InputMaybe<Ratings_Arr_Rel_Insert_Input>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Arr_Rel_Insert_Input>;
+  rental_requests?: InputMaybe<Rental_Requests_Arr_Rel_Insert_Input>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -7523,6 +7721,8 @@ export type Clients_Order_By = {
   order_holds_aggregate?: InputMaybe<Order_Holds_Aggregate_Order_By>;
   orders_aggregate?: InputMaybe<Orders_Aggregate_Order_By>;
   ratings_received_aggregate?: InputMaybe<Ratings_Aggregate_Order_By>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Order_By>;
+  rental_requests_aggregate?: InputMaybe<Rental_Requests_Aggregate_Order_By>;
   updated_at?: InputMaybe<Order_By>;
   user?: InputMaybe<Users_Order_By>;
   user_id?: InputMaybe<Order_By>;
@@ -15410,6 +15610,46 @@ export type Mutation_Root = {
   delete_ratings?: Maybe<Ratings_Mutation_Response>;
   /** delete single row from the table: "ratings" */
   delete_ratings_by_pk?: Maybe<Ratings>;
+  /** delete data from the table: "rental_booking_windows" */
+  delete_rental_booking_windows?: Maybe<Rental_Booking_Windows_Mutation_Response>;
+  /** delete single row from the table: "rental_booking_windows" */
+  delete_rental_booking_windows_by_pk?: Maybe<Rental_Booking_Windows>;
+  /** delete data from the table: "rental_bookings" */
+  delete_rental_bookings?: Maybe<Rental_Bookings_Mutation_Response>;
+  /** delete single row from the table: "rental_bookings" */
+  delete_rental_bookings_by_pk?: Maybe<Rental_Bookings>;
+  /** delete data from the table: "rental_categories" */
+  delete_rental_categories?: Maybe<Rental_Categories_Mutation_Response>;
+  /** delete single row from the table: "rental_categories" */
+  delete_rental_categories_by_pk?: Maybe<Rental_Categories>;
+  /** delete data from the table: "rental_holds" */
+  delete_rental_holds?: Maybe<Rental_Holds_Mutation_Response>;
+  /** delete single row from the table: "rental_holds" */
+  delete_rental_holds_by_pk?: Maybe<Rental_Holds>;
+  /** delete data from the table: "rental_item_images" */
+  delete_rental_item_images?: Maybe<Rental_Item_Images_Mutation_Response>;
+  /** delete single row from the table: "rental_item_images" */
+  delete_rental_item_images_by_pk?: Maybe<Rental_Item_Images>;
+  /** delete data from the table: "rental_items" */
+  delete_rental_items?: Maybe<Rental_Items_Mutation_Response>;
+  /** delete single row from the table: "rental_items" */
+  delete_rental_items_by_pk?: Maybe<Rental_Items>;
+  /** delete data from the table: "rental_listing_weekly_availability" */
+  delete_rental_listing_weekly_availability?: Maybe<Rental_Listing_Weekly_Availability_Mutation_Response>;
+  /** delete single row from the table: "rental_listing_weekly_availability" */
+  delete_rental_listing_weekly_availability_by_pk?: Maybe<Rental_Listing_Weekly_Availability>;
+  /** delete data from the table: "rental_location_listings" */
+  delete_rental_location_listings?: Maybe<Rental_Location_Listings_Mutation_Response>;
+  /** delete single row from the table: "rental_location_listings" */
+  delete_rental_location_listings_by_pk?: Maybe<Rental_Location_Listings>;
+  /** delete data from the table: "rental_requests" */
+  delete_rental_requests?: Maybe<Rental_Requests_Mutation_Response>;
+  /** delete single row from the table: "rental_requests" */
+  delete_rental_requests_by_pk?: Maybe<Rental_Requests>;
+  /** delete data from the table: "rental_status_history" */
+  delete_rental_status_history?: Maybe<Rental_Status_History_Mutation_Response>;
+  /** delete single row from the table: "rental_status_history" */
+  delete_rental_status_history_by_pk?: Maybe<Rental_Status_History>;
   /** delete data from the table: "support_tickets" */
   delete_support_tickets?: Maybe<Support_Tickets_Mutation_Response>;
   /** delete single row from the table: "support_tickets" */
@@ -15654,6 +15894,46 @@ export type Mutation_Root = {
   insert_ratings?: Maybe<Ratings_Mutation_Response>;
   /** insert a single row into the table: "ratings" */
   insert_ratings_one?: Maybe<Ratings>;
+  /** insert data into the table: "rental_booking_windows" */
+  insert_rental_booking_windows?: Maybe<Rental_Booking_Windows_Mutation_Response>;
+  /** insert a single row into the table: "rental_booking_windows" */
+  insert_rental_booking_windows_one?: Maybe<Rental_Booking_Windows>;
+  /** insert data into the table: "rental_bookings" */
+  insert_rental_bookings?: Maybe<Rental_Bookings_Mutation_Response>;
+  /** insert a single row into the table: "rental_bookings" */
+  insert_rental_bookings_one?: Maybe<Rental_Bookings>;
+  /** insert data into the table: "rental_categories" */
+  insert_rental_categories?: Maybe<Rental_Categories_Mutation_Response>;
+  /** insert a single row into the table: "rental_categories" */
+  insert_rental_categories_one?: Maybe<Rental_Categories>;
+  /** insert data into the table: "rental_holds" */
+  insert_rental_holds?: Maybe<Rental_Holds_Mutation_Response>;
+  /** insert a single row into the table: "rental_holds" */
+  insert_rental_holds_one?: Maybe<Rental_Holds>;
+  /** insert data into the table: "rental_item_images" */
+  insert_rental_item_images?: Maybe<Rental_Item_Images_Mutation_Response>;
+  /** insert a single row into the table: "rental_item_images" */
+  insert_rental_item_images_one?: Maybe<Rental_Item_Images>;
+  /** insert data into the table: "rental_items" */
+  insert_rental_items?: Maybe<Rental_Items_Mutation_Response>;
+  /** insert a single row into the table: "rental_items" */
+  insert_rental_items_one?: Maybe<Rental_Items>;
+  /** insert data into the table: "rental_listing_weekly_availability" */
+  insert_rental_listing_weekly_availability?: Maybe<Rental_Listing_Weekly_Availability_Mutation_Response>;
+  /** insert a single row into the table: "rental_listing_weekly_availability" */
+  insert_rental_listing_weekly_availability_one?: Maybe<Rental_Listing_Weekly_Availability>;
+  /** insert data into the table: "rental_location_listings" */
+  insert_rental_location_listings?: Maybe<Rental_Location_Listings_Mutation_Response>;
+  /** insert a single row into the table: "rental_location_listings" */
+  insert_rental_location_listings_one?: Maybe<Rental_Location_Listings>;
+  /** insert data into the table: "rental_requests" */
+  insert_rental_requests?: Maybe<Rental_Requests_Mutation_Response>;
+  /** insert a single row into the table: "rental_requests" */
+  insert_rental_requests_one?: Maybe<Rental_Requests>;
+  /** insert data into the table: "rental_status_history" */
+  insert_rental_status_history?: Maybe<Rental_Status_History_Mutation_Response>;
+  /** insert a single row into the table: "rental_status_history" */
+  insert_rental_status_history_one?: Maybe<Rental_Status_History>;
   /** insert data into the table: "support_tickets" */
   insert_support_tickets?: Maybe<Support_Tickets_Mutation_Response>;
   /** insert a single row into the table: "support_tickets" */
@@ -16002,6 +16282,66 @@ export type Mutation_Root = {
   update_ratings_by_pk?: Maybe<Ratings>;
   /** update multiples rows of table: "ratings" */
   update_ratings_many?: Maybe<Array<Maybe<Ratings_Mutation_Response>>>;
+  /** update data of the table: "rental_booking_windows" */
+  update_rental_booking_windows?: Maybe<Rental_Booking_Windows_Mutation_Response>;
+  /** update single row of the table: "rental_booking_windows" */
+  update_rental_booking_windows_by_pk?: Maybe<Rental_Booking_Windows>;
+  /** update multiples rows of table: "rental_booking_windows" */
+  update_rental_booking_windows_many?: Maybe<Array<Maybe<Rental_Booking_Windows_Mutation_Response>>>;
+  /** update data of the table: "rental_bookings" */
+  update_rental_bookings?: Maybe<Rental_Bookings_Mutation_Response>;
+  /** update single row of the table: "rental_bookings" */
+  update_rental_bookings_by_pk?: Maybe<Rental_Bookings>;
+  /** update multiples rows of table: "rental_bookings" */
+  update_rental_bookings_many?: Maybe<Array<Maybe<Rental_Bookings_Mutation_Response>>>;
+  /** update data of the table: "rental_categories" */
+  update_rental_categories?: Maybe<Rental_Categories_Mutation_Response>;
+  /** update single row of the table: "rental_categories" */
+  update_rental_categories_by_pk?: Maybe<Rental_Categories>;
+  /** update multiples rows of table: "rental_categories" */
+  update_rental_categories_many?: Maybe<Array<Maybe<Rental_Categories_Mutation_Response>>>;
+  /** update data of the table: "rental_holds" */
+  update_rental_holds?: Maybe<Rental_Holds_Mutation_Response>;
+  /** update single row of the table: "rental_holds" */
+  update_rental_holds_by_pk?: Maybe<Rental_Holds>;
+  /** update multiples rows of table: "rental_holds" */
+  update_rental_holds_many?: Maybe<Array<Maybe<Rental_Holds_Mutation_Response>>>;
+  /** update data of the table: "rental_item_images" */
+  update_rental_item_images?: Maybe<Rental_Item_Images_Mutation_Response>;
+  /** update single row of the table: "rental_item_images" */
+  update_rental_item_images_by_pk?: Maybe<Rental_Item_Images>;
+  /** update multiples rows of table: "rental_item_images" */
+  update_rental_item_images_many?: Maybe<Array<Maybe<Rental_Item_Images_Mutation_Response>>>;
+  /** update data of the table: "rental_items" */
+  update_rental_items?: Maybe<Rental_Items_Mutation_Response>;
+  /** update single row of the table: "rental_items" */
+  update_rental_items_by_pk?: Maybe<Rental_Items>;
+  /** update multiples rows of table: "rental_items" */
+  update_rental_items_many?: Maybe<Array<Maybe<Rental_Items_Mutation_Response>>>;
+  /** update data of the table: "rental_listing_weekly_availability" */
+  update_rental_listing_weekly_availability?: Maybe<Rental_Listing_Weekly_Availability_Mutation_Response>;
+  /** update single row of the table: "rental_listing_weekly_availability" */
+  update_rental_listing_weekly_availability_by_pk?: Maybe<Rental_Listing_Weekly_Availability>;
+  /** update multiples rows of table: "rental_listing_weekly_availability" */
+  update_rental_listing_weekly_availability_many?: Maybe<Array<Maybe<Rental_Listing_Weekly_Availability_Mutation_Response>>>;
+  /** update data of the table: "rental_location_listings" */
+  update_rental_location_listings?: Maybe<Rental_Location_Listings_Mutation_Response>;
+  /** update single row of the table: "rental_location_listings" */
+  update_rental_location_listings_by_pk?: Maybe<Rental_Location_Listings>;
+  /** update multiples rows of table: "rental_location_listings" */
+  update_rental_location_listings_many?: Maybe<Array<Maybe<Rental_Location_Listings_Mutation_Response>>>;
+  /** update data of the table: "rental_requests" */
+  update_rental_requests?: Maybe<Rental_Requests_Mutation_Response>;
+  /** update single row of the table: "rental_requests" */
+  update_rental_requests_by_pk?: Maybe<Rental_Requests>;
+  /** update multiples rows of table: "rental_requests" */
+  update_rental_requests_many?: Maybe<Array<Maybe<Rental_Requests_Mutation_Response>>>;
+  /** update data of the table: "rental_status_history" */
+  update_rental_status_history?: Maybe<Rental_Status_History_Mutation_Response>;
+  /** update single row of the table: "rental_status_history" */
+  update_rental_status_history_by_pk?: Maybe<Rental_Status_History>;
+  /** update multiples rows of table: "rental_status_history" */
+  update_rental_status_history_many?: Maybe<Array<Maybe<Rental_Status_History_Mutation_Response>>>;
   /** update data of the table: "support_tickets" */
   update_support_tickets?: Maybe<Support_Tickets_Mutation_Response>;
   /** update single row of the table: "support_tickets" */
@@ -16680,6 +17020,126 @@ export type Mutation_RootDelete_RatingsArgs = {
 
 /** mutation root */
 export type Mutation_RootDelete_Ratings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Booking_WindowsArgs = {
+  where: Rental_Booking_Windows_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Booking_Windows_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_BookingsArgs = {
+  where: Rental_Bookings_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Bookings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_CategoriesArgs = {
+  where: Rental_Categories_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Categories_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_HoldsArgs = {
+  where: Rental_Holds_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Holds_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Item_ImagesArgs = {
+  where: Rental_Item_Images_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Item_Images_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_ItemsArgs = {
+  where: Rental_Items_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Items_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Listing_Weekly_AvailabilityArgs = {
+  where: Rental_Listing_Weekly_Availability_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Listing_Weekly_Availability_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Location_ListingsArgs = {
+  where: Rental_Location_Listings_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Location_Listings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_RequestsArgs = {
+  where: Rental_Requests_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Status_HistoryArgs = {
+  where: Rental_Status_History_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Rental_Status_History_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -17517,6 +17977,146 @@ export type Mutation_RootInsert_RatingsArgs = {
 export type Mutation_RootInsert_Ratings_OneArgs = {
   object: Ratings_Insert_Input;
   on_conflict?: InputMaybe<Ratings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Booking_WindowsArgs = {
+  objects: Array<Rental_Booking_Windows_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Booking_Windows_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Booking_Windows_OneArgs = {
+  object: Rental_Booking_Windows_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Booking_Windows_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_BookingsArgs = {
+  objects: Array<Rental_Bookings_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Bookings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Bookings_OneArgs = {
+  object: Rental_Bookings_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Bookings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_CategoriesArgs = {
+  objects: Array<Rental_Categories_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Categories_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Categories_OneArgs = {
+  object: Rental_Categories_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Categories_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_HoldsArgs = {
+  objects: Array<Rental_Holds_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Holds_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Holds_OneArgs = {
+  object: Rental_Holds_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Holds_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Item_ImagesArgs = {
+  objects: Array<Rental_Item_Images_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Item_Images_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Item_Images_OneArgs = {
+  object: Rental_Item_Images_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Item_Images_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_ItemsArgs = {
+  objects: Array<Rental_Items_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Items_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Items_OneArgs = {
+  object: Rental_Items_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Items_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Listing_Weekly_AvailabilityArgs = {
+  objects: Array<Rental_Listing_Weekly_Availability_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Listing_Weekly_Availability_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Listing_Weekly_Availability_OneArgs = {
+  object: Rental_Listing_Weekly_Availability_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Listing_Weekly_Availability_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Location_ListingsArgs = {
+  objects: Array<Rental_Location_Listings_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Location_Listings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Location_Listings_OneArgs = {
+  object: Rental_Location_Listings_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Location_Listings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_RequestsArgs = {
+  objects: Array<Rental_Requests_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Requests_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Requests_OneArgs = {
+  object: Rental_Requests_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Requests_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Status_HistoryArgs = {
+  objects: Array<Rental_Status_History_Insert_Input>;
+  on_conflict?: InputMaybe<Rental_Status_History_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Rental_Status_History_OneArgs = {
+  object: Rental_Status_History_Insert_Input;
+  on_conflict?: InputMaybe<Rental_Status_History_On_Conflict>;
 };
 
 
@@ -18793,6 +19393,238 @@ export type Mutation_RootUpdate_Ratings_By_PkArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Ratings_ManyArgs = {
   updates: Array<Ratings_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Booking_WindowsArgs = {
+  _set?: InputMaybe<Rental_Booking_Windows_Set_Input>;
+  where: Rental_Booking_Windows_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Booking_Windows_By_PkArgs = {
+  _set?: InputMaybe<Rental_Booking_Windows_Set_Input>;
+  pk_columns: Rental_Booking_Windows_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Booking_Windows_ManyArgs = {
+  updates: Array<Rental_Booking_Windows_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_BookingsArgs = {
+  _append?: InputMaybe<Rental_Bookings_Append_Input>;
+  _delete_at_path?: InputMaybe<Rental_Bookings_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Rental_Bookings_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Rental_Bookings_Delete_Key_Input>;
+  _inc?: InputMaybe<Rental_Bookings_Inc_Input>;
+  _prepend?: InputMaybe<Rental_Bookings_Prepend_Input>;
+  _set?: InputMaybe<Rental_Bookings_Set_Input>;
+  where: Rental_Bookings_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Bookings_By_PkArgs = {
+  _append?: InputMaybe<Rental_Bookings_Append_Input>;
+  _delete_at_path?: InputMaybe<Rental_Bookings_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Rental_Bookings_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Rental_Bookings_Delete_Key_Input>;
+  _inc?: InputMaybe<Rental_Bookings_Inc_Input>;
+  _prepend?: InputMaybe<Rental_Bookings_Prepend_Input>;
+  _set?: InputMaybe<Rental_Bookings_Set_Input>;
+  pk_columns: Rental_Bookings_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Bookings_ManyArgs = {
+  updates: Array<Rental_Bookings_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_CategoriesArgs = {
+  _inc?: InputMaybe<Rental_Categories_Inc_Input>;
+  _set?: InputMaybe<Rental_Categories_Set_Input>;
+  where: Rental_Categories_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Categories_By_PkArgs = {
+  _inc?: InputMaybe<Rental_Categories_Inc_Input>;
+  _set?: InputMaybe<Rental_Categories_Set_Input>;
+  pk_columns: Rental_Categories_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Categories_ManyArgs = {
+  updates: Array<Rental_Categories_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_HoldsArgs = {
+  _inc?: InputMaybe<Rental_Holds_Inc_Input>;
+  _set?: InputMaybe<Rental_Holds_Set_Input>;
+  where: Rental_Holds_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Holds_By_PkArgs = {
+  _inc?: InputMaybe<Rental_Holds_Inc_Input>;
+  _set?: InputMaybe<Rental_Holds_Set_Input>;
+  pk_columns: Rental_Holds_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Holds_ManyArgs = {
+  updates: Array<Rental_Holds_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Item_ImagesArgs = {
+  _inc?: InputMaybe<Rental_Item_Images_Inc_Input>;
+  _set?: InputMaybe<Rental_Item_Images_Set_Input>;
+  where: Rental_Item_Images_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Item_Images_By_PkArgs = {
+  _inc?: InputMaybe<Rental_Item_Images_Inc_Input>;
+  _set?: InputMaybe<Rental_Item_Images_Set_Input>;
+  pk_columns: Rental_Item_Images_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Item_Images_ManyArgs = {
+  updates: Array<Rental_Item_Images_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_ItemsArgs = {
+  _set?: InputMaybe<Rental_Items_Set_Input>;
+  where: Rental_Items_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Items_By_PkArgs = {
+  _set?: InputMaybe<Rental_Items_Set_Input>;
+  pk_columns: Rental_Items_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Items_ManyArgs = {
+  updates: Array<Rental_Items_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Listing_Weekly_AvailabilityArgs = {
+  _inc?: InputMaybe<Rental_Listing_Weekly_Availability_Inc_Input>;
+  _set?: InputMaybe<Rental_Listing_Weekly_Availability_Set_Input>;
+  where: Rental_Listing_Weekly_Availability_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Listing_Weekly_Availability_By_PkArgs = {
+  _inc?: InputMaybe<Rental_Listing_Weekly_Availability_Inc_Input>;
+  _set?: InputMaybe<Rental_Listing_Weekly_Availability_Set_Input>;
+  pk_columns: Rental_Listing_Weekly_Availability_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Listing_Weekly_Availability_ManyArgs = {
+  updates: Array<Rental_Listing_Weekly_Availability_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Location_ListingsArgs = {
+  _inc?: InputMaybe<Rental_Location_Listings_Inc_Input>;
+  _set?: InputMaybe<Rental_Location_Listings_Set_Input>;
+  where: Rental_Location_Listings_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Location_Listings_By_PkArgs = {
+  _inc?: InputMaybe<Rental_Location_Listings_Inc_Input>;
+  _set?: InputMaybe<Rental_Location_Listings_Set_Input>;
+  pk_columns: Rental_Location_Listings_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Location_Listings_ManyArgs = {
+  updates: Array<Rental_Location_Listings_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_RequestsArgs = {
+  _append?: InputMaybe<Rental_Requests_Append_Input>;
+  _delete_at_path?: InputMaybe<Rental_Requests_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Rental_Requests_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Rental_Requests_Delete_Key_Input>;
+  _prepend?: InputMaybe<Rental_Requests_Prepend_Input>;
+  _set?: InputMaybe<Rental_Requests_Set_Input>;
+  where: Rental_Requests_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Requests_By_PkArgs = {
+  _append?: InputMaybe<Rental_Requests_Append_Input>;
+  _delete_at_path?: InputMaybe<Rental_Requests_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Rental_Requests_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Rental_Requests_Delete_Key_Input>;
+  _prepend?: InputMaybe<Rental_Requests_Prepend_Input>;
+  _set?: InputMaybe<Rental_Requests_Set_Input>;
+  pk_columns: Rental_Requests_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Requests_ManyArgs = {
+  updates: Array<Rental_Requests_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Status_HistoryArgs = {
+  _set?: InputMaybe<Rental_Status_History_Set_Input>;
+  where: Rental_Status_History_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Status_History_By_PkArgs = {
+  _set?: InputMaybe<Rental_Status_History_Set_Input>;
+  pk_columns: Rental_Status_History_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Rental_Status_History_ManyArgs = {
+  updates: Array<Rental_Status_History_Updates>;
 };
 
 
@@ -21292,6 +22124,8 @@ export type Orders = {
   /** An aggregate relationship */
   order_status_history_aggregate: Order_Status_History_Aggregate;
   payment_method?: Maybe<Scalars['String']['output']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: Maybe<Scalars['payment_source_enum']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee: Scalars['numeric']['output'];
@@ -21578,6 +22412,7 @@ export type Orders_Bool_Exp = {
   order_status_history?: InputMaybe<Order_Status_History_Bool_Exp>;
   order_status_history_aggregate?: InputMaybe<Order_Status_History_Aggregate_Bool_Exp>;
   payment_method?: InputMaybe<String_Comparison_Exp>;
+  payment_source?: InputMaybe<Payment_Source_Enum_Comparison_Exp>;
   payment_status?: InputMaybe<String_Comparison_Exp>;
   per_km_delivery_fee?: InputMaybe<Numeric_Comparison_Exp>;
   preferred_delivery_time?: InputMaybe<Timestamptz_Comparison_Exp>;
@@ -21652,6 +22487,8 @@ export type Orders_Insert_Input = {
   order_number?: InputMaybe<Scalars['String']['input']>;
   order_status_history?: InputMaybe<Order_Status_History_Arr_Rel_Insert_Input>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: InputMaybe<Scalars['payment_source_enum']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
@@ -21696,6 +22533,8 @@ export type Orders_Max_Fields = {
   id?: Maybe<Scalars['uuid']['output']>;
   order_number?: Maybe<Scalars['String']['output']>;
   payment_method?: Maybe<Scalars['String']['output']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: Maybe<Scalars['payment_source_enum']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: Maybe<Scalars['numeric']['output']>;
@@ -21734,6 +22573,8 @@ export type Orders_Max_Order_By = {
   id?: InputMaybe<Order_By>;
   order_number?: InputMaybe<Order_By>;
   payment_method?: InputMaybe<Order_By>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: InputMaybe<Order_By>;
@@ -21773,6 +22614,8 @@ export type Orders_Min_Fields = {
   id?: Maybe<Scalars['uuid']['output']>;
   order_number?: Maybe<Scalars['String']['output']>;
   payment_method?: Maybe<Scalars['String']['output']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: Maybe<Scalars['payment_source_enum']['output']>;
   payment_status?: Maybe<Scalars['String']['output']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: Maybe<Scalars['numeric']['output']>;
@@ -21811,6 +22654,8 @@ export type Orders_Min_Order_By = {
   id?: InputMaybe<Order_By>;
   order_number?: InputMaybe<Order_By>;
   payment_method?: InputMaybe<Order_By>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: InputMaybe<Order_By>;
@@ -21878,6 +22723,7 @@ export type Orders_Order_By = {
   order_number?: InputMaybe<Order_By>;
   order_status_history_aggregate?: InputMaybe<Order_Status_History_Aggregate_Order_By>;
   payment_method?: InputMaybe<Order_By>;
+  payment_source?: InputMaybe<Order_By>;
   payment_status?: InputMaybe<Order_By>;
   per_km_delivery_fee?: InputMaybe<Order_By>;
   preferred_delivery_time?: InputMaybe<Order_By>;
@@ -21936,6 +22782,8 @@ export enum Orders_Select_Column {
   OrderNumber = 'order_number',
   /** column name */
   PaymentMethod = 'payment_method',
+  /** column name */
+  PaymentSource = 'payment_source',
   /** column name */
   PaymentStatus = 'payment_status',
   /** column name */
@@ -22001,6 +22849,8 @@ export type Orders_Set_Input = {
   id?: InputMaybe<Scalars['uuid']['input']>;
   order_number?: InputMaybe<Scalars['String']['input']>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: InputMaybe<Scalars['payment_source_enum']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
@@ -22132,6 +22982,8 @@ export type Orders_Stream_Cursor_Value_Input = {
   id?: InputMaybe<Scalars['uuid']['input']>;
   order_number?: InputMaybe<Scalars['String']['input']>;
   payment_method?: InputMaybe<Scalars['String']['input']>;
+  /** How the order was paid: credit_card, mobile_payment, or wallet */
+  payment_source?: InputMaybe<Scalars['payment_source_enum']['input']>;
   payment_status?: InputMaybe<Scalars['String']['input']>;
   /** Per-kilometer delivery fee calculated as (per_km_rate * distance) */
   per_km_delivery_fee?: InputMaybe<Scalars['numeric']['input']>;
@@ -22214,6 +23066,8 @@ export enum Orders_Update_Column {
   OrderNumber = 'order_number',
   /** column name */
   PaymentMethod = 'payment_method',
+  /** column name */
+  PaymentSource = 'payment_source',
   /** column name */
   PaymentStatus = 'payment_status',
   /** column name */
@@ -23023,6 +23877,19 @@ export type Payment_Entity_Type_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['payment_entity_type']['input']>>;
 };
 
+/** Boolean expression to compare columns of type "payment_source_enum". All fields are combined with logical 'AND'. */
+export type Payment_Source_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _gt?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _gte?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['payment_source_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _lte?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _neq?: InputMaybe<Scalars['payment_source_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['payment_source_enum']['input']>>;
+};
+
 /** Web Push subscription endpoints for sending browser push notifications */
 export type Push_Subscriptions = {
   __typename?: 'push_subscriptions';
@@ -23548,6 +24415,66 @@ export type Query_Root = {
   ratings_aggregate: Ratings_Aggregate;
   /** fetch data from the table: "ratings" using primary key columns */
   ratings_by_pk?: Maybe<Ratings>;
+  /** An array relationship */
+  rental_booking_windows: Array<Rental_Booking_Windows>;
+  /** An aggregate relationship */
+  rental_booking_windows_aggregate: Rental_Booking_Windows_Aggregate;
+  /** fetch data from the table: "rental_booking_windows" using primary key columns */
+  rental_booking_windows_by_pk?: Maybe<Rental_Booking_Windows>;
+  /** An array relationship */
+  rental_bookings: Array<Rental_Bookings>;
+  /** An aggregate relationship */
+  rental_bookings_aggregate: Rental_Bookings_Aggregate;
+  /** fetch data from the table: "rental_bookings" using primary key columns */
+  rental_bookings_by_pk?: Maybe<Rental_Bookings>;
+  /** fetch data from the table: "rental_categories" */
+  rental_categories: Array<Rental_Categories>;
+  /** fetch aggregated fields from the table: "rental_categories" */
+  rental_categories_aggregate: Rental_Categories_Aggregate;
+  /** fetch data from the table: "rental_categories" using primary key columns */
+  rental_categories_by_pk?: Maybe<Rental_Categories>;
+  /** fetch data from the table: "rental_holds" */
+  rental_holds: Array<Rental_Holds>;
+  /** fetch aggregated fields from the table: "rental_holds" */
+  rental_holds_aggregate: Rental_Holds_Aggregate;
+  /** fetch data from the table: "rental_holds" using primary key columns */
+  rental_holds_by_pk?: Maybe<Rental_Holds>;
+  /** An array relationship */
+  rental_item_images: Array<Rental_Item_Images>;
+  /** An aggregate relationship */
+  rental_item_images_aggregate: Rental_Item_Images_Aggregate;
+  /** fetch data from the table: "rental_item_images" using primary key columns */
+  rental_item_images_by_pk?: Maybe<Rental_Item_Images>;
+  /** An array relationship */
+  rental_items: Array<Rental_Items>;
+  /** An aggregate relationship */
+  rental_items_aggregate: Rental_Items_Aggregate;
+  /** fetch data from the table: "rental_items" using primary key columns */
+  rental_items_by_pk?: Maybe<Rental_Items>;
+  /** fetch data from the table: "rental_listing_weekly_availability" */
+  rental_listing_weekly_availability: Array<Rental_Listing_Weekly_Availability>;
+  /** fetch aggregated fields from the table: "rental_listing_weekly_availability" */
+  rental_listing_weekly_availability_aggregate: Rental_Listing_Weekly_Availability_Aggregate;
+  /** fetch data from the table: "rental_listing_weekly_availability" using primary key columns */
+  rental_listing_weekly_availability_by_pk?: Maybe<Rental_Listing_Weekly_Availability>;
+  /** An array relationship */
+  rental_location_listings: Array<Rental_Location_Listings>;
+  /** An aggregate relationship */
+  rental_location_listings_aggregate: Rental_Location_Listings_Aggregate;
+  /** fetch data from the table: "rental_location_listings" using primary key columns */
+  rental_location_listings_by_pk?: Maybe<Rental_Location_Listings>;
+  /** An array relationship */
+  rental_requests: Array<Rental_Requests>;
+  /** An aggregate relationship */
+  rental_requests_aggregate: Rental_Requests_Aggregate;
+  /** fetch data from the table: "rental_requests" using primary key columns */
+  rental_requests_by_pk?: Maybe<Rental_Requests>;
+  /** fetch data from the table: "rental_status_history" */
+  rental_status_history: Array<Rental_Status_History>;
+  /** fetch aggregated fields from the table: "rental_status_history" */
+  rental_status_history_aggregate: Rental_Status_History_Aggregate;
+  /** fetch data from the table: "rental_status_history" using primary key columns */
+  rental_status_history_by_pk?: Maybe<Rental_Status_History>;
   /** fetch data from the table: "support_tickets" */
   support_tickets: Array<Support_Tickets>;
   /** fetch aggregated fields from the table: "support_tickets" */
@@ -24802,6 +25729,236 @@ export type Query_RootRatings_By_PkArgs = {
 };
 
 
+export type Query_RootRental_Booking_WindowsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Booking_Windows_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Booking_Windows_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_BookingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Bookings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Bookings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_CategoriesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Categories_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Categories_Order_By>>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Categories_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Categories_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Categories_Order_By>>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Categories_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_HoldsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Holds_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Holds_Order_By>>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Holds_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Holds_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Holds_Order_By>>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Holds_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_Item_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Item_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Item_Images_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_ItemsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Items_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Items_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_Listing_Weekly_AvailabilityArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Listing_Weekly_Availability_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Listing_Weekly_Availability_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_Location_ListingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Location_Listings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Location_Listings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootRental_Status_HistoryArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Status_History_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+
+export type Query_RootRental_Status_History_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
 export type Query_RootSupport_TicketsArgs = {
   distinct_on?: InputMaybe<Array<Support_Tickets_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -25913,6 +27070,4451 @@ export type Ratings_Variance_Order_By = {
   rating?: InputMaybe<Order_By>;
 };
 
+/** Boolean expression to compare columns of type "rental_booking_status_enum". All fields are combined with logical 'AND'. */
+export type Rental_Booking_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _gt?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _gte?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['rental_booking_status_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _lte?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _neq?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['rental_booking_status_enum']['input']>>;
+};
+
+/** columns and relationships of "rental_booking_windows" */
+export type Rental_Booking_Windows = {
+  __typename?: 'rental_booking_windows';
+  created_at: Scalars['timestamptz']['output'];
+  end_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  /** An object relationship */
+  rental_booking: Rental_Bookings;
+  rental_booking_id: Scalars['uuid']['output'];
+  start_at: Scalars['timestamptz']['output'];
+};
+
+/** aggregated selection of "rental_booking_windows" */
+export type Rental_Booking_Windows_Aggregate = {
+  __typename?: 'rental_booking_windows_aggregate';
+  aggregate?: Maybe<Rental_Booking_Windows_Aggregate_Fields>;
+  nodes: Array<Rental_Booking_Windows>;
+};
+
+export type Rental_Booking_Windows_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Rental_Booking_Windows_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Booking_Windows_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_booking_windows" */
+export type Rental_Booking_Windows_Aggregate_Fields = {
+  __typename?: 'rental_booking_windows_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Booking_Windows_Max_Fields>;
+  min?: Maybe<Rental_Booking_Windows_Min_Fields>;
+};
+
+
+/** aggregate fields of "rental_booking_windows" */
+export type Rental_Booking_Windows_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_booking_windows" */
+export type Rental_Booking_Windows_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Booking_Windows_Max_Order_By>;
+  min?: InputMaybe<Rental_Booking_Windows_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_booking_windows" */
+export type Rental_Booking_Windows_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Booking_Windows_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Booking_Windows_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "rental_booking_windows". All fields are combined with a logical 'AND'. */
+export type Rental_Booking_Windows_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Booking_Windows_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Booking_Windows_Bool_Exp>>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  end_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_booking?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_booking_id?: InputMaybe<Uuid_Comparison_Exp>;
+  start_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_booking_windows" */
+export enum Rental_Booking_Windows_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalBookingWindowsPkey = 'rental_booking_windows_pkey'
+}
+
+/** input type for inserting data into table "rental_booking_windows" */
+export type Rental_Booking_Windows_Insert_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking?: InputMaybe<Rental_Bookings_Obj_Rel_Insert_Input>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Booking_Windows_Max_Fields = {
+  __typename?: 'rental_booking_windows_max_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  end_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  start_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "rental_booking_windows" */
+export type Rental_Booking_Windows_Max_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  start_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Booking_Windows_Min_Fields = {
+  __typename?: 'rental_booking_windows_min_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  end_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  start_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "rental_booking_windows" */
+export type Rental_Booking_Windows_Min_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  start_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_booking_windows" */
+export type Rental_Booking_Windows_Mutation_Response = {
+  __typename?: 'rental_booking_windows_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Booking_Windows>;
+};
+
+/** on_conflict condition type for table "rental_booking_windows" */
+export type Rental_Booking_Windows_On_Conflict = {
+  constraint: Rental_Booking_Windows_Constraint;
+  update_columns?: Array<Rental_Booking_Windows_Update_Column>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_booking_windows". */
+export type Rental_Booking_Windows_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_booking?: InputMaybe<Rental_Bookings_Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  start_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_booking_windows */
+export type Rental_Booking_Windows_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_booking_windows" */
+export enum Rental_Booking_Windows_Select_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  EndAt = 'end_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  StartAt = 'start_at'
+}
+
+/** input type for updating data in table "rental_booking_windows" */
+export type Rental_Booking_Windows_Set_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "rental_booking_windows" */
+export type Rental_Booking_Windows_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Booking_Windows_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Booking_Windows_Stream_Cursor_Value_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "rental_booking_windows" */
+export enum Rental_Booking_Windows_Update_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  EndAt = 'end_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  StartAt = 'start_at'
+}
+
+export type Rental_Booking_Windows_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Booking_Windows_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Booking_Windows_Bool_Exp;
+};
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_Bookings = {
+  __typename?: 'rental_bookings';
+  actual_end_at?: Maybe<Scalars['timestamptz']['output']>;
+  actual_start_at?: Maybe<Scalars['timestamptz']['output']>;
+  booking_number: Scalars['String']['output'];
+  /** An object relationship */
+  business: Businesses;
+  business_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  client: Clients;
+  client_id: Scalars['uuid']['output'];
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_at: Scalars['timestamptz']['output'];
+  currency: Scalars['currency_enum']['output'];
+  end_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  period_ended_notified_at?: Maybe<Scalars['timestamptz']['output']>;
+  /** An array relationship */
+  rental_booking_windows: Array<Rental_Booking_Windows>;
+  /** An aggregate relationship */
+  rental_booking_windows_aggregate: Rental_Booking_Windows_Aggregate;
+  /** An object relationship */
+  rental_hold?: Maybe<Rental_Holds>;
+  /** An object relationship */
+  rental_location_listing: Rental_Location_Listings;
+  rental_location_listing_id: Scalars['uuid']['output'];
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot: Scalars['jsonb']['output'];
+  /** An object relationship */
+  rental_request: Rental_Requests;
+  rental_request_id: Scalars['uuid']['output'];
+  rental_start_overwrite_code_hash?: Maybe<Scalars['String']['output']>;
+  rental_start_overwrite_code_used_at?: Maybe<Scalars['timestamptz']['output']>;
+  rental_start_pin_attempts: Scalars['Int']['output'];
+  rental_start_pin_hash?: Maybe<Scalars['String']['output']>;
+  /** An array relationship */
+  rental_status_histories: Array<Rental_Status_History>;
+  /** An aggregate relationship */
+  rental_status_histories_aggregate: Rental_Status_History_Aggregate;
+  start_at: Scalars['timestamptz']['output'];
+  status: Scalars['rental_booking_status_enum']['output'];
+  total_amount: Scalars['numeric']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_BookingsRental_Booking_WindowsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_BookingsRental_Booking_Windows_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_BookingsRental_Pricing_SnapshotArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_BookingsRental_Status_HistoriesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_bookings" */
+export type Rental_BookingsRental_Status_Histories_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+/** aggregated selection of "rental_bookings" */
+export type Rental_Bookings_Aggregate = {
+  __typename?: 'rental_bookings_aggregate';
+  aggregate?: Maybe<Rental_Bookings_Aggregate_Fields>;
+  nodes: Array<Rental_Bookings>;
+};
+
+export type Rental_Bookings_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Rental_Bookings_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Bookings_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_bookings" */
+export type Rental_Bookings_Aggregate_Fields = {
+  __typename?: 'rental_bookings_aggregate_fields';
+  avg?: Maybe<Rental_Bookings_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Bookings_Max_Fields>;
+  min?: Maybe<Rental_Bookings_Min_Fields>;
+  stddev?: Maybe<Rental_Bookings_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Bookings_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Bookings_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Bookings_Sum_Fields>;
+  var_pop?: Maybe<Rental_Bookings_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Bookings_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Bookings_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_bookings" */
+export type Rental_Bookings_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_bookings" */
+export type Rental_Bookings_Aggregate_Order_By = {
+  avg?: InputMaybe<Rental_Bookings_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Bookings_Max_Order_By>;
+  min?: InputMaybe<Rental_Bookings_Min_Order_By>;
+  stddev?: InputMaybe<Rental_Bookings_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Rental_Bookings_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Rental_Bookings_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Rental_Bookings_Sum_Order_By>;
+  var_pop?: InputMaybe<Rental_Bookings_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Rental_Bookings_Var_Samp_Order_By>;
+  variance?: InputMaybe<Rental_Bookings_Variance_Order_By>;
+};
+
+/** append existing jsonb value of filtered columns with new jsonb value */
+export type Rental_Bookings_Append_Input = {
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** input type for inserting array relation for remote table "rental_bookings" */
+export type Rental_Bookings_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Bookings_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Bookings_On_Conflict>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Bookings_Avg_Fields = {
+  __typename?: 'rental_bookings_avg_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by avg() on columns of table "rental_bookings" */
+export type Rental_Bookings_Avg_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "rental_bookings". All fields are combined with a logical 'AND'. */
+export type Rental_Bookings_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Bookings_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Bookings_Bool_Exp>>;
+  actual_end_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  actual_start_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  booking_number?: InputMaybe<String_Comparison_Exp>;
+  business?: InputMaybe<Businesses_Bool_Exp>;
+  business_id?: InputMaybe<Uuid_Comparison_Exp>;
+  client?: InputMaybe<Clients_Bool_Exp>;
+  client_id?: InputMaybe<Uuid_Comparison_Exp>;
+  contract_expires_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  currency?: InputMaybe<Currency_Enum_Comparison_Exp>;
+  end_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  period_ended_notified_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  rental_booking_windows?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+  rental_booking_windows_aggregate?: InputMaybe<Rental_Booking_Windows_Aggregate_Bool_Exp>;
+  rental_hold?: InputMaybe<Rental_Holds_Bool_Exp>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  rental_location_listing_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_pricing_snapshot?: InputMaybe<Jsonb_Comparison_Exp>;
+  rental_request?: InputMaybe<Rental_Requests_Bool_Exp>;
+  rental_request_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_start_overwrite_code_hash?: InputMaybe<String_Comparison_Exp>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  rental_start_pin_attempts?: InputMaybe<Int_Comparison_Exp>;
+  rental_start_pin_hash?: InputMaybe<String_Comparison_Exp>;
+  rental_status_histories?: InputMaybe<Rental_Status_History_Bool_Exp>;
+  rental_status_histories_aggregate?: InputMaybe<Rental_Status_History_Aggregate_Bool_Exp>;
+  start_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  status?: InputMaybe<Rental_Booking_Status_Enum_Comparison_Exp>;
+  total_amount?: InputMaybe<Numeric_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_bookings" */
+export enum Rental_Bookings_Constraint {
+  /** unique or primary key constraint on columns "booking_number" */
+  IdxRentalBookingsBookingNumberUnique = 'idx_rental_bookings_booking_number_unique',
+  /** unique or primary key constraint on columns "id" */
+  RentalBookingsPkey = 'rental_bookings_pkey',
+  /** unique or primary key constraint on columns "rental_request_id" */
+  RentalBookingsRentalRequestIdKey = 'rental_bookings_rental_request_id_key'
+}
+
+/** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+export type Rental_Bookings_Delete_At_Path_Input = {
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+/** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+export type Rental_Bookings_Delete_Elem_Input = {
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** delete key/value pair or string element. key/value pairs are matched based on their key value */
+export type Rental_Bookings_Delete_Key_Input = {
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** input type for incrementing numeric columns in table "rental_bookings" */
+export type Rental_Bookings_Inc_Input = {
+  rental_start_pin_attempts?: InputMaybe<Scalars['Int']['input']>;
+  total_amount?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** input type for inserting data into table "rental_bookings" */
+export type Rental_Bookings_Insert_Input = {
+  actual_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  actual_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  booking_number?: InputMaybe<Scalars['String']['input']>;
+  business?: InputMaybe<Businesses_Obj_Rel_Insert_Input>;
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  client?: InputMaybe<Clients_Obj_Rel_Insert_Input>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  period_ended_notified_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_booking_windows?: InputMaybe<Rental_Booking_Windows_Arr_Rel_Insert_Input>;
+  rental_hold?: InputMaybe<Rental_Holds_Obj_Rel_Insert_Input>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Obj_Rel_Insert_Input>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  rental_request?: InputMaybe<Rental_Requests_Obj_Rel_Insert_Input>;
+  rental_request_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_start_overwrite_code_hash?: InputMaybe<Scalars['String']['input']>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_start_pin_attempts?: InputMaybe<Scalars['Int']['input']>;
+  rental_start_pin_hash?: InputMaybe<Scalars['String']['input']>;
+  rental_status_histories?: InputMaybe<Rental_Status_History_Arr_Rel_Insert_Input>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  total_amount?: InputMaybe<Scalars['numeric']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Bookings_Max_Fields = {
+  __typename?: 'rental_bookings_max_fields';
+  actual_end_at?: Maybe<Scalars['timestamptz']['output']>;
+  actual_start_at?: Maybe<Scalars['timestamptz']['output']>;
+  booking_number?: Maybe<Scalars['String']['output']>;
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  end_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  period_ended_notified_at?: Maybe<Scalars['timestamptz']['output']>;
+  rental_location_listing_id?: Maybe<Scalars['uuid']['output']>;
+  rental_request_id?: Maybe<Scalars['uuid']['output']>;
+  rental_start_overwrite_code_hash?: Maybe<Scalars['String']['output']>;
+  rental_start_overwrite_code_used_at?: Maybe<Scalars['timestamptz']['output']>;
+  rental_start_pin_attempts?: Maybe<Scalars['Int']['output']>;
+  rental_start_pin_hash?: Maybe<Scalars['String']['output']>;
+  start_at?: Maybe<Scalars['timestamptz']['output']>;
+  status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+  total_amount?: Maybe<Scalars['numeric']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "rental_bookings" */
+export type Rental_Bookings_Max_Order_By = {
+  actual_end_at?: InputMaybe<Order_By>;
+  actual_start_at?: InputMaybe<Order_By>;
+  booking_number?: InputMaybe<Order_By>;
+  business_id?: InputMaybe<Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  period_ended_notified_at?: InputMaybe<Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  rental_request_id?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_hash?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Order_By>;
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  rental_start_pin_hash?: InputMaybe<Order_By>;
+  start_at?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Bookings_Min_Fields = {
+  __typename?: 'rental_bookings_min_fields';
+  actual_end_at?: Maybe<Scalars['timestamptz']['output']>;
+  actual_start_at?: Maybe<Scalars['timestamptz']['output']>;
+  booking_number?: Maybe<Scalars['String']['output']>;
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  end_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  period_ended_notified_at?: Maybe<Scalars['timestamptz']['output']>;
+  rental_location_listing_id?: Maybe<Scalars['uuid']['output']>;
+  rental_request_id?: Maybe<Scalars['uuid']['output']>;
+  rental_start_overwrite_code_hash?: Maybe<Scalars['String']['output']>;
+  rental_start_overwrite_code_used_at?: Maybe<Scalars['timestamptz']['output']>;
+  rental_start_pin_attempts?: Maybe<Scalars['Int']['output']>;
+  rental_start_pin_hash?: Maybe<Scalars['String']['output']>;
+  start_at?: Maybe<Scalars['timestamptz']['output']>;
+  status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+  total_amount?: Maybe<Scalars['numeric']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "rental_bookings" */
+export type Rental_Bookings_Min_Order_By = {
+  actual_end_at?: InputMaybe<Order_By>;
+  actual_start_at?: InputMaybe<Order_By>;
+  booking_number?: InputMaybe<Order_By>;
+  business_id?: InputMaybe<Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  period_ended_notified_at?: InputMaybe<Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  rental_request_id?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_hash?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Order_By>;
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  rental_start_pin_hash?: InputMaybe<Order_By>;
+  start_at?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_bookings" */
+export type Rental_Bookings_Mutation_Response = {
+  __typename?: 'rental_bookings_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Bookings>;
+};
+
+/** input type for inserting object relation for remote table "rental_bookings" */
+export type Rental_Bookings_Obj_Rel_Insert_Input = {
+  data: Rental_Bookings_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Bookings_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_bookings" */
+export type Rental_Bookings_On_Conflict = {
+  constraint: Rental_Bookings_Constraint;
+  update_columns?: Array<Rental_Bookings_Update_Column>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_bookings". */
+export type Rental_Bookings_Order_By = {
+  actual_end_at?: InputMaybe<Order_By>;
+  actual_start_at?: InputMaybe<Order_By>;
+  booking_number?: InputMaybe<Order_By>;
+  business?: InputMaybe<Businesses_Order_By>;
+  business_id?: InputMaybe<Order_By>;
+  client?: InputMaybe<Clients_Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  contract_expires_at?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  end_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  period_ended_notified_at?: InputMaybe<Order_By>;
+  rental_booking_windows_aggregate?: InputMaybe<Rental_Booking_Windows_Aggregate_Order_By>;
+  rental_hold?: InputMaybe<Rental_Holds_Order_By>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  rental_pricing_snapshot?: InputMaybe<Order_By>;
+  rental_request?: InputMaybe<Rental_Requests_Order_By>;
+  rental_request_id?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_hash?: InputMaybe<Order_By>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Order_By>;
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  rental_start_pin_hash?: InputMaybe<Order_By>;
+  rental_status_histories_aggregate?: InputMaybe<Rental_Status_History_Aggregate_Order_By>;
+  start_at?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_bookings */
+export type Rental_Bookings_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** prepend existing jsonb value of filtered columns with new jsonb value */
+export type Rental_Bookings_Prepend_Input = {
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** select columns of table "rental_bookings" */
+export enum Rental_Bookings_Select_Column {
+  /** column name */
+  ActualEndAt = 'actual_end_at',
+  /** column name */
+  ActualStartAt = 'actual_start_at',
+  /** column name */
+  BookingNumber = 'booking_number',
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  ContractExpiresAt = 'contract_expires_at',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  EndAt = 'end_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  PeriodEndedNotifiedAt = 'period_ended_notified_at',
+  /** column name */
+  RentalLocationListingId = 'rental_location_listing_id',
+  /** column name */
+  RentalPricingSnapshot = 'rental_pricing_snapshot',
+  /** column name */
+  RentalRequestId = 'rental_request_id',
+  /** column name */
+  RentalStartOverwriteCodeHash = 'rental_start_overwrite_code_hash',
+  /** column name */
+  RentalStartOverwriteCodeUsedAt = 'rental_start_overwrite_code_used_at',
+  /** column name */
+  RentalStartPinAttempts = 'rental_start_pin_attempts',
+  /** column name */
+  RentalStartPinHash = 'rental_start_pin_hash',
+  /** column name */
+  StartAt = 'start_at',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  TotalAmount = 'total_amount',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "rental_bookings" */
+export type Rental_Bookings_Set_Input = {
+  actual_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  actual_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  booking_number?: InputMaybe<Scalars['String']['input']>;
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  period_ended_notified_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  rental_request_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_start_overwrite_code_hash?: InputMaybe<Scalars['String']['input']>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_start_pin_attempts?: InputMaybe<Scalars['Int']['input']>;
+  rental_start_pin_hash?: InputMaybe<Scalars['String']['input']>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  total_amount?: InputMaybe<Scalars['numeric']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Bookings_Stddev_Fields = {
+  __typename?: 'rental_bookings_stddev_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev() on columns of table "rental_bookings" */
+export type Rental_Bookings_Stddev_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Bookings_Stddev_Pop_Fields = {
+  __typename?: 'rental_bookings_stddev_pop_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_pop() on columns of table "rental_bookings" */
+export type Rental_Bookings_Stddev_Pop_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Bookings_Stddev_Samp_Fields = {
+  __typename?: 'rental_bookings_stddev_samp_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_samp() on columns of table "rental_bookings" */
+export type Rental_Bookings_Stddev_Samp_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "rental_bookings" */
+export type Rental_Bookings_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Bookings_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Bookings_Stream_Cursor_Value_Input = {
+  actual_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  actual_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  booking_number?: InputMaybe<Scalars['String']['input']>;
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** When status is proposed, client must confirm before this time */
+  contract_expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  period_ended_notified_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Copy of pricing snapshot at booking time */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  rental_request_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_start_overwrite_code_hash?: InputMaybe<Scalars['String']['input']>;
+  rental_start_overwrite_code_used_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  rental_start_pin_attempts?: InputMaybe<Scalars['Int']['input']>;
+  rental_start_pin_hash?: InputMaybe<Scalars['String']['input']>;
+  start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  total_amount?: InputMaybe<Scalars['numeric']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Bookings_Sum_Fields = {
+  __typename?: 'rental_bookings_sum_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Int']['output']>;
+  total_amount?: Maybe<Scalars['numeric']['output']>;
+};
+
+/** order by sum() on columns of table "rental_bookings" */
+export type Rental_Bookings_Sum_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** update columns of table "rental_bookings" */
+export enum Rental_Bookings_Update_Column {
+  /** column name */
+  ActualEndAt = 'actual_end_at',
+  /** column name */
+  ActualStartAt = 'actual_start_at',
+  /** column name */
+  BookingNumber = 'booking_number',
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  ContractExpiresAt = 'contract_expires_at',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  EndAt = 'end_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  PeriodEndedNotifiedAt = 'period_ended_notified_at',
+  /** column name */
+  RentalLocationListingId = 'rental_location_listing_id',
+  /** column name */
+  RentalPricingSnapshot = 'rental_pricing_snapshot',
+  /** column name */
+  RentalRequestId = 'rental_request_id',
+  /** column name */
+  RentalStartOverwriteCodeHash = 'rental_start_overwrite_code_hash',
+  /** column name */
+  RentalStartOverwriteCodeUsedAt = 'rental_start_overwrite_code_used_at',
+  /** column name */
+  RentalStartPinAttempts = 'rental_start_pin_attempts',
+  /** column name */
+  RentalStartPinHash = 'rental_start_pin_hash',
+  /** column name */
+  StartAt = 'start_at',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  TotalAmount = 'total_amount',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Bookings_Updates = {
+  /** append existing jsonb value of filtered columns with new jsonb value */
+  _append?: InputMaybe<Rental_Bookings_Append_Input>;
+  /** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+  _delete_at_path?: InputMaybe<Rental_Bookings_Delete_At_Path_Input>;
+  /** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+  _delete_elem?: InputMaybe<Rental_Bookings_Delete_Elem_Input>;
+  /** delete key/value pair or string element. key/value pairs are matched based on their key value */
+  _delete_key?: InputMaybe<Rental_Bookings_Delete_Key_Input>;
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Bookings_Inc_Input>;
+  /** prepend existing jsonb value of filtered columns with new jsonb value */
+  _prepend?: InputMaybe<Rental_Bookings_Prepend_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Bookings_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Bookings_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Bookings_Var_Pop_Fields = {
+  __typename?: 'rental_bookings_var_pop_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_pop() on columns of table "rental_bookings" */
+export type Rental_Bookings_Var_Pop_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Bookings_Var_Samp_Fields = {
+  __typename?: 'rental_bookings_var_samp_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_samp() on columns of table "rental_bookings" */
+export type Rental_Bookings_Var_Samp_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Bookings_Variance_Fields = {
+  __typename?: 'rental_bookings_variance_fields';
+  rental_start_pin_attempts?: Maybe<Scalars['Float']['output']>;
+  total_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by variance() on columns of table "rental_bookings" */
+export type Rental_Bookings_Variance_Order_By = {
+  rental_start_pin_attempts?: InputMaybe<Order_By>;
+  total_amount?: InputMaybe<Order_By>;
+};
+
+/** columns and relationships of "rental_categories" */
+export type Rental_Categories = {
+  __typename?: 'rental_categories';
+  created_at: Scalars['timestamptz']['output'];
+  display_order: Scalars['Int']['output'];
+  id: Scalars['uuid']['output'];
+  is_active: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  /** An array relationship */
+  rental_item_images: Array<Rental_Item_Images>;
+  /** An aggregate relationship */
+  rental_item_images_aggregate: Rental_Item_Images_Aggregate;
+  /** An array relationship */
+  rental_items: Array<Rental_Items>;
+  /** An aggregate relationship */
+  rental_items_aggregate: Rental_Items_Aggregate;
+  slug: Scalars['String']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+
+/** columns and relationships of "rental_categories" */
+export type Rental_CategoriesRental_Item_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_categories" */
+export type Rental_CategoriesRental_Item_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_categories" */
+export type Rental_CategoriesRental_ItemsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_categories" */
+export type Rental_CategoriesRental_Items_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+/** aggregated selection of "rental_categories" */
+export type Rental_Categories_Aggregate = {
+  __typename?: 'rental_categories_aggregate';
+  aggregate?: Maybe<Rental_Categories_Aggregate_Fields>;
+  nodes: Array<Rental_Categories>;
+};
+
+/** aggregate fields of "rental_categories" */
+export type Rental_Categories_Aggregate_Fields = {
+  __typename?: 'rental_categories_aggregate_fields';
+  avg?: Maybe<Rental_Categories_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Categories_Max_Fields>;
+  min?: Maybe<Rental_Categories_Min_Fields>;
+  stddev?: Maybe<Rental_Categories_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Categories_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Categories_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Categories_Sum_Fields>;
+  var_pop?: Maybe<Rental_Categories_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Categories_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Categories_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_categories" */
+export type Rental_Categories_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Categories_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Categories_Avg_Fields = {
+  __typename?: 'rental_categories_avg_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Boolean expression to filter rows from the table "rental_categories". All fields are combined with a logical 'AND'. */
+export type Rental_Categories_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Categories_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Categories_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Categories_Bool_Exp>>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  display_order?: InputMaybe<Int_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_active?: InputMaybe<Boolean_Comparison_Exp>;
+  name?: InputMaybe<String_Comparison_Exp>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp>;
+  rental_items?: InputMaybe<Rental_Items_Bool_Exp>;
+  rental_items_aggregate?: InputMaybe<Rental_Items_Aggregate_Bool_Exp>;
+  slug?: InputMaybe<String_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_categories" */
+export enum Rental_Categories_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalCategoriesPkey = 'rental_categories_pkey',
+  /** unique or primary key constraint on columns "slug" */
+  RentalCategoriesSlugKey = 'rental_categories_slug_key'
+}
+
+/** input type for incrementing numeric columns in table "rental_categories" */
+export type Rental_Categories_Inc_Input = {
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** input type for inserting data into table "rental_categories" */
+export type Rental_Categories_Insert_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Arr_Rel_Insert_Input>;
+  rental_items?: InputMaybe<Rental_Items_Arr_Rel_Insert_Input>;
+  slug?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Categories_Max_Fields = {
+  __typename?: 'rental_categories_max_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_order?: Maybe<Scalars['Int']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  slug?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** aggregate min on columns */
+export type Rental_Categories_Min_Fields = {
+  __typename?: 'rental_categories_min_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_order?: Maybe<Scalars['Int']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  slug?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** response of any mutation on the table "rental_categories" */
+export type Rental_Categories_Mutation_Response = {
+  __typename?: 'rental_categories_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Categories>;
+};
+
+/** input type for inserting object relation for remote table "rental_categories" */
+export type Rental_Categories_Obj_Rel_Insert_Input = {
+  data: Rental_Categories_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Categories_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_categories" */
+export type Rental_Categories_On_Conflict = {
+  constraint: Rental_Categories_Constraint;
+  update_columns?: Array<Rental_Categories_Update_Column>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_categories". */
+export type Rental_Categories_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  display_order?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  is_active?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Order_By>;
+  rental_items_aggregate?: InputMaybe<Rental_Items_Aggregate_Order_By>;
+  slug?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_categories */
+export type Rental_Categories_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_categories" */
+export enum Rental_Categories_Select_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DisplayOrder = 'display_order',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  Slug = 'slug',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "rental_categories" */
+export type Rental_Categories_Set_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  slug?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Categories_Stddev_Fields = {
+  __typename?: 'rental_categories_stddev_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Categories_Stddev_Pop_Fields = {
+  __typename?: 'rental_categories_stddev_pop_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Categories_Stddev_Samp_Fields = {
+  __typename?: 'rental_categories_stddev_samp_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Streaming cursor of the table "rental_categories" */
+export type Rental_Categories_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Categories_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Categories_Stream_Cursor_Value_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  slug?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Categories_Sum_Fields = {
+  __typename?: 'rental_categories_sum_fields';
+  display_order?: Maybe<Scalars['Int']['output']>;
+};
+
+/** update columns of table "rental_categories" */
+export enum Rental_Categories_Update_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DisplayOrder = 'display_order',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  Slug = 'slug',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Categories_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Categories_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Categories_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Categories_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Categories_Var_Pop_Fields = {
+  __typename?: 'rental_categories_var_pop_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Categories_Var_Samp_Fields = {
+  __typename?: 'rental_categories_var_samp_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Categories_Variance_Fields = {
+  __typename?: 'rental_categories_variance_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Boolean expression to compare columns of type "rental_hold_status_enum". All fields are combined with logical 'AND'. */
+export type Rental_Hold_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _gt?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _gte?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['rental_hold_status_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _lte?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _neq?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['rental_hold_status_enum']['input']>>;
+};
+
+/** columns and relationships of "rental_holds" */
+export type Rental_Holds = {
+  __typename?: 'rental_holds';
+  /** An object relationship */
+  client: Clients;
+  client_hold_amount: Scalars['numeric']['output'];
+  client_id: Scalars['uuid']['output'];
+  created_at: Scalars['timestamptz']['output'];
+  currency: Scalars['currency_enum']['output'];
+  id: Scalars['uuid']['output'];
+  /** An object relationship */
+  rental_booking: Rental_Bookings;
+  rental_booking_id: Scalars['uuid']['output'];
+  status: Scalars['rental_hold_status_enum']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+/** aggregated selection of "rental_holds" */
+export type Rental_Holds_Aggregate = {
+  __typename?: 'rental_holds_aggregate';
+  aggregate?: Maybe<Rental_Holds_Aggregate_Fields>;
+  nodes: Array<Rental_Holds>;
+};
+
+/** aggregate fields of "rental_holds" */
+export type Rental_Holds_Aggregate_Fields = {
+  __typename?: 'rental_holds_aggregate_fields';
+  avg?: Maybe<Rental_Holds_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Holds_Max_Fields>;
+  min?: Maybe<Rental_Holds_Min_Fields>;
+  stddev?: Maybe<Rental_Holds_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Holds_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Holds_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Holds_Sum_Fields>;
+  var_pop?: Maybe<Rental_Holds_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Holds_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Holds_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_holds" */
+export type Rental_Holds_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Holds_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Holds_Avg_Fields = {
+  __typename?: 'rental_holds_avg_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Boolean expression to filter rows from the table "rental_holds". All fields are combined with a logical 'AND'. */
+export type Rental_Holds_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Holds_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Holds_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Holds_Bool_Exp>>;
+  client?: InputMaybe<Clients_Bool_Exp>;
+  client_hold_amount?: InputMaybe<Numeric_Comparison_Exp>;
+  client_id?: InputMaybe<Uuid_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  currency?: InputMaybe<Currency_Enum_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_booking?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_booking_id?: InputMaybe<Uuid_Comparison_Exp>;
+  status?: InputMaybe<Rental_Hold_Status_Enum_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_holds" */
+export enum Rental_Holds_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalHoldsPkey = 'rental_holds_pkey',
+  /** unique or primary key constraint on columns "rental_booking_id" */
+  RentalHoldsUniqueBooking = 'rental_holds_unique_booking'
+}
+
+/** input type for incrementing numeric columns in table "rental_holds" */
+export type Rental_Holds_Inc_Input = {
+  client_hold_amount?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** input type for inserting data into table "rental_holds" */
+export type Rental_Holds_Insert_Input = {
+  client?: InputMaybe<Clients_Obj_Rel_Insert_Input>;
+  client_hold_amount?: InputMaybe<Scalars['numeric']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking?: InputMaybe<Rental_Bookings_Obj_Rel_Insert_Input>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Holds_Max_Fields = {
+  __typename?: 'rental_holds_max_fields';
+  client_hold_amount?: Maybe<Scalars['numeric']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_hold_status_enum']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** aggregate min on columns */
+export type Rental_Holds_Min_Fields = {
+  __typename?: 'rental_holds_min_fields';
+  client_hold_amount?: Maybe<Scalars['numeric']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_hold_status_enum']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** response of any mutation on the table "rental_holds" */
+export type Rental_Holds_Mutation_Response = {
+  __typename?: 'rental_holds_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Holds>;
+};
+
+/** input type for inserting object relation for remote table "rental_holds" */
+export type Rental_Holds_Obj_Rel_Insert_Input = {
+  data: Rental_Holds_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Holds_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_holds" */
+export type Rental_Holds_On_Conflict = {
+  constraint: Rental_Holds_Constraint;
+  update_columns?: Array<Rental_Holds_Update_Column>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_holds". */
+export type Rental_Holds_Order_By = {
+  client?: InputMaybe<Clients_Order_By>;
+  client_hold_amount?: InputMaybe<Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_booking?: InputMaybe<Rental_Bookings_Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_holds */
+export type Rental_Holds_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_holds" */
+export enum Rental_Holds_Select_Column {
+  /** column name */
+  ClientHoldAmount = 'client_hold_amount',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "rental_holds" */
+export type Rental_Holds_Set_Input = {
+  client_hold_amount?: InputMaybe<Scalars['numeric']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Holds_Stddev_Fields = {
+  __typename?: 'rental_holds_stddev_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Holds_Stddev_Pop_Fields = {
+  __typename?: 'rental_holds_stddev_pop_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Holds_Stddev_Samp_Fields = {
+  __typename?: 'rental_holds_stddev_samp_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Streaming cursor of the table "rental_holds" */
+export type Rental_Holds_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Holds_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Holds_Stream_Cursor_Value_Input = {
+  client_hold_amount?: InputMaybe<Scalars['numeric']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_hold_status_enum']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Holds_Sum_Fields = {
+  __typename?: 'rental_holds_sum_fields';
+  client_hold_amount?: Maybe<Scalars['numeric']['output']>;
+};
+
+/** update columns of table "rental_holds" */
+export enum Rental_Holds_Update_Column {
+  /** column name */
+  ClientHoldAmount = 'client_hold_amount',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Holds_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Holds_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Holds_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Holds_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Holds_Var_Pop_Fields = {
+  __typename?: 'rental_holds_var_pop_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Holds_Var_Samp_Fields = {
+  __typename?: 'rental_holds_var_samp_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Holds_Variance_Fields = {
+  __typename?: 'rental_holds_variance_fields';
+  client_hold_amount?: Maybe<Scalars['Float']['output']>;
+};
+
+/** Boolean expression to compare columns of type "rental_item_image_status_enum". All fields are combined with logical 'AND'. */
+export type Rental_Item_Image_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _gt?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _gte?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['rental_item_image_status_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _lte?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _neq?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['rental_item_image_status_enum']['input']>>;
+};
+
+/** columns and relationships of "rental_item_images" */
+export type Rental_Item_Images = {
+  __typename?: 'rental_item_images';
+  alt_text?: Maybe<Scalars['String']['output']>;
+  /** An object relationship */
+  business: Businesses;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id: Scalars['uuid']['output'];
+  caption?: Maybe<Scalars['String']['output']>;
+  created_at: Scalars['timestamptz']['output'];
+  display_order: Scalars['Int']['output'];
+  file_size?: Maybe<Scalars['Int']['output']>;
+  format?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Int']['output']>;
+  id: Scalars['uuid']['output'];
+  image_url: Scalars['String']['output'];
+  /** True when the displayed image was replaced after AI cleanup */
+  is_ai_cleaned: Scalars['Boolean']['output'];
+  /** An object relationship */
+  rental_category?: Maybe<Rental_Categories>;
+  rental_category_id?: Maybe<Scalars['uuid']['output']>;
+  /** An object relationship */
+  rental_item?: Maybe<Rental_Items>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: Maybe<Scalars['uuid']['output']>;
+  s3_key?: Maybe<Scalars['String']['output']>;
+  status: Scalars['rental_item_image_status_enum']['output'];
+  tags: Array<Scalars['String']['output']>;
+  updated_at: Scalars['timestamptz']['output'];
+  width?: Maybe<Scalars['Int']['output']>;
+};
+
+/** aggregated selection of "rental_item_images" */
+export type Rental_Item_Images_Aggregate = {
+  __typename?: 'rental_item_images_aggregate';
+  aggregate?: Maybe<Rental_Item_Images_Aggregate_Fields>;
+  nodes: Array<Rental_Item_Images>;
+};
+
+export type Rental_Item_Images_Aggregate_Bool_Exp = {
+  bool_and?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp_Bool_And>;
+  bool_or?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp_Bool_Or>;
+  count?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Item_Images_Aggregate_Bool_Exp_Bool_And = {
+  arguments: Rental_Item_Images_Select_Column_Rental_Item_Images_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Item_Images_Aggregate_Bool_Exp_Bool_Or = {
+  arguments: Rental_Item_Images_Select_Column_Rental_Item_Images_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Item_Images_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_item_images" */
+export type Rental_Item_Images_Aggregate_Fields = {
+  __typename?: 'rental_item_images_aggregate_fields';
+  avg?: Maybe<Rental_Item_Images_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Item_Images_Max_Fields>;
+  min?: Maybe<Rental_Item_Images_Min_Fields>;
+  stddev?: Maybe<Rental_Item_Images_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Item_Images_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Item_Images_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Item_Images_Sum_Fields>;
+  var_pop?: Maybe<Rental_Item_Images_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Item_Images_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Item_Images_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_item_images" */
+export type Rental_Item_Images_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_item_images" */
+export type Rental_Item_Images_Aggregate_Order_By = {
+  avg?: InputMaybe<Rental_Item_Images_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Item_Images_Max_Order_By>;
+  min?: InputMaybe<Rental_Item_Images_Min_Order_By>;
+  stddev?: InputMaybe<Rental_Item_Images_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Rental_Item_Images_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Rental_Item_Images_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Rental_Item_Images_Sum_Order_By>;
+  var_pop?: InputMaybe<Rental_Item_Images_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Rental_Item_Images_Var_Samp_Order_By>;
+  variance?: InputMaybe<Rental_Item_Images_Variance_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_item_images" */
+export type Rental_Item_Images_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Item_Images_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Item_Images_On_Conflict>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Item_Images_Avg_Fields = {
+  __typename?: 'rental_item_images_avg_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by avg() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Avg_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "rental_item_images". All fields are combined with a logical 'AND'. */
+export type Rental_Item_Images_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Item_Images_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Item_Images_Bool_Exp>>;
+  alt_text?: InputMaybe<String_Comparison_Exp>;
+  business?: InputMaybe<Businesses_Bool_Exp>;
+  business_id?: InputMaybe<Uuid_Comparison_Exp>;
+  caption?: InputMaybe<String_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  display_order?: InputMaybe<Int_Comparison_Exp>;
+  file_size?: InputMaybe<Int_Comparison_Exp>;
+  format?: InputMaybe<String_Comparison_Exp>;
+  height?: InputMaybe<Int_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  image_url?: InputMaybe<String_Comparison_Exp>;
+  is_ai_cleaned?: InputMaybe<Boolean_Comparison_Exp>;
+  rental_category?: InputMaybe<Rental_Categories_Bool_Exp>;
+  rental_category_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_item?: InputMaybe<Rental_Items_Bool_Exp>;
+  rental_item_id?: InputMaybe<Uuid_Comparison_Exp>;
+  s3_key?: InputMaybe<String_Comparison_Exp>;
+  status?: InputMaybe<Rental_Item_Image_Status_Enum_Comparison_Exp>;
+  tags?: InputMaybe<String_Array_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  width?: InputMaybe<Int_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_item_images" */
+export enum Rental_Item_Images_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalItemImagesPkey = 'rental_item_images_pkey'
+}
+
+/** input type for incrementing numeric columns in table "rental_item_images" */
+export type Rental_Item_Images_Inc_Input = {
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  file_size?: InputMaybe<Scalars['Int']['input']>;
+  height?: InputMaybe<Scalars['Int']['input']>;
+  width?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** input type for inserting data into table "rental_item_images" */
+export type Rental_Item_Images_Insert_Input = {
+  alt_text?: InputMaybe<Scalars['String']['input']>;
+  business?: InputMaybe<Businesses_Obj_Rel_Insert_Input>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  caption?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  file_size?: InputMaybe<Scalars['Int']['input']>;
+  format?: InputMaybe<Scalars['String']['input']>;
+  height?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  image_url?: InputMaybe<Scalars['String']['input']>;
+  /** True when the displayed image was replaced after AI cleanup */
+  is_ai_cleaned?: InputMaybe<Scalars['Boolean']['input']>;
+  rental_category?: InputMaybe<Rental_Categories_Obj_Rel_Insert_Input>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_item?: InputMaybe<Rental_Items_Obj_Rel_Insert_Input>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  s3_key?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  width?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Item_Images_Max_Fields = {
+  __typename?: 'rental_item_images_max_fields';
+  alt_text?: Maybe<Scalars['String']['output']>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  caption?: Maybe<Scalars['String']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_order?: Maybe<Scalars['Int']['output']>;
+  file_size?: Maybe<Scalars['Int']['output']>;
+  format?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Int']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  image_url?: Maybe<Scalars['String']['output']>;
+  rental_category_id?: Maybe<Scalars['uuid']['output']>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: Maybe<Scalars['uuid']['output']>;
+  s3_key?: Maybe<Scalars['String']['output']>;
+  status?: Maybe<Scalars['rental_item_image_status_enum']['output']>;
+  tags?: Maybe<Array<Scalars['String']['output']>>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  width?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by max() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Max_Order_By = {
+  alt_text?: InputMaybe<Order_By>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: InputMaybe<Order_By>;
+  caption?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  format?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  image_url?: InputMaybe<Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: InputMaybe<Order_By>;
+  s3_key?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Item_Images_Min_Fields = {
+  __typename?: 'rental_item_images_min_fields';
+  alt_text?: Maybe<Scalars['String']['output']>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  caption?: Maybe<Scalars['String']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_order?: Maybe<Scalars['Int']['output']>;
+  file_size?: Maybe<Scalars['Int']['output']>;
+  format?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Int']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  image_url?: Maybe<Scalars['String']['output']>;
+  rental_category_id?: Maybe<Scalars['uuid']['output']>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: Maybe<Scalars['uuid']['output']>;
+  s3_key?: Maybe<Scalars['String']['output']>;
+  status?: Maybe<Scalars['rental_item_image_status_enum']['output']>;
+  tags?: Maybe<Array<Scalars['String']['output']>>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  width?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by min() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Min_Order_By = {
+  alt_text?: InputMaybe<Order_By>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: InputMaybe<Order_By>;
+  caption?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  format?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  image_url?: InputMaybe<Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: InputMaybe<Order_By>;
+  s3_key?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_item_images" */
+export type Rental_Item_Images_Mutation_Response = {
+  __typename?: 'rental_item_images_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Item_Images>;
+};
+
+/** on_conflict condition type for table "rental_item_images" */
+export type Rental_Item_Images_On_Conflict = {
+  constraint: Rental_Item_Images_Constraint;
+  update_columns?: Array<Rental_Item_Images_Update_Column>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_item_images". */
+export type Rental_Item_Images_Order_By = {
+  alt_text?: InputMaybe<Order_By>;
+  business?: InputMaybe<Businesses_Order_By>;
+  business_id?: InputMaybe<Order_By>;
+  caption?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  format?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  image_url?: InputMaybe<Order_By>;
+  is_ai_cleaned?: InputMaybe<Order_By>;
+  rental_category?: InputMaybe<Rental_Categories_Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  rental_item?: InputMaybe<Rental_Items_Order_By>;
+  rental_item_id?: InputMaybe<Order_By>;
+  s3_key?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_item_images */
+export type Rental_Item_Images_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_item_images" */
+export enum Rental_Item_Images_Select_Column {
+  /** column name */
+  AltText = 'alt_text',
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  Caption = 'caption',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DisplayOrder = 'display_order',
+  /** column name */
+  FileSize = 'file_size',
+  /** column name */
+  Format = 'format',
+  /** column name */
+  Height = 'height',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  ImageUrl = 'image_url',
+  /** column name */
+  IsAiCleaned = 'is_ai_cleaned',
+  /** column name */
+  RentalCategoryId = 'rental_category_id',
+  /** column name */
+  RentalItemId = 'rental_item_id',
+  /** column name */
+  S3Key = 's3_key',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  Tags = 'tags',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  Width = 'width'
+}
+
+/** select "rental_item_images_aggregate_bool_exp_bool_and_arguments_columns" columns of table "rental_item_images" */
+export enum Rental_Item_Images_Select_Column_Rental_Item_Images_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
+  /** column name */
+  IsAiCleaned = 'is_ai_cleaned'
+}
+
+/** select "rental_item_images_aggregate_bool_exp_bool_or_arguments_columns" columns of table "rental_item_images" */
+export enum Rental_Item_Images_Select_Column_Rental_Item_Images_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
+  /** column name */
+  IsAiCleaned = 'is_ai_cleaned'
+}
+
+/** input type for updating data in table "rental_item_images" */
+export type Rental_Item_Images_Set_Input = {
+  alt_text?: InputMaybe<Scalars['String']['input']>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  caption?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  file_size?: InputMaybe<Scalars['Int']['input']>;
+  format?: InputMaybe<Scalars['String']['input']>;
+  height?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  image_url?: InputMaybe<Scalars['String']['input']>;
+  /** True when the displayed image was replaced after AI cleanup */
+  is_ai_cleaned?: InputMaybe<Scalars['Boolean']['input']>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  s3_key?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  width?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Item_Images_Stddev_Fields = {
+  __typename?: 'rental_item_images_stddev_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Stddev_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Item_Images_Stddev_Pop_Fields = {
+  __typename?: 'rental_item_images_stddev_pop_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_pop() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Stddev_Pop_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Item_Images_Stddev_Samp_Fields = {
+  __typename?: 'rental_item_images_stddev_samp_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_samp() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Stddev_Samp_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "rental_item_images" */
+export type Rental_Item_Images_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Item_Images_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Item_Images_Stream_Cursor_Value_Input = {
+  alt_text?: InputMaybe<Scalars['String']['input']>;
+  /** Owner business; required even when rental_item_id is null (library) */
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  caption?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_order?: InputMaybe<Scalars['Int']['input']>;
+  file_size?: InputMaybe<Scalars['Int']['input']>;
+  format?: InputMaybe<Scalars['String']['input']>;
+  height?: InputMaybe<Scalars['Int']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  image_url?: InputMaybe<Scalars['String']['input']>;
+  /** True when the displayed image was replaced after AI cleanup */
+  is_ai_cleaned?: InputMaybe<Scalars['Boolean']['input']>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Null while image is only in the library; set when attached to a rental item */
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  s3_key?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['rental_item_image_status_enum']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  width?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Item_Images_Sum_Fields = {
+  __typename?: 'rental_item_images_sum_fields';
+  display_order?: Maybe<Scalars['Int']['output']>;
+  file_size?: Maybe<Scalars['Int']['output']>;
+  height?: Maybe<Scalars['Int']['output']>;
+  width?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by sum() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Sum_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** update columns of table "rental_item_images" */
+export enum Rental_Item_Images_Update_Column {
+  /** column name */
+  AltText = 'alt_text',
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  Caption = 'caption',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DisplayOrder = 'display_order',
+  /** column name */
+  FileSize = 'file_size',
+  /** column name */
+  Format = 'format',
+  /** column name */
+  Height = 'height',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  ImageUrl = 'image_url',
+  /** column name */
+  IsAiCleaned = 'is_ai_cleaned',
+  /** column name */
+  RentalCategoryId = 'rental_category_id',
+  /** column name */
+  RentalItemId = 'rental_item_id',
+  /** column name */
+  S3Key = 's3_key',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  Tags = 'tags',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  Width = 'width'
+}
+
+export type Rental_Item_Images_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Item_Images_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Item_Images_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Item_Images_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Item_Images_Var_Pop_Fields = {
+  __typename?: 'rental_item_images_var_pop_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_pop() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Var_Pop_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Item_Images_Var_Samp_Fields = {
+  __typename?: 'rental_item_images_var_samp_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_samp() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Var_Samp_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Item_Images_Variance_Fields = {
+  __typename?: 'rental_item_images_variance_fields';
+  display_order?: Maybe<Scalars['Float']['output']>;
+  file_size?: Maybe<Scalars['Float']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by variance() on columns of table "rental_item_images" */
+export type Rental_Item_Images_Variance_Order_By = {
+  display_order?: InputMaybe<Order_By>;
+  file_size?: InputMaybe<Order_By>;
+  height?: InputMaybe<Order_By>;
+  width?: InputMaybe<Order_By>;
+};
+
+/** Business-operated rental catalog items (v1: business_operated only) */
+export type Rental_Items = {
+  __typename?: 'rental_items';
+  /** An object relationship */
+  business: Businesses;
+  business_id: Scalars['uuid']['output'];
+  created_at: Scalars['timestamptz']['output'];
+  currency: Scalars['currency_enum']['output'];
+  description: Scalars['String']['output'];
+  id: Scalars['uuid']['output'];
+  is_active: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  operation_mode: Scalars['rental_operation_mode_enum']['output'];
+  /** An object relationship */
+  rental_category: Rental_Categories;
+  rental_category_id: Scalars['uuid']['output'];
+  /** An array relationship */
+  rental_item_images: Array<Rental_Item_Images>;
+  /** An aggregate relationship */
+  rental_item_images_aggregate: Rental_Item_Images_Aggregate;
+  /** An array relationship */
+  rental_location_listings: Array<Rental_Location_Listings>;
+  /** An aggregate relationship */
+  rental_location_listings_aggregate: Rental_Location_Listings_Aggregate;
+  tags: Array<Scalars['String']['output']>;
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+
+/** Business-operated rental catalog items (v1: business_operated only) */
+export type Rental_ItemsRental_Item_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** Business-operated rental catalog items (v1: business_operated only) */
+export type Rental_ItemsRental_Item_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+/** Business-operated rental catalog items (v1: business_operated only) */
+export type Rental_ItemsRental_Location_ListingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+/** Business-operated rental catalog items (v1: business_operated only) */
+export type Rental_ItemsRental_Location_Listings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+/** aggregated selection of "rental_items" */
+export type Rental_Items_Aggregate = {
+  __typename?: 'rental_items_aggregate';
+  aggregate?: Maybe<Rental_Items_Aggregate_Fields>;
+  nodes: Array<Rental_Items>;
+};
+
+export type Rental_Items_Aggregate_Bool_Exp = {
+  bool_and?: InputMaybe<Rental_Items_Aggregate_Bool_Exp_Bool_And>;
+  bool_or?: InputMaybe<Rental_Items_Aggregate_Bool_Exp_Bool_Or>;
+  count?: InputMaybe<Rental_Items_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Items_Aggregate_Bool_Exp_Bool_And = {
+  arguments: Rental_Items_Select_Column_Rental_Items_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Items_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Items_Aggregate_Bool_Exp_Bool_Or = {
+  arguments: Rental_Items_Select_Column_Rental_Items_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Items_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Items_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Items_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_items" */
+export type Rental_Items_Aggregate_Fields = {
+  __typename?: 'rental_items_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Items_Max_Fields>;
+  min?: Maybe<Rental_Items_Min_Fields>;
+};
+
+
+/** aggregate fields of "rental_items" */
+export type Rental_Items_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_items" */
+export type Rental_Items_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Items_Max_Order_By>;
+  min?: InputMaybe<Rental_Items_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_items" */
+export type Rental_Items_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Items_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Items_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "rental_items". All fields are combined with a logical 'AND'. */
+export type Rental_Items_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Items_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Items_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Items_Bool_Exp>>;
+  business?: InputMaybe<Businesses_Bool_Exp>;
+  business_id?: InputMaybe<Uuid_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  currency?: InputMaybe<Currency_Enum_Comparison_Exp>;
+  description?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_active?: InputMaybe<Boolean_Comparison_Exp>;
+  name?: InputMaybe<String_Comparison_Exp>;
+  operation_mode?: InputMaybe<Rental_Operation_Mode_Enum_Comparison_Exp>;
+  rental_category?: InputMaybe<Rental_Categories_Bool_Exp>;
+  rental_category_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Bool_Exp>;
+  rental_location_listings?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  rental_location_listings_aggregate?: InputMaybe<Rental_Location_Listings_Aggregate_Bool_Exp>;
+  tags?: InputMaybe<String_Array_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_items" */
+export enum Rental_Items_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalItemsPkey = 'rental_items_pkey'
+}
+
+/** input type for inserting data into table "rental_items" */
+export type Rental_Items_Insert_Input = {
+  business?: InputMaybe<Businesses_Obj_Rel_Insert_Input>;
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  operation_mode?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  rental_category?: InputMaybe<Rental_Categories_Obj_Rel_Insert_Input>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_item_images?: InputMaybe<Rental_Item_Images_Arr_Rel_Insert_Input>;
+  rental_location_listings?: InputMaybe<Rental_Location_Listings_Arr_Rel_Insert_Input>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Items_Max_Fields = {
+  __typename?: 'rental_items_max_fields';
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  operation_mode?: Maybe<Scalars['rental_operation_mode_enum']['output']>;
+  rental_category_id?: Maybe<Scalars['uuid']['output']>;
+  tags?: Maybe<Array<Scalars['String']['output']>>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "rental_items" */
+export type Rental_Items_Max_Order_By = {
+  business_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  description?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  operation_mode?: InputMaybe<Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Items_Min_Fields = {
+  __typename?: 'rental_items_min_fields';
+  business_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  currency?: Maybe<Scalars['currency_enum']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  operation_mode?: Maybe<Scalars['rental_operation_mode_enum']['output']>;
+  rental_category_id?: Maybe<Scalars['uuid']['output']>;
+  tags?: Maybe<Array<Scalars['String']['output']>>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "rental_items" */
+export type Rental_Items_Min_Order_By = {
+  business_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  description?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  operation_mode?: InputMaybe<Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_items" */
+export type Rental_Items_Mutation_Response = {
+  __typename?: 'rental_items_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Items>;
+};
+
+/** input type for inserting object relation for remote table "rental_items" */
+export type Rental_Items_Obj_Rel_Insert_Input = {
+  data: Rental_Items_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Items_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_items" */
+export type Rental_Items_On_Conflict = {
+  constraint: Rental_Items_Constraint;
+  update_columns?: Array<Rental_Items_Update_Column>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_items". */
+export type Rental_Items_Order_By = {
+  business?: InputMaybe<Businesses_Order_By>;
+  business_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  currency?: InputMaybe<Order_By>;
+  description?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  is_active?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  operation_mode?: InputMaybe<Order_By>;
+  rental_category?: InputMaybe<Rental_Categories_Order_By>;
+  rental_category_id?: InputMaybe<Order_By>;
+  rental_item_images_aggregate?: InputMaybe<Rental_Item_Images_Aggregate_Order_By>;
+  rental_location_listings_aggregate?: InputMaybe<Rental_Location_Listings_Aggregate_Order_By>;
+  tags?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_items */
+export type Rental_Items_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_items" */
+export enum Rental_Items_Select_Column {
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  Description = 'description',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  OperationMode = 'operation_mode',
+  /** column name */
+  RentalCategoryId = 'rental_category_id',
+  /** column name */
+  Tags = 'tags',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** select "rental_items_aggregate_bool_exp_bool_and_arguments_columns" columns of table "rental_items" */
+export enum Rental_Items_Select_Column_Rental_Items_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
+  /** column name */
+  IsActive = 'is_active'
+}
+
+/** select "rental_items_aggregate_bool_exp_bool_or_arguments_columns" columns of table "rental_items" */
+export enum Rental_Items_Select_Column_Rental_Items_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
+  /** column name */
+  IsActive = 'is_active'
+}
+
+/** input type for updating data in table "rental_items" */
+export type Rental_Items_Set_Input = {
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  operation_mode?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "rental_items" */
+export type Rental_Items_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Items_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Items_Stream_Cursor_Value_Input = {
+  business_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  currency?: InputMaybe<Scalars['currency_enum']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  operation_mode?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  rental_category_id?: InputMaybe<Scalars['uuid']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "rental_items" */
+export enum Rental_Items_Update_Column {
+  /** column name */
+  BusinessId = 'business_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Currency = 'currency',
+  /** column name */
+  Description = 'description',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  OperationMode = 'operation_mode',
+  /** column name */
+  RentalCategoryId = 'rental_category_id',
+  /** column name */
+  Tags = 'tags',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Items_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Items_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Items_Bool_Exp;
+};
+
+/** columns and relationships of "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability = {
+  __typename?: 'rental_listing_weekly_availability';
+  created_at: Scalars['timestamptz']['output'];
+  end_time?: Maybe<Scalars['time']['output']>;
+  id: Scalars['uuid']['output'];
+  is_available: Scalars['Boolean']['output'];
+  listing_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  rental_location_listing: Rental_Location_Listings;
+  start_time?: Maybe<Scalars['time']['output']>;
+  updated_at: Scalars['timestamptz']['output'];
+  weekday: Scalars['Int']['output'];
+};
+
+/** aggregated selection of "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Aggregate = {
+  __typename?: 'rental_listing_weekly_availability_aggregate';
+  aggregate?: Maybe<Rental_Listing_Weekly_Availability_Aggregate_Fields>;
+  nodes: Array<Rental_Listing_Weekly_Availability>;
+};
+
+export type Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp = {
+  bool_and?: InputMaybe<Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_And>;
+  bool_or?: InputMaybe<Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_Or>;
+  count?: InputMaybe<Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_And = {
+  arguments: Rental_Listing_Weekly_Availability_Select_Column_Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_Or = {
+  arguments: Rental_Listing_Weekly_Availability_Select_Column_Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Aggregate_Fields = {
+  __typename?: 'rental_listing_weekly_availability_aggregate_fields';
+  avg?: Maybe<Rental_Listing_Weekly_Availability_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Listing_Weekly_Availability_Max_Fields>;
+  min?: Maybe<Rental_Listing_Weekly_Availability_Min_Fields>;
+  stddev?: Maybe<Rental_Listing_Weekly_Availability_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Listing_Weekly_Availability_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Listing_Weekly_Availability_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Listing_Weekly_Availability_Sum_Fields>;
+  var_pop?: Maybe<Rental_Listing_Weekly_Availability_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Listing_Weekly_Availability_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Listing_Weekly_Availability_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Aggregate_Order_By = {
+  avg?: InputMaybe<Rental_Listing_Weekly_Availability_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Listing_Weekly_Availability_Max_Order_By>;
+  min?: InputMaybe<Rental_Listing_Weekly_Availability_Min_Order_By>;
+  stddev?: InputMaybe<Rental_Listing_Weekly_Availability_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Rental_Listing_Weekly_Availability_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Rental_Listing_Weekly_Availability_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Rental_Listing_Weekly_Availability_Sum_Order_By>;
+  var_pop?: InputMaybe<Rental_Listing_Weekly_Availability_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Rental_Listing_Weekly_Availability_Var_Samp_Order_By>;
+  variance?: InputMaybe<Rental_Listing_Weekly_Availability_Variance_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Listing_Weekly_Availability_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Listing_Weekly_Availability_On_Conflict>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Listing_Weekly_Availability_Avg_Fields = {
+  __typename?: 'rental_listing_weekly_availability_avg_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by avg() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Avg_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "rental_listing_weekly_availability". All fields are combined with a logical 'AND'. */
+export type Rental_Listing_Weekly_Availability_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Bool_Exp>>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  end_time?: InputMaybe<Time_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_available?: InputMaybe<Boolean_Comparison_Exp>;
+  listing_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  start_time?: InputMaybe<Time_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  weekday?: InputMaybe<Int_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_listing_weekly_availability" */
+export enum Rental_Listing_Weekly_Availability_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalListingWeeklyAvailabilityPkey = 'rental_listing_weekly_availability_pkey',
+  /** unique or primary key constraint on columns "weekday", "listing_id" */
+  RentalListingWeeklyAvailabilityUnique = 'rental_listing_weekly_availability_unique'
+}
+
+/** input type for incrementing numeric columns in table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Inc_Input = {
+  weekday?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** input type for inserting data into table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Insert_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_time?: InputMaybe<Scalars['time']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_available?: InputMaybe<Scalars['Boolean']['input']>;
+  listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Obj_Rel_Insert_Input>;
+  start_time?: InputMaybe<Scalars['time']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  weekday?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Listing_Weekly_Availability_Max_Fields = {
+  __typename?: 'rental_listing_weekly_availability_max_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  listing_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  weekday?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by max() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Max_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  listing_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Listing_Weekly_Availability_Min_Fields = {
+  __typename?: 'rental_listing_weekly_availability_min_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  listing_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  weekday?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by min() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Min_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  listing_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Mutation_Response = {
+  __typename?: 'rental_listing_weekly_availability_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Listing_Weekly_Availability>;
+};
+
+/** on_conflict condition type for table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_On_Conflict = {
+  constraint: Rental_Listing_Weekly_Availability_Constraint;
+  update_columns?: Array<Rental_Listing_Weekly_Availability_Update_Column>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_listing_weekly_availability". */
+export type Rental_Listing_Weekly_Availability_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  end_time?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  is_available?: InputMaybe<Order_By>;
+  listing_id?: InputMaybe<Order_By>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Order_By>;
+  start_time?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_listing_weekly_availability */
+export type Rental_Listing_Weekly_Availability_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_listing_weekly_availability" */
+export enum Rental_Listing_Weekly_Availability_Select_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  EndTime = 'end_time',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsAvailable = 'is_available',
+  /** column name */
+  ListingId = 'listing_id',
+  /** column name */
+  StartTime = 'start_time',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  Weekday = 'weekday'
+}
+
+/** select "rental_listing_weekly_availability_aggregate_bool_exp_bool_and_arguments_columns" columns of table "rental_listing_weekly_availability" */
+export enum Rental_Listing_Weekly_Availability_Select_Column_Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
+  /** column name */
+  IsAvailable = 'is_available'
+}
+
+/** select "rental_listing_weekly_availability_aggregate_bool_exp_bool_or_arguments_columns" columns of table "rental_listing_weekly_availability" */
+export enum Rental_Listing_Weekly_Availability_Select_Column_Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
+  /** column name */
+  IsAvailable = 'is_available'
+}
+
+/** input type for updating data in table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Set_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_time?: InputMaybe<Scalars['time']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_available?: InputMaybe<Scalars['Boolean']['input']>;
+  listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  start_time?: InputMaybe<Scalars['time']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  weekday?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Listing_Weekly_Availability_Stddev_Fields = {
+  __typename?: 'rental_listing_weekly_availability_stddev_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Stddev_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Listing_Weekly_Availability_Stddev_Pop_Fields = {
+  __typename?: 'rental_listing_weekly_availability_stddev_pop_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_pop() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Stddev_Pop_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Listing_Weekly_Availability_Stddev_Samp_Fields = {
+  __typename?: 'rental_listing_weekly_availability_stddev_samp_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_samp() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Stddev_Samp_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Listing_Weekly_Availability_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Listing_Weekly_Availability_Stream_Cursor_Value_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  end_time?: InputMaybe<Scalars['time']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_available?: InputMaybe<Scalars['Boolean']['input']>;
+  listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  start_time?: InputMaybe<Scalars['time']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  weekday?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Listing_Weekly_Availability_Sum_Fields = {
+  __typename?: 'rental_listing_weekly_availability_sum_fields';
+  weekday?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by sum() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Sum_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** update columns of table "rental_listing_weekly_availability" */
+export enum Rental_Listing_Weekly_Availability_Update_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  EndTime = 'end_time',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsAvailable = 'is_available',
+  /** column name */
+  ListingId = 'listing_id',
+  /** column name */
+  StartTime = 'start_time',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  Weekday = 'weekday'
+}
+
+export type Rental_Listing_Weekly_Availability_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Listing_Weekly_Availability_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Listing_Weekly_Availability_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Listing_Weekly_Availability_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Listing_Weekly_Availability_Var_Pop_Fields = {
+  __typename?: 'rental_listing_weekly_availability_var_pop_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_pop() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Var_Pop_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Listing_Weekly_Availability_Var_Samp_Fields = {
+  __typename?: 'rental_listing_weekly_availability_var_samp_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_samp() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Var_Samp_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Listing_Weekly_Availability_Variance_Fields = {
+  __typename?: 'rental_listing_weekly_availability_variance_fields';
+  weekday?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by variance() on columns of table "rental_listing_weekly_availability" */
+export type Rental_Listing_Weekly_Availability_Variance_Order_By = {
+  weekday?: InputMaybe<Order_By>;
+};
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_Listings = {
+  __typename?: 'rental_location_listings';
+  base_price_per_day: Scalars['numeric']['output'];
+  base_price_per_hour: Scalars['numeric']['output'];
+  /** An object relationship */
+  business_location: Business_Locations;
+  business_location_id: Scalars['uuid']['output'];
+  created_at: Scalars['timestamptz']['output'];
+  dropoff_instructions: Scalars['String']['output'];
+  id: Scalars['uuid']['output'];
+  is_active: Scalars['Boolean']['output'];
+  max_rental_days?: Maybe<Scalars['Int']['output']>;
+  max_rental_hours?: Maybe<Scalars['Int']['output']>;
+  min_rental_days: Scalars['Int']['output'];
+  min_rental_hours: Scalars['Int']['output'];
+  pickup_instructions: Scalars['String']['output'];
+  /** An array relationship */
+  rental_bookings: Array<Rental_Bookings>;
+  /** An aggregate relationship */
+  rental_bookings_aggregate: Rental_Bookings_Aggregate;
+  /** An object relationship */
+  rental_item: Rental_Items;
+  rental_item_id: Scalars['uuid']['output'];
+  /** An array relationship */
+  rental_requests: Array<Rental_Requests>;
+  /** An aggregate relationship */
+  rental_requests_aggregate: Rental_Requests_Aggregate;
+  units_available: Scalars['Int']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+  /** An array relationship */
+  weekly_availability: Array<Rental_Listing_Weekly_Availability>;
+  /** An aggregate relationship */
+  weekly_availability_aggregate: Rental_Listing_Weekly_Availability_Aggregate;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsRental_BookingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsRental_Bookings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsRental_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsRental_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsWeekly_AvailabilityArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+/** columns and relationships of "rental_location_listings" */
+export type Rental_Location_ListingsWeekly_Availability_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+/** aggregated selection of "rental_location_listings" */
+export type Rental_Location_Listings_Aggregate = {
+  __typename?: 'rental_location_listings_aggregate';
+  aggregate?: Maybe<Rental_Location_Listings_Aggregate_Fields>;
+  nodes: Array<Rental_Location_Listings>;
+};
+
+export type Rental_Location_Listings_Aggregate_Bool_Exp = {
+  bool_and?: InputMaybe<Rental_Location_Listings_Aggregate_Bool_Exp_Bool_And>;
+  bool_or?: InputMaybe<Rental_Location_Listings_Aggregate_Bool_Exp_Bool_Or>;
+  count?: InputMaybe<Rental_Location_Listings_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Location_Listings_Aggregate_Bool_Exp_Bool_And = {
+  arguments: Rental_Location_Listings_Select_Column_Rental_Location_Listings_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Location_Listings_Aggregate_Bool_Exp_Bool_Or = {
+  arguments: Rental_Location_Listings_Select_Column_Rental_Location_Listings_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Rental_Location_Listings_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_location_listings" */
+export type Rental_Location_Listings_Aggregate_Fields = {
+  __typename?: 'rental_location_listings_aggregate_fields';
+  avg?: Maybe<Rental_Location_Listings_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Location_Listings_Max_Fields>;
+  min?: Maybe<Rental_Location_Listings_Min_Fields>;
+  stddev?: Maybe<Rental_Location_Listings_Stddev_Fields>;
+  stddev_pop?: Maybe<Rental_Location_Listings_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Rental_Location_Listings_Stddev_Samp_Fields>;
+  sum?: Maybe<Rental_Location_Listings_Sum_Fields>;
+  var_pop?: Maybe<Rental_Location_Listings_Var_Pop_Fields>;
+  var_samp?: Maybe<Rental_Location_Listings_Var_Samp_Fields>;
+  variance?: Maybe<Rental_Location_Listings_Variance_Fields>;
+};
+
+
+/** aggregate fields of "rental_location_listings" */
+export type Rental_Location_Listings_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_location_listings" */
+export type Rental_Location_Listings_Aggregate_Order_By = {
+  avg?: InputMaybe<Rental_Location_Listings_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Location_Listings_Max_Order_By>;
+  min?: InputMaybe<Rental_Location_Listings_Min_Order_By>;
+  stddev?: InputMaybe<Rental_Location_Listings_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Rental_Location_Listings_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Rental_Location_Listings_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Rental_Location_Listings_Sum_Order_By>;
+  var_pop?: InputMaybe<Rental_Location_Listings_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Rental_Location_Listings_Var_Samp_Order_By>;
+  variance?: InputMaybe<Rental_Location_Listings_Variance_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_location_listings" */
+export type Rental_Location_Listings_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Location_Listings_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Location_Listings_On_Conflict>;
+};
+
+/** aggregate avg on columns */
+export type Rental_Location_Listings_Avg_Fields = {
+  __typename?: 'rental_location_listings_avg_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by avg() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Avg_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "rental_location_listings". All fields are combined with a logical 'AND'. */
+export type Rental_Location_Listings_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Location_Listings_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Location_Listings_Bool_Exp>>;
+  base_price_per_day?: InputMaybe<Numeric_Comparison_Exp>;
+  base_price_per_hour?: InputMaybe<Numeric_Comparison_Exp>;
+  business_location?: InputMaybe<Business_Locations_Bool_Exp>;
+  business_location_id?: InputMaybe<Uuid_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  dropoff_instructions?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_active?: InputMaybe<Boolean_Comparison_Exp>;
+  max_rental_days?: InputMaybe<Int_Comparison_Exp>;
+  max_rental_hours?: InputMaybe<Int_Comparison_Exp>;
+  min_rental_days?: InputMaybe<Int_Comparison_Exp>;
+  min_rental_hours?: InputMaybe<Int_Comparison_Exp>;
+  pickup_instructions?: InputMaybe<String_Comparison_Exp>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Bool_Exp>;
+  rental_item?: InputMaybe<Rental_Items_Bool_Exp>;
+  rental_item_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_requests?: InputMaybe<Rental_Requests_Bool_Exp>;
+  rental_requests_aggregate?: InputMaybe<Rental_Requests_Aggregate_Bool_Exp>;
+  units_available?: InputMaybe<Int_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  weekly_availability?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+  weekly_availability_aggregate?: InputMaybe<Rental_Listing_Weekly_Availability_Aggregate_Bool_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_location_listings" */
+export enum Rental_Location_Listings_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalLocationListingsPkey = 'rental_location_listings_pkey',
+  /** unique or primary key constraint on columns "rental_item_id", "business_location_id" */
+  RentalLocationListingsUniqueLocationItem = 'rental_location_listings_unique_location_item'
+}
+
+/** input type for incrementing numeric columns in table "rental_location_listings" */
+export type Rental_Location_Listings_Inc_Input = {
+  base_price_per_day?: InputMaybe<Scalars['numeric']['input']>;
+  base_price_per_hour?: InputMaybe<Scalars['numeric']['input']>;
+  max_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  max_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  units_available?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** input type for inserting data into table "rental_location_listings" */
+export type Rental_Location_Listings_Insert_Input = {
+  base_price_per_day?: InputMaybe<Scalars['numeric']['input']>;
+  base_price_per_hour?: InputMaybe<Scalars['numeric']['input']>;
+  business_location?: InputMaybe<Business_Locations_Obj_Rel_Insert_Input>;
+  business_location_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  dropoff_instructions?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  max_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  max_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  pickup_instructions?: InputMaybe<Scalars['String']['input']>;
+  rental_bookings?: InputMaybe<Rental_Bookings_Arr_Rel_Insert_Input>;
+  rental_item?: InputMaybe<Rental_Items_Obj_Rel_Insert_Input>;
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_requests?: InputMaybe<Rental_Requests_Arr_Rel_Insert_Input>;
+  units_available?: InputMaybe<Scalars['Int']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  weekly_availability?: InputMaybe<Rental_Listing_Weekly_Availability_Arr_Rel_Insert_Input>;
+};
+
+/** aggregate max on columns */
+export type Rental_Location_Listings_Max_Fields = {
+  __typename?: 'rental_location_listings_max_fields';
+  base_price_per_day?: Maybe<Scalars['numeric']['output']>;
+  base_price_per_hour?: Maybe<Scalars['numeric']['output']>;
+  business_location_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  dropoff_instructions?: Maybe<Scalars['String']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  max_rental_days?: Maybe<Scalars['Int']['output']>;
+  max_rental_hours?: Maybe<Scalars['Int']['output']>;
+  min_rental_days?: Maybe<Scalars['Int']['output']>;
+  min_rental_hours?: Maybe<Scalars['Int']['output']>;
+  pickup_instructions?: Maybe<Scalars['String']['output']>;
+  rental_item_id?: Maybe<Scalars['uuid']['output']>;
+  units_available?: Maybe<Scalars['Int']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Max_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  business_location_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  dropoff_instructions?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  pickup_instructions?: InputMaybe<Order_By>;
+  rental_item_id?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Location_Listings_Min_Fields = {
+  __typename?: 'rental_location_listings_min_fields';
+  base_price_per_day?: Maybe<Scalars['numeric']['output']>;
+  base_price_per_hour?: Maybe<Scalars['numeric']['output']>;
+  business_location_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  dropoff_instructions?: Maybe<Scalars['String']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  max_rental_days?: Maybe<Scalars['Int']['output']>;
+  max_rental_hours?: Maybe<Scalars['Int']['output']>;
+  min_rental_days?: Maybe<Scalars['Int']['output']>;
+  min_rental_hours?: Maybe<Scalars['Int']['output']>;
+  pickup_instructions?: Maybe<Scalars['String']['output']>;
+  rental_item_id?: Maybe<Scalars['uuid']['output']>;
+  units_available?: Maybe<Scalars['Int']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Min_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  business_location_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  dropoff_instructions?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  pickup_instructions?: InputMaybe<Order_By>;
+  rental_item_id?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_location_listings" */
+export type Rental_Location_Listings_Mutation_Response = {
+  __typename?: 'rental_location_listings_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Location_Listings>;
+};
+
+/** input type for inserting object relation for remote table "rental_location_listings" */
+export type Rental_Location_Listings_Obj_Rel_Insert_Input = {
+  data: Rental_Location_Listings_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Location_Listings_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_location_listings" */
+export type Rental_Location_Listings_On_Conflict = {
+  constraint: Rental_Location_Listings_Constraint;
+  update_columns?: Array<Rental_Location_Listings_Update_Column>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_location_listings". */
+export type Rental_Location_Listings_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  business_location?: InputMaybe<Business_Locations_Order_By>;
+  business_location_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  dropoff_instructions?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  is_active?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  pickup_instructions?: InputMaybe<Order_By>;
+  rental_bookings_aggregate?: InputMaybe<Rental_Bookings_Aggregate_Order_By>;
+  rental_item?: InputMaybe<Rental_Items_Order_By>;
+  rental_item_id?: InputMaybe<Order_By>;
+  rental_requests_aggregate?: InputMaybe<Rental_Requests_Aggregate_Order_By>;
+  units_available?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  weekly_availability_aggregate?: InputMaybe<Rental_Listing_Weekly_Availability_Aggregate_Order_By>;
+};
+
+/** primary key columns input for table: rental_location_listings */
+export type Rental_Location_Listings_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_location_listings" */
+export enum Rental_Location_Listings_Select_Column {
+  /** column name */
+  BasePricePerDay = 'base_price_per_day',
+  /** column name */
+  BasePricePerHour = 'base_price_per_hour',
+  /** column name */
+  BusinessLocationId = 'business_location_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DropoffInstructions = 'dropoff_instructions',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  MaxRentalDays = 'max_rental_days',
+  /** column name */
+  MaxRentalHours = 'max_rental_hours',
+  /** column name */
+  MinRentalDays = 'min_rental_days',
+  /** column name */
+  MinRentalHours = 'min_rental_hours',
+  /** column name */
+  PickupInstructions = 'pickup_instructions',
+  /** column name */
+  RentalItemId = 'rental_item_id',
+  /** column name */
+  UnitsAvailable = 'units_available',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** select "rental_location_listings_aggregate_bool_exp_bool_and_arguments_columns" columns of table "rental_location_listings" */
+export enum Rental_Location_Listings_Select_Column_Rental_Location_Listings_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
+  /** column name */
+  IsActive = 'is_active'
+}
+
+/** select "rental_location_listings_aggregate_bool_exp_bool_or_arguments_columns" columns of table "rental_location_listings" */
+export enum Rental_Location_Listings_Select_Column_Rental_Location_Listings_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
+  /** column name */
+  IsActive = 'is_active'
+}
+
+/** input type for updating data in table "rental_location_listings" */
+export type Rental_Location_Listings_Set_Input = {
+  base_price_per_day?: InputMaybe<Scalars['numeric']['input']>;
+  base_price_per_hour?: InputMaybe<Scalars['numeric']['input']>;
+  business_location_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  dropoff_instructions?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  max_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  max_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  pickup_instructions?: InputMaybe<Scalars['String']['input']>;
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  units_available?: InputMaybe<Scalars['Int']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Rental_Location_Listings_Stddev_Fields = {
+  __typename?: 'rental_location_listings_stddev_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Stddev_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Rental_Location_Listings_Stddev_Pop_Fields = {
+  __typename?: 'rental_location_listings_stddev_pop_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_pop() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Stddev_Pop_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Rental_Location_Listings_Stddev_Samp_Fields = {
+  __typename?: 'rental_location_listings_stddev_samp_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_samp() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Stddev_Samp_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "rental_location_listings" */
+export type Rental_Location_Listings_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Location_Listings_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Location_Listings_Stream_Cursor_Value_Input = {
+  base_price_per_day?: InputMaybe<Scalars['numeric']['input']>;
+  base_price_per_hour?: InputMaybe<Scalars['numeric']['input']>;
+  business_location_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  dropoff_instructions?: InputMaybe<Scalars['String']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_active?: InputMaybe<Scalars['Boolean']['input']>;
+  max_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  max_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_days?: InputMaybe<Scalars['Int']['input']>;
+  min_rental_hours?: InputMaybe<Scalars['Int']['input']>;
+  pickup_instructions?: InputMaybe<Scalars['String']['input']>;
+  rental_item_id?: InputMaybe<Scalars['uuid']['input']>;
+  units_available?: InputMaybe<Scalars['Int']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Rental_Location_Listings_Sum_Fields = {
+  __typename?: 'rental_location_listings_sum_fields';
+  base_price_per_day?: Maybe<Scalars['numeric']['output']>;
+  base_price_per_hour?: Maybe<Scalars['numeric']['output']>;
+  max_rental_days?: Maybe<Scalars['Int']['output']>;
+  max_rental_hours?: Maybe<Scalars['Int']['output']>;
+  min_rental_days?: Maybe<Scalars['Int']['output']>;
+  min_rental_hours?: Maybe<Scalars['Int']['output']>;
+  units_available?: Maybe<Scalars['Int']['output']>;
+};
+
+/** order by sum() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Sum_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** update columns of table "rental_location_listings" */
+export enum Rental_Location_Listings_Update_Column {
+  /** column name */
+  BasePricePerDay = 'base_price_per_day',
+  /** column name */
+  BasePricePerHour = 'base_price_per_hour',
+  /** column name */
+  BusinessLocationId = 'business_location_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  DropoffInstructions = 'dropoff_instructions',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsActive = 'is_active',
+  /** column name */
+  MaxRentalDays = 'max_rental_days',
+  /** column name */
+  MaxRentalHours = 'max_rental_hours',
+  /** column name */
+  MinRentalDays = 'min_rental_days',
+  /** column name */
+  MinRentalHours = 'min_rental_hours',
+  /** column name */
+  PickupInstructions = 'pickup_instructions',
+  /** column name */
+  RentalItemId = 'rental_item_id',
+  /** column name */
+  UnitsAvailable = 'units_available',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Location_Listings_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Rental_Location_Listings_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Location_Listings_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Location_Listings_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Rental_Location_Listings_Var_Pop_Fields = {
+  __typename?: 'rental_location_listings_var_pop_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_pop() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Var_Pop_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** aggregate var_samp on columns */
+export type Rental_Location_Listings_Var_Samp_Fields = {
+  __typename?: 'rental_location_listings_var_samp_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_samp() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Var_Samp_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** aggregate variance on columns */
+export type Rental_Location_Listings_Variance_Fields = {
+  __typename?: 'rental_location_listings_variance_fields';
+  base_price_per_day?: Maybe<Scalars['Float']['output']>;
+  base_price_per_hour?: Maybe<Scalars['Float']['output']>;
+  max_rental_days?: Maybe<Scalars['Float']['output']>;
+  max_rental_hours?: Maybe<Scalars['Float']['output']>;
+  min_rental_days?: Maybe<Scalars['Float']['output']>;
+  min_rental_hours?: Maybe<Scalars['Float']['output']>;
+  units_available?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by variance() on columns of table "rental_location_listings" */
+export type Rental_Location_Listings_Variance_Order_By = {
+  base_price_per_day?: InputMaybe<Order_By>;
+  base_price_per_hour?: InputMaybe<Order_By>;
+  max_rental_days?: InputMaybe<Order_By>;
+  max_rental_hours?: InputMaybe<Order_By>;
+  min_rental_days?: InputMaybe<Order_By>;
+  min_rental_hours?: InputMaybe<Order_By>;
+  units_available?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to compare columns of type "rental_operation_mode_enum". All fields are combined with logical 'AND'. */
+export type Rental_Operation_Mode_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _gt?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _gte?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['rental_operation_mode_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _lte?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _neq?: InputMaybe<Scalars['rental_operation_mode_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['rental_operation_mode_enum']['input']>>;
+};
+
+/** Boolean expression to compare columns of type "rental_request_status_enum". All fields are combined with logical 'AND'. */
+export type Rental_Request_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _gt?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _gte?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _in?: InputMaybe<Array<Scalars['rental_request_status_enum']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _lte?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _neq?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  _nin?: InputMaybe<Array<Scalars['rental_request_status_enum']['input']>>;
+};
+
+/** columns and relationships of "rental_requests" */
+export type Rental_Requests = {
+  __typename?: 'rental_requests';
+  business_response_note?: Maybe<Scalars['String']['output']>;
+  /** An object relationship */
+  client: Clients;
+  client_id: Scalars['uuid']['output'];
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: Maybe<Scalars['String']['output']>;
+  created_at: Scalars['timestamptz']['output'];
+  expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  id: Scalars['uuid']['output'];
+  /** An object relationship */
+  rental_booking?: Maybe<Rental_Bookings>;
+  /** An object relationship */
+  rental_location_listing: Rental_Location_Listings;
+  rental_location_listing_id: Scalars['uuid']['output'];
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: Maybe<Scalars['jsonb']['output']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: Maybe<Scalars['jsonb']['output']>;
+  requested_end_at: Scalars['timestamptz']['output'];
+  requested_start_at: Scalars['timestamptz']['output'];
+  responded_at?: Maybe<Scalars['timestamptz']['output']>;
+  /** An object relationship */
+  responded_by_user?: Maybe<Users>;
+  responded_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  status: Scalars['rental_request_status_enum']['output'];
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: Maybe<Scalars['String']['output']>;
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+
+/** columns and relationships of "rental_requests" */
+export type Rental_RequestsRental_Pricing_SnapshotArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** columns and relationships of "rental_requests" */
+export type Rental_RequestsRental_Selection_WindowsArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregated selection of "rental_requests" */
+export type Rental_Requests_Aggregate = {
+  __typename?: 'rental_requests_aggregate';
+  aggregate?: Maybe<Rental_Requests_Aggregate_Fields>;
+  nodes: Array<Rental_Requests>;
+};
+
+export type Rental_Requests_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Rental_Requests_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Requests_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Requests_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_requests" */
+export type Rental_Requests_Aggregate_Fields = {
+  __typename?: 'rental_requests_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Requests_Max_Fields>;
+  min?: Maybe<Rental_Requests_Min_Fields>;
+};
+
+
+/** aggregate fields of "rental_requests" */
+export type Rental_Requests_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_requests" */
+export type Rental_Requests_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Requests_Max_Order_By>;
+  min?: InputMaybe<Rental_Requests_Min_Order_By>;
+};
+
+/** append existing jsonb value of filtered columns with new jsonb value */
+export type Rental_Requests_Append_Input = {
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** input type for inserting array relation for remote table "rental_requests" */
+export type Rental_Requests_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Requests_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Requests_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "rental_requests". All fields are combined with a logical 'AND'. */
+export type Rental_Requests_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Requests_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Requests_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Requests_Bool_Exp>>;
+  business_response_note?: InputMaybe<String_Comparison_Exp>;
+  client?: InputMaybe<Clients_Bool_Exp>;
+  client_id?: InputMaybe<Uuid_Comparison_Exp>;
+  client_request_note?: InputMaybe<String_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  expires_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_booking?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+  rental_location_listing_id?: InputMaybe<Uuid_Comparison_Exp>;
+  rental_pricing_snapshot?: InputMaybe<Jsonb_Comparison_Exp>;
+  rental_selection_windows?: InputMaybe<Jsonb_Comparison_Exp>;
+  requested_end_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  requested_start_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  responded_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  responded_by_user?: InputMaybe<Users_Bool_Exp>;
+  responded_by_user_id?: InputMaybe<Uuid_Comparison_Exp>;
+  status?: InputMaybe<Rental_Request_Status_Enum_Comparison_Exp>;
+  unavailable_reason_code?: InputMaybe<String_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_requests" */
+export enum Rental_Requests_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalRequestsPkey = 'rental_requests_pkey'
+}
+
+/** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+export type Rental_Requests_Delete_At_Path_Input = {
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+/** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+export type Rental_Requests_Delete_Elem_Input = {
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['Int']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** delete key/value pair or string element. key/value pairs are matched based on their key value */
+export type Rental_Requests_Delete_Key_Input = {
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['String']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** input type for inserting data into table "rental_requests" */
+export type Rental_Requests_Insert_Input = {
+  business_response_note?: InputMaybe<Scalars['String']['input']>;
+  client?: InputMaybe<Clients_Obj_Rel_Insert_Input>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_booking?: InputMaybe<Rental_Bookings_Obj_Rel_Insert_Input>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Obj_Rel_Insert_Input>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['jsonb']['input']>;
+  requested_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  requested_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_by_user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  responded_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Requests_Max_Fields = {
+  __typename?: 'rental_requests_max_fields';
+  business_response_note?: Maybe<Scalars['String']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: Maybe<Scalars['String']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_location_listing_id?: Maybe<Scalars['uuid']['output']>;
+  requested_end_at?: Maybe<Scalars['timestamptz']['output']>;
+  requested_start_at?: Maybe<Scalars['timestamptz']['output']>;
+  responded_at?: Maybe<Scalars['timestamptz']['output']>;
+  responded_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_request_status_enum']['output']>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "rental_requests" */
+export type Rental_Requests_Max_Order_By = {
+  business_response_note?: InputMaybe<Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  expires_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  requested_end_at?: InputMaybe<Order_By>;
+  requested_start_at?: InputMaybe<Order_By>;
+  responded_at?: InputMaybe<Order_By>;
+  responded_by_user_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Requests_Min_Fields = {
+  __typename?: 'rental_requests_min_fields';
+  business_response_note?: Maybe<Scalars['String']['output']>;
+  client_id?: Maybe<Scalars['uuid']['output']>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: Maybe<Scalars['String']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  expires_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  rental_location_listing_id?: Maybe<Scalars['uuid']['output']>;
+  requested_end_at?: Maybe<Scalars['timestamptz']['output']>;
+  requested_start_at?: Maybe<Scalars['timestamptz']['output']>;
+  responded_at?: Maybe<Scalars['timestamptz']['output']>;
+  responded_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_request_status_enum']['output']>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "rental_requests" */
+export type Rental_Requests_Min_Order_By = {
+  business_response_note?: InputMaybe<Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  expires_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  requested_end_at?: InputMaybe<Order_By>;
+  requested_start_at?: InputMaybe<Order_By>;
+  responded_at?: InputMaybe<Order_By>;
+  responded_by_user_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_requests" */
+export type Rental_Requests_Mutation_Response = {
+  __typename?: 'rental_requests_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Requests>;
+};
+
+/** input type for inserting object relation for remote table "rental_requests" */
+export type Rental_Requests_Obj_Rel_Insert_Input = {
+  data: Rental_Requests_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Requests_On_Conflict>;
+};
+
+/** on_conflict condition type for table "rental_requests" */
+export type Rental_Requests_On_Conflict = {
+  constraint: Rental_Requests_Constraint;
+  update_columns?: Array<Rental_Requests_Update_Column>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_requests". */
+export type Rental_Requests_Order_By = {
+  business_response_note?: InputMaybe<Order_By>;
+  client?: InputMaybe<Clients_Order_By>;
+  client_id?: InputMaybe<Order_By>;
+  client_request_note?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  expires_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  rental_booking?: InputMaybe<Rental_Bookings_Order_By>;
+  rental_location_listing?: InputMaybe<Rental_Location_Listings_Order_By>;
+  rental_location_listing_id?: InputMaybe<Order_By>;
+  rental_pricing_snapshot?: InputMaybe<Order_By>;
+  rental_selection_windows?: InputMaybe<Order_By>;
+  requested_end_at?: InputMaybe<Order_By>;
+  requested_start_at?: InputMaybe<Order_By>;
+  responded_at?: InputMaybe<Order_By>;
+  responded_by_user?: InputMaybe<Users_Order_By>;
+  responded_by_user_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  unavailable_reason_code?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_requests */
+export type Rental_Requests_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** prepend existing jsonb value of filtered columns with new jsonb value */
+export type Rental_Requests_Prepend_Input = {
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** select columns of table "rental_requests" */
+export enum Rental_Requests_Select_Column {
+  /** column name */
+  BusinessResponseNote = 'business_response_note',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  ClientRequestNote = 'client_request_note',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  ExpiresAt = 'expires_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalLocationListingId = 'rental_location_listing_id',
+  /** column name */
+  RentalPricingSnapshot = 'rental_pricing_snapshot',
+  /** column name */
+  RentalSelectionWindows = 'rental_selection_windows',
+  /** column name */
+  RequestedEndAt = 'requested_end_at',
+  /** column name */
+  RequestedStartAt = 'requested_start_at',
+  /** column name */
+  RespondedAt = 'responded_at',
+  /** column name */
+  RespondedByUserId = 'responded_by_user_id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UnavailableReasonCode = 'unavailable_reason_code',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "rental_requests" */
+export type Rental_Requests_Set_Input = {
+  business_response_note?: InputMaybe<Scalars['String']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['jsonb']['input']>;
+  requested_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  requested_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "rental_requests" */
+export type Rental_Requests_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Requests_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Requests_Stream_Cursor_Value_Input = {
+  business_response_note?: InputMaybe<Scalars['String']['input']>;
+  client_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Optional message from the client when submitting the rental request */
+  client_request_note?: InputMaybe<Scalars['String']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  expires_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  rental_location_listing_id?: InputMaybe<Scalars['uuid']['input']>;
+  /** Required when status is available; JSON pricing contract from business */
+  rental_pricing_snapshot?: InputMaybe<Scalars['jsonb']['input']>;
+  /** Optional array of {start_at,end_at} ISO instants; when set, pricing/capacity use all windows; requested_start/end remain min/max for display */
+  rental_selection_windows?: InputMaybe<Scalars['jsonb']['input']>;
+  requested_end_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  requested_start_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  responded_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_request_status_enum']['input']>;
+  /** Business reason when status is unavailable (e.g. fully_booked, other) */
+  unavailable_reason_code?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "rental_requests" */
+export enum Rental_Requests_Update_Column {
+  /** column name */
+  BusinessResponseNote = 'business_response_note',
+  /** column name */
+  ClientId = 'client_id',
+  /** column name */
+  ClientRequestNote = 'client_request_note',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  ExpiresAt = 'expires_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  RentalLocationListingId = 'rental_location_listing_id',
+  /** column name */
+  RentalPricingSnapshot = 'rental_pricing_snapshot',
+  /** column name */
+  RentalSelectionWindows = 'rental_selection_windows',
+  /** column name */
+  RequestedEndAt = 'requested_end_at',
+  /** column name */
+  RequestedStartAt = 'requested_start_at',
+  /** column name */
+  RespondedAt = 'responded_at',
+  /** column name */
+  RespondedByUserId = 'responded_by_user_id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UnavailableReasonCode = 'unavailable_reason_code',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Rental_Requests_Updates = {
+  /** append existing jsonb value of filtered columns with new jsonb value */
+  _append?: InputMaybe<Rental_Requests_Append_Input>;
+  /** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+  _delete_at_path?: InputMaybe<Rental_Requests_Delete_At_Path_Input>;
+  /** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+  _delete_elem?: InputMaybe<Rental_Requests_Delete_Elem_Input>;
+  /** delete key/value pair or string element. key/value pairs are matched based on their key value */
+  _delete_key?: InputMaybe<Rental_Requests_Delete_Key_Input>;
+  /** prepend existing jsonb value of filtered columns with new jsonb value */
+  _prepend?: InputMaybe<Rental_Requests_Prepend_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Requests_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Requests_Bool_Exp;
+};
+
+/** columns and relationships of "rental_status_history" */
+export type Rental_Status_History = {
+  __typename?: 'rental_status_history';
+  changed_by_type: Scalars['String']['output'];
+  /** An object relationship */
+  changed_by_user?: Maybe<Users>;
+  changed_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  created_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  notes?: Maybe<Scalars['String']['output']>;
+  previous_status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+  /** An object relationship */
+  rental_booking: Rental_Bookings;
+  rental_booking_id: Scalars['uuid']['output'];
+  status: Scalars['rental_booking_status_enum']['output'];
+};
+
+/** aggregated selection of "rental_status_history" */
+export type Rental_Status_History_Aggregate = {
+  __typename?: 'rental_status_history_aggregate';
+  aggregate?: Maybe<Rental_Status_History_Aggregate_Fields>;
+  nodes: Array<Rental_Status_History>;
+};
+
+export type Rental_Status_History_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Rental_Status_History_Aggregate_Bool_Exp_Count>;
+};
+
+export type Rental_Status_History_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Rental_Status_History_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "rental_status_history" */
+export type Rental_Status_History_Aggregate_Fields = {
+  __typename?: 'rental_status_history_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Rental_Status_History_Max_Fields>;
+  min?: Maybe<Rental_Status_History_Min_Fields>;
+};
+
+
+/** aggregate fields of "rental_status_history" */
+export type Rental_Status_History_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "rental_status_history" */
+export type Rental_Status_History_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Rental_Status_History_Max_Order_By>;
+  min?: InputMaybe<Rental_Status_History_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "rental_status_history" */
+export type Rental_Status_History_Arr_Rel_Insert_Input = {
+  data: Array<Rental_Status_History_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Rental_Status_History_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "rental_status_history". All fields are combined with a logical 'AND'. */
+export type Rental_Status_History_Bool_Exp = {
+  _and?: InputMaybe<Array<Rental_Status_History_Bool_Exp>>;
+  _not?: InputMaybe<Rental_Status_History_Bool_Exp>;
+  _or?: InputMaybe<Array<Rental_Status_History_Bool_Exp>>;
+  changed_by_type?: InputMaybe<String_Comparison_Exp>;
+  changed_by_user?: InputMaybe<Users_Bool_Exp>;
+  changed_by_user_id?: InputMaybe<Uuid_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  notes?: InputMaybe<String_Comparison_Exp>;
+  previous_status?: InputMaybe<Rental_Booking_Status_Enum_Comparison_Exp>;
+  rental_booking?: InputMaybe<Rental_Bookings_Bool_Exp>;
+  rental_booking_id?: InputMaybe<Uuid_Comparison_Exp>;
+  status?: InputMaybe<Rental_Booking_Status_Enum_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "rental_status_history" */
+export enum Rental_Status_History_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  RentalStatusHistoryPkey = 'rental_status_history_pkey'
+}
+
+/** input type for inserting data into table "rental_status_history" */
+export type Rental_Status_History_Insert_Input = {
+  changed_by_type?: InputMaybe<Scalars['String']['input']>;
+  changed_by_user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  changed_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  notes?: InputMaybe<Scalars['String']['input']>;
+  previous_status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  rental_booking?: InputMaybe<Rental_Bookings_Obj_Rel_Insert_Input>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+};
+
+/** aggregate max on columns */
+export type Rental_Status_History_Max_Fields = {
+  __typename?: 'rental_status_history_max_fields';
+  changed_by_type?: Maybe<Scalars['String']['output']>;
+  changed_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  notes?: Maybe<Scalars['String']['output']>;
+  previous_status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+};
+
+/** order by max() on columns of table "rental_status_history" */
+export type Rental_Status_History_Max_Order_By = {
+  changed_by_type?: InputMaybe<Order_By>;
+  changed_by_user_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  notes?: InputMaybe<Order_By>;
+  previous_status?: InputMaybe<Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Rental_Status_History_Min_Fields = {
+  __typename?: 'rental_status_history_min_fields';
+  changed_by_type?: Maybe<Scalars['String']['output']>;
+  changed_by_user_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  notes?: Maybe<Scalars['String']['output']>;
+  previous_status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+  rental_booking_id?: Maybe<Scalars['uuid']['output']>;
+  status?: Maybe<Scalars['rental_booking_status_enum']['output']>;
+};
+
+/** order by min() on columns of table "rental_status_history" */
+export type Rental_Status_History_Min_Order_By = {
+  changed_by_type?: InputMaybe<Order_By>;
+  changed_by_user_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  notes?: InputMaybe<Order_By>;
+  previous_status?: InputMaybe<Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "rental_status_history" */
+export type Rental_Status_History_Mutation_Response = {
+  __typename?: 'rental_status_history_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Rental_Status_History>;
+};
+
+/** on_conflict condition type for table "rental_status_history" */
+export type Rental_Status_History_On_Conflict = {
+  constraint: Rental_Status_History_Constraint;
+  update_columns?: Array<Rental_Status_History_Update_Column>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "rental_status_history". */
+export type Rental_Status_History_Order_By = {
+  changed_by_type?: InputMaybe<Order_By>;
+  changed_by_user?: InputMaybe<Users_Order_By>;
+  changed_by_user_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  notes?: InputMaybe<Order_By>;
+  previous_status?: InputMaybe<Order_By>;
+  rental_booking?: InputMaybe<Rental_Bookings_Order_By>;
+  rental_booking_id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: rental_status_history */
+export type Rental_Status_History_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "rental_status_history" */
+export enum Rental_Status_History_Select_Column {
+  /** column name */
+  ChangedByType = 'changed_by_type',
+  /** column name */
+  ChangedByUserId = 'changed_by_user_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Notes = 'notes',
+  /** column name */
+  PreviousStatus = 'previous_status',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  Status = 'status'
+}
+
+/** input type for updating data in table "rental_status_history" */
+export type Rental_Status_History_Set_Input = {
+  changed_by_type?: InputMaybe<Scalars['String']['input']>;
+  changed_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  notes?: InputMaybe<Scalars['String']['input']>;
+  previous_status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+};
+
+/** Streaming cursor of the table "rental_status_history" */
+export type Rental_Status_History_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Rental_Status_History_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Rental_Status_History_Stream_Cursor_Value_Input = {
+  changed_by_type?: InputMaybe<Scalars['String']['input']>;
+  changed_by_user_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  notes?: InputMaybe<Scalars['String']['input']>;
+  previous_status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+  rental_booking_id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Scalars['rental_booking_status_enum']['input']>;
+};
+
+/** update columns of table "rental_status_history" */
+export enum Rental_Status_History_Update_Column {
+  /** column name */
+  ChangedByType = 'changed_by_type',
+  /** column name */
+  ChangedByUserId = 'changed_by_user_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Notes = 'notes',
+  /** column name */
+  PreviousStatus = 'previous_status',
+  /** column name */
+  RentalBookingId = 'rental_booking_id',
+  /** column name */
+  Status = 'status'
+}
+
+export type Rental_Status_History_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Rental_Status_History_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Rental_Status_History_Bool_Exp;
+};
+
 export type Subscription_Root = {
   __typename?: 'subscription_root';
   /** An array relationship */
@@ -26331,6 +31933,86 @@ export type Subscription_Root = {
   ratings_by_pk?: Maybe<Ratings>;
   /** fetch data from the table in a streaming manner: "ratings" */
   ratings_stream: Array<Ratings>;
+  /** An array relationship */
+  rental_booking_windows: Array<Rental_Booking_Windows>;
+  /** An aggregate relationship */
+  rental_booking_windows_aggregate: Rental_Booking_Windows_Aggregate;
+  /** fetch data from the table: "rental_booking_windows" using primary key columns */
+  rental_booking_windows_by_pk?: Maybe<Rental_Booking_Windows>;
+  /** fetch data from the table in a streaming manner: "rental_booking_windows" */
+  rental_booking_windows_stream: Array<Rental_Booking_Windows>;
+  /** An array relationship */
+  rental_bookings: Array<Rental_Bookings>;
+  /** An aggregate relationship */
+  rental_bookings_aggregate: Rental_Bookings_Aggregate;
+  /** fetch data from the table: "rental_bookings" using primary key columns */
+  rental_bookings_by_pk?: Maybe<Rental_Bookings>;
+  /** fetch data from the table in a streaming manner: "rental_bookings" */
+  rental_bookings_stream: Array<Rental_Bookings>;
+  /** fetch data from the table: "rental_categories" */
+  rental_categories: Array<Rental_Categories>;
+  /** fetch aggregated fields from the table: "rental_categories" */
+  rental_categories_aggregate: Rental_Categories_Aggregate;
+  /** fetch data from the table: "rental_categories" using primary key columns */
+  rental_categories_by_pk?: Maybe<Rental_Categories>;
+  /** fetch data from the table in a streaming manner: "rental_categories" */
+  rental_categories_stream: Array<Rental_Categories>;
+  /** fetch data from the table: "rental_holds" */
+  rental_holds: Array<Rental_Holds>;
+  /** fetch aggregated fields from the table: "rental_holds" */
+  rental_holds_aggregate: Rental_Holds_Aggregate;
+  /** fetch data from the table: "rental_holds" using primary key columns */
+  rental_holds_by_pk?: Maybe<Rental_Holds>;
+  /** fetch data from the table in a streaming manner: "rental_holds" */
+  rental_holds_stream: Array<Rental_Holds>;
+  /** An array relationship */
+  rental_item_images: Array<Rental_Item_Images>;
+  /** An aggregate relationship */
+  rental_item_images_aggregate: Rental_Item_Images_Aggregate;
+  /** fetch data from the table: "rental_item_images" using primary key columns */
+  rental_item_images_by_pk?: Maybe<Rental_Item_Images>;
+  /** fetch data from the table in a streaming manner: "rental_item_images" */
+  rental_item_images_stream: Array<Rental_Item_Images>;
+  /** An array relationship */
+  rental_items: Array<Rental_Items>;
+  /** An aggregate relationship */
+  rental_items_aggregate: Rental_Items_Aggregate;
+  /** fetch data from the table: "rental_items" using primary key columns */
+  rental_items_by_pk?: Maybe<Rental_Items>;
+  /** fetch data from the table in a streaming manner: "rental_items" */
+  rental_items_stream: Array<Rental_Items>;
+  /** fetch data from the table: "rental_listing_weekly_availability" */
+  rental_listing_weekly_availability: Array<Rental_Listing_Weekly_Availability>;
+  /** fetch aggregated fields from the table: "rental_listing_weekly_availability" */
+  rental_listing_weekly_availability_aggregate: Rental_Listing_Weekly_Availability_Aggregate;
+  /** fetch data from the table: "rental_listing_weekly_availability" using primary key columns */
+  rental_listing_weekly_availability_by_pk?: Maybe<Rental_Listing_Weekly_Availability>;
+  /** fetch data from the table in a streaming manner: "rental_listing_weekly_availability" */
+  rental_listing_weekly_availability_stream: Array<Rental_Listing_Weekly_Availability>;
+  /** An array relationship */
+  rental_location_listings: Array<Rental_Location_Listings>;
+  /** An aggregate relationship */
+  rental_location_listings_aggregate: Rental_Location_Listings_Aggregate;
+  /** fetch data from the table: "rental_location_listings" using primary key columns */
+  rental_location_listings_by_pk?: Maybe<Rental_Location_Listings>;
+  /** fetch data from the table in a streaming manner: "rental_location_listings" */
+  rental_location_listings_stream: Array<Rental_Location_Listings>;
+  /** An array relationship */
+  rental_requests: Array<Rental_Requests>;
+  /** An aggregate relationship */
+  rental_requests_aggregate: Rental_Requests_Aggregate;
+  /** fetch data from the table: "rental_requests" using primary key columns */
+  rental_requests_by_pk?: Maybe<Rental_Requests>;
+  /** fetch data from the table in a streaming manner: "rental_requests" */
+  rental_requests_stream: Array<Rental_Requests>;
+  /** fetch data from the table: "rental_status_history" */
+  rental_status_history: Array<Rental_Status_History>;
+  /** fetch aggregated fields from the table: "rental_status_history" */
+  rental_status_history_aggregate: Rental_Status_History_Aggregate;
+  /** fetch data from the table: "rental_status_history" using primary key columns */
+  rental_status_history_by_pk?: Maybe<Rental_Status_History>;
+  /** fetch data from the table in a streaming manner: "rental_status_history" */
+  rental_status_history_stream: Array<Rental_Status_History>;
   /** fetch data from the table: "support_tickets" */
   support_tickets: Array<Support_Tickets>;
   /** fetch aggregated fields from the table: "support_tickets" */
@@ -27964,6 +33646,306 @@ export type Subscription_RootRatings_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Ratings_Stream_Cursor_Input>>;
   where?: InputMaybe<Ratings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Booking_WindowsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Booking_Windows_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Booking_Windows_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Booking_Windows_Order_By>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Booking_Windows_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Booking_Windows_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Booking_Windows_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Booking_Windows_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_BookingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Bookings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Bookings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Bookings_Order_By>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Bookings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Bookings_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Bookings_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Bookings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_CategoriesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Categories_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Categories_Order_By>>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Categories_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Categories_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Categories_Order_By>>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Categories_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Categories_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Categories_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Categories_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_HoldsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Holds_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Holds_Order_By>>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Holds_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Holds_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Holds_Order_By>>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Holds_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Holds_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Holds_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Holds_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Item_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Item_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Item_Images_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Item_Images_Order_By>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Item_Images_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Item_Images_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Item_Images_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Item_Images_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_ItemsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Items_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Items_Order_By>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Items_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Items_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Items_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Items_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Listing_Weekly_AvailabilityArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Listing_Weekly_Availability_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Listing_Weekly_Availability_Order_By>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Listing_Weekly_Availability_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Listing_Weekly_Availability_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Listing_Weekly_Availability_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Listing_Weekly_Availability_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Location_ListingsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Location_Listings_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Location_Listings_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Location_Listings_Order_By>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Location_Listings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Location_Listings_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Location_Listings_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Location_Listings_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Requests_Order_By>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Requests_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Requests_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Status_HistoryArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Status_History_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Rental_Status_History_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Rental_Status_History_Order_By>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
+};
+
+
+export type Subscription_RootRental_Status_History_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootRental_Status_History_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Rental_Status_History_Stream_Cursor_Input>>;
+  where?: InputMaybe<Rental_Status_History_Bool_Exp>;
 };
 
 
@@ -31023,21 +37005,21 @@ export type GetUserClientQueryVariables = Exact<{
 }>;
 
 
-export type GetUserClientQuery = { __typename?: 'query_root', clients: Array<{ __typename?: 'clients', id: string, user_id: string, created_at: string, updated_at: string, client_addresses: Array<{ __typename?: 'client_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+export type GetUserClientQuery = { __typename?: 'query_root', clients: Array<{ __typename?: 'clients', id: string, user_id: string, created_at: string, updated_at: string, client_addresses: Array<{ __typename?: 'client_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null } }> }> };
 
 export type GetUserBusinessQueryVariables = Exact<{
   userId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetUserBusinessQuery = { __typename?: 'query_root', businesses: Array<{ __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, is_verified?: boolean | null, created_at: string, updated_at: string, business_addresses: Array<{ __typename?: 'business_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+export type GetUserBusinessQuery = { __typename?: 'query_root', businesses: Array<{ __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, is_verified?: boolean | null, created_at: string, updated_at: string, business_addresses: Array<{ __typename?: 'business_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null } }> }> };
 
 export type GetUserAgentQueryVariables = Exact<{
   userId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetUserAgentQuery = { __typename?: 'query_root', agents: Array<{ __typename?: 'agents', id: string, user_id: string, vehicle_type_id: Vehicle_Types_Enum, is_verified?: boolean | null, onboarding_complete: boolean, agent_code: string, created_at: string, updated_at: string, agent_addresses: Array<{ __typename?: 'agent_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null } }> }> };
+export type GetUserAgentQuery = { __typename?: 'query_root', agents: Array<{ __typename?: 'agents', id: string, user_id: string, vehicle_type_id: Vehicle_Types_Enum, is_verified?: boolean | null, onboarding_complete: boolean, agent_code: string, created_at: string, updated_at: string, agent_addresses: Array<{ __typename?: 'agent_addresses', address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null } }> }> };
 
 export type GetClientByIdQueryVariables = Exact<{
   id: Scalars['uuid']['input'];
@@ -31065,28 +37047,28 @@ export type GetAgentAddressesQueryVariables = Exact<{
 }>;
 
 
-export type GetAgentAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+export type GetAgentAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null, updated_at?: string | null }> };
 
 export type GetClientAddressesQueryVariables = Exact<{
   clientId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetClientAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+export type GetClientAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null, updated_at?: string | null }> };
 
 export type GetBusinessAddressesQueryVariables = Exact<{
   businessId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetBusinessAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null }> };
+export type GetBusinessAddressesQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null, updated_at?: string | null }> };
 
 export type GetAddressByIdQueryVariables = Exact<{
   addressId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetAddressByIdQuery = { __typename?: 'query_root', addresses_by_pk?: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, created_at?: string | null, updated_at?: string | null } | null };
+export type GetAddressByIdQuery = { __typename?: 'query_root', addresses: Array<{ __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, is_primary?: boolean | null, address_type?: string | null, status: any, created_at?: string | null, updated_at?: string | null }> };
 
 export type CreateUserAccountMutationVariables = Exact<{
   userId: Scalars['uuid']['input'];

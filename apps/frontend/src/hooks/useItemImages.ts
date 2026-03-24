@@ -199,6 +199,7 @@ export const useItemImages = () => {
   const uploadItemImage = useCallback(
     async (
       itemId: string,
+      businessId: string,
       file: File,
       userId: string,
       bucketName: string,
@@ -236,6 +237,7 @@ export const useItemImages = () => {
 
         // Create item image record
         const imageData: CreateItemImageData = {
+          business_id: businessId,
           item_id: itemId,
           image_url: s3Url,
           image_type: imageType,

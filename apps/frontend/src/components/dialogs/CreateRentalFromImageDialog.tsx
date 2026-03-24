@@ -16,7 +16,6 @@ import {
   FormControlLabel,
   Alert,
   Chip,
-  CircularProgress,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
@@ -25,6 +24,7 @@ import type { RentalItemImage } from '../../hooks/useRentalItemImages';
 import { useCreateRentalFromImage } from '../../hooks/useCreateRentalFromImage';
 import { useRentalFromImageSuggestions } from '../../hooks/useRentalFromImageSuggestions';
 import type { RentalCategoryRow } from '../../hooks/useRentalCategories';
+import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
 
 export type CreateRentalFromImageEntrySource = 'manual' | 'ai_prefill';
 
@@ -216,18 +216,26 @@ export const CreateRentalFromImageDialog: React.FC<
           )}
 
           {isAiFlow && suggestionsLoading && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={20} />
-              <Typography variant="body2" color="text.secondary">
-                {t(
-                  'business.rentalImages.createFromImage.analyzing',
-                  'Analyzing image…'
-                )}
-              </Typography>
-            </Box>
+            <ImageCleanupLoadingAnimation
+              minHeight={180}
+              message={t(
+                'business.rentalImages.createFromImage.analyzing',
+                'Analyzing image...'
+              )}
+            />
           )}
 
-          {isAiFlow && aiCategoryHint && !suggestionsLoading && (
+          {isAiFlow && loading && !suggestionsLoading && (
+            <ImageCleanupLoadingAnimation
+              minHeight={180}
+              message={t(
+                'business.rentalImages.createFromImage.creating',
+                'Creating rental item...'
+              )}
+            />
+          )}
+
+          {isAiFlow && aiCategoryHint && !suggestionsLoading && !loading && (
             <Alert severity="warning">
               {t(
                 'business.rentalImages.createFromImage.categoryUnmatched',

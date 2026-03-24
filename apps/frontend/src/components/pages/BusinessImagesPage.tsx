@@ -1,11 +1,13 @@
 import {
   Add as AddIcon,
+  ArrowBack as ArrowBackIcon,
   AutoFixHigh as AutoFixHighIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
   Delete as DeleteIcon,
   Image as ImageIcon,
   Link as LinkIcon,
+  LinkOff as LinkOffIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Tag as TagIcon,
@@ -36,10 +38,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import axios from 'axios';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../common/ConfirmationModal';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import { CreateItemFromImageDialog } from '../dialogs/CreateItemFromImageDialog';
@@ -69,12 +73,12 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
   const { results, loading, error, search } = useBusinessItemSearch();
   const { associateImageToItem } = useBusinessImages();
   const [input, setInput] = useState('');
-  const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setInput('');
-      setSelectedSku(null);
+      setSelectedItemId(null);
     }
   }, [open]);
 
@@ -84,7 +88,7 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
   };
 
   const handleConfirm = async () => {
-    if (!image || !selectedSku) {
+    if (!image || !selectedItemId) {
       enqueueSnackbar(
         t('business.images.associate.selectItem', 'Please select an item'),
         { variant: 'warning' }
@@ -92,7 +96,7 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
       return;
     }
     try {
-      await associateImageToItem(image.id, selectedSku);
+      await associateImageToItem(image.id, selectedItemId);
       enqueueSnackbar(
         t(
           'business.images.associate.success',
@@ -212,18 +216,20 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
               {results.map((item) => (
                 <Paper
                   key={item.id}
-                  variant={selectedSku === item.sku ? 'outlined' : 'elevation'}
+                  variant={
+                    selectedItemId === item.id ? 'outlined' : 'elevation'
+                  }
                   sx={{
                     p: 1.5,
                     cursor: 'pointer',
                     borderRadius: 1.5,
                     borderColor:
-                      selectedSku === item.sku ? 'primary.main' : 'divider',
+                      selectedItemId === item.id ? 'primary.main' : 'divider',
                     '&:hover': {
                       bgcolor: 'action.hover',
                     },
                   }}
-                  onClick={() => setSelectedSku(item.sku || null)}
+                  onClick={() => setSelectedItemId(item.id)}
                 >
                   <Typography variant="subtitle2">
                     {item.name}{' '}
@@ -249,7 +255,7 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
         <Button
           variant="contained"
           onClick={handleConfirm}
-          disabled={!selectedSku}
+          disabled={!selectedItemId}
         >
           {t('business.images.associate.confirm', 'Associate')}
         </Button>
@@ -260,6 +266,7 @@ const AssociateItemDialog: React.FC<AssociateItemDialogProps> = ({
 
 const BusinessImagesPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { profile, loading: profileLoading, error: profileError } =
     useUserProfileContext();
@@ -273,6 +280,7 @@ const BusinessImagesPage: React.FC = () => {
     error,
     fetchImages,
     bulkCreateImages,
+    disassociateImageFromItem,
     updateImage,
     deleteImage,
     removeTag,
@@ -545,6 +553,27 @@ const BusinessImagesPage: React.FC = () => {
     setAssociateDialogOpen(true);
   };
 
+  const handleDisassociateFromItem = async (img: BusinessImage) => {
+    try {
+      await disassociateImageFromItem(img.id);
+      enqueueSnackbar(
+        t(
+          'business.images.disassociate.success',
+          'Image unlinked from item'
+        ),
+        { variant: 'success' }
+      );
+    } catch {
+      enqueueSnackbar(
+        t(
+          'business.images.disassociate.error',
+          'Failed to unlink image from item'
+        ),
+        { variant: 'error' }
+      );
+    }
+  };
+
   const handleCloseAssociateDialog = () => {
     setAssociateDialogOpen(false);
     setImageToAssociate(null);
@@ -588,7 +617,7 @@ const BusinessImagesPage: React.FC = () => {
     const value =
       subCategoryId === '' ? null : parseInt(subCategoryId, 10) || null;
     try {
-      await updateImage(img.id, { sub_category_id: value });
+      await updateImage(img.id, { item_sub_category_id: value });
       enqueueSnackbar(
         t('business.images.update.success', 'Image updated successfully'),
         { variant: 'success' }
@@ -739,10 +768,14 @@ const BusinessImagesPage: React.FC = () => {
     return (
       <Box
         sx={{
+          maxWidth: 1320,
+          mx: 'auto',
+          px: { xs: 2, sm: 3 },
+          py: 6,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          minHeight: 320,
+          minHeight: 280,
         }}
       >
         <CircularProgress />
@@ -752,46 +785,114 @@ const BusinessImagesPage: React.FC = () => {
 
   if (profileError) {
     return (
-      <Alert severity="error">
-        {t('common.errorLoadingData', 'Error loading data')}: {profileError}
-      </Alert>
+      <Box sx={{ maxWidth: 1320, mx: 'auto', px: { xs: 2, sm: 3 }, py: 3 }}>
+        <Alert severity="error" sx={{ borderRadius: 2 }}>
+          {t('common.errorLoadingData', 'Error loading data')}: {profileError}
+        </Alert>
+      </Box>
     );
   }
 
   if (!profile?.business) {
     return (
-      <Alert severity="error">
-        {t(
-          'business.images.noBusiness',
-          'You need a business profile to manage images.'
-        )}
-      </Alert>
+      <Box sx={{ maxWidth: 1320, mx: 'auto', px: { xs: 2, sm: 3 }, py: 3 }}>
+        <Alert severity="error" sx={{ borderRadius: 2 }}>
+          {t(
+            'business.images.noBusiness',
+            'You need a business profile to manage images.'
+          )}
+        </Alert>
+      </Box>
     );
   }
 
   const filteredImages = images;
 
   return (
-    <Box sx={{ mt: 0, mb: 0 }}>
-      <Stack spacing={2}>
-        <Box>
-          <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ImageIcon color="error" />
-            {t(
-              'business.images.title',
-              'Item Images Library'
-            )}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'business.images.subtitle',
-              'Bulk upload, organize, and connect images to your items.'
-            )}
-          </Typography>
-        </Box>
+    <Box
+      sx={{
+        maxWidth: 1320,
+        mx: 'auto',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, md: 3 },
+        pb: 4,
+      }}
+    >
+      <Stack spacing={2.5}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 2.5 },
+            borderRadius: 3,
+            border: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+          >
+            <Box>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: (theme) =>
+                      alpha(theme.palette.primary.main, 0.1),
+                    color: 'primary.main',
+                  }}
+                >
+                  <ImageIcon fontSize="small" />
+                </Box>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                    {t(
+                      'business.images.title',
+                      'Item image library'
+                    )}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5, maxWidth: 560 }}
+                  >
+                    {t(
+                      'business.images.subtitle',
+                      'Upload images, then link them to catalog items or create new items from a photo.'
+                    )}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Box>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate('/dashboard')}
+              sx={{
+                borderColor: 'divider',
+                flexShrink: 0,
+                alignSelf: { xs: 'stretch', md: 'center' },
+              }}
+            >
+              {t(
+                'business.images.backToDashboard',
+                'Back to dashboard'
+              )}
+            </Button>
+          </Stack>
+        </Paper>
 
         {error && (
-          <Alert severity="error">
+          <Alert severity="error" sx={{ borderRadius: 2 }}>
             {t(
               'business.images.loadError',
               'Failed to load images for your business.'
@@ -799,17 +900,31 @@ const BusinessImagesPage: React.FC = () => {
           </Alert>
         )}
 
-        {/* Filters and actions */}
         <Paper
-          variant="outlined"
+          elevation={0}
           sx={{
-            p: 2,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 2,
-            alignItems: 'center',
+            p: { xs: 2, sm: 2.5 },
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
           }}
         >
+          <Typography
+            variant="subtitle2"
+            fontWeight={600}
+            color="text.primary"
+            sx={{ mb: 1.5 }}
+          >
+            {t('business.images.filters.sectionTitle', 'Search and filter')}
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 2,
+              alignItems: 'center',
+            }}
+          >
           <FormControl sx={{ minWidth: 180 }} size="small">
             <InputLabel>
               {t(
@@ -932,26 +1047,30 @@ const BusinessImagesPage: React.FC = () => {
             startIcon={<RefreshIcon />}
             onClick={handleRefresh}
             disabled={loading}
+            sx={{ borderColor: 'divider' }}
           >
             {t('business.images.actions.refresh', 'Refresh')}
           </Button>
+        </Box>
         </Paper>
 
-        {/* Upload section */}
         <Paper
-          variant="outlined"
+          elevation={0}
           sx={{
-            p: 2,
+            p: { xs: 2, sm: 2.5 },
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: '2fr 1.3fr' },
-            gap: 2,
+            gap: { xs: 2, md: 3 },
           }}
         >
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+          <Box sx={{ pr: { md: 1 } }}>
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
               {t(
                 'business.images.upload.stepTitle',
-                '1. Choose subcategory and upload images'
+                'Upload from device'
               )}
             </Typography>
             <Stack spacing={2}>
@@ -1067,11 +1186,19 @@ const BusinessImagesPage: React.FC = () => {
             </Stack>
           </Box>
 
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+          <Box
+            sx={{
+              borderLeft: { md: 1 },
+              borderTop: { xs: 1, md: 0 },
+              borderColor: 'divider',
+              pl: { md: 3 },
+              pt: { xs: 2, md: 0 },
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
               {t(
                 'business.images.upload.urlStepTitle',
-                '2. Or add images by URL'
+                'Add by URL'
               )}
             </Typography>
             <Stack spacing={2}>
@@ -1141,6 +1268,7 @@ const BusinessImagesPage: React.FC = () => {
               startIcon={<ImageIcon />}
               onClick={handleSaveUploads}
               disabled={submitting}
+              sx={{ minWidth: 200 }}
             >
               {submitting ? (
                 <CircularProgress size={20} color="inherit" />
@@ -1154,25 +1282,30 @@ const BusinessImagesPage: React.FC = () => {
           </Box>
         </Paper>
 
-        {/* Images grid */}
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
+          }}
+        >
           <Stack
             direction="row"
             justifyContent="space-between"
             alignItems="center"
-            sx={{ mb: 2 }}
+            sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}
           >
-            <Typography variant="subtitle1">
-              {t('business.images.list.title', 'Your image library')}{' '}
-              <Typography
-                component="span"
-                variant="body2"
-                color="text.secondary"
-              >
-                ({total}{' '}
-                {t('business.images.list.countLabel', 'images total')})
+            <Box>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {t('business.images.list.title', 'Library')}
               </Typography>
-            </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {total}{' '}
+                {t('business.images.list.countLabel', 'images')}
+              </Typography>
+            </Box>
           </Stack>
 
           {loading ? (
@@ -1186,7 +1319,7 @@ const BusinessImagesPage: React.FC = () => {
               <CircularProgress />
             </Box>
           ) : !filteredImages.length ? (
-            <Alert severity="info">
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
               {t(
                 'business.images.list.empty',
                 'No images yet. Upload files or add image URLs to get started.'
@@ -1216,9 +1349,9 @@ const BusinessImagesPage: React.FC = () => {
                     captionEdits[img.id] ?? img.caption ?? '';
                   const altValue = altEdits[img.id] ?? img.alt_text ?? '';
                   const existingSubcategory =
-                    img.sub_category_id != null
+                    img.item_sub_category_id != null
                       ? subcategories.find(
-                          (sc) => sc.id === img.sub_category_id
+                          (sc) => sc.id === img.item_sub_category_id
                         )
                       : undefined;
                   const cardCategoryId =
@@ -1236,19 +1369,34 @@ const BusinessImagesPage: React.FC = () => {
                       : subcategories;
 
                   return (
-                    <Card key={img.id} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <Card
+                      key={img.id}
+                      elevation={0}
+                      sx={{
+                        borderRadius: 2,
+                        border: 1,
+                        borderColor: 'divider',
+                        overflow: 'hidden',
+                        transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                        '&:hover': {
+                          boxShadow: (theme) => theme.shadows[2],
+                          borderColor: 'action.hover',
+                        },
+                      }}
+                    >
                       <CardMedia
                         component="img"
-                        height="160"
+                        height="168"
                         image={img.image_url}
                         alt={img.alt_text || ''}
                         sx={{
                           objectFit: 'cover',
                           cursor: 'pointer',
+                          bgcolor: 'grey.100',
                         }}
                         onClick={() => setImageToView(img)}
                       />
-                      <CardContent sx={{ pb: 1 }}>
+                      <CardContent sx={{ pb: 1, pt: 1.5 }}>
                         <Stack spacing={1}>
                           <Stack
                             direction="row"
@@ -1291,6 +1439,18 @@ const BusinessImagesPage: React.FC = () => {
                               {new Date(img.created_at).toLocaleDateString()}
                             </Typography>
                           </Stack>
+
+                          {img.item_id && img.item && (
+                            <Alert severity="info" sx={{ py: 0.5 }}>
+                              <Typography variant="body2">
+                                {t('business.images.linkedItem', {
+                                  defaultValue: 'Linked: {{name}}',
+                                  name: img.item.name,
+                                })}
+                                {img.item.sku ? ` · SKU: ${img.item.sku}` : ''}
+                              </Typography>
+                            </Alert>
+                          )}
 
                           <FormControl fullWidth size="small">
                             <InputLabel>
@@ -1340,8 +1500,8 @@ const BusinessImagesPage: React.FC = () => {
                                 'Subcategory'
                               )}
                               value={
-                                img.sub_category_id != null
-                                  ? String(img.sub_category_id)
+                                img.item_sub_category_id != null
+                                  ? String(img.item_sub_category_id)
                                   : ''
                               }
                               onChange={(e) =>
@@ -1445,7 +1605,7 @@ const BusinessImagesPage: React.FC = () => {
                             variant="outlined"
                             startIcon={<SearchIcon />}
                             onClick={() => handleOpenAssociateDialog(img)}
-                            disabled={submitting}
+                            disabled={submitting || !!img.item_id}
                             fullWidth
                           >
                             {t(
@@ -1453,12 +1613,28 @@ const BusinessImagesPage: React.FC = () => {
                               'Associate item'
                             )}
                           </Button>
+                          {img.item_id && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              startIcon={<LinkOffIcon />}
+                              onClick={() => void handleDisassociateFromItem(img)}
+                              disabled={submitting}
+                              fullWidth
+                            >
+                              {t(
+                                'business.images.actions.disassociateItem',
+                                'Unlink from item'
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="small"
                             variant="outlined"
                             startIcon={<ImageIcon />}
                             onClick={() => handleOpenCreateFromImage(img)}
-                            disabled={submitting}
+                            disabled={submitting || !!img.item_id}
                             fullWidth
                           >
                             {t(
@@ -1524,8 +1700,11 @@ const BusinessImagesPage: React.FC = () => {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   mt: 2,
+                  pt: 2,
                   gap: 2,
                   flexWrap: 'wrap',
+                  borderTop: 1,
+                  borderColor: 'divider',
                 }}
               >
                 <Pagination

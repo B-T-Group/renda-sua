@@ -91,7 +91,11 @@ export class BusinessImagesController {
     schema: {
       type: 'object',
       properties: {
-        sub_category_id: { type: 'integer', nullable: true },
+        sub_category_id: {
+          type: 'integer',
+          nullable: true,
+          description: 'Maps to item_sub_category_id on item_images',
+        },
         images: {
           type: 'array',
           items: {
@@ -134,31 +138,44 @@ export class BusinessImagesController {
 
   @Post(':id/associate-item')
   @ApiOperation({
-    summary:
-      'Associate a business image with an item by tagging it with the item SKU',
+    summary: 'Link a library image to an existing item (sets item_id on item_images)',
   })
   @ApiResponse({ status: 200, description: 'Image associated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid SKU' })
+  @ApiResponse({ status: 400, description: 'Invalid item or already linked' })
   @ApiResponse({ status: 403, description: 'User has no business' })
-  @ApiResponse({ status: 404, description: 'Image not found' })
+  @ApiResponse({ status: 404, description: 'Image or item not found' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        sku: { type: 'string' },
+        item_id: { type: 'string', format: 'uuid' },
       },
-      required: ['sku'],
+      required: ['item_id'],
     },
   })
   async associateImageToItem(
     @Param('id') id: string,
-    @Body() body: { sku: string }
+    @Body() body: { item_id: string }
   ) {
     const businessId = await this.getBusinessIdOrThrow();
     await this.businessImagesService.associateImageToItem(
       businessId,
       id,
-      body.sku
+      body.item_id
+    );
+    return { success: true };
+  }
+
+  @Post(':id/disassociate-item')
+  @ApiOperation({
+    summary: 'Unlink image from item (keeps row in library; item_id set null)',
+  })
+  @ApiResponse({ status: 200, description: 'Image disassociated successfully' })
+  async disassociateImageFromItem(@Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow();
+    await this.businessImagesService.disassociateImageFromItem(
+      businessId,
+      id
     );
     return { success: true };
   }
@@ -175,7 +192,7 @@ export class BusinessImagesController {
     schema: {
       type: 'object',
       properties: {
-        sub_category_id: { type: 'integer', nullable: true },
+        item_sub_category_id: { type: 'integer', nullable: true },
         image_url: { type: 'string' },
         s3_key: { type: 'string', nullable: true },
         file_size: { type: 'number', nullable: true },
