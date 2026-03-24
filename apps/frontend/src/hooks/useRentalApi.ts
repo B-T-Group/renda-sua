@@ -162,6 +162,33 @@ export interface ClientRentalRequestRow {
   } | null;
 }
 
+export interface BusinessRentalScheduleRow {
+  id: string;
+  status: string;
+  start_at: string;
+  end_at: string;
+  total_amount: number;
+  currency: string;
+  rental_location_listing?: {
+    id: string;
+    business_location?: { id: string; name: string } | null;
+    rental_item?: { id: string; name: string } | null;
+  } | null;
+  rental_request?: {
+    id: string;
+    created_at: string;
+    client?: {
+      id: string;
+      user?: {
+        first_name?: string | null;
+        last_name?: string | null;
+        phone_number?: string | null;
+        email?: string | null;
+      } | null;
+    } | null;
+  } | null;
+}
+
 export function useRentalApi() {
   const api = useApiClient();
   const rentalCatalogGeo = useRentalCatalogGeoParams();
@@ -262,6 +289,23 @@ export function useRentalApi() {
     if (!data.success) return [];
     return data.data.requests ?? [];
   }, [api]);
+
+  const fetchBusinessRentalSchedule = useCallback(
+    async (rentalItemId: string): Promise<BusinessRentalScheduleRow[]> => {
+      if (!rentalItemId) {
+        return [];
+      }
+      const { data } = await api.get<{
+        success: boolean;
+        data: { schedule: BusinessRentalScheduleRow[] };
+      }>('/rentals/business/schedule', {
+        params: { rental_item_id: rentalItemId },
+      });
+      if (!data.success) return [];
+      return data.data.schedule ?? [];
+    },
+    [api]
+  );
 
   const createBusinessRentalItem = useCallback(
     async (body: {
@@ -397,6 +441,7 @@ export function useRentalApi() {
     fetchPublicRentalListing,
     fetchBusinessRentalRequests,
     fetchClientRentalRequests,
+    fetchBusinessRentalSchedule,
     createBusinessRentalItem,
     createBusinessRentalListing,
     createRequest,

@@ -413,6 +413,14 @@ export class RentalsService {
     return r.rental_requests ?? [];
   }
 
+  async getBusinessRentalSchedule(rentalItemId: string): Promise<any[]> {
+    await this.requireBusinessId();
+    const r = await this.hasuraUserService.executeQuery<{
+      rental_bookings: any[];
+    }>(Q.GET_BUSINESS_RENTAL_SCHEDULE, { rentalItemId });
+    return r.rental_bookings ?? [];
+  }
+
   async getClientRentalRequests(): Promise<ClientRentalRequestRow[]> {
     await this.requireClientId();
     const r = await this.hasuraUserService.executeQuery<{

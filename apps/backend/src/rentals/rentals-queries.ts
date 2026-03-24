@@ -612,6 +612,52 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
   }
 `;
 
+export const GET_BUSINESS_RENTAL_SCHEDULE = `
+  query GetBusinessRentalSchedule($rentalItemId: uuid) {
+    rental_bookings(
+      where: {
+        status: { _in: [proposed, confirmed, active, awaiting_return] }
+        rental_location_listing: {
+          rental_item_id: { _eq: $rentalItemId }
+        }
+      }
+      order_by: { start_at: asc }
+      limit: 500
+    ) {
+      id
+      status
+      start_at
+      end_at
+      total_amount
+      currency
+      rental_location_listing {
+        id
+        business_location {
+          id
+          name
+        }
+        rental_item {
+          id
+          name
+        }
+      }
+      rental_request {
+        id
+        created_at
+        client {
+          id
+          user {
+            first_name
+            last_name
+            phone_number
+            email
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const COUNT_ACTIVE_PROPOSED_BOOKINGS_FOR_LISTING = `
   query CountActiveProposedBookingsForListing($listingId: uuid!, $now: timestamptz!) {
     rental_bookings_aggregate(

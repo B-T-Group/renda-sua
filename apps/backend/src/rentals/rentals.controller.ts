@@ -151,6 +151,24 @@ export class RentalsController {
     return { success: true, data: { requests } };
   }
 
+  @Get('business/schedule')
+  @ApiOperation({
+    summary: 'List rental schedule bookings for a selected business rental item',
+  })
+  @ApiQuery({
+    name: 'rental_item_id',
+    required: true,
+    description: 'Rental item id to load schedule for',
+  })
+  @ApiResponse({ status: 200, description: 'Schedule returned' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  async getBusinessSchedule(@Query('rental_item_id') rentalItemId: string) {
+    const schedule = await this.rentalsService.getBusinessRentalSchedule(
+      rentalItemId
+    );
+    return { success: true, data: { schedule } };
+  }
+
   @Post('business/items')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a rental item for the current business' })

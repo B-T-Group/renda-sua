@@ -19,12 +19,20 @@ import {
   Typography,
 } from '@mui/material';
 import { Storefront } from '@mui/icons-material';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
-import { useRentalApi, type BusinessRentalItemRow, type BusinessRentalRequestRow } from '../../hooks/useRentalApi';
+import {
+  useRentalApi,
+  type BusinessRentalItemRow,
+  type BusinessRentalRequestRow,
+  type BusinessRentalScheduleRow,
+} from '../../hooks/useRentalApi';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import { BusinessRentalRespondDialog } from '../rentals/BusinessRentalRespondDialog';
 import { BusinessRentalRequestCard } from '../rentals/BusinessRentalRequestCard';
@@ -37,6 +45,37 @@ type WeeklyAvailabilitySlot = {
   start_time: string | null;
   end_time: string | null;
 };
+
+function dateKeyFromIso(iso?: string | null): string {
+  if (!iso) {
+    return '';
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return '';
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateTimeNoTimezone(iso?: string | null): string {
+  if (!iso) {
+    return '-';
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return iso;
+  }
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 const BusinessRentalsPage: React.FC = () => {
   const defaultWeeklyAvailability: WeeklyAvailabilitySlot[] = [
@@ -59,6 +98,7 @@ const BusinessRentalsPage: React.FC = () => {
     respondRequest,
     fetchBusinessRentalItems,
     fetchBusinessRentalRequests,
+    fetchBusinessRentalSchedule,
     createBusinessRentalItem,
     createBusinessRentalListing,
   } = useRentalApi();
@@ -85,6 +125,11 @@ const BusinessRentalsPage: React.FC = () => {
     req: BusinessRentalRequestRow;
     mode: 'available' | 'unavailable';
   } | null>(null);
+  const [scheduleItemId, setScheduleItemId] = useState('');
+  const [scheduleRows, setScheduleRows] = useState<BusinessRentalScheduleRow[]>(
+    []
+  );
+  const [selectedScheduleDay, setSelectedScheduleDay] = useState('');
   const sortedRequests = useMemo(
     () =>
       [...requests].sort((a, b) => {
@@ -93,6 +138,31 @@ const BusinessRentalsPage: React.FC = () => {
         return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
       }),
     [requests]
+  );
+  const scheduleEvents = useMemo(() => {
+    const dayCounts = new Map<string, number>();
+    scheduleRows.forEach((row) => {
+      const key = dateKeyFromIso(row.start_at);
+      if (!key) {
+        return;
+      }
+      dayCounts.set(key, (dayCounts.get(key) ?? 0) + 1);
+    });
+    return Array.from(dayCounts.entries()).map(([dayKey, count]) => ({
+      id: dayKey,
+      start: dayKey,
+      allDay: true,
+      title: t('business.rentals.scheduleCount', '{{count}} rental(s)', { count }),
+    }));
+  }, [scheduleRows, t]);
+  const scheduleRowsForSelectedDay = useMemo(
+    () =>
+      scheduleRows.filter(
+        (row) =>
+          selectedScheduleDay &&
+          dateKeyFromIso(row.start_at) === selectedScheduleDay
+      ),
+    [scheduleRows, selectedScheduleDay]
   );
 
   const loadItems = useCallback(async () => {
@@ -117,6 +187,29 @@ const BusinessRentalsPage: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [businessId, loadItems, loadRequests]);
+
+  useEffect(() => {
+    if (!scheduleItemId && items.length > 0) {
+      setScheduleItemId(items[0].id);
+    }
+  }, [items, scheduleItemId]);
+
+  useEffect(() => {
+    if (!scheduleItemId) {
+      setScheduleRows([]);
+      return;
+    }
+    fetchBusinessRentalSchedule(scheduleItemId)
+      .then((rows) => {
+        setScheduleRows(rows);
+        const firstDay = dateKeyFromIso(rows[0]?.start_at);
+        setSelectedScheduleDay(firstDay || '');
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load rental schedule', error);
+        setScheduleRows([]);
+      });
+  }, [fetchBusinessRentalSchedule, scheduleItemId]);
 
   const saveItem = async () => {
     if (!businessId || !cat) return;
@@ -213,6 +306,7 @@ const BusinessRentalsPage: React.FC = () => {
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
             <Tab label={t('business.rentals.catalogTab', 'Catalog')} />
             <Tab label={t('business.rentals.requestsTab', 'Requests')} />
+            <Tab label={t('business.rentals.myScheduleTab', 'MySchedule')} />
           </Tabs>
         {tab === 0 && (
           <Box sx={{ px: { xs: 1, md: 0.5 }, pb: { xs: 1, md: 0.5 } }}>
@@ -347,6 +441,143 @@ const BusinessRentalsPage: React.FC = () => {
                 onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
               />
             ))}
+          </Box>
+        )}
+        {tab === 2 && (
+          <Box sx={{ px: { xs: 1, md: 0.5 }, pb: { xs: 1, md: 0.5 } }}>
+            <Autocomplete
+              fullWidth
+              sx={{ mb: 2 }}
+              options={items}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              value={items.find((it) => it.id === scheduleItemId) ?? null}
+              onChange={(_, option) => setScheduleItemId(option?.id ?? '')}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t(
+                    'business.rentals.scheduleItemSelect',
+                    'Select rental item'
+                  )}
+                />
+              )}
+            />
+            {!scheduleItemId ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: 1,
+                  borderColor: 'divider',
+                  textAlign: 'center',
+                  bgcolor: 'background.default',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    'business.rentals.scheduleSelectPrompt',
+                    'Select a rental item to view its schedule.'
+                  )}
+                </Typography>
+              </Paper>
+            ) : (
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={2}
+                alignItems="stretch"
+              >
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: 1,
+                    borderColor: 'divider',
+                    flex: { xs: '1 1 auto', md: '0 0 58%' },
+                    minWidth: 0,
+                  }}
+                >
+                  <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    height="auto"
+                    events={scheduleEvents}
+                    eventDisplay="block"
+                    dateClick={(info: { dateStr: string }) =>
+                      setSelectedScheduleDay(info.dateStr)
+                    }
+                  />
+                </Paper>
+
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: 1,
+                    borderColor: 'divider',
+                    flex: { xs: '1 1 auto', md: '1 1 42%' },
+                    minWidth: 0,
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {t('business.rentals.scheduleDetailsTitle', 'Day details')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    {selectedScheduleDay || t('business.rentals.scheduleNoDay', 'No day selected')}
+                  </Typography>
+                  {scheduleRowsForSelectedDay.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {t(
+                        'business.rentals.scheduleNoRentalsForDay',
+                        'No rentals found for this day.'
+                      )}
+                    </Typography>
+                  ) : (
+                    scheduleRowsForSelectedDay.map((row) => {
+                      const clientUser = row.rental_request?.client?.user;
+                      const clientName = `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`.trim();
+                      return (
+                        <Box
+                          key={row.id}
+                          sx={{
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 1.5,
+                            p: 1.5,
+                            mb: 1.25,
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {formatDateTimeNoTimezone(row.start_at)} {'->'}{' '}
+                            {formatDateTimeNoTimezone(row.end_at)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                            {t('common.status', 'Status')}: {row.status}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            {t('business.rentals.location', 'Location')}:{' '}
+                            {row.rental_location_listing?.business_location?.name || '-'}
+                          </Typography>
+                          {clientName ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {t('business.rentals.client', 'Client')}: {clientName}
+                            </Typography>
+                          ) : null}
+                          {clientUser?.phone_number ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {t('common.phone', 'Phone')}: {clientUser.phone_number}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      );
+                    })
+                  )}
+                </Paper>
+              </Stack>
+            )}
           </Box>
         )}
         </Paper>
