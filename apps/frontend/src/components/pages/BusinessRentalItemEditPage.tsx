@@ -1,4 +1,7 @@
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import {
+  ArrowBack as ArrowBackIcon,
+  Visibility as VisibilityIcon,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -27,6 +30,7 @@ import {
 } from '../../hooks/useRentalApi';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import LoadingPage from '../common/LoadingPage';
+import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 
 interface ListingFormState {
@@ -294,6 +298,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
           <Button component={RouterLink} to="/business/rental-images" variant="text">
             {t('business.rentals.manageImages', 'Manage images')}
           </Button>
+          <Button
+            component={RouterLink}
+            to={`/business/rentals/items/${item.id}`}
+            variant="text"
+            startIcon={<VisibilityIcon />}
+          >
+            {t('business.rentals.preview', 'Preview')}
+          </Button>
         </Stack>
 
         <Typography variant="h4" gutterBottom>
@@ -305,20 +317,55 @@ const BusinessRentalItemEditPage: React.FC = () => {
             {t('business.rentals.editItemSection', 'Rental details')}
           </Typography>
           <Stack spacing={2}>
+            {item.rental_item_images?.[0]?.image_url ? (
+              <Box
+                component="img"
+                src={item.rental_item_images[0].image_url}
+                alt={item.name}
+                sx={{
+                  width: '100%',
+                  maxHeight: 260,
+                  objectFit: 'cover',
+                  borderRadius: 1.5,
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  borderRadius: 1.5,
+                  border: 1,
+                  borderColor: 'divider',
+                  p: 2,
+                  textAlign: 'center',
+                  bgcolor: 'action.hover',
+                }}
+              >
+                <Typography color="text.secondary">
+                  {t('rentals.noImage', 'No image')}
+                </Typography>
+              </Box>
+            )}
             <TextField
               label={t('common.name', 'Name')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               fullWidth
             />
-            <TextField
-              label={t('common.description', 'Description')}
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
-            />
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.75 }}>
+                {t('common.description', 'Description')}
+              </Typography>
+              <RichTextEditor
+                value={desc}
+                onChange={setDesc}
+                placeholder={t(
+                  'business.rentals.descriptionPlaceholder',
+                  'Describe your rental item with highlights, usage notes, and what is included.'
+                )}
+              />
+            </Box>
             <FormControl fullWidth>
               <InputLabel>{t('rentals.category', 'Category')}</InputLabel>
               <Select

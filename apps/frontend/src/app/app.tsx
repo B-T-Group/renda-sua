@@ -28,6 +28,7 @@ import BusinessImagesPage from '../components/pages/BusinessImagesPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import BusinessRentalItemEditPage from '../components/pages/BusinessRentalItemEditPage';
+import BusinessRentalItemViewPage from '../components/pages/BusinessRentalItemViewPage';
 import BusinessRentalsPage from '../components/pages/BusinessRentalsPage';
 import RentalItemImagesPage from '../components/pages/RentalItemImagesPage';
 import CartPage from '../components/pages/CartPage';
@@ -462,6 +463,14 @@ function App() {
             />
             <Route
               path="/business/rentals/items/:itemId"
+              element={
+                <ProtectedRoute>
+                  <BusinessRentalItemViewPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals/items/:itemId/edit"
               element={
                 <ProtectedRoute>
                   <BusinessRentalItemEditPage />

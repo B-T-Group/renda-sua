@@ -398,13 +398,22 @@ const BusinessRentalsPage: React.FC = () => {
                     <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                       <Chip size="small" label={`${t('business.rentals.listingsCount', 'Listings')}: ${it.rental_location_listings?.length ?? 0}`} />
                     </Stack>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => navigate(`/business/rentals/items/${it.id}`)}
-                    >
-                      {t('business.rentals.edit', 'Edit')}
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => navigate(`/business/rentals/items/${it.id}`)}
+                      >
+                        {t('business.rentals.preview', 'Preview')}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/business/rentals/items/${it.id}/edit`)}
+                      >
+                        {t('business.rentals.edit', 'Edit')}
+                      </Button>
+                    </Stack>
                   </Box>
                 </Box>
               );
