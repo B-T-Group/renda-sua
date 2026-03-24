@@ -132,7 +132,7 @@ const Header: React.FC = () => {
         { label: t('common.items', 'Items'), path: '/business/items', icon: <Assignment /> },
         {
           label: t('business.dashboard.rentalsTitle', 'Rentals'),
-          path: '/business/rentals',
+          path: '/business/rentals/catalog',
           icon: <Assignment />,
         },
         {

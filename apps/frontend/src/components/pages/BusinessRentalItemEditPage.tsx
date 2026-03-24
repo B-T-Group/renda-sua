@@ -274,7 +274,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
       <Box sx={{ p: 2 }}>
         <Button
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/business/rentals')}
+          onClick={() => navigate('/business/rentals/catalog')}
           sx={{ mb: 2 }}
         >
           {t('business.rentals.backToCatalog', 'Back to rentals')}
@@ -291,7 +291,7 @@ const BusinessRentalItemEditPage: React.FC = () => {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
           <Button
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/business/rentals')}
+            onClick={() => navigate('/business/rentals/catalog')}
           >
             {t('business.rentals.backToCatalog', 'Back to rentals')}
           </Button>

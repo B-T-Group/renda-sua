@@ -29,7 +29,10 @@ import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
 import BusinessRentalItemEditPage from '../components/pages/BusinessRentalItemEditPage';
 import BusinessRentalItemViewPage from '../components/pages/BusinessRentalItemViewPage';
+import BusinessRentalsCatalogPage from '../components/pages/BusinessRentalsCatalogPage';
 import BusinessRentalsPage from '../components/pages/BusinessRentalsPage';
+import BusinessRentalsRequestsPage from '../components/pages/BusinessRentalsRequestsPage';
+import BusinessRentalsSchedulePage from '../components/pages/BusinessRentalsSchedulePage';
 import RentalItemImagesPage from '../components/pages/RentalItemImagesPage';
 import CartPage from '../components/pages/CartPage';
 import ClientRentalRequestsPage from '../components/pages/ClientRentalRequestsPage';
@@ -458,6 +461,30 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessImagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals/catalog"
+              element={
+                <ProtectedRoute>
+                  <BusinessRentalsCatalogPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals/requests"
+              element={
+                <ProtectedRoute>
+                  <BusinessRentalsRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/rentals/schedule"
+              element={
+                <ProtectedRoute>
+                  <BusinessRentalsSchedulePage />
                 </ProtectedRoute>
               }
             />

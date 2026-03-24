@@ -5,13 +5,15 @@ import {
   Business as BizIcon,
   Label as BrandIcon,
   Category as CategoryIcon,
+  CalendarMonth as RentalCalendarIcon,
   Description as DocumentsIcon,
   Error as ErrorIcon,
+  Inbox as RentalInboxIcon,
   Inventory2 as ItemsIcon,
-  Handshake as RentalsIcon,
   LocationOn as LocationsIcon,
   Assignment as OrdersIcon,
   Settings as SettingsIcon,
+  Storefront as RentalCatalogIcon,
   Group as UsersIcon,
   Image as ImageIcon,
   Public as PublicIcon,
@@ -123,15 +125,37 @@ const BusinessDashboard: React.FC = () => {
 
   const rentalModules: BusinessDashboardModule[] = [
     {
-      title: t('business.dashboard.rentalsTitle', 'Rentals'),
+      title: t('business.dashboard.rentalCatalogModule', 'Rental catalog'),
       description: t(
-        'business.dashboard.rentalsDescription',
-        'Manage rental catalog, location listings, and client requests.'
+        'business.dashboard.rentalCatalogModuleDescription',
+        'Rental items, listings per location, preview and edit.'
       ),
-      icon: <RentalsIcon sx={{ fontSize: 40 }} />,
+      icon: <RentalCatalogIcon sx={{ fontSize: 40 }} />,
       count: null,
       color: '#00695c',
-      path: '/business/rentals',
+      path: '/business/rentals/catalog',
+    },
+    {
+      title: t('business.dashboard.rentalRequestsModule', 'Rental requests'),
+      description: t(
+        'business.dashboard.rentalRequestsModuleDescription',
+        'Incoming client requests and responses.'
+      ),
+      icon: <RentalInboxIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00796b',
+      path: '/business/rentals/requests',
+    },
+    {
+      title: t('business.dashboard.rentalScheduleModule', 'Rental schedule'),
+      description: t(
+        'business.dashboard.rentalScheduleModuleDescription',
+        'Calendar of bookings by rental item.'
+      ),
+      icon: <RentalCalendarIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#004d40',
+      path: '/business/rentals/schedule',
     },
     {
       title: t(
