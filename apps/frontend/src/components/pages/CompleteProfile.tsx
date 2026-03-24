@@ -1,11 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
   ArrowForward,
-  Business,
   CameraAlt as CameraAltIcon,
   LocationOn,
-  LocalShipping,
-  Person,
   Save,
 } from '@mui/icons-material';
 import {
@@ -46,14 +43,15 @@ import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 import { useUserTypes } from '../../hooks/useUserTypes';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
+import {
+  type SignupGoalId,
+  SignupGoalIllustration,
+} from '../onboarding/SignupGoalIllustration';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
-const SIGNUP_COUNTRIES = [
-  { code: 'CM', name: 'Cameroon' },
-  { code: 'GA', name: 'Gabon' },
-];
+const SIGNUP_COUNTRY_CODES = ['CM', 'GA'] as const;
 
 interface ProfileData {
   first_name: string;
@@ -61,6 +59,8 @@ interface ProfileData {
   email: string;
   phone_number: string;
   user_type_id: string;
+  /** Selected onboarding goal; drives user type + business main_interest */
+  signup_goal: SignupGoalId | '';
   address: {
     address_line_1: string;
     country: string;
@@ -70,12 +70,40 @@ interface ProfileData {
   profile: {
     vehicle_type_id?: string;
     name?: string;
+    main_interest?: 'sell_items' | 'rent_items';
   };
   referral_agent_code?: string;
 }
 
-const BASE_STEPS = ['Choose Persona', 'Address', 'Personal Information', 'Review & Submit'];
-const AGENT_STEPS = ['Choose Persona', 'Address', 'Personal Information', 'ID Document (optional)', 'Review & Submit'];
+const SIGNUP_GOAL_ORDER: SignupGoalId[] = [
+  'browse_buy',
+  'rent_and_earn',
+  'sell_items',
+  'delivery_agent',
+];
+
+/** English fallbacks when a translation key is missing */
+const SIGNUP_GOAL_FALLBACKS: Record<
+  SignupGoalId,
+  { title: string; description: string }
+> = {
+  browse_buy: {
+    title: 'I want to browse and buy items',
+    description: 'Shop from businesses and enjoy delivery to your door.',
+  },
+  rent_and_earn: {
+    title: 'I have items I want to rent and make money',
+    description: 'List rentals, manage bookings, and grow rental income.',
+  },
+  sell_items: {
+    title: 'I sell items',
+    description: 'Run your store, catalog, orders, and locations in one place.',
+  },
+  delivery_agent: {
+    title: 'I am a delivery agent',
+    description: 'Pick up and deliver orders, track routes, and get paid.',
+  },
+};
 
 const StepIconWrapper: React.FC<{
   completed?: boolean;
@@ -100,30 +128,6 @@ const StepIconWrapper: React.FC<{
   </Box>
 );
 
-const personaOptions = [
-  {
-    id: 'client',
-    title: 'Client',
-    description: 'I order items',
-    icon: <Person sx={{ fontSize: 40 }} />,
-    color: '#1976d2',
-  },
-  {
-    id: 'agent',
-    title: 'Agent',
-    description: 'I deliver items',
-    icon: <LocalShipping sx={{ fontSize: 40 }} />,
-    color: '#388e3c',
-  },
-  {
-    id: 'business',
-    title: 'Business',
-    description: 'I manage items and orders',
-    icon: <Business sx={{ fontSize: 40 }} />,
-    color: '#f57c00',
-  },
-];
-
 const CompleteProfile: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -144,6 +148,7 @@ const CompleteProfile: React.FC = () => {
     email: user?.email || '',
     phone_number: '',
     user_type_id: '',
+    signup_goal: '',
     address: {
       address_line_1: '',
       country: '',
@@ -159,10 +164,16 @@ const CompleteProfile: React.FC = () => {
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const idDocumentInputRef = useRef<HTMLInputElement>(null);
 
-  const steps = useMemo(
-    () => (profileData.user_type_id === 'agent' ? AGENT_STEPS : BASE_STEPS),
-    [profileData.user_type_id]
-  );
+  const steps = useMemo(() => {
+    const s1 = t('completeProfile.step.whatBringsYou', 'What brings you here');
+    const s2 = t('completeProfile.step.address', 'Address');
+    const s3 = t('completeProfile.step.personal', 'Personal information');
+    const s4 = t('completeProfile.step.review', 'Review & submit');
+    const sId = t('completeProfile.step.idDocument', 'ID document (optional)');
+    return profileData.user_type_id === 'agent'
+      ? [s1, s2, s3, sId, s4]
+      : [s1, s2, s3, s4];
+  }, [profileData.user_type_id, t]);
   const isAgent = profileData.user_type_id === 'agent';
 
   const { documentTypes } = useDocumentManagement();
@@ -234,11 +245,44 @@ const CompleteProfile: React.FC = () => {
       });
     };
 
-  const handlePersonaSelect = (userTypeId: string) => {
-    setProfileData({
-      ...profileData,
-      user_type_id: userTypeId,
-      profile: {},
+  const handleGoalSelect = (goalId: SignupGoalId) => {
+    setProfileData((prev) => {
+      if (goalId === 'browse_buy') {
+        return {
+          ...prev,
+          signup_goal: goalId,
+          user_type_id: 'client',
+          profile: {},
+        };
+      }
+      if (goalId === 'delivery_agent') {
+        return {
+          ...prev,
+          signup_goal: goalId,
+          user_type_id: 'agent',
+          profile: {},
+        };
+      }
+      if (goalId === 'rent_and_earn') {
+        return {
+          ...prev,
+          signup_goal: goalId,
+          user_type_id: 'business',
+          profile: {
+            ...prev.profile,
+            main_interest: 'rent_items',
+          },
+        };
+      }
+      return {
+        ...prev,
+        signup_goal: goalId,
+        user_type_id: 'business',
+        profile: {
+          ...prev.profile,
+          main_interest: 'sell_items',
+        },
+      };
     });
   };
 
@@ -264,7 +308,12 @@ const CompleteProfile: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!apiClient) {
-      setError('API client not available');
+      setError(
+        t(
+          'completeProfile.errors.apiClientUnavailable',
+          'Something went wrong loading the app. Please refresh the page.'
+        )
+      );
       return;
     }
 
@@ -278,7 +327,12 @@ const CompleteProfile: React.FC = () => {
       }>('/users', profileData);
 
       if (!createResponse?.success || !createResponse?.user?.id) {
-        throw new Error('Failed to create user');
+        throw new Error(
+          t(
+            'completeProfile.errors.createUserFailed',
+            'We could not create your account. Please try again.'
+          )
+        );
       }
       const userId = createResponse.user.id;
 
@@ -330,7 +384,11 @@ const CompleteProfile: React.FC = () => {
         navigate('/app');
       }, 2000);
     } catch (err: unknown) {
-      let errorMessage = 'Failed to create user. Please try again.';
+      const genericMessage = t(
+        'completeProfile.errors.createUserGeneric',
+        'Failed to complete your profile. Please try again.'
+      );
+      let errorMessage = genericMessage;
 
       if (err && typeof err === 'object' && 'response' in err) {
         const response = (err as { response?: { data?: { error?: string } } })
@@ -338,6 +396,8 @@ const CompleteProfile: React.FC = () => {
         if (response?.data?.error) {
           errorMessage = response.data.error;
         }
+      } else if (err instanceof Error && err.message) {
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
@@ -349,7 +409,7 @@ const CompleteProfile: React.FC = () => {
   const isStepValid = (step: number) => {
     switch (step) {
       case 0:
-        return profileData.user_type_id !== '';
+        return profileData.signup_goal !== '';
       case 1: {
         const a = profileData.address;
         return !!(
@@ -366,7 +426,11 @@ const CompleteProfile: React.FC = () => {
           profileData.user_type_id;
 
         if (profileData.user_type_id === 'business') {
-          return hasRequiredFields && profileData.profile.name;
+          return (
+            hasRequiredFields &&
+            !!profileData.profile.name &&
+            !!profileData.profile.main_interest
+          );
         }
 
         return hasRequiredFields;
@@ -376,10 +440,6 @@ const CompleteProfile: React.FC = () => {
     }
   };
 
-  const getSelectedPersona = () => {
-    return personaOptions.find((p) => p.id === profileData.user_type_id);
-  };
-
   const handleStepClick = (step: number) => {
     if (step < activeStep || (step === activeStep + 1 && isStepValid(activeStep))) {
       setActiveStep(step);
@@ -387,7 +447,12 @@ const CompleteProfile: React.FC = () => {
   };
 
   const renderReviewContent = () => {
-    const selectedPersona = getSelectedPersona();
+    const goalTitle = profileData.signup_goal
+      ? t(
+          `completeProfile.signupGoals.${profileData.signup_goal}.title`,
+          SIGNUP_GOAL_FALLBACKS[profileData.signup_goal].title
+        )
+      : '';
     return (
       <Box
         sx={{
@@ -401,8 +466,10 @@ const CompleteProfile: React.FC = () => {
         </Typography>
         <Paper sx={{ p: { xs: 1.25, sm: 2 }, bgcolor: 'grey.50' }}>
           <Typography variant="body2" gutterBottom>
-            <strong>Name:</strong> {profileData.first_name}{' '}
-            {profileData.last_name}
+            <strong>
+              {t('completeProfile.review.labels.fullName', 'Full name')}:
+            </strong>{' '}
+            {profileData.first_name} {profileData.last_name}
           </Typography>
           <Typography
             variant="body2"
@@ -412,50 +479,108 @@ const CompleteProfile: React.FC = () => {
               overflowWrap: 'anywhere',
             }}
           >
-            <strong>Email:</strong>{' '}
-            {profileData.email || 'Not provided'}
+            <strong>{t('completeProfile.review.labels.email', 'Email')}:</strong>{' '}
+            {profileData.email ||
+              t('completeProfile.review.notProvided', 'Not provided')}
           </Typography>
           <Typography
             variant="body2"
             gutterBottom
             sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
           >
-            <strong>Phone Number:</strong>{' '}
-            {profileData.phone_number || 'Not provided'}
+            <strong>
+              {t('completeProfile.review.labels.phoneNumber', 'Phone number')}:
+            </strong>{' '}
+            {profileData.phone_number ||
+              t('completeProfile.review.notProvided', 'Not provided')}
           </Typography>
           <Typography variant="body2" gutterBottom>
-            <strong>Persona:</strong> {selectedPersona?.title}
+            <strong>
+              {t('completeProfile.reviewYourGoal', 'Your goal')}:
+            </strong>{' '}
+            {goalTitle}
           </Typography>
           {profileData.user_type_id === 'business' &&
             profileData.profile.name && (
               <Typography variant="body2" gutterBottom>
-                <strong>Business Name:</strong> {profileData.profile.name}
+                <strong>
+                  {t(
+                    'completeProfile.review.labels.businessName',
+                    'Business name'
+                  )}
+                  :
+                </strong>{' '}
+                {profileData.profile.name}
+              </Typography>
+            )}
+          {profileData.user_type_id === 'business' &&
+            profileData.profile.main_interest && (
+              <Typography variant="body2" gutterBottom>
+                <strong>
+                  {t('completeProfile.reviewMainInterest', 'Focus')}:
+                </strong>{' '}
+                {profileData.profile.main_interest === 'rent_items'
+                  ? t(
+                      'completeProfile.mainInterest.rentItems',
+                      'Renting out items'
+                    )
+                  : t(
+                      'completeProfile.mainInterest.sellItems',
+                      'Selling products'
+                    )}
               </Typography>
             )}
           {isAgent && (
             <>
               {profilePictureFile && (
                 <Typography variant="body2" gutterBottom>
-                  <strong>Profile picture:</strong> {t('completeProfile.added', 'Added')}
+                  <strong>
+                    {t(
+                      'completeProfile.review.labels.profilePicture',
+                      'Profile picture'
+                    )}
+                    :
+                  </strong>{' '}
+                  {t('completeProfile.added', 'Added')}
                 </Typography>
               )}
               {(idDocumentFile && idDocumentTypeId) ? (
                 <Typography variant="body2" gutterBottom>
-                  <strong>ID document:</strong> {t('completeProfile.added', 'Added')}
+                  <strong>
+                    {t(
+                      'completeProfile.review.labels.idDocument',
+                      'ID document'
+                    )}
+                    :
+                  </strong>{' '}
+                  {t('completeProfile.added', 'Added')}
                 </Typography>
               ) : (
                 <Typography variant="body2" gutterBottom color="text.secondary">
-                  <strong>ID document:</strong> {t('completeProfile.skipped', 'Skipped')}
+                  <strong>
+                    {t(
+                      'completeProfile.review.labels.idDocument',
+                      'ID document'
+                    )}
+                    :
+                  </strong>{' '}
+                  {t('completeProfile.skipped', 'Skipped')}
                 </Typography>
               )}
             </>
           )}
           <Typography variant="body2" gutterBottom>
-            <strong>Address:</strong>{' '}
+            <strong>
+              {t('completeProfile.review.labels.address', 'Address')}:
+            </strong>{' '}
             {profileData.address.address_line_1},{' '}
             {profileData.address.city}, {profileData.address.state},{' '}
-            {SIGNUP_COUNTRIES.find((c) => c.code === profileData.address.country)?.name ||
-              profileData.address.country}
+            {profileData.address.country
+              ? t(
+                  `completeProfile.countries.${profileData.address.country}`,
+                  profileData.address.country
+                )
+              : ''}
           </Typography>
         </Paper>
       </Box>
@@ -474,50 +599,77 @@ const CompleteProfile: React.FC = () => {
             }}
           >
             <Typography variant="h6" gutterBottom>
-              {t('completeProfile.choosePersona', 'Choose Your Persona')}
+              {t(
+                'completeProfile.whatBringsYouTitle',
+                'What brings you here today?'
+              )}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t('completeProfile.choosePersonaHint', 'Select the type of account you want to create')}
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {t(
+                'completeProfile.whatBringsYouHint',
+                'Pick the option that fits you best—we will set up the right account type.'
+              )}
             </Typography>
 
             <Box
               sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', md: 'row' },
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                },
                 gap: { xs: 1.5, sm: 2 },
               }}
             >
-              {personaOptions.map((persona) => (
-                <Box key={persona.id} sx={{ flex: 1 }}>
+              {SIGNUP_GOAL_ORDER.map((goalId) => {
+                const titleKey = `completeProfile.signupGoals.${goalId}.title`;
+                const descKey = `completeProfile.signupGoals.${goalId}.description`;
+                const colors: Record<SignupGoalId, string> = {
+                  browse_buy: theme.palette.primary.main,
+                  rent_and_earn: '#00897b',
+                  sell_items: '#f57c00',
+                  delivery_agent: '#388e3c',
+                };
+                const accent = colors[goalId];
+                const selected = profileData.signup_goal === goalId;
+                return (
                   <Card
+                    key={goalId}
                     sx={{
                       cursor: 'pointer',
-                      border: profileData.user_type_id === persona.id ? 2 : 1,
-                      borderColor:
-                        profileData.user_type_id === persona.id
-                          ? persona.color
-                          : 'divider',
+                      border: selected ? 2 : 1,
+                      borderColor: selected ? accent : 'divider',
+                      transition: 'box-shadow 0.2s, border-color 0.2s',
                       '&:hover': {
-                        borderColor: persona.color,
-                        boxShadow: 2,
+                        borderColor: accent,
+                        boxShadow: 3,
                       },
                     }}
-                    onClick={() => handlePersonaSelect(persona.id)}
+                    onClick={() => handleGoalSelect(goalId)}
                   >
-                    <CardContent sx={{ textAlign: 'center', py: 3 }}>
-                      <Box sx={{ color: persona.color, mb: 2 }}>
-                        {persona.icon}
+                    <CardContent
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        py: { xs: 2, sm: 2.5 },
+                        px: 1.5,
+                      }}
+                    >
+                      <Box sx={{ width: '100%', maxWidth: 120, mb: 1.5 }}>
+                        <SignupGoalIllustration goalId={goalId} accent={accent} />
                       </Box>
-                      <Typography variant="h6" gutterBottom>
-                        {persona.title}
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        {t(titleKey, SIGNUP_GOAL_FALLBACKS[goalId].title)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {persona.description}
+                        {t(descKey, SIGNUP_GOAL_FALLBACKS[goalId].description)}
                       </Typography>
                     </CardContent>
                   </Card>
-                </Box>
-              ))}
+                );
+              })}
             </Box>
           </Box>
         );
@@ -556,9 +708,9 @@ const CompleteProfile: React.FC = () => {
                 label={t('completeProfile.country', 'Country')}
                 onChange={(e) => handleAddressChange('country', e.target.value)}
               >
-                {SIGNUP_COUNTRIES.map((c) => (
-                  <MenuItem key={c.code} value={c.code}>
-                    {c.name}
+                {SIGNUP_COUNTRY_CODES.map((code) => (
+                  <MenuItem key={code} value={code}>
+                    {t(`completeProfile.countries.${code}`, code)}
                   </MenuItem>
                 ))}
               </Select>
@@ -689,15 +841,21 @@ const CompleteProfile: React.FC = () => {
                   phone_number: value || '',
                 })
               }
-              label="Phone Number"
-              helperText="This phone number should be your mobile money phone number and will be used for payments associated with your account."
+              label={t('completeProfile.phone.label', 'Phone number')}
+              helperText={t(
+                'completeProfile.phone.helper',
+                'Use the mobile number for your mobile money account; it will be used for payments on this account.'
+              )}
               required
               useDevPhoneDropdown
             />
 
             {profileData.user_type_id === 'business' && (
               <TextField
-                label="Business Name"
+                label={t(
+                  'completeProfile.businessNameLabel',
+                  'Business name'
+                )}
                 value={profileData.profile.name || ''}
                 onChange={handleProfileChange('name')}
                 fullWidth
@@ -873,7 +1031,7 @@ const CompleteProfile: React.FC = () => {
             {typesError}
           </Alert>
           <Button variant="contained" onClick={() => window.location.reload()}>
-            Retry
+            {t('common.retry', 'Retry')}
           </Button>
         </Paper>
       </Box>
@@ -904,11 +1062,13 @@ const CompleteProfile: React.FC = () => {
             <Logo variant="default" size="large" />
           </Box>
           <Typography variant="h5" component="h1" gutterBottom>
-            Profile Complete!
+            {t('completeProfile.successTitle', 'Profile complete')}
           </Typography>
           <Typography variant="body1" color="text.secondary" paragraph>
-            Your profile has been successfully created. Redirecting to
-            dashboard...
+            {t(
+              'completeProfile.successMessage',
+              'Your profile was created successfully. Redirecting to your dashboard…'
+            )}
           </Typography>
           <CircularProgress size={24} />
         </Paper>
@@ -950,6 +1110,7 @@ const CompleteProfile: React.FC = () => {
           <Step key={index}>
             <StepButton
               onClick={() => handleStepClick(index)}
+              aria-label={steps[index]}
               icon={
                 <StepIconWrapper
                   completed={index < activeStep}
@@ -971,7 +1132,7 @@ const CompleteProfile: React.FC = () => {
   const navButtons = (
     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
       <Button disabled={activeStep === 0} onClick={handleBack}>
-        Back
+        {t('common.back', 'Back')}
       </Button>
       <Box>
         {activeStep === steps.length - 1 ? (
@@ -990,7 +1151,7 @@ const CompleteProfile: React.FC = () => {
             disabled={!isStepValid(activeStep) || typesLoading}
             endIcon={<ArrowForward />}
           >
-            Next
+            {t('common.next', 'Next')}
           </Button>
         )}
       </Box>
@@ -1015,7 +1176,7 @@ const CompleteProfile: React.FC = () => {
         >
           <Box sx={{ flexShrink: 0, px: 2, pt: 2, pb: 1 }}>
             <Button onClick={activeStep === 0 ? () => navigate(-1) : handleBack} size="small">
-              Back
+              {t('common.back', 'Back')}
             </Button>
           </Box>
           <Box
@@ -1047,7 +1208,7 @@ const CompleteProfile: React.FC = () => {
                 variant="outlined"
                 fullWidth
               >
-                Back
+                {t('common.back', 'Back')}
               </Button>
               {activeStep === steps.length - 1 ? (
                 <Button
@@ -1067,7 +1228,7 @@ const CompleteProfile: React.FC = () => {
                   endIcon={<ArrowForward />}
                   fullWidth
                 >
-                  Next
+                  {t('common.next', 'Next')}
                 </Button>
               )}
             </Box>

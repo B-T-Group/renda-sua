@@ -845,7 +845,7 @@ export class HasuraSystemService {
       phone_number?: string;
       user_type_id: string;
     },
-    businessData: { name: string }
+    businessData: { name: string; main_interest?: 'sell_items' | 'rent_items' }
   ): Promise<{ user: any; business: any }> {
     const mutation = `
       mutation CreateUserWithBusiness(
@@ -855,7 +855,8 @@ export class HasuraSystemService {
         $last_name: String!, 
         $phone_number: String,
         $user_type_id: user_types_enum!,
-        $business_name: String!
+        $business_name: String!,
+        $main_interest: business_main_interest_enum!
       ) {
         insert_users_one(object: {
           identifier: $identifier,
@@ -867,6 +868,7 @@ export class HasuraSystemService {
           business: {
             data: {
               name: $business_name
+              main_interest: $main_interest
             }
           }
         }) {
@@ -885,6 +887,7 @@ export class HasuraSystemService {
             id
             user_id
             name
+            main_interest
             is_admin
             is_verified
             created_at
@@ -902,6 +905,7 @@ export class HasuraSystemService {
       phone_number: userData.phone_number,
       user_type_id: userData.user_type_id,
       business_name: businessData.name,
+      main_interest: businessData.main_interest ?? 'sell_items',
     });
 
     const user = result.insert_users_one;
@@ -925,6 +929,7 @@ export class HasuraSystemService {
         id: business.id,
         user_id: business.user_id,
         name: business.name,
+        main_interest: business.main_interest,
         is_admin: business.is_admin,
         is_verified: business.is_verified,
         created_at: business.created_at,

@@ -2,6 +2,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Login } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface LoginButtonProps {
   /** Use light/outlined style for use on a dark header */
@@ -9,6 +10,7 @@ interface LoginButtonProps {
 }
 
 const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
+  const { t } = useTranslation();
   const { loginWithRedirect, isAuthenticated } = useAuth0();
 
   const handleLogin = () => {
@@ -30,6 +32,8 @@ const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
       sx={{
         px: 3,
         py: 1,
+        mx: { xs: 0.75, sm: 1.25 },
+        my: { xs: 0.5, sm: 0 },
         fontSize: '1rem',
         fontWeight: 600,
         ...(inverted && {
@@ -42,7 +46,7 @@ const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
         }),
       }}
     >
-      Sign In
+      {t('auth.signIn', 'Sign In')}
     </Button>
   );
 };

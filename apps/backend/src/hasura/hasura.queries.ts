@@ -53,6 +53,7 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         is_internal
         onboarding_complete
         status
+        agent_code
         created_at
         updated_at
       }
@@ -60,23 +61,12 @@ export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
         id
         user_id
         name
+        main_interest
         is_admin
         is_verified
         image_cleanup_enabled
         created_at
         updated_at
-      }
-      agent {
-        id
-        user_id
-        vehicle_type_id
-        is_verified
-        is_internal
-        onboarding_complete
-        status
-        created_at
-        updated_at
-        agent_code
       }
     }
   }

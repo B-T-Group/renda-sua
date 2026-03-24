@@ -442,7 +442,8 @@
       "resending": "Envoi en cours..."
     },
     "logout": "Déconnexion",
-    "profile": "Profil"
+    "profile": "Profil",
+    "signIn": "Se connecter"
   },
   "completeProfile": {
     "added": "Ajouté",
@@ -452,6 +453,39 @@
     "city": "Ville",
     "choosePersona": "Choisissez Votre Profil",
     "choosePersonaHint": "Sélectionnez le type de compte que vous souhaitez créer",
+    "whatBringsYouTitle": "Qu'est-ce qui vous amène ici aujourd'hui ?",
+    "whatBringsYouHint": "Choisissez l'option qui vous correspond — nous configurerons le bon type de compte.",
+    "reviewYourGoal": "Votre objectif",
+    "reviewMainInterest": "Activité principale",
+    "mainInterest": {
+      "sellItems": "Vente de produits",
+      "rentItems": "Location d'articles"
+    },
+    "step": {
+      "whatBringsYou": "Votre objectif",
+      "address": "Adresse",
+      "personal": "Informations personnelles",
+      "idDocument": "Pièce d'identité (facultatif)",
+      "review": "Vérification et envoi"
+    },
+    "signupGoals": {
+      "browse_buy": {
+        "title": "Je veux parcourir et acheter des articles",
+        "description": "Achetez auprès des commerçants et faites-vous livrer."
+      },
+      "rent_and_earn": {
+        "title": "J'ai des articles à louer pour gagner de l'argent",
+        "description": "Publiez des locations, gérez les réservations et vos revenus."
+      },
+      "sell_items": {
+        "title": "Je vends des articles",
+        "description": "Gérez boutique, catalogue, commandes et points de vente."
+      },
+      "delivery_agent": {
+        "title": "Je suis agent de livraison",
+        "description": "Enlevez et livrez les commandes, suivez vos trajets et soyez payé."
+      }
+    },
     "country": "Pays",
     "completeButton": "Compléter le Profil",
     "creating": "Création en cours...",
@@ -469,7 +503,35 @@
     "skipped": "Passé",
     "state": "Région / État",
     "subtitle": "Veuillez fournir quelques informations supplémentaires pour finaliser la configuration de votre compte",
-    "title": "Complétez Votre Profil"
+    "title": "Complétez Votre Profil",
+    "businessNameLabel": "Nom de l'entreprise",
+    "countries": {
+      "CM": "Cameroun",
+      "GA": "Gabon"
+    },
+    "phone": {
+      "label": "Numéro de téléphone",
+      "helper": "Indiquez le numéro mobile associé à votre compte mobile money ; il servira aux paiements sur ce compte."
+    },
+    "review": {
+      "notProvided": "Non renseigné",
+      "labels": {
+        "fullName": "Nom complet",
+        "email": "E-mail",
+        "phoneNumber": "Téléphone",
+        "address": "Adresse",
+        "businessName": "Nom de l'entreprise",
+        "profilePicture": "Photo de profil",
+        "idDocument": "Pièce d'identité"
+      }
+    },
+    "errors": {
+      "apiClientUnavailable": "Impossible de contacter le serveur. Veuillez actualiser la page.",
+      "createUserFailed": "Votre compte n'a pas pu être créé. Veuillez réessayer.",
+      "createUserGeneric": "Impossible de finaliser votre profil. Veuillez réessayer."
+    },
+    "successTitle": "Profil complété",
+    "successMessage": "Votre profil a été créé avec succès. Redirection vers votre tableau de bord…"
   },
   "business": {
     "csvUpload": {
@@ -524,6 +586,7 @@
       "batchOrdersTitle": "Traitement des commandes par lot",
       "batchOrdersDescription": "Mettez à jour rapidement le statut de plusieurs commandes à la fois",
       "subtitle": "Gérez vos opérations commerciales, suivez les performances et développez votre entreprise avec nos outils complets.",
+      "subtitleRentalFocused": "Votre tableau de bord met les locations en avant — catalogue, réservations et photothèque location en tête.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
       "verified": "Vérifié",
@@ -1546,6 +1609,7 @@
     "viewAll": "Voir Tous les Messages"
   },
   "nav": {
+    "rentals": "Locations",
     "support": "Assistance"
   },
   "orderActions": {
@@ -2279,7 +2343,7 @@
       "popularSearches": "Popular searches:",
       "searchPlaceholder": "Rechercher des articles...",
       "showResults": "Show {count} Results",
-      "signIn": "Sign In",
+      "signIn": "Se connecter",
       "sortBy": "Sort by",
       "sortName": "Name A-Z",
       "sortNewest": "Newest First",

@@ -453,7 +453,8 @@
       "resending": "Sending..."
     },
     "logout": "Logout",
-    "profile": "Profile"
+    "profile": "Profile",
+    "signIn": "Sign In"
   },
   "completeProfile": {
     "added": "Added",
@@ -463,6 +464,39 @@
     "city": "City",
     "choosePersona": "Choose Your Persona",
     "choosePersonaHint": "Select the type of account you want to create",
+    "whatBringsYouTitle": "What brings you here today?",
+    "whatBringsYouHint": "Pick the option that fits you best—we will set up the right account type.",
+    "reviewYourGoal": "Your goal",
+    "reviewMainInterest": "Focus",
+    "mainInterest": {
+      "sellItems": "Selling products",
+      "rentItems": "Renting out items"
+    },
+    "step": {
+      "whatBringsYou": "What brings you here",
+      "address": "Address",
+      "personal": "Personal information",
+      "idDocument": "ID document (optional)",
+      "review": "Review & submit"
+    },
+    "signupGoals": {
+      "browse_buy": {
+        "title": "I want to browse and buy items",
+        "description": "Shop from businesses and enjoy delivery to your door."
+      },
+      "rent_and_earn": {
+        "title": "I have items I want to rent and make money",
+        "description": "List rentals, manage bookings, and grow rental income."
+      },
+      "sell_items": {
+        "title": "I sell items",
+        "description": "Run your store, catalog, orders, and locations in one place."
+      },
+      "delivery_agent": {
+        "title": "I am a delivery agent",
+        "description": "Pick up and deliver orders, track routes, and get paid."
+      }
+    },
     "country": "Country",
     "completeButton": "Complete Profile",
     "creating": "Creating...",
@@ -480,7 +514,35 @@
     "skipped": "Skipped",
     "state": "State / Region",
     "subtitle": "Please provide some additional information to complete your account setup",
-    "title": "Complete Your Profile"
+    "title": "Complete Your Profile",
+    "businessNameLabel": "Business name",
+    "countries": {
+      "CM": "Cameroon",
+      "GA": "Gabon"
+    },
+    "phone": {
+      "label": "Phone number",
+      "helper": "Use the mobile number for your mobile money account; it will be used for payments on this account."
+    },
+    "review": {
+      "notProvided": "Not provided",
+      "labels": {
+        "fullName": "Full name",
+        "email": "Email",
+        "phoneNumber": "Phone number",
+        "address": "Address",
+        "businessName": "Business name",
+        "profilePicture": "Profile picture",
+        "idDocument": "ID document"
+      }
+    },
+    "errors": {
+      "apiClientUnavailable": "Something went wrong loading the app. Please refresh the page.",
+      "createUserFailed": "We could not create your account. Please try again.",
+      "createUserGeneric": "Failed to complete your profile. Please try again."
+    },
+    "successTitle": "Profile complete",
+    "successMessage": "Your profile was created successfully. Redirecting to your dashboard…"
   },
   "business": {
     "csvUpload": {
@@ -535,6 +597,7 @@
       "batchOrdersTitle": "Batch process orders",
       "batchOrdersDescription": "Quickly update the status of multiple orders at once",
       "subtitle": "Manage your business operations, track performance, and grow your business with our comprehensive tools.",
+      "subtitleRentalFocused": "Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
       "verified": "Verified",
@@ -1557,6 +1620,7 @@
     "viewAll": "View All Messages"
   },
   "nav": {
+    "rentals": "Rentals",
     "support": "Support"
   },
   "orderActions": {

@@ -124,6 +124,7 @@ export class HasuraController {
       };
       business: {
         name: string;
+        main_interest?: 'sell_items' | 'rent_items';
       };
     }
   ) {
@@ -132,7 +133,10 @@ export class HasuraController {
       const result = await this.hasuraSystemService.createUserWithBusiness(
         identifier,
         data.user,
-        data.business
+        {
+          name: data.business.name,
+          main_interest: data.business.main_interest ?? 'sell_items',
+        }
       );
       return {
         success: true,

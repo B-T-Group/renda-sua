@@ -1,4 +1,4 @@
-import { HelpOutline, Home, ShoppingBag } from '@mui/icons-material';
+import { Handshake, Home, ShoppingBag } from '@mui/icons-material';
 import { Box, Paper, useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,8 @@ const GuestBottomNav: React.FC = () => {
   const isHomeActive = location.pathname === '/';
   const isItemsActive =
     location.pathname === '/items' || location.pathname.startsWith('/items/');
-  const isSupportActive = location.pathname === '/support';
+  const isRentalsActive =
+    location.pathname === '/rentals' || location.pathname.startsWith('/rentals/');
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -115,21 +116,21 @@ const GuestBottomNav: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Support */}
+        {/* Public rentals catalog */}
         <Box
-          onClick={() => handleNavigate('/support')}
-          sx={navItemSx(isSupportActive)}
+          onClick={() => handleNavigate('/rentals')}
+          sx={navItemSx(isRentalsActive)}
           role="button"
-          aria-label={t('nav.support', 'Support')}
+          aria-label={t('nav.rentals', 'Rentals')}
         >
-          <HelpOutline
+          <Handshake
             sx={{
               fontSize: 24,
-              color: isSupportActive ? 'primary.main' : 'text.secondary',
+              color: isRentalsActive ? 'primary.main' : 'text.secondary',
             }}
           />
-          <Box component="span" sx={labelSx(isSupportActive)}>
-            {t('nav.support', 'Support')}
+          <Box component="span" sx={labelSx(isRentalsActive)}>
+            {t('nav.rentals', 'Rentals')}
           </Box>
         </Box>
       </Box>

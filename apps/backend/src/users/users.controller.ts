@@ -323,6 +323,8 @@ export class UsersController {
       phone: string;
       userType: string;
       businessName?: string;
+      /** sell_items | rent_items — defaults to sell_items for business */
+      mainInterest?: 'sell_items' | 'rent_items';
       address?: string;
       vehicleTypeId?: string;
     }
@@ -399,6 +401,7 @@ export class UsersController {
             },
             {
               name: profileData.businessName,
+              main_interest: profileData.mainInterest ?? 'sell_items',
             }
           );
           return {
@@ -455,6 +458,7 @@ export class UsersController {
       profile: {
         vehicle_type_id?: string;
         name?: string;
+        main_interest?: 'sell_items' | 'rent_items';
       };
       address?: {
         address_line_1: string;
@@ -525,19 +529,26 @@ export class UsersController {
           if (!userData.profile.name) {
             throw new Error('business name is required for business users');
           }
-          result = await this.hasuraSystemService.createUserWithBusiness(
-            identifier,
-            {
-              email: userData.email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              phone_number: userData.phone_number,
-              user_type_id: userData.user_type_id,
-            },
-            {
-              name: userData.profile.name,
+          {
+            const mi = userData.profile.main_interest ?? 'sell_items';
+            if (mi !== 'sell_items' && mi !== 'rent_items') {
+              throw new Error('main_interest must be sell_items or rent_items');
             }
-          );
+            result = await this.hasuraSystemService.createUserWithBusiness(
+              identifier,
+              {
+                email: userData.email,
+                first_name: userData.first_name,
+                last_name: userData.last_name,
+                phone_number: userData.phone_number,
+                user_type_id: userData.user_type_id,
+              },
+              {
+                name: userData.profile.name,
+                main_interest: mi,
+              }
+            );
+          }
           if (addressData) {
             await this.addressesService.createAddressForSignup(
               result.business.id,
@@ -587,7 +598,11 @@ export class UsersController {
       email: string;
       phone_number?: string;
       user_type_id: string;
-      profile: { vehicle_type_id?: string; name?: string };
+      profile: {
+        vehicle_type_id?: string;
+        name?: string;
+        main_interest?: 'sell_items' | 'rent_items';
+      };
       address?: {
         address_line_1: string;
         country: string;

@@ -61,6 +61,9 @@ const BusinessDashboard: React.FC = () => {
   const inventoryCount = aggregates?.inventoryCount ?? 0;
   const pendingFailedDeliveriesCount = aggregates?.pendingFailedDeliveriesCount ?? 0;
 
+  const isRentalFocused =
+    profile?.business?.main_interest === 'rent_items';
+
   const orderModules: BusinessDashboardModule[] = [
     {
       title: t('common.orders'),
@@ -365,7 +368,12 @@ const BusinessDashboard: React.FC = () => {
       )}
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-        {t('business.dashboard.subtitle')}
+        {isRentalFocused
+          ? t(
+              'business.dashboard.subtitleRentalFocused',
+              'Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.'
+            )
+          : t('business.dashboard.subtitle')}
       </Typography>
 
       <AddressAlert />
@@ -494,28 +502,57 @@ const BusinessDashboard: React.FC = () => {
         {renderModuleRow(orderModules)}
       </BusinessDashboardSection>
 
-      <BusinessDashboardSection
-        title={t(
-          'business.dashboard.sections.catalog',
-          'Catalog & locations'
-        )}
-        subtitle={t(
-          'business.dashboard.sections.catalogHint',
-          'Products, images, and where you sell from.'
-        )}
-      >
-        {renderModuleRow(catalogModules)}
-      </BusinessDashboardSection>
+      {isRentalFocused ? (
+        <>
+          <BusinessDashboardSection
+            title={t('business.dashboard.sections.rentals', 'Rentals')}
+            subtitle={t(
+              'business.dashboard.sections.rentalsHint',
+              'Rental catalog, listings, and photo library.'
+            )}
+          >
+            {renderModuleRow(rentalModules)}
+          </BusinessDashboardSection>
 
-      <BusinessDashboardSection
-        title={t('business.dashboard.sections.rentals', 'Rentals')}
-        subtitle={t(
-          'business.dashboard.sections.rentalsHint',
-          'Rental catalog, listings, and photo library.'
-        )}
-      >
-        {renderModuleRow(rentalModules)}
-      </BusinessDashboardSection>
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.catalog',
+              'Catalog & locations'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.catalogHint',
+              'Products, images, and where you sell from.'
+            )}
+          >
+            {renderModuleRow(catalogModules)}
+          </BusinessDashboardSection>
+        </>
+      ) : (
+        <>
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.catalog',
+              'Catalog & locations'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.catalogHint',
+              'Products, images, and where you sell from.'
+            )}
+          >
+            {renderModuleRow(catalogModules)}
+          </BusinessDashboardSection>
+
+          <BusinessDashboardSection
+            title={t('business.dashboard.sections.rentals', 'Rentals')}
+            subtitle={t(
+              'business.dashboard.sections.rentalsHint',
+              'Rental catalog, listings, and photo library.'
+            )}
+          >
+            {renderModuleRow(rentalModules)}
+          </BusinessDashboardSection>
+        </>
+      )}
 
       <BusinessDashboardSection
         title={t(

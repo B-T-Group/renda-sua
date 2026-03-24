@@ -26,6 +26,7 @@ export interface UserProfile {
     id: string;
     user_id: string;
     name: string;
+    main_interest?: 'sell_items' | 'rent_items';
     is_admin: boolean;
     is_verified: boolean;
     created_at: string;

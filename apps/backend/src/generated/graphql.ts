@@ -16,6 +16,7 @@ export type Scalars = {
   bigint: { input: any; output: any; }
   bpchar: { input: any; output: any; }
   business_image_status_enum: { input: any; output: any; }
+  business_main_interest_enum: { input: any; output: any; }
   currency_enum: { input: any; output: any; }
   date: { input: any; output: any; }
   failed_delivery_resolution_type_enum: { input: any; output: any; }
@@ -6816,6 +6817,8 @@ export type Businesses = {
   id: Scalars['uuid']['output'];
   /** When true, this business can use the AI image cleanup feature. Only business admins can enable this for a business. */
   image_cleanup_enabled: Scalars['Boolean']['output'];
+  /** Primary focus: retail catalog vs. rentals (onboarding / dashboard tailoring). */
+  main_interest: Scalars['business_main_interest_enum']['output'];
   /** Indicates if the business has admin privileges */
   is_admin?: Maybe<Scalars['Boolean']['output']>;
   /** Indicates if the business account has been verified */
