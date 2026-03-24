@@ -2,9 +2,15 @@ table:
   name: item_images
   schema: public
 object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
   - name: item
     using:
       foreign_key_constraint_on: item_id
+  - name: item_sub_category
+    using:
+      foreign_key_constraint_on: item_sub_category_id
   - name: uploaded_by_user
     using:
       foreign_key_constraint_on: uploaded_by
@@ -12,34 +18,74 @@ insert_permissions:
   - role: business
     permission:
       check:
-        item:
-          business:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
+        _and:
+          - business:
+              user:
+                identifier:
+                  _eq: X-Hasura-User-Id
+          - _or:
+              - item_id:
+                  _is_null: true
+              - item:
+                  business:
+                    user:
+                      identifier:
+                        _eq: X-Hasura-User-Id
       columns:
+        - business_id
         - item_id
+        - item_sub_category_id
         - image_url
+        - s3_key
         - image_type
         - alt_text
         - caption
         - display_order
+        - file_size
+        - width
+        - height
+        - format
         - uploaded_by
+        - is_active
+        - tags
+        - status
+        - is_ai_cleaned
 select_permissions:
   - role: agent
     permission:
       columns:
         - id
+        - business_id
         - item_id
+        - item_sub_category_id
         - image_url
+        - s3_key
         - image_type
         - alt_text
         - caption
         - display_order
+        - file_size
+        - width
+        - height
+        - format
         - uploaded_by
+        - is_active
+        - tags
+        - status
+        - is_ai_cleaned
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _and:
+          - item_id:
+              _is_null: false
+          - item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
   - role: anonymous
     permission:
       columns:
@@ -50,24 +96,48 @@ select_permissions:
         - alt_text
         - caption
         - display_order
-        - uploaded_by
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _and:
+          - item_id:
+              _is_null: false
+          - item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
   - role: business
     permission:
       columns:
         - id
+        - business_id
         - item_id
+        - item_sub_category_id
         - image_url
+        - s3_key
         - image_type
         - alt_text
         - caption
         - display_order
+        - file_size
+        - width
+        - height
+        - format
         - uploaded_by
+        - is_active
+        - tags
+        - status
+        - is_ai_cleaned
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
   - role: client
     permission:
       columns:
@@ -78,10 +148,19 @@ select_permissions:
         - alt_text
         - caption
         - display_order
-        - uploaded_by
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _and:
+          - item_id:
+              _is_null: false
+          - item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
   - role: user
     permission:
       columns:
@@ -92,16 +171,51 @@ select_permissions:
         - alt_text
         - caption
         - display_order
-        - uploaded_by
         - created_at
         - updated_at
-      filter: {}
+      filter:
+        _and:
+          - item_id:
+              _is_null: false
+          - item:
+              _and:
+                - is_active:
+                    _eq: true
+                - business:
+                    is_verified:
+                      _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - item_id
+        - item_sub_category_id
+        - image_url
+        - s3_key
+        - image_type
+        - alt_text
+        - caption
+        - display_order
+        - file_size
+        - width
+        - height
+        - format
+        - uploaded_by
+        - is_active
+        - tags
+        - status
+        - is_ai_cleaned
+      filter:
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
+      check: null
 delete_permissions:
   - role: business
     permission:
       filter:
-        item:
-          business:
-            user:
-              identifier:
-                _eq: X-Hasura-User-Id
+        business:
+          user:
+            identifier:
+              _eq: X-Hasura-User-Id
