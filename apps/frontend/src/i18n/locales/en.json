@@ -763,14 +763,17 @@
           "success": "Rental item created"
         },
         "location": {
-          "hint": "Pick where renters pick up the item and set your hourly rate.",
+          "hint": "Pick where renters pick up the item and set your hourly and daily rates.",
           "addressFirst": "Add a primary business address before creating locations.",
           "select": "Location",
           "addLocation": "New location",
           "pricePerHour": "Price per hour",
+          "pricePerDay": "Price per day",
+          "pricePerDayHint": "Leave empty to use 12 × hourly rate",
           "finish": "Finish",
           "pickLocation": "Select or add a location",
-          "invalidPrice": "Enter a valid hourly price",
+          "invalidHourlyPrice": "Enter a valid hourly price",
+          "invalidDailyPrice": "Enter a valid daily price or leave it empty",
           "success": "Rental listing created",
           "error": "Could not create listing"
         },

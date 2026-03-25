@@ -43,6 +43,7 @@
     "cdk:synth": "cd apps/cdk && cdk synth",
     "cdk:bootstrap": "cd apps/cdk && cdk bootstrap",
     "sync:resend-templates": "tsx apps/backend/scripts/sync-resend-templates.ts",
+    "sync:resend-template": "tsx apps/backend/scripts/sync-resend-templates.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

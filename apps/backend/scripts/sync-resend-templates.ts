@@ -2,10 +2,13 @@
  * Sync HTML email templates from apps/backend/src/notifications/templates/{en,fr}
  * to Resend. Requires RESEND_API_KEY.
  *
- * Run from repo root: npm run sync:resend-templates
+ * Run from repo root:
+ * - All templates: npm run sync:resend-templates
+ * - One template:  npm run sync:resend-template -- en/my_template.html
+ *   (bare filename syncs both en/ and fr/ when both files exist)
  */
-import { readdir, readFile, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { readdir, readFile, realpath, stat, writeFile } from 'fs/promises';
+import { dirname, join, relative, resolve, sep } from 'path';
 import { Resend } from 'resend';
 import { fileURLToPath } from 'url';
 
@@ -201,6 +204,105 @@ async function updateAndPublish(
   await sleep(2000);
 }
 
+function isInsideTemplatesRoot(filePath: string): boolean {
+  const root = resolve(TEMPLATES_ROOT) + sep;
+  const f = resolve(filePath);
+  return f === resolve(TEMPLATES_ROOT) || f.startsWith(root);
+}
+
+async function targetsFromLocalePath(
+  locale: 'en' | 'fr',
+  filename: string
+): Promise<Array<{ locale: 'en' | 'fr'; filename: string; filePath: string }>> {
+  const filePath = join(TEMPLATES_ROOT, locale, filename);
+  await stat(filePath);
+  return [{ locale, filename, filePath }];
+}
+
+async function targetsFromBareFilename(
+  filename: string
+): Promise<Array<{ locale: 'en' | 'fr'; filename: string; filePath: string }>> {
+  const out: Array<{ locale: 'en' | 'fr'; filename: string; filePath: string }> = [];
+  for (const loc of ['en', 'fr'] as const) {
+    const filePath = join(TEMPLATES_ROOT, loc, filename);
+    try {
+      await stat(filePath);
+      out.push({ locale: loc, filename, filePath });
+    } catch {
+      /* missing locale file */
+    }
+  }
+  if (out.length === 0) {
+    throw new Error(
+      `No template "${filename}" in en/ or fr/ under ${TEMPLATES_ROOT}`
+    );
+  }
+  return out;
+}
+
+async function targetsFromResolvedFile(
+  filePath: string
+): Promise<Array<{ locale: 'en' | 'fr'; filename: string; filePath: string }>> {
+  let resolved: string;
+  try {
+    resolved = await realpath(filePath);
+  } catch {
+    resolved = resolve(filePath);
+  }
+  if (!isInsideTemplatesRoot(resolved)) {
+    throw new Error(`Path must be under ${TEMPLATES_ROOT}: ${resolved}`);
+  }
+  const rel = relative(resolve(TEMPLATES_ROOT), resolved);
+  const parts = rel.split(sep);
+  if (parts.length !== 2) {
+    throw new Error(`Expected templates/<en|fr>/<file>.html, got: ${rel}`);
+  }
+  const [locale, filename] = parts;
+  if (locale !== 'en' && locale !== 'fr') {
+    throw new Error(`Locale folder must be en or fr, got: ${locale}`);
+  }
+  await stat(resolved);
+  return [{ locale, filename, filePath: resolved }];
+}
+
+async function resolveTemplateTargets(
+  raw: string
+): Promise<Array<{ locale: 'en' | 'fr'; filename: string; filePath: string }>> {
+  const input = raw.trim().replace(/^['"]|['"]$/g, '');
+  if (!input.endsWith('.html')) {
+    throw new Error('Template reference must end with .html');
+  }
+  const localeMatch = input.match(/^(en|fr)[/\\]([^/\\]+\.html)$/i);
+  if (localeMatch) {
+    const locale = localeMatch[1].toLowerCase() as 'en' | 'fr';
+    return targetsFromLocalePath(locale, localeMatch[2]);
+  }
+  if (!input.includes('/') && !input.includes(sep)) {
+    return targetsFromBareFilename(input);
+  }
+  const cwdPath = resolve(process.cwd(), input);
+  return targetsFromResolvedFile(cwdPath);
+}
+
+async function syncSingleTemplate(rawArg: string): Promise<void> {
+  console.log('Resend single-template sync');
+  console.log(`Templates: ${TEMPLATES_ROOT}`);
+  console.log(`From: ${DEFAULT_FROM}\n`);
+
+  const targets = await resolveTemplateTargets(rawArg);
+  const raw = await readFile(IDS_PATH, 'utf-8');
+  const idMap = JSON.parse(raw) as Record<string, string>;
+
+  for (const t of targets) {
+    await processFile(t.locale, t.filename, idMap);
+    console.log('');
+  }
+
+  await writeFile(IDS_PATH, JSON.stringify(idMap, null, 2) + '\n', 'utf-8');
+  console.log(`Wrote template ids: ${IDS_PATH}`);
+  console.log('Done.');
+}
+
 async function processFile(
   locale: 'en' | 'fr',
   filename: string,
@@ -228,6 +330,12 @@ async function processFile(
 }
 
 async function main(): Promise<void> {
+  const singleArg = process.argv.slice(2)[0];
+  if (singleArg) {
+    await syncSingleTemplate(singleArg);
+    return;
+  }
+
   console.log('Resend template sync');
   console.log(`Templates: ${TEMPLATES_ROOT}`);
   console.log(`From: ${DEFAULT_FROM}\n`);

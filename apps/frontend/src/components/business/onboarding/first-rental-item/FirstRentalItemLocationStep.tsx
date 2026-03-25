@@ -1,7 +1,6 @@
 import { Add as AddIcon } from '@mui/icons-material';
 import {
   Alert,
-  Box,
   Button,
   FormControl,
   InputLabel,
@@ -51,6 +50,7 @@ const FirstRentalItemLocationStep: React.FC<
 
   const [locationId, setLocationId] = useState('');
   const [pricePerHour, setPricePerHour] = useState('');
+  const [pricePerDay, setPricePerDay] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -88,12 +88,27 @@ const FirstRentalItemLocationStep: React.FC<
       );
       return;
     }
-    const rate = Number.parseFloat(pricePerHour.trim());
-    if (Number.isNaN(rate) || rate < 0) {
+    const hourly = Number.parseFloat(pricePerHour.trim());
+    if (Number.isNaN(hourly) || hourly < 0) {
       enqueueSnackbar(
         t(
-          'business.onboarding.firstRental.location.invalidPrice',
+          'business.onboarding.firstRental.location.invalidHourlyPrice',
           'Enter a valid hourly price'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
+    const dailyRaw = pricePerDay.trim();
+    const daily =
+      dailyRaw === ''
+        ? Number((hourly * 12).toFixed(2))
+        : Number.parseFloat(dailyRaw);
+    if (Number.isNaN(daily) || daily < 0) {
+      enqueueSnackbar(
+        t(
+          'business.onboarding.firstRental.location.invalidDailyPrice',
+          'Enter a valid daily price or leave it empty'
         ),
         { variant: 'warning' }
       );
@@ -101,12 +116,11 @@ const FirstRentalItemLocationStep: React.FC<
     }
     setSaving(true);
     try {
-      const dayRate = Number((rate * 12).toFixed(2));
       const res = await createBusinessRentalListing({
         rental_item_id: item.id,
         business_location_id: locationId,
-        base_price_per_hour: rate,
-        base_price_per_day: dayRate,
+        base_price_per_hour: hourly,
+        base_price_per_day: daily,
       });
       if (!res?.success) {
         throw new Error('Listing failed');
@@ -146,7 +160,7 @@ const FirstRentalItemLocationStep: React.FC<
       <Typography variant="body2" color="text.secondary">
         {t(
           'business.onboarding.firstRental.location.hint',
-          'Pick where renters pick up the item and set your hourly rate.'
+          'Pick where renters pick up the item and set your hourly and daily rates.'
         )}
       </Typography>
       {!primaryAddressCountry && (
@@ -187,17 +201,36 @@ const FirstRentalItemLocationStep: React.FC<
           )}
         </Button>
       </Stack>
-      <TextField
-        label={t(
-          'business.onboarding.firstRental.location.pricePerHour',
-          'Price per hour'
-        )}
-        type="number"
-        value={pricePerHour}
-        onChange={(e) => setPricePerHour(e.target.value)}
-        disabled={busy}
-        inputProps={{ min: 0, step: '0.01' }}
-      />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField
+          fullWidth
+          label={t(
+            'business.onboarding.firstRental.location.pricePerHour',
+            'Price per hour'
+          )}
+          type="number"
+          value={pricePerHour}
+          onChange={(e) => setPricePerHour(e.target.value)}
+          disabled={busy}
+          inputProps={{ min: 0, step: '0.01' }}
+        />
+        <TextField
+          fullWidth
+          label={t(
+            'business.onboarding.firstRental.location.pricePerDay',
+            'Price per day'
+          )}
+          type="number"
+          value={pricePerDay}
+          onChange={(e) => setPricePerDay(e.target.value)}
+          disabled={busy}
+          inputProps={{ min: 0, step: '0.01' }}
+          helperText={t(
+            'business.onboarding.firstRental.location.pricePerDayHint',
+            'Leave empty to use 12 × hourly rate'
+          )}
+        />
+      </Stack>
       <Button
         variant="contained"
         onClick={() => void finish()}

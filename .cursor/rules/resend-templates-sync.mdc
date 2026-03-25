@@ -1,0 +1,27 @@
+---
+description: Sync Resend email HTML templates after local edits
+globs: apps/backend/src/notifications/templates/**/*.html
+alwaysApply: false
+---
+
+# Resend notification templates
+
+When you **create or update** any file under `apps/backend/src/notifications/templates/` (HTML email sources), sync that template to Resend so production sends use the latest version and `resend-template-ids.json` stays correct.
+
+## Command
+
+From the **repository root**, with `RESEND_API_KEY` set in the environment:
+
+```bash
+npm run sync:resend-template -- en/<template_name>.html
+```
+
+Examples:
+
+- One locale: `npm run sync:resend-template -- en/client_rental_request_accepted.html`
+- French only: `npm run sync:resend-template -- fr/client_rental_request_accepted.html`
+- Both `en/` and `fr/` copies of the same filename: `npm run sync:resend-template -- client_rental_request_accepted.html`
+
+Use `npm run sync:resend-templates` (no extra args) only when a full sync of every template is intentional.
+
+Do not skip the sync after template changes unless the user explicitly says not to or lacks API access.

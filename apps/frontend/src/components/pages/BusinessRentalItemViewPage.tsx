@@ -110,16 +110,34 @@ const BusinessRentalItemViewPage: React.FC = () => {
         <Paper sx={{ overflow: 'hidden', borderRadius: 2 }}>
           {coverImage ? (
             <Box
-              component="img"
-              src={coverImage}
-              alt={item.name}
-              sx={{ width: '100%', height: { xs: 220, md: 320 }, objectFit: 'cover' }}
-            />
+              sx={{
+                width: '100%',
+                bgcolor: 'action.hover',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                py: { xs: 1, md: 1.5 },
+              }}
+            >
+              <Box
+                component="img"
+                src={coverImage}
+                alt={item.name}
+                sx={{
+                  maxWidth: '100%',
+                  maxHeight: 'min(85vh, 1400px)',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
+            </Box>
           ) : (
             <Box
               sx={{
                 width: '100%',
-                height: { xs: 220, md: 320 },
+                minHeight: { xs: 180, md: 220 },
                 bgcolor: 'action.hover',
                 display: 'flex',
                 alignItems: 'center',

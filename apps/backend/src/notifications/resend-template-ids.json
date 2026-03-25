@@ -68,5 +68,11 @@
   "business_rental_listing_approved": "7e0367f0-ef47-4541-9843-58e76014a659",
   "business_rental_listing_approved_fr": "5a0a49bb-bd7c-4e73-8a02-19e591c94dca",
   "business_rental_listing_rejected": "cbcfe971-2b81-4b78-bcfe-cdcd2956c996",
-  "business_rental_listing_rejected_fr": "695296fd-7eff-4512-bc58-511f98ba89e4"
+  "business_rental_listing_rejected_fr": "695296fd-7eff-4512-bc58-511f98ba89e4",
+  "business_rental_booking_request": "8ae0007b-362e-4d8a-bcf4-93d33de4f4b3",
+  "client_rental_request_accepted": "98e0f3cb-66ca-4a40-8460-e31c9819564a",
+  "client_rental_request_rejected": "4718fe54-acfa-435d-9d2d-0d554e58fbee",
+  "business_rental_booking_request_fr": "6a2bee7e-1e97-4323-b241-b928fa7c8454",
+  "client_rental_request_accepted_fr": "abc47d42-5616-4240-ad16-f68b2c46444e",
+  "client_rental_request_rejected_fr": "98d1e83d-6525-406e-ada7-b4707218f8d8"
 }

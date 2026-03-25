@@ -752,14 +752,17 @@
           "success": "Article de location créé"
         },
         "location": {
-          "hint": "Lieu de retrait et tarif horaire.",
+          "hint": "Lieu de retrait et tarifs horaire et journalier.",
           "addressFirst": "Ajoutez d’abord une adresse principale avant de créer des emplacements.",
           "select": "Emplacement",
           "addLocation": "Nouvel emplacement",
           "pricePerHour": "Prix par heure",
+          "pricePerDay": "Prix par jour",
+          "pricePerDayHint": "Laisser vide pour utiliser 12 × le tarif horaire",
           "finish": "Terminer",
           "pickLocation": "Sélectionnez ou ajoutez un emplacement",
-          "invalidPrice": "Indiquez un tarif horaire valide",
+          "invalidHourlyPrice": "Indiquez un tarif horaire valide",
+          "invalidDailyPrice": "Indiquez un tarif journalier valide ou laissez le champ vide",
           "success": "Annonce de location créée",
           "error": "Impossible de créer l’annonce"
         },
