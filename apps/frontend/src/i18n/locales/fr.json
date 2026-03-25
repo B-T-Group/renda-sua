@@ -507,7 +507,9 @@
     "businessNameLabel": "Nom de l'entreprise",
     "countries": {
       "CM": "Cameroun",
-      "GA": "Gabon"
+      "GA": "Gabon",
+      "US": "États-Unis",
+      "CA": "Canada"
     },
     "phone": {
       "label": "Numéro de téléphone",

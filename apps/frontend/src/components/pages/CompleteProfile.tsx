@@ -51,7 +51,7 @@ import {
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
-const SIGNUP_COUNTRY_CODES = ['CM', 'GA'] as const;
+const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
 
 interface ProfileData {
   first_name: string;

@@ -518,7 +518,9 @@
     "businessNameLabel": "Business name",
     "countries": {
       "CM": "Cameroon",
-      "GA": "Gabon"
+      "GA": "Gabon",
+      "US": "United States",
+      "CA": "Canada"
     },
     "phone": {
       "label": "Phone number",
