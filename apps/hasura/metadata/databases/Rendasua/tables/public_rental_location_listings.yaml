@@ -5,6 +5,9 @@ object_relationships:
   - name: business_location
     using:
       foreign_key_constraint_on: business_location_id
+  - name: moderated_by_user
+    using:
+      foreign_key_constraint_on: moderated_by_user_id
   - name: rental_item
     using:
       foreign_key_constraint_on: rental_item_id
@@ -76,6 +79,8 @@ select_permissions:
         - updated_at
       filter:
         _and:
+          - moderation_status:
+              _eq: approved
           - is_active:
               _eq: true
           - deleted_at:
@@ -106,6 +111,9 @@ select_permissions:
         - deleted_at
         - created_at
         - updated_at
+        - moderation_status
+        - moderated_at
+        - moderated_by_user_id
       filter:
         rental_item:
           business:
@@ -131,6 +139,8 @@ select_permissions:
         - updated_at
       filter:
         _and:
+          - moderation_status:
+              _eq: approved
           - is_active:
               _eq: true
           - deleted_at:
