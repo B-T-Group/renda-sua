@@ -32,6 +32,7 @@ import {
 import { useRentalCategories } from '../../hooks/useRentalCategories';
 import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
+import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
 
@@ -533,12 +534,29 @@ const BusinessRentalItemEditPage: React.FC = () => {
           if (!f) return null;
           return (
             <Paper key={l.id} sx={{ p: 2, mb: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                {t('business.rentals.listingAtLocation', {
-                  defaultValue: 'Listing: {{location}}',
-                  location: locName,
-                })}
-              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="subtitle1">
+                  {t('business.rentals.listingAtLocation', {
+                    defaultValue: 'Listing: {{location}}',
+                    location: locName,
+                  })}
+                </Typography>
+                <RentalListingModerationStatusChip status={l.moderation_status} />
+              </Stack>
+              {l.moderation_status === 'rejected' ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {t(
+                    'business.rentals.moderation.resubmitHint',
+                    'If this listing was rejected, saving changes will send it for review again.'
+                  )}
+                </Alert>
+              ) : null}
               <Stack spacing={2}>
                 <TextField
                   label={t('business.rentals.pricePerHour', 'Price per hour')}

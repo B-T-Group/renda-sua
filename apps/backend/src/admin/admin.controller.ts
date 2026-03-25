@@ -25,9 +25,11 @@ import { AdminAuthGuard } from './admin-auth.guard';
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import type { CountryOnboardingConfigDto } from './dto/country-onboarding.dto';
+import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
 import { AdminMessageService } from './admin-message.service';
 import { AdminService } from './admin.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
+import { RentalListingModerationService } from './rental-listing-moderation.service';
 
 interface RequestWithUser extends Request {
   user: any;
@@ -53,6 +55,7 @@ export class AdminController {
   constructor(
     private readonly adminMessageService: AdminMessageService,
     private readonly adminService: AdminService,
+    private readonly rentalListingModerationService: RentalListingModerationService,
     private readonly applicationSetupService: ApplicationSetupService,
     private readonly countryOnboardingService: CountryOnboardingService
   ) {}
@@ -110,6 +113,75 @@ export class AdminController {
         error: error.message || 'Internal server error',
       };
     }
+  }
+
+  @Get('rental-listings/moderation')
+  @ApiOperation({
+    summary: 'List rental location listings for moderation (pending by default)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'rejected', 'all'],
+  })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiResponse({ status: 200, description: 'Paginated listings' })
+  async listRentalListingsModeration(
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const result = await this.rentalListingModerationService.listModerationQueue({
+      status,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+    });
+    return { success: true, ...result };
+  }
+
+  @Post('rental-listings/:listingId/approve')
+  @ApiOperation({ summary: 'Approve a pending rental listing (visible in public catalog)' })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Listing approved' })
+  @ApiResponse({ status: 400, description: 'Listing not pending' })
+  async approveRentalListing(
+    @Param('listingId') listingId: string,
+    @Req() request: RequestWithUser
+  ) {
+    await this.rentalListingModerationService.approveListing(
+      listingId,
+      request.user.id
+    );
+    return { success: true };
+  }
+
+  @Post('rental-listings/:listingId/reject')
+  @ApiOperation({
+    summary: 'Reject a pending rental listing (requires reason; message + email to business)',
+  })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiBody({ type: RejectRentalListingDto })
+  @ApiResponse({ status: 200, description: 'Listing rejected' })
+  @ApiResponse({ status: 400, description: 'Invalid body or listing not pending' })
+  async rejectRentalListing(
+    @Param('listingId') listingId: string,
+    @Body() body: RejectRentalListingDto,
+    @Req() request: RequestWithUser
+  ) {
+    const reason = body.rejectionReason?.trim();
+    if (!reason) {
+      throw new HttpException(
+        'rejectionReason is required',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.rentalListingModerationService.rejectListing(
+      listingId,
+      request.user.id,
+      reason
+    );
+    return { success: true };
   }
 
   @Get('agents')

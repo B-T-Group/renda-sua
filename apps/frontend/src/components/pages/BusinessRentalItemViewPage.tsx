@@ -16,6 +16,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useRentalApi, type BusinessRentalItemDetail } from '../../hooks/useRentalApi';
 import { renderRichTextToHtml } from '../../utils/richText';
 import LoadingPage from '../common/LoadingPage';
+import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessRentalItemViewPage: React.FC = () => {
@@ -172,10 +173,17 @@ const BusinessRentalItemViewPage: React.FC = () => {
             <Stack spacing={1.5}>
               {item.rental_location_listings.map((listing) => (
                 <Paper key={listing.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography sx={{ fontWeight: 600 }}>
-                    {listing.business_location?.name ??
-                      t('business.rentals.location', 'Location')}
-                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Typography sx={{ fontWeight: 600 }}>
+                      {listing.business_location?.name ??
+                        t('business.rentals.location', 'Location')}
+                    </Typography>
+                    {!listing.deleted_at ? (
+                      <RentalListingModerationStatusChip
+                        status={listing.moderation_status}
+                      />
+                    ) : null}
+                  </Stack>
                   {listing.deleted_at ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {t(

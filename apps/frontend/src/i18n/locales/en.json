@@ -142,6 +142,28 @@
     "businesses": {
       "imageCleanupEnabled": "Image cleanup enabled"
     },
+    "rentalListingModeration": {
+      "pageTitle": "Rental listing moderation",
+      "pageSubtitle": "Approve or reject new rental listings before they appear in the public catalog.",
+      "itemName": "Rental item",
+      "location": "Location",
+      "business": "Business",
+      "status": "Status",
+      "statusFilter": "Queue",
+      "pending": "Pending",
+      "rejected": "Rejected",
+      "all": "Pending and rejected",
+      "approve": "Approve",
+      "reject": "Reject",
+      "rejectTitle": "Reject listing",
+      "rejectHelp": "The business will see this reason in their messages and by email.",
+      "rejectionReason": "Rejection reason",
+      "empty": "No listings in this queue",
+      "loadError": "Could not load moderation queue",
+      "actionFailed": "Action failed",
+      "refresh": "Refresh",
+      "accessDenied": "You do not have permission to view this page."
+    },
     "applicationSetup": {
       "active": "Active",
       "applicationConfigsTitle": "Application configurations",
@@ -594,6 +616,8 @@
       "applicationSetupDescription": "Configure delivery and application settings for your country",
       "manageCommissionAccounts": "Company Accounts & Partners",
       "manageCommissionAccountsDescription": "View company account and partner accounts with commission transactions",
+      "manageRentalListingModeration": "Rental listing moderation",
+      "manageRentalListingModerationDescription": "Approve or reject rental listings before they go live",
       "noBusinessProfile": "No business profile found",
       "ordersDescription": "View and manage customer orders, track delivery status, and handle order fulfillment.",
       "batchOrdersTitle": "Batch process orders",
@@ -642,6 +666,10 @@
         "adminSystem": "System & onboarding",
         "adminSystemHint": "Configuration, country setup, and application defaults."
       }
+    },
+    "rentalImages": {
+      "dashboardTitle": "Rental image library",
+      "dashboardDescription": "Upload rental photos, run AI cleanup, and link or create rental items."
     },
     "onboarding": {
       "firstSale": {
@@ -804,12 +832,21 @@
       "weeklyAvailability": "Weekly availability",
       "units": "Units available",
       "tagsHint": "Tags (comma-separated)",
+      "descriptionPlaceholder": "Describe your rental item with highlights, usage notes, and what is included.",
       "edit": "Edit",
+      "preview": "Preview",
       "editItemTitle": "Edit rental",
       "backToCatalog": "Back to rentals",
       "manageImages": "Manage images",
       "editItemSection": "Rental details",
       "listingsSection": "Location listings",
+      "moderation": {
+        "pending": "Pending approval",
+        "approved": "Live",
+        "rejected": "Rejected",
+        "pendingListingsBadge": "{{count}} listing(s) pending approval",
+        "resubmitHint": "If this listing was rejected, saving changes will send it for review again."
+      },
       "listingAtLocation": "Listing: {{location}}",
       "saveListing": "Save listing",
       "saving": "Saving...",
@@ -822,6 +859,7 @@
       "currency": "Currency",
       "itemActive": "Active in catalog",
       "listingActive": "Listing active",
+      "maxHoursHint": "Leave empty for no maximum",
       "maxDaysHint": "Leave empty for no maximum",
       "softDelete": {
         "removeListing": "Remove listing",
@@ -1492,6 +1530,7 @@
     "more": "More",
     "moreThan": "More than",
     "next": "Next",
+    "previous": "Previous",
     "none": "None",
     "no": "No",
     "status": "Status",

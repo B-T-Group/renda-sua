@@ -101,6 +101,7 @@ interface RentalRequestWindowPlan {
 export interface PublicRentalListingRow {
   id: string;
   deleted_at?: string | null;
+  moderation_status?: string;
   base_price_per_hour: number;
   base_price_per_day: number;
   min_rental_hours: number;
@@ -250,6 +251,9 @@ export class RentalsService {
     }>(Q.GET_PUBLIC_RENTAL_LISTING_BY_PK, { id: listingId });
     const row = r.rental_location_listings_by_pk;
     if (!row) return null;
+    if (row.moderation_status !== 'approved') {
+      return null;
+    }
     if (row.deleted_at || row.rental_item?.deleted_at) {
       return null;
     }
@@ -629,7 +633,11 @@ export class RentalsService {
     dto: UpdateBusinessRentalListingDto
   ): Promise<void> {
     const businessId = await this.requireBusinessId();
-    await this.assertRentalListingForBusiness(listingId, businessId);
+    const listingRow = await this.loadRentalListingBusinessRow(
+      listingId,
+      businessId
+    );
+    const wasRejected = listingRow.moderation_status === 'rejected';
     const changes = this.buildListingUpdateSet(dto);
     if (!Object.keys(changes).length) {
       const availabilityOnly = dto.weekly_availability !== undefined;
@@ -647,6 +655,12 @@ export class RentalsService {
     if (dto.weekly_availability !== undefined) {
       const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
       await this.upsertWeeklyAvailability(listingId, availability);
+    }
+    const resubmitted =
+      wasRejected &&
+      (Object.keys(changes).length > 0 || dto.weekly_availability !== undefined);
+    if (resubmitted) {
+      await this.resetRejectedListingToPendingModeration(listingId);
     }
   }
 
@@ -754,14 +768,19 @@ export class RentalsService {
     }
   }
 
-  private async assertRentalListingForBusiness(
+  private async loadRentalListingBusinessRow(
     listingId: string,
     businessId: string,
     options: { allowDeleted?: boolean } = {}
-  ): Promise<void> {
+  ): Promise<{
+    deleted_at: string | null;
+    moderation_status: string;
+    rental_item: { business_id: string; deleted_at: string | null };
+  }> {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings_by_pk: {
         deleted_at: string | null;
+        moderation_status: string;
         rental_item: { business_id: string; deleted_at: string | null };
       } | null;
     }>(Q.GET_RENTAL_LISTING_BUSINESS_CHECK, { id: listingId });
@@ -774,6 +793,29 @@ export class RentalsService {
       (row.deleted_at || row.rental_item.deleted_at)
     ) {
       throw new HttpException('This listing was removed', HttpStatus.BAD_REQUEST);
+    }
+    return row;
+  }
+
+  private async assertRentalListingForBusiness(
+    listingId: string,
+    businessId: string,
+    options: { allowDeleted?: boolean } = {}
+  ): Promise<void> {
+    await this.loadRentalListingBusinessRow(listingId, businessId, options);
+  }
+
+  private async resetRejectedListingToPendingModeration(
+    listingId: string
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_location_listings_by_pk: { id: string } | null;
+    }>(Q.RESET_RENTAL_LISTING_MODERATION_PENDING, { id: listingId });
+    if (!result.update_rental_location_listings_by_pk) {
+      throw new HttpException(
+        'Failed to resubmit listing for review',
+        HttpStatus.BAD_REQUEST
+      );
     }
   }
 
@@ -1504,6 +1546,9 @@ export class RentalsService {
     if (listing.deleted_at || listing.rental_item?.deleted_at) {
       throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
     }
+    if (listing.moderation_status !== 'approved') {
+      throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
+    }
     if (!listing.rental_item?.business?.is_verified) {
       throw new HttpException('Business not verified', HttpStatus.BAD_REQUEST);
     }
@@ -2227,6 +2272,7 @@ export class RentalsService {
     return {
       _and: [
         base,
+        { moderation_status: { _eq: 'approved' } },
         { deleted_at: { _is_null: true } },
         { rental_item: { deleted_at: { _is_null: true } } },
         {

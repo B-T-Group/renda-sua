@@ -142,6 +142,28 @@
     "businesses": {
       "imageCleanupEnabled": "Nettoyage d'image activé"
     },
+    "rentalListingModeration": {
+      "pageTitle": "Modération des annonces de location",
+      "pageSubtitle": "Approuvez ou refusez les nouvelles annonces avant qu’elles n’apparaissent dans le catalogue public.",
+      "itemName": "Article à louer",
+      "location": "Lieu",
+      "business": "Entreprise",
+      "status": "Statut",
+      "statusFilter": "File",
+      "pending": "En attente",
+      "rejected": "Refusée",
+      "all": "En attente et refusées",
+      "approve": "Approuver",
+      "reject": "Refuser",
+      "rejectTitle": "Refuser l’annonce",
+      "rejectHelp": "L’entreprise verra ce motif dans ses messages et par e-mail.",
+      "rejectionReason": "Motif du refus",
+      "empty": "Aucune annonce dans cette file",
+      "loadError": "Impossible de charger la file de modération",
+      "actionFailed": "L’action a échoué",
+      "refresh": "Actualiser",
+      "accessDenied": "Vous n’avez pas l’autorisation d’accéder à cette page."
+    },
     "applicationSetup": {
       "active": "Actif",
       "applicationConfigsTitle": "Configurations de l'application",
@@ -583,6 +605,8 @@
       "applicationSetupDescription": "Configurer les paramètres de livraison et de l'application pour votre pays",
       "manageCommissionAccounts": "Comptes Entreprise & Partenaires",
       "manageCommissionAccountsDescription": "Voir le compte entreprise et les comptes partenaires avec les transactions de commission",
+      "manageRentalListingModeration": "Modération des annonces de location",
+      "manageRentalListingModerationDescription": "Approuver ou refuser les annonces avant publication",
       "noBusinessProfile": "Aucun profil d'entreprise trouvé",
       "ordersDescription": "Consultez et gérez les commandes clients, suivez le statut de livraison et gérez l'exécution des commandes.",
       "batchOrdersTitle": "Traitement des commandes par lot",
@@ -631,6 +655,10 @@
         "adminSystem": "Système et intégration",
         "adminSystemHint": "Configuration, paramétrage pays et valeurs par défaut de l’application."
       }
+    },
+    "rentalImages": {
+      "dashboardTitle": "Photothèque de location",
+      "dashboardDescription": "Téléversez des photos de location, lancez le nettoyage par IA et liez ou créez des articles à louer."
     },
     "onboarding": {
       "firstSale": {
@@ -793,12 +821,21 @@
       "weeklyAvailability": "Disponibilité hebdomadaire",
       "units": "Unités disponibles",
       "tagsHint": "Étiquettes (séparées par des virgules)",
+      "descriptionPlaceholder": "Décrivez votre article à louer : points forts, consignes d’utilisation et ce qui est inclus.",
       "edit": "Modifier",
+      "preview": "Aperçu",
       "editItemTitle": "Modifier la location",
       "backToCatalog": "Retour aux locations",
       "manageImages": "Gérer les images",
       "editItemSection": "Détails de l'article",
       "listingsSection": "Annonces par lieu",
+      "moderation": {
+        "pending": "En attente de validation",
+        "approved": "En ligne",
+        "rejected": "Refusée",
+        "pendingListingsBadge": "{{count}} annonce(s) en attente de validation",
+        "resubmitHint": "Si cette annonce a été refusée, l’enregistrement renverra l’annonce pour vérification."
+      },
       "listingAtLocation": "Annonce : {{location}}",
       "saveListing": "Enregistrer l'annonce",
       "saving": "Enregistrement...",
@@ -811,6 +848,7 @@
       "currency": "Devise",
       "itemActive": "Actif dans le catalogue",
       "listingActive": "Annonce active",
+      "maxHoursHint": "Laisser vide pour aucun maximum",
       "maxDaysHint": "Laisser vide pour aucun maximum",
       "softDelete": {
         "removeListing": "Supprimer l’annonce",
@@ -1480,6 +1518,7 @@
     "more": "Plus",
     "moreThan": "Plus de",
     "next": "Suivant",
+    "previous": "Précédent",
     "none": "Aucun",
     "no": "Non",
     "status": "Statut",

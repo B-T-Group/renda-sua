@@ -37,3 +37,14 @@ export interface RentalPeriodEndedEmailPayload {
   clientUserId: string;
   businessUserId: string;
 }
+
+export interface RentalListingModerationEmailPayload {
+  listingId: string;
+  rentalItemName: string;
+  businessUserId: string;
+}
+
+export interface RentalListingRejectedEmailPayload
+  extends RentalListingModerationEmailPayload {
+  rejectionReason: string;
+}

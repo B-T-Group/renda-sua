@@ -17,6 +17,7 @@ import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
+import AdminRentalListingsModerationPage from '../components/pages/AdminRentalListingsModerationPage';
 import AdminUserDocumentsPage from '../components/pages/AdminUserDocumentsPage';
 import AdminUserMessagesPage from '../components/pages/AdminUserMessagesPage';
 import CountryOnboardingPage from '../components/pages/CountryOnboardingPage';
@@ -298,6 +299,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminManageBusinesses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/rental-listings/moderation"
+              element={
+                <ProtectedRoute>
+                  <AdminRentalListingsModerationPage />
                 </ProtectedRoute>
               }
             />

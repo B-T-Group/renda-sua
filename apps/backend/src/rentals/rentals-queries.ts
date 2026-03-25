@@ -4,6 +4,7 @@ export const GET_LISTING_FOR_REQUEST = `
       id
       is_active
       deleted_at
+      moderation_status
       min_rental_hours
       max_rental_hours
       units_available
@@ -94,6 +95,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
     rental_location_listings_by_pk(id: $id) {
       id
       deleted_at
+      moderation_status
       base_price_per_hour
       base_price_per_day
       min_rental_hours
@@ -475,6 +477,8 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         base_price_per_day
         is_active
         deleted_at
+        moderation_status
+        moderated_at
       }
     }
   }
@@ -507,6 +511,9 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         units_available
         is_active
         deleted_at
+        moderation_status
+        moderated_at
+        moderated_by_user_id
         pickup_instructions
         dropoff_instructions
         weekly_availability(order_by: { weekday: asc }) {
@@ -549,10 +556,26 @@ export const GET_RENTAL_LISTING_BUSINESS_CHECK = `
     rental_location_listings_by_pk(id: $id) {
       id
       deleted_at
+      moderation_status
       rental_item {
         business_id
         deleted_at
       }
+    }
+  }
+`;
+
+export const RESET_RENTAL_LISTING_MODERATION_PENDING = `
+  mutation ResetRentalListingModerationPending($id: uuid!) {
+    update_rental_location_listings_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        moderation_status: pending
+        moderated_at: null
+        moderated_by_user_id: null
+      }
+    ) {
+      id
     }
   }
 `;

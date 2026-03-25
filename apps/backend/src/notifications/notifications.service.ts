@@ -15,12 +15,16 @@ import {
 } from './email-template-data';
 import type {
   NotificationData,
+  RentalListingModerationEmailPayload,
+  RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
 } from './notification-types';
 import twilio = require('twilio');
 
 export type {
   NotificationData,
+  RentalListingModerationEmailPayload,
+  RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
 } from './notification-types';
 
@@ -182,6 +186,67 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendRentalPeriodEndedEmails: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendRentalListingApprovedEmail(
+    payload: RentalListingModerationEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental listing approved email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_rental_listing_approved',
+          locale
+        ),
+        variables: {
+          listingId: payload.listingId,
+          rentalItemName: payload.rentalItemName,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendRentalListingApprovedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendRentalListingRejectedEmail(
+    payload: RentalListingRejectedEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental listing rejected email skipped: missing recipient email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_rental_listing_rejected',
+          locale
+        ),
+        variables: {
+          listingId: payload.listingId,
+          rentalItemName: payload.rentalItemName,
+          rejectionReason: payload.rejectionReason,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendRentalListingRejectedEmail: ${error?.message ?? String(error)}`
       );
     }
   }

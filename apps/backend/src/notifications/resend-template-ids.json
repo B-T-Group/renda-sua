@@ -64,5 +64,9 @@
   "business_rental_period_ended": "feeebb0a-3bfa-48df-9813-6229eb20e4cc",
   "business_rental_period_ended_fr": "c8760692-a3a2-4761-aa23-5066d114876f",
   "client_rental_period_ended": "c2440b28-627b-4754-b343-f179783139cd",
-  "client_rental_period_ended_fr": "76ef4e14-cd3d-4a5e-ba19-d47a9f676c1f"
+  "client_rental_period_ended_fr": "76ef4e14-cd3d-4a5e-ba19-d47a9f676c1f",
+  "business_rental_listing_approved": "7e0367f0-ef47-4541-9843-58e76014a659",
+  "business_rental_listing_approved_fr": "5a0a49bb-bd7c-4e73-8a02-19e591c94dca",
+  "business_rental_listing_rejected": "cbcfe971-2b81-4b78-bcfe-cdcd2956c996",
+  "business_rental_listing_rejected_fr": "695296fd-7eff-4512-bc58-511f98ba89e4"
 }

@@ -32,6 +32,7 @@ import {
   WEEKDAY_LABELS,
   type WeeklyAvailabilitySlot,
 } from '../rentals/businessRentalsShared';
+import RentalListingModerationStatusChip from '../rentals/RentalListingModerationStatusChip';
 import LoadingPage from '../common/LoadingPage';
 
 const BusinessRentalsCatalogPage: React.FC = () => {
@@ -175,6 +176,10 @@ const BusinessRentalsCatalogPage: React.FC = () => {
         )}
         {items.map((it) => {
           const thumb = it.rental_item_images?.[0]?.image_url;
+          const pendingModeration =
+            it.rental_location_listings?.filter(
+              (l) => !l.deleted_at && l.moderation_status === 'pending'
+            ).length ?? 0;
           return (
             <Box
               key={it.id}
@@ -237,6 +242,17 @@ const BusinessRentalsCatalogPage: React.FC = () => {
                     size="small"
                     label={`${t('business.rentals.listingsCount', 'Listings')}: ${it.rental_location_listings?.length ?? 0}`}
                   />
+                  {pendingModeration > 0 ? (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      label={t('business.rentals.moderation.pendingListingsBadge', {
+                        defaultValue: '{{count}} listing(s) pending approval',
+                        count: pendingModeration,
+                      })}
+                    />
+                  ) : null}
                   {it.deleted_at ? (
                     <Chip
                       size="small"

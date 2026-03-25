@@ -85,6 +85,16 @@ function subjectForTemplate(name: string): string {
       ? 'Location — fin de période — Rendasua'
       : 'Rental period ended — Rendasua';
   }
+  if (name.includes('business_rental_listing_approved')) {
+    return name.endsWith('_fr')
+      ? 'Annonce de location approuvée — Rendasua'
+      : 'Rental listing approved — Rendasua';
+  }
+  if (name.includes('business_rental_listing_rejected')) {
+    return name.endsWith('_fr')
+      ? 'Annonce de location non approuvée — Rendasua'
+      : 'Rental listing not approved — Rendasua';
+  }
   return name.endsWith('_fr')
     ? 'Mise à jour de commande — Rendasua'
     : 'Rendasua — order update';

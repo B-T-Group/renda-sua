@@ -5,6 +5,7 @@ import {
   Business as BizIcon,
   Label as BrandIcon,
   Category as CategoryIcon,
+  FactCheck as RentalModerationIcon,
   CalendarMonth as RentalCalendarIcon,
   Description as DocumentsIcon,
   Error as ErrorIcon,
@@ -278,6 +279,14 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#1976d2',
       path: '/admin/commission-accounts',
+    },
+    {
+      title: t('business.dashboard.manageRentalListingModeration'),
+      description: t('business.dashboard.manageRentalListingModerationDescription'),
+      icon: <RentalModerationIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#5d4037',
+      path: '/admin/rental-listings/moderation',
     },
   ];
 

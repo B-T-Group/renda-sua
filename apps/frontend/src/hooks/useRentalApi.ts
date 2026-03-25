@@ -59,6 +59,8 @@ export interface BusinessRentalItemRow {
     base_price_per_day: number;
     is_active?: boolean;
     deleted_at?: string | null;
+    moderation_status?: string;
+    moderated_at?: string | null;
   }[];
 }
 
@@ -72,6 +74,9 @@ export interface BusinessRentalListingDetail {
   units_available: number;
   is_active: boolean;
   deleted_at?: string | null;
+  moderation_status?: string;
+  moderated_at?: string | null;
+  moderated_by_user_id?: string | null;
   pickup_instructions?: string | null;
   dropoff_instructions?: string | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];
