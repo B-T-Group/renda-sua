@@ -10,11 +10,11 @@ const FirstRentalItemOnboardingPage: React.FC = () => {
       <SEOHead
         title={t(
           'business.onboarding.firstRental.seoTitle',
-          'Add your first rental'
+          'Add rental item'
         )}
         description={t(
           'business.onboarding.firstRental.seoDescription',
-          'Guided setup: upload photos, create your rental, publish at a location.'
+          'Upload photos, choose a main image, create details (optionally with AI), then publish at a location.'
         )}
         keywords={t('seo.business-dashboard.keywords')}
       />

@@ -22,6 +22,9 @@ export function rentalStudioTabFromPath(pathname: string): number {
   if (pathname.includes('/business/rentals/items/')) {
     return 0;
   }
+  if (pathname.includes('/business/onboarding/add-rental-item')) {
+    return 0;
+  }
   return 0;
 }
 

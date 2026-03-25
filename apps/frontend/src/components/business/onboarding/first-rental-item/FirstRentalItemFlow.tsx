@@ -8,13 +8,14 @@ import {
   Stepper,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import FirstRentalItemCreateStep, {
   type CreatedRentalItemSummary,
 } from './FirstRentalItemCreateStep';
+import type { FirstRentalUploadResult } from './firstRentalUploadTypes';
 import FirstRentalItemLocationStep from './FirstRentalItemLocationStep';
 import FirstRentalItemSuccessStep from './FirstRentalItemSuccessStep';
 import FirstRentalItemUploadStep from './FirstRentalItemUploadStep';
@@ -24,19 +25,8 @@ const FirstRentalItemFlow: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const [step, setStep] = useState(0);
-  const [imageIds, setImageIds] = useState<string[]>([]);
-  const [primaryImagePreviewUrl, setPrimaryImagePreviewUrl] = useState<
-    string | null
-  >(null);
+  const [upload, setUpload] = useState<FirstRentalUploadResult | null>(null);
   const [item, setItem] = useState<CreatedRentalItemSummary | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (primaryImagePreviewUrl) {
-        URL.revokeObjectURL(primaryImagePreviewUrl);
-      }
-    };
-  }, [primaryImagePreviewUrl]);
 
   if (!profile?.business) {
     return <Navigate to="/dashboard" replace />;
@@ -61,7 +51,7 @@ const FirstRentalItemFlow: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         {t(
           'business.onboarding.firstRental.title',
-          'Add your first rental'
+          'Add rental item'
         )}
       </Typography>
       <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>
@@ -74,20 +64,15 @@ const FirstRentalItemFlow: React.FC = () => {
       <Paper sx={{ p: 3 }}>
         {step === 0 && (
           <FirstRentalItemUploadStep
-            onComplete={(ids, primaryFile) => {
-              setPrimaryImagePreviewUrl((prev) => {
-                if (prev) URL.revokeObjectURL(prev);
-                return URL.createObjectURL(primaryFile);
-              });
-              setImageIds(ids);
+            onComplete={(result) => {
+              setUpload(result);
               setStep(1);
             }}
           />
         )}
-        {step === 1 && (
+        {step === 1 && upload && (
           <FirstRentalItemCreateStep
-            imageIds={imageIds}
-            primaryImagePreviewUrl={primaryImagePreviewUrl}
+            upload={upload}
             onComplete={(s) => {
               setItem(s);
               setStep(2);

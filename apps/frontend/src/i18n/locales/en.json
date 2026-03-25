@@ -728,9 +728,9 @@
         }
       },
       "firstRental": {
-        "seoTitle": "Add your first rental",
-        "seoDescription": "Guided setup: upload photos, create your rental, publish at a location.",
-        "title": "Add your first rental",
+        "seoTitle": "Add rental item",
+        "seoDescription": "Upload photos, choose a main image, create details (optionally with AI), then publish at a location.",
+        "title": "Add rental item",
         "back": "Back",
         "steps": {
           "upload": "Photos",
@@ -739,9 +739,11 @@
           "done": "Done"
         },
         "upload": {
-          "hint": "Add photos of what you rent out. We will create the rental from your first image and can attach the rest to the same item.",
-          "clearPhotoNote": "Use a clear, well-lit photo of the item you rent on a simple background so renters (and AI, if you use it) can see details easily.",
-          "previewCaption": "Preview shows your first image only.",
+          "hint": "Add one or more photos. Choose which image is the main listing photo, then continue.",
+          "clearPhotoNote": "Use clear, well-lit photos of the item you rent on a simple background so renters (and AI, if you use it) can see details easily.",
+          "mainPhotoLabel": "Main listing photo — tap a thumbnail to select",
+          "mainBadge": "Main",
+          "previewCaption": "Large preview shows the image selected as main.",
           "chooseFiles": "Choose images",
           "continue": "Continue",
           "presignError": "Failed to prepare upload",
@@ -750,7 +752,9 @@
           "error": "Upload failed"
         },
         "create": {
-          "hint": "Fill in the details below. Optionally use AI once to suggest fields from your photo.",
+          "hint": "Choose which photo AI should read, fill in the details, then continue.",
+          "aiSourceLabel": "Photo for AI suggestions",
+          "aiSourceBadge": "AI",
           "fillWithAi": "Fill details with AI",
           "aiWorking": "Analyzing your image…",
           "categoryHint": "Suggested category: {{hint}}. Pick the closest match below if needed.",
@@ -778,7 +782,7 @@
           "error": "Could not create listing"
         },
         "success": {
-          "title": "Your first rental is set up",
+          "title": "Rental item is set up",
           "body": "{{name}} has a listing at your location. You can add more listings or photos anytime.",
           "dashboard": "Back to dashboard",
           "viewItem": "View rental item"

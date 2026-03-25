@@ -20,6 +20,7 @@ import { useCreateRentalFromImage } from '../../../../hooks/useCreateRentalFromI
 import { useRentalCategories } from '../../../../hooks/useRentalCategories';
 import { useRentalFromImageSuggestions } from '../../../../hooks/useRentalFromImageSuggestions';
 import { useRentalItemImages } from '../../../../hooks/useRentalItemImages';
+import type { FirstRentalUploadResult } from './firstRentalUploadTypes';
 
 export interface CreatedRentalItemSummary {
   id: string;
@@ -27,8 +28,7 @@ export interface CreatedRentalItemSummary {
 }
 
 interface FirstRentalItemCreateStepProps {
-  imageIds: string[];
-  primaryImagePreviewUrl: string | null;
+  upload: FirstRentalUploadResult;
   onComplete: (summary: CreatedRentalItemSummary) => void;
 }
 
@@ -46,15 +46,30 @@ async function linkExtraRentalImages(
   }
 }
 
+async function applyGalleryOrder(
+  updateImage: (
+    id: string,
+    changes: { display_order: number }
+  ) => Promise<unknown>,
+  mainImageId: string,
+  allIds: string[]
+) {
+  const rest = allIds.filter((id) => id !== mainImageId);
+  const ordered = [mainImageId, ...rest];
+  for (let i = 0; i < ordered.length; i++) {
+    await updateImage(ordered[i], { display_order: i });
+  }
+}
+
 const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
-  imageIds,
-  primaryImagePreviewUrl,
+  upload,
   onComplete,
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const primaryId = imageIds[0] ?? '';
-  const extraIds = imageIds.slice(1);
+  const { imageIds, files, mainImageIndex } = upload;
+  const [sourceImageIndex, setSourceImageIndex] = useState(mainImageIndex);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [aiTrigger, setAiTrigger] = useState(0);
   const [name, setName] = useState('');
   const [rentalCategoryId, setRentalCategoryId] = useState('');
@@ -63,9 +78,23 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiCategoryHint, setAiCategoryHint] = useState<string | null>(null);
 
+  const sourceId = imageIds[sourceImageIndex] ?? '';
+  const mainId = imageIds[mainImageIndex] ?? '';
+
+  useEffect(() => {
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setPreviewUrls(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [files]);
+
+  useEffect(() => {
+    setAiSuggestedTags([]);
+    setAiCategoryHint(null);
+  }, [sourceImageIndex]);
+
   const { categories, loading: catLoading } = useRentalCategories();
   const { suggestions, loading: sugLoading, error: sugError } =
-    useRentalFromImageSuggestions(primaryId, {
+    useRentalFromImageSuggestions(sourceId || null, {
       autoWhen: false,
       trigger: aiTrigger,
     });
@@ -74,7 +103,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     loading: createLoading,
     error: createError,
   } = useCreateRentalFromImage();
-  const { associateToRentalItem } = useRentalItemImages();
+  const { associateToRentalItem, updateImage } = useRentalItemImages();
 
   useEffect(() => {
     if (!suggestions) return;
@@ -103,7 +132,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
   const requestAi = () => setAiTrigger((n) => n + 1);
 
   const submit = async () => {
-    if (!primaryId) return;
+    if (!sourceId) return;
     if (!name.trim() || !rentalCategoryId) {
       enqueueSnackbar(
         t(
@@ -116,7 +145,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     }
     const res = await createRentalFromImage({
       mode: 'manual',
-      imageId: primaryId,
+      imageId: sourceId,
       name: name.trim(),
       rental_category_id: rentalCategoryId,
       description: description.trim() || undefined,
@@ -127,7 +156,13 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
     const rid = res?.item?.id;
     const rname = res?.item?.name;
     if (!rid || !rname) return;
+    const extraIds = imageIds.filter((id) => id !== sourceId);
     await linkExtraRentalImages(associateToRentalItem, rid, extraIds);
+    try {
+      await applyGalleryOrder(updateImage, mainId, imageIds);
+    } catch {
+      /* display order is best-effort */
+    }
     enqueueSnackbar(
       t(
         'business.onboarding.firstRental.create.success',
@@ -139,16 +174,87 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
   };
 
   const formDisabled = catLoading || sugLoading || createLoading;
+  const heroUrl = previewUrls[sourceImageIndex];
 
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
         {t(
           'business.onboarding.firstRental.create.hint',
-          'Fill in the details below. Optionally use AI once to suggest fields from your photo.'
+          'Choose which photo AI should read, fill in the details, then continue.'
         )}
       </Typography>
-      {primaryImagePreviewUrl ? (
+      {imageIds.length > 1 ? (
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {t(
+              'business.onboarding.firstRental.create.aiSourceLabel',
+              'Photo for AI suggestions'
+            )}
+          </Typography>
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            {imageIds.map((id, i) => (
+              <Box
+                key={id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSourceImageIndex(i)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSourceImageIndex(i);
+                  }
+                }}
+                sx={{
+                  position: 'relative',
+                  border: 2,
+                  borderColor:
+                    sourceImageIndex === i ? 'secondary.main' : 'divider',
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  width: 88,
+                  height: 88,
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                {previewUrls[i] ? (
+                  <Box
+                    component="img"
+                    src={previewUrls[i]}
+                    alt=""
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
+                  />
+                ) : null}
+                {sourceImageIndex === i ? (
+                  <Chip
+                    size="small"
+                    color="secondary"
+                    label={t(
+                      'business.onboarding.firstRental.create.aiSourceBadge',
+                      'AI'
+                    )}
+                    sx={{
+                      position: 'absolute',
+                      bottom: 4,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      height: 20,
+                      fontSize: '0.65rem',
+                    }}
+                  />
+                ) : null}
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      ) : null}
+      {heroUrl ? (
         <Box
           sx={{
             borderRadius: 2,
@@ -164,7 +270,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
         >
           <Box
             component="img"
-            src={primaryImagePreviewUrl}
+            src={heroUrl}
             alt=""
             sx={{
               maxHeight: 200,
@@ -179,7 +285,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
         variant="outlined"
         startIcon={<AutoAwesomeIcon />}
         onClick={requestAi}
-        disabled={formDisabled || !primaryId}
+        disabled={formDisabled || !sourceId}
       >
         {t(
           'business.onboarding.firstRental.create.fillWithAi',
@@ -267,7 +373,7 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
       <Button
         variant="contained"
         onClick={() => void submit()}
-        disabled={formDisabled || !primaryId}
+        disabled={formDisabled || !sourceId}
       >
         {t('business.onboarding.firstRental.create.continue', 'Continue')}
       </Button>

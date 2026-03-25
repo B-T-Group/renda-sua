@@ -25,7 +25,6 @@ import {
   useRentalApi,
   type BusinessRentalItemRow,
 } from '../../hooks/useRentalApi';
-import { useRentalCategories } from '../../hooks/useRentalCategories';
 import BusinessRentalsStudioShell from '../rentals/BusinessRentalsStudioShell';
 import {
   createDefaultWeeklyAvailability,
@@ -40,19 +39,12 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
-  const { categories } = useRentalCategories();
   const { locations } = useBusinessLocations(businessId);
-  const { fetchBusinessRentalItems, createBusinessRentalItem, createBusinessRentalListing } =
-    useRentalApi();
+  const { fetchBusinessRentalItems, createBusinessRentalListing } = useRentalApi();
 
   const [items, setItems] = useState<BusinessRentalItemRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [itemOpen, setItemOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [desc, setDesc] = useState('');
-  const [cat, setCat] = useState('');
-  const [tags, setTags] = useState('');
   const [selItem, setSelItem] = useState('');
   const [selLoc, setSelLoc] = useState('');
   const [price, setPrice] = useState('');
@@ -83,22 +75,6 @@ const BusinessRentalsCatalogPage: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [businessId, loadItems]);
-
-  const saveItem = async () => {
-    if (!businessId || !cat) return;
-    await createBusinessRentalItem({
-      rental_category_id: cat,
-      name,
-      description: desc,
-      tags: tags
-        .split(',')
-        .map((x) => x.trim())
-        .filter(Boolean),
-      currency: 'XAF',
-    });
-    setItemOpen(false);
-    void loadItems();
-  };
 
   const saveListing = async () => {
     if (!selItem || !selLoc) return;
@@ -144,7 +120,10 @@ const BusinessRentalsCatalogPage: React.FC = () => {
         )}
       >
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
-          <Button variant="contained" onClick={() => setItemOpen(true)}>
+          <Button
+            variant="contained"
+            onClick={() => navigate('/business/onboarding/add-rental-item')}
+          >
             {t('business.rentals.addItem', 'Add rental item')}
           </Button>
           <Button variant="outlined" onClick={() => setListOpen(true)}>
@@ -286,45 +265,6 @@ const BusinessRentalsCatalogPage: React.FC = () => {
           );
         })}
       </BusinessRentalsStudioShell>
-
-      <Dialog open={itemOpen} onClose={() => setItemOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{t('business.rentals.addItem', 'Add rental item')}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField label={t('common.name', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
-          <TextField
-            label={t('common.description', 'Description')}
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            multiline
-            minRows={2}
-          />
-          <FormControl fullWidth>
-            <InputLabel>{t('rentals.category', 'Category')}</InputLabel>
-            <Select
-              value={cat}
-              label={t('rentals.category', 'Category')}
-              onChange={(e) => setCat(e.target.value as string)}
-            >
-              {categories.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            label={t('business.rentals.tagsHint', 'Tags (comma-separated)')}
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setItemOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-          <Button variant="contained" onClick={() => void saveItem()}>
-            {t('common.save', 'Save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={listOpen} onClose={() => setListOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('business.rentals.addListing', 'Add location listing')}</DialogTitle>

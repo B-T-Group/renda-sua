@@ -1,7 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
@@ -484,12 +484,16 @@ function App() {
               }
             />
             <Route
-              path="/business/onboarding/first-rental-item"
+              path="/business/onboarding/add-rental-item"
               element={
                 <ProtectedRoute>
                   <FirstRentalItemOnboardingPage />
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/business/onboarding/first-rental-item"
+              element={<Navigate to="/business/onboarding/add-rental-item" replace />}
             />
             <Route
               path="/business/rentals/catalog"

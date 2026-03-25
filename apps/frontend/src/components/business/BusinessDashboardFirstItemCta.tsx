@@ -18,7 +18,7 @@ const BusinessDashboardFirstItemCta: React.FC<
   const isSale = variant === 'sale';
   const to = isSale
     ? '/business/onboarding/first-sale-item'
-    : '/business/onboarding/first-rental-item';
+    : '/business/onboarding/add-rental-item';
   return (
     <Card
       elevation={0}

@@ -717,9 +717,9 @@
         }
       },
       "firstRental": {
-        "seoTitle": "Ajouter votre première location",
-        "seoDescription": "Assistant : photos, fiche de location, publication sur un emplacement.",
-        "title": "Ajouter votre première location",
+        "seoTitle": "Ajouter un article à louer",
+        "seoDescription": "Téléversez des photos, choisissez l’image principale, créez la fiche (éventuellement avec l’IA), puis publiez sur un emplacement.",
+        "title": "Ajouter un article à louer",
         "back": "Retour",
         "steps": {
           "upload": "Photos",
@@ -728,9 +728,11 @@
           "done": "Terminé"
         },
         "upload": {
-          "hint": "Photos de ce que vous louez. La première sert à créer l’article ; les autres peuvent être liées au même article.",
-          "clearPhotoNote": "Utilisez une photo nette et bien éclairée de l’article loué sur un fond simple pour que les locataires (et l’IA, si vous l’utilisez) voient bien les détails.",
-          "previewCaption": "L’aperçu montre uniquement la première image.",
+          "hint": "Ajoutez une ou plusieurs photos. Choisissez l’image principale de l’annonce, puis continuez.",
+          "clearPhotoNote": "Utilisez des photos nettes et bien éclairées de l’article loué sur un fond simple pour que les locataires (et l’IA, si vous l’utilisez) voient bien les détails.",
+          "mainPhotoLabel": "Photo principale — touchez une vignette pour la choisir",
+          "mainBadge": "Principale",
+          "previewCaption": "L’aperçu large montre l’image choisie comme principale.",
           "chooseFiles": "Choisir des images",
           "continue": "Continuer",
           "presignError": "Échec de préparation du téléversement",
@@ -739,7 +741,9 @@
           "error": "Échec du téléversement"
         },
         "create": {
-          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de la photo.",
+          "hint": "Choisissez quelle photo l’IA doit analyser, remplissez les champs, puis continuez.",
+          "aiSourceLabel": "Photo pour les suggestions IA",
+          "aiSourceBadge": "IA",
           "fillWithAi": "Remplir les détails avec l’IA",
           "aiWorking": "Analyse de votre image…",
           "categoryHint": "Catégorie suggérée : {{hint}}. Choisissez la correspondance la plus proche ci-dessous si besoin.",
@@ -767,7 +771,7 @@
           "error": "Impossible de créer l’annonce"
         },
         "success": {
-          "title": "Votre première location est prête",
+          "title": "Article de location prêt",
           "body": "{{name}} a une annonce sur votre emplacement. Vous pourrez en ajouter d’autres plus tard.",
           "dashboard": "Retour au tableau de bord",
           "viewItem": "Voir l’article à louer"
