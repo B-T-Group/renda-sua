@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
 export interface RentalFromImageSuggestionData {
@@ -10,15 +10,39 @@ export interface RentalFromImageSuggestionData {
   currency: string;
 }
 
-export const useRentalFromImageSuggestions = () => {
+export type UseRentalFromImageSuggestionsOptions = {
+  /** When true, fetch while the condition holds (e.g. dialog open + AI prefill). */
+  autoWhen?: boolean;
+  /** Increment (e.g. on button click) to run a fetch; 0 waits for first click. */
+  trigger?: number;
+};
+
+export const useRentalFromImageSuggestions = (
+  imageId: string | null,
+  options: UseRentalFromImageSuggestionsOptions = {}
+) => {
+  const { autoWhen = false, trigger = 0 } = options;
   const apiClient = useApiClient();
+  const [suggestions, setSuggestions] =
+    useState<RentalFromImageSuggestionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSuggestions = useCallback(
-    async (
-      imageId: string
-    ): Promise<RentalFromImageSuggestionData | null> => {
+  useEffect(() => {
+    if (!imageId) {
+      setSuggestions(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    if (!autoWhen && trigger < 1) {
+      setSuggestions(null);
+      setError(null);
+      return;
+    }
+    setSuggestions(null);
+    let cancelled = false;
+    const run = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -29,24 +53,34 @@ export const useRentalFromImageSuggestions = () => {
         }>('/rental-item-images/rental-from-image-suggestions', {
           imageId,
         });
-        if (!response.data.success || !response.data.data) {
-          setError(response.data.error || 'Failed to analyze image');
-          return null;
+        if (!cancelled) {
+          if (response.data.success && response.data.data) {
+            setSuggestions(response.data.data);
+          } else {
+            setError(
+              response.data.error || 'Failed to analyze image'
+            );
+          }
         }
-        return response.data.data;
       } catch (err: any) {
-        const msg =
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to analyze image';
-        setError(msg);
-        return null;
+        if (!cancelled) {
+          setError(
+            err.response?.data?.error ||
+              err.message ||
+              'Failed to analyze image'
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    },
-    [apiClient]
-  );
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiClient, imageId, autoWhen, trigger]);
 
-  return { fetchSuggestions, loading, error };
+  return { suggestions, loading, error };
 };

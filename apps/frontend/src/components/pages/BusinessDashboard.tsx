@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessDashboardModuleCard, {
   BusinessDashboardModule,
 } from '../business/BusinessDashboardModuleCard';
@@ -57,12 +58,18 @@ const BusinessDashboard: React.FC = () => {
   const ordersTotalNonCancelled = aggregates?.ordersTotal ?? 0;
   const orderCountByStatus = aggregates?.ordersByStatus ?? {};
   const itemCount = aggregates?.itemCount ?? 0;
+  const rentalItemCount = aggregates?.rentalItemCount ?? 0;
   const locationCount = aggregates?.locationCount ?? 0;
   const inventoryCount = aggregates?.inventoryCount ?? 0;
   const pendingFailedDeliveriesCount = aggregates?.pendingFailedDeliveriesCount ?? 0;
 
-  const isRentalFocused =
-    profile?.business?.main_interest === 'rent_items';
+  const mainInterest =
+    profile?.business?.main_interest ?? 'sell_items';
+  const isRentalFocused = mainInterest === 'rent_items';
+  const showFirstSaleCta =
+    !isLoading && mainInterest === 'sell_items' && itemCount === 0;
+  const showFirstRentalCta =
+    !isLoading && mainInterest === 'rent_items' && rentalItemCount === 0;
 
   const orderModules: BusinessDashboardModule[] = [
     {
@@ -376,6 +383,11 @@ const BusinessDashboard: React.FC = () => {
           : t('business.dashboard.subtitle')}
       </Typography>
 
+      {showFirstSaleCta && <BusinessDashboardFirstItemCta variant="sale" />}
+      {showFirstRentalCta && (
+        <BusinessDashboardFirstItemCta variant="rental" />
+      )}
+
       <AddressAlert />
 
       {aggregatesError && (
@@ -489,19 +501,6 @@ const BusinessDashboard: React.FC = () => {
         </Card>
       </BusinessDashboardSection>
 
-      <BusinessDashboardSection
-        title={t(
-          'business.dashboard.sections.ordersAndDelivery',
-          'Orders & delivery'
-        )}
-        subtitle={t(
-          'business.dashboard.sections.ordersAndDeliveryHint',
-          'Track sales, batch updates, and resolve delivery issues.'
-        )}
-      >
-        {renderModuleRow(orderModules)}
-      </BusinessDashboardSection>
-
       {isRentalFocused ? (
         <>
           <BusinessDashboardSection
@@ -512,6 +511,19 @@ const BusinessDashboard: React.FC = () => {
             )}
           >
             {renderModuleRow(rentalModules)}
+          </BusinessDashboardSection>
+
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.ordersAndDelivery',
+              'Orders & delivery'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.ordersAndDeliveryHint',
+              'Track sales, batch updates, and resolve delivery issues.'
+            )}
+          >
+            {renderModuleRow(orderModules)}
           </BusinessDashboardSection>
 
           <BusinessDashboardSection
@@ -529,6 +541,19 @@ const BusinessDashboard: React.FC = () => {
         </>
       ) : (
         <>
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.ordersAndDelivery',
+              'Orders & delivery'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.ordersAndDeliveryHint',
+              'Track sales, batch updates, and resolve delivery issues.'
+            )}
+          >
+            {renderModuleRow(orderModules)}
+          </BusinessDashboardSection>
+
           <BusinessDashboardSection
             title={t(
               'business.dashboard.sections.catalog',

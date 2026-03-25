@@ -40,7 +40,7 @@ export const CreateItemFromImageDialog: React.FC<
   const [createdItem, setCreatedItem] = useState<any | null>(null);
 
   const { loading: suggestionsLoading, suggestions, error: suggestionsError } =
-    useImageItemSuggestions(image?.id ?? null, open);
+    useImageItemSuggestions(image?.id ?? null, { autoWhen: open });
 
   const {
     createItemFromImage,

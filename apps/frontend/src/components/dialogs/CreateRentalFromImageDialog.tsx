@@ -53,10 +53,12 @@ export const CreateRentalFromImageDialog: React.FC<
   const { createRentalFromImage, loading, error } =
     useCreateRentalFromImage();
   const {
-    fetchSuggestions,
+    suggestions,
     loading: suggestionsLoading,
     error: suggestionsError,
-  } = useRentalFromImageSuggestions();
+  } = useRentalFromImageSuggestions(image?.id ?? null, {
+    autoWhen: open && entrySource === 'ai_prefill',
+  });
 
   useEffect(() => {
     if (!open || !image) return;
@@ -82,24 +84,20 @@ export const CreateRentalFromImageDialog: React.FC<
   }, [suggestionsError, enqueueSnackbar]);
 
   useEffect(() => {
-    if (!open || !image || entrySource !== 'ai_prefill') return;
-    let cancelled = false;
-    void (async () => {
-      const data = await fetchSuggestions(image.id);
-      if (cancelled || !data) return;
-      setName(data.name?.trim() || image.caption?.trim() || '');
-      setDescription(data.description?.trim() || '');
-      setRentalCategoryId(data.rental_category_id || '');
-      setCurrency(data.currency?.trim() || 'XAF');
-      setAiSuggestedTags(data.suggested_tags ?? []);
-      setAiCategoryHint(
-        data.rental_category_id ? null : data.rentalCategorySuggestion || null
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, image?.id, entrySource, fetchSuggestions]);
+    if (!open || !image || entrySource !== 'ai_prefill' || !suggestions) {
+      return;
+    }
+    setName(suggestions.name?.trim() || image.caption?.trim() || '');
+    setDescription(suggestions.description?.trim() || '');
+    setRentalCategoryId(suggestions.rental_category_id || '');
+    setCurrency(suggestions.currency?.trim() || 'XAF');
+    setAiSuggestedTags(suggestions.suggested_tags ?? []);
+    setAiCategoryHint(
+      suggestions.rental_category_id
+        ? null
+        : suggestions.rentalCategorySuggestion || null
+    );
+  }, [open, image, entrySource, suggestions]);
 
   const handleCreate = async () => {
     if (!image) return;

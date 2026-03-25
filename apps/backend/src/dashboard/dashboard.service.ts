@@ -6,6 +6,7 @@ export interface DashboardAggregatesDto {
   ordersTotal: number;
   ordersByStatus: Record<string, number>;
   itemCount: number;
+  rentalItemCount: number;
   locationCount: number;
   inventoryCount: number;
   pendingFailedDeliveriesCount: number;
@@ -37,6 +38,7 @@ export class DashboardService {
     const [
       ordersByStatus,
       itemCount,
+      rentalItemCount,
       locationCount,
       inventoryCount,
       pendingFailedDeliveriesCount,
@@ -44,6 +46,7 @@ export class DashboardService {
     ] = await Promise.all([
       this.getOrdersByStatus(businessId),
       this.getItemCount(businessId),
+      this.getRentalItemCount(businessId),
       this.getLocationCount(businessId),
       this.getInventoryCount(businessId),
       this.getPendingFailedDeliveriesCount(businessId),
@@ -56,6 +59,7 @@ export class DashboardService {
       ordersTotal,
       ordersByStatus,
       itemCount,
+      rentalItemCount,
       locationCount,
       inventoryCount,
       pendingFailedDeliveriesCount,
@@ -109,6 +113,20 @@ export class DashboardService {
       businessId,
     });
     return result?.items_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async getRentalItemCount(businessId: string): Promise<number> {
+    const query = `
+      query DashboardRentalItemCount($businessId: uuid!) {
+        rental_items_aggregate(where: { business_id: { _eq: $businessId } }) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      businessId,
+    });
+    return result?.rental_items_aggregate?.aggregate?.count ?? 0;
   }
 
   private async getLocationCount(businessId: string): Promise<number> {

@@ -616,6 +616,14 @@
       "adminManagementHint": "Platform tools visible to administrators only.",
       "countryOnboarding": "Country onboarding",
       "countryOnboardingDescription": "Multi-step wizard to configure delivery slots and supported states for a country",
+      "firstItem": {
+        "saleTitle": "Add your first product",
+        "saleBody": "Upload photos, create your item with AI or manually, then add it to a location so customers can buy.",
+        "saleCta": "Start guided setup",
+        "rentalTitle": "Add your first rental item",
+        "rentalBody": "Upload photos, create your rental with AI or manually, then publish it at a location.",
+        "rentalCta": "Start guided setup"
+      },
       "sections": {
         "ordersAndDelivery": "Orders & delivery",
         "ordersAndDeliveryHint": "Track sales, batch updates, and resolve delivery issues.",
@@ -631,6 +639,117 @@
         "adminCatalogHint": "Taxonomy, brands, and commission-related accounts.",
         "adminSystem": "System & onboarding",
         "adminSystemHint": "Configuration, country setup, and application defaults."
+      }
+    },
+    "onboarding": {
+      "firstSale": {
+        "seoTitle": "Add your first product",
+        "seoDescription": "Guided setup: upload photos, create your product, add it to a location.",
+        "title": "Add your first product",
+        "back": "Back",
+        "steps": {
+          "upload": "Photos",
+          "create": "Product details",
+          "location": "Location",
+          "done": "Done"
+        },
+        "upload": {
+          "hint": "Add one or more photos of your product. You can create the listing from the first image and attach the rest to the same item.",
+          "clearPhotoNote": "Use a clear, well-lit photo of your product on a simple background so buyers (and AI, if you use it) can see details easily.",
+          "previewCaption": "Preview shows your first image only.",
+          "chooseFiles": "Choose images",
+          "continue": "Continue",
+          "presignError": "Failed to prepare image upload",
+          "noIds": "Upload did not return image ids",
+          "success": "Images uploaded successfully",
+          "error": "Failed to upload images"
+        },
+        "create": {
+          "hint": "Fill in the details below. Optionally use AI once to suggest fields from your photo.",
+          "fillWithAi": "Fill details with AI",
+          "aiWorking": "Analyzing your image…",
+          "name": "Name",
+          "category": "Category name",
+          "subCategory": "Subcategory name",
+          "brand": "Brand",
+          "description": "Description",
+          "price": "Price",
+          "currency": "Currency",
+          "continue": "Continue",
+          "nameRequired": "Please enter a product name",
+          "success": "Product created"
+        },
+        "location": {
+          "hint": "Choose where this product is stocked. You can add a new location if needed.",
+          "addressFirst": "Add a primary business address in your profile before creating locations.",
+          "select": "Location",
+          "addLocation": "New location",
+          "quantity": "Quantity",
+          "finish": "Finish",
+          "pickLocation": "Select or add a location",
+          "success": "Item added to your location",
+          "error": "Could not add to location"
+        },
+        "success": {
+          "title": "Your first product is live",
+          "body": "{{name}} is on your catalog and available at the location you chose.",
+          "dashboard": "Back to dashboard",
+          "viewItem": "View product"
+        }
+      },
+      "firstRental": {
+        "seoTitle": "Add your first rental",
+        "seoDescription": "Guided setup: upload photos, create your rental, publish at a location.",
+        "title": "Add your first rental",
+        "back": "Back",
+        "steps": {
+          "upload": "Photos",
+          "create": "Rental details",
+          "location": "Location & price",
+          "done": "Done"
+        },
+        "upload": {
+          "hint": "Add photos of what you rent out. We will create the rental from your first image and can attach the rest to the same item.",
+          "clearPhotoNote": "Use a clear, well-lit photo of the item you rent on a simple background so renters (and AI, if you use it) can see details easily.",
+          "previewCaption": "Preview shows your first image only.",
+          "chooseFiles": "Choose images",
+          "continue": "Continue",
+          "presignError": "Failed to prepare upload",
+          "noIds": "Upload did not return image ids",
+          "success": "Images uploaded",
+          "error": "Upload failed"
+        },
+        "create": {
+          "hint": "Fill in the details below. Optionally use AI once to suggest fields from your photo.",
+          "fillWithAi": "Fill details with AI",
+          "aiWorking": "Analyzing your image…",
+          "categoryHint": "Suggested category: {{hint}}. Pick the closest match below if needed.",
+          "name": "Name",
+          "category": "Rental category",
+          "description": "Description",
+          "currency": "Currency",
+          "continue": "Continue",
+          "manualRequired": "Name and category are required",
+          "success": "Rental item created"
+        },
+        "location": {
+          "hint": "Pick where renters pick up the item and set your hourly rate.",
+          "addressFirst": "Add a primary business address before creating locations.",
+          "select": "Location",
+          "addLocation": "New location",
+          "pricePerHour": "Price per hour",
+          "finish": "Finish",
+          "pickLocation": "Select or add a location",
+          "invalidPrice": "Enter a valid hourly price",
+          "success": "Rental listing created",
+          "error": "Could not create listing"
+        },
+        "success": {
+          "title": "Your first rental is set up",
+          "body": "{{name}} has a listing at your location. You can add more listings or photos anytime.",
+          "dashboard": "Back to dashboard",
+          "viewItem": "View rental item"
+        }
       }
     },
     "rentals": {

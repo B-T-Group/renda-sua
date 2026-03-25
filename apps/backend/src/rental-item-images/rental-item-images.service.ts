@@ -138,6 +138,9 @@ const INSERT_RENTAL_ITEM_IMAGES = `
   mutation InsertRentalItemImages($objects: [rental_item_images_insert_input!]!) {
     insert_rental_item_images(objects: $objects) {
       affected_rows
+      returning {
+        id
+      }
     }
   }
 `;
@@ -261,8 +264,8 @@ export class RentalItemImagesService {
     businessId: string,
     rentalCategoryId: string | null,
     images: CreateRentalItemImageInput[]
-  ): Promise<void> {
-    if (!images.length) return;
+  ): Promise<{ id: string }[]> {
+    if (!images.length) return [];
     const objects = images.map((img) => ({
       business_id: businessId,
       rental_item_id: null,
@@ -278,9 +281,12 @@ export class RentalItemImagesService {
       tags: [],
       status: 'unassigned',
     }));
-    await this.hasuraUserService.executeMutation(INSERT_RENTAL_ITEM_IMAGES, {
+    const row = await this.hasuraUserService.executeMutation<{
+      insert_rental_item_images: { returning: { id: string }[] };
+    }>(INSERT_RENTAL_ITEM_IMAGES, {
       objects,
     });
+    return row?.insert_rental_item_images?.returning ?? [];
   }
 
   async associateRentalItem(

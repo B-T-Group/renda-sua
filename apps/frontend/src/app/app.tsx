@@ -42,6 +42,8 @@ import CheckoutPage from '../components/pages/CheckoutPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
+import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
+import FirstSaleItemOnboardingPage from '../components/pages/FirstSaleItemOnboardingPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
@@ -461,6 +463,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessImagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/onboarding/first-sale-item"
+              element={
+                <ProtectedRoute>
+                  <FirstSaleItemOnboardingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/onboarding/first-rental-item"
+              element={
+                <ProtectedRoute>
+                  <FirstRentalItemOnboardingPage />
                 </ProtectedRoute>
               }
             />

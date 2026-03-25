@@ -11,10 +11,18 @@ export interface ImageItemSuggestions {
   currency?: string;
 }
 
+export type UseImageItemSuggestionsOptions = {
+  /** When true, fetch while the condition holds (e.g. dialog open). */
+  autoWhen?: boolean;
+  /** Increment (e.g. on button click) to run a fetch; 0 means wait for first click. */
+  trigger?: number;
+};
+
 export const useImageItemSuggestions = (
   imageId: string | null,
-  enabled: boolean
+  options: UseImageItemSuggestionsOptions = {}
 ) => {
+  const { autoWhen = false, trigger = 0 } = options;
   const apiClient = useApiClient();
   const [suggestions, setSuggestions] = useState<ImageItemSuggestions | null>(
     null
@@ -23,7 +31,10 @@ export const useImageItemSuggestions = (
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enabled || !imageId) {
+    if (!imageId) {
+      return;
+    }
+    if (!autoWhen && trigger < 1) {
       return;
     }
     let cancelled = false;
@@ -64,7 +75,7 @@ export const useImageItemSuggestions = (
     return () => {
       cancelled = true;
     };
-  }, [apiClient, imageId, enabled]);
+  }, [apiClient, imageId, autoWhen, trigger]);
 
   return { suggestions, loading, error };
 };

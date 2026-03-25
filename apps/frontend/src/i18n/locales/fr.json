@@ -605,6 +605,14 @@
       "adminManagementHint": "Outils de plateforme visibles uniquement par les administrateurs.",
       "countryOnboarding": "Intégration pays",
       "countryOnboardingDescription": "Assistant pour configurer les créneaux de livraison et les régions prises en charge pour un pays",
+      "firstItem": {
+        "saleTitle": "Ajoutez votre premier produit",
+        "saleBody": "Téléversez des photos, créez l’article avec l’IA ou manuellement, puis ajoutez-le à un emplacement pour la vente.",
+        "saleCta": "Démarrer l’assistant",
+        "rentalTitle": "Ajoutez votre premier article à louer",
+        "rentalBody": "Téléversez des photos, créez la location avec l’IA ou manuellement, puis publiez-la sur un emplacement.",
+        "rentalCta": "Démarrer l’assistant"
+      },
       "sections": {
         "ordersAndDelivery": "Commandes et livraison",
         "ordersAndDeliveryHint": "Suivi des ventes, mises à jour par lot et livraisons en échec.",
@@ -620,6 +628,117 @@
         "adminCatalogHint": "Taxonomie, marques et comptes liés aux commissions.",
         "adminSystem": "Système et intégration",
         "adminSystemHint": "Configuration, paramétrage pays et valeurs par défaut de l’application."
+      }
+    },
+    "onboarding": {
+      "firstSale": {
+        "seoTitle": "Ajouter votre premier produit",
+        "seoDescription": "Assistant : photos, fiche produit, mise en stock sur un emplacement.",
+        "title": "Ajouter votre premier produit",
+        "back": "Retour",
+        "steps": {
+          "upload": "Photos",
+          "create": "Détails du produit",
+          "location": "Emplacement",
+          "done": "Terminé"
+        },
+        "upload": {
+          "hint": "Ajoutez une ou plusieurs photos. La première sert à créer la fiche ; les autres peuvent être liées au même article.",
+          "clearPhotoNote": "Utilisez une photo nette et bien éclairée sur un fond simple pour que les acheteurs (et l’IA, si vous l’utilisez) voient bien les détails.",
+          "previewCaption": "L’aperçu montre uniquement la première image.",
+          "chooseFiles": "Choisir des images",
+          "continue": "Continuer",
+          "presignError": "Échec de préparation du téléversement",
+          "noIds": "Aucun identifiant d’image renvoyé",
+          "success": "Images téléversées",
+          "error": "Échec du téléversement"
+        },
+        "create": {
+          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de la photo.",
+          "fillWithAi": "Remplir avec l’IA",
+          "aiWorking": "Analyse de votre image…",
+          "name": "Nom",
+          "category": "Catégorie",
+          "subCategory": "Sous-catégorie",
+          "brand": "Marque",
+          "description": "Description",
+          "price": "Prix",
+          "currency": "Devise",
+          "continue": "Continuer",
+          "nameRequired": "Indiquez un nom de produit",
+          "success": "Produit créé"
+        },
+        "location": {
+          "hint": "Choisissez l’emplacement du stock. Vous pouvez en créer un nouveau.",
+          "addressFirst": "Ajoutez d’abord une adresse principale à votre profil entreprise.",
+          "select": "Emplacement",
+          "addLocation": "Nouvel emplacement",
+          "quantity": "Quantité",
+          "finish": "Terminer",
+          "pickLocation": "Sélectionnez ou ajoutez un emplacement",
+          "success": "Article ajouté à l’emplacement",
+          "error": "Impossible d’ajouter à l’emplacement"
+        },
+        "success": {
+          "title": "Votre premier produit est en ligne",
+          "body": "{{name}} figure au catalogue sur l’emplacement choisi.",
+          "dashboard": "Retour au tableau de bord",
+          "viewItem": "Voir le produit"
+        }
+      },
+      "firstRental": {
+        "seoTitle": "Ajouter votre première location",
+        "seoDescription": "Assistant : photos, fiche de location, publication sur un emplacement.",
+        "title": "Ajouter votre première location",
+        "back": "Retour",
+        "steps": {
+          "upload": "Photos",
+          "create": "Détails de la location",
+          "location": "Emplacement et tarif",
+          "done": "Terminé"
+        },
+        "upload": {
+          "hint": "Photos de ce que vous louez. La première sert à créer l’article ; les autres peuvent être liées au même article.",
+          "clearPhotoNote": "Utilisez une photo nette et bien éclairée de l’article loué sur un fond simple pour que les locataires (et l’IA, si vous l’utilisez) voient bien les détails.",
+          "previewCaption": "L’aperçu montre uniquement la première image.",
+          "chooseFiles": "Choisir des images",
+          "continue": "Continuer",
+          "presignError": "Échec de préparation du téléversement",
+          "noIds": "Aucun identifiant d’image renvoyé",
+          "success": "Images téléversées",
+          "error": "Échec du téléversement"
+        },
+        "create": {
+          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de la photo.",
+          "fillWithAi": "Remplir les détails avec l’IA",
+          "aiWorking": "Analyse de votre image…",
+          "categoryHint": "Catégorie suggérée : {{hint}}. Choisissez la correspondance la plus proche ci-dessous si besoin.",
+          "name": "Nom",
+          "category": "Catégorie de location",
+          "description": "Description",
+          "currency": "Devise",
+          "continue": "Continuer",
+          "manualRequired": "Le nom et la catégorie sont obligatoires",
+          "success": "Article de location créé"
+        },
+        "location": {
+          "hint": "Lieu de retrait et tarif horaire.",
+          "addressFirst": "Ajoutez d’abord une adresse principale avant de créer des emplacements.",
+          "select": "Emplacement",
+          "addLocation": "Nouvel emplacement",
+          "pricePerHour": "Prix par heure",
+          "finish": "Terminer",
+          "pickLocation": "Sélectionnez ou ajoutez un emplacement",
+          "invalidPrice": "Indiquez un tarif horaire valide",
+          "success": "Annonce de location créée",
+          "error": "Impossible de créer l’annonce"
+        },
+        "success": {
+          "title": "Votre première location est prête",
+          "body": "{{name}} a une annonce sur votre emplacement. Vous pourrez en ajouter d’autres plus tard.",
+          "dashboard": "Retour au tableau de bord",
+          "viewItem": "Voir l’article à louer"
+        }
       }
     },
     "rentals": {

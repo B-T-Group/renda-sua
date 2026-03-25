@@ -142,12 +142,15 @@ export class RentalItemImagesController {
         HttpStatus.BAD_REQUEST
       );
     }
-    await this.rentalItemImagesService.bulkCreate(
+    const created = await this.rentalItemImagesService.bulkCreate(
       businessId,
       body.rental_category_id ?? null,
       images
     );
-    return { success: true };
+    return {
+      success: true,
+      data: { images: created.map((r) => ({ id: r.id })) },
+    };
   }
 
   @Post('rental-from-image-suggestions')

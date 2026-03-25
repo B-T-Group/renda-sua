@@ -114,15 +114,22 @@ export const useBusinessImages = () => {
   );
 
   const bulkCreateImages = useCallback(
-    async (payload: BulkCreateBusinessImagesPayload) => {
+    async (
+      payload: BulkCreateBusinessImagesPayload,
+      options?: { skipRefetch?: boolean }
+    ): Promise<{ id: string }[]> => {
       setSubmitting(true);
       setError(null);
       try {
-        await apiClient.post<{ success: boolean }>(
-          '/business-images/bulk',
-          payload
-        );
-        await fetchImages();
+        const res = await apiClient.post<{
+          success: boolean;
+          data?: { images: { id: string }[] };
+        }>('/business-images/bulk', payload);
+        const ids = res.data.data?.images ?? [];
+        if (!options?.skipRefetch) {
+          await fetchImages();
+        }
+        return ids;
       } catch (err: any) {
         setError(
           err.response?.data?.error ||
@@ -138,7 +145,11 @@ export const useBusinessImages = () => {
   );
 
   const associateImageToItem = useCallback(
-    async (imageId: string, itemId: string) => {
+    async (
+      imageId: string,
+      itemId: string,
+      options?: { skipRefetch?: boolean }
+    ) => {
       setSubmitting(true);
       setError(null);
       try {
@@ -146,7 +157,9 @@ export const useBusinessImages = () => {
           `/business-images/${imageId}/associate-item`,
           { item_id: itemId }
         );
-        await fetchImages();
+        if (!options?.skipRefetch) {
+          await fetchImages();
+        }
       } catch (err: any) {
         setError(
           err.response?.data?.error ||

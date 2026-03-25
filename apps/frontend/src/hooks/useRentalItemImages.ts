@@ -116,15 +116,22 @@ export const useRentalItemImages = () => {
   );
 
   const bulkCreateImages = useCallback(
-    async (payload: BulkCreateRentalItemImagesPayload) => {
+    async (
+      payload: BulkCreateRentalItemImagesPayload,
+      options?: { skipRefetch?: boolean }
+    ): Promise<{ id: string }[]> => {
       setSubmitting(true);
       setError(null);
       try {
-        await apiClient.post<{ success: boolean }>(
-          '/rental-item-images/bulk',
-          payload
-        );
-        await fetchImages();
+        const res = await apiClient.post<{
+          success: boolean;
+          data?: { images: { id: string }[] };
+        }>('/rental-item-images/bulk', payload);
+        const ids = res.data.data?.images ?? [];
+        if (!options?.skipRefetch) {
+          await fetchImages();
+        }
+        return ids;
       } catch (err: any) {
         setError(
           err.response?.data?.error ||
@@ -140,7 +147,11 @@ export const useRentalItemImages = () => {
   );
 
   const associateToRentalItem = useCallback(
-    async (imageId: string, rentalItemId: string) => {
+    async (
+      imageId: string,
+      rentalItemId: string,
+      options?: { skipRefetch?: boolean }
+    ) => {
       setSubmitting(true);
       setError(null);
       try {
@@ -148,7 +159,9 @@ export const useRentalItemImages = () => {
           `/rental-item-images/${imageId}/associate-rental-item`,
           { rental_item_id: rentalItemId }
         );
-        await fetchImages();
+        if (!options?.skipRefetch) {
+          await fetchImages();
+        }
       } catch (err: any) {
         setError(
           err.response?.data?.error ||

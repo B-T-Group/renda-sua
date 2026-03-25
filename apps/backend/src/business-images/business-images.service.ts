@@ -256,9 +256,9 @@ export class BusinessImagesService {
     businessId: string,
     subCategoryId: number | null,
     images: CreateBusinessImageInput[]
-  ): Promise<void> {
+  ): Promise<{ id: string }[]> {
     if (!images.length) {
-      return;
+      return [];
     }
     const objects = images.map((img) => ({
       business_id: businessId,
@@ -278,9 +278,12 @@ export class BusinessImagesService {
       display_order: 0,
       is_active: true,
     }));
-    await this.hasuraUserService.executeMutation(INSERT_ITEM_IMAGES, {
+    const row = await this.hasuraUserService.executeMutation<{
+      insert_item_images: { returning: { id: string }[] };
+    }>(INSERT_ITEM_IMAGES, {
       objects,
     });
+    return row?.insert_item_images?.returning ?? [];
   }
 
   async associateImageToItem(

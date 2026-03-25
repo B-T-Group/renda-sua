@@ -128,12 +128,15 @@ export class BusinessImagesController {
     }
     const subCategoryId =
       body.sub_category_id === undefined ? null : body.sub_category_id;
-    await this.businessImagesService.bulkCreateBusinessImages(
+    const created = await this.businessImagesService.bulkCreateBusinessImages(
       businessId,
       subCategoryId,
       images
     );
-    return { success: true };
+    return {
+      success: true,
+      data: { images: created.map((r) => ({ id: r.id })) },
+    };
   }
 
   @Post(':id/associate-item')

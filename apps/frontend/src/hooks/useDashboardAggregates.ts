@@ -5,6 +5,7 @@ export interface DashboardAggregates {
   ordersTotal: number;
   ordersByStatus: Record<string, number>;
   itemCount: number;
+  rentalItemCount: number;
   locationCount: number;
   inventoryCount: number;
   pendingFailedDeliveriesCount: number;
