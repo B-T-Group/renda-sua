@@ -71,6 +71,7 @@ insert_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -89,6 +90,7 @@ insert_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -107,6 +109,7 @@ insert_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -125,6 +128,7 @@ select_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -157,6 +161,7 @@ select_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -181,6 +186,7 @@ select_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -218,6 +224,7 @@ select_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - status
@@ -256,6 +263,7 @@ update_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - updated_at
@@ -283,6 +291,7 @@ update_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - updated_at
@@ -315,6 +324,7 @@ update_permissions:
         - country
         - latitude
         - longitude
+        - instructions
         - is_primary
         - address_type
         - updated_at

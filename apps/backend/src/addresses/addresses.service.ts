@@ -942,7 +942,6 @@ export class AddressesService {
       if (addressData.instructions !== undefined) {
         updateData.instructions = addressData.instructions;
       }
-
       // Update address
       const updateMutation = `
         mutation UpdateAddress(
@@ -1491,7 +1490,6 @@ export class AddressesService {
     if (addressData.instructions !== undefined) {
       updateData.instructions = addressData.instructions;
     }
-
     // Update address
     const updateMutation = `
       mutation UpdateAddress(
@@ -1519,7 +1517,7 @@ export class AddressesService {
             address_type: $addressType,
             latitude: $latitude,
             longitude: $longitude,
-            instructions: $instructions
+            instructions: $instructions,
           }
         ) {
           id
