@@ -48,3 +48,14 @@ export interface RentalListingRejectedEmailPayload
   extends RentalListingModerationEmailPayload {
   rejectionReason: string;
 }
+
+export interface BusinessRentalBookingRequestEmailPayload {
+  businessUserId: string;
+  requestId: string;
+  listingId: string;
+  rentalItemName: string;
+  locationName: string;
+  requestedStartAt: string;
+  requestedEndAt: string;
+  clientName: string;
+}

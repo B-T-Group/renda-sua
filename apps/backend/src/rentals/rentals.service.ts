@@ -97,6 +97,16 @@ interface RentalRequestWindowPlan {
   totalHours: number;
 }
 
+/** Shape of `GET_LISTING_FOR_REQUEST` row (subset used for booking-request email). */
+interface RentalListingForRequestEmail {
+  id: string;
+  rental_item?: {
+    name?: string | null;
+    business?: { user_id?: string | null } | null;
+  } | null;
+  business_location?: { name?: string | null } | null;
+}
+
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
 export interface PublicRentalListingRow {
   id: string;
@@ -315,7 +325,39 @@ export class RentalsService {
         client_request_note: note || null,
       },
     });
-    return { success: true, requestId: row.insert_rental_requests_one.id };
+    const requestId = row.insert_rental_requests_one.id;
+    await this.emailBusinessNewRentalRequest(
+      listing,
+      requestId,
+      plan.envelopeStartIso,
+      plan.envelopeEndIso,
+      user
+    );
+    return { success: true, requestId };
+  }
+
+  private async emailBusinessNewRentalRequest(
+    listing: RentalListingForRequestEmail,
+    requestId: string,
+    requestedStartAt: string,
+    requestedEndAt: string,
+    user: { first_name?: string | null; last_name?: string | null }
+  ) {
+    const businessUserId = listing.rental_item?.business?.user_id ?? undefined;
+    if (!businessUserId) return;
+    const clientName =
+      [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || 'A client';
+    const locationName = listing.business_location?.name?.trim() || '—';
+    await this.notificationsService.sendBusinessRentalBookingRequestEmail({
+      businessUserId,
+      requestId,
+      listingId: listing.id,
+      rentalItemName: listing.rental_item?.name ?? 'Rental',
+      locationName,
+      requestedStartAt,
+      requestedEndAt,
+      clientName,
+    });
   }
 
   async respondToRentalRequest(requestId: string, dto: RespondRentalRequestDto) {

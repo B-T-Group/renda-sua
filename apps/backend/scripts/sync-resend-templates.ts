@@ -95,6 +95,11 @@ function subjectForTemplate(name: string): string {
       ? 'Annonce de location non approuvée — Rendasua'
       : 'Rental listing not approved — Rendasua';
   }
+  if (name.includes('business_rental_booking_request')) {
+    return name.endsWith('_fr')
+      ? 'Nouvelle demande de location — Rendasua'
+      : 'New rental booking request — Rendasua';
+  }
   return name.endsWith('_fr')
     ? 'Mise à jour de commande — Rendasua'
     : 'Rendasua — order update';

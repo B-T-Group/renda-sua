@@ -18,6 +18,7 @@ export const GET_LISTING_FOR_REQUEST = `
       }
       rental_item {
         id
+        name
         business_id
         currency
         is_active
@@ -25,6 +26,7 @@ export const GET_LISTING_FOR_REQUEST = `
         business { id user_id is_verified }
       }
       business_location_id
+      business_location { name }
     }
   }
 `;

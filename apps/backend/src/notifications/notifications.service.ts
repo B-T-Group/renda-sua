@@ -14,6 +14,7 @@ import {
   type EmailLocale,
 } from './email-template-data';
 import type {
+  BusinessRentalBookingRequestEmailPayload,
   NotificationData,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
@@ -22,6 +23,7 @@ import type {
 import twilio = require('twilio');
 
 export type {
+  BusinessRentalBookingRequestEmailPayload,
   NotificationData,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
@@ -247,6 +249,41 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendRentalListingRejectedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendBusinessRentalBookingRequestEmail(
+    payload: BusinessRentalBookingRequestEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.businessUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental booking request email skipped: missing business email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'business_rental_booking_request',
+          locale
+        ),
+        variables: {
+          requestId: payload.requestId,
+          listingId: payload.listingId,
+          rentalItemName: payload.rentalItemName,
+          locationName: payload.locationName,
+          requestedStartAt: payload.requestedStartAt,
+          requestedEndAt: payload.requestedEndAt,
+          clientName: payload.clientName,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
       );
     }
   }
