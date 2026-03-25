@@ -11,7 +11,7 @@ import {
   Typography,
   TextField,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RichTextEditor } from '../common/RichTextEditor';
 import type {
@@ -20,6 +20,10 @@ import type {
   RespondRentalRequestBody,
   UnavailableRentalReasonCode,
 } from '../../hooks/useRentalApi';
+import {
+  computeRentalPricingLines,
+  parseRentalSelectionWindowsFromJson,
+} from '../../utils/rentalPricingLines';
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
   'fully_booked',
@@ -48,16 +52,26 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
-  const hours = totalRentalHoursForRequest(req);
-  const rate = Number(req.rental_location_listing.base_price_per_hour);
-  const total = Number((hours * rate).toFixed(2));
+  const weekly = req.rental_location_listing.weekly_availability ?? [];
+  const windows = parseRentalSelectionWindowsFromJson(
+    req.rental_selection_windows,
+    req.requested_start_at,
+    req.requested_end_at
+  );
+  const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
+  const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
+  const { lines, total } = computeRentalPricingLines(
+    windows,
+    weekly,
+    ratePerHour,
+    ratePerDay
+  );
   const cur = req.rental_location_listing.rental_item.currency;
   return {
-    version: 2,
+    version: 3,
     currency: cur,
     total,
-    ratePerHour: rate,
-    hours,
+    lines,
     computedAt: new Date().toISOString(),
   };
 }
@@ -181,12 +195,32 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     }
   }, [onClose, onSuccess, reasonCode, request, respondRequest, t, unavailableNote]);
 
-  if (!open || !mode || !request) return null;
+  const offerPreview = useMemo(() => {
+    if (!request || mode !== 'available') return null;
+    try {
+      const weekly = request.rental_location_listing.weekly_availability ?? [];
+      const windows = parseRentalSelectionWindowsFromJson(
+        request.rental_selection_windows,
+        request.requested_start_at,
+        request.requested_end_at
+      );
+      const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
+      const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
+      const { lines, total } = computeRentalPricingLines(
+        windows,
+        weekly,
+        ratePerHour,
+        ratePerDay
+      );
+      const hours = totalRentalHoursForRequest(request);
+      return { ok: true as const, lines, total, hours, cur: request.rental_location_listing.rental_item.currency };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false as const, message: msg };
+    }
+  }, [mode, request]);
 
-  const hours = totalRentalHoursForRequest(request);
-  const rate = Number(request.rental_location_listing.base_price_per_hour);
-  const total = Number((hours * rate).toFixed(2));
-  const cur = request.rental_location_listing.rental_item.currency;
+  if (!open || !mode || !request) return null;
 
   const title =
     mode === 'available'
@@ -210,17 +244,40 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
             <Typography variant="subtitle2">
               {t('business.rentals.contractSummary', 'Offer summary')}
             </Typography>
-            <Typography variant="body2">
-              {t('business.rentals.contractHours', '{{count}} hour(s)', { count: hours })}
-            </Typography>
-            <Typography variant="body2">
-              {t('business.rentals.contractRate', '{{amount}} / hour', {
-                amount: formatMoney(rate, cur),
-              })}
-            </Typography>
-            <Typography variant="h6" fontWeight={700}>
-              {t('business.rentals.contractTotal', 'Total')}: {formatMoney(total, cur)}
-            </Typography>
+            {offerPreview && !offerPreview.ok ? (
+              <Typography variant="body2" color="error">
+                {offerPreview.message}
+              </Typography>
+            ) : null}
+            {offerPreview?.ok ? (
+              <>
+                <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
+                  {t('rentals.requestForm.priceBreakdown', 'Price breakdown')}
+                </Typography>
+                {offerPreview.lines.map((line, idx) => (
+                  <Typography key={idx} variant="body2">
+                    {line.kind === 'all_day'
+                      ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
+                          date: line.calendarDate,
+                        })
+                      : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
+                          h: line.billableHours,
+                          rate: formatMoney(line.ratePerHour, offerPreview.cur),
+                        })}{' '}
+                    — {formatMoney(line.subtotal, offerPreview.cur)}
+                  </Typography>
+                ))}
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {t('business.rentals.contractBillableHoursTotal', '{{count}} total billable hours', {
+                    count: offerPreview.hours,
+                  })}
+                </Typography>
+                <Typography variant="h6" fontWeight={700}>
+                  {t('business.rentals.contractTotal', 'Total')}:{' '}
+                  {formatMoney(offerPreview.total, offerPreview.cur)}
+                </Typography>
+              </>
+            ) : null}
             <TextField
               label={t(
                 'business.rentals.contractExpiryHoursLabel',
@@ -293,7 +350,10 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         </Button>
         <Button
           variant="contained"
-          disabled={submitting}
+          disabled={
+            submitting ||
+            (mode === 'available' && offerPreview != null && !offerPreview.ok)
+          }
           onClick={() => void (mode === 'available' ? submitAvailable() : submitUnavailable())}
         >
           {t('business.rentals.submitResponse', 'Send response')}

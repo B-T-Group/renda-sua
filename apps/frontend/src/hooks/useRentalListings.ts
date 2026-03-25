@@ -12,6 +12,7 @@ export type RentalListingsSortMode =
 export interface RentalListingRow {
   id: string;
   base_price_per_hour: string | number;
+  base_price_per_day: string | number;
   min_rental_hours: number;
   max_rental_hours: number | null;
   pickup_instructions: string;

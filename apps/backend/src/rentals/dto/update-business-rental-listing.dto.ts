@@ -54,6 +54,12 @@ export class UpdateBusinessRentalListingDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  base_price_per_day?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsInt()
   @Min(1)
   min_rental_hours?: number;

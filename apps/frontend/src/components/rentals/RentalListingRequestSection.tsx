@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
+import { assertAllDayWindowMatchesListingOpenHours, estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
   bookedSegmentsForLocalDay,
   dayHasNoBookedOverlap,
@@ -41,7 +42,7 @@ import {
   rentalBillableHours,
   totalBillableHours,
   type SelectionRange,
-  type WeeklyRow
+  type WeeklyRow,
 } from './rentalRequestScheduleUtils';
 
 export const RENTAL_REQUEST_SECTION_ID = 'rental-request-section';
@@ -77,6 +78,7 @@ export interface RentalListingRequestSectionProps {
   maxRentalHours?: number | null;
   weeklyAvailability?: WeeklyRow[];
   basePricePerHour?: number;
+  basePricePerDay?: number;
   currency?: string;
 }
 
@@ -87,6 +89,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   maxRentalHours = null,
   weeklyAvailability = [],
   basePricePerHour = 0,
+  basePricePerDay = 0,
   currency = 'XAF',
 }) => {
   const { t, i18n } = useTranslation();
@@ -154,16 +157,26 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
 
   const pickAllDay = () => {
     if (!dayBounds || !canAllDay) return;
-    const ranges = maximalFreeHourRangesLocal(dayBounds.open, dayBounds.close, bookedSegs, nowMs);
-    if (ranges.length === 0) return;
     setMsg(null);
-    setSelections((prev) => {
-      let next = prev;
-      for (const r of ranges) {
-        next = mergeRangeIntoSelections(next, r.startMs, r.endMs);
-      }
-      return next;
-    });
+    const openMs = dayBounds.open.getTime();
+    if (openMs > nowMs) {
+      setSelections((prev) =>
+        mergeRangeIntoSelections(prev, openMs, dayBounds.close.getTime(), {
+          billing: 'all_day',
+          calendarDate: dateStr,
+        })
+      );
+    } else {
+      const ranges = maximalFreeHourRangesLocal(dayBounds.open, dayBounds.close, bookedSegs, nowMs);
+      if (ranges.length === 0) return;
+      setSelections((prev) => {
+        let next = prev;
+        for (const r of ranges) {
+          next = mergeRangeIntoSelections(next, r.startMs, r.endMs, { billing: 'hourly' });
+        }
+        return next;
+      });
+    }
     setStartMs('');
     setEndMs('');
   };
@@ -192,7 +205,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         return;
       }
     }
-    setSelections((prev) => mergeRangeIntoSelections(prev, s, e));
+    setSelections((prev) => mergeRangeIntoSelections(prev, s, e, { billing: 'hourly' }));
     setStartMs('');
     setEndMs('');
   };
@@ -202,9 +215,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   };
 
   const hoursTotal = useMemo(() => totalBillableHours(selections), [selections]);
-  const estimatedTotal = useMemo(
-    () => Number((hoursTotal * basePricePerHour).toFixed(2)),
-    [basePricePerHour, hoursTotal]
+  const { lines: estimateLines, total: estimatedTotal } = useMemo(
+    () => estimateTotalFromSelectionRanges(selections, basePricePerHour, basePricePerDay),
+    [basePricePerDay, basePricePerHour, selections]
   );
 
   const validateBeforeSubmit = useCallback((): string | null => {
@@ -218,6 +231,24 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       return t('rentals.requestForm.aboveMaxHours', 'Selected time exceeds maximum hours.');
     }
     for (const r of selections) {
+      if (r.billing === 'all_day') {
+        if (!r.calendarDate) {
+          return t('rentals.requestForm.allDayNeedsDate', 'All-day selection is missing a date.');
+        }
+        try {
+          assertAllDayWindowMatchesListingOpenHours(
+            weeklyAvailability,
+            r.calendarDate,
+            new Date(r.startMs),
+            new Date(r.endMs)
+          );
+        } catch {
+          return t(
+            'rentals.requestForm.invalidAllDay',
+            'All-day selection must cover the full open hours for that date.'
+          );
+        }
+      }
       if (r.startMs <= Date.now()) {
         return t('rentals.requestForm.startMustBeFuture', 'Start must be in the future.');
       }
@@ -230,7 +261,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       }
     }
     return null;
-  }, [booked, hoursTotal, maxRentalHours, minRentalHours, selections, t]);
+  }, [booked, hoursTotal, maxRentalHours, minRentalHours, selections, t, weeklyAvailability]);
 
   const openConfirm = () => {
     setMsg(null);
@@ -254,10 +285,14 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
     const windows = selections.map((r) => {
       const s = localPickerInstantToRequestParts(r.startMs);
       const e = localPickerInstantToRequestParts(r.endMs);
-      return {
+      const base = {
         requestedStartAt: requestedSlotUtcIso(s.dateKey, s.hour, s.minute),
         requestedEndAt: requestedSlotUtcIso(e.dateKey, e.hour, e.minute),
       };
+      if (r.billing === 'all_day' && r.calendarDate) {
+        return { ...base, billing: 'all_day' as const, calendarDate: r.calendarDate };
+      }
+      return base;
     });
     const starts = selections.map((r) => r.startMs);
     const ends = selections.map((r) => r.endMs);
@@ -405,7 +440,9 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                         disabled={!dayBounds || slotStarts.length === 0 || !canAllDay}
                         fullWidth
                       >
-                        {t('rentals.requestForm.allDay', 'Add all available hours')}
+                        {dayBounds && dayBounds.open.getTime() > nowMs
+                          ? t('rentals.requestForm.addFullDayRate', 'Add full day (daily rate)')
+                          : t('rentals.requestForm.allDay', 'Add all available hours')}
                       </Button>
                       <Button variant="contained" onClick={addRange} disabled={!dayBounds} fullWidth>
                         {t('rentals.requestForm.addRange', 'Add to request')}
@@ -447,21 +484,48 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
                         >
                           <ListItemText
                             primary={formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
-                            secondary={t('rentals.requestForm.rangeHours', '{{h}} h', {
-                              h: rentalBillableHours(r.startMs, r.endMs),
-                            })}
+                            secondary={
+                              r.billing === 'all_day'
+                                ? t('rentals.requestForm.allDayRateLine', 'All day — daily rate')
+                                : t('rentals.requestForm.rangeHours', '{{h}} h', {
+                                    h: rentalBillableHours(r.startMs, r.endMs),
+                                  })
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 1 }}>
+                      {t('rentals.requestForm.priceBreakdown', 'Price breakdown')}
+                    </Typography>
+                    <List dense disablePadding sx={{ mb: 1 }}>
+                      {estimateLines.map((line, idx) => (
+                        <ListItem key={idx} disableGutters sx={{ py: 0.25 }}>
+                          <ListItemText
+                            primaryTypographyProps={{ variant: 'body2' }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                            primary={
+                              line.kind === 'all_day'
+                                ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
+                                    date: line.calendarDate,
+                                  })
+                                : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
+                                    h: line.billableHours,
+                                    rate: formatMoney(line.ratePerHour, currency),
+                                  })
+                            }
+                            secondary={formatMoney(line.subtotal, currency)}
                           />
                         </ListItem>
                       ))}
                     </List>
                     <Typography variant="body2" color="text.secondary">
                       {t('rentals.requestForm.runningTotal', 'Estimated total')}:{' '}
-                      <strong>{formatMoney(estimatedTotal, currency)}</strong> ({' '}
-                      {t('rentals.requestForm.totalHoursLine', '{{h}} hours at {{rate}} / hour', {
+                      <strong>{formatMoney(estimatedTotal, currency)}</strong>
+                      {' · '}
+                      {t('rentals.requestForm.totalHoursLineShort', '{{h}} billable hours total', {
                         h: hoursTotal,
-                        rate: formatMoney(basePricePerHour, currency),
                       })}
-                      )
                     </Typography>
                   </>
                 ) : null}
@@ -545,15 +609,41 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
               <ListItem key={r.id}>
                 <ListItemText
                   primary={formatSelectionLabel(r.startMs, r.endMs, i18n.language)}
-                  secondary={t('rentals.requestForm.rangeHours', '{{h}} h', {
-                    h: rentalBillableHours(r.startMs, r.endMs),
-                  })}
+                  secondary={
+                    r.billing === 'all_day'
+                      ? t('rentals.requestForm.allDayRateLine', 'All day — daily rate')
+                      : t('rentals.requestForm.rangeHours', '{{h}} h', {
+                          h: rentalBillableHours(r.startMs, r.endMs),
+                        })
+                  }
                 />
               </ListItem>
             ))}
           </List>
           <Divider sx={{ my: 2 }} />
-          <Typography variant="body1" fontWeight={600}>
+          <Typography variant="subtitle2" fontWeight={600}>
+            {t('rentals.requestForm.priceBreakdown', 'Price breakdown')}
+          </Typography>
+          <List dense>
+            {estimateLines.map((line, idx) => (
+              <ListItem key={idx} disableGutters>
+                <ListItemText
+                  primary={
+                    line.kind === 'all_day'
+                      ? t('rentals.requestForm.lineAllDay', 'Full day {{date}}', {
+                          date: line.calendarDate,
+                        })
+                      : t('rentals.requestForm.lineHourly', '{{h}} h × {{rate}}', {
+                          h: line.billableHours,
+                          rate: formatMoney(line.ratePerHour, currency),
+                        })
+                  }
+                  secondary={formatMoney(line.subtotal, currency)}
+                />
+              </ListItem>
+            ))}
+          </List>
+          <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
             {t('rentals.requestForm.confirmHours', 'Total hours')}: {hoursTotal}
           </Typography>
           <Typography variant="h6" fontWeight={800} color="primary" sx={{ mt: 1 }}>

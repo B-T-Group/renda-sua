@@ -32,6 +32,7 @@ import {
 } from './dto/respond-rental-request.dto';
 import {
   isValidRentalPricingSnapshot,
+  RentalPricingLine,
   RentalPricingSnapshotDto,
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
@@ -81,11 +82,18 @@ interface WeeklyAvailabilityRow {
   end_time: string | null;
 }
 
+type RentalRequestWindowEntry = {
+  start: Date;
+  end: Date;
+  billing: 'hourly' | 'all_day';
+  calendarDate?: string;
+};
+
 interface RentalRequestWindowPlan {
   envelopeStartIso: string;
   envelopeEndIso: string;
-  selectionWindowsJson: Array<{ start_at: string; end_at: string }>;
-  windows: Array<{ start: Date; end: Date }>;
+  selectionWindowsJson: Array<Record<string, unknown>>;
+  windows: RentalRequestWindowEntry[];
   totalHours: number;
 }
 
@@ -93,6 +101,7 @@ interface RentalRequestWindowPlan {
 export interface PublicRentalListingRow {
   id: string;
   base_price_per_hour: number;
+  base_price_per_day: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
   pickup_instructions: string;
@@ -146,6 +155,7 @@ export interface ClientRentalRequestRow {
   rental_location_listing: {
     id: string;
     base_price_per_hour: number | string;
+    base_price_per_day?: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
@@ -162,6 +172,11 @@ function rentalListingUpdatedAtMs(row: PublicRentalListingRow): number {
 
 function rentalPricePerHour(row: PublicRentalListingRow): number {
   const v = row.base_price_per_hour;
+  return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
+}
+
+function rentalPricePerDay(row: PublicRentalListingRow): number {
+  const v = row.base_price_per_day;
   return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
 }
 
@@ -518,6 +533,10 @@ export class RentalsService {
     if (Number.isNaN(price) || price < 0) {
       throw new HttpException('Invalid base_price_per_hour', HttpStatus.BAD_REQUEST);
     }
+    const dayPrice = Number(dto.base_price_per_day);
+    if (Number.isNaN(dayPrice) || dayPrice < 0) {
+      throw new HttpException('Invalid base_price_per_day', HttpStatus.BAD_REQUEST);
+    }
     const availability = this.normalizeWeeklyAvailability(dto.weekly_availability);
     const row = await this.hasuraUserService.executeMutation<{
       insert_rental_location_listings_one: { id: string } | null;
@@ -528,6 +547,7 @@ export class RentalsService {
         pickup_instructions: dto.pickup_instructions?.trim() ?? '',
         dropoff_instructions: dto.dropoff_instructions?.trim() ?? '',
         base_price_per_hour: price,
+        base_price_per_day: dayPrice,
         min_rental_hours: minHours,
         max_rental_hours: maxHours,
         units_available: dto.units_available ?? 1,
@@ -645,6 +665,16 @@ export class RentalsService {
         );
       }
       out.base_price_per_hour = p;
+    }
+    if (dto.base_price_per_day !== undefined) {
+      const p = Number(dto.base_price_per_day);
+      if (Number.isNaN(p) || p < 0) {
+        throw new HttpException(
+          'Invalid base_price_per_day',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      out.base_price_per_day = p;
     }
     if (dto.min_rental_hours !== undefined) {
       out.min_rental_hours = dto.min_rental_hours;
@@ -1361,19 +1391,34 @@ export class RentalsService {
     return this.planFromDateWindows(windows);
   }
 
-  private dtoToRequestDateWindows(dto: CreateRentalRequestDto): Array<{ start: Date; end: Date }> {
+  private dtoToRequestDateWindows(dto: CreateRentalRequestDto): RentalRequestWindowEntry[] {
     if (dto.windows?.length) {
-      return dto.windows.map((w) => ({
-        start: new Date(w.requestedStartAt),
-        end: new Date(w.requestedEndAt),
-      }));
+      return dto.windows.map((w) => {
+        const billing = w.billing === 'all_day' ? 'all_day' : 'hourly';
+        if (billing === 'all_day' && !w.calendarDate) {
+          throw new HttpException(
+            'calendarDate is required for all_day windows',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+        return {
+          start: new Date(w.requestedStartAt),
+          end: new Date(w.requestedEndAt),
+          billing,
+          calendarDate: w.calendarDate,
+        };
+      });
     }
     return [
-      { start: new Date(dto.requestedStartAt!), end: new Date(dto.requestedEndAt!) },
+      {
+        start: new Date(dto.requestedStartAt!),
+        end: new Date(dto.requestedEndAt!),
+        billing: 'hourly',
+      },
     ];
   }
 
-  private assertValidRequestDateWindows(windows: Array<{ start: Date; end: Date }>) {
+  private assertValidRequestDateWindows(windows: RentalRequestWindowEntry[]) {
     for (const w of windows) {
       if (Number.isNaN(w.start.getTime()) || Number.isNaN(w.end.getTime()) || !(w.end > w.start)) {
         throw new HttpException('Each window must have a valid end after start', HttpStatus.BAD_REQUEST);
@@ -1381,20 +1426,28 @@ export class RentalsService {
     }
   }
 
-  private planFromDateWindows(windows: Array<{ start: Date; end: Date }>): RentalRequestWindowPlan {
+  private planFromDateWindows(windows: RentalRequestWindowEntry[]): RentalRequestWindowPlan {
     const starts = windows.map((w) => w.start.getTime());
     const ends = windows.map((w) => w.end.getTime());
     let totalHours = 0;
     for (const w of windows) {
       totalHours += rentalHoursCount(w.start, w.end);
     }
+    const selectionWindowsJson = windows.map((w) => {
+      const row: Record<string, unknown> = {
+        start_at: w.start.toISOString(),
+        end_at: w.end.toISOString(),
+      };
+      if (w.billing === 'all_day' && w.calendarDate) {
+        row.billing = 'all_day';
+        row.calendar_date = w.calendarDate;
+      }
+      return row;
+    });
     return {
       envelopeStartIso: new Date(Math.min(...starts)).toISOString(),
       envelopeEndIso: new Date(Math.max(...ends)).toISOString(),
-      selectionWindowsJson: windows.map((w) => ({
-        start_at: w.start.toISOString(),
-        end_at: w.end.toISOString(),
-      })),
+      selectionWindowsJson,
       windows,
       totalHours,
     };
@@ -1414,22 +1467,77 @@ export class RentalsService {
       this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
     }
     for (const w of plan.windows) {
+      if (w.billing === 'all_day') {
+        this.assertAllDayWindowMatchesListingOpenHours(
+          weekly,
+          w.calendarDate!,
+          w.start,
+          w.end
+        );
+      }
+    }
+    for (const w of plan.windows) {
       await this.assertCapacity(listing.id, w.start, w.end, listing.units_available);
     }
   }
 
-  private parseRentalSelectionWindows(req: any): Array<{ start: Date; end: Date }> {
+  private assertAllDayWindowMatchesListingOpenHours(
+    weekly: WeeklyAvailabilityRow[],
+    calendarDate: string,
+    start: Date,
+    end: Date
+  ): void {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(calendarDate);
+    if (!m) {
+      throw new HttpException('Invalid calendar_date', HttpStatus.BAD_REQUEST);
+    }
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const d = Number(m[3]);
+    const anchor = new Date(Date.UTC(y, mo, d, 12, 0, 0, 0));
+    const day = anchor.getUTCDay();
+    const row = weekly.find((r) => r.weekday === day);
+    if (!row?.is_available || !row.start_time || !row.end_time) {
+      throw new HttpException(
+        'all_day is not valid on this calendar date',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const dayStart = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0));
+    const [sh, sm] = row.start_time.split(':').map(Number);
+    const [eh, em] = row.end_time.split(':').map(Number);
+    const windowStart = new Date(dayStart);
+    windowStart.setUTCHours(sh, sm || 0, 0, 0);
+    const windowEnd = new Date(dayStart);
+    windowEnd.setUTCHours(eh, em || 0, 0, 0);
+    if (start.getTime() !== windowStart.getTime() || end.getTime() !== windowEnd.getTime()) {
+      throw new HttpException(
+        'all_day window must span full listing open hours for that date',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private parseRentalSelectionWindows(req: any): RentalRequestWindowEntry[] {
     const raw = req.rental_selection_windows;
     if (Array.isArray(raw) && raw.length > 0) {
-      return raw.map((w: { start_at: string; end_at: string }) => ({
-        start: new Date(w.start_at),
-        end: new Date(w.end_at),
-      }));
+      return raw.map((w: Record<string, unknown>) => {
+        const billing = w.billing === 'all_day' ? 'all_day' : 'hourly';
+        const calendarDate =
+          typeof w.calendar_date === 'string' ? w.calendar_date : undefined;
+        return {
+          start: new Date(String(w.start_at)),
+          end: new Date(String(w.end_at)),
+          billing,
+          calendarDate,
+        };
+      });
     }
     return [
       {
         start: new Date(req.requested_start_at),
         end: new Date(req.requested_end_at),
+        billing: 'hourly',
       },
     ];
   }
@@ -1535,18 +1643,53 @@ export class RentalsService {
 
   private computePricingSnapshotForRequest(req: any): RentalPricingSnapshotDto {
     const parts = this.parseRentalSelectionWindows(req);
-    let hours = 0;
-    for (const { start, end } of parts) {
-      hours += rentalHoursCount(start, end);
+    const listing = req.rental_location_listing;
+    const weekly = listing.weekly_availability ?? [];
+    const ratePerHour = Number(listing.base_price_per_hour);
+    const ratePerDay = Number(listing.base_price_per_day);
+    const lines: RentalPricingLine[] = [];
+    let total = 0;
+    for (const p of parts) {
+      if (p.billing === 'all_day') {
+        if (!p.calendarDate) {
+          throw new HttpException(
+            'all_day window missing calendar_date',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+        this.assertAllDayWindowMatchesListingOpenHours(
+          weekly,
+          p.calendarDate,
+          p.start,
+          p.end
+        );
+        const subtotal = Number(ratePerDay.toFixed(2));
+        total += subtotal;
+        lines.push({
+          kind: 'all_day',
+          calendarDate: p.calendarDate,
+          ratePerDay,
+          subtotal,
+        });
+      } else {
+        const h = rentalHoursCount(p.start, p.end);
+        const subtotal = Number((h * ratePerHour).toFixed(2));
+        total += subtotal;
+        lines.push({
+          kind: 'hourly',
+          startAt: p.start.toISOString(),
+          endAt: p.end.toISOString(),
+          billableHours: h,
+          ratePerHour,
+          subtotal,
+        });
+      }
     }
-    const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
-    const total = Number((hours * ratePerHour).toFixed(2));
     return {
-      version: 2,
-      currency: req.rental_location_listing.rental_item.currency,
-      ratePerHour,
-      hours,
-      total,
+      version: 3,
+      currency: listing.rental_item.currency,
+      total: Number(total.toFixed(2)),
+      lines,
       computedAt: new Date().toISOString(),
     };
   }
@@ -1982,11 +2125,21 @@ export class RentalsService {
       return copy;
     }
     if (sort === 'cheapest') {
-      copy.sort((a, b) => rentalPricePerHour(a) - rentalPricePerHour(b));
+      copy.sort((a, b) => {
+        const ah = rentalPricePerHour(a);
+        const bh = rentalPricePerHour(b);
+        if (ah !== bh) return ah - bh;
+        return rentalPricePerDay(a) - rentalPricePerDay(b);
+      });
       return copy;
     }
     if (sort === 'expensive') {
-      copy.sort((a, b) => rentalPricePerHour(b) - rentalPricePerHour(a));
+      copy.sort((a, b) => {
+        const ah = rentalPricePerHour(a);
+        const bh = rentalPricePerHour(b);
+        if (ah !== bh) return bh - ah;
+        return rentalPricePerDay(b) - rentalPricePerDay(a);
+      });
       return copy;
     }
     copy.sort((a, b) => rentalListingUpdatedAtMs(b) - rentalListingUpdatedAtMs(a));

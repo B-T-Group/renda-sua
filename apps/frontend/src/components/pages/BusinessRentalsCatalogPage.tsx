@@ -55,6 +55,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
   const [selItem, setSelItem] = useState('');
   const [selLoc, setSelLoc] = useState('');
   const [price, setPrice] = useState('');
+  const [priceDay, setPriceDay] = useState('');
   const [minD, setMinD] = useState('1');
   const [maxD, setMaxD] = useState('');
   const [pickup, setPickup] = useState('');
@@ -100,12 +101,16 @@ const BusinessRentalsCatalogPage: React.FC = () => {
 
   const saveListing = async () => {
     if (!selItem || !selLoc) return;
+    const hourly = Number(price);
+    const daily =
+      priceDay.trim() === '' ? Number((hourly * 12).toFixed(2)) : Number(priceDay);
     await createBusinessRentalListing({
       rental_item_id: selItem,
       business_location_id: selLoc,
       pickup_instructions: pickup,
       dropoff_instructions: dropoff,
-      base_price_per_hour: Number(price),
+      base_price_per_hour: hourly,
+      base_price_per_day: daily,
       min_rental_hours: Number(minD) || 1,
       max_rental_hours: maxD ? Number(maxD) : null,
       units_available: Number(units) || 1,
@@ -327,6 +332,16 @@ const BusinessRentalsCatalogPage: React.FC = () => {
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             type="number"
+          />
+          <TextField
+            label={t('business.rentals.pricePerDay', 'Full day price (daily rate)')}
+            value={priceDay}
+            onChange={(e) => setPriceDay(e.target.value)}
+            type="number"
+            helperText={t(
+              'business.rentals.pricePerDayHint',
+              'Leave empty to use 12 × hourly rate'
+            )}
           />
           <TextField label={t('rentals.minHours', 'Min hours')} value={minD} onChange={(e) => setMinD(e.target.value)} />
           <TextField label={t('rentals.maxHours', 'Max hours')} value={maxD} onChange={(e) => setMaxD(e.target.value)} />

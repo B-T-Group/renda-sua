@@ -101,10 +101,12 @@ const FirstRentalItemLocationStep: React.FC<
     }
     setSaving(true);
     try {
+      const dayRate = Number((rate * 12).toFixed(2));
       const res = await createBusinessRentalListing({
         rental_item_id: item.id,
         business_location_id: locationId,
         base_price_per_hour: rate,
+        base_price_per_day: dayRate,
       });
       if (!res?.success) {
         throw new Error('Listing failed');

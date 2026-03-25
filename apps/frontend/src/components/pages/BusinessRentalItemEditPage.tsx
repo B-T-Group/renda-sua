@@ -35,6 +35,7 @@ import SEOHead from '../seo/SEOHead';
 
 interface ListingFormState {
   base_price_per_hour: string;
+  base_price_per_day: string;
   min_rental_hours: string;
   max_rental_hours: string;
   units_available: string;
@@ -56,6 +57,7 @@ function listingFormsFromDetail(
   for (const l of item.rental_location_listings) {
     out[l.id] = {
       base_price_per_hour: String(l.base_price_per_hour),
+      base_price_per_day: String(l.base_price_per_day ?? ''),
       min_rental_hours: String(l.min_rental_hours),
       max_rental_hours: l.max_rental_hours != null ? String(l.max_rental_hours) : '',
       units_available: String(l.units_available),
@@ -105,22 +107,26 @@ function buildListingUpdateBody(
 
 function parsePriceFields(f: ListingFormState): {
   base_price_per_hour: number;
+  base_price_per_day: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
 } | null {
   const base = Number(f.base_price_per_hour);
+  const day = Number(f.base_price_per_day);
   const minD = Number(f.min_rental_hours);
   const maxRaw = f.max_rental_hours.trim();
   const maxD = maxRaw === '' ? null : Number(maxRaw);
   const units = Number(f.units_available);
   if (Number.isNaN(base) || base < 0) return null;
+  if (Number.isNaN(day) || day < 0) return null;
   if (Number.isNaN(minD) || minD < 1) return null;
   if (maxD !== null && (Number.isNaN(maxD) || maxD < 1)) return null;
   if (maxD !== null && maxD < minD) return null;
   if (Number.isNaN(units) || units < 1) return null;
   return {
     base_price_per_hour: base,
+    base_price_per_day: day,
     min_rental_hours: minD,
     max_rental_hours: maxD,
     units_available: units,
@@ -435,6 +441,15 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   value={f.base_price_per_hour}
                   onChange={(e) =>
                     patchListingForm(l.id, { base_price_per_hour: e.target.value })
+                  }
+                  type="number"
+                  fullWidth
+                />
+                <TextField
+                  label={t('business.rentals.pricePerDay', 'Full day price (daily rate)')}
+                  value={f.base_price_per_day}
+                  onChange={(e) =>
+                    patchListingForm(l.id, { base_price_per_day: e.target.value })
                   }
                   type="number"
                   fullWidth

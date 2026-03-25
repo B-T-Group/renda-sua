@@ -435,6 +435,10 @@ const RentalListingDetailPage: React.FC = () => {
   const tags = row.rental_item.tags ?? [];
   const addressLine = formatAddress(row.business_location.address ?? {});
   const priceLabel = formatMoney(row.base_price_per_hour, row.rental_item.currency);
+  const dayPriceLabel = formatMoney(
+    Number(row.base_price_per_day ?? 0),
+    row.rental_item.currency
+  );
 
   return (
     <>
@@ -571,6 +575,12 @@ const RentalListingDetailPage: React.FC = () => {
                       {t('rentals.detail.hourlyRate', 'Hourly rate')}
                     </Typography>
                   </Stack>
+                  <Typography variant="body1" fontWeight={600} sx={{ mt: 1.5 }}>
+                    {dayPriceLabel}{' '}
+                    <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>
+                      {t('rentals.detail.fullDayRate', 'Full day (daily rate)')}
+                    </Typography>
+                  </Typography>
                   <Stack direction="row" gap={2} flexWrap="wrap" sx={{ mt: 2 }}>
                     <Box>
                       <Typography variant="caption" color="text.secondary" display="block">
@@ -728,6 +738,7 @@ const RentalListingDetailPage: React.FC = () => {
                   maxRentalHours={row.max_rental_hours}
                   weeklyAvailability={row.weekly_availability ?? []}
                   basePricePerHour={Number(row.base_price_per_hour)}
+                  basePricePerDay={Number(row.base_price_per_day ?? 0)}
                   currency={row.rental_item.currency}
                 />
               ) : null}

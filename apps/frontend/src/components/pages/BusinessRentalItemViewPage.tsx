@@ -169,6 +169,10 @@ const BusinessRentalItemViewPage: React.FC = () => {
                     {t('business.rentals.pricePerHour', 'Price per hour')}: {listing.base_price_per_hour}{' '}
                     {item.currency}
                   </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('business.rentals.pricePerDay', 'Full day price (daily rate)')}:{' '}
+                    {listing.base_price_per_day} {item.currency}
+                  </Typography>
                 </Paper>
               ))}
             </Stack>

@@ -7,7 +7,13 @@ export type WeeklyRow = {
   end_time: string | null;
 };
 
-export type SelectionRange = { id: string; startMs: number; endMs: number };
+export type SelectionRange = {
+  id: string;
+  startMs: number;
+  endMs: number;
+  billing: 'hourly' | 'all_day';
+  calendarDate?: string;
+};
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -161,8 +167,11 @@ export function maximalFreeHourRangesLocal(
 export function mergeRangeIntoSelections(
   prev: SelectionRange[],
   startMs: number,
-  endMs: number
+  endMs: number,
+  meta?: { billing?: 'hourly' | 'all_day'; calendarDate?: string }
 ): SelectionRange[] {
+  const billing = meta?.billing ?? 'hourly';
+  const calendarDate = meta?.calendarDate;
   const key = localDateKey(new Date(startMs));
   const others = prev.filter((r) => localDateKey(new Date(r.startMs)) !== key);
   const sameDay = prev.filter((r) => localDateKey(new Date(r.startMs)) === key);
@@ -171,6 +180,8 @@ export function mergeRangeIntoSelections(
     id: `${key}-${m.s}-${m.e}-${i}`,
     startMs: m.s,
     endMs: m.e,
+    billing,
+    ...(billing === 'all_day' && calendarDate ? { calendarDate } : {}),
   }));
   return [...others, ...next].sort((a, b) => a.startMs - b.startMs);
 }

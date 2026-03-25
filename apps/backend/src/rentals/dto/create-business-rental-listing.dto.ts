@@ -63,6 +63,11 @@ export class CreateBusinessRentalListingDto {
   @Min(0)
   base_price_per_hour!: number;
 
+  @ApiProperty({ description: 'Flat price for one full-day (all-day) rental window' })
+  @IsNumber()
+  @Min(0)
+  base_price_per_day!: number;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @IsInt()

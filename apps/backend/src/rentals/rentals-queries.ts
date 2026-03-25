@@ -7,6 +7,7 @@ export const GET_LISTING_FOR_REQUEST = `
       max_rental_hours
       units_available
       base_price_per_hour
+      base_price_per_day
       weekly_availability(order_by: { weekday: asc }) {
         weekday
         is_available
@@ -33,6 +34,7 @@ export const LIST_PUBLIC_RENTAL_LISTINGS = `
     rental_location_listings(where: $where, order_by: $order_by) {
       id
       base_price_per_hour
+      base_price_per_day
       min_rental_hours
       max_rental_hours
       pickup_instructions
@@ -90,6 +92,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
     rental_location_listings_by_pk(id: $id) {
       id
       base_price_per_hour
+      base_price_per_day
       min_rental_hours
       max_rental_hours
       pickup_instructions
@@ -169,6 +172,13 @@ export const GET_RENTAL_REQUEST_FULL = `
         id
         units_available
         base_price_per_hour
+        base_price_per_day
+        weekly_availability(order_by: { weekday: asc }) {
+          weekday
+          is_available
+          start_time
+          end_time
+        }
         rental_item { id business_id currency is_active }
       }
       client { id user_id }
@@ -456,6 +466,7 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         id
         business_location_id
         base_price_per_hour
+        base_price_per_day
       }
     }
   }
@@ -481,6 +492,7 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         id
         business_location_id
         base_price_per_hour
+        base_price_per_day
         min_rental_hours
         max_rental_hours
         units_available
@@ -559,6 +571,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       rental_location_listing {
         id
         base_price_per_hour
+        base_price_per_day
         business_location {
           name
         }
@@ -603,6 +616,13 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       rental_location_listing {
         id
         base_price_per_hour
+        base_price_per_day
+        weekly_availability(order_by: { weekday: asc }) {
+          weekday
+          is_available
+          start_time
+          end_time
+        }
         rental_item {
           name
           currency

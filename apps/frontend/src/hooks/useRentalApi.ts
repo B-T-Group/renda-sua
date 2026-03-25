@@ -3,12 +3,29 @@ import { useApiClient } from './useApiClient';
 import { useRentalCatalogGeoParams } from './useRentalCatalogGeoParams';
 import type { RentalListingRow } from './useRentalListings';
 
+export type RentalPricingSnapshotLine =
+  | {
+      kind: 'hourly';
+      startAt: string;
+      endAt: string;
+      billableHours: number;
+      ratePerHour: number;
+      subtotal: number;
+    }
+  | {
+      kind: 'all_day';
+      calendarDate: string;
+      ratePerDay: number;
+      subtotal: number;
+    };
+
 export interface RentalPricingSnapshotBody {
   version: number;
   currency: string;
   total: number;
   ratePerHour?: number;
   hours?: number;
+  lines?: RentalPricingSnapshotLine[];
   computedAt: string;
 }
 
@@ -37,6 +54,7 @@ export interface BusinessRentalItemRow {
     id: string;
     business_location_id: string;
     base_price_per_hour: number;
+    base_price_per_day: number;
   }[];
 }
 
@@ -44,6 +62,7 @@ export interface BusinessRentalListingDetail {
   id: string;
   business_location_id: string;
   base_price_per_hour: number;
+  base_price_per_day: number;
   min_rental_hours: number;
   max_rental_hours: number | null;
   units_available: number;
@@ -80,6 +99,7 @@ export interface UpdateBusinessRentalListingBody {
   pickup_instructions?: string;
   dropoff_instructions?: string;
   base_price_per_hour?: number;
+  base_price_per_day?: number;
   min_rental_hours?: number;
   max_rental_hours?: number | null;
   units_available?: number;
@@ -123,6 +143,7 @@ export interface BusinessRentalRequestRow {
   rental_location_listing: {
     id: string;
     base_price_per_hour: number;
+    base_price_per_day: number;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
     rental_item: { name: string; currency: string };
   };
@@ -152,6 +173,7 @@ export interface ClientRentalRequestRow {
   rental_location_listing: {
     id: string;
     base_price_per_hour: number | string;
+    base_price_per_day?: number | string;
     business_location?: { name: string } | null;
     rental_item: { name: string; currency: string };
   } | null;
@@ -331,6 +353,7 @@ export function useRentalApi() {
       pickup_instructions?: string;
       dropoff_instructions?: string;
       base_price_per_hour: number;
+      base_price_per_day: number;
       min_rental_hours?: number;
       max_rental_hours?: number | null;
       units_available?: number;
@@ -350,7 +373,12 @@ export function useRentalApi() {
       rentalLocationListingId: string;
       requestedStartAt: string;
       requestedEndAt: string;
-      windows?: Array<{ requestedStartAt: string; requestedEndAt: string }>;
+      windows?: Array<{
+        requestedStartAt: string;
+        requestedEndAt: string;
+        billing?: 'hourly' | 'all_day';
+        calendarDate?: string;
+      }>;
       clientRequestNote?: string;
     }) => {
       const { data } = await api.post('/rentals/requests', body);

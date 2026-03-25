@@ -3,6 +3,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
+import type { RentalPricingSnapshotLine } from '../../hooks/useRentalApi';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -85,6 +86,29 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
           label={t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
           value={`${formatRentalRequestLocalDateTime(row.requested_start_at)} — ${formatRentalRequestLocalDateTime(row.requested_end_at)}`}
         />
+        {quote?.lines?.length ? (
+          <>
+            <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ pt: 1 }}>
+              {t('rentals.clientRequests.bookConfirmLabelBreakdown', 'Price breakdown')}
+            </Typography>
+            {quote.lines.map((line: RentalPricingSnapshotLine, idx: number) => (
+              <DetailRow
+                key={idx}
+                label={
+                  line.kind === 'all_day'
+                    ? t('rentals.clientRequests.lineAllDay', 'Full day {{date}}', {
+                        date: line.calendarDate,
+                      })
+                    : t('rentals.clientRequests.lineHourly', '{{h}} h × {{rate}}', {
+                        h: line.billableHours,
+                        rate: formatRentalMoney(line.ratePerHour, quote.currency),
+                      })
+                }
+                value={formatRentalMoney(line.subtotal, quote.currency)}
+              />
+            ))}
+          </>
+        ) : null}
         {quote ? (
           <DetailRow
             label={t('rentals.clientRequests.bookConfirmLabelTotal', 'Quoted total')}
