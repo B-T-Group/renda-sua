@@ -28,7 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import type { RentalTakenWindow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from '../../utils/rentalRequestUtc';
-import { assertAllDayWindowMatchesListingOpenHours, estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
+import { estimateTotalFromSelectionRanges } from '../../utils/rentalPricingLines';
 import {
   bookedSegmentsForLocalDay,
   dayHasNoBookedOverlap,
@@ -148,7 +148,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
   }, [bookedSegs, dayBounds, startMs]);
 
   const canAllDay =
-    !!dayBounds && dayHasNoBookedOverlap(dayBounds.open, dayBounds.close, booked);
+    !!dayBounds && dayHasNoBookedOverlap(dayStartEnd.start, dayStartEnd.end, booked);
 
   useEffect(() => {
     setStartMs('');
@@ -235,17 +235,10 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
         if (!r.calendarDate) {
           return t('rentals.requestForm.allDayNeedsDate', 'All-day selection is missing a date.');
         }
-        try {
-          assertAllDayWindowMatchesListingOpenHours(
-            weeklyAvailability,
-            r.calendarDate,
-            new Date(r.startMs),
-            new Date(r.endMs)
-          );
-        } catch {
+        if (!dayHasNoBookedOverlap(dayStartEnd.start, dayStartEnd.end, booked)) {
           return t(
-            'rentals.requestForm.invalidAllDay',
-            'All-day selection must cover the full open hours for that date.'
+            'rentals.requestForm.allDayDisabledHint',
+            'Add all available hours is disabled when any time that day is already booked.'
           );
         }
       }
@@ -261,7 +254,7 @@ export const RentalListingRequestSection: React.FC<RentalListingRequestSectionPr
       }
     }
     return null;
-  }, [booked, hoursTotal, maxRentalHours, minRentalHours, selections, t, weeklyAvailability]);
+  }, [booked, dayStartEnd, hoursTotal, maxRentalHours, minRentalHours, selections, t]);
 
   const openConfirm = () => {
     setMsg(null);

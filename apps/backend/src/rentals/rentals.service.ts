@@ -1664,26 +1664,16 @@ export class RentalsService {
       this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
     }
     for (const w of plan.windows) {
-      if (w.billing === 'all_day') {
-        this.assertAllDayWindowMatchesListingOpenHours(
-          weekly,
-          w.calendarDate!,
-          w.start,
-          w.end
-        );
+      if (w.billing === 'all_day' && w.calendarDate) {
+        const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
+        await this.assertCapacity(listing.id, start, end, listing.units_available);
+      } else {
+        await this.assertCapacity(listing.id, w.start, w.end, listing.units_available);
       }
-    }
-    for (const w of plan.windows) {
-      await this.assertCapacity(listing.id, w.start, w.end, listing.units_available);
     }
   }
 
-  private assertAllDayWindowMatchesListingOpenHours(
-    weekly: WeeklyAvailabilityRow[],
-    calendarDate: string,
-    start: Date,
-    end: Date
-  ): void {
+  private utcDayBoundsFromCalendarDate(calendarDate: string): { start: Date; end: Date } {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(calendarDate);
     if (!m) {
       throw new HttpException('Invalid calendar_date', HttpStatus.BAD_REQUEST);
@@ -1691,28 +1681,10 @@ export class RentalsService {
     const y = Number(m[1]);
     const mo = Number(m[2]) - 1;
     const d = Number(m[3]);
-    const anchor = new Date(Date.UTC(y, mo, d, 12, 0, 0, 0));
-    const day = anchor.getUTCDay();
-    const row = weekly.find((r) => r.weekday === day);
-    if (!row?.is_available || !row.start_time || !row.end_time) {
-      throw new HttpException(
-        'all_day is not valid on this calendar date',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    const dayStart = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0));
-    const [sh, sm] = row.start_time.split(':').map(Number);
-    const [eh, em] = row.end_time.split(':').map(Number);
-    const windowStart = new Date(dayStart);
-    windowStart.setUTCHours(sh, sm || 0, 0, 0);
-    const windowEnd = new Date(dayStart);
-    windowEnd.setUTCHours(eh, em || 0, 0, 0);
-    if (start.getTime() !== windowStart.getTime() || end.getTime() !== windowEnd.getTime()) {
-      throw new HttpException(
-        'all_day window must span full listing open hours for that date',
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    const start = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { start, end };
   }
 
   private parseRentalSelectionWindows(req: any): RentalRequestWindowEntry[] {
@@ -1744,8 +1716,13 @@ export class RentalsService {
     units: number,
     req: any
   ): Promise<void> {
-    for (const { start, end } of this.parseRentalSelectionWindows(req)) {
-      await this.assertCapacity(listingId, start, end, units);
+    for (const w of this.parseRentalSelectionWindows(req)) {
+      if (w.billing === 'all_day' && w.calendarDate) {
+        const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
+        await this.assertCapacity(listingId, start, end, units);
+      } else {
+        await this.assertCapacity(listingId, w.start, w.end, units);
+      }
     }
   }
 
@@ -1841,7 +1818,6 @@ export class RentalsService {
   private computePricingSnapshotForRequest(req: any): RentalPricingSnapshotDto {
     const parts = this.parseRentalSelectionWindows(req);
     const listing = req.rental_location_listing;
-    const weekly = listing.weekly_availability ?? [];
     const ratePerHour = Number(listing.base_price_per_hour);
     const ratePerDay = Number(listing.base_price_per_day);
     const lines: RentalPricingLine[] = [];
@@ -1854,12 +1830,6 @@ export class RentalsService {
             HttpStatus.BAD_REQUEST
           );
         }
-        this.assertAllDayWindowMatchesListingOpenHours(
-          weekly,
-          p.calendarDate,
-          p.start,
-          p.end
-        );
         const subtotal = Number(ratePerDay.toFixed(2));
         total += subtotal;
         lines.push({

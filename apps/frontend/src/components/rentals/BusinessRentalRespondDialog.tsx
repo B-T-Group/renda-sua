@@ -62,7 +62,6 @@ function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnaps
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
   const { lines, total } = computeRentalPricingLines(
     windows,
-    weekly,
     ratePerHour,
     ratePerDay
   );
@@ -208,7 +207,6 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
       const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
       const { lines, total } = computeRentalPricingLines(
         windows,
-        weekly,
         ratePerHour,
         ratePerDay
       );
