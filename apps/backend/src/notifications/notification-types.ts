@@ -59,3 +59,23 @@ export interface BusinessRentalBookingRequestEmailPayload {
   requestedEndAt: string;
   clientName: string;
 }
+
+export interface ClientRentalRequestAcceptedEmailPayload {
+  clientUserId: string;
+  requestId: string;
+  rentalItemName: string;
+  businessName: string;
+  bookingNumber: string;
+  contractExpiresAt: string;
+  requestedStartAt: string;
+  requestedEndAt: string;
+}
+
+export interface ClientRentalRequestRejectedEmailPayload {
+  clientUserId: string;
+  requestId: string;
+  rentalItemName: string;
+  businessName: string;
+  unavailableReasonCode: string;
+  businessResponseNote?: string | null;
+}

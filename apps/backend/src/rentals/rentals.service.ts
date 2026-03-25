@@ -107,6 +107,31 @@ interface RentalListingForRequestEmail {
   business_location?: { name?: string | null } | null;
 }
 
+/**
+ * `GET_RENTAL_REQUEST_FULL` shape used when a business responds (available / unavailable)
+ * and for client notification emails.
+ */
+interface RentalRequestRowForClientNotification {
+  id: string;
+  client_id: string;
+  rental_location_listing_id: string;
+  requested_start_at: string;
+  requested_end_at: string;
+  client?: { user_id?: string | null } | null;
+  rental_location_listing?: {
+    rental_item?: {
+      name?: string | null;
+      business_id?: string;
+      currency?: string;
+      business?: { name?: string | null } | null;
+    } | null;
+    base_price_per_hour?: number | string;
+    base_price_per_day?: number | string;
+    weekly_availability?: WeeklyAvailabilityRow[];
+  } | null;
+  rental_selection_windows?: unknown;
+}
+
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
 export interface PublicRentalListingRow {
   id: string;
@@ -360,6 +385,46 @@ export class RentalsService {
     });
   }
 
+  private async emailClientRentalRequestAccepted(
+    req: RentalRequestRowForClientNotification,
+    bookingNumber: string,
+    contractExpiresAt: string,
+    requestId: string
+  ) {
+    const clientUserId = req.client?.user_id ?? undefined;
+    if (!clientUserId) return;
+    const item = req.rental_location_listing?.rental_item;
+    await this.notificationsService.sendClientRentalRequestAcceptedEmail({
+      clientUserId,
+      requestId,
+      rentalItemName: item?.name ?? 'Rental',
+      businessName: item?.business?.name?.trim() || '—',
+      bookingNumber,
+      contractExpiresAt,
+      requestedStartAt: req.requested_start_at,
+      requestedEndAt: req.requested_end_at,
+    });
+  }
+
+  private async emailClientRentalRequestRejected(
+    req: RentalRequestRowForClientNotification,
+    code: string,
+    note: string | null | undefined,
+    requestId: string
+  ) {
+    const clientUserId = req.client?.user_id ?? undefined;
+    if (!clientUserId) return;
+    const item = req.rental_location_listing?.rental_item;
+    await this.notificationsService.sendClientRentalRequestRejectedEmail({
+      clientUserId,
+      requestId,
+      rentalItemName: item?.name ?? 'Rental',
+      businessName: item?.business?.name?.trim() || '—',
+      unavailableReasonCode: code,
+      businessResponseNote: note,
+    });
+  }
+
   async respondToRentalRequest(requestId: string, dto: RespondRentalRequestDto) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business) {
@@ -374,9 +439,21 @@ export class RentalsService {
     }
     const respondedAt = new Date().toISOString();
     if (dto.status === RespondRentalRequestStatusDto.available) {
-      await this.respondRentalRequestAvailable(requestId, dto, user.id, req, respondedAt);
+      await this.respondRentalRequestAvailable(
+        requestId,
+        dto,
+        user.id,
+        req as RentalRequestRowForClientNotification,
+        respondedAt
+      );
     } else {
-      await this.respondRentalRequestUnavailable(requestId, dto, user.id, respondedAt);
+      await this.respondRentalRequestUnavailable(
+        requestId,
+        dto,
+        user.id,
+        req as RentalRequestRowForClientNotification,
+        respondedAt
+      );
     }
     return { success: true };
   }
@@ -385,6 +462,7 @@ export class RentalsService {
     requestId: string,
     dto: RespondRentalRequestDto,
     userId: string,
+    req: RentalRequestRowForClientNotification,
     respondedAt: string
   ) {
     if (dto.unavailableReasonCode == null) {
@@ -409,13 +487,19 @@ export class RentalsService {
       respondedAt,
       userId,
     });
+    await this.emailClientRentalRequestRejected(
+      req,
+      dto.unavailableReasonCode,
+      dto.businessResponseNote,
+      requestId
+    );
   }
 
   private async respondRentalRequestAvailable(
     requestId: string,
     dto: RespondRentalRequestDto,
     userId: string,
-    req: any,
+    req: RentalRequestRowForClientNotification,
     respondedAt: string
   ) {
     if (dto.contractExpiryHours == null) {
@@ -455,6 +539,12 @@ export class RentalsService {
         respondedAt,
         userId,
       });
+      await this.emailClientRentalRequestAccepted(
+        req,
+        ins.insert_rental_bookings_one.booking_number,
+        contractExpiresAt,
+        requestId
+      );
     } catch (e: any) {
       if (bookingId) await this.deleteBooking(bookingId);
       throw e instanceof HttpException

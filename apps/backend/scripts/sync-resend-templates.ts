@@ -100,6 +100,16 @@ function subjectForTemplate(name: string): string {
       ? 'Nouvelle demande de location — Rendasua'
       : 'New rental booking request — Rendasua';
   }
+  if (name.includes('client_rental_request_accepted')) {
+    return name.endsWith('_fr')
+      ? 'Demande de location acceptée — Rendasua'
+      : 'Your rental request was accepted — Rendasua';
+  }
+  if (name.includes('client_rental_request_rejected')) {
+    return name.endsWith('_fr')
+      ? 'Demande de location refusée — Rendasua'
+      : 'Update on your rental request — Rendasua';
+  }
   return name.endsWith('_fr')
     ? 'Mise à jour de commande — Rendasua'
     : 'Rendasua — order update';

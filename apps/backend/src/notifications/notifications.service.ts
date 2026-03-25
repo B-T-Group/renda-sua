@@ -15,6 +15,8 @@ import {
 } from './email-template-data';
 import type {
   BusinessRentalBookingRequestEmailPayload,
+  ClientRentalRequestAcceptedEmailPayload,
+  ClientRentalRequestRejectedEmailPayload,
   NotificationData,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
@@ -24,11 +26,57 @@ import twilio = require('twilio');
 
 export type {
   BusinessRentalBookingRequestEmailPayload,
+  ClientRentalRequestAcceptedEmailPayload,
+  ClientRentalRequestRejectedEmailPayload,
   NotificationData,
   RentalListingModerationEmailPayload,
   RentalListingRejectedEmailPayload,
   RentalPeriodEndedEmailPayload,
 } from './notification-types';
+
+function escapeHtmlForEmail(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const RENTAL_REJECTION_REASONS: Record<
+  EmailLocale,
+  Record<string, string>
+> = {
+  en: {
+    fully_booked: 'This listing is fully booked for the dates you requested.',
+    dates_not_available: 'Those dates are not available from this business.',
+    item_unavailable: 'The item is not available.',
+    pricing_mismatch: 'The business could not match the requested pricing.',
+  },
+  fr: {
+    fully_booked: 'Cette annonce est complète pour les dates demandées.',
+    dates_not_available: 'Ces dates ne sont pas disponibles chez ce professionnel.',
+    item_unavailable: "L'article n'est pas disponible.",
+    pricing_mismatch: "Le professionnel n'a pas pu confirmer le tarif demandé.",
+  },
+};
+
+function clientRentalRejectionReasonHtml(
+  code: string,
+  note: string | null | undefined,
+  locale: EmailLocale
+): string {
+  const map = RENTAL_REJECTION_REASONS[locale] ?? RENTAL_REJECTION_REASONS.en;
+  const n = note?.trim() ?? '';
+  if (code === 'other') {
+    return escapeHtmlForEmail(
+      n ||
+        (locale === 'fr' ? 'Aucun détail fourni.' : 'No details provided.')
+    );
+  }
+  const head = map[code] ?? escapeHtmlForEmail(code);
+  if (!n) return head;
+  return `${head}<br><br>${escapeHtmlForEmail(n)}`;
+}
 
 export interface EmailTemplate {
   id: string;
@@ -284,6 +332,78 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.error(
         `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendClientRentalRequestAcceptedEmail(
+    payload: ClientRentalRequestAcceptedEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.clientUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental request accepted email skipped: missing client email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'client_rental_request_accepted',
+          locale
+        ),
+        variables: {
+          requestId: payload.requestId,
+          rentalItemName: payload.rentalItemName,
+          businessName: payload.businessName,
+          bookingNumber: payload.bookingNumber,
+          contractExpiresAt: payload.contractExpiresAt,
+          requestedStartAt: payload.requestedStartAt,
+          requestedEndAt: payload.requestedEndAt,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendClientRentalRequestAcceptedEmail: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  async sendClientRentalRequestRejectedEmail(
+    payload: ClientRentalRequestRejectedEmailPayload
+  ): Promise<void> {
+    try {
+      const u = await this.getUserRowForEmail(payload.clientUserId);
+      if (!u?.email) {
+        this.logger.warn(
+          'Rental request rejected email skipped: missing client email'
+        );
+        return;
+      }
+      const locale = normalizeLanguage(u.preferred_language);
+      const reasonHtml = clientRentalRejectionReasonHtml(
+        payload.unavailableReasonCode,
+        payload.businessResponseNote,
+        locale
+      );
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(
+          'client_rental_request_rejected',
+          locale
+        ),
+        variables: {
+          requestId: payload.requestId,
+          rentalItemName: payload.rentalItemName,
+          businessName: payload.businessName,
+          reasonHtml,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `sendClientRentalRequestRejectedEmail: ${error?.message ?? String(error)}`
       );
     }
   }

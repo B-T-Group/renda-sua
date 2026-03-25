@@ -187,7 +187,14 @@ export const GET_RENTAL_REQUEST_FULL = `
           start_time
           end_time
         }
-        rental_item { id business_id currency is_active }
+        rental_item {
+          id
+          business_id
+          currency
+          is_active
+          name
+          business { name }
+        }
       }
       client { id user_id }
       rental_booking {
