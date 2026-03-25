@@ -809,7 +809,21 @@
       "currency": "Devise",
       "itemActive": "Actif dans le catalogue",
       "listingActive": "Annonce active",
-      "maxDaysHint": "Laisser vide pour aucun maximum"
+      "maxDaysHint": "Laisser vide pour aucun maximum",
+      "softDelete": {
+        "removeListing": "Supprimer l’annonce",
+        "removeListingTitle": "Supprimer cette annonce pour ce lieu ?",
+        "removeListingMessage": "L’annonce sera retirée du catalogue. Vous ne pouvez la supprimer que s’il n’y a pas de réservations actives ni de demandes en cours.",
+        "removeItem": "Retirer l’article du catalogue",
+        "removeItemTitle": "Retirer cet article de location du catalogue ?",
+        "removeItemMessage": "L’article et toutes ses annonces par lieu seront retirés. Possible seulement sans réservations actives ni demandes en cours.",
+        "listingRemoved": "Annonce supprimée",
+        "itemRemoved": "Article retiré du catalogue",
+        "failed": "Suppression impossible",
+        "itemRemovedBanner": "Cet article a été retiré du catalogue. La modification n’est plus disponible.",
+        "listingRemovedBanner": "Cette annonce a été supprimée.",
+        "catalogBadge": "Retiré du catalogue"
+      }
     },
     "failedDeliveries": {
       "title": "Livraisons échouées",

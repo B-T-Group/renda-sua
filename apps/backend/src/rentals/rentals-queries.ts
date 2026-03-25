@@ -3,6 +3,7 @@ export const GET_LISTING_FOR_REQUEST = `
     rental_location_listings_by_pk(id: $id) {
       id
       is_active
+      deleted_at
       min_rental_hours
       max_rental_hours
       units_available
@@ -19,6 +20,7 @@ export const GET_LISTING_FOR_REQUEST = `
         business_id
         currency
         is_active
+        deleted_at
         business { id user_id is_verified }
       }
       business_location_id
@@ -91,6 +93,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
   query GetPublicRentalListingByPk($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
       id
+      deleted_at
       base_price_per_hour
       base_price_per_day
       min_rental_hours
@@ -111,6 +114,7 @@ export const GET_PUBLIC_RENTAL_LISTING_BY_PK = `
         tags
         currency
         operation_mode
+        deleted_at
         rental_category {
           id
           name
@@ -457,6 +461,8 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
       description
       currency
       rental_category_id
+      is_active
+      deleted_at
       rental_item_images(order_by: { display_order: asc }) {
         id
         image_url
@@ -467,6 +473,8 @@ export const GET_BUSINESS_RENTAL_ITEMS = `
         business_location_id
         base_price_per_hour
         base_price_per_day
+        is_active
+        deleted_at
       }
     }
   }
@@ -482,6 +490,7 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
       currency
       tags
       is_active
+      deleted_at
       operation_mode
       rental_item_images(order_by: { display_order: asc }) {
         id
@@ -497,6 +506,7 @@ export const GET_BUSINESS_RENTAL_ITEM_DETAIL = `
         max_rental_hours
         units_available
         is_active
+        deleted_at
         pickup_instructions
         dropoff_instructions
         weekly_availability(order_by: { weekday: asc }) {
@@ -538,8 +548,10 @@ export const GET_RENTAL_LISTING_BUSINESS_CHECK = `
   query RentalListingBusinessCheck($id: uuid!) {
     rental_location_listings_by_pk(id: $id) {
       id
+      deleted_at
       rental_item {
         business_id
+        deleted_at
       }
     }
   }
@@ -743,6 +755,103 @@ export const GET_RENTAL_ITEM_BUSINESS_CHECK = `
     rental_items_by_pk(id: $id) {
       id
       business_id
+      deleted_at
+    }
+  }
+`;
+
+export const COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_LISTING = `
+  query CountInFlightBookingsForListing($listingId: uuid!) {
+    rental_bookings_aggregate(
+      where: {
+        rental_location_listing_id: { _eq: $listingId }
+        status: { _in: [proposed, confirmed, active, awaiting_return] }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const COUNT_OPEN_RENTAL_REQUESTS_FOR_LISTING = `
+  query CountOpenRentalRequestsForListing($listingId: uuid!) {
+    rental_requests_aggregate(
+      where: {
+        rental_location_listing_id: { _eq: $listingId }
+        status: { _in: [pending, available] }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_RENTAL_ITEM = `
+  query CountInFlightBookingsForRentalItem($rentalItemId: uuid!) {
+    rental_bookings_aggregate(
+      where: {
+        rental_location_listing: { rental_item_id: { _eq: $rentalItemId } }
+        status: { _in: [proposed, confirmed, active, awaiting_return] }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const COUNT_OPEN_RENTAL_REQUESTS_FOR_RENTAL_ITEM = `
+  query CountOpenRentalRequestsForRentalItem($rentalItemId: uuid!) {
+    rental_requests_aggregate(
+      where: {
+        rental_location_listing: { rental_item_id: { _eq: $rentalItemId } }
+        status: { _in: [pending, available] }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
+export const SOFT_DELETE_RENTAL_LOCATION_LISTING = `
+  mutation SoftDeleteRentalLocationListing($id: uuid!, $deletedAt: timestamptz!) {
+    update_rental_location_listings_by_pk(
+      pk_columns: { id: $id }
+      _set: { deleted_at: $deletedAt, is_active: false }
+    ) {
+      id
+    }
+  }
+`;
+
+export const SOFT_DELETE_RENTAL_LISTINGS_FOR_ITEM = `
+  mutation SoftDeleteRentalListingsForItem($rentalItemId: uuid!, $deletedAt: timestamptz!) {
+    update_rental_location_listings(
+      where: {
+        rental_item_id: { _eq: $rentalItemId }
+        deleted_at: { _is_null: true }
+      }
+      _set: { deleted_at: $deletedAt, is_active: false }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const SOFT_DELETE_RENTAL_ITEM = `
+  mutation SoftDeleteRentalItem($id: uuid!, $deletedAt: timestamptz!) {
+    update_rental_items_by_pk(
+      pk_columns: { id: $id }
+      _set: { deleted_at: $deletedAt, is_active: false }
+    ) {
+      id
     }
   }
 `;

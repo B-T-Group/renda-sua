@@ -49,12 +49,16 @@ export interface BusinessRentalItemRow {
   description: string;
   currency: string;
   rental_category_id: string;
+  is_active?: boolean;
+  deleted_at?: string | null;
   rental_item_images?: BusinessRentalItemImageRow[];
   rental_location_listings: {
     id: string;
     business_location_id: string;
     base_price_per_hour: number;
     base_price_per_day: number;
+    is_active?: boolean;
+    deleted_at?: string | null;
   }[];
 }
 
@@ -67,6 +71,7 @@ export interface BusinessRentalListingDetail {
   max_rental_hours: number | null;
   units_available: number;
   is_active: boolean;
+  deleted_at?: string | null;
   pickup_instructions?: string | null;
   dropoff_instructions?: string | null;
   weekly_availability: RentalWeeklyAvailabilityRow[];
@@ -81,6 +86,7 @@ export interface BusinessRentalItemDetail {
   currency: string;
   tags?: string[] | null;
   is_active: boolean;
+  deleted_at?: string | null;
   operation_mode?: string;
   rental_item_images: BusinessRentalItemImageRow[];
   rental_location_listings: BusinessRentalListingDetail[];
@@ -460,6 +466,26 @@ export function useRentalApi() {
     [api]
   );
 
+  const deleteBusinessRentalListing = useCallback(
+    async (listingId: string) => {
+      const { data } = await api.delete<{ success: boolean }>(
+        `/rentals/business/listings/${listingId}`
+      );
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
+  const deleteBusinessRentalItem = useCallback(
+    async (itemId: string) => {
+      const { data } = await api.delete<{ success: boolean }>(
+        `/rentals/business/items/${itemId}`
+      );
+      return data as { success: boolean };
+    },
+    [api]
+  );
+
   return {
     fetchBusinessRentalItems,
     fetchBusinessRentalItem,
@@ -481,5 +507,7 @@ export function useRentalApi() {
     verifyStartPin,
     generateOverwrite,
     confirmReturn,
+    deleteBusinessRentalListing,
+    deleteBusinessRentalItem,
   };
 }

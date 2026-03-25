@@ -3,6 +3,7 @@ import {
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   FormControl,
@@ -29,9 +30,18 @@ import {
   type UpdateBusinessRentalListingBody,
 } from '../../hooks/useRentalApi';
 import { useRentalCategories } from '../../hooks/useRentalCategories';
+import ConfirmationModal from '../common/ConfirmationModal';
 import LoadingPage from '../common/LoadingPage';
 import { RichTextEditor } from '../common/RichTextEditor';
 import SEOHead from '../seo/SEOHead';
+
+function rentalDeleteErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { message?: string | string[] } } };
+  const m = err?.response?.data?.message;
+  if (typeof m === 'string') return m;
+  if (Array.isArray(m) && m.length) return String(m[0]);
+  return fallback;
+}
 
 interface ListingFormState {
   base_price_per_hour: string;
@@ -145,6 +155,8 @@ const BusinessRentalItemEditPage: React.FC = () => {
     fetchBusinessRentalItem,
     updateBusinessRentalItem,
     updateBusinessRentalListing,
+    deleteBusinessRentalListing,
+    deleteBusinessRentalItem,
   } = useRentalApi();
 
   const [item, setItem] = useState<BusinessRentalItemDetail | null>(null);
@@ -160,6 +172,9 @@ const BusinessRentalItemEditPage: React.FC = () => {
   );
   const [savingItem, setSavingItem] = useState(false);
   const [savingListingId, setSavingListingId] = useState<string | null>(null);
+  const [listingDeleteId, setListingDeleteId] = useState<string | null>(null);
+  const [itemDeleteOpen, setItemDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const reload = useCallback(async () => {
     if (!itemId) return;
@@ -263,6 +278,54 @@ const BusinessRentalItemEditPage: React.FC = () => {
     [enqueueSnackbar, listingForms, reload, t, updateBusinessRentalListing]
   );
 
+  const confirmDeleteListing = useCallback(async () => {
+    if (!listingDeleteId) return;
+    setDeleteLoading(true);
+    try {
+      await deleteBusinessRentalListing(listingDeleteId);
+      enqueueSnackbar(
+        t('business.rentals.softDelete.listingRemoved', 'Listing removed'),
+        { variant: 'success' }
+      );
+      setListingDeleteId(null);
+      await reload();
+    } catch (error: unknown) {
+      enqueueSnackbar(
+        rentalDeleteErrorMessage(
+          error,
+          t('business.rentals.softDelete.failed', 'Could not remove')
+        ),
+        { variant: 'error' }
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deleteBusinessRentalListing, enqueueSnackbar, listingDeleteId, reload, t]);
+
+  const confirmDeleteItem = useCallback(async () => {
+    if (!itemId) return;
+    setDeleteLoading(true);
+    try {
+      await deleteBusinessRentalItem(itemId);
+      enqueueSnackbar(
+        t('business.rentals.softDelete.itemRemoved', 'Rental removed from catalog'),
+        { variant: 'success' }
+      );
+      setItemDeleteOpen(false);
+      navigate('/business/rentals/catalog');
+    } catch (error: unknown) {
+      enqueueSnackbar(
+        rentalDeleteErrorMessage(
+          error,
+          t('business.rentals.softDelete.failed', 'Could not remove')
+        ),
+        { variant: 'error' }
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deleteBusinessRentalItem, enqueueSnackbar, itemId, navigate, t]);
+
   if (!businessId) {
     return (
       <Typography sx={{ p: 3 }}>
@@ -287,6 +350,29 @@ const BusinessRentalItemEditPage: React.FC = () => {
         </Button>
         <Typography>{t('business.rentals.loadError', 'Could not load this rental.')}</Typography>
       </Box>
+    );
+  }
+
+  if (item.deleted_at) {
+    return (
+      <>
+        <SEOHead title={t('business.rentals.editItemTitle', 'Edit rental')} />
+        <Box sx={{ p: 2, maxWidth: 720, mx: 'auto' }}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/business/rentals/catalog')}
+            sx={{ mb: 2 }}
+          >
+            {t('business.rentals.backToCatalog', 'Back to rentals')}
+          </Button>
+          <Alert severity="info">
+            {t(
+              'business.rentals.softDelete.itemRemovedBanner',
+              'This rental was removed from the catalog. Editing is disabled.'
+            )}
+          </Alert>
+        </Box>
+      </>
     );
   }
 
@@ -416,6 +502,14 @@ const BusinessRentalItemEditPage: React.FC = () => {
                 ? t('business.rentals.saving', 'Saving...')
                 : t('common.save', 'Save')}
             </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setItemDeleteOpen(true)}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              {t('business.rentals.softDelete.removeItem', 'Remove rental from catalog')}
+            </Button>
           </Stack>
         </Paper>
 
@@ -425,8 +519,18 @@ const BusinessRentalItemEditPage: React.FC = () => {
 
         {item.rental_location_listings.map((l: BusinessRentalListingDetail) => {
           const f = listingForms[l.id];
-          if (!f) return null;
           const locName = l.business_location?.name ?? l.business_location_id;
+          if (l.deleted_at) {
+            return (
+              <Paper key={l.id} sx={{ p: 2, mb: 2 }}>
+                <Alert severity="info">
+                  {t('business.rentals.softDelete.listingRemovedBanner', 'This listing was removed.')}{' '}
+                  ({locName})
+                </Alert>
+              </Paper>
+            );
+          }
+          if (!f) return null;
           return (
             <Paper key={l.id} sx={{ p: 2, mb: 2 }}>
               <Typography variant="subtitle1" gutterBottom>
@@ -566,20 +670,63 @@ const BusinessRentalItemEditPage: React.FC = () => {
                   }
                   label={t('business.rentals.listingActive', 'Listing active')}
                 />
-                <Button
-                  variant="outlined"
-                  onClick={() => void saveListing(l.id)}
-                  disabled={savingListingId === l.id}
-                >
-                  {savingListingId === l.id
-                    ? t('business.rentals.saving', 'Saving...')
-                    : t('business.rentals.saveListing', 'Save listing')}
-                </Button>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Button
+                    variant="outlined"
+                    onClick={() => void saveListing(l.id)}
+                    disabled={savingListingId === l.id}
+                  >
+                    {savingListingId === l.id
+                      ? t('business.rentals.saving', 'Saving...')
+                      : t('business.rentals.saveListing', 'Save listing')}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => setListingDeleteId(l.id)}
+                  >
+                    {t('business.rentals.softDelete.removeListing', 'Remove listing')}
+                  </Button>
+                </Stack>
               </Stack>
             </Paper>
           );
         })}
       </Box>
+
+      <ConfirmationModal
+        open={!!listingDeleteId}
+        title={t(
+          'business.rentals.softDelete.removeListingTitle',
+          'Remove this location listing?'
+        )}
+        message={t(
+          'business.rentals.softDelete.removeListingMessage',
+          'The listing will be hidden from the catalog. You can only remove it when there are no active bookings or open requests.'
+        )}
+        confirmText={t('business.rentals.softDelete.removeListing', 'Remove listing')}
+        confirmColor="error"
+        loading={deleteLoading}
+        onCancel={() => setListingDeleteId(null)}
+        onConfirm={() => void confirmDeleteListing()}
+      />
+
+      <ConfirmationModal
+        open={itemDeleteOpen}
+        title={t(
+          'business.rentals.softDelete.removeItemTitle',
+          'Remove this rental from the catalog?'
+        )}
+        message={t(
+          'business.rentals.softDelete.removeItemMessage',
+          'This rental and all its location listings will be hidden. You can only remove it when there are no active bookings or open requests.'
+        )}
+        confirmText={t('business.rentals.softDelete.removeItem', 'Remove rental from catalog')}
+        confirmColor="error"
+        loading={deleteLoading}
+        onCancel={() => setItemDeleteOpen(false)}
+        onConfirm={() => void confirmDeleteItem()}
+      />
     </>
   );
 };

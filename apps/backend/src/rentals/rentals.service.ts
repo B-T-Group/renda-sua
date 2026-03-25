@@ -100,6 +100,7 @@ interface RentalRequestWindowPlan {
 /** Browse catalog row: same shape as frontend `RentalListingRow`. */
 export interface PublicRentalListingRow {
   id: string;
+  deleted_at?: string | null;
   base_price_per_hour: number;
   base_price_per_day: number;
   min_rental_hours: number;
@@ -115,6 +116,7 @@ export interface PublicRentalListingRow {
     tags: string[];
     currency: string;
     operation_mode: string;
+    deleted_at?: string | null;
     rental_category: { id: string; name: string };
     rental_item_images: Array<{ id: string; image_url: string; alt_text?: string }>;
     business: { id: string; name: string; is_verified?: boolean };
@@ -248,6 +250,9 @@ export class RentalsService {
     }>(Q.GET_PUBLIC_RENTAL_LISTING_BY_PK, { id: listingId });
     const row = r.rental_location_listings_by_pk;
     if (!row) return null;
+    if (row.deleted_at || row.rental_item?.deleted_at) {
+      return null;
+    }
     if (await this.listingHasActiveProposedContract(listingId)) {
       return null;
     }
@@ -595,6 +600,30 @@ export class RentalsService {
     }
   }
 
+  async softDeleteBusinessRentalListing(listingId: string): Promise<void> {
+    const businessId = await this.requireBusinessId();
+    await this.assertRentalListingForBusiness(listingId, businessId, {
+      allowDeleted: true,
+    });
+    if (await this.rentalListingIsAlreadySoftDeleted(listingId)) {
+      return;
+    }
+    await this.assertNoBlockingWorkflowsForListing(listingId);
+    await this.runSoftDeleteRentalListing(listingId);
+  }
+
+  async softDeleteBusinessRentalItem(itemId: string): Promise<void> {
+    const businessId = await this.requireBusinessId();
+    await this.assertRentalItemForBusiness(itemId, businessId, {
+      allowDeleted: true,
+    });
+    if (await this.rentalItemIsAlreadySoftDeleted(itemId)) {
+      return;
+    }
+    await this.assertNoBlockingWorkflowsForRentalItem(itemId);
+    await this.runSoftDeleteRentalItemAndListings(itemId);
+  }
+
   async updateBusinessRentalListing(
     listingId: string,
     dto: UpdateBusinessRentalListingDto
@@ -727,16 +756,24 @@ export class RentalsService {
 
   private async assertRentalListingForBusiness(
     listingId: string,
-    businessId: string
+    businessId: string,
+    options: { allowDeleted?: boolean } = {}
   ): Promise<void> {
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings_by_pk: {
-        rental_item: { business_id: string };
+        deleted_at: string | null;
+        rental_item: { business_id: string; deleted_at: string | null };
       } | null;
     }>(Q.GET_RENTAL_LISTING_BUSINESS_CHECK, { id: listingId });
     const row = r.rental_location_listings_by_pk;
     if (!row || row.rental_item.business_id !== businessId) {
       throw new HttpException('Listing not found', HttpStatus.NOT_FOUND);
+    }
+    if (
+      !options.allowDeleted &&
+      (row.deleted_at || row.rental_item.deleted_at)
+    ) {
+      throw new HttpException('This listing was removed', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -766,14 +803,24 @@ export class RentalsService {
 
   private async assertRentalItemForBusiness(
     itemId: string,
-    businessId: string
+    businessId: string,
+    options: { allowDeleted?: boolean } = {}
   ): Promise<void> {
     const r = await this.hasuraSystemService.executeQuery<{
-      rental_items_by_pk: { business_id: string } | null;
+      rental_items_by_pk: {
+        business_id: string;
+        deleted_at: string | null;
+      } | null;
     }>(Q.GET_RENTAL_ITEM_BUSINESS_CHECK, { id: itemId });
     const row = r.rental_items_by_pk;
     if (!row || row.business_id !== businessId) {
       throw new HttpException('Rental item not found', HttpStatus.NOT_FOUND);
+    }
+    if (!options.allowDeleted && row.deleted_at) {
+      throw new HttpException(
+        'This rental item was removed',
+        HttpStatus.BAD_REQUEST
+      );
     }
   }
 
@@ -788,6 +835,108 @@ export class RentalsService {
     if (!row || row.business_id !== businessId) {
       throw new HttpException('Location not found', HttpStatus.NOT_FOUND);
     }
+  }
+
+  private async rentalListingIsAlreadySoftDeleted(
+    listingId: string
+  ): Promise<boolean> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_location_listings_by_pk: { deleted_at: string | null } | null;
+    }>(Q.GET_RENTAL_LISTING_BUSINESS_CHECK, { id: listingId });
+    return !!r.rental_location_listings_by_pk?.deleted_at;
+  }
+
+  private async rentalItemIsAlreadySoftDeleted(itemId: string): Promise<boolean> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_items_by_pk: { deleted_at: string | null } | null;
+    }>(Q.GET_RENTAL_ITEM_BUSINESS_CHECK, { id: itemId });
+    return !!r.rental_items_by_pk?.deleted_at;
+  }
+
+  private async assertNoBlockingWorkflowsForListing(
+    listingId: string
+  ): Promise<void> {
+    const bookings = await this.countInFlightBookingsForListing(listingId);
+    if (bookings > 0) {
+      throw new HttpException(
+        'Cannot remove this listing while there are active bookings.',
+        HttpStatus.CONFLICT
+      );
+    }
+    const requests = await this.countOpenRequestsForListing(listingId);
+    if (requests > 0) {
+      throw new HttpException(
+        'Cannot remove this listing while there are open rental requests.',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async assertNoBlockingWorkflowsForRentalItem(
+    itemId: string
+  ): Promise<void> {
+    const bookings = await this.countInFlightBookingsForRentalItem(itemId);
+    if (bookings > 0) {
+      throw new HttpException(
+        'Cannot remove this rental item while there are active bookings.',
+        HttpStatus.CONFLICT
+      );
+    }
+    const requests = await this.countOpenRequestsForRentalItem(itemId);
+    if (requests > 0) {
+      throw new HttpException(
+        'Cannot remove this rental item while there are open rental requests.',
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async runSoftDeleteRentalListing(listingId: string): Promise<void> {
+    const deletedAt = new Date().toISOString();
+    await this.hasuraUserService.executeMutation(Q.SOFT_DELETE_RENTAL_LOCATION_LISTING, {
+      id: listingId,
+      deletedAt,
+    });
+  }
+
+  private async runSoftDeleteRentalItemAndListings(itemId: string): Promise<void> {
+    const deletedAt = new Date().toISOString();
+    await this.hasuraUserService.executeMutation(Q.SOFT_DELETE_RENTAL_LISTINGS_FOR_ITEM, {
+      rentalItemId: itemId,
+      deletedAt,
+    });
+    await this.hasuraUserService.executeMutation(Q.SOFT_DELETE_RENTAL_ITEM, {
+      id: itemId,
+      deletedAt,
+    });
+  }
+
+  private async countInFlightBookingsForListing(listingId: string): Promise<number> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_LISTING, { listingId });
+    return r.rental_bookings_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countOpenRequestsForListing(listingId: string): Promise<number> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_requests_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.COUNT_OPEN_RENTAL_REQUESTS_FOR_LISTING, { listingId });
+    return r.rental_requests_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countInFlightBookingsForRentalItem(itemId: string): Promise<number> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_bookings_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.COUNT_IN_FLIGHT_RENTAL_BOOKINGS_FOR_RENTAL_ITEM, { rentalItemId: itemId });
+    return r.rental_bookings_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private async countOpenRequestsForRentalItem(itemId: string): Promise<number> {
+    const r = await this.hasuraSystemService.executeQuery<{
+      rental_requests_aggregate: { aggregate: { count: number } | null } | null;
+    }>(Q.COUNT_OPEN_RENTAL_REQUESTS_FOR_RENTAL_ITEM, { rentalItemId: itemId });
+    return r.rental_requests_aggregate?.aggregate?.count ?? 0;
   }
 
   async createRentalBooking(dto: CreateRentalBookingDto) {
@@ -1350,6 +1499,9 @@ export class RentalsService {
 
   private assertListingBookable(listing: any) {
     if (!listing?.is_active || !listing.rental_item?.is_active) {
+      throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
+    }
+    if (listing.deleted_at || listing.rental_item?.deleted_at) {
       throw new HttpException('Listing not available', HttpStatus.BAD_REQUEST);
     }
     if (!listing.rental_item?.business?.is_verified) {
@@ -2075,6 +2227,8 @@ export class RentalsService {
     return {
       _and: [
         base,
+        { deleted_at: { _is_null: true } },
+        { rental_item: { deleted_at: { _is_null: true } } },
         {
           _not: {
             rental_bookings: {

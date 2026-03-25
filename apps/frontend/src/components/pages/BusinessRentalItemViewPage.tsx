@@ -1,5 +1,6 @@
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -89,11 +90,21 @@ const BusinessRentalItemViewPage: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<EditIcon />}
+            disabled={!!item.deleted_at}
             onClick={() => navigate(`/business/rentals/items/${item.id}/edit`)}
           >
             {t('business.rentals.edit', 'Edit')}
           </Button>
         </Stack>
+
+        {item.deleted_at ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t(
+              'business.rentals.softDelete.itemRemovedBanner',
+              'This rental was removed from the catalog. Editing is disabled.'
+            )}
+          </Alert>
+        ) : null}
 
         <Paper sx={{ overflow: 'hidden', borderRadius: 2 }}>
           {coverImage ? (
@@ -165,14 +176,25 @@ const BusinessRentalItemViewPage: React.FC = () => {
                     {listing.business_location?.name ??
                       t('business.rentals.location', 'Location')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.rentals.pricePerHour', 'Price per hour')}: {listing.base_price_per_hour}{' '}
-                    {item.currency}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('business.rentals.pricePerDay', 'Full day price (daily rate)')}:{' '}
-                    {listing.base_price_per_day} {item.currency}
-                  </Typography>
+                  {listing.deleted_at ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {t(
+                        'business.rentals.softDelete.listingRemovedBanner',
+                        'This listing was removed.'
+                      )}
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('business.rentals.pricePerHour', 'Price per hour')}:{' '}
+                        {listing.base_price_per_hour} {item.currency}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('business.rentals.pricePerDay', 'Full day price (daily rate)')}:{' '}
+                        {listing.base_price_per_day} {item.currency}
+                      </Typography>
+                    </>
+                  )}
                 </Paper>
               ))}
             </Stack>

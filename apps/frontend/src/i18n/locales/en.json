@@ -820,7 +820,21 @@
       "currency": "Currency",
       "itemActive": "Active in catalog",
       "listingActive": "Listing active",
-      "maxDaysHint": "Leave empty for no maximum"
+      "maxDaysHint": "Leave empty for no maximum",
+      "softDelete": {
+        "removeListing": "Remove listing",
+        "removeListingTitle": "Remove this location listing?",
+        "removeListingMessage": "The listing will be hidden from the catalog. You can only remove it when there are no active bookings or open requests.",
+        "removeItem": "Remove rental from catalog",
+        "removeItemTitle": "Remove this rental from the catalog?",
+        "removeItemMessage": "This rental and all its location listings will be hidden. You can only remove it when there are no active bookings or open requests.",
+        "listingRemoved": "Listing removed",
+        "itemRemoved": "Rental removed from catalog",
+        "failed": "Could not remove",
+        "itemRemovedBanner": "This rental was removed from the catalog. Editing is disabled.",
+        "listingRemovedBanner": "This listing was removed.",
+        "catalogBadge": "Removed from catalog"
+      }
     },
     "failedDeliveries": {
       "title": "Failed Deliveries",

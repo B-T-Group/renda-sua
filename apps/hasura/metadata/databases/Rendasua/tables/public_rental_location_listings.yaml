@@ -71,16 +71,21 @@ select_permissions:
         - max_rental_hours
         - units_available
         - is_active
+        - deleted_at
         - created_at
         - updated_at
       filter:
         _and:
           - is_active:
               _eq: true
+          - deleted_at:
+              _is_null: true
           - rental_item:
               _and:
                 - is_active:
                     _eq: true
+                - deleted_at:
+                    _is_null: true
                 - business:
                     is_verified:
                       _eq: true
@@ -98,6 +103,7 @@ select_permissions:
         - max_rental_hours
         - units_available
         - is_active
+        - deleted_at
         - created_at
         - updated_at
       filter:
@@ -120,16 +126,21 @@ select_permissions:
         - max_rental_hours
         - units_available
         - is_active
+        - deleted_at
         - created_at
         - updated_at
       filter:
         _and:
           - is_active:
               _eq: true
+          - deleted_at:
+              _is_null: true
           - rental_item:
               _and:
                 - is_active:
                     _eq: true
+                - deleted_at:
+                    _is_null: true
                 - business:
                     is_verified:
                       _eq: true
@@ -145,6 +156,7 @@ update_permissions:
         - max_rental_hours
         - units_available
         - is_active
+        - deleted_at
       filter:
         rental_item:
           business:

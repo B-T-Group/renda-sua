@@ -190,6 +190,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
                 bgcolor: 'background.paper',
                 transition: 'box-shadow 0.2s',
                 '&:hover': { boxShadow: 1 },
+                opacity: it.deleted_at ? 0.75 : 1,
               }}
             >
               {thumb ? (
@@ -231,11 +232,22 @@ const BusinessRentalsCatalogPage: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">
                   {it.description}
                 </Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 1, mt: 0.5 }}>
+                <Stack direction="row" spacing={1} sx={{ mb: 1, mt: 0.5 }} flexWrap="wrap">
                   <Chip
                     size="small"
                     label={`${t('business.rentals.listingsCount', 'Listings')}: ${it.rental_location_listings?.length ?? 0}`}
                   />
+                  {it.deleted_at ? (
+                    <Chip
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                      label={t(
+                        'business.rentals.softDelete.catalogBadge',
+                        'Removed from catalog'
+                      )}
+                    />
+                  ) : null}
                 </Stack>
                 <Stack direction="row" spacing={1}>
                   <Button

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -231,6 +232,44 @@ export class RentalsController {
     @Body() dto: UpdateBusinessRentalListingDto
   ) {
     await this.rentalsService.updateBusinessRentalListing(listingId, dto);
+    return { success: true };
+  }
+
+  @Delete('business/listings/:listingId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Soft-delete a rental location listing (no active bookings or open requests)',
+  })
+  @ApiParam({ name: 'listingId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Listing removed from catalog' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Blocked by active bookings or open requests',
+  })
+  async deleteBusinessListing(@Param('listingId') listingId: string) {
+    await this.rentalsService.softDeleteBusinessRentalListing(listingId);
+    return { success: true };
+  }
+
+  @Delete('business/items/:itemId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Soft-delete a rental catalog item and all its listings (no active bookings or open requests)',
+  })
+  @ApiParam({ name: 'itemId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Item removed from catalog' })
+  @ApiResponse({ status: 403, description: 'Not a business user' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Blocked by active bookings or open requests',
+  })
+  async deleteBusinessItem(@Param('itemId') itemId: string) {
+    await this.rentalsService.softDeleteBusinessRentalItem(itemId);
     return { success: true };
   }
 
