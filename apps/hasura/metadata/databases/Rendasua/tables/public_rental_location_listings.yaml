@@ -51,6 +51,7 @@ insert_permissions:
         - pickup_instructions
         - dropoff_instructions
         - base_price_per_hour
+        - base_price_per_day
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -65,6 +66,7 @@ select_permissions:
         - pickup_instructions
         - dropoff_instructions
         - base_price_per_hour
+        - base_price_per_day
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -91,6 +93,7 @@ select_permissions:
         - pickup_instructions
         - dropoff_instructions
         - base_price_per_hour
+        - base_price_per_day
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -112,6 +115,7 @@ select_permissions:
         - pickup_instructions
         - dropoff_instructions
         - base_price_per_hour
+        - base_price_per_day
         - min_rental_hours
         - max_rental_hours
         - units_available
@@ -136,6 +140,7 @@ update_permissions:
         - pickup_instructions
         - dropoff_instructions
         - base_price_per_hour
+        - base_price_per_day
         - min_rental_hours
         - max_rental_hours
         - units_available
