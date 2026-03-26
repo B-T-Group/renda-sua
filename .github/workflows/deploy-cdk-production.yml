@@ -97,12 +97,6 @@ jobs:
           cd apps/hasura
           HASURA_GRAPHQL_ADMIN_SECRET="$(aws secretsmanager get-secret-value --region "${{ env.AWS_REGION }}" --secret-id "${{ env.HASURA_ADMIN_SECRET_ARN }}" --query SecretString --output text)"
           HASURA_DB_NAME="Rendasua"
-          SOURCE_NAMES="$(curl -ks "${{ env.HASURA_ENDPOINT }}/v1/metadata" -H "x-hasura-admin-secret: ${HASURA_GRAPHQL_ADMIN_SECRET}" -H "content-type: application/json" -d '{"type":"export_metadata","args":{}}' | jq -r '.sources[].name')"
-          if ! echo "${SOURCE_NAMES}" | grep -qx 'Rendasua'; then
-            HASURA_DB_NAME="default"
-            mkdir -p migrations/default
-            rsync -a migrations/Rendasua/ migrations/default/
-          fi
           hasura migrate apply --database-name "${HASURA_DB_NAME}" --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
           hasura metadata apply --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
           hasura metadata reload --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
