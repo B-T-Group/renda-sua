@@ -334,6 +334,22 @@ export class RentalsController {
     return this.rentalsService.cancelRentalBooking(bookingId);
   }
 
+  @Get('bookings/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get booking detail for current viewer (client or business)',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: '{ success: true, data: { booking: { ... } } }',
+  })
+  @ApiResponse({ status: 404, description: 'Booking not found (or not visible)' })
+  async getBooking(@Param('id') bookingId: string) {
+    const booking = await this.rentalsService.getBookingDetailForViewer(bookingId);
+    return { success: true, data: { booking } };
+  }
+
   @Get('bookings/:id/start-pin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get rental start PIN (client)' })

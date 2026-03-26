@@ -167,6 +167,11 @@ export interface BusinessRentalRequestRow {
       phone_number?: string | null;
     } | null;
   } | null;
+  rental_booking?: {
+    id: string;
+    status: string;
+    booking_number?: string | null;
+  } | null;
 }
 
 export interface ClientRentalRequestRow {
@@ -219,6 +224,27 @@ export interface BusinessRentalScheduleRow {
         email?: string | null;
       } | null;
     } | null;
+  } | null;
+}
+
+export interface RentalBookingDetail {
+  id: string;
+  booking_number?: string | null;
+  status: string;
+  start_at: string;
+  end_at: string;
+  total_amount: number;
+  currency: string;
+  rental_pricing_snapshot?: unknown;
+  client_id: string;
+  business_id: string;
+  rental_location_listing?: {
+    rental_item?: { name?: string | null } | null;
+    business_location?: { name?: string | null } | null;
+  } | null;
+  rental_hold?: {
+    client_hold_amount: number;
+    status: string;
   } | null;
 }
 
@@ -440,6 +466,22 @@ export function useRentalApi() {
     [api]
   );
 
+  const fetchBookingDetail = useCallback(
+    async (bookingId: string): Promise<RentalBookingDetail | null> => {
+      try {
+        const { data } = await api.get<{
+          success: boolean;
+          data: { booking: RentalBookingDetail };
+        }>(`/rentals/bookings/${bookingId}`);
+        if (!data.success) return null;
+        return data.data.booking ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [api]
+  );
+
   const verifyStartPin = useCallback(
     async (bookingId: string, body: { pin?: string; overwriteCode?: string }) => {
       const { data } = await api.post(
@@ -509,6 +551,7 @@ export function useRentalApi() {
     cancelClientRentalRequest,
     cancelBooking,
     getStartPin,
+    fetchBookingDetail,
     verifyStartPin,
     generateOverwrite,
     confirmReturn,

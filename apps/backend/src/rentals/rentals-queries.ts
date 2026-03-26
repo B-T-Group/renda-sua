@@ -345,6 +345,39 @@ export const GET_RENTAL_BOOKING_FULL = `
   }
 `;
 
+/**
+ * Viewer-safe booking detail for web app booking page.
+ * Uses Hasura RLS (user-scoped) and intentionally omits sensitive hashes.
+ */
+export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
+  query GetRentalBookingDetailForViewer($id: uuid!) {
+    rental_bookings_by_pk(id: $id) {
+      id
+      booking_number
+      status
+      start_at
+      end_at
+      total_amount
+      currency
+      rental_pricing_snapshot
+      client_id
+      business_id
+      rental_location_listing {
+        rental_item {
+          name
+        }
+        business_location {
+          name
+        }
+      }
+      rental_hold {
+        client_hold_amount
+        status
+      }
+    }
+  }
+`;
+
 export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
   query GetRentalBookingFullByBookingNumber($bookingNumber: String!) {
     rental_bookings(
@@ -656,6 +689,11 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
           email
           phone_number
         }
+      }
+      rental_booking {
+        id
+        status
+        booking_number
       }
       rental_location_listing {
         id

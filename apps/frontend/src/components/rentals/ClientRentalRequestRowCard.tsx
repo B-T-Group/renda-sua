@@ -1,9 +1,20 @@
 import { CalendarMonth, LocationOn, OpenInNew } from '@mui/icons-material';
-import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClientRentalRequestRow } from '../../hooks/useRentalApi';
+import { useRentalApi, type ClientRentalRequestRow } from '../../hooks/useRentalApi';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -57,6 +68,10 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const api = useRentalApi();
+  const [pinInfo, setPinInfo] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
   const listing = row.rental_location_listing;
   const itemName = listing?.rental_item?.name ?? t('rentals.clientRequests.unknownItem', 'Rental');
   const locName = listing?.business_location?.name;
@@ -65,19 +80,23 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const deadlineIso = proposedContractDeadlineIso(row);
   const canBookNow = row.status === 'available' && isProposedContractOpen(row);
   const reasonCode = row.unavailable_reason_code?.trim();
+  const bookingId = row.rental_booking?.id;
+  const bookingStatus = row.rental_booking?.status;
+  const canRevealPin = row.status === 'booked' && bookingId && bookingStatus === 'confirmed';
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 2, sm: 2.5 },
-        borderRadius: 2,
-        border: 1,
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
-      }}
-    >
-      <Stack spacing={1.5}>
+    <>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          borderRadius: 2,
+          border: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Stack spacing={1.5}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
@@ -213,18 +232,85 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.cancelRequest', 'Cancel request')}
             </Button>
           ) : null}
-          {row.status === 'booked' && row.rental_booking?.id ? (
-            <Button
-              size="small"
-              variant="contained"
-              color="info"
-              onClick={() => onViewBooking(row.rental_booking!.id)}
-            >
-              {t('rentals.clientRequests.viewBooking', 'View booking')}
-            </Button>
+          {row.status === 'booked' && bookingId ? (
+            <>
+              {canRevealPin ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={pinLoading}
+                  onClick={async () => {
+                    setPinLoading(true);
+                    try {
+                      const r = await api.getStartPin(bookingId);
+                      setPinInfo(r.pin);
+                      setPinModalOpen(true);
+                    } catch (e: unknown) {
+                      setPinInfo(null);
+                      setPinModalOpen(false);
+                    } finally {
+                      setPinLoading(false);
+                    }
+                  }}
+                >
+                  {t('rentals.showStartPin', 'Show start PIN')}
+                </Button>
+              ) : null}
+              <Button
+                size="small"
+                variant="contained"
+                color="info"
+                onClick={() => onViewBooking(bookingId)}
+              >
+                {t('rentals.clientRequests.viewBooking', 'View booking')}
+              </Button>
+            </>
           ) : null}
         </Stack>
-      </Stack>
-    </Paper>
+        </Stack>
+      </Paper>
+
+      <Dialog
+        open={pinModalOpen}
+        onClose={() => setPinModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('rentals.showStartPin', 'Show start PIN')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {t('rentals.yourPin', 'Your start PIN')}
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 900,
+              letterSpacing: 4,
+              textAlign: 'center',
+              py: 1,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+              bgcolor: alpha(theme.palette.info.main, 0.06),
+            }}
+          >
+            {pinInfo ?? '—'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.25 }}>
+            {t(
+              'rentals.pinShareHint',
+              'Share this code with the owner to start the rental.'
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPinModalOpen(false)}>
+            {t('common.close', 'Close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };

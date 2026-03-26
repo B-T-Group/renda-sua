@@ -1554,6 +1554,17 @@ export class RentalsService {
     return { pin };
   }
 
+  async getBookingDetailForViewer(bookingId: string) {
+    const r = await this.hasuraUserService.executeQuery<{
+      rental_bookings_by_pk: any | null;
+    }>(Q.GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER, { id: bookingId });
+    const booking = r.rental_bookings_by_pk;
+    if (!booking) {
+      throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    }
+    return booking;
+  }
+
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
     const user = await this.hasuraUserService.getUser();
     if (!user.business) {
