@@ -84,6 +84,8 @@ export interface AirtelMoneyConfig {
 export interface Auth0Config {
   domain: string;
   audience: string;
+  clientId?: string;
+  clientSecret?: string;
   managementClientId?: string;
   managementClientSecret?: string;
 }
@@ -322,6 +324,8 @@ export default (): Configuration => {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',
       audience:
         process.env.AUTH0_AUDIENCE || 'https://rendasua.ca.auth0.com/api/v2/',
+      clientId: process.env.AUTH0_CLIENT_ID || '',
+      clientSecret: process.env.AUTH0_CLIENT_SECRET || '',
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
     },

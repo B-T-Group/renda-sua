@@ -30,16 +30,12 @@ import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
 
 const LandingPage: React.FC = () => {
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useAuth0();
   const theme = useTheme();
   const { t } = useTranslation();
 
   const handleSignUp = () => {
-    loginWithRedirect({
-      authorizationParams: {
-        screen_hint: 'signup',
-      },
-    });
+    window.location.assign('/signup?intent=client_buy');
   };
 
   // SEO configuration for landing page
@@ -201,7 +197,7 @@ const LandingPage: React.FC = () => {
                     variant="contained"
                     size="large"
                     component={RouterLink}
-                    to="/items"
+                    to="/signup?intent=client_buy"
                     endIcon={<ArrowForward />}
                     sx={{
                       bgcolor: 'primary.main',
@@ -749,7 +745,7 @@ const LandingPage: React.FC = () => {
                     variant="contained"
                     size="large"
                     component={RouterLink}
-                    to="/app"
+                    to="/signup?intent=business_sell"
                     endIcon={<ArrowForward />}
                     sx={{
                       px: 4,
@@ -760,10 +756,23 @@ const LandingPage: React.FC = () => {
                       textTransform: 'none',
                     }}
                   >
-                    {t(
-                      'landing.businessCta.openBusinessAccount',
-                      'Open Business Account'
-                    )}
+                    {t('landing.businessCta.openBusinessAccount', 'Open Business Account')}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    component={RouterLink}
+                    to="/signup?intent=business_rent"
+                    sx={{
+                      px: 4,
+                      py: 1.5,
+                      fontSize: '1.05rem',
+                      fontWeight: 600,
+                      borderRadius: 2,
+                      textTransform: 'none',
+                    }}
+                  >
+                    {t('landing.businessCta.openRentalAccount', 'Open Rental Account')}
                   </Button>
                   <Button
                     variant="outlined"

@@ -3,6 +3,7 @@ import { Login } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 interface LoginButtonProps {
   /** Use light/outlined style for use on a dark header */
@@ -11,12 +12,11 @@ interface LoginButtonProps {
 
 const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
   const { t } = useTranslation();
-  const { loginWithRedirect, isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useAuth0();
+  const navigate = useNavigate();
 
   const handleLogin = () => {
-    loginWithRedirect({
-      appState: { returnTo: '/app' }, // Redirect to /app after login for profile checking
-    });
+    navigate('/auth/login');
   };
 
   if (isAuthenticated) {

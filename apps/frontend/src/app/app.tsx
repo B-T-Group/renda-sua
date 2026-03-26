@@ -46,8 +46,11 @@ import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
 import FirstSaleItemOnboardingPage from '../components/pages/FirstSaleItemOnboardingPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
+import LoginPage from '../components/pages/LoginPage';
+import OtpAuthPage from '../components/pages/OtpAuthPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
+import SignupPage from '../components/pages/SignupPage';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
@@ -181,6 +184,9 @@ function App() {
         >
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/auth/login" element={<LoginPage />} />
+            <Route path="/auth/otp" element={<OtpAuthPage />} />
+            <Route path="/signup" element={<SignupPage />} />
 
             {/* Public routes */}
             <Route
