@@ -1,6 +1,8 @@
 // Development environment configuration
 const getDevelopmentEnvironment = () => {
-  const hasuraUrl = 'https://healthy-mackerel-72.hasura.app/v1/graphql';
+  const hasuraUrl =
+    process.env.REACT_APP_HASURA_URL ||
+    'https://dev-hasura.rendasua.com/v1/graphql';
   const auth0Domain =
     process.env.REACT_APP_AUTH0_DOMAIN || 'rendasua.ca.auth0.com';
   const auth0ClientId =

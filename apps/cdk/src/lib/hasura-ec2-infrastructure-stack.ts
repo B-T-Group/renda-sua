@@ -171,9 +171,10 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'HASURA_GRAPHQL_ADMIN_SECRET=${ADMIN_SECRET}',
       'HASURA_GRAPHQL_UNAUTHORIZED_ROLE=anonymous',
       'HASURA_GRAPHQL_JWT_SECRET=${JWT_ONE_LINE}',
-      `HASURA_GRAPHQL_ENABLE_CONSOLE=${isProd ? 'false' : 'true'}`,
+      // Console + introspection enabled in prod (restrict access via admin secret, network, or nginx auth).
+      'HASURA_GRAPHQL_ENABLE_CONSOLE=true',
       `HASURA_GRAPHQL_ENABLE_TELEMETRY=${isProd ? 'false' : 'true'}`,
-      `HASURA_GRAPHQL_ENABLE_INTROSPECTION=${isProd ? 'false' : 'true'}`,
+      'HASURA_GRAPHQL_ENABLE_INTROSPECTION=true',
       'HASURA_GRAPHQL_LOG_LEVEL=info',
       'EOF',
       `docker pull ${hasuraImage}`,

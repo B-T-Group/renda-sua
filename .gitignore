@@ -7,6 +7,7 @@ out-tsc
 cdk.out
 build
 .env
+apps/hasura/.env.hasura-cdk-parity
 .vscode/settings.json
 
 # Python
