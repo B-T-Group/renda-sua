@@ -110,6 +110,48 @@ cdk deploy --context environment=dev
 cdk deploy --context environment=production
 ```
 
+### Deploy Self-Hosted Hasura (EC2 dev + prod)
+
+This repository includes an additional stack (`HasuraEc2Infrastructure`) that provisions:
+
+- Two public EC2 instances (`t4g.micro`) for Hasura (`dev` and `prod`)
+- Route53 records in `rendasua.com` (default: `hasura-dev.rendasua.com`, `hasura.rendasua.com`)
+- Nginx reverse proxy with Let's Encrypt certificates
+- Runtime secret fetch from AWS Secrets Manager
+
+#### Required Secrets
+
+Store each value as a plain `SecretString`:
+
+- Dev DB URL secret ARN (e.g. `postgres://...`)
+- Dev Hasura admin secret ARN
+- Prod DB URL secret ARN
+- Prod Hasura admin secret ARN
+
+#### Synthesize and Diff
+
+Use Nx targets to validate before deploy:
+
+```bash
+nx run cdk:synth
+nx run cdk:diff -- HasuraEc2Infrastructure
+```
+
+#### Deploy
+
+```bash
+nx run cdk:deploy -- HasuraEc2Infrastructure
+```
+
+#### Optional Context Values
+
+- `hasuraHostedZoneDomain` (default: `rendasua.com`)
+- `hasuraDevDomain` (default: `hasura-dev.rendasua.com`)
+- `hasuraProdDomain` (default: `hasura.rendasua.com`)
+- `hasuraSshCidr` (if omitted, no SSH ingress rule is opened)
+- `hasuraInstanceType` (default: `t4g.micro`)
+- `hasuraImage` (default: `hasura/graphql-engine:v2.48.3`)
+
 ### Destroy Infrastructure
 
 ```bash

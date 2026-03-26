@@ -15,6 +15,12 @@
     ]
   },
   "context": {
+    "hasuraEc2Enabled": "true",
+    "hasuraLetsEncryptEmail": "tech@rendasua.com",
+    "hasuraDevDbSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-db-7R53Sp",
+    "hasuraDevAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9",
+    "hasuraProdDbSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-db-VmDPN2",
+    "hasuraProdAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-admin-H1onlM",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
