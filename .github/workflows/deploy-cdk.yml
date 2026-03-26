@@ -74,12 +74,12 @@ jobs:
       - name: Synthesize CDK template
         run: |
           cd apps/cdk
-          cdk synth --context environment=${{ env.CDK_ENVIRONMENT }}
+          cdk synth RendasuaInfrastructure-${{ env.CDK_ENVIRONMENT }} HasuraEc2InfrastructureDev --context environment=${{ env.CDK_ENVIRONMENT }} --context hasuraEnvironment=dev
 
       - name: Deploy CDK infrastructure
         run: |
           cd apps/cdk
-          cdk deploy --context environment=${{ env.CDK_ENVIRONMENT }} --require-approval never
+          cdk deploy RendasuaInfrastructure-${{ env.CDK_ENVIRONMENT }} HasuraEc2InfrastructureDev --context environment=${{ env.CDK_ENVIRONMENT }} --context hasuraEnvironment=dev --require-approval never
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 

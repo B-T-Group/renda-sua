@@ -4,31 +4,27 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import { Construct } from 'constructs';
 
-interface HasuraEnvironmentConfig {
+export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
   readonly environment: 'dev' | 'prod';
   readonly domainName: string;
+  readonly hostedZoneDomain: string;
   readonly dbSecretArn: string;
   readonly adminSecretArn: string;
-}
-
-export interface HasuraEc2InfrastructureStackProps extends cdk.StackProps {
-  readonly hostedZoneDomain: string;
   readonly letsEncryptEmail: string;
   readonly sshCidr?: string;
   readonly instanceType?: string;
   readonly hasuraImage?: string;
-  readonly dev: Omit<HasuraEnvironmentConfig, 'environment'>;
-  readonly prod: Omit<HasuraEnvironmentConfig, 'environment'>;
 }
 
-export class HasuraEc2InfrastructureStack extends cdk.Stack {
+export class HasuraEc2EnvironmentStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
-    props: HasuraEc2InfrastructureStackProps
+    props: HasuraEc2EnvironmentStackProps
   ) {
     super(scope, id, props);
 
+    const namePrefix = `Hasura${props.environment === 'prod' ? 'Prod' : 'Dev'}`;
     const vpc = new ec2.Vpc(this, 'HasuraVpc', {
       maxAzs: 2,
       natGateways: 0,
@@ -44,28 +40,11 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
       domainName: props.hostedZoneDomain,
     });
 
-    this.createEnvironmentResources(vpc, zone, props, {
-      environment: 'dev',
-      ...props.dev,
-    });
-    this.createEnvironmentResources(vpc, zone, props, {
-      environment: 'prod',
-      ...props.prod,
-    });
-  }
-
-  private createEnvironmentResources(
-    vpc: ec2.IVpc,
-    zone: route53.IHostedZone,
-    props: HasuraEc2InfrastructureStackProps,
-    envConfig: HasuraEnvironmentConfig
-  ): void {
-    const namePrefix = `Hasura${envConfig.environment === 'prod' ? 'Prod' : 'Dev'}`;
     const securityGroup = this.createSecurityGroup(vpc, props, namePrefix);
-    const role = this.createEc2Role(namePrefix, envConfig);
+    const role = this.createEc2Role(namePrefix, props);
     const eip = new ec2.CfnEIP(this, `${namePrefix}Eip`, {
       domain: 'vpc',
-      tags: [{ key: 'Name', value: `hasura-${envConfig.environment}-eip` }],
+      tags: [{ key: 'Name', value: `hasura-${props.environment}-eip` }],
     });
 
     const instance = new ec2.Instance(this, `${namePrefix}Instance`, {
@@ -87,7 +66,7 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
     });
 
     instance.addUserData(
-      ...this.renderUserData(props, envConfig, props.hasuraImage ?? 'hasura/graphql-engine:v2.48.3')
+      ...this.renderUserData(props, props.hasuraImage ?? 'hasura/graphql-engine:v2.48.3')
     );
 
     new ec2.CfnEIPAssociation(this, `${namePrefix}EipAssociation`, {
@@ -97,28 +76,28 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
 
     new route53.ARecord(this, `${namePrefix}DnsRecord`, {
       zone,
-      recordName: this.recordNameForZone(envConfig.domainName, zone.zoneName),
+      recordName: this.recordNameForZone(props.domainName, zone.zoneName),
       target: route53.RecordTarget.fromIpAddresses(eip.ref),
       ttl: cdk.Duration.minutes(5),
     });
 
     new cdk.CfnOutput(this, `${namePrefix}PublicDomain`, {
-      value: `https://${envConfig.domainName}`,
-      description: `Hasura ${envConfig.environment} public URL`,
+      value: `https://${props.domainName}`,
+      description: `Hasura ${props.environment} public URL`,
     });
     new cdk.CfnOutput(this, `${namePrefix}PublicIp`, {
       value: eip.ref,
-      description: `Hasura ${envConfig.environment} Elastic IP`,
+      description: `Hasura ${props.environment} Elastic IP`,
     });
     new cdk.CfnOutput(this, `${namePrefix}InstanceId`, {
       value: instance.instanceId,
-      description: `Hasura ${envConfig.environment} EC2 instance ID`,
+      description: `Hasura ${props.environment} EC2 instance ID`,
     });
   }
 
   private createSecurityGroup(
     vpc: ec2.IVpc,
-    props: HasuraEc2InfrastructureStackProps,
+    props: HasuraEc2EnvironmentStackProps,
     namePrefix: string
   ): ec2.SecurityGroup {
     const securityGroup = new ec2.SecurityGroup(this, `${namePrefix}Sg`, {
@@ -140,7 +119,7 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
 
   private createEc2Role(
     namePrefix: string,
-    envConfig: HasuraEnvironmentConfig
+    props: HasuraEc2EnvironmentStackProps
   ): iam.Role {
     const role = new iam.Role(this, `${namePrefix}Role`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -154,18 +133,17 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
-        resources: [envConfig.dbSecretArn, envConfig.adminSecretArn],
+        resources: [props.dbSecretArn, props.adminSecretArn],
       })
     );
     return role;
   }
 
   private renderUserData(
-    props: HasuraEc2InfrastructureStackProps,
-    envConfig: HasuraEnvironmentConfig,
+    props: HasuraEc2EnvironmentStackProps,
     hasuraImage: string
   ): string[] {
-    const isProd = envConfig.environment === 'prod';
+    const isProd = props.environment === 'prod';
     return [
       '#!/bin/bash',
       'set -euxo pipefail',
@@ -174,8 +152,8 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
       'systemctl enable docker',
       'systemctl start docker',
       'mkdir -p /opt/hasura',
-      `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${envConfig.dbSecretArn}' --query SecretString --output text --region '${this.region}')"`,
-      `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${envConfig.adminSecretArn}' --query SecretString --output text --region '${this.region}')"`,
+      `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${props.dbSecretArn}' --query SecretString --output text --region '${this.region}')"`,
+      `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.adminSecretArn}' --query SecretString --output text --region '${this.region}')"`,
       'cat > /opt/hasura/.env <<EOF',
       'HASURA_GRAPHQL_DATABASE_URL=${DB_URL}',
       'HASURA_GRAPHQL_ADMIN_SECRET=${ADMIN_SECRET}',
@@ -191,7 +169,7 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
       'cat > /etc/nginx/sites-available/hasura <<EOF',
       'server {',
       '  listen 80;',
-      `  server_name ${envConfig.domainName};`,
+      `  server_name ${props.domainName};`,
       '  location / {',
       '    proxy_pass http://127.0.0.1:8080;',
       '    proxy_set_header Host $host;',
@@ -205,7 +183,7 @@ export class HasuraEc2InfrastructureStack extends cdk.Stack {
       'rm -f /etc/nginx/sites-enabled/default',
       'nginx -t',
       'systemctl restart nginx',
-      `certbot --nginx --non-interactive --agree-tos --email '${props.letsEncryptEmail}' -d '${envConfig.domainName}' --redirect || true`,
+      `certbot --nginx --non-interactive --agree-tos --email '${props.letsEncryptEmail}' -d '${props.domainName}' --redirect || true`,
       'systemctl enable certbot.timer || true',
       'systemctl restart certbot.timer || true',
     ];

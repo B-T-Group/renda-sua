@@ -41,8 +41,8 @@ This directory contains GitHub Actions workflows for automated deployment and te
 1. Install dependencies and AWS CDK
 2. Bootstrap CDK (if needed)
 3. Build CDK application
-4. Synthesize CloudFormation template
-5. Deploy to development environment
+4. Synthesize CloudFormation template (development + shared Hasura stack)
+5. Deploy to development environment and shared Hasura stack
 6. Verify deployment
 
 ### 3. Deploy CDK to Production (`deploy-cdk-production.yml`)
@@ -55,7 +55,7 @@ This directory contains GitHub Actions workflows for automated deployment and te
 - Manual trigger with environment selection
 - Production environment protection
 - Deployment plan preview
-- Environment-specific deployment
+- Environment-specific deployment (production stack only; excludes shared Hasura stack)
 
 ## Required Secrets
 

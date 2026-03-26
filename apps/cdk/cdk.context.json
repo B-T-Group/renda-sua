@@ -10,5 +10,14 @@
   "hosted-zone:account=235680477887:domainName=rendasua.com:region=us-east-1": {
     "Id": "/hostedzone/Z031959330Z8R9JZ16GSL",
     "Name": "rendasua.com."
+  },
+  "availability-zones:account=235680477887:region=ca-central-1": [
+    "ca-central-1a",
+    "ca-central-1b",
+    "ca-central-1d"
+  ],
+  "hosted-zone:account=235680477887:domainName=rendasua.com:region=ca-central-1": {
+    "Id": "/hostedzone/Z031959330Z8R9JZ16GSL",
+    "Name": "rendasua.com."
   }
 }

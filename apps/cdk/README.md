@@ -110,11 +110,14 @@ cdk deploy --context environment=dev
 cdk deploy --context environment=production
 ```
 
-### Deploy Self-Hosted Hasura (EC2 dev + prod)
+### Deploy Self-Hosted Hasura (EC2 per environment)
 
-This repository includes an additional stack (`HasuraEc2Infrastructure`) that provisions:
+This repository includes two additional stacks:
 
-- Two public EC2 instances (`t4g.micro`) for Hasura (`dev` and `prod`)
+- `HasuraEc2InfrastructureDev`
+- `HasuraEc2InfrastructureProd`
+
+Each stack provisions one public EC2 instance (`t4g.micro`) for the matching environment:
 - Route53 records in `rendasua.com` (default: `hasura-dev.rendasua.com`, `hasura.rendasua.com`)
 - Nginx reverse proxy with Let's Encrypt certificates
 - Runtime secret fetch from AWS Secrets Manager
@@ -134,13 +137,15 @@ Use Nx targets to validate before deploy:
 
 ```bash
 nx run cdk:synth
-nx run cdk:diff -- HasuraEc2Infrastructure
+nx run cdk:diff -- HasuraEc2InfrastructureDev
+nx run cdk:diff -- HasuraEc2InfrastructureProd
 ```
 
 #### Deploy
 
 ```bash
-nx run cdk:deploy -- HasuraEc2Infrastructure
+nx run cdk:deploy -- HasuraEc2InfrastructureDev
+nx run cdk:deploy -- HasuraEc2InfrastructureProd
 ```
 
 #### Optional Context Values

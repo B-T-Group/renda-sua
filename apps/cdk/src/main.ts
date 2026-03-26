@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
-import { HasuraEc2InfrastructureStack } from './lib/hasura-ec2-infrastructure-stack';
+import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
 
 const app = new cdk.App();
@@ -28,7 +28,13 @@ if (hasuraEc2Enabled) {
     return String(value);
   };
 
-  new HasuraEc2InfrastructureStack(app, 'HasuraEc2Infrastructure', {
+  const targetHasuraEnvironment = String(
+    app.node.tryGetContext('hasuraEnvironment') || environment
+  ).toLowerCase();
+  const deployHasuraDev = targetHasuraEnvironment === 'dev' || targetHasuraEnvironment === 'development';
+  const deployHasuraProd = targetHasuraEnvironment === 'prod' || targetHasuraEnvironment === 'production';
+
+  const commonProps = {
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
       region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
@@ -44,19 +50,29 @@ if (hasuraEc2Enabled) {
     hasuraImage: String(
       app.node.tryGetContext('hasuraImage') || 'hasura/graphql-engine:v2.48.3'
     ),
-    dev: {
+  };
+
+  if (deployHasuraDev) {
+    new HasuraEc2EnvironmentStack(app, 'HasuraEc2InfrastructureDev', {
+      ...commonProps,
+      environment: 'dev',
       domainName: String(
         app.node.tryGetContext('hasuraDevDomain') || 'hasura-dev.rendasua.com'
       ),
       dbSecretArn: required('hasuraDevDbSecretArn'),
       adminSecretArn: required('hasuraDevAdminSecretArn'),
-    },
-    prod: {
+    });
+  }
+
+  if (deployHasuraProd) {
+    new HasuraEc2EnvironmentStack(app, 'HasuraEc2InfrastructureProd', {
+      ...commonProps,
+      environment: 'prod',
       domainName: String(
         app.node.tryGetContext('hasuraProdDomain') || 'hasura.rendasua.com'
       ),
       dbSecretArn: required('hasuraProdDbSecretArn'),
       adminSecretArn: required('hasuraProdAdminSecretArn'),
-    },
-  });
+    });
+  }
 }
