@@ -15,6 +15,7 @@ import {
 import { alpha, useTheme } from '@mui/material/styles';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PinCodeFields } from '../common/PinCodeFields';
@@ -73,6 +74,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigate = useNavigate();
   const api = useRentalApi();
   const firstName = request.client?.user?.first_name?.trim() || '';
   const lastName = request.client?.user?.last_name?.trim() || '';
@@ -288,6 +290,16 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                 }}
               >
                 {t('business.rentals.startRental', 'Start rental')}
+              </Button>
+            ) : null}
+
+            {booking?.id ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => navigate(`/rentals/bookings/${booking.id}`)}
+              >
+                {t('rentals.clientRequests.viewBooking', 'View reservation')}
               </Button>
             ) : null}
           </Stack>

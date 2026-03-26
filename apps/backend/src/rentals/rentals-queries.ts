@@ -362,9 +362,22 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       rental_pricing_snapshot
       client_id
       business_id
+      client {
+        user {
+          first_name
+          last_name
+          phone_number
+          email
+        }
+      }
       rental_location_listing {
         rental_item {
           name
+          rental_item_images(order_by: { display_order: asc }, limit: 1) {
+            id
+            image_url
+            alt_text
+          }
         }
         business_location {
           name

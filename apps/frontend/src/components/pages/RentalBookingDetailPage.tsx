@@ -1,5 +1,6 @@
 import {
   Alert,
+  Avatar,
   Chip,
   Box,
   Button,
@@ -109,6 +110,9 @@ const RentalBookingDetailPage: React.FC = () => {
   const title = booking.rental_location_listing?.rental_item?.name ?? 'Rental';
   const locationName = booking.rental_location_listing?.business_location?.name ?? '—';
   const status = booking.status ?? '—';
+  const bookingImage = booking.rental_location_listing?.rental_item?.rental_item_images?.[0];
+  const imageUrl = bookingImage?.image_url?.trim() || '';
+  const imageAlt = bookingImage?.alt_text?.trim() || title;
   const pricing = parseRentalPricingSnapshot(booking.rental_pricing_snapshot);
   const isAllDay =
     (pricing?.lines?.length ?? 0) > 0 &&
@@ -197,6 +201,47 @@ const RentalBookingDetailPage: React.FC = () => {
                   {t('rentals.clientRequests.bookConfirmSummaryHeading', 'Booking summary')}
                 </Typography>
 
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  {imageUrl ? (
+                    <Box
+                      component="img"
+                      src={imageUrl}
+                      alt={imageAlt}
+                      sx={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 2,
+                        objectFit: 'cover',
+                        border: 1,
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                      }}
+                    />
+                  ) : (
+                    <Avatar
+                      variant="rounded"
+                      sx={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 2,
+                        fontWeight: 900,
+                        bgcolor: alpha(theme.palette.primary.main, 0.12),
+                        color: 'primary.main',
+                      }}
+                    >
+                      {title?.trim()?.[0]?.toUpperCase() ?? 'R'}
+                    </Avatar>
+                  )}
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle1" fontWeight={900} noWrap>
+                      {title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {locationName}
+                    </Typography>
+                  </Box>
+                </Stack>
+
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">
@@ -237,6 +282,37 @@ const RentalBookingDetailPage: React.FC = () => {
                 </Box>
               </Stack>
             </Paper>
+
+            {isBusiness && booking.client?.user ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: { xs: 2, sm: 2.5 },
+                  borderRadius: 2,
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              >
+                <Typography variant="h6" fontWeight={900} sx={{ mb: 1 }}>
+                  {t('business.rentals.clientDetails', 'Client details')}
+                </Typography>
+                <Stack spacing={0.4}>
+                  <Typography variant="body2">
+                    <strong>{t('common.name', 'Name')}:</strong>{' '}
+                    {`${booking.client.user.first_name ?? ''} ${booking.client.user.last_name ?? ''}`.trim() ||
+                      '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{t('common.phone', 'Phone')}:</strong>{' '}
+                    {booking.client.user.phone_number || '—'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{t('common.email', 'Email')}:</strong>{' '}
+                    {booking.client.user.email || '—'}
+                  </Typography>
+                </Stack>
+              </Paper>
+            ) : null}
 
             {(isClient && booking.status === 'confirmed') ||
             (isBusiness && (booking.status === 'confirmed' || booking.status === 'awaiting_return')) ? (

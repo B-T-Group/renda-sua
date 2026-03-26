@@ -9,6 +9,7 @@ import {
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import type { DateClickArg, EventClickArg } from '@fullcalendar/interaction';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -98,6 +99,17 @@ const BusinessRentalsSchedulePage: React.FC = () => {
       ),
     [scheduleRows, selectedScheduleDay]
   );
+
+  const handleCalendarDateClick = useCallback((info: DateClickArg) => {
+    setSelectedScheduleDay(info.dateStr);
+  }, []);
+
+  const handleCalendarEventClick = useCallback((info: EventClickArg) => {
+    const dayKey = dateKeyFromIso(info.event.startStr);
+    if (dayKey) {
+      setSelectedScheduleDay(dayKey);
+    }
+  }, []);
 
   if (!businessId) {
     return (
@@ -189,6 +201,15 @@ const BusinessRentalsSchedulePage: React.FC = () => {
               borderColor: 'divider',
               flex: { xs: '1 1 auto', md: '0 0 58%' },
               minWidth: 0,
+              '& .fc-daygrid-day.fc-day-selected': {
+                backgroundColor: 'action.selected',
+              },
+              '& .fc-daygrid-day-number': {
+                cursor: 'pointer',
+              },
+              '& .fc-daygrid-event': {
+                cursor: 'pointer',
+              },
             }}
           >
             <FullCalendar
@@ -197,7 +218,11 @@ const BusinessRentalsSchedulePage: React.FC = () => {
               height="auto"
               events={scheduleEvents}
               eventDisplay="block"
-              dateClick={(info: { dateStr: string }) => setSelectedScheduleDay(info.dateStr)}
+              dateClick={handleCalendarDateClick}
+              eventClick={handleCalendarEventClick}
+              dayCellClassNames={(arg) =>
+                arg.dateStr === selectedScheduleDay ? ['fc-day-selected'] : []
+              }
             />
           </Paper>
           <Paper

@@ -247,8 +247,23 @@ export interface RentalBookingDetail {
   rental_pricing_snapshot?: unknown;
   client_id: string;
   business_id: string;
+  client?: {
+    user?: {
+      first_name?: string | null;
+      last_name?: string | null;
+      phone_number?: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
   rental_location_listing?: {
-    rental_item?: { name?: string | null } | null;
+    rental_item?: {
+      name?: string | null;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        alt_text?: string | null;
+      }>;
+    } | null;
     business_location?: { name?: string | null } | null;
   } | null;
   rental_hold?: {
