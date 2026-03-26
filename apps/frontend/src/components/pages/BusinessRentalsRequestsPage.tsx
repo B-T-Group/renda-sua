@@ -1,4 +1,12 @@
-import { Box, Paper, Typography } from '@mui/material';
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Paper,
+  Typography,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -51,6 +59,12 @@ const BusinessRentalsRequestsPage: React.FC = () => {
     [requests]
   );
 
+  const { availableRequests, unavailableRequests } = useMemo(() => {
+    const unavailable = sortedRequests.filter((r) => r.status === 'unavailable');
+    const available = sortedRequests.filter((r) => r.status !== 'unavailable');
+    return { availableRequests: available, unavailableRequests: unavailable };
+  }, [sortedRequests]);
+
   if (!businessId) {
     return (
       <Typography sx={{ p: 3 }}>
@@ -97,15 +111,53 @@ const BusinessRentalsRequestsPage: React.FC = () => {
           </Paper>
         )}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {sortedRequests.map((req) => (
+          {availableRequests.map((req) => (
             <BusinessRentalRequestCard
               key={req.id}
               request={req}
               onAccept={(selected) => setRespondTarget({ req: selected, mode: 'available' })}
               onReject={(selected) => setRespondTarget({ req: selected, mode: 'unavailable' })}
+              onStartRentalSuccess={() => void loadRequests()}
             />
           ))}
         </Box>
+
+        {unavailableRequests.length > 0 ? (
+          <Accordion
+            defaultExpanded={false}
+            elevation={0}
+            sx={{
+              mt: 2,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+              '&:before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={800}>
+                {t('rentals.unavailable', 'Unavailable')} ({unavailableRequests.length})
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {unavailableRequests.map((req) => (
+                  <BusinessRentalRequestCard
+                    key={req.id}
+                    request={req}
+                    onAccept={(selected) =>
+                      setRespondTarget({ req: selected, mode: 'available' })
+                    }
+                    onReject={(selected) =>
+                      setRespondTarget({ req: selected, mode: 'unavailable' })
+                    }
+                    onStartRentalSuccess={() => void loadRequests()}
+                  />
+                ))}
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+        ) : null}
       </BusinessRentalsStudioShell>
 
       <BusinessRentalRespondDialog

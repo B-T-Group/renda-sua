@@ -1,5 +1,6 @@
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -61,12 +62,14 @@ export interface BusinessRentalRequestCardProps {
   request: BusinessRentalRequestRow;
   onAccept: (request: BusinessRentalRequestRow) => void;
   onReject: (request: BusinessRentalRequestRow) => void;
+  onStartRentalSuccess?: () => void;
 }
 
 export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps> = ({
   request,
   onAccept,
   onReject,
+  onStartRentalSuccess,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -78,6 +81,12 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const phone = request.client?.user?.phone_number?.trim() || '';
   const booking = request.rental_booking ?? null;
   const bookingIsConfirmed = booking?.status === 'confirmed';
+  const bookingIsActive = booking?.status === 'active';
+  const actualStartAt = booking?.actual_start_at ?? null;
+  const itemName = request.rental_location_listing?.rental_item?.name ?? '—';
+  const img = request.rental_location_listing?.rental_item?.rental_item_images?.[0];
+  const imgUrl = img?.image_url?.trim() || '';
+  const imgAlt = img?.alt_text?.trim() || itemName;
 
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [startPin, setStartPin] = useState('');
@@ -85,7 +94,13 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const [startError, setStartError] = useState<string | null>(null);
   const [startSuccess, setStartSuccess] = useState<string | null>(null);
 
+  const displayStatus = useMemo(() => {
+    if (booking?.status === 'active') return 'active';
+    return request.status;
+  }, [booking?.status, request.status]);
+
   const statusChipColor = useMemo(() => {
+    if (displayStatus === 'active') return 'success' as const;
     if (request.status === 'pending') return 'warning' as const;
     if (request.status === 'available') return 'success' as const;
     if (request.status === 'unavailable') return 'error' as const;
@@ -93,7 +108,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
     if (request.status === 'expired') return 'default' as const;
     if (request.status === 'cancelled') return 'default' as const;
     return 'default' as const;
-  }, [request.status]);
+  }, [displayStatus, request.status]);
 
   return (
     <Paper
@@ -107,120 +122,175 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
         bgcolor: 'background.paper',
       }}
     >
-      <Stack spacing={1.25}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          justifyContent="space-between"
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 900, lineHeight: 1.15 }} noWrap>
-              {request.rental_location_listing?.rental_item?.name}
+      <Stack direction="row" spacing={2} alignItems="stretch">
+        {imgUrl ? (
+          <Box
+            component="img"
+            src={imgUrl}
+            alt={imgAlt}
+            sx={{
+              width: 104,
+              height: 104,
+              borderRadius: 2,
+              objectFit: 'cover',
+              border: 1,
+              borderColor: 'divider',
+              flexShrink: 0,
+              bgcolor: 'action.hover',
+            }}
+          />
+        ) : (
+          <Avatar
+            variant="rounded"
+            sx={{
+              width: 104,
+              height: 104,
+              borderRadius: 2,
+              fontWeight: 900,
+              bgcolor: alpha(theme.palette.primary.main, 0.12),
+              color: 'primary.main',
+              border: 1,
+              borderColor: 'divider',
+              flexShrink: 0,
+              fontSize: '1.1rem',
+            }}
+          >
+            {itemName?.trim()?.[0]?.toUpperCase() ?? 'R'}
+          </Avatar>
+        )}
+
+        <Stack spacing={1.15} sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            justifyContent="space-between"
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, lineHeight: 1.15 }} noWrap>
+                {itemName}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.35, fontWeight: 600 }}
+              >
+                {formatDateTimeWithoutTimezone(request.requested_start_at)} →{' '}
+                {formatDateTimeWithoutTimezone(request.requested_end_at)}
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              color={statusChipColor}
+              sx={{ fontWeight: 800, flexShrink: 0 }}
+              label={
+                displayStatus === 'active'
+                  ? t('rentals.inProgress', 'In progress')
+                  : t(`rentals.requestStatus.${request.status}`, request.status)
+              }
+            />
+          </Stack>
+
+          <Typography variant="caption" color="text.secondary">
+            {t('business.rentals.requestCreatedAt', 'Requested on')}:{' '}
+            {formatDateOnly(request.created_at)}
+          </Typography>
+
+          {bookingIsActive && actualStartAt ? (
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              {t('rentals.startedAt', 'Started at')}:{' '}
+              {formatDateTimeWithoutTimezone(actualStartAt)}
             </Typography>
+          ) : null}
+
+          {startSuccess ? (
+            <Alert severity="success" sx={{ mt: 0.25 }}>
+              {startSuccess}
+            </Alert>
+          ) : null}
+
+          {bookingIsConfirmed && (fullName || email || phone) ? (
+            <Box
+              sx={{
+                mt: 0.15,
+                p: 1.25,
+                borderRadius: 2,
+                border: 1,
+                borderColor: alpha(theme.palette.info.main, 0.25),
+                bgcolor: alpha(theme.palette.info.main, 0.06),
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('business.rentals.clientDetails', 'Client details')}
+              </Typography>
+              {fullName ? (
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {t('common.name', 'Name')}: {fullName}
+                </Typography>
+              ) : null}
+              {phone ? (
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {t('common.phone', 'Phone')}: {phone}
+                </Typography>
+              ) : null}
+              {email ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.email', 'Email')}: {email}
+                </Typography>
+              ) : null}
+            </Box>
+          ) : null}
+
+          {request.client_request_note?.trim() ? (
             <Typography
               variant="body2"
               color="text.secondary"
-              sx={{ mt: 0.35, fontWeight: 600 }}
+              sx={{ mt: 0.15, whiteSpace: 'pre-wrap' }}
             >
-              {formatDateTimeWithoutTimezone(request.requested_start_at)} →{' '}
-              {formatDateTimeWithoutTimezone(request.requested_end_at)}
+              <strong>{t('business.rentals.clientRequestNote', 'Client note')}:</strong>{' '}
+              {request.client_request_note.trim()}
             </Typography>
-          </Box>
-          <Chip
-            size="small"
-            color={statusChipColor}
-            sx={{ fontWeight: 800, flexShrink: 0 }}
-            label={t(`rentals.requestStatus.${request.status}`, request.status)}
-          />
-        </Stack>
+          ) : null}
 
-        <Typography variant="caption" color="text.secondary">
-          {t('business.rentals.requestCreatedAt', 'Requested on')}:{' '}
-          {formatDateOnly(request.created_at)}
-        </Typography>
+          <Box sx={{ flex: 1 }} />
 
-        {startSuccess ? (
-          <Alert severity="success" sx={{ mt: 0.5 }}>
-            {startSuccess}
-          </Alert>
-        ) : null}
-
-        {bookingIsConfirmed && (fullName || email || phone) ? (
-          <Box
-            sx={{
-              mt: 0.25,
-              p: 1.5,
-              borderRadius: 2,
-              border: 1,
-              borderColor: alpha(theme.palette.info.main, 0.25),
-              bgcolor: alpha(theme.palette.info.main, 0.06),
-            }}
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ pt: 0.25, flexWrap: 'wrap', justifyContent: 'flex-end' }}
           >
-            <Typography variant="caption" color="text.secondary" display="block">
-              {t('business.rentals.clientDetails', 'Client details')}
-            </Typography>
-            {fullName ? (
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {t('common.name', 'Name')}: {fullName}
-              </Typography>
+            {request.status === 'pending' ? (
+              <>
+                <Button size="small" variant="contained" onClick={() => onAccept(request)}>
+                  {t('business.rentals.accept', 'Accept')}
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  onClick={() => onReject(request)}
+                >
+                  {t('business.rentals.reject', 'Reject')}
+                </Button>
+              </>
             ) : null}
-            {phone ? (
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {t('common.phone', 'Phone')}: {phone}
-              </Typography>
-            ) : null}
-            {email ? (
-              <Typography variant="body2" color="text.secondary">
-                {t('common.email', 'Email')}: {email}
-              </Typography>
-            ) : null}
-          </Box>
-        ) : null}
 
-        {request.client_request_note?.trim() ? (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}
-          >
-            <strong>{t('business.rentals.clientRequestNote', 'Client note')}:</strong>{' '}
-            {request.client_request_note.trim()}
-          </Typography>
-        ) : null}
-
-        <Stack direction="row" spacing={1} sx={{ pt: 0.5, flexWrap: 'wrap' }}>
-          {request.status === 'pending' ? (
-            <>
-              <Button size="small" variant="contained" onClick={() => onAccept(request)}>
-                {t('business.rentals.accept', 'Accept')}
-              </Button>
+            {request.status === 'booked' && bookingIsConfirmed && booking?.id ? (
               <Button
                 size="small"
-                variant="outlined"
-                color="warning"
-                onClick={() => onReject(request)}
+                variant="contained"
+                color="success"
+                onClick={() => {
+                  setStartError(null);
+                  setStartSuccess(null);
+                  setStartPin('');
+                  setStartModalOpen(true);
+                }}
               >
-                {t('business.rentals.reject', 'Reject')}
+                {t('business.rentals.startRental', 'Start rental')}
               </Button>
-            </>
-          ) : null}
-
-          {request.status === 'booked' && bookingIsConfirmed && booking?.id ? (
-            <Button
-              size="small"
-              variant="contained"
-              color="success"
-              onClick={() => {
-                setStartError(null);
-                setStartSuccess(null);
-                setStartPin('');
-                setStartModalOpen(true);
-              }}
-            >
-              {t('business.rentals.startRental', 'Start rental')}
-            </Button>
-          ) : null}
+            ) : null}
+          </Stack>
         </Stack>
       </Stack>
 
@@ -270,6 +340,7 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                 await api.verifyStartPin(booking.id, { pin: startPin.trim() });
                 setStartModalOpen(false);
                 setStartSuccess(t('rentals.started', 'Rental started'));
+                onStartRentalSuccess?.();
               } catch (e: unknown) {
                 setStartError(
                   apiErrorMessage(e, t('common.error', 'Error'))

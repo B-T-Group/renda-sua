@@ -694,6 +694,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         id
         status
         booking_number
+        actual_start_at
       }
       rental_location_listing {
         id
@@ -708,6 +709,11 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         rental_item {
           name
           currency
+          rental_item_images(order_by: { display_order: asc }, limit: 1) {
+            id
+            image_url
+            alt_text
+          }
         }
       }
     }

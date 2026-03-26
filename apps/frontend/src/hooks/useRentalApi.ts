@@ -156,7 +156,15 @@ export interface BusinessRentalRequestRow {
     base_price_per_hour: number;
     base_price_per_day: number;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
-    rental_item: { name: string; currency: string };
+    rental_item: {
+      name: string;
+      currency: string;
+      rental_item_images?: Array<{
+        id: string;
+        image_url: string;
+        alt_text?: string | null;
+      }>;
+    };
   };
   client?: {
     id: string;
@@ -171,6 +179,7 @@ export interface BusinessRentalRequestRow {
     id: string;
     status: string;
     booking_number?: string | null;
+    actual_start_at?: string | null;
   } | null;
 }
 
