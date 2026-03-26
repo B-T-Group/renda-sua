@@ -16,6 +16,8 @@ on:
 
 env:
   AWS_REGION: ca-central-1
+  HASURA_ENDPOINT: https://hasura.rendasua.com
+  HASURA_ADMIN_SECRET_ARN: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-admin-H1onlM
 
 permissions:
   id-token: write
@@ -72,6 +74,11 @@ jobs:
           cd apps/cdk
           npm run build
 
+      - name: Install Hasura CLI
+        run: |
+          curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | bash
+          hasura version
+
       - name: Show deployment plan
         run: |
           cd apps/cdk
@@ -84,6 +91,22 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Apply Hasura migrations and metadata (prod)
+        run: |
+          cd apps/hasura
+          HASURA_GRAPHQL_ADMIN_SECRET="$(aws secretsmanager get-secret-value --region "${{ env.AWS_REGION }}" --secret-id "${{ env.HASURA_ADMIN_SECRET_ARN }}" --query SecretString --output text)"
+          HASURA_DB_NAME="Rendasua"
+          SOURCE_NAMES="$(curl -ks "${{ env.HASURA_ENDPOINT }}/v1/metadata" -H "x-hasura-admin-secret: ${HASURA_GRAPHQL_ADMIN_SECRET}" -H "content-type: application/json" -d '{"type":"export_metadata","args":{}}' | jq -r '.sources[].name')"
+          if ! echo "${SOURCE_NAMES}" | rg -q '^Rendasua$'; then
+            HASURA_DB_NAME="default"
+            mkdir -p migrations/default
+            rsync -a migrations/Rendasua/ migrations/default/
+          fi
+          hasura migrate apply --database-name "${HASURA_DB_NAME}" --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+          hasura metadata apply --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+          hasura metadata reload --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+          hasura metadata inconsistency status --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
 
       - name: Verify production deployment
         run: |

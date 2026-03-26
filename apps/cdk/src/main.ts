@@ -61,6 +61,7 @@ if (hasuraEc2Enabled) {
       ),
       dbSecretArn: required('hasuraDevDbSecretArn'),
       adminSecretArn: required('hasuraDevAdminSecretArn'),
+      jwtSecretArn: required('hasuraDevJwtSecretArn'),
     });
   }
 
@@ -73,6 +74,7 @@ if (hasuraEc2Enabled) {
       ),
       dbSecretArn: required('hasuraProdDbSecretArn'),
       adminSecretArn: required('hasuraProdAdminSecretArn'),
+      jwtSecretArn: required('hasuraProdJwtSecretArn'),
     });
   }
 }

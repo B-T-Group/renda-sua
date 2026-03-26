@@ -21,6 +21,8 @@
     "hasuraDevAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9",
     "hasuraProdDbSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-db-VmDPN2",
     "hasuraProdAdminSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-admin-H1onlM",
+    "hasuraDevJwtSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-jwt-secret-dev-RcX0vs",
+    "hasuraProdJwtSecretArn": "arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-jwt-secret-prod-1tHs8K",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],

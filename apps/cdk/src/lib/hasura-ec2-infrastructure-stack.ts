@@ -10,6 +10,7 @@ export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
   readonly hostedZoneDomain: string;
   readonly dbSecretArn: string;
   readonly adminSecretArn: string;
+  readonly jwtSecretArn: string;
   readonly letsEncryptEmail: string;
   readonly sshCidr?: string;
   readonly instanceType?: string;
@@ -133,7 +134,11 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
-        resources: [props.dbSecretArn, props.adminSecretArn],
+        resources: [
+          props.dbSecretArn,
+          props.adminSecretArn,
+          props.jwtSecretArn,
+        ],
       })
     );
     return role;
@@ -155,9 +160,12 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'mkdir -p /opt/hasura',
       `DB_URL="$(aws secretsmanager get-secret-value --secret-id '${props.dbSecretArn}' --query SecretString --output text --region '${this.region}')"`,
       `ADMIN_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.adminSecretArn}' --query SecretString --output text --region '${this.region}')"`,
+      `JWT_SECRET="$(aws secretsmanager get-secret-value --secret-id '${props.jwtSecretArn}' --query SecretString --output text --region '${this.region}')"`,
       'cat > /opt/hasura/.env <<EOF',
-      'HASURA_GRAPHQL_DATABASE_URL=${DB_URL}',
+      'PG_DATABASE_URL=${DB_URL}',
       'HASURA_GRAPHQL_ADMIN_SECRET=${ADMIN_SECRET}',
+      'HASURA_GRAPHQL_UNAUTHORIZED_ROLE=anonymous',
+      'HASURA_GRAPHQL_JWT_SECRET=${JWT_SECRET}',
       `HASURA_GRAPHQL_ENABLE_CONSOLE=${isProd ? 'false' : 'true'}`,
       `HASURA_GRAPHQL_ENABLE_TELEMETRY=${isProd ? 'false' : 'true'}`,
       `HASURA_GRAPHQL_ENABLE_INTROSPECTION=${isProd ? 'false' : 'true'}`,
