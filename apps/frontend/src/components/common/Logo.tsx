@@ -1,6 +1,7 @@
 import { Box, Chip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import rendasuaLogo from '../../assets/rendasua.svg';
 
 interface LogoProps {
@@ -80,6 +81,7 @@ const Logo: React.FC<LogoProps> = ({
   color = 'primary',
   size = 'medium',
 }) => {
+  const { t } = useTranslation();
   const getTextColor = () => {
     switch (color) {
       case 'white':
@@ -127,7 +129,7 @@ const Logo: React.FC<LogoProps> = ({
       </LogoContainer>
       {variant === 'with-tagline' && (
         <DeliveryTagline
-          label="Fast Delivery Service"
+          label={t('landing.hero.serviceTagline', 'Sales, Rentals & Delivery')}
           size="small"
           sx={{
             backgroundColor: isWhiteVariant

@@ -1731,9 +1731,10 @@
     },
     "hero": {
       "shopNow": "Shop Now",
+      "serviceTagline": "Sales, Rentals & Delivery",
       "signUp": "Sign Up",
-      "subtitle": "Shop from a wide selection of products and get them delivered to your doorstep within 24-48 hours",
-      "title": "Fast Delivery of Quality Items",
+      "subtitle": "Shop products, book rentals, and get reliable delivery to your doorstep across Gabon.",
+      "title": "Sales, Rentals, and Fast Delivery",
       "trustSignals": {
         "deliveryTime": "24-48h delivery",
         "securePayment": "Secure payments (MTN, Orange, Moov, Airtel Money)"

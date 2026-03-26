@@ -1720,9 +1720,10 @@
     },
     "hero": {
       "shopNow": "Acheter Maintenant",
+      "serviceTagline": "Ventes, locations et livraison",
       "signUp": "S'inscrire",
-      "subtitle": "Achetez parmi une large sélection de produits et recevez-les à votre porte en 24-48 heures",
-      "title": "Livraison Rapide d'Articles de Qualité",
+      "subtitle": "Achetez des produits, réservez des locations et profitez d'une livraison fiable partout au Gabon.",
+      "title": "Ventes, locations et livraison rapide",
       "trustSignals": {
         "deliveryTime": "Livraison 24-48h",
         "securePayment": "Paiements sécurisés (MTN, Orange, Moov, Airtel Money)"
