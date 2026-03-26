@@ -31,9 +31,7 @@ export type ParsedRentalWindow = {
 };
 
 export function parseRentalSelectionWindowsFromJson(
-  raw: unknown,
-  fallbackStart: string,
-  fallbackEnd: string
+  raw: unknown
 ): ParsedRentalWindow[] {
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.map((w: Record<string, unknown>) => {
@@ -48,13 +46,7 @@ export function parseRentalSelectionWindowsFromJson(
       };
     });
   }
-  return [
-    {
-      start: new Date(fallbackStart),
-      end: new Date(fallbackEnd),
-      billing: 'hourly',
-    },
-  ];
+  return [];
 }
 
 export function computeRentalPricingLines(

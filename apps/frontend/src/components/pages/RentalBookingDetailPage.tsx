@@ -26,6 +26,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import {
   formatRentalRequestLocalDateTime,
   parseRentalPricingSnapshot,
+  parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 
 const RentalBookingDetailPage: React.FC = () => {
@@ -119,6 +120,18 @@ const RentalBookingDetailPage: React.FC = () => {
     pricing?.lines?.every((l) => l.kind === 'all_day') === true;
   const startLocal = formatRentalRequestLocalDateTime(booking.start_at);
   const endLocal = formatRentalRequestLocalDateTime(booking.end_at);
+  const selectionWindows = parseRentalSelectionWindows(
+    booking.rental_request?.rental_selection_windows
+  );
+  const bookingWindows = selectionWindows.length
+    ? selectionWindows
+    : [
+        {
+          start_at: booking.start_at,
+          end_at: booking.end_at,
+          billing: isAllDay ? 'all_day' : 'hourly',
+        },
+      ];
 
   const statusChipColor =
     status === 'confirmed'
@@ -255,11 +268,41 @@ const RentalBookingDetailPage: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       {t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
                     </Typography>
-                    <Typography variant="body1" fontWeight={700}>
-                      {isAllDay
-                        ? `${startLocal} — ${t('rentals.allDay', 'All day')}`
-                        : `${startLocal} → ${endLocal}`}
-                    </Typography>
+                    <Box
+                      sx={{
+                        mt: 0.5,
+                        p: 1,
+                        borderRadius: 1.5,
+                        border: 1,
+                        borderColor: 'divider',
+                        bgcolor: alpha(theme.palette.primary.main, 0.04),
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight={800} sx={{ mb: 0.6 }}>
+                        {`${startLocal} → ${endLocal}`}
+                      </Typography>
+                      <Stack spacing={0.6}>
+                        {bookingWindows.map((window, idx) => (
+                          <Box
+                            key={`${window.start_at}-${window.end_at}-${idx}`}
+                            sx={{
+                              px: 1,
+                              py: 0.75,
+                              borderRadius: 1,
+                              border: 1,
+                              borderColor: alpha(theme.palette.divider, 0.8),
+                              bgcolor: 'background.paper',
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight={700}>
+                              {window.billing === 'all_day'
+                                ? `${formatRentalRequestLocalDateTime(window.start_at)} — ${t('rentals.allDay', 'All day')}`
+                                : `${formatRentalRequestLocalDateTime(window.start_at)} → ${formatRentalRequestLocalDateTime(window.end_at)}`}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
                   </Box>
                 </Stack>
 

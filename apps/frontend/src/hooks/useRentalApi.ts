@@ -138,13 +138,18 @@ export interface RespondRentalRequestBody {
   businessResponseNote?: string;
 }
 
+export interface RentalSelectionWindow {
+  start_at: string;
+  end_at: string;
+  billing?: 'hourly' | 'all_day';
+  calendar_date?: string;
+}
+
 export interface BusinessRentalRequestRow {
   id: string;
   created_at: string;
   status: string;
-  requested_start_at: string;
-  requested_end_at: string;
-  rental_selection_windows?: unknown;
+  rental_selection_windows?: RentalSelectionWindow[] | null;
   rental_pricing_snapshot: unknown;
   business_response_note?: string | null;
   client_request_note?: string | null;
@@ -186,8 +191,7 @@ export interface BusinessRentalRequestRow {
 export interface ClientRentalRequestRow {
   id: string;
   status: string;
-  requested_start_at: string;
-  requested_end_at: string;
+  rental_selection_windows?: RentalSelectionWindow[] | null;
   created_at: string;
   business_response_note?: string | null;
   unavailable_reason_code?: string | null;
@@ -269,6 +273,9 @@ export interface RentalBookingDetail {
   rental_hold?: {
     client_hold_amount: number;
     status: string;
+  } | null;
+  rental_request?: {
+    rental_selection_windows?: RentalSelectionWindow[] | null;
   } | null;
 }
 

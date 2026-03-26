@@ -115,8 +115,6 @@ interface RentalRequestRowForClientNotification {
   id: string;
   client_id: string;
   rental_location_listing_id: string;
-  requested_start_at: string;
-  requested_end_at: string;
   client?: { user_id?: string | null } | null;
   rental_location_listing?: {
     rental_item?: {
@@ -181,8 +179,7 @@ export interface PublicRentalListingRow {
 export interface ClientRentalRequestRow {
   id: string;
   status: string;
-  requested_start_at: string;
-  requested_end_at: string;
+  rental_selection_windows?: unknown;
   created_at: string;
   business_response_note?: string | null;
   client_request_note?: string | null;
@@ -343,8 +340,6 @@ export class RentalsService {
       object: {
         client_id: user.client.id,
         rental_location_listing_id: listing.id,
-        requested_start_at: plan.envelopeStartIso,
-        requested_end_at: plan.envelopeEndIso,
         rental_selection_windows: plan.selectionWindowsJson,
         status: 'pending',
         client_request_note: note || null,
@@ -401,8 +396,8 @@ export class RentalsService {
       businessName: item?.business?.name?.trim() || '—',
       bookingNumber,
       contractExpiresAt,
-      requestedStartAt: req.requested_start_at,
-      requestedEndAt: req.requested_end_at,
+      requestedStartAt: this.requestWindowEnvelope(req).startAt,
+      requestedEndAt: this.requestWindowEnvelope(req).endAt,
     });
   }
 
@@ -1845,13 +1840,17 @@ export class RentalsService {
         };
       });
     }
-    return [
-      {
-        start: new Date(req.requested_start_at),
-        end: new Date(req.requested_end_at),
-        billing: 'hourly',
-      },
-    ];
+    throw new HttpException('rental_selection_windows is required', HttpStatus.BAD_REQUEST);
+  }
+
+  private requestWindowEnvelope(req: any): { startAt: string; endAt: string } {
+    const windows = this.parseRentalSelectionWindows(req);
+    const starts = windows.map((w) => w.start.getTime());
+    const ends = windows.map((w) => w.end.getTime());
+    return {
+      startAt: new Date(Math.min(...starts)).toISOString(),
+      endAt: new Date(Math.max(...ends)).toISOString(),
+    };
   }
 
   private async assertCapacityForRequestWindows(
@@ -2093,8 +2092,8 @@ export class RentalsService {
         client_id: clientId,
         business_id: req.rental_location_listing.rental_item.business_id,
         rental_location_listing_id: req.rental_location_listing_id,
-        start_at: req.requested_start_at,
-        end_at: req.requested_end_at,
+        start_at: this.requestWindowEnvelope(req).startAt,
+        end_at: this.requestWindowEnvelope(req).endAt,
         total_amount: total,
         currency: snap.currency,
         rental_pricing_snapshot: snap,
@@ -2112,6 +2111,7 @@ export class RentalsService {
     total: number,
     contractExpiresAt: string
   ) {
+    const envelope = this.requestWindowEnvelope(req);
     return this.hasuraSystemService.executeMutation<{
       insert_rental_bookings_one: { id: string; booking_number: string };
     }>(Q.INSERT_RENTAL_BOOKING, {
@@ -2120,8 +2120,8 @@ export class RentalsService {
         client_id: clientId,
         business_id: req.rental_location_listing.rental_item.business_id,
         rental_location_listing_id: req.rental_location_listing_id,
-        start_at: req.requested_start_at,
-        end_at: req.requested_end_at,
+        start_at: envelope.startAt,
+        end_at: envelope.endAt,
         total_amount: total,
         currency: snap.currency,
         rental_pricing_snapshot: snap,

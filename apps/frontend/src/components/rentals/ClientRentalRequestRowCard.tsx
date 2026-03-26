@@ -18,6 +18,7 @@ import { useRentalApi, type ClientRentalRequestRow } from '../../hooks/useRental
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
+  parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
@@ -83,6 +84,7 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
   const bookingId = row.rental_booking?.id;
   const bookingStatus = row.rental_booking?.status;
   const canRevealPin = row.status === 'booked' && bookingId && bookingStatus === 'confirmed';
+  const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
 
   return (
     <>
@@ -131,9 +133,19 @@ export const ClientRentalRequestRowCard: React.FC<ClientRentalRequestRowCardProp
               {t('rentals.clientRequests.requestedPeriod', 'Requested period')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
-              {formatRentalRequestLocalDateTime(row.requested_start_at)} —{' '}
-              {formatRentalRequestLocalDateTime(row.requested_end_at)}
+              {selectionWindows.length
+                ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
+                : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
             </Typography>
+            {selectionWindows.length ? (
+              <Box sx={{ mt: 0.25 }}>
+                {selectionWindows.map((window, index) => (
+                  <Typography key={`${window.start_at}-${window.end_at}-${index}`} variant="caption" color="text.secondary" display="block">
+                    {`${index + 1}. ${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
+                  </Typography>
+                ))}
+              </Box>
+            ) : null}
           </Box>
         </Stack>
 

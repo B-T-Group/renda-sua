@@ -158,8 +158,7 @@ export const INSERT_RENTAL_REQUEST = `
     insert_rental_requests_one(object: $object) {
       id
       status
-      requested_start_at
-      requested_end_at
+      rental_selection_windows
     }
   }
 `;
@@ -170,8 +169,6 @@ export const GET_RENTAL_REQUEST_FULL = `
       id
       client_id
       status
-      requested_start_at
-      requested_end_at
       rental_selection_windows
       rental_pricing_snapshot
       rental_location_listing_id
@@ -386,6 +383,9 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       rental_hold {
         client_hold_amount
         status
+      }
+      rental_request {
+        rental_selection_windows
       }
     }
   }
@@ -649,8 +649,7 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
     rental_requests(order_by: { created_at: desc }, limit: 30) {
       id
       status
-      requested_start_at
-      requested_end_at
+      rental_selection_windows
       created_at
       business_response_note
       client_request_note
@@ -685,8 +684,6 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       id
       created_at
       status
-      requested_start_at
-      requested_end_at
       rental_selection_windows
       rental_pricing_snapshot
       business_response_note

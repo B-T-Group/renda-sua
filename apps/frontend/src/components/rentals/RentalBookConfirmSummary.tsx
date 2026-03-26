@@ -7,6 +7,7 @@ import type { RentalPricingSnapshotLine } from '../../hooks/useRentalApi';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
+  parseRentalSelectionWindows,
   parseRentalPricingSnapshot,
   proposedContractDeadlineIso,
 } from '../../utils/rentalRequestDisplay';
@@ -57,6 +58,10 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
   const locName = listing?.business_location?.name;
   const quote = parseRentalPricingSnapshot(row.rental_pricing_snapshot);
   const deadlineIso = proposedContractDeadlineIso(row);
+  const selectionWindows = parseRentalSelectionWindows(row.rental_selection_windows);
+  const envelopePeriod = selectionWindows.length
+    ? `${formatRentalRequestLocalDateTime(selectionWindows[0].start_at)} — ${formatRentalRequestLocalDateTime(selectionWindows[selectionWindows.length - 1].end_at)}`
+    : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable');
 
   return (
     <Paper
@@ -84,8 +89,17 @@ export const RentalBookConfirmSummary: React.FC<RentalBookConfirmSummaryProps> =
         />
         <DetailRow
           label={t('rentals.clientRequests.bookConfirmLabelPeriod', 'Rental period')}
-          value={`${formatRentalRequestLocalDateTime(row.requested_start_at)} — ${formatRentalRequestLocalDateTime(row.requested_end_at)}`}
+          value={envelopePeriod}
         />
+        {selectionWindows.map((window, idx) => (
+          <DetailRow
+            key={`${window.start_at}-${window.end_at}-${idx}`}
+            label={t('rentals.clientRequests.bookConfirmLabelWindow', 'Window {{index}}', {
+              index: idx + 1,
+            })}
+            value={`${formatRentalRequestLocalDateTime(window.start_at)} — ${formatRentalRequestLocalDateTime(window.end_at)}`}
+          />
+        ))}
         {quote?.lines?.length ? (
           <>
             <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ pt: 1 }}>

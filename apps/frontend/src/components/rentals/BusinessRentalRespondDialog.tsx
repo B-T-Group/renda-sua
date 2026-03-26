@@ -24,6 +24,7 @@ import {
   computeRentalPricingLines,
   parseRentalSelectionWindowsFromJson,
 } from '../../utils/rentalPricingLines';
+import { parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
 
 const REASON_CODES: UnavailableRentalReasonCode[] = [
   'fully_booked',
@@ -48,15 +49,13 @@ function totalRentalHoursForRequest(req: BusinessRentalRequestRow): number {
     }
     return sum;
   }
-  return rentalHours(req.requested_start_at, req.requested_end_at);
+  return 0;
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow): RentalPricingSnapshotBody {
   const weekly = req.rental_location_listing.weekly_availability ?? [];
   const windows = parseRentalSelectionWindowsFromJson(
-    req.rental_selection_windows,
-    req.requested_start_at,
-    req.requested_end_at
+    req.rental_selection_windows
   );
   const ratePerHour = Number(req.rental_location_listing.base_price_per_hour);
   const ratePerDay = Number(req.rental_location_listing.base_price_per_day ?? 0);
@@ -199,9 +198,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     try {
       const weekly = request.rental_location_listing.weekly_availability ?? [];
       const windows = parseRentalSelectionWindowsFromJson(
-        request.rental_selection_windows,
-        request.requested_start_at,
-        request.requested_end_at
+        request.rental_selection_windows
       );
       const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
       const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
@@ -219,6 +216,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   }, [mode, request]);
 
   if (!open || !mode || !request) return null;
+  const selectionWindows = parseRentalSelectionWindows(request.rental_selection_windows);
 
   const title =
     mode === 'available'
@@ -233,8 +231,9 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
           {request.rental_location_listing.rental_item.name}
         </Typography>
         <Typography variant="body2">
-          {formatDateTimeWithoutTimezone(request.requested_start_at)} ->{' '}
-          {formatDateTimeWithoutTimezone(request.requested_end_at)}
+          {selectionWindows.length
+            ? `${formatDateTimeWithoutTimezone(selectionWindows[0].start_at)} -> ${formatDateTimeWithoutTimezone(selectionWindows[selectionWindows.length - 1].end_at)}`
+            : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
         </Typography>
 
         {mode === 'available' ? (

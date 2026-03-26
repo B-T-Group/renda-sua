@@ -261,7 +261,7 @@ export const RentalItemCard: React.FC<RentalItemCardProps> = ({
           </Typography>
         ) : null}
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mt: 'auto' }}>
+        <Stack direction="column" spacing={1.25} sx={{ mt: 'auto' }}>
           <Button
             variant="contained"
             fullWidth

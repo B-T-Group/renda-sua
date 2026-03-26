@@ -19,6 +19,12 @@ import { useNavigate } from 'react-router-dom';
 import type { BusinessRentalRequestRow } from '../../hooks/useRentalApi';
 import { useRentalApi } from '../../hooks/useRentalApi';
 import { PinCodeFields } from '../common/PinCodeFields';
+import {
+  formatRentalMoney,
+  parseRentalPricingSnapshot,
+  parseRentalSelectionWindows,
+} from '../../utils/rentalRequestDisplay';
+import { computeRentalPricingLines, parseRentalSelectionWindowsFromJson } from '../../utils/rentalPricingLines';
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   const msg = (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -87,8 +93,37 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
   const actualStartAt = booking?.actual_start_at ?? null;
   const itemName = request.rental_location_listing?.rental_item?.name ?? '—';
   const img = request.rental_location_listing?.rental_item?.rental_item_images?.[0];
-  const imgUrl = img?.image_url?.trim() || '';
+  const imgUrl =
+    (img?.image_url?.trim() ||
+      (img as { imageUrl?: string | null } | undefined)?.imageUrl?.trim() ||
+      '') as string;
   const imgAlt = img?.alt_text?.trim() || itemName;
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const selectionWindows = useMemo(
+    () => parseRentalSelectionWindows(request.rental_selection_windows),
+    [request.rental_selection_windows]
+  );
+  const currency = request.rental_location_listing?.rental_item?.currency ?? 'XAF';
+  const pricingPreview = useMemo(() => {
+    const quoted = parseRentalPricingSnapshot(request.rental_pricing_snapshot);
+    if (quoted?.lines?.length) {
+      return { lines: quoted.lines, total: quoted.total, currency: quoted.currency };
+    }
+    const windows = parseRentalSelectionWindowsFromJson(request.rental_selection_windows);
+    if (!windows.length) {
+      return { lines: [], total: 0, currency };
+    }
+    const ratePerHour = Number(request.rental_location_listing.base_price_per_hour);
+    const ratePerDay = Number(request.rental_location_listing.base_price_per_day ?? 0);
+    const computed = computeRentalPricingLines(windows, ratePerHour, ratePerDay);
+    return { lines: computed.lines, total: computed.total, currency };
+  }, [
+    currency,
+    request.rental_location_listing.base_price_per_day,
+    request.rental_location_listing.base_price_per_hour,
+    request.rental_pricing_snapshot,
+    request.rental_selection_windows,
+  ]);
 
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [startPin, setStartPin] = useState('');
@@ -125,11 +160,12 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
       }}
     >
       <Stack direction="row" spacing={2} alignItems="stretch">
-        {imgUrl ? (
+        {imgUrl && !imageLoadFailed ? (
           <Box
             component="img"
             src={imgUrl}
             alt={imgAlt}
+            onError={() => setImageLoadFailed(true)}
             sx={{
               width: 104,
               height: 104,
@@ -177,8 +213,9 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
                 color="text.secondary"
                 sx={{ mt: 0.35, fontWeight: 600 }}
               >
-                {formatDateTimeWithoutTimezone(request.requested_start_at)} →{' '}
-                {formatDateTimeWithoutTimezone(request.requested_end_at)}
+                {selectionWindows.length
+                  ? `${formatDateTimeWithoutTimezone(selectionWindows[0].start_at)} → ${formatDateTimeWithoutTimezone(selectionWindows[selectionWindows.length - 1].end_at)}`
+                  : t('rentals.clientRequests.unknownPeriod', 'Requested period unavailable')}
               </Typography>
             </Box>
             <Chip
@@ -197,6 +234,56 @@ export const BusinessRentalRequestCard: React.FC<BusinessRentalRequestCardProps>
             {t('business.rentals.requestCreatedAt', 'Requested on')}:{' '}
             {formatDateOnly(request.created_at)}
           </Typography>
+
+          {selectionWindows.length ? (
+            <Box
+              sx={{
+                mt: 0.35,
+                p: 1.15,
+                borderRadius: 1.5,
+                border: 1,
+                borderColor: 'divider',
+                bgcolor: alpha(theme.palette.primary.main, 0.04),
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }} display="block">
+                {t('business.rentals.requestWindows', 'Requested windows')}
+              </Typography>
+              <Stack spacing={0.75} sx={{ mt: 0.8 }}>
+                {selectionWindows.map((window, index) => (
+                  <Stack
+                    key={`${window.start_at}-${window.end_at}-${index}`}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={0.5}
+                    justifyContent="space-between"
+                    sx={{
+                      py: 0.65,
+                      px: 0.9,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: 1,
+                      borderColor: alpha(theme.palette.divider, 0.8),
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {`${index + 1}. ${formatDateTimeWithoutTimezone(window.start_at)} → ${formatDateTimeWithoutTimezone(window.end_at)}`}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 800, color: 'success.dark' }}>
+                      {formatRentalMoney(pricingPreview.lines[index]?.subtotal ?? 0, pricingPreview.currency)}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1, pt: 0.8, borderTop: 1, borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {t('business.rentals.ownerTotalFromRequest', 'Owner total from this request')}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 900, color: 'success.main' }}>
+                  {formatRentalMoney(pricingPreview.total, pricingPreview.currency)}
+                </Typography>
+              </Stack>
+            </Box>
+          ) : null}
 
           {bookingIsActive && actualStartAt ? (
             <Typography variant="body2" sx={{ fontWeight: 700 }}>

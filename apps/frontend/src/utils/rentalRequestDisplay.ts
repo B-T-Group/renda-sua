@@ -1,4 +1,8 @@
-import type { ClientRentalRequestRow, RentalPricingSnapshotLine } from '../hooks/useRentalApi';
+import type {
+  ClientRentalRequestRow,
+  RentalPricingSnapshotLine,
+  RentalSelectionWindow,
+} from '../hooks/useRentalApi';
 
 export function formatRentalRequestLocalDateTime(iso: string): string {
   try {
@@ -9,6 +13,26 @@ export function formatRentalRequestLocalDateTime(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+export function parseRentalSelectionWindows(raw: unknown): RentalSelectionWindow[] {
+  if (!Array.isArray(raw)) return [];
+  const windows: RentalSelectionWindow[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.start_at !== 'string' || typeof row.end_at !== 'string') continue;
+    windows.push({
+      start_at: row.start_at,
+      end_at: row.end_at,
+      billing: row.billing === 'all_day' ? 'all_day' : undefined,
+      calendar_date: typeof row.calendar_date === 'string' ? row.calendar_date : undefined,
+    });
+  }
+  return windows.sort(
+    (a, b) =>
+      new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+  );
 }
 
 export type ParsedRentalPricingSnapshot = {
