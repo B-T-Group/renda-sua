@@ -48,7 +48,8 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       tags: [{ key: 'Name', value: `hasura-${props.environment}-eip` }],
     });
 
-    const instance = new ec2.Instance(this, `${namePrefix}Instance`, {
+    // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
+    const instance = new ec2.Instance(this, `${namePrefix}InstanceHasuraEC2`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.micro'),
@@ -165,6 +166,8 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       `JWT_ONE_LINE="$(printf '%s' "$JWT_SECRET" | python3 -c 'import json,sys; print(json.dumps(json.loads(sys.stdin.read())))')"`,
       'cat > /opt/hasura/.env <<EOF',
       'PG_DATABASE_URL=${DB_URL}',
+      'HASURA_GRAPHQL_DATABASE_URL=${DB_URL}',
+      'HASURA_GRAPHQL_METADATA_DATABASE_URL=${DB_URL}',
       'HASURA_GRAPHQL_ADMIN_SECRET=${ADMIN_SECRET}',
       'HASURA_GRAPHQL_UNAUTHORIZED_ROLE=anonymous',
       'HASURA_GRAPHQL_JWT_SECRET=${JWT_ONE_LINE}',
@@ -183,10 +186,11 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       `  server_name ${props.domainName};`,
       '  location / {',
       '    proxy_pass http://127.0.0.1:8080;',
-      '    proxy_set_header Host $host;',
-      '    proxy_set_header X-Real-IP $remote_addr;',
-      '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-      '    proxy_set_header X-Forwarded-Proto $scheme;',
+      // set -u treats $host etc. as shell vars; escape so nginx receives literal $host.
+      '    proxy_set_header Host \\$host;',
+      '    proxy_set_header X-Real-IP \\$remote_addr;',
+      '    proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;',
+      '    proxy_set_header X-Forwarded-Proto \\$scheme;',
       '  }',
       '}',
       'EOF',
