@@ -15,7 +15,7 @@ insert_permissions:
         item:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
       columns:
         - item_id
@@ -27,7 +27,7 @@ delete_permissions:
         item:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
 select_permissions:
   - role: agent

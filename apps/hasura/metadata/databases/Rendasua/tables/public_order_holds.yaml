@@ -30,7 +30,7 @@ select_permissions:
         order:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
       allow_aggregations: true
   - role: client
@@ -50,6 +50,6 @@ select_permissions:
       filter:
         client:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       allow_aggregations: true

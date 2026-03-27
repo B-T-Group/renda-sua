@@ -20,7 +20,7 @@ select_permissions:
       filter:
         agent:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
   - role: user
     permission:
@@ -33,5 +33,5 @@ select_permissions:
       filter:
         agent:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id

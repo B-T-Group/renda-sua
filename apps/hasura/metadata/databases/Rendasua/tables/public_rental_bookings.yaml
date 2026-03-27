@@ -65,7 +65,7 @@ select_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -91,5 +91,5 @@ select_permissions:
       filter:
         client:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id

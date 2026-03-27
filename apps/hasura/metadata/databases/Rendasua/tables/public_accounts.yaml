@@ -32,7 +32,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -57,7 +57,7 @@ select_permissions:
         - business_location_id
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -74,7 +74,7 @@ select_permissions:
         - business_location_id
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -91,7 +91,7 @@ select_permissions:
         - business_location_id
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: user
     permission:
@@ -108,5 +108,5 @@ select_permissions:
         - business_location_id
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id

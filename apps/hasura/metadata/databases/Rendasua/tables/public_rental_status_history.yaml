@@ -24,7 +24,7 @@ select_permissions:
         rental_booking:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -41,5 +41,5 @@ select_permissions:
         rental_booking:
           client:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id

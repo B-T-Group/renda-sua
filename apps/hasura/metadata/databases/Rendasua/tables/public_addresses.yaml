@@ -142,12 +142,12 @@ select_permissions:
               - agent_addresses:
                   agent:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
               - orders:
                   assigned_agent:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
   - role: anonymous
     permission:
@@ -200,17 +200,17 @@ select_permissions:
               - business_addresses:
                   business:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
               - business_location:
                   business:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
               - orders:
                   business:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -238,18 +238,18 @@ select_permissions:
               - client_addresses:
                   client:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
               - orders:
                   client:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
               - business_location:
                   orders:
                     client:
                       user:
-                        identifier:
+                        id:
                           _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
@@ -272,12 +272,12 @@ update_permissions:
           - agent_addresses:
               agent:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               assigned_agent:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
       check: null
   - role: business
@@ -300,17 +300,17 @@ update_permissions:
           - business_addresses:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - business_location:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
       check: null
   - role: client
@@ -333,18 +333,18 @@ update_permissions:
           - client_addresses:
               client:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               client:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - business_location:
               orders:
                 client:
                   user:
-                    identifier:
+                    id:
                       _eq: X-Hasura-User-Id
       check: null
 delete_permissions:
@@ -355,12 +355,12 @@ delete_permissions:
           - agent_addresses:
               agent:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               assigned_agent:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -369,17 +369,17 @@ delete_permissions:
           - business_addresses:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - business_location:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               business:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -388,16 +388,16 @@ delete_permissions:
           - client_addresses:
               client:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - orders:
               client:
                 user:
-                  identifier:
+                  id:
                     _eq: X-Hasura-User-Id
           - business_location:
               orders:
                 client:
                   user:
-                    identifier:
+                    id:
                       _eq: X-Hasura-User-Id

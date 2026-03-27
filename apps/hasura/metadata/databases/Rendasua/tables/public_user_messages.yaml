@@ -25,7 +25,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -36,7 +36,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -47,7 +47,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -67,7 +67,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -81,7 +81,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -95,7 +95,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
@@ -104,7 +104,7 @@ update_permissions:
         - message
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check: null
   - role: business
@@ -113,7 +113,7 @@ update_permissions:
         - message
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check: null
   - role: client
@@ -122,7 +122,7 @@ update_permissions:
         - message
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check: null
 delete_permissions:
@@ -130,17 +130,17 @@ delete_permissions:
     permission:
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id

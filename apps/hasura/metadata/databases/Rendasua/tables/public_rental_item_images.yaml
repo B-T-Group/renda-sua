@@ -18,7 +18,7 @@ insert_permissions:
         _and:
           - business:
               user:
-                identifier:
+                id:
                   _eq: X-Hasura-User-Id
           - _or:
               - rental_item_id:
@@ -26,7 +26,7 @@ insert_permissions:
               - rental_item:
                   business:
                     user:
-                      identifier:
+                      id:
                         _eq: X-Hasura-User-Id
       columns:
         - business_id
@@ -90,7 +90,7 @@ select_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -134,7 +134,7 @@ update_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       check: null
 delete_permissions:
@@ -143,5 +143,5 @@ delete_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id

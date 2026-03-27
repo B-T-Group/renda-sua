@@ -15,7 +15,7 @@ insert_permissions:
         order:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
       columns:
         - order_id
@@ -36,7 +36,7 @@ select_permissions:
         order:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
 update_permissions:
   - role: business
@@ -49,7 +49,7 @@ update_permissions:
         order:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
       check: null
       backend_only: true

@@ -18,7 +18,7 @@ insert_permissions:
         order:
           client:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
       columns:
         - id
@@ -51,7 +51,7 @@ select_permissions:
         order:
           assigned_agent:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -72,7 +72,7 @@ select_permissions:
         order:
           business:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -93,5 +93,5 @@ select_permissions:
         order:
           client:
             user:
-              identifier:
+              id:
                 _eq: X-Hasura-User-Id

@@ -27,7 +27,7 @@ select_permissions:
         - created_at
       filter:
         recipient_user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -44,7 +44,7 @@ select_permissions:
         - created_at
       filter:
         recipient_user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -61,7 +61,7 @@ select_permissions:
         - created_at
       filter:
         recipient_user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: partner
     permission:
@@ -78,5 +78,5 @@ select_permissions:
         - created_at
       filter:
         recipient_user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id

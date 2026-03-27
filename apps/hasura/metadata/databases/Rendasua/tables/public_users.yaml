@@ -212,7 +212,7 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -231,7 +231,7 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -250,7 +250,7 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
   - role: partner
     permission:
@@ -269,7 +269,7 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
   - role: user
     permission:
@@ -288,7 +288,7 @@ select_permissions:
         - created_at
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
 update_permissions:
   - role: agent
@@ -303,7 +303,7 @@ update_permissions:
         - preferred_language
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
       check: null
   - role: business
@@ -318,7 +318,7 @@ update_permissions:
         - preferred_language
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
       check: null
   - role: client
@@ -333,7 +333,7 @@ update_permissions:
         - preferred_language
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
       check: null
   - role: partner
@@ -348,7 +348,7 @@ update_permissions:
         - preferred_language
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
       check: null
   - role: user
@@ -363,6 +363,6 @@ update_permissions:
         - preferred_language
         - updated_at
       filter:
-        identifier:
+        id:
           _eq: X-Hasura-User-Id
       check: null

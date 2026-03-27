@@ -29,7 +29,7 @@ insert_permissions:
       check:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       columns:
         - business_id
@@ -83,7 +83,7 @@ select_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -124,7 +124,7 @@ update_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       check: null
 delete_permissions:
@@ -133,5 +133,5 @@ delete_permissions:
       filter:
         business:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id

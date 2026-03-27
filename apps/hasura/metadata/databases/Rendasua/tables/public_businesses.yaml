@@ -86,7 +86,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -179,6 +179,6 @@ update_permissions:
         - is_verified
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check: null

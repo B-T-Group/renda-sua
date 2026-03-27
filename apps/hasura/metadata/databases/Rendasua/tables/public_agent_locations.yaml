@@ -11,7 +11,7 @@ insert_permissions:
       check:
         agent:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       columns:
         - agent_id
@@ -30,7 +30,7 @@ select_permissions:
       filter:
         agent:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -61,6 +61,6 @@ update_permissions:
       filter:
         agent:
           user:
-            identifier:
+            id:
               _eq: X-Hasura-User-Id
       check: null

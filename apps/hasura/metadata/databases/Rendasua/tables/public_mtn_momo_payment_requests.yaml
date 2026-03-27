@@ -10,7 +10,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -27,7 +27,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -44,7 +44,7 @@ insert_permissions:
     permission:
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       columns:
         - user_id
@@ -90,7 +90,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -108,7 +108,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -126,7 +126,7 @@ select_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: user
     permission:
@@ -153,11 +153,11 @@ update_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: business
     permission:
@@ -166,11 +166,11 @@ update_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: client
     permission:
@@ -179,11 +179,11 @@ update_permissions:
         - updated_at
       filter:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
       check:
         user:
-          identifier:
+          id:
             _eq: X-Hasura-User-Id
   - role: user
     permission:
