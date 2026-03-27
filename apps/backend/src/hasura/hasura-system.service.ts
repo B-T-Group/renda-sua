@@ -535,7 +535,6 @@ export class HasuraSystemService {
         users(where: { email: { _eq: "hq@rendasua.com" } }) {
           id
           user_type_id
-          identifier
           first_name
           last_name
           email
@@ -592,19 +591,15 @@ export class HasuraSystemService {
   /**
    * Create a new user record
    */
-  async createUser(
-    identifier: string,
-    userData: {
-      email: string;
-      first_name: string;
-      last_name: string;
-      phone_number?: string;
-      user_type_id: string;
-    }
-  ): Promise<any> {
+  async createUser(userData: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone_number?: string;
+    user_type_id: string;
+  }): Promise<any> {
     const mutation = `
       mutation CreateUser(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -612,7 +607,6 @@ export class HasuraSystemService {
         $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -620,7 +614,6 @@ export class HasuraSystemService {
           user_type_id: $user_type_id
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -635,7 +628,6 @@ export class HasuraSystemService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier,
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -649,19 +641,15 @@ export class HasuraSystemService {
   /**
    * Create a new user with client record using nested query
    */
-  async createUserWithClient(
-    identifier: string,
-    userData: {
-      email: string;
-      first_name: string;
-      last_name: string;
-      phone_number?: string;
-      user_type_id: string;
-    }
-  ): Promise<{ user: any; client: any }> {
+  async createUserWithClient(userData: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone_number?: string;
+    user_type_id: string;
+  }): Promise<{ user: any; client: any }> {
     const mutation = `
       mutation CreateUserWithClient(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -669,7 +657,6 @@ export class HasuraSystemService {
         $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -680,7 +667,6 @@ export class HasuraSystemService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -701,7 +687,6 @@ export class HasuraSystemService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier,
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -715,7 +700,6 @@ export class HasuraSystemService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -739,7 +723,6 @@ export class HasuraSystemService {
    * Create a new user with agent record using nested query
    */
   async createUserWithAgent(
-    identifier: string,
     userData: {
       email: string;
       first_name: string;
@@ -751,7 +734,6 @@ export class HasuraSystemService {
   ): Promise<{ user: any; agent: any }> {
     const mutation = `
       mutation CreateUserWithAgent(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -760,7 +742,6 @@ export class HasuraSystemService {
         $vehicle_type_id: vehicle_types_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -773,7 +754,6 @@ export class HasuraSystemService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -796,7 +776,6 @@ export class HasuraSystemService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier,
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -811,7 +790,6 @@ export class HasuraSystemService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -837,7 +815,6 @@ export class HasuraSystemService {
    * Create a new user with business record using nested query
    */
   async createUserWithBusiness(
-    identifier: string,
     userData: {
       email: string;
       first_name: string;
@@ -849,7 +826,6 @@ export class HasuraSystemService {
   ): Promise<{ user: any; business: any }> {
     const mutation = `
       mutation CreateUserWithBusiness(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -859,7 +835,6 @@ export class HasuraSystemService {
         $main_interest: business_main_interest_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -873,7 +848,6 @@ export class HasuraSystemService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -898,7 +872,6 @@ export class HasuraSystemService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier,
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -914,7 +887,6 @@ export class HasuraSystemService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,

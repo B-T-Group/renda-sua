@@ -133,12 +133,11 @@ export class AddressesService {
     }
   }
 
-  private async getUserInfo(identifier: string) {
+  private async getUserInfo(userId: string) {
     const getUserQuery = `
-      query GetUserByIdentifier($identifier: String!) {
-        users(where: {identifier: {_eq: $identifier}}) {
+      query GetUserByIdForAddresses($userId: uuid!) {
+        users_by_pk(id: $userId) {
           id
-          identifier
           user_type_id
           client {
             id
@@ -156,11 +155,11 @@ export class AddressesService {
     const userResult = await this.hasuraSystemService.executeQuery(
       getUserQuery,
       {
-        identifier,
+        userId,
       }
     );
 
-    if (!userResult.users || userResult.users.length === 0) {
+    if (!userResult.users_by_pk) {
       throw new HttpException(
         {
           success: false,
@@ -170,7 +169,7 @@ export class AddressesService {
       );
     }
 
-    return userResult.users[0];
+    return userResult.users_by_pk;
   }
 
   private async checkExistingAccount(userId: string, currency: string) {
@@ -339,8 +338,8 @@ export class AddressesService {
     warning?: string;
   }> {
     try {
-      const identifier = this.hasuraUserService.getIdentifier();
-      const user = await this.getUserInfo(identifier);
+      const userId = this.hasuraUserService.getUserId();
+      const user = await this.getUserInfo(userId);
 
       // Geocode the address
       let coordinates: { latitude: number; longitude: number } | null = null;
@@ -758,8 +757,8 @@ export class AddressesService {
     warning?: string;
   }> {
     try {
-      const identifier = this.hasuraUserService.getIdentifier();
-      const user = await this.getUserInfo(identifier);
+      const userId = this.hasuraUserService.getUserId();
+      const user = await this.getUserInfo(userId);
 
       // Check if address exists
       const address = await this.getAddressesByIds([addressId]);
@@ -1125,8 +1124,8 @@ export class AddressesService {
   async getBusinessLocationAddress(
     locationId: string
   ): Promise<AddressResponse> {
-    const identifier = this.hasuraUserService.getIdentifier();
-    const user = await this.getUserInfo(identifier);
+    const userId = this.hasuraUserService.getUserId();
+    const user = await this.getUserInfo(userId);
 
     // Verify business location exists and belongs to user's business
     const locationQuery = `
@@ -1193,8 +1192,8 @@ export class AddressesService {
     address: AddressResponse;
     warning?: string;
   }> {
-    const identifier = this.hasuraUserService.getIdentifier();
-    const user = await this.getUserInfo(identifier);
+    const userId = this.hasuraUserService.getUserId();
+    const user = await this.getUserInfo(userId);
 
     // Verify business location exists and belongs to user's business
     const locationQuery = `
@@ -1354,8 +1353,8 @@ export class AddressesService {
     address: AddressResponse;
     warning?: string;
   }> {
-    const identifier = this.hasuraUserService.getIdentifier();
-    const user = await this.getUserInfo(identifier);
+    const userId = this.hasuraUserService.getUserId();
+    const user = await this.getUserInfo(userId);
 
     // Get business location and verify ownership
     const location = await this.getBusinessLocationAddress(locationId);
@@ -1570,8 +1569,8 @@ export class AddressesService {
     success: boolean;
     message: string;
   }> {
-    const identifier = this.hasuraUserService.getIdentifier();
-    const user = await this.getUserInfo(identifier);
+    const userId = this.hasuraUserService.getUserId();
+    const user = await this.getUserInfo(userId);
 
     // Get business location and verify ownership
     const locationQuery = `

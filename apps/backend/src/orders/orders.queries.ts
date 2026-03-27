@@ -194,7 +194,6 @@ export const GET_ORDER_BY_ID = gql`
         user_id
         user {
           id
-          identifier
           first_name
           last_name
           email
@@ -208,7 +207,6 @@ export const GET_ORDER_BY_ID = gql`
         is_admin
         user {
           id
-          identifier
           first_name
           last_name
           email
@@ -251,7 +249,6 @@ export const GET_ORDER_BY_ID = gql`
         is_internal
         user {
           id
-          identifier
           first_name
           last_name
           email
@@ -314,7 +311,6 @@ export const GET_ORDER_BY_ID = gql`
         created_at
         changed_by_user {
           id
-          identifier
           first_name
           last_name
           email

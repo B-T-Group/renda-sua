@@ -121,7 +121,6 @@ export interface OrderWithDetails {
     user_id: string;
     user: {
       id: string;
-      identifier: string;
       first_name: string;
       last_name: string;
       email: string;
@@ -135,7 +134,6 @@ export interface OrderWithDetails {
     is_admin: boolean;
     user: {
       id: string;
-      identifier: string;
       first_name: string;
       last_name: string;
       email: string;
@@ -175,7 +173,6 @@ export interface OrderWithDetails {
     is_verified: boolean;
     user: {
       id: string;
-      identifier: string;
       first_name: string;
       last_name: string;
       email: string;
@@ -237,7 +234,6 @@ export interface OrderWithDetails {
     created_at: string;
     changed_by_user: {
       id: string;
-      identifier: string;
       first_name: string;
       last_name: string;
       email: string;
@@ -2995,7 +2991,6 @@ export class OrdersService {
             user_id
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3009,7 +3004,6 @@ export class OrdersService {
             is_admin
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3051,7 +3045,6 @@ export class OrdersService {
             is_verified
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3088,7 +3081,6 @@ export class OrdersService {
             created_at
             changed_by_user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3182,7 +3174,6 @@ export class OrdersService {
             user_id
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3196,7 +3187,6 @@ export class OrdersService {
             is_admin
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3236,7 +3226,6 @@ export class OrdersService {
             is_verified
             user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3299,7 +3288,6 @@ export class OrdersService {
             created_at
             changed_by_user {
               id
-              identifier
               first_name
               last_name
               email
@@ -3469,7 +3457,6 @@ export class OrdersService {
           updated_at
           user {
             id
-            identifier
             email
             first_name
             last_name
@@ -3559,7 +3546,6 @@ export class OrdersService {
           updated_at
           user {
             id
-            identifier
             email
             first_name
             last_name

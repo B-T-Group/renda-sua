@@ -252,14 +252,13 @@ export class AccountsController {
   @Post()
   async createAccount(@Body() accountData: { currency: string }) {
     try {
-      const identifier = this.hasuraUserService.getIdentifier();
+      const userId = this.hasuraUserService.getUserId();
 
       // First, get the current user to check their user_type_id
       const getUserQuery = `
-        query GetUserByIdentifier($identifier: String!) {
-          users(where: {identifier: {_eq: $identifier}}) {
+        query GetUserByIdForAccount($userId: uuid!) {
+          users_by_pk(id: $userId) {
             id
-            identifier
             user_type_id
           }
         }
@@ -268,11 +267,11 @@ export class AccountsController {
       const userResult = await this.hasuraUserService.executeQuery(
         getUserQuery,
         {
-          identifier,
+          userId,
         }
       );
 
-      if (!userResult.users || userResult.users.length === 0) {
+      if (!userResult.users_by_pk) {
         throw new HttpException(
           {
             success: false,
@@ -282,7 +281,7 @@ export class AccountsController {
         );
       }
 
-      const user = userResult.users[0];
+      const user = userResult.users_by_pk;
 
       // Check if user already has an account with this currency
       const checkExistingAccountQuery = `

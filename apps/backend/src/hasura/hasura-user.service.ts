@@ -11,7 +11,9 @@ import {
   Users,
 } from '../generated/graphql';
 import { HasuraSystemService } from './hasura-system.service';
-import { GET_USER_BY_IDENTIFIER_WITH_RELATIONS } from './hasura.queries';
+import { GET_USER_BY_ID_WITH_RELATIONS } from './hasura.queries';
+
+const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -60,7 +62,8 @@ export interface OrderResult {
 @Injectable({ scope: Scope.REQUEST })
 export class HasuraUserService {
   private readonly logger = new Logger(HasuraUserService.name);
-  public identifier!: string;
+  /** DB `users.id` from JWT `https://hasura.io/jwt/claims` → `x-hasura-user-id`. */
+  public user_id!: string;
   private readonly hasuraUrl: string;
   private _authToken: string | null = null;
   private readonly client: GraphQLClient;
@@ -73,7 +76,9 @@ export class HasuraUserService {
     this.hasuraUrl =
       hasuraConfig?.endpoint || 'http://localhost:8080/v1/graphql';
     this._authToken = this.extractAuthToken();
-    this.identifier = this.extractSubClaim();
+    this.user_id = this._authToken
+      ? this.extractHasuraUserIdFromToken(this._authToken)
+      : 'anonymous';
 
     // Build headers based on whether we have a token or not
     const headers: Record<string, string> = {
@@ -98,7 +103,9 @@ export class HasuraUserService {
   private get authToken(): string | null {
     if (!this._authToken) {
       this._authToken = this.extractAuthToken();
-      this.identifier = this.extractSubClaim();
+      this.user_id = this._authToken
+        ? this.extractHasuraUserIdFromToken(this._authToken)
+        : 'anonymous';
     }
     return this._authToken;
   }
@@ -151,9 +158,8 @@ export class HasuraUserService {
     user_type_id: string;
   }): Promise<Users> {
     const mutation = `
-      mutation CreateUser($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $phone_number: String, $user_type_id: user_types_enum!) {
+      mutation CreateUser($email: String!, $first_name: String!, $last_name: String!, $phone_number: String, $user_type_id: user_types_enum!) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -161,7 +167,6 @@ export class HasuraUserService {
           user_type_id: $user_type_id
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -176,7 +181,6 @@ export class HasuraUserService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier: this.identifier, // Use identifier from token
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -199,7 +203,6 @@ export class HasuraUserService {
   }): Promise<{ user: Users; client: Clients }> {
     const mutation = `
       mutation CreateUserWithClient(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -207,7 +210,6 @@ export class HasuraUserService {
         $user_type_id: user_types_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -218,7 +220,6 @@ export class HasuraUserService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -233,7 +234,6 @@ export class HasuraUserService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier: this.identifier, // Use identifier from token
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -269,7 +269,6 @@ export class HasuraUserService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -304,7 +303,6 @@ export class HasuraUserService {
   ): Promise<{ user: Users; agent: Agents }> {
     const mutation = `
       mutation CreateUserWithAgent(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -313,7 +311,6 @@ export class HasuraUserService {
         $vehicle_type_id: vehicle_types_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -326,7 +323,6 @@ export class HasuraUserService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -341,7 +337,6 @@ export class HasuraUserService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier: this.identifier, // Use identifier from token
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -381,7 +376,6 @@ export class HasuraUserService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -421,7 +415,6 @@ export class HasuraUserService {
   ): Promise<{ user: Users; business: Businesses }> {
     const mutation = `
       mutation CreateUserWithBusiness(
-        $identifier: String!, 
         $email: String!, 
         $first_name: String!, 
         $last_name: String!, 
@@ -431,7 +424,6 @@ export class HasuraUserService {
         $main_interest: business_main_interest_enum!
       ) {
         insert_users_one(object: {
-          identifier: $identifier,
           email: $email,
           first_name: $first_name,
           last_name: $last_name,
@@ -445,7 +437,6 @@ export class HasuraUserService {
           }
         }) {
           id
-          identifier
           email
           first_name
           last_name
@@ -460,7 +451,6 @@ export class HasuraUserService {
     `;
 
     const result = await this.executeMutation(mutation, {
-      identifier: this.identifier, // Use identifier from token
       email: userData.email,
       first_name: userData.first_name,
       last_name: userData.last_name,
@@ -503,7 +493,6 @@ export class HasuraUserService {
     return {
       user: {
         id: user.id,
-        identifier: user.identifier,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -539,38 +528,76 @@ export class HasuraUserService {
     return authHeader.substring(7); // Remove 'Bearer ' prefix
   }
 
-  /**
-   * Extract sub claim from JWT token
-   */
-  private extractSubClaim(): string {
-    if (!this._authToken) {
-      return 'anonymous'; // Return anonymous identifier when no token
+  private decodeJwtPayload(token: string): Record<string, unknown> {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      throw new Error('Invalid JWT format');
     }
+    const json = Buffer.from(parts[1], 'base64').toString('utf8');
+    return JSON.parse(json) as Record<string, unknown>;
+  }
 
+  /**
+   * DB user id from Auth0 Action: `x-hasura-user-id` inside `https://hasura.io/jwt/claims`.
+   */
+  private extractHasuraUserIdFromToken(token: string): string {
     try {
-      // This is a simplified JWT decode - in production, you should use a proper JWT library
-      const token = this._authToken;
-      const payload = JSON.parse(
-        Buffer.from(token.split('.')[1], 'base64').toString()
+      const payload = this.decodeJwtPayload(token);
+      const claims = payload[HASURA_JWT_CLAIMS_NAMESPACE] as
+        | Record<string, unknown>
+        | undefined;
+      const id =
+        claims?.['x-hasura-user-id'] ?? claims?.['X-Hasura-User-Id'];
+      if (id === undefined || id === null || String(id).trim() === '') {
+        throw new Error('Missing x-hasura-user-id in Hasura JWT claims');
+      }
+      return String(id);
+    } catch (error: any) {
+      throw new Error(
+        error?.message ||
+          'Invalid JWT token or missing Hasura user id in claims'
       );
-      return payload.sub || payload.user_id || payload.id;
-    } catch {
-      throw new Error('Invalid JWT token or missing sub claim');
     }
   }
 
   /**
-   * Get the user identifier (sub claim)
+   * Auth0 access token `sub` (for logging / correlation; not stored on `users`).
    */
-  getIdentifier(): string {
-    return this.identifier;
+  getAuthSubject(): string {
+    if (!this._authToken) {
+      return 'anonymous';
+    }
+    try {
+      const payload = this.decodeJwtPayload(this._authToken);
+      const sub = payload.sub;
+      if (!sub || typeof sub !== 'string') {
+        throw new Error('Invalid JWT: missing sub claim');
+      }
+      return sub;
+    } catch (error: any) {
+      throw new Error(
+        error?.message || 'Invalid JWT token or missing sub claim'
+      );
+    }
+  }
+
+  /**
+   * Same as `user_id` (from Hasura JWT claims); use for permission-aligned lookups.
+   */
+  getUserId(): string {
+    return this.user_id;
   }
 
   /**
    * Check if the service is properly configured
    */
   isConfigured(): boolean {
-    return !!(this.hasuraUrl && this._authToken && this.identifier);
+    return !!(
+      this.hasuraUrl &&
+      this._authToken &&
+      this.user_id &&
+      this.user_id !== 'anonymous'
+    );
   }
 
   /**
@@ -810,7 +837,7 @@ export class HasuraUserService {
   }
 
   /**
-   * Get the current user by identifier
+   * Get the current user by JWT Hasura user id (`x-hasura-user-id`).
    */
   async getUser(): Promise<
     Users & {
@@ -820,32 +847,24 @@ export class HasuraUserService {
       addresses?: Addresses[];
     }
   > {
-    // Validate identifier exists
-    if (!this.identifier) {
-      throw new Error('User identifier is missing from authentication token');
-    }
-
-    // Handle anonymous identifier (no authenticated user)
-    if (this.identifier === 'anonymous') {
+    if (!this.user_id || this.user_id === 'anonymous') {
       throw new Error(
         'No authenticated user. Please provide a valid authentication token.'
       );
     }
 
     try {
-      // Use consolidated query to fetch user with all related data in one request
       const userResult = await this.executeQuery<any>(
-        GET_USER_BY_IDENTIFIER_WITH_RELATIONS,
+        GET_USER_BY_ID_WITH_RELATIONS,
         {
-          identifier: this.identifier,
+          userId: this.user_id,
         }
       );
 
-      if (!userResult.users || userResult.users.length === 0) {
-        throw new Error(`User not found with identifier: ${this.identifier}`);
+      const userData = userResult.users_by_pk;
+      if (!userData) {
+        throw new Error(`User not found for id: ${this.user_id}`);
       }
-
-      const userData = userResult.users[0];
 
       // Build the user object with client/agent/business data
       const user: Users & {
@@ -871,19 +890,17 @@ export class HasuraUserService {
 
       return user;
     } catch (error: any) {
-      // Log the error for debugging
       this.logger.error('Error in getUser()', {
-        identifier: this.identifier,
+        userId: this.user_id,
         error: error.message,
         stack: error.stack,
       });
 
-      // Re-throw with more context
-      if (error.message.includes('User not found')) {
+      if (error.message?.includes('User not found')) {
         throw error;
       }
       throw new Error(
-        `Failed to get user by identifier: ${error.message || 'Unknown error'}`
+        `Failed to get user by id: ${error.message || 'Unknown error'}`
       );
     }
   }

@@ -159,9 +159,8 @@ export class AppController {
         case 'client':
           result = await this.hasuraSystemService.executeMutation(
             `
-            mutation CreateUserWithClient($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!) {
+            mutation CreateUserWithClient($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!) {
               insert_users_one(object: {
-                identifier: $identifier,
                 email: $email,
                 first_name: $first_name,
                 last_name: $last_name,
@@ -171,7 +170,6 @@ export class AppController {
                 }
               }) {
                 id
-                identifier
                 email
                 first_name
                 last_name
@@ -188,7 +186,6 @@ export class AppController {
             }
           `,
             {
-              identifier: `test-${Date.now()}`,
               email: email,
               first_name: userData.first_name,
               last_name: userData.last_name,
@@ -204,9 +201,8 @@ export class AppController {
         case 'agent':
           result = await this.hasuraSystemService.executeMutation(
             `
-            mutation CreateUserWithAgent($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $vehicle_type_id: String!) {
+            mutation CreateUserWithAgent($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $vehicle_type_id: String!) {
               insert_users_one(object: {
-                identifier: $identifier,
                 email: $email,
                 first_name: $first_name,
                 last_name: $last_name,
@@ -218,7 +214,6 @@ export class AppController {
                 }
               }) {
                 id
-                identifier
                 email
                 first_name
                 last_name
@@ -236,7 +231,6 @@ export class AppController {
             }
           `,
             {
-              identifier: `test-${Date.now()}`,
               email: email,
               first_name: userData.first_name,
               last_name: userData.last_name,
@@ -256,9 +250,8 @@ export class AppController {
           }
           result = await this.hasuraSystemService.executeMutation(
             `
-            mutation CreateUserWithBusiness($identifier: String!, $email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $name: String!) {
+            mutation CreateUserWithBusiness($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $name: String!) {
               insert_users_one(object: {
-                identifier: $identifier,
                 email: $email,
                 first_name: $first_name,
                 last_name: $last_name,
@@ -270,7 +263,6 @@ export class AppController {
                 }
               }) {
                 id
-                identifier
                 email
                 first_name
                 last_name
@@ -290,7 +282,6 @@ export class AppController {
             }
           `,
             {
-              identifier: `test-${Date.now()}`,
               email: email,
               first_name: userData.first_name,
               last_name: userData.last_name,

@@ -97,23 +97,21 @@ export class SignupService {
   }
 
   async completeSignup(userId: string, auth0User: any): Promise<{ user: any }> {
-    const identifier = auth0User?.sub;
     const email = this.normalizeEmail(auth0User?.email || '');
-    if (!identifier || !email) {
+    if (!email) {
       throw new HttpException(
         { success: false, error: 'Invalid authenticated user' },
         HttpStatus.BAD_REQUEST
       );
     }
     const userById = await this.hasuraSystemService.executeQuery<{
-      users_by_pk: { id: string; email: string; identifier: string | null } | null;
+      users_by_pk: { id: string; email: string } | null;
     }>(
       `
       query GetUser($id: uuid!) {
         users_by_pk(id: $id) {
           id
           email
-          identifier
         }
       }
     `,
@@ -132,35 +130,16 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
-    const existingIdentifier = await this.hasuraSystemService.executeQuery<{
-      users: Array<{ id: string }>;
-    }>(
-      `
-      query ExistingIdentifier($identifier: String!) {
-        users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-          id
-        }
-      }
-    `,
-      { identifier }
-    );
-    if ((existingIdentifier.users?.length || 0) > 0) {
-      throw new HttpException(
-        { success: false, error: 'Auth0 identity already linked' },
-        HttpStatus.CONFLICT
-      );
-    }
     const update = await this.hasuraSystemService.executeMutation<{
       update_users_by_pk: any;
     }>(
       `
-      mutation CompleteSignup($id: uuid!, $identifier: String!) {
+      mutation CompleteSignup($id: uuid!) {
         update_users_by_pk(
           pk_columns: { id: $id }
-          _set: { identifier: $identifier, email_verified: true }
+          _set: { email_verified: true }
         ) {
           id
-          identifier
           email
           first_name
           last_name
@@ -169,7 +148,7 @@ export class SignupService {
         }
       }
     `,
-      { id: userId, identifier }
+      { id: userId }
     );
     return { user: update.update_users_by_pk };
   }
@@ -211,7 +190,6 @@ export class SignupService {
       last_name: payload.last_name,
       phone_number: payload.phone_number || null,
       user_type_id: payload.user_type_id,
-      identifier: null,
       email_verified: false,
     };
     const userFields = `

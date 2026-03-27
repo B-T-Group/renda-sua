@@ -31,24 +31,18 @@ export class SupportService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   async createTicket(
-    userIdentifier: string,
+    userId: string,
     dto: CreateTicketDto
   ): Promise<SupportTicket> {
-    const userQuery = `
-      query GetUserByIdentifier($identifier: String!) {
-        users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-          id
-        }
-      }
-    `;
-    const userResult = await this.hasuraSystemService.executeQuery(userQuery, {
-      identifier: userIdentifier,
-    });
-    const users = (userResult?.users as { id: string }[]) ?? [];
-    if (users.length === 0) {
+    const userCheck = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: { id: string } | null;
+    }>(
+      `query UserExists($id: uuid!) { users_by_pk(id: $id) { id } }`,
+      { id: userId }
+    );
+    if (!userCheck.users_by_pk) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
-    const userId = users[0].id;
 
     const mutation = `
       mutation InsertSupportTicket($object: support_tickets_insert_input!) {
@@ -86,20 +80,14 @@ export class SupportService {
     return ticket as SupportTicket;
   }
 
-  async getMyTickets(userIdentifier: string): Promise<SupportTicket[]> {
-    const userQuery = `
-      query GetUserByIdentifier($identifier: String!) {
-        users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-          id
-        }
-      }
-    `;
-    const userResult = await this.hasuraSystemService.executeQuery(userQuery, {
-      identifier: userIdentifier,
-    });
-    const users = (userResult?.users as { id: string }[]) ?? [];
-    if (users.length === 0) return [];
-    const userId = users[0].id;
+  async getMyTickets(userId: string): Promise<SupportTicket[]> {
+    const userCheck = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: { id: string } | null;
+    }>(
+      `query UserExists($id: uuid!) { users_by_pk(id: $id) { id } }`,
+      { id: userId }
+    );
+    if (!userCheck.users_by_pk) return [];
 
     const query = `
       query GetSupportTickets($userId: uuid!) {
@@ -132,34 +120,28 @@ export class SupportService {
 
   async getTicketById(
     ticketId: string,
-    userIdentifier: string
+    userId: string
   ): Promise<SupportTicket | null> {
-    const tickets = await this.getMyTickets(userIdentifier);
+    const tickets = await this.getMyTickets(userId);
     return tickets.find((t) => t.id === ticketId) ?? null;
   }
 
   async updateTicketStatus(
     ticketId: string,
     status: SupportTicketStatus,
-    resolvedByIdentifier?: string
+    resolvedByUserId?: string
   ): Promise<SupportTicket> {
     const set: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
     if (status === 'resolved') {
       set.resolved_at = new Date().toISOString();
-      if (resolvedByIdentifier) {
-        const userQuery = `
-          query GetUserByIdentifier($identifier: String!) {
-            users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-              id
-            }
-          }
-        `;
-        const userResult = await this.hasuraSystemService.executeQuery(
-          userQuery,
-          { identifier: resolvedByIdentifier }
+      if (resolvedByUserId) {
+        const check = await this.hasuraSystemService.executeQuery<{
+          users_by_pk: { id: string } | null;
+        }>(
+          `query UserExists($id: uuid!) { users_by_pk(id: $id) { id } }`,
+          { id: resolvedByUserId }
         );
-        const users = (userResult?.users as { id: string }[]) ?? [];
-        if (users.length > 0) set.resolved_by = users[0].id;
+        if (check.users_by_pk) set.resolved_by = resolvedByUserId;
       }
     }
 

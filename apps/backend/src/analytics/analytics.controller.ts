@@ -4,19 +4,14 @@ import {
     HttpException,
     HttpStatus,
     Query,
-    Req,
     UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { BusinessAnalytics } from './analytics.service';
 import { AnalyticsService } from './analytics.service';
-
-interface RequestWithUser extends Request {
-  user?: { sub?: string; id?: string };
-}
 
 @ApiTags('Analytics')
 @Controller('analytics')
@@ -24,7 +19,8 @@ interface RequestWithUser extends Request {
 export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
 
   @Get('business')
@@ -34,24 +30,23 @@ export class AnalyticsController {
   @ApiResponse({ status: 200, description: 'Business analytics' })
   @ApiResponse({ status: 403, description: 'Not a business user' })
   async getBusinessAnalytics(
-    @Req() request: RequestWithUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string
   ): Promise<BusinessAnalytics> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
 
     const query = `
-      query GetBusinessByUser($identifier: String!) {
-        businesses(where: { user: { identifier: { _eq: $identifier } } }, limit: 1) {
+      query GetBusinessByUser($userId: uuid!) {
+        businesses(where: { user_id: { _eq: $userId } }, limit: 1) {
           id
         }
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      identifier: userIdentifier,
+      userId,
     });
     const businesses = (result?.businesses as { id: string }[]) ?? [];
     if (businesses.length === 0) {

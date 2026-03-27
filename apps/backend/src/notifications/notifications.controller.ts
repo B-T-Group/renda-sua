@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { NotificationData } from './notification-types';
 import { NotificationsService } from './notifications.service';
 
@@ -12,7 +13,10 @@ interface RequestWithUser extends Request {
 @ApiTags('Notifications')
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   @Get('vapid-public-key')
   @ApiOperation({ summary: 'Get VAPID public key for push subscription' })
@@ -34,14 +38,14 @@ export class NotificationsController {
     },
     @Req() request: RequestWithUser
   ) {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
     if (!body?.endpoint || !body?.keys?.p256dh || !body?.keys?.auth) {
       return { success: false, error: 'Invalid subscription payload' };
     }
-    return this.notificationsService.savePushSubscription(userIdentifier, {
+    return this.notificationsService.savePushSubscription(userId, {
       endpoint: body.endpoint,
       keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
     });
@@ -68,15 +72,15 @@ export class NotificationsController {
     @Body() body: { expoPushToken?: string; deviceId?: string },
     @Req() request: RequestWithUser
   ) {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
     if (!body?.expoPushToken || typeof body.expoPushToken !== 'string') {
       return { success: false, error: 'expoPushToken is required' };
     }
     return this.notificationsService.saveMobilePushToken(
-      userIdentifier,
+      userId,
       body.expoPushToken
     );
   }
@@ -92,12 +96,12 @@ export class NotificationsController {
     @Body() body: { title?: string; body?: string },
     @Req() request: RequestWithUser
   ) {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       return { success: false, error: 'Unauthorized' };
     }
     const result = await this.notificationsService.sendTestPushNotification(
-      userIdentifier,
+      userId,
       body?.title,
       body?.body
     );

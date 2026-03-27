@@ -1,33 +1,10 @@
 import { gql } from 'graphql-request';
 
-// Query for getting user by identifier
-export const GET_USER_BY_IDENTIFIER = gql`
-  query GetUserByIdentifier($identifier: String!) {
-    users(where: { identifier: { _eq: $identifier } }) {
+/** Current user + relations, keyed by DB user id (JWT x-hasura-user-id). */
+export const GET_USER_BY_ID_WITH_RELATIONS = gql`
+  query GetUserByIdWithRelations($userId: uuid!) {
+    users_by_pk(id: $userId) {
       id
-      identifier
-      email
-      first_name
-      last_name
-      phone_number
-      phone_number_verified
-      email_verified
-      user_type_id
-      profile_picture_url
-      preferred_language
-      created_at
-      updated_at
-    }
-  }
-`;
-
-// Consolidated query for getting user by identifier with all related data (client/agent/business)
-// Note: Addresses are fetched separately to avoid relationship access issues
-export const GET_USER_BY_IDENTIFIER_WITH_RELATIONS = gql`
-  query GetUserByIdentifierWithRelations($identifier: String!) {
-    users(where: { identifier: { _eq: $identifier } }) {
-      id
-      identifier
       email
       first_name
       last_name

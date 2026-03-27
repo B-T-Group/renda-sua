@@ -41,7 +41,6 @@ export interface GetRendasuaHQUserQuery {
   users: Array<{
     id: string;
     user_type_id: string;
-    identifier: string;
     first_name: string;
     last_name: string;
     email: string;

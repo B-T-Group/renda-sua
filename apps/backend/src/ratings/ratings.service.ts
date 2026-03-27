@@ -65,7 +65,7 @@ export class RatingsService {
 
   async createRating(
     createRatingDto: CreateRatingDto,
-    userIdentifier: string
+    userId: string
   ): Promise<Rating> {
     // Validate that the order exists and is completed
     const order = await this.getOrder(createRatingDto.orderId);
@@ -78,7 +78,7 @@ export class RatingsService {
     }
 
     // Validate that the user is involved in the order
-    const userProfile = await this.getUserProfile(userIdentifier);
+    const userProfile = await this.getUserProfile(userId);
     if (!userProfile) {
       throw new NotFoundException('User profile not found');
     }
@@ -299,12 +299,10 @@ export class RatingsService {
     }
   }
 
-  private async getUserProfile(
-    userIdentifier: string
-  ): Promise<UserProfile | null> {
+  private async getUserProfile(userId: string): Promise<UserProfile | null> {
     const query = `
-      query GetUserProfile($userIdentifier: String!) {
-        users(where: {identifier: {_eq: $userIdentifier}}) {
+      query GetUserProfile($userId: uuid!) {
+        users_by_pk(id: $userId) {
           id
           user_type_id
           first_name
@@ -324,9 +322,9 @@ export class RatingsService {
 
     try {
       const response = await this.hasuraSystemService.executeQuery(query, {
-        userIdentifier,
+        userId,
       });
-      return response.users[0]; // Return first user with this identifier
+      return response.users_by_pk ?? null;
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
       return null;

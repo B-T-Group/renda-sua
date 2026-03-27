@@ -58,7 +58,7 @@ export class SignupController {
 
   @Post('signup/complete')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Complete signup by linking Auth0 identifier' })
+  @ApiOperation({ summary: 'Complete signup after email verification' })
   async signupComplete(
     @Body() body: { userId: string },
     @CurrentUser() auth0User: any

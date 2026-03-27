@@ -15,6 +15,7 @@ import {
     FastDeliveryConfig,
 } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LocationsService } from './locations.service';
 
 interface RequestWithUser extends Request {
@@ -87,6 +88,7 @@ export class LocationsController {
 
   constructor(
     private readonly hasuraService: HasuraSystemService,
+    private readonly hasuraUserService: HasuraUserService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly locationsService: LocationsService
   ) {}
@@ -629,8 +631,8 @@ export class LocationsController {
     };
     error?: string;
   }> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const requestUserId = this.hasuraUserService.getUserId();
+    if (!requestUserId || requestUserId === 'anonymous') {
       throw new HttpException(
         { success: false, error: 'Unauthorized' },
         HttpStatus.UNAUTHORIZED
@@ -652,9 +654,6 @@ export class LocationsController {
             assigned_agent_id
             client {
               user_id
-              user {
-                identifier
-              }
             }
           }
         }
@@ -666,7 +665,7 @@ export class LocationsController {
         id: string;
         current_status: string;
         assigned_agent_id: string | null;
-        client?: { user_id: string; user?: { identifier?: string } };
+        client?: { user_id: string };
       } | null;
 
       if (!order) {
@@ -676,7 +675,7 @@ export class LocationsController {
         );
       }
 
-      if (order.client?.user?.identifier !== userIdentifier) {
+      if (order.client?.user_id !== requestUserId) {
         throw new HttpException(
           { success: false, error: 'You can only view agent location for your own orders' },
           HttpStatus.FORBIDDEN

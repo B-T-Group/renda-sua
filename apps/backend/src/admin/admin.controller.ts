@@ -489,7 +489,6 @@ export class AdminController {
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid' },
-          identifier: { type: 'string' },
           email: { type: 'string', example: 'hq@rendasua.com' },
           first_name: { type: 'string' },
           last_name: { type: 'string' },

@@ -683,31 +683,24 @@ export class NotificationsService {
   }
 
   /**
-   * Save push subscription for a user (by Auth0 identifier)
+   * Save push subscription for a user (by DB user id / JWT x-hasura-user-id)
    */
   async savePushSubscription(
-    userIdentifier: string,
+    userId: string,
     subscription: {
       endpoint: string;
       keys: { p256dh: string; auth: string };
     }
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const query = `
-        query GetUserByIdentifier($identifier: String!) {
-          users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-            id
-          }
-        }
-      `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        identifier: userIdentifier,
+      const check = await this.hasuraSystemService.executeQuery<{
+        users_by_pk: { id: string } | null;
+      }>(`query U($id: uuid!) { users_by_pk(id: $id) { id } }`, {
+        id: userId,
       });
-      const users = (result?.users as { id: string }[]) ?? [];
-      if (users.length === 0) {
+      if (!check.users_by_pk) {
         return { success: false, error: 'User not found' };
       }
-      const userId = users[0].id;
 
       const mutation = `
         mutation InsertPushSubscription($object: push_subscriptions_insert_input!) {
@@ -735,11 +728,10 @@ export class NotificationsService {
   }
 
   /**
-   * Save Expo push token for the current user (by Auth0 identifier).
-   * Used by mobile apps to register for native push notifications.
+   * Save Expo push token for the current user (by DB user id).
    */
   async saveMobilePushToken(
-    userIdentifier: string,
+    userId: string,
     expoPushToken: string
   ): Promise<{ success: boolean; error?: string }> {
     if (!expoPushToken?.trim()) {
@@ -749,21 +741,12 @@ export class NotificationsService {
       return { success: false, error: 'Invalid Expo push token' };
     }
     try {
-      const query = `
-        query GetUserByIdentifier($identifier: String!) {
-          users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-            id
-          }
-        }
-      `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        identifier: userIdentifier,
-      });
-      const users = (result?.users as { id: string }[]) ?? [];
-      if (users.length === 0) {
+      const check = await this.hasuraSystemService.executeQuery<{
+        users_by_pk: { id: string } | null;
+      }>(`query U($id: uuid!) { users_by_pk(id: $id) { id } }`, { id: userId });
+      if (!check.users_by_pk) {
         return { success: false, error: 'User not found' };
       }
-      const userId = users[0].id;
       const mutation = `
         mutation InsertMobilePushToken($object: mobile_push_tokens_insert_input!) {
           insert_mobile_push_tokens_one(object: $object) {
@@ -794,7 +777,7 @@ export class NotificationsService {
    * Send a test push notification to web and/or mobile subscriptions for the current user.
    */
   async sendTestPushNotification(
-    userIdentifier: string,
+    userId: string,
     title?: string,
     body?: string
   ): Promise<{ sent: boolean; subscriptionsCount: number; sentCount?: number; error?: string }> {
@@ -815,22 +798,12 @@ export class NotificationsService {
     }
 
     try {
-      const userQuery = `
-        query GetUserByIdentifier($identifier: String!) {
-          users(where: { identifier: { _eq: $identifier } }, limit: 1) {
-            id
-          }
-        }
-      `;
-      const userResult = await this.hasuraSystemService.executeQuery(
-        userQuery,
-        { identifier: userIdentifier }
-      );
-      const users = (userResult?.users as { id: string }[]) ?? [];
-      if (users.length === 0) {
+      const check = await this.hasuraSystemService.executeQuery<{
+        users_by_pk: { id: string } | null;
+      }>(`query U($id: uuid!) { users_by_pk(id: $id) { id } }`, { id: userId });
+      if (!check.users_by_pk) {
         return { sent: false, subscriptionsCount: 0, error: 'User not found' };
       }
-      const userId = users[0].id;
 
       const [subResult, tokenResult] = await Promise.all([
         this.hasuraSystemService.executeQuery(

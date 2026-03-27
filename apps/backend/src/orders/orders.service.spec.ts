@@ -20,7 +20,6 @@ describe('OrdersService', () => {
 
   const mockUser = {
     id: 'user-123',
-    identifier: 'john.doe@example.com',
     email: 'john.doe@example.com',
     first_name: 'John',
     last_name: 'Doe',
@@ -33,7 +32,6 @@ describe('OrdersService', () => {
 
   const mockAgentUser = {
     id: 'agent-123',
-    identifier: 'jane.smith@example.com',
     email: 'jane.smith@example.com',
     first_name: 'Jane',
     last_name: 'Smith',
@@ -46,7 +44,6 @@ describe('OrdersService', () => {
 
   const mockClientUser = {
     id: 'client-456',
-    identifier: 'client@example.com',
     email: 'client@example.com',
     first_name: 'Client',
     last_name: 'User',

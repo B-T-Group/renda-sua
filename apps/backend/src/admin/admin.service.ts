@@ -13,7 +13,6 @@ const GET_AGENTS_QUERY = `
       updated_at
       user {
         id
-        identifier
         email
         first_name
         last_name
@@ -59,7 +58,6 @@ const GET_CLIENTS_QUERY = `
       updated_at
       user {
         id
-        identifier
         email
         first_name
         last_name
@@ -108,7 +106,6 @@ const GET_BUSINESSES_QUERY = `
       updated_at
       user {
         id
-        identifier
         email
         first_name
         last_name
@@ -153,7 +150,6 @@ const UPDATE_USER_MUTATION = `
       last_name
       phone_number
       email
-      identifier
       user_type_id
       updated_at
     }
@@ -261,7 +257,7 @@ export class AdminService {
         agents(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id vehicle_type_id is_verified is_internal created_at updated_at
           user {
-            id identifier email first_name last_name phone_number
+          id email first_name last_name phone_number
             accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at }
             user_uploads(where: { document_type: { name: { _in: $idTypeNames } } }, order_by: { created_at: desc }) {
               id file_name content_type document_type_id is_approved note created_at updated_at
@@ -305,7 +301,7 @@ export class AdminService {
       query GetClients($where: clients_bool_exp, $limit: Int!, $offset: Int!) {
         clients(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id created_at updated_at
-          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           client_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         clients_aggregate(where: $where) { aggregate { count } }
@@ -335,7 +331,7 @@ export class AdminService {
       query GetBusinesses($where: businesses_bool_exp, $limit: Int!, $offset: Int!) {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id name is_admin is_verified image_cleanup_enabled created_at updated_at
-          user { id identifier email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
+          user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
           business_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         businesses_aggregate(where: $where) { aggregate { count } }
@@ -574,7 +570,6 @@ export class AdminService {
           }
           user {
             id
-            identifier
             email
             first_name
             last_name
@@ -695,7 +690,6 @@ export class AdminService {
           updated_at
           user {
             id
-            identifier
             email
             first_name
             last_name
@@ -741,7 +735,6 @@ export class AdminService {
       query GetUserDetails($userId: uuid!) {
         users_by_pk(id: $userId) {
           id
-          identifier
           email
           first_name
           last_name
@@ -817,7 +810,6 @@ export class AdminService {
           order_by: { created_at: desc }
         ) {
           id
-          identifier
           email
           first_name
           last_name

@@ -1236,7 +1236,6 @@ export class OrdersController {
                 type: 'object',
                 properties: {
                   id: { type: 'string', format: 'uuid' },
-                  identifier: { type: 'string' },
                   email: { type: 'string' },
                   first_name: { type: 'string' },
                   last_name: { type: 'string' },
@@ -1333,7 +1332,6 @@ export class OrdersController {
               type: 'object',
               properties: {
                 id: { type: 'string', format: 'uuid' },
-                identifier: { type: 'string' },
                 email: { type: 'string' },
                 first_name: { type: 'string' },
                 last_name: { type: 'string' },

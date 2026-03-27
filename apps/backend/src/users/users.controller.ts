@@ -42,12 +42,10 @@ export class UsersController {
     try {
       const user = await this.hasuraUserService.getUser();
 
-      const identifier = this.hasuraUserService.getIdentifier();
-
       return {
         success: true,
         user,
-        identifier,
+        userId: this.hasuraUserService.getUserId(),
         auth0User: {
           sub: auth0User.sub,
           email: auth0User.email,
@@ -87,7 +85,6 @@ export class UsersController {
             _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, preferred_language: $preferred_language }
           ) {
             id
-            identifier
             email
             first_name
             last_name
@@ -330,8 +327,6 @@ export class UsersController {
     }
   ) {
     try {
-      const identifier = this.hasuraUserService.getIdentifier();
-
       // Map frontend user types to backend user type IDs (these should match the enum values)
       const userTypeMap: { [key: string]: string } = {
         client: 'client',
@@ -348,26 +343,22 @@ export class UsersController {
 
       switch (userTypeId) {
         case 'client':
-          result = await this.hasuraSystemService.createUserWithClient(
-            identifier,
-            {
-              email: profileData.email,
-              first_name: profileData.firstName,
-              last_name: profileData.lastName,
-              phone_number: profileData.phone,
-              user_type_id: userTypeId,
-            }
-          );
+          result = await this.hasuraSystemService.createUserWithClient({
+            email: profileData.email,
+            first_name: profileData.firstName,
+            last_name: profileData.lastName,
+            phone_number: profileData.phone,
+            user_type_id: userTypeId,
+          });
           return {
             success: true,
             user: result.user,
             client: result.client,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
 
         case 'agent':
           result = await this.hasuraSystemService.createUserWithAgent(
-            identifier,
             {
               email: profileData.email,
               first_name: profileData.firstName,
@@ -383,7 +374,7 @@ export class UsersController {
             success: true,
             user: result.user,
             agent: result.agent,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
 
         case 'business':
@@ -391,7 +382,6 @@ export class UsersController {
             throw new Error('Business name is required for business users');
           }
           result = await this.hasuraSystemService.createUserWithBusiness(
-            identifier,
             {
               email: profileData.email,
               first_name: profileData.firstName,
@@ -408,7 +398,7 @@ export class UsersController {
             success: true,
             user: result.user,
             business: result.business,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
 
         default:
@@ -470,8 +460,6 @@ export class UsersController {
     }
   ) {
     try {
-      const identifier = this.hasuraUserService.getIdentifier();
-
       const addressData =
         userData.address &&
         ['client', 'agent', 'business'].includes(userData.user_type_id)
@@ -494,16 +482,13 @@ export class UsersController {
 
       switch (userData.user_type_id) {
         case 'client':
-          result = await this.hasuraSystemService.createUserWithClient(
-            identifier,
-            {
-              email: userData.email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              phone_number: userData.phone_number,
-              user_type_id: userData.user_type_id,
-            }
-          );
+          result = await this.hasuraSystemService.createUserWithClient({
+            email: userData.email,
+            first_name: userData.first_name,
+            last_name: userData.last_name,
+            phone_number: userData.phone_number,
+            user_type_id: userData.user_type_id,
+          });
           if (addressData) {
             await this.addressesService.createAddressForSignup(
               result.client.id,
@@ -515,15 +500,11 @@ export class UsersController {
             success: true,
             user: result.user,
             client: result.client,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
 
         case 'agent':
-          return await this.createAgentUser(
-            identifier,
-            userData,
-            addressData
-          );
+          return await this.createAgentUser(userData, addressData);
 
         case 'business':
           if (!userData.profile.name) {
@@ -535,7 +516,6 @@ export class UsersController {
               throw new Error('main_interest must be sell_items or rent_items');
             }
             result = await this.hasuraSystemService.createUserWithBusiness(
-              identifier,
               {
                 email: userData.email,
                 first_name: userData.first_name,
@@ -560,12 +540,12 @@ export class UsersController {
             success: true,
             user: result.user,
             business: result.business,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
 
         default: {
           // For any other user type, just create the user without related records
-          const user = await this.hasuraSystemService.createUser(identifier, {
+          const user = await this.hasuraSystemService.createUser({
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
@@ -575,7 +555,7 @@ export class UsersController {
           return {
             success: true,
             user,
-            identifier: identifier,
+            userId: this.hasuraUserService.getUserId(),
           };
         }
       }
@@ -591,7 +571,6 @@ export class UsersController {
   }
 
   private async createAgentUser(
-    identifier: string,
     userData: {
       first_name: string;
       last_name: string;
@@ -619,7 +598,6 @@ export class UsersController {
     } | null
   ) {
     const result = await this.hasuraSystemService.createUserWithAgent(
-      identifier,
       {
         email: userData.email,
         first_name: userData.first_name,
@@ -650,7 +628,7 @@ export class UsersController {
       success: true,
       user: result.user,
       agent: result.agent,
-      identifier: identifier,
+      userId: this.hasuraUserService.getUserId(),
     };
   }
 

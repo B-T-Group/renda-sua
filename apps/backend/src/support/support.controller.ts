@@ -7,12 +7,11 @@ import {
     Param,
     Patch,
     Post,
-    Req,
     UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import type {
     CreateTicketDto,
     SupportTicket,
@@ -20,53 +19,46 @@ import type {
 } from './support.service';
 import { SupportService } from './support.service';
 
-interface RequestWithUser extends Request {
-  user?: { sub?: string; id?: string };
-}
-
 @ApiTags('Support')
 @Controller('support')
 @UseGuards(AuthGuard)
 export class SupportController {
-  constructor(private readonly supportService: SupportService) {}
+  constructor(
+    private readonly supportService: SupportService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   @Post('tickets')
   @ApiOperation({ summary: 'Create a support ticket' })
   @ApiResponse({ status: 201, description: 'Ticket created' })
-  async createTicket(
-    @Body() dto: CreateTicketDto,
-    @Req() request: RequestWithUser
-  ): Promise<SupportTicket> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+  async createTicket(@Body() dto: CreateTicketDto): Promise<SupportTicket> {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
-    return this.supportService.createTicket(userIdentifier, dto);
+    return this.supportService.createTicket(userId, dto);
   }
 
   @Get('tickets')
   @ApiOperation({ summary: 'List my support tickets' })
   @ApiResponse({ status: 200, description: 'List of tickets' })
-  async getMyTickets(@Req() request: RequestWithUser): Promise<SupportTicket[]> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+  async getMyTickets(): Promise<SupportTicket[]> {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       return [];
     }
-    return this.supportService.getMyTickets(userIdentifier);
+    return this.supportService.getMyTickets(userId);
   }
 
   @Get('tickets/:id')
   @ApiOperation({ summary: 'Get ticket by ID' })
   @ApiResponse({ status: 200, description: 'Ticket details' })
-  async getTicket(
-    @Param('id') id: string,
-    @Req() request: RequestWithUser
-  ): Promise<SupportTicket | null> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+  async getTicket(@Param('id') id: string): Promise<SupportTicket | null> {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       return null;
     }
-    return this.supportService.getTicketById(id, userIdentifier);
+    return this.supportService.getTicketById(id, userId);
   }
 
   @Patch('tickets/:id')
@@ -74,17 +66,12 @@ export class SupportController {
   @ApiResponse({ status: 200, description: 'Ticket updated' })
   async updateTicketStatus(
     @Param('id') id: string,
-    @Body() body: { status: SupportTicketStatus },
-    @Req() request: RequestWithUser
+    @Body() body: { status: SupportTicketStatus }
   ): Promise<SupportTicket> {
-    const userIdentifier = request.user?.sub ?? request.user?.id;
-    if (!userIdentifier) {
+    const userId = this.hasuraUserService.getUserId();
+    if (!userId || userId === 'anonymous') {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
-    return this.supportService.updateTicketStatus(
-      id,
-      body.status,
-      userIdentifier
-    );
+    return this.supportService.updateTicketStatus(id, body.status, userId);
   }
 }

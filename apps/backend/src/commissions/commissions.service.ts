@@ -282,7 +282,6 @@ export class CommissionsService {
         users(where: { email: { _eq: "hq@rendasua.com" } }) {
           id
           user_type_id
-          identifier
           first_name
           last_name
           email

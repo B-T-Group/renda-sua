@@ -40,7 +40,6 @@ export class PermissionService {
             user_id
             user {
               id
-              identifier
               user_type_id
             }
           }

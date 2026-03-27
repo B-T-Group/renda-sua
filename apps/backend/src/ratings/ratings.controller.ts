@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { RatingsService } from './ratings.service';
 
@@ -22,7 +23,10 @@ import { RatingsService } from './ratings.service';
 @Controller('ratings')
 @ApiBearerAuth()
 export class RatingsController {
-  constructor(private readonly ratingsService: RatingsService) {}
+  constructor(
+    private readonly ratingsService: RatingsService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
 
   @Get('order/:orderId')
   @HttpCode(HttpStatus.OK)
@@ -235,10 +239,10 @@ export class RatingsController {
     @Request() req: any
   ) {
     try {
-      const userIdentifier = req.user.sub; // Auth0 user ID
+      const userId = this.hasuraUserService.getUserId();
       const rating = await this.ratingsService.createRating(
         createRatingDto,
-        userIdentifier
+        userId
       );
 
       return {

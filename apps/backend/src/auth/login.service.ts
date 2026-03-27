@@ -42,14 +42,12 @@ export class LoginService {
   private async getUserByEmail(email: string): Promise<{
     id: string;
     email: string;
-    identifier: string | null;
     email_verified: boolean | null;
   } | null> {
     const result = await this.hasuraSystemService.executeQuery<{
       users: Array<{
         id: string;
         email: string;
-        identifier: string | null;
         email_verified: boolean | null;
       }>;
     }>(
@@ -58,7 +56,6 @@ export class LoginService {
         users(where: { email: { _eq: $email } }, limit: 1) {
           id
           email
-          identifier
           email_verified
         }
       }
@@ -86,37 +83,23 @@ export class LoginService {
     await this.auth0Service.startEmailOtp(email);
   }
 
-  private async ensureIdentifierAndVerifiedEmail(params: {
-    userId: string;
-    currentIdentifier: string | null;
-    sub: string;
-    shouldVerifyEmail: boolean;
-  }): Promise<void> {
-    const { userId, currentIdentifier, sub, shouldVerifyEmail } = params;
-    if (currentIdentifier && currentIdentifier !== sub) {
-      throw new HttpException(
-        { success: false, error: 'Auth0 identity mismatch for this email' },
-        HttpStatus.CONFLICT
-      );
-    }
-    if (currentIdentifier === sub && !shouldVerifyEmail) return;
-
+  private async markEmailVerifiedIfNeeded(
+    userId: string,
+    shouldVerifyEmail: boolean
+  ): Promise<void> {
+    if (!shouldVerifyEmail) return;
     await this.hasuraSystemService.executeMutation(
       `
-      mutation UpdateUserAuth0($id: uuid!, $identifier: String!, $email_verified: Boolean!) {
+      mutation VerifyLoginEmail($id: uuid!) {
         update_users_by_pk(
           pk_columns: { id: $id }
-          _set: { identifier: $identifier, email_verified: $email_verified }
+          _set: { email_verified: true }
         ) {
           id
         }
       }
     `,
-      {
-        id: userId,
-        identifier: sub,
-        email_verified: true,
-      }
+      { id: userId }
     );
   }
 
@@ -147,8 +130,7 @@ export class LoginService {
       );
     }
 
-    const claims = this.decodeClaimsFromIdToken(tokenData.id_token);
-    const sub = claims.sub as string;
+    this.decodeClaimsFromIdToken(tokenData.id_token);
 
     const user = await this.getUserByEmail(email);
     if (!user) {
@@ -159,12 +141,7 @@ export class LoginService {
     }
 
     const shouldVerifyEmail = user.email_verified !== true;
-    await this.ensureIdentifierAndVerifiedEmail({
-      userId: user.id,
-      currentIdentifier: user.identifier,
-      sub,
-      shouldVerifyEmail,
-    });
+    await this.markEmailVerifiedIfNeeded(user.id, shouldVerifyEmail);
 
     return tokenData;
   }

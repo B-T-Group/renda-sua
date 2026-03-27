@@ -36108,7 +36108,6 @@ export type Users = {
   email_verified?: Maybe<Scalars['Boolean']['output']>;
   first_name: Scalars['String']['output'];
   id: Scalars['uuid']['output'];
-  identifier: Scalars['String']['output'];
   /** An array relationship */
   item_images: Array<Item_Images>;
   /** An aggregate relationship */
@@ -36409,7 +36408,6 @@ export type Users_Bool_Exp = {
   email_verified?: InputMaybe<Boolean_Comparison_Exp>;
   first_name?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
-  identifier?: InputMaybe<String_Comparison_Exp>;
   item_images?: InputMaybe<Item_Images_Bool_Exp>;
   item_images_aggregate?: InputMaybe<Item_Images_Aggregate_Bool_Exp>;
   last_name?: InputMaybe<String_Comparison_Exp>;
@@ -36434,12 +36432,8 @@ export type Users_Bool_Exp = {
 
 /** unique or primary key constraints on table "users" */
 export enum Users_Constraint {
-  /** unique or primary key constraint on columns "identifier" */
-  IdxUsersIdentifier = 'idx_users_identifier',
   /** unique or primary key constraint on columns "email" */
   UsersEmailKey = 'users_email_key',
-  /** unique or primary key constraint on columns "identifier" */
-  UsersIdentifierKey = 'users_identifier_key',
   /** unique or primary key constraint on columns "id" */
   UsersPkey = 'users_pkey'
 }
@@ -36458,7 +36452,6 @@ export type Users_Insert_Input = {
   email_verified?: InputMaybe<Scalars['Boolean']['input']>;
   first_name?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  identifier?: InputMaybe<Scalars['String']['input']>;
   item_images?: InputMaybe<Item_Images_Arr_Rel_Insert_Input>;
   last_name?: InputMaybe<Scalars['String']['input']>;
   mtn_momo_payment_requests?: InputMaybe<Mtn_Momo_Payment_Requests_Arr_Rel_Insert_Input>;
@@ -36485,7 +36478,6 @@ export type Users_Max_Fields = {
   email?: Maybe<Scalars['String']['output']>;
   first_name?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
-  identifier?: Maybe<Scalars['String']['output']>;
   last_name?: Maybe<Scalars['String']['output']>;
   /** User phone number for contact and verification */
   phone_number?: Maybe<Scalars['String']['output']>;
@@ -36501,7 +36493,6 @@ export type Users_Max_Order_By = {
   email?: InputMaybe<Order_By>;
   first_name?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
-  identifier?: InputMaybe<Order_By>;
   last_name?: InputMaybe<Order_By>;
   /** User phone number for contact and verification */
   phone_number?: InputMaybe<Order_By>;
@@ -36518,7 +36509,6 @@ export type Users_Min_Fields = {
   email?: Maybe<Scalars['String']['output']>;
   first_name?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
-  identifier?: Maybe<Scalars['String']['output']>;
   last_name?: Maybe<Scalars['String']['output']>;
   /** User phone number for contact and verification */
   phone_number?: Maybe<Scalars['String']['output']>;
@@ -36534,7 +36524,6 @@ export type Users_Min_Order_By = {
   email?: InputMaybe<Order_By>;
   first_name?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
-  identifier?: InputMaybe<Order_By>;
   last_name?: InputMaybe<Order_By>;
   /** User phone number for contact and verification */
   phone_number?: InputMaybe<Order_By>;
@@ -36580,7 +36569,6 @@ export type Users_Order_By = {
   email_verified?: InputMaybe<Order_By>;
   first_name?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
-  identifier?: InputMaybe<Order_By>;
   item_images_aggregate?: InputMaybe<Item_Images_Aggregate_Order_By>;
   last_name?: InputMaybe<Order_By>;
   mtn_momo_payment_requests_aggregate?: InputMaybe<Mtn_Momo_Payment_Requests_Aggregate_Order_By>;
@@ -36614,8 +36602,6 @@ export enum Users_Select_Column {
   FirstName = 'first_name',
   /** column name */
   Id = 'id',
-  /** column name */
-  Identifier = 'identifier',
   /** column name */
   LastName = 'last_name',
   /** column name */
@@ -36656,7 +36642,6 @@ export type Users_Set_Input = {
   email_verified?: InputMaybe<Scalars['Boolean']['input']>;
   first_name?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  identifier?: InputMaybe<Scalars['String']['input']>;
   last_name?: InputMaybe<Scalars['String']['input']>;
   /** User phone number for contact and verification */
   phone_number?: InputMaybe<Scalars['String']['input']>;
@@ -36685,7 +36670,6 @@ export type Users_Stream_Cursor_Value_Input = {
   email_verified?: InputMaybe<Scalars['Boolean']['input']>;
   first_name?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  identifier?: InputMaybe<Scalars['String']['input']>;
   last_name?: InputMaybe<Scalars['String']['input']>;
   /** User phone number for contact and verification */
   phone_number?: InputMaybe<Scalars['String']['input']>;
@@ -36710,8 +36694,6 @@ export enum Users_Update_Column {
   FirstName = 'first_name',
   /** column name */
   Id = 'id',
-  /** column name */
-  Identifier = 'identifier',
   /** column name */
   LastName = 'last_name',
   /** column name */
@@ -36958,20 +36940,6 @@ export type Weight_Units_Enum_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['weight_units_enum']['input']>>;
 };
 
-export type GetUserByIdentifierQueryVariables = Exact<{
-  identifier: Scalars['String']['input'];
-}>;
-
-
-export type GetUserByIdentifierQuery = { __typename?: 'query_root', users: Array<{ __typename?: 'users', id: string, identifier: string, email: string, first_name: string, last_name: string, phone_number?: string | null, phone_number_verified?: boolean | null, email_verified?: boolean | null, user_type_id: User_Types_Enum, profile_picture_url?: string | null, preferred_language: string, created_at: string, updated_at: string }> };
-
-export type GetUserByIdentifierWithRelationsQueryVariables = Exact<{
-  identifier: Scalars['String']['input'];
-}>;
-
-
-export type GetUserByIdentifierWithRelationsQuery = { __typename?: 'query_root', users: Array<{ __typename?: 'users', id: string, identifier: string, email: string, first_name: string, last_name: string, phone_number?: string | null, phone_number_verified?: boolean | null, email_verified?: boolean | null, user_type_id: User_Types_Enum, profile_picture_url?: string | null, preferred_language: string, created_at: string, updated_at: string, client?: { __typename?: 'clients', id: string, user_id: string, created_at: string, updated_at: string } | null, agent?: { __typename?: 'agents', id: string, user_id: string, vehicle_type_id: Vehicle_Types_Enum, is_verified?: boolean | null, is_internal?: boolean | null, onboarding_complete: boolean, status: string, created_at: string, updated_at: string, agent_code: string } | null, business?: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, is_verified?: boolean | null, image_cleanup_enabled: boolean, created_at: string, updated_at: string } | null }> };
-
 export type GetUserByIdQueryVariables = Exact<{
   userId: Scalars['uuid']['input'];
 }>;
@@ -37175,7 +37143,7 @@ export type GetOrderByIdQueryVariables = Exact<{
 }>;
 
 
-export type GetOrderByIdQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, per_km_delivery_fee: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, verified_agent_delivery?: boolean | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user_id: string, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null, instructions?: string | null } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null, instructions?: string | null }, assigned_agent?: { __typename?: 'agents', id: string, user_id: string, is_verified?: boolean | null, is_internal?: boolean | null, user: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, phone_number?: string | null, profile_picture_url?: string | null } } | null, order_items: Array<{ __typename?: 'order_items', id: string, business_inventory_id: string, item_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, dimensions?: string | null, brand?: { __typename?: 'brands', id: string, name: string, description: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, description: string, item_category: { __typename?: 'item_categories', id: number, name: string, description: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string, alt_text?: string | null, display_order?: number | null }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', id: string, order_id: string, status: any, previous_status?: any | null, notes?: string | null, changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, changed_by_user?: { __typename?: 'users', id: string, identifier: string, first_name: string, last_name: string, email: string, agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, business?: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, client?: { __typename?: 'clients', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null } | null }>, order_holds: Array<{ __typename?: 'order_holds', id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string, updated_at: string }>, delivery_time_windows: Array<{ __typename?: 'delivery_time_windows', id: string, order_id: string, slot_id: string, preferred_date: any, time_slot_start: any, time_slot_end: any, is_confirmed?: boolean | null, special_instructions?: string | null, confirmed_at?: string | null, confirmed_by?: string | null, created_at?: string | null, updated_at?: string | null, slot: { __typename?: 'delivery_time_slots', id: string, slot_name: string, slot_type: string, start_time: any, end_time: any, is_active?: boolean | null }, confirmedByUser?: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } | null }> } | null };
+export type GetOrderByIdQuery = { __typename?: 'query_root', orders_by_pk?: { __typename?: 'orders', id: string, order_number: string, client_id: string, business_id: string, business_location_id: string, assigned_agent_id?: string | null, delivery_address_id: string, subtotal: number, base_delivery_fee: number, tax_amount: number, total_amount: number, per_km_delivery_fee: number, currency: string, current_status: any, estimated_delivery_time?: string | null, actual_delivery_time?: string | null, special_instructions?: string | null, preferred_delivery_time?: string | null, payment_method?: string | null, payment_status?: string | null, verified_agent_delivery?: boolean | null, created_at?: string | null, updated_at?: string | null, client: { __typename?: 'clients', id: string, user_id: string, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business: { __typename?: 'businesses', id: string, user_id: string, name: string, is_admin?: boolean | null, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string, phone_number?: string | null } }, business_location: { __typename?: 'business_locations', id: string, name: string, location_type?: any | null, address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null, instructions?: string | null } }, delivery_address: { __typename?: 'addresses', id: string, address_line_1: string, address_line_2?: string | null, city: string, state: string, postal_code: string, country: string, latitude?: number | null, longitude?: number | null, instructions?: string | null }, assigned_agent?: { __typename?: 'agents', id: string, user_id: string, is_verified?: boolean | null, is_internal?: boolean | null, user: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string, phone_number?: string | null, profile_picture_url?: string | null } } | null, order_items: Array<{ __typename?: 'order_items', id: string, business_inventory_id: string, item_id: string, item_name: string, item_description?: string | null, unit_price: number, quantity: number, total_price: number, special_instructions?: string | null, item: { __typename?: 'items', id: string, sku?: string | null, name: string, description: string, currency: string, model?: string | null, color?: string | null, weight?: number | null, weight_unit?: any | null, dimensions?: string | null, brand?: { __typename?: 'brands', id: string, name: string, description: string } | null, item_sub_category: { __typename?: 'item_sub_categories', id: number, name: string, description: string, item_category: { __typename?: 'item_categories', id: number, name: string, description: string } }, item_images: Array<{ __typename?: 'item_images', id: string, image_url: string, alt_text?: string | null, display_order?: number | null }> } }>, order_status_history: Array<{ __typename?: 'order_status_history', id: string, order_id: string, status: any, previous_status?: any | null, notes?: string | null, changed_by_type: string, changed_by_user_id?: string | null, created_at?: string | null, changed_by_user?: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string, agent?: { __typename?: 'agents', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, business?: { __typename?: 'businesses', id: string, name: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null, client?: { __typename?: 'clients', id: string, user: { __typename?: 'users', first_name: string, last_name: string, email: string } } | null } | null }>, order_holds: Array<{ __typename?: 'order_holds', id: string, client_id: string, agent_id?: string | null, client_hold_amount: number, agent_hold_amount: number, delivery_fees: number, currency: any, status: any, created_at: string, updated_at: string }>, delivery_time_windows: Array<{ __typename?: 'delivery_time_windows', id: string, order_id: string, slot_id: string, preferred_date: any, time_slot_start: any, time_slot_end: any, is_confirmed?: boolean | null, special_instructions?: string | null, confirmed_at?: string | null, confirmed_by?: string | null, created_at?: string | null, updated_at?: string | null, slot: { __typename?: 'delivery_time_slots', id: string, slot_name: string, slot_type: string, start_time: any, end_time: any, is_active?: boolean | null }, confirmedByUser?: { __typename?: 'users', id: string, first_name: string, last_name: string, email: string } | null }> } | null };
 
 export type GetOrderByNumberQueryVariables = Exact<{
   orderNumber: Scalars['String']['input'];
