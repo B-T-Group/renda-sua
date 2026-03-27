@@ -488,7 +488,8 @@
       "title": "Vérifiez votre compte"
     },
     "profile": "Profil",
-    "signIn": "Se connecter"
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire"
   },
   "signupPage": {
     "title": "Créer votre compte",

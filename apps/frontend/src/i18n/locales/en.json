@@ -499,7 +499,8 @@
       "title": "Verify your account"
     },
     "profile": "Profile",
-    "signIn": "Sign In"
+    "signIn": "Sign In",
+    "signUp": "Sign up"
   },
   "signupPage": {
     "title": "Create your account",
