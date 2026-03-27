@@ -4,13 +4,21 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import type { TransactionRequest } from './accounts.service';
 import { AccountsService } from './accounts.service';
 
@@ -147,6 +155,71 @@ export class AccountsController {
         {
           success: false,
           error: error.message || 'Failed to fetch account info',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':accountId')
+  @ApiOperation({
+    summary: 'Get a single account by ID for the current user',
+    description:
+      'Returns account with business_location and account_transactions when the account belongs to the authenticated user.',
+  })
+  @ApiParam({ name: 'accountId', format: 'uuid', description: 'Account id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Account found',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            account: { type: 'object' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  async getAccountById(@Param('accountId') accountId: string) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) {
+        throw new HttpException(
+          { success: false, error: 'User not found' },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+
+      const result = await this.hasuraUserService.executeQuery<{
+        accounts: unknown[];
+      }>(GET_ACCOUNT_BY_ID_FOR_USER, {
+        accountId,
+        userId: user.id,
+      });
+
+      const account = result.accounts?.[0];
+      if (!account) {
+        throw new HttpException(
+          { success: false, error: 'Account not found' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return { success: true, data: { account } };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to fetch account',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

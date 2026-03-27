@@ -1,37 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAccountSubscription } from './useAccountSubscription';
 import { useApiClient } from './useApiClient';
-import { useGraphQLRequest } from './useGraphQLRequest';
-
-const GET_ACCOUNT_BY_ID = `
-  query GetAccountById($accountId: uuid!) {
-    accounts_by_pk(id: $accountId) {
-      id
-      user_id
-      currency
-      available_balance
-      withheld_balance
-      total_balance
-      is_active
-      created_at
-      updated_at
-      business_location_id
-      business_location {
-        id
-        name
-        phone
-      }
-      account_transactions {
-        id
-        account_id
-        transaction_type
-        amount
-        memo
-        created_at
-      }
-    }
-  }
-`;
 
 export interface Account {
   id: string;
@@ -116,52 +85,63 @@ export const useAccountInfo = () => {
 };
 
 export const useAccountById = (accountId: string) => {
-  const { data, loading, error, execute, refetch } = useGraphQLRequest<{
-    accounts_by_pk: Account;
-  }>(GET_ACCOUNT_BY_ID);
-
-  const hasExecuted = useRef(false);
+  const apiClient = useApiClient();
   const [localAccount, setLocalAccount] = useState<Account | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
 
-  // Set up subscription for real-time account updates
+  const fetchAccount = useCallback(async () => {
+    if (!apiClient || !accountId) {
+      setLocalAccount(null);
+      return;
+    }
+    setLoading(true);
+    setQueryError(null);
+    try {
+      const res = await apiClient.get<{
+        success: boolean;
+        data?: { account: Account };
+      }>(`/accounts/${accountId}`);
+      if (res.data.success && res.data.data?.account) {
+        setLocalAccount(res.data.data.account);
+      } else {
+        setLocalAccount(null);
+      }
+    } catch (err: any) {
+      setQueryError(
+        err?.response?.data?.error ??
+          err?.message ??
+          'Failed to load account'
+      );
+      setLocalAccount(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient, accountId]);
+
+  useEffect(() => {
+    fetchAccount();
+  }, [fetchAccount]);
+
   const {
     loading: subscriptionLoading,
     error: subscriptionError,
     subscriptionFailed,
   } = useAccountSubscription({
-    accountId: accountId,
+    accountId,
     onAccountUpdate: (updatedAccount) => {
-      console.log('Account subscription update received:', updatedAccount);
       setLocalAccount(updatedAccount);
     },
     enabled: !!accountId,
   });
 
-  // Update local state when query data changes
-  useEffect(() => {
-    if (data?.accounts_by_pk) {
-      setLocalAccount(data.accounts_by_pk);
-    }
-  }, [data]);
-
-  useEffect(() => {
-    if (!hasExecuted.current && accountId) {
-      hasExecuted.current = true;
-      setTimeout(() => {
-        execute({ accountId });
-      }, 0);
-    }
-  }, [accountId, execute]);
-
-  // Use local state for account (which includes subscription updates)
-  // Fall back to query data if no subscription updates have been received
-  const account: Account | null = localAccount || data?.accounts_by_pk || null;
+  const account: Account | null = localAccount;
 
   return {
     account,
     loading: loading || subscriptionLoading,
-    error: error || subscriptionError,
+    error: queryError || subscriptionError,
     subscriptionFailed,
-    refetch: () => refetch({ accountId }),
+    refetch: fetchAccount,
   };
 };

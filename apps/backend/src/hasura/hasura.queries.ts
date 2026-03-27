@@ -132,6 +132,40 @@ export const GET_ACCOUNT_BY_ID = gql`
   }
 `;
 
+/** User-scoped: only returns the account if it belongs to $userId (for REST GET /accounts/:id). */
+export const GET_ACCOUNT_BY_ID_FOR_USER = gql`
+  query GetAccountByIdForUser($accountId: uuid!, $userId: uuid!) {
+    accounts(
+      where: { id: { _eq: $accountId }, user_id: { _eq: $userId } }
+      limit: 1
+    ) {
+      id
+      user_id
+      currency
+      available_balance
+      withheld_balance
+      total_balance
+      is_active
+      created_at
+      updated_at
+      business_location_id
+      business_location {
+        id
+        name
+        phone
+      }
+      account_transactions {
+        id
+        account_id
+        transaction_type
+        amount
+        memo
+        created_at
+      }
+    }
+  }
+`;
+
 // Query for getting user client record
 export const GET_USER_CLIENT = gql`
   query GetUserClient($userId: uuid!) {
