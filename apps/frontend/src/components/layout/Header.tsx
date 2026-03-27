@@ -699,9 +699,14 @@ const Header: React.FC = () => {
                   </MenuComponent>
                 </>
               ) : (
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                  <LoginHeaderButton inverted />
-                  <SignupHeaderButton inverted />
+                <Stack
+                  direction="row"
+                  spacing={isMobile ? 0.5 : 1}
+                  alignItems="center"
+                  sx={{ flexShrink: 0 }}
+                >
+                  <LoginHeaderButton inverted compact={isMobile} />
+                  <SignupHeaderButton inverted compact={isMobile} />
                 </Stack>
               )}
 

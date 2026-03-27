@@ -8,9 +8,11 @@ import LoginMethodDialog from './LoginMethodDialog';
 interface LoginHeaderButtonProps {
   /** Use light/outlined style on a dark header */
   inverted?: boolean;
+  /** Narrow layout: smaller control, no icon (e.g. mobile header) */
+  compact?: boolean;
 }
 
-const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted }) => {
+const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact }) => {
   const { t } = useTranslation();
   const { isAuthenticated } = useSessionAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -24,14 +26,19 @@ const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted }) => {
       <Button
         variant={inverted ? 'outlined' : 'contained'}
         color="primary"
-        startIcon={<Login />}
+        size={compact ? 'small' : 'medium'}
+        startIcon={compact ? undefined : <Login fontSize="small" />}
         onClick={() => setDialogOpen(true)}
         sx={{
-          px: { xs: 2, sm: 3 },
-          py: 1,
-          my: { xs: 0.5, sm: 0 },
-          fontSize: '1rem',
+          borderRadius: 0,
+          px: compact ? { xs: 0.75, sm: 1 } : { xs: 2, sm: 3 },
+          py: compact ? 0.5 : 1,
+          my: compact ? 0 : { xs: 0.5, sm: 0 },
+          minWidth: compact ? 0 : undefined,
+          fontSize: compact ? '0.75rem' : '1rem',
           fontWeight: 600,
+          lineHeight: compact ? 1.2 : undefined,
+          whiteSpace: 'nowrap',
           ...(inverted && {
             color: '#ffffff',
             borderColor: 'rgba(255,255,255,0.8)',

@@ -533,6 +533,7 @@ const SignupPage: React.FC = () => {
                 phone_number: value || '',
               }))
             }
+            squareEdges
             label={t('signupPage.phoneNumber', 'Phone number')}
             helperText={t(
               'signupPage.phoneHelper',
@@ -579,7 +580,7 @@ const SignupPage: React.FC = () => {
                     cursor: 'pointer',
                     border: selected ? 2 : 1,
                     borderColor: selected ? goal.accent : 'divider',
-                    borderRadius: 2,
+                    borderRadius: 0,
                     transition: 'transform 0.15s ease, box-shadow 0.2s, border-color 0.2s',
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation',
@@ -643,12 +644,12 @@ const SignupPage: React.FC = () => {
             )}
           </Typography>
           {locationHookError && (
-            <Alert severity="warning" sx={{ py: 0.5, borderRadius: 2 }}>
+            <Alert severity="warning" sx={{ py: 0.5, borderRadius: 0 }}>
               {locationHookError}
             </Alert>
           )}
           {locationBanner && (
-            <Alert severity="info" onClose={() => setLocationBanner(null)} sx={{ py: 0.5, borderRadius: 2 }}>
+            <Alert severity="info" onClose={() => setLocationBanner(null)} sx={{ py: 0.5, borderRadius: 0 }}>
               {locationBanner}
             </Alert>
           )}
@@ -656,7 +657,7 @@ const SignupPage: React.FC = () => {
             fullWidth={isNarrow}
             variant="outlined"
             size="large"
-            sx={{ py: 1.25, borderRadius: 2 }}
+            sx={{ py: 1.25, borderRadius: 0 }}
             startIcon={
               locationLoading ? (
                 <CircularProgress size={20} color="inherit" />
@@ -779,7 +780,7 @@ const SignupPage: React.FC = () => {
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           {t('signupPage.reviewTitle', 'Review your details')}
         </Typography>
-        <Paper variant="outlined" sx={{ p: 0, borderRadius: 2, overflow: 'hidden' }}>
+        <Paper variant="outlined" sx={{ p: 0, borderRadius: 0, overflow: 'hidden' }}>
           <Box sx={{ px: { xs: 2, sm: 2 }, pt: 1.5, pb: 2 }}>
             {reviewRow(
               t('signupPage.review.name', 'Name'),
@@ -827,22 +828,34 @@ const SignupPage: React.FC = () => {
         elevation={isNarrow ? 0 : 1}
         sx={{
           p: { xs: 2, sm: 4 },
-          borderRadius: { xs: 2, sm: 3 },
+          borderRadius: 0,
           border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' },
           overflow: 'visible',
+          '& .MuiOutlinedInput-root': { borderRadius: 0 },
+          '& .MuiButton-root': { borderRadius: 0 },
+          '& .MuiCard-root': { borderRadius: 0 },
+          '& .MuiAlert-root': { borderRadius: 0 },
         }}
       >
         <Stack spacing={{ xs: 2, sm: 2.5 }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', pt: { xs: 0.5, sm: 0 } }}>
             <Logo variant="default" size={isNarrow ? 'small' : 'medium'} />
           </Box>
-          <Typography variant={isNarrow ? 'h5' : 'h4'} component="h1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+          <Typography
+            variant={isNarrow ? 'h5' : 'h4'}
+            component="h1"
+            sx={{ fontWeight: 700, lineHeight: 1.25, textAlign: 'center' }}
+          >
             {t('signupPage.title', 'Create your account')}
           </Typography>
           <Typography
             color="text.secondary"
             variant="body2"
-            sx={{ lineHeight: 1.5, fontSize: { xs: '0.9375rem', sm: '1rem' } }}
+            sx={{
+              lineHeight: 1.5,
+              fontSize: { xs: '0.9375rem', sm: '1rem' },
+              textAlign: 'center',
+            }}
           >
             {stepSubtitle}
           </Typography>
@@ -876,9 +889,9 @@ const SignupPage: React.FC = () => {
                 value={stepProgressPercent}
                 sx={{
                   height: 8,
-                  borderRadius: 999,
+                  borderRadius: 0,
                   bgcolor: alpha(theme.palette.primary.main, 0.12),
-                  '& .MuiLinearProgress-bar': { borderRadius: 999 },
+                  '& .MuiLinearProgress-bar': { borderRadius: 0 },
                 }}
               />
             </Box>
@@ -899,7 +912,7 @@ const SignupPage: React.FC = () => {
           )}
 
           {error && (
-            <Alert severity="error" sx={{ borderRadius: 2 }}>
+            <Alert severity="error" sx={{ borderRadius: 0 }}>
               {error}
             </Alert>
           )}
@@ -950,7 +963,7 @@ const SignupPage: React.FC = () => {
                   minWidth: { xs: 96, sm: 'auto' },
                   flexShrink: 0,
                   py: 1.25,
-                  borderRadius: 2,
+                  borderRadius: 0,
                 }}
               >
                 {t('signupPage.back', 'Back')}
@@ -962,7 +975,7 @@ const SignupPage: React.FC = () => {
                   fullWidth
                   onClick={handleNext}
                   disabled={nextDisabled}
-                  sx={{ py: 1.25, borderRadius: 2, fontWeight: 700 }}
+                  sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
                 >
                   {t('signupPage.next', 'Next')}
                 </Button>
@@ -974,7 +987,7 @@ const SignupPage: React.FC = () => {
                   onClick={handleCreate}
                   disabled={nextDisabled}
                   startIcon={saving ? <CircularProgress size={20} color="inherit" /> : undefined}
-                  sx={{ py: 1.25, borderRadius: 2, fontWeight: 700 }}
+                  sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
                 >
                   {saving
                     ? t('signupPage.creating', 'Creating...')

@@ -46,20 +46,40 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({ open, onClose }) 
   }, [loginWithRedirect]);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="xs"
+      slotProps={{
+        paper: { sx: { borderRadius: 0 } },
+      }}
+    >
       <DialogTitle>{t('auth.chooseLoginMethod', 'Choose login method')}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-          <Button variant="contained" onClick={handleEmailPasswordLogin} fullWidth>
+          <Button
+            variant="contained"
+            onClick={handleEmailPasswordLogin}
+            fullWidth
+            sx={{ borderRadius: 0 }}
+          >
             {t('auth.loginWithEmailPassword', 'Login with email/password')}
           </Button>
-          <Button variant="outlined" onClick={handleOtpLogin} fullWidth>
+          <Button
+            variant="outlined"
+            onClick={handleOtpLogin}
+            fullWidth
+            sx={{ borderRadius: 0 }}
+          >
             {t('auth.loginWithOtp', 'Login with one-time password')}
           </Button>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
+        <Button onClick={onClose} sx={{ borderRadius: 0 }}>
+          {t('common.cancel', 'Cancel')}
+        </Button>
       </DialogActions>
     </Dialog>
   );

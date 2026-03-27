@@ -44,6 +44,8 @@ interface PhoneInputProps {
   useDevPhoneDropdown?: boolean;
   /** Optional start adornment (e.g. phone icon) for both dev dropdown and standard input */
   startAdornment?: React.ReactNode;
+  /** Match square (no radius) inputs, e.g. signup flow */
+  squareEdges?: boolean;
 }
 
 const PhoneInput: React.FC<PhoneInputProps> = ({
@@ -61,6 +63,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   onlyCountries,
   useDevPhoneDropdown = false,
   startAdornment,
+  squareEdges = false,
   ...props
 }) => {
   const { t } = useTranslation();
@@ -171,7 +174,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           display: 'flex',
           alignItems: 'center',
           border: error ? '1px solid #d32f2f' : '1px solid rgba(0, 0, 0, 0.23)',
-          borderRadius: '4px',
+          borderRadius: squareEdges ? 0 : '4px',
           padding: '8px 12px',
           backgroundColor: disabled ? 'rgba(0, 0, 0, 0.12)' : 'transparent',
           transition: 'border-color 0.2s ease-in-out',
