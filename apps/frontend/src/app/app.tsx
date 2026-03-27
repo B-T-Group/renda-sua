@@ -46,7 +46,6 @@ import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
 import FirstSaleItemOnboardingPage from '../components/pages/FirstSaleItemOnboardingPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
-import LoginPage from '../components/pages/LoginPage';
 import OtpAuthPage from '../components/pages/OtpAuthPage';
 import PrivacyPolicyPage from '../components/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '../components/pages/TermsOfServicePage';
@@ -81,8 +80,8 @@ import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 
 function App() {
-  const { isLoading, isAuthenticated } = useAuth0();
-  const { isCheckingProfile } = useAuthFlow();
+  const { isLoading } = useAuth0();
+  const { isAuthenticated, isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
   const { userType, profile, refetch } = useUserProfileContext();
@@ -184,7 +183,10 @@ function App() {
         >
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/auth/login" element={<LoginPage />} />
+            <Route
+              path="/auth/login"
+              element={<Navigate to="/" replace />}
+            />
             <Route path="/auth/otp" element={<OtpAuthPage />} />
             <Route path="/signup" element={<SignupPage />} />
 

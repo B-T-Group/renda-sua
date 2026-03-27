@@ -1,11 +1,10 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { GraphQLClient } from 'graphql-request';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { environment } from '../config/environment';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 
 export const useGraphQLClient = () => {
-  const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } =
-    useAuth0();
+  const { getAccessToken, isAuthenticated, logout } = useSessionAuth();
   const [client, setClient] = useState<GraphQLClient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +37,8 @@ export const useGraphQLClient = () => {
         setError(null);
 
         // Test token retrieval first
-        const token = await getAccessTokenSilently();
+        const token = await getAccessToken();
+        if (!token) throw new Error('No access token available');
 
         if (!isMounted) return;
 
@@ -69,7 +69,7 @@ export const useGraphQLClient = () => {
     return () => {
       isMounted = false;
     };
-  }, [getAccessTokenSilently, isAuthenticated]);
+  }, [getAccessToken, isAuthenticated]);
 
   // Memoize the getAuthenticatedClient function to prevent unnecessary re-renders
   const getAuthenticatedClient =
@@ -77,7 +77,8 @@ export const useGraphQLClient = () => {
       if (!isAuthenticated) return null;
 
       try {
-        const token = await getAccessTokenSilently();
+        const token = await getAccessToken();
+        if (!token) return null;
         return new GraphQLClient(environment.hasuraUrl, {
           headers: {
             'Content-Type': 'application/json',
@@ -86,26 +87,10 @@ export const useGraphQLClient = () => {
         });
       } catch (error) {
         console.error('Error getting authenticated client:', error);
-        // Try to refresh token
-        try {
-          await getAccessTokenSilently({ cacheMode: 'off' });
-          const newToken = await getAccessTokenSilently();
-          return new GraphQLClient(environment.hasuraUrl, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${newToken}`,
-            },
-          });
-        } catch (refreshError) {
-          console.error(
-            'Token refresh failed, redirecting to login:',
-            refreshError
-          );
-          await loginWithRedirect();
-          return null;
-        }
+        await logout();
+        return null;
       }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, getAccessToken, logout]);
 
   return {
     client,

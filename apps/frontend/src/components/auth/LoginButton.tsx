@@ -1,9 +1,9 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Login } from '@mui/icons-material';
 import { Button } from '@mui/material';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 interface LoginButtonProps {
   /** Use light/outlined style for use on a dark header */
@@ -12,12 +12,22 @@ interface LoginButtonProps {
 
 const LoginButton: React.FC<LoginButtonProps> = ({ inverted }) => {
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
-  const navigate = useNavigate();
+  const { loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
 
-  const handleLogin = () => {
-    navigate('/auth/login');
-  };
+  const handleLogin = useCallback(async () => {
+    try {
+      await loginWithRedirect({
+        authorizationParams: {
+          screen_hint: 'login',
+          connection: 'email',
+        },
+        appState: { returnTo: '/app' },
+      });
+    } catch (err: any) {
+      console.error('loginWithRedirect failed:', err);
+    }
+  }, [loginWithRedirect]);
 
   if (isAuthenticated) {
     return null;

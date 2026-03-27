@@ -463,9 +463,98 @@
       "resendSuccess": "E-mail de vérification envoyé avec succès",
       "resending": "Envoi en cours..."
     },
+    "emailAddressLabel": "Adresse e-mail",
+    "emailPlaceholder": "nom@exemple.com",
     "logout": "Déconnexion",
+    "otp": {
+      "backToHome": "Retour à l’accueil",
+      "enterCode": "Saisissez le code à usage unique envoyé à votre e-mail.",
+      "expiresIn": "Expire dans",
+      "expired": "Code expiré",
+      "verify": "Vérifier le code",
+      "verifying": "Vérification..."
+    },
+    "otpLogin": {
+      "continue": "Continuer avec OTP",
+      "createAccount": "Créer un nouveau compte",
+      "invalidOtp": "Code invalide. Veuillez réessayer.",
+      "startFailed": "Impossible d'envoyer le code. Veuillez réessayer.",
+      "subtitle": "Connectez-vous en toute sécurité avec un code envoyé à votre e-mail.",
+      "title": "Bon retour",
+      "titleShort": "Connexion par code",
+      "userNotFound": "Aucun compte trouvé pour cet e-mail."
+    },
+    "otpSignup": {
+      "title": "Vérifiez votre compte"
+    },
     "profile": "Profil",
     "signIn": "Se connecter"
+  },
+  "signupPage": {
+    "title": "Créer votre compte",
+    "subtitle": "Renseignez votre profil, puis validez avec un code envoyé à votre e-mail.",
+    "steps": {
+      "contact": "Contact",
+      "goal": "Votre objectif",
+      "address": "Adresse",
+      "review": "Vérification"
+    },
+    "next": "Suivant",
+    "back": "Retour",
+    "contactSubtitle": "Indiquez votre nom et vos coordonnées.",
+    "goalSubtitle": "Choisissez ce qui vous correspond—nous configurerons le bon type de compte.",
+    "addressSubtitle": "Nous l'utilisons pour la livraison et les options locales.",
+    "reviewSubtitle": "Vérifiez les informations, puis créez votre compte.",
+    "addressStepTitle": "Votre adresse",
+    "addressStepHint": "Saisissez votre ville—nous proposons des correspondances pour votre région.",
+    "useCurrentLocation": "Utiliser ma position",
+    "locationUnavailable": "Impossible de déterminer l'adresse à partir de votre position.",
+    "countryNotSupported": "Nous n'avons pas pu associer votre pays à une région prise en charge. Veuillez choisir le pays et l'adresse manuellement.",
+    "locationFailed": "Impossible d'obtenir votre position. Vérifiez les autorisations et réessayez.",
+    "reviewTitle": "Vérifier vos informations",
+    "review": {
+      "name": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "goal": "Objectif",
+      "business": "Entreprise",
+      "address": "Adresse"
+    },
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "E-mail",
+    "emailTaken": "Cette adresse e-mail est déjà utilisée.",
+    "checkingEmail": "Vérification de la disponibilité de l'e-mail...",
+    "phoneNumber": "Numéro de téléphone",
+    "phoneHelper": "Utilisez le numéro associé à votre compte de paiement mobile.",
+    "goalSectionTitle": "Que souhaitez-vous faire ?",
+    "goalSectionHint": "Cela nous aide à configurer le bon type de compte pour vous.",
+    "goals": {
+      "browse_buy": {
+        "title": "Je veux acheter",
+        "description": "Achetez des produits et recevez une livraison rapide chez vous."
+      },
+      "rent_and_earn": {
+        "title": "Je veux louer des articles",
+        "description": "Publiez des locations, gérez les réservations et vos revenus."
+      },
+      "sell_items": {
+        "title": "Je veux vendre",
+        "description": "Ouvrez votre boutique et gérez vos ventes."
+      },
+      "delivery_agent": {
+        "title": "Je veux livrer et être rémunéré",
+        "description": "Livrez les commandes clients et soyez payé à chaque course."
+      }
+    },
+    "businessName": "Nom de l'entreprise",
+    "businessFocus": "Activité principale",
+    "sellItems": "Vente d'articles",
+    "rentItems": "Location d'articles",
+    "creating": "Création...",
+    "createAccount": "Créer le compte",
+    "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",
+    "createAccountError": "Impossible de créer le compte pour le moment."
   },
   "completeProfile": {
     "added": "Ajouté",
@@ -1719,6 +1808,7 @@
       "title": "Prêt à Commencer vos Achats ?"
     },
     "hero": {
+      "logIn": "Se connecter",
       "shopNow": "Acheter Maintenant",
       "serviceTagline": "Ventes, locations et livraison",
       "signUp": "S'inscrire",

@@ -8,13 +8,13 @@ import {
 import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
-import { useAuth0 } from '@auth0/auth0-react';
 import { createClient } from 'graphql-ws';
 import { useEffect, useState } from 'react';
 import { environment } from '../config/environment';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 
 export const useGraphQLSubscription = () => {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessToken, isAuthenticated } = useSessionAuth();
   const [client, setClient] = useState<ApolloClient<unknown> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export const useGraphQLSubscription = () => {
         // Add authentication context for HTTP requests
         const authLink = setContext(async (_, { headers }) => {
           try {
-            const token = await getAccessTokenSilently();
+            const token = await getAccessToken();
             return {
               headers: {
                 ...headers,
@@ -74,7 +74,7 @@ export const useGraphQLSubscription = () => {
             url: wsUrl,
             connectionParams: async () => {
               try {
-                const token = await getAccessTokenSilently();
+                const token = await getAccessToken();
                 return {
                   headers: {
                     Authorization: `Bearer ${token}`,
@@ -150,7 +150,7 @@ export const useGraphQLSubscription = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated, getAccessTokenSilently]);
+  }, [isAuthenticated, getAccessToken]);
 
   return {
     client,

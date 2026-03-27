@@ -32,7 +32,7 @@ export class Auth0Service {
 
   async startEmailOtp(email: string): Promise<void> {
     const auth0 = this.configService.get('auth0');
-    const clientId = auth0?.clientId || auth0?.managementClientId;
+    const clientId = auth0?.managementClientId;
     if (!auth0?.domain || !clientId) {
       throw new Error('Auth0 passwordless configuration is missing');
     }
@@ -47,6 +47,7 @@ export class Auth0Service {
   async verifyEmailOtp(email: string, otp: string): Promise<{
     access_token: string;
     id_token?: string;
+    refresh_token?: string;
     token_type: string;
     expires_in: number;
   }> {
@@ -65,7 +66,7 @@ export class Auth0Service {
       otp,
       realm: 'email',
       audience,
-      scope: 'openid profile email',
+      scope: 'openid profile email offline_access',
     });
     return data;
   }

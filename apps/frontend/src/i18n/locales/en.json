@@ -474,9 +474,98 @@
       "resendSuccess": "Verification email sent successfully",
       "resending": "Sending..."
     },
+    "emailAddressLabel": "Email address",
+    "emailPlaceholder": "name@example.com",
     "logout": "Logout",
+    "otp": {
+      "backToHome": "Back to home",
+      "enterCode": "Enter the OTP sent to your email.",
+      "expiresIn": "Expires in",
+      "expired": "Code expired",
+      "verify": "Verify OTP",
+      "verifying": "Verifying..."
+    },
+    "otpLogin": {
+      "continue": "Continue with OTP",
+      "createAccount": "Create a new account",
+      "invalidOtp": "Invalid OTP. Please try again.",
+      "startFailed": "Unable to send OTP. Please try again.",
+      "subtitle": "Log in securely with a one-time passcode sent to your email.",
+      "title": "Welcome back",
+      "titleShort": "Log in with OTP",
+      "userNotFound": "No account found for this email."
+    },
+    "otpSignup": {
+      "title": "Verify your account"
+    },
     "profile": "Profile",
     "signIn": "Sign In"
+  },
+  "signupPage": {
+    "title": "Create your account",
+    "subtitle": "Set up your profile first, then verify with an OTP sent to your email.",
+    "steps": {
+      "contact": "Contact",
+      "goal": "Your goal",
+      "address": "Address",
+      "review": "Review"
+    },
+    "next": "Next",
+    "back": "Back",
+    "contactSubtitle": "Enter your name and how we can reach you.",
+    "goalSubtitle": "Choose what fits you—we will configure the right account type.",
+    "addressSubtitle": "We use this to tailor delivery and local options.",
+    "reviewSubtitle": "Check everything looks correct, then create your account.",
+    "addressStepTitle": "Your address",
+    "addressStepHint": "Start typing your city—we suggest matches for your region.",
+    "useCurrentLocation": "Use current location",
+    "locationUnavailable": "Could not resolve address from your location.",
+    "countryNotSupported": "We could not match your country to a supported region. Please choose country and address manually.",
+    "locationFailed": "Unable to get your location. Check permissions and try again.",
+    "reviewTitle": "Review your details",
+    "review": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "goal": "Goal",
+      "business": "Business",
+      "address": "Address"
+    },
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "emailTaken": "This email is already taken.",
+    "checkingEmail": "Checking email availability...",
+    "phoneNumber": "Phone number",
+    "phoneHelper": "Use the mobile number linked to your payment account.",
+    "goalSectionTitle": "Choose what you want to do",
+    "goalSectionHint": "This helps us set up the right account experience for you.",
+    "goals": {
+      "browse_buy": {
+        "title": "I want to buy stuff",
+        "description": "Shop products and get fast delivery to your location."
+      },
+      "rent_and_earn": {
+        "title": "I want to rent stuff",
+        "description": "List items for rent and earn from bookings."
+      },
+      "sell_items": {
+        "title": "I want to sell stuff",
+        "description": "Open your business store and manage sales."
+      },
+      "delivery_agent": {
+        "title": "I want to make money via deliveries",
+        "description": "Deliver customer orders and get paid for each trip."
+      }
+    },
+    "businessName": "Business name",
+    "businessFocus": "Business focus",
+    "sellItems": "Sell items",
+    "rentItems": "Rent items",
+    "creating": "Creating...",
+    "createAccount": "Create account",
+    "alreadyHaveAccount": "Already have an account? Log in",
+    "createAccountError": "Unable to create account at this time."
   },
   "completeProfile": {
     "added": "Added",
@@ -1730,6 +1819,7 @@
       "title": "Ready to Start Shopping?"
     },
     "hero": {
+      "logIn": "Log in",
       "shopNow": "Shop Now",
       "serviceTagline": "Sales, Rentals & Delivery",
       "signUp": "Sign Up",

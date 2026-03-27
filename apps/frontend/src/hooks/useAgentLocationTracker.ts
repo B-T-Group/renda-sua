@@ -8,6 +8,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { environment } from '../config/environment';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import {
     clearLastLocation,
@@ -338,7 +339,7 @@ export const useAgentLocationTracker = (
   }, [isAgent, isAuthenticated]); // Only depend on these to avoid recreating on every updateLocation change
 
   // Update auth token in service worker and handle sync requests
-  const { getAccessTokenSilently } = useAuth0();
+  const { getAccessToken } = useSessionAuth();
 
   useEffect(() => {
     if (isAuthenticated && 'serviceWorker' in navigator) {
@@ -362,7 +363,7 @@ export const useAgentLocationTracker = (
               return;
             }
 
-            const token = await getAccessTokenSilently();
+            const token = await getAccessToken();
 
             // Send data to service worker
             const registration = await navigator.serviceWorker.ready;
@@ -390,7 +391,7 @@ export const useAgentLocationTracker = (
       };
     }
     return undefined;
-  }, [isAuthenticated, getAccessTokenSilently, profile?.agent?.id]);
+  }, [isAuthenticated, getAccessToken, profile?.agent?.id]);
 
   return {
     isTracking,

@@ -1,10 +1,10 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Logout } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const LogoutButton = () => {
-  const { logout } = useAuth0();
+  const { logout } = useSessionAuth();
   const { t } = useTranslation();
 
   return (
@@ -12,9 +12,7 @@ const LogoutButton = () => {
       variant="contained"
       color="error"
       startIcon={<Logout />}
-      onClick={() =>
-        logout({ logoutParams: { returnTo: window.location.origin } })
-      }
+      onClick={() => logout()}
       size="medium"
       sx={{
         bgcolor: '#dc2626',
@@ -30,7 +28,7 @@ const LogoutButton = () => {
         boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)',
       }}
     >
-      {t('auth.logout')}
+      {t('auth.logout', 'Log out')}
     </Button>
   );
 };

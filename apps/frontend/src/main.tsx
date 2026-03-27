@@ -11,6 +11,7 @@ import { AnalyticsInit } from './components/analytics/AnalyticsInit';
 import { environment } from './config/environment';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { SessionAuthProvider } from './contexts/SessionAuthContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import './i18n'; // Initialize i18n
 import ApolloProvider from './providers/ApolloProvider';
@@ -62,13 +63,15 @@ root.render(
         >
           <AnalyticsInit />
           <LoadingProvider>
-            <UserProfileProvider>
-              <CartProvider>
-                <ApolloProvider>
-                  <App />
-                </ApolloProvider>
-              </CartProvider>
-            </UserProfileProvider>
+            <SessionAuthProvider>
+              <UserProfileProvider>
+                <CartProvider>
+                  <ApolloProvider>
+                    <App />
+                  </ApolloProvider>
+                </CartProvider>
+              </UserProfileProvider>
+            </SessionAuthProvider>
           </LoadingProvider>
         </BrowserRouter>
       </ThemeProvider>

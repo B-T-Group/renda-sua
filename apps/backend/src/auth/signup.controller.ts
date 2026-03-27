@@ -10,7 +10,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
-import { SignupService } from './signup.service';
+import { SignupCreatedUser, SignupService } from './signup.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -33,13 +33,13 @@ export class SignupController {
   @Public()
   @Post('signup/start')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create pending signup and send OTP' })
-  async signupStart(@Body() body: any): Promise<{ success: boolean; userId: string; otpSent: boolean }> {
+  @ApiOperation({ summary: 'Create pending signup user' })
+  @ApiResponse({ status: 201, description: 'User created' })
+  async signupStart(@Body() body: any): Promise<{ success: boolean; user: SignupCreatedUser }> {
     const result = await this.signupService.startSignup(body);
     return {
       success: true,
-      userId: result.userId,
-      otpSent: true,
+      user: result.user,
     };
   }
 

@@ -6,7 +6,7 @@ import { AuthModule } from '../auth/auth.module';
 
 @Global()
 @Module({
-  imports: [forwardRef(() => GoogleModule), AuthModule],
+  imports: [forwardRef(() => GoogleModule), forwardRef(() => AuthModule)],
   controllers: [AddressesController],
   providers: [AddressesService],
   exports: [AddressesService],

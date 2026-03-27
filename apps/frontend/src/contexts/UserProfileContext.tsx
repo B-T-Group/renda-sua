@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSessionAuth } from './SessionAuthContext';
 import { useApiClient } from '../hooks/useApiClient';
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 
@@ -289,7 +290,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
 
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isLoading } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const apiClient = useApiClient();
   const { i18n } = useTranslation();
 

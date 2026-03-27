@@ -1,10 +1,12 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 
 export const useAuthFlow = () => {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isLoading } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const {

@@ -37,6 +37,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoginButton from '../auth/LoginButton';
 import LogoutButton from '../auth/LogoutButton';
@@ -47,7 +48,8 @@ import MobileBalanceChip from '../common/MobileBalanceChip';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 
 const Header: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth0();
+  const { isLoading } = useAuth0();
+  const { isAuthenticated, user, logout } = useSessionAuth();
   const { userType, profile } = useUserProfileContext();
   const { getCartItemCount } = useCart();
   const { t } = useTranslation();
@@ -391,21 +393,21 @@ const Header: React.FC = () => {
                 <ListItemIcon>
                   <Person />
                 </ListItemIcon>
-                <ListItemText primary={t('auth.profile')} />
+                <ListItemText primary={t('auth.profile', 'Profile')} />
               </ListItemButton>
             </ListItem>
             <ListItem disablePadding>
               <ListItemButton
                 onClick={() => {
                   handleDrawerToggle();
-                  logout({ logoutParams: { returnTo: window.location.origin } });
+                  logout();
                 }}
                 sx={{ borderRadius: 1, mx: 1 }}
               >
                 <ListItemIcon>
                   <Logout />
                 </ListItemIcon>
-                <ListItemText primary={t('auth.logout')} />
+                <ListItemText primary={t('auth.logout', 'Log out')} />
               </ListItemButton>
             </ListItem>
           </>

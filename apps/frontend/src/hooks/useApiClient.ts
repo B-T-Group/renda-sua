@@ -1,13 +1,12 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { useCallback, useMemo } from 'react';
 import { environment } from '../config/environment';
 import { useLoading } from '../contexts/LoadingContext';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 
 export const useApiClient = (): AxiosInstance => {
-  const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } =
-    useAuth0();
+  const { isAuthenticated, getAccessToken, logout } = useSessionAuth();
 
   // Get loading context - hooks must be called unconditionally
   const loadingContext = useLoading();
@@ -21,17 +20,14 @@ export const useApiClient = (): AxiosInstance => {
     try {
       if (refreshToken) {
         return await refreshToken();
-      } else {
-        // Fallback to direct Auth0 call if context not available
-        await getAccessTokenSilently({ cacheMode: 'off' });
-        return await getAccessTokenSilently();
       }
+      return await getAccessToken();
     } catch (error) {
-      console.error('Token refresh failed, redirecting to login:', error);
-      await loginWithRedirect();
+      console.error('Token refresh failed, logging out:', error);
+      await logout();
       throw error;
     }
-  }, [refreshToken, getAccessTokenSilently, loginWithRedirect]);
+  }, [refreshToken, getAccessToken, logout]);
 
   const apiClient = useMemo(() => {
     const instance = axios.create({
@@ -48,7 +44,7 @@ export const useApiClient = (): AxiosInstance => {
           // Use token refresh context if available, otherwise fallback to direct Auth0 call
           const token = getValidToken
             ? await getValidToken()
-            : await getAccessTokenSilently();
+            : await getAccessToken();
 
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -121,13 +117,12 @@ export const useApiClient = (): AxiosInstance => {
 
     return instance;
   }, [
-    getAccessTokenSilently,
     isAuthenticated,
     showLoading,
     hideLoading,
     handleTokenRefresh,
-    loginWithRedirect,
     getValidToken,
+    getAccessToken,
   ]);
 
   return apiClient;

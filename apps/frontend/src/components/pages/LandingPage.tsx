@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   ArrowForward,
   BusinessCenter,
@@ -24,13 +23,14 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useSEO } from '../../hooks/useSEO';
 import { useTheme } from '../../hooks/useTheme';
 import Logo from '../common/Logo';
 import { SEOHead } from '../seo';
 
 const LandingPage: React.FC = () => {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const theme = useTheme();
   const { t } = useTranslation();
 
