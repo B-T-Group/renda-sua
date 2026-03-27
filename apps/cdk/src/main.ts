@@ -69,6 +69,11 @@ if (hasuraEc2Enabled) {
     new HasuraEc2EnvironmentStack(app, 'HasuraEc2InfrastructureProd', {
       ...commonProps,
       environment: 'prod',
+      instanceType: String(
+        app.node.tryGetContext('hasuraProdInstanceType') ||
+          app.node.tryGetContext('hasuraInstanceType') ||
+          't4g.small'
+      ),
       domainName: String(
         app.node.tryGetContext('hasuraProdDomain') || 'hasura.rendasua.com'
       ),
