@@ -42,6 +42,8 @@ interface PhoneInputProps {
   onlyCountries?: string[];
   /** In development, render a dropdown of DEV_PHONE_NUMBERS instead of free-form input (profile/signup) */
   useDevPhoneDropdown?: boolean;
+  /** Optional start adornment (e.g. phone icon) for both dev dropdown and standard input */
+  startAdornment?: React.ReactNode;
 }
 
 const PhoneInput: React.FC<PhoneInputProps> = ({
@@ -58,6 +60,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   margin = 'normal',
   onlyCountries,
   useDevPhoneDropdown = false,
+  startAdornment,
   ...props
 }) => {
   const { t } = useTranslation();
@@ -84,6 +87,17 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
               helperText={helperText}
               required={required}
               margin={margin}
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: startAdornment ? (
+                  <>
+                    {startAdornment}
+                    {params.InputProps?.startAdornment}
+                  </>
+                ) : (
+                  params.InputProps?.startAdornment
+                ),
+              }}
             />
           )}
         />
@@ -93,6 +107,56 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
       </Box>
     );
   }
+
+  const phoneFieldStyles = {
+    position: 'relative' as const,
+    flex: 1,
+    minWidth: 0,
+    '& .PhoneInput': {
+      display: 'flex',
+      alignItems: 'center',
+      border: 'none',
+      borderRadius: 0,
+      padding: 0,
+      backgroundColor: 'transparent',
+    },
+    '& .PhoneInputCountry': {
+      marginRight: '8px',
+      display: 'flex',
+      alignItems: 'center',
+    },
+    '& .PhoneInputCountrySelect': {
+      border: 'none',
+      background: 'transparent',
+      fontSize: '14px',
+      color: 'rgba(0, 0, 0, 0.87)',
+      cursor: 'pointer',
+      '&:focus': {
+        outline: 'none',
+      },
+    },
+    '& .PhoneInputCountryIcon': {
+      width: '20px',
+      height: '15px',
+      marginRight: '4px',
+    },
+    '& .PhoneInputInput': {
+      border: 'none',
+      background: 'transparent',
+      fontSize: '16px',
+      color: 'rgba(0, 0, 0, 0.87)',
+      flex: 1,
+      '&:focus': {
+        outline: 'none',
+      },
+      '&::placeholder': {
+        color: 'rgba(0, 0, 0, 0.54)',
+      },
+      '&:disabled': {
+        color: 'rgba(0, 0, 0, 0.38)',
+      },
+    },
+  };
 
   return (
     <Box
@@ -104,72 +168,47 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
       <Box
         sx={{
           position: 'relative',
-          '& .PhoneInput': {
-            display: 'flex',
-            alignItems: 'center',
-            border: error
-              ? '1px solid #d32f2f'
-              : '1px solid rgba(0, 0, 0, 0.23)',
-            borderRadius: '4px',
-            padding: '8px 12px',
-            backgroundColor: disabled ? 'rgba(0, 0, 0, 0.12)' : 'transparent',
-            transition: 'border-color 0.2s ease-in-out',
-            '&:hover': {
-              borderColor: error ? '#d32f2f' : 'rgba(0, 0, 0, 0.87)',
-            },
-            '&:focus-within': {
-              borderColor: error ? '#d32f2f' : '#1976d2',
-              borderWidth: '2px',
-            },
+          display: 'flex',
+          alignItems: 'center',
+          border: error ? '1px solid #d32f2f' : '1px solid rgba(0, 0, 0, 0.23)',
+          borderRadius: '4px',
+          padding: '8px 12px',
+          backgroundColor: disabled ? 'rgba(0, 0, 0, 0.12)' : 'transparent',
+          transition: 'border-color 0.2s ease-in-out',
+          '&:hover': {
+            borderColor: error ? '#d32f2f' : 'rgba(0, 0, 0, 0.87)',
           },
-          '& .PhoneInputCountry': {
-            marginRight: '8px',
-            display: 'flex',
-            alignItems: 'center',
-          },
-          '& .PhoneInputCountrySelect': {
-            border: 'none',
-            background: 'transparent',
-            fontSize: '14px',
-            color: 'rgba(0, 0, 0, 0.87)',
-            cursor: 'pointer',
-            '&:focus': {
-              outline: 'none',
-            },
-          },
-          '& .PhoneInputCountryIcon': {
-            width: '20px',
-            height: '15px',
-            marginRight: '4px',
-          },
-          '& .PhoneInputInput': {
-            border: 'none',
-            background: 'transparent',
-            fontSize: '16px',
-            color: 'rgba(0, 0, 0, 0.87)',
-            flex: 1,
-            '&:focus': {
-              outline: 'none',
-            },
-            '&::placeholder': {
-              color: 'rgba(0, 0, 0, 0.54)',
-            },
-            '&:disabled': {
-              color: 'rgba(0, 0, 0, 0.38)',
-            },
+          '&:focus-within': {
+            borderColor: error ? '#d32f2f' : '#1976d2',
+            borderWidth: '2px',
           },
         }}
       >
-        <PhoneInputBase
-          international
-          defaultCountry={defaultCountry as any}
-          value={value || ''}
-          onChange={onChange as any}
-          placeholder={placeholder}
-          disabled={disabled}
-          required={required}
-          countries={onlyCountries as any}
-        />
+        {startAdornment && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mr: 1,
+              color: 'action.active',
+              flexShrink: 0,
+            }}
+          >
+            {startAdornment}
+          </Box>
+        )}
+        <Box sx={phoneFieldStyles}>
+          <PhoneInputBase
+            international
+            defaultCountry={defaultCountry as any}
+            value={value || ''}
+            onChange={onChange as any}
+            placeholder={placeholder}
+            disabled={disabled}
+            required={required}
+            countries={onlyCountries as any}
+          />
+        </Box>
       </Box>
 
       {label && (

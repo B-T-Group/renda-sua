@@ -548,9 +548,6 @@
       }
     },
     "businessName": "Nom de l'entreprise",
-    "businessFocus": "Activité principale",
-    "sellItems": "Vente d'articles",
-    "rentItems": "Location d'articles",
     "creating": "Création...",
     "createAccount": "Créer le compte",
     "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",

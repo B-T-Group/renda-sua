@@ -1,5 +1,16 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { MyLocation as MyLocationIcon } from '@mui/icons-material';
+import {
+  Business as BusinessIcon,
+  EmailOutlined as EmailOutlinedIcon,
+  HomeOutlined as HomeOutlinedIcon,
+  LocationCity as LocationCityIcon,
+  Map as MapIcon,
+  MyLocation as MyLocationIcon,
+  Person as PersonIcon,
+  PersonOutline as PersonOutlineIcon,
+  PhoneOutlined as PhoneOutlinedIcon,
+  Public as PublicIcon,
+} from '@mui/icons-material';
 import {
   Alert,
   Autocomplete,
@@ -9,11 +20,9 @@ import {
   CardContent,
   CircularProgress,
   Container,
-  FormControl,
-  InputLabel,
+  InputAdornment,
   MenuItem,
   Paper,
-  Select,
   Stack,
   Step,
   StepLabel,
@@ -248,7 +257,10 @@ const SignupPage: React.FC = () => {
     setForm((prev) => ({
       ...prev,
       user_type_id: selected.userType,
-      main_interest: selected.mainInterest || prev.main_interest,
+      main_interest:
+        selected.userType === 'business'
+          ? selected.mainInterest ?? 'sell_items'
+          : prev.main_interest,
     }));
   };
 
@@ -453,12 +465,26 @@ const SignupPage: React.FC = () => {
             value={form.first_name}
             onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
             required
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <PersonOutlineIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
           />
           <TextField
             label={t('signupPage.lastName', 'Last name')}
             value={form.last_name}
             onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
             required
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <PersonIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
           />
           <TextField
             label={t('signupPage.email', 'Email')}
@@ -473,6 +499,13 @@ const SignupPage: React.FC = () => {
                   ? t('signupPage.checkingEmail', 'Checking email availability...')
                   : ' '
             }
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <EmailOutlinedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
           />
           <PhoneInput
             value={form.phone_number}
@@ -489,6 +522,11 @@ const SignupPage: React.FC = () => {
             )}
             required
             useDevPhoneDropdown
+            startAdornment={
+              <InputAdornment position="start">
+                <PhoneOutlinedIcon fontSize="small" color="action" />
+              </InputAdornment>
+            }
           />
         </Stack>
       );
@@ -554,22 +592,14 @@ const SignupPage: React.FC = () => {
                   setForm((p) => ({ ...p, business_name: e.target.value }))
                 }
                 required
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <BusinessIcon fontSize="small" color="action" />
+                    </InputAdornment>
+                  ),
+                }}
               />
-              <TextField
-                select
-                label={t('signupPage.businessFocus', 'Business focus')}
-                value={form.main_interest}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, main_interest: e.target.value }))
-                }
-              >
-                <MenuItem value="sell_items">
-                  {t('signupPage.sellItems', 'Sell items')}
-                </MenuItem>
-                <MenuItem value="rent_items">
-                  {t('signupPage.rentItems', 'Rent items')}
-                </MenuItem>
-              </TextField>
             </>
           )}
         </Stack>
@@ -621,21 +651,35 @@ const SignupPage: React.FC = () => {
             onChange={(e) => handleAddressChange('address_line_1', e.target.value)}
             fullWidth
             required
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <HomeOutlinedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
           />
-          <FormControl fullWidth required>
-            <InputLabel>{t('completeProfile.country', 'Country')}</InputLabel>
-            <Select
-              value={form.address.country}
-              label={t('completeProfile.country', 'Country')}
-              onChange={(e) => handleAddressChange('country', e.target.value)}
-            >
-              {SIGNUP_COUNTRY_CODES.map((code) => (
-                <MenuItem key={code} value={code}>
-                  {t(`completeProfile.countries.${code}`, code)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <TextField
+            select
+            fullWidth
+            required
+            label={t('completeProfile.country', 'Country')}
+            value={form.address.country}
+            onChange={(e) => handleAddressChange('country', e.target.value)}
+            SelectProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <PublicIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          >
+            {SIGNUP_COUNTRY_CODES.map((code) => (
+              <MenuItem key={code} value={code}>
+                {t(`completeProfile.countries.${code}`, code)}
+              </MenuItem>
+            ))}
+          </TextField>
           <Autocomplete
             options={addressStates.map((s) => s.name)}
             value={form.address.state || null}
@@ -647,6 +691,17 @@ const SignupPage: React.FC = () => {
                 {...params}
                 label={t('completeProfile.state', 'State / Region')}
                 required
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <InputAdornment position="start">
+                        <MapIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                }}
               />
             )}
           />
@@ -664,6 +719,17 @@ const SignupPage: React.FC = () => {
                 {...params}
                 label={t('completeProfile.city', 'City')}
                 required
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <InputAdornment position="start">
+                        <LocationCityIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                }}
               />
             )}
           />

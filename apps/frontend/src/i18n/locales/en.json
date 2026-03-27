@@ -559,9 +559,6 @@
       }
     },
     "businessName": "Business name",
-    "businessFocus": "Business focus",
-    "sellItems": "Sell items",
-    "rentItems": "Rent items",
     "creating": "Creating...",
     "createAccount": "Create account",
     "alreadyHaveAccount": "Already have an account? Log in",
