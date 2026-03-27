@@ -1,0 +1,76 @@
+# Applies Hasura migrations and metadata via .github/actions/apply-hasura (not from CDK deploy workflows).
+name: Apply Hasura migrations and metadata
+
+on:
+  push:
+    branches: [main, prod]
+    paths:
+      - "apps/hasura/**"
+      - ".github/actions/apply-hasura/**"
+      - ".github/workflows/hasura-apply.yml"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target Hasura environment (for manual runs only)"
+        required: true
+        type: choice
+        options:
+          - dev
+          - production
+
+env:
+  AWS_REGION: ca-central-1
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  apply-hasura-dev:
+    name: Apply Hasura (dev)
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Apply Hasura (dev)
+        uses: ./.github/actions/apply-hasura
+        with:
+          aws_region: ${{ env.AWS_REGION }}
+          hasura_endpoint: https://hasura-dev.rendasua.com
+          hasura_admin_secret_arn: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9
+          environment_title: dev
+
+  apply-hasura-production:
+    name: Apply Hasura (production)
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/prod') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Apply Hasura (production)
+        uses: ./.github/actions/apply-hasura
+        with:
+          aws_region: ${{ env.AWS_REGION }}
+          hasura_endpoint: https://hasura.rendasua.com
+          hasura_admin_secret_arn: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-prod-admin-H1onlM
+          environment_title: production

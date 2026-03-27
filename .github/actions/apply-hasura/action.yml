@@ -1,0 +1,89 @@
+name: Apply Hasura migrations and metadata
+description: >
+  Installs the Hasura CLI, loads the admin secret from AWS Secrets Manager, runs migrate apply,
+  metadata apply, reload, and metadata inconsistency status, and appends results to the job summary.
+
+inputs:
+  aws_region:
+    description: AWS region for Secrets Manager and CLI calls
+    required: true
+  hasura_endpoint:
+    description: Hasura GraphQL endpoint URL (e.g. https://hasura.example.com)
+    required: true
+  hasura_admin_secret_arn:
+    description: Secrets Manager ARN for the Hasura admin secret
+    required: true
+  environment_title:
+    description: Short label for the summary heading (e.g. dev or prod)
+    required: true
+  database_name:
+    description: Hasura logical database name
+    required: false
+    default: Rendasua
+
+runs:
+  using: composite
+  steps:
+    - name: Install Hasura CLI
+      shell: bash
+      run: |
+        curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | bash
+        hasura version
+
+    - name: Apply migrations and metadata
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws_region }}
+        HASURA_ENDPOINT: ${{ inputs.hasura_endpoint }}
+        HASURA_ADMIN_SECRET_ARN: ${{ inputs.hasura_admin_secret_arn }}
+        HASURA_DB_NAME: ${{ inputs.database_name }}
+        ENV_TITLE: ${{ inputs.environment_title }}
+      run: |
+        set -euo pipefail
+        cd apps/hasura
+
+        HASURA_GRAPHQL_ADMIN_SECRET="$(aws secretsmanager get-secret-value --region "${AWS_REGION}" --secret-id "${HASURA_ADMIN_SECRET_ARN}" --query SecretString --output text)"
+
+        append_summary() {
+          printf '%s\n' "$1" >> "${GITHUB_STEP_SUMMARY}"
+        }
+
+        {
+          append_summary "## Hasura ${ENV_TITLE} — migrations & metadata"
+          append_summary ""
+          append_summary "| Item | Value |"
+          append_summary "| --- | --- |"
+          append_summary "| Endpoint | \`${HASURA_ENDPOINT}\` |"
+          append_summary "| Database | \`${HASURA_DB_NAME}\` |"
+          append_summary "| Ref | \`${GITHUB_REF}\` |"
+          append_summary "| SHA | [\`${GITHUB_SHA:0:7}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) |"
+          append_summary "| Workflow | [\`${GITHUB_WORKFLOW}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+          append_summary ""
+        }
+
+        run_logged() {
+          local title="$1"
+          shift
+          append_summary "### ${title}"
+          append_summary ""
+          append_summary "\`\`\`"
+          set +e
+          "$@" 2>&1 | tee -a "${GITHUB_STEP_SUMMARY}"
+          local ec=${PIPESTATUS[0]}
+          set -e
+          append_summary "\`\`\`"
+          append_summary ""
+          return "${ec}"
+        }
+
+        run_logged "hasura migrate apply" \
+          hasura migrate apply --database-name "${HASURA_DB_NAME}" --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+
+        run_logged "hasura metadata apply" \
+          hasura metadata apply --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+
+        run_logged "hasura metadata reload" \
+          hasura metadata reload --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+
+        run_logged "hasura metadata inconsistency status" \
+          hasura metadata inconsistency status --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .

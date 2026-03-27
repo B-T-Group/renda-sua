@@ -1,5 +1,7 @@
 name: Deploy CDK Infrastructure
 
+# Hasura migrate/metadata runs in .github/workflows/hasura-apply.yml via .github/actions/apply-hasura.
+
 on:
   push:
     branches: [main]
@@ -15,8 +17,6 @@ on:
 env:
   AWS_REGION: ca-central-1
   CDK_ENVIRONMENT: development
-  HASURA_ENDPOINT: https://hasura-dev.rendasua.com
-  HASURA_ADMIN_SECRET_ARN: arn:aws:secretsmanager:ca-central-1:235680477887:secret:hasura-dev-admin-lvXQN9
 
 permissions:
   id-token: write
@@ -73,11 +73,6 @@ jobs:
           cd apps/cdk
           npm run build
 
-      - name: Install Hasura CLI
-        run: |
-          curl -L https://github.com/hasura/graphql-engine/raw/stable/cli/get.sh | bash
-          hasura version
-
       - name: Synthesize CDK template
         run: |
           cd apps/cdk
@@ -89,16 +84,6 @@ jobs:
           cdk deploy RendasuaInfrastructure-${{ env.CDK_ENVIRONMENT }} HasuraEc2InfrastructureDev --context environment=${{ env.CDK_ENVIRONMENT }} --context hasuraEnvironment=dev --require-approval never
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
-
-      - name: Apply Hasura migrations and metadata (dev)
-        run: |
-          cd apps/hasura
-          HASURA_GRAPHQL_ADMIN_SECRET="$(aws secretsmanager get-secret-value --region "${{ env.AWS_REGION }}" --secret-id "${{ env.HASURA_ADMIN_SECRET_ARN }}" --query SecretString --output text)"
-          HASURA_DB_NAME="Rendasua"
-          hasura migrate apply --database-name "${HASURA_DB_NAME}" --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
-          hasura metadata apply --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
-          hasura metadata reload --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
-          hasura metadata inconsistency status --endpoint "${{ env.HASURA_ENDPOINT }}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
 
       - name: Verify deployment
         run: |
