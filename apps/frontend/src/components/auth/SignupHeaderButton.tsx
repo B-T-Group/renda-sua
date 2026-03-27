@@ -26,9 +26,8 @@ const SignupHeaderButton: React.FC<SignupHeaderButtonProps> = ({ inverted }) => 
       color="primary"
       startIcon={<PersonAddAlt />}
       sx={{
-        px: 3,
+        px: { xs: 2, sm: 3 },
         py: 1,
-        mx: { xs: 0.75, sm: 1.25 },
         my: { xs: 0.5, sm: 0 },
         fontSize: '1rem',
         fontWeight: 600,

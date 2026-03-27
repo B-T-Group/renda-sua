@@ -493,6 +493,7 @@
   },
   "signupPage": {
     "title": "Créer votre compte",
+    "stepProgress": "Étape {{current}} sur {{total}}",
     "subtitle": "Renseignez votre profil, puis validez avec un code envoyé à votre e-mail.",
     "steps": {
       "contact": "Contact",

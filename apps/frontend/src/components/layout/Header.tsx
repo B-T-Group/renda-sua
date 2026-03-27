@@ -39,6 +39,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import LoginHeaderButton from '../auth/LoginHeaderButton';
 import SignupHeaderButton from '../auth/SignupHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
 import HeaderSearch from '../common/HeaderSearch';
@@ -698,7 +699,10 @@ const Header: React.FC = () => {
                   </MenuComponent>
                 </>
               ) : (
-                <SignupHeaderButton inverted />
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                  <LoginHeaderButton inverted />
+                  <SignupHeaderButton inverted />
+                </Stack>
               )}
 
               {/* Mobile Menu Button */}

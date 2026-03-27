@@ -504,6 +504,7 @@
   },
   "signupPage": {
     "title": "Create your account",
+    "stepProgress": "Step {{current}} of {{total}}",
     "subtitle": "Set up your profile first, then verify with an OTP sent to your email.",
     "steps": {
       "contact": "Contact",

@@ -20,7 +20,9 @@ import {
   CardContent,
   CircularProgress,
   Container,
+  Divider,
   InputAdornment,
+  LinearProgress,
   MenuItem,
   Paper,
   Stack,
@@ -32,6 +34,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { City, State } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +46,7 @@ import {
   findMatchedCityName,
   findMatchedStateNameForCountry,
 } from '../../utils/locationAddressMatch';
+import LoginMethodDialog from '../auth/LoginMethodDialog';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
 import { SignupGoalIllustration, type SignupGoalId } from '../onboarding/SignupGoalIllustration';
@@ -120,6 +124,7 @@ const SignupPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locationBanner, setLocationBanner] = useState<string | null>(null);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const {
     getCurrentLocation,
     loading: locationLoading,
@@ -233,6 +238,10 @@ const SignupPage: React.FC = () => {
       main_interest: defaults.main_interest || prev.main_interest,
     }));
   }, [defaults]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeStep]);
 
   const addressStates = useMemo(
     () => (form.address.country ? State.getStatesOfCountry(form.address.country) : []),
@@ -459,12 +468,15 @@ const SignupPage: React.FC = () => {
   const renderStepBody = () => {
     if (activeStep === 0) {
       return (
-        <Stack spacing={2.5}>
+        <Stack spacing={{ xs: 2, sm: 2.5 }}>
           <TextField
+            fullWidth
             label={t('signupPage.firstName', 'First name')}
             value={form.first_name}
             onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
             required
+            autoComplete="given-name"
+            inputProps={{ autoCapitalize: 'words' }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -474,10 +486,13 @@ const SignupPage: React.FC = () => {
             }}
           />
           <TextField
+            fullWidth
             label={t('signupPage.lastName', 'Last name')}
             value={form.last_name}
             onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
             required
+            autoComplete="family-name"
+            inputProps={{ autoCapitalize: 'words' }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -487,10 +502,13 @@ const SignupPage: React.FC = () => {
             }}
           />
           <TextField
+            fullWidth
             label={t('signupPage.email', 'Email')}
+            type="email"
             value={form.email}
             onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
             required
+            autoComplete="email"
             error={emailTaken}
             helperText={
               emailTaken
@@ -534,11 +552,11 @@ const SignupPage: React.FC = () => {
 
     if (activeStep === 1) {
       return (
-        <Stack spacing={2.5}>
-          <Typography variant="subtitle1" sx={{ mb: 0 }}>
+        <Stack spacing={{ xs: 2, sm: 2.5 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {t('signupPage.goalSectionTitle', 'Choose what you want to do')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
             {t(
               'signupPage.goalSectionHint',
               'This helps us set up the right account experience for you.'
@@ -548,7 +566,7 @@ const SignupPage: React.FC = () => {
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-              gap: 1.5,
+              gap: { xs: 1.25, sm: 1.5 },
             }}
           >
             {goalOptions.map((goal) => {
@@ -556,26 +574,32 @@ const SignupPage: React.FC = () => {
               return (
                 <Card
                   key={goal.id}
+                  elevation={selected ? 2 : 0}
                   sx={{
                     cursor: 'pointer',
                     border: selected ? 2 : 1,
                     borderColor: selected ? goal.accent : 'divider',
-                    transition: 'box-shadow 0.2s, border-color 0.2s',
+                    borderRadius: 2,
+                    transition: 'transform 0.15s ease, box-shadow 0.2s, border-color 0.2s',
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
+                    minHeight: { xs: 132, sm: 'auto' },
                     '&:hover': {
                       borderColor: goal.accent,
-                      boxShadow: 3,
+                      boxShadow: 2,
                     },
+                    '&:active': { transform: { xs: 'scale(0.98)', sm: 'none' } },
                   }}
                   onClick={() => handleGoalSelect(goal.id)}
                 >
-                  <CardContent sx={{ py: 2, px: 1.5 }}>
-                    <Box sx={{ width: '100%', maxWidth: 92, mb: 1, mx: 'auto' }}>
+                  <CardContent sx={{ py: { xs: 2, sm: 2 }, px: { xs: 2, sm: 1.5 } }}>
+                    <Box sx={{ width: '100%', maxWidth: { xs: 80, sm: 92 }, mb: { xs: 1, sm: 1 }, mx: 'auto' }}>
                       <SignupGoalIllustration goalId={goal.id} accent={goal.accent} />
                     </Box>
-                    <Typography variant="subtitle2" fontWeight={700} textAlign="center" gutterBottom>
+                    <Typography variant="subtitle2" fontWeight={700} textAlign="center" gutterBottom sx={{ lineHeight: 1.3 }}>
                       {goal.title}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                    <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ lineHeight: 1.45, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
                       {goal.description}
                     </Typography>
                   </CardContent>
@@ -584,23 +608,23 @@ const SignupPage: React.FC = () => {
             })}
           </Box>
           {form.user_type_id === 'business' && (
-            <>
-              <TextField
-                label={t('signupPage.businessName', 'Business name')}
-                value={form.business_name}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, business_name: e.target.value }))
-                }
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <BusinessIcon fontSize="small" color="action" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </>
+            <TextField
+              fullWidth
+              label={t('signupPage.businessName', 'Business name')}
+              value={form.business_name}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, business_name: e.target.value }))
+              }
+              required
+              autoComplete="organization"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <BusinessIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
           )}
         </Stack>
       );
@@ -608,48 +632,48 @@ const SignupPage: React.FC = () => {
 
     if (activeStep === 2) {
       return (
-        <Stack spacing={2.5}>
-          <Typography variant="subtitle1">
+        <Stack spacing={{ xs: 2, sm: 2.5 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {t('signupPage.addressStepTitle', 'Your address')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
             {t(
               'signupPage.addressStepHint',
               'Start typing your city—we suggest matches for your region.'
             )}
           </Typography>
           {locationHookError && (
-            <Alert severity="warning" sx={{ py: 0.5 }}>
+            <Alert severity="warning" sx={{ py: 0.5, borderRadius: 2 }}>
               {locationHookError}
             </Alert>
           )}
           {locationBanner && (
-            <Alert severity="info" onClose={() => setLocationBanner(null)} sx={{ py: 0.5 }}>
+            <Alert severity="info" onClose={() => setLocationBanner(null)} sx={{ py: 0.5, borderRadius: 2 }}>
               {locationBanner}
             </Alert>
           )}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-            <Button
-              variant="outlined"
-              size="medium"
-              startIcon={
-                locationLoading ? (
-                  <CircularProgress size={18} color="inherit" />
-                ) : (
-                  <MyLocationIcon />
-                )
-              }
-              onClick={handleUseCurrentLocation}
-              disabled={locationLoading}
-            >
-              {t('signupPage.useCurrentLocation', 'Use current location')}
-            </Button>
-          </Box>
+          <Button
+            fullWidth={isNarrow}
+            variant="outlined"
+            size="large"
+            sx={{ py: 1.25, borderRadius: 2 }}
+            startIcon={
+              locationLoading ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <MyLocationIcon />
+              )
+            }
+            onClick={handleUseCurrentLocation}
+            disabled={locationLoading}
+          >
+            {t('signupPage.useCurrentLocation', 'Use current location')}
+          </Button>
           <TextField
+            fullWidth
             label={t('completeProfile.addressLine1', 'Address Line 1')}
             value={form.address.address_line_1}
             onChange={(e) => handleAddressChange('address_line_1', e.target.value)}
-            fullWidth
             required
             InputProps={{
               startAdornment: (
@@ -681,6 +705,7 @@ const SignupPage: React.FC = () => {
             ))}
           </TextField>
           <Autocomplete
+            fullWidth
             options={addressStates.map((s) => s.name)}
             value={form.address.state || null}
             onChange={(_, value) => handleAddressChange('state', value ?? '')}
@@ -706,6 +731,7 @@ const SignupPage: React.FC = () => {
             )}
           />
           <Autocomplete
+            fullWidth
             freeSolo
             options={addressCities.map((c) => c.name)}
             value={form.address.city}
@@ -737,40 +763,48 @@ const SignupPage: React.FC = () => {
       );
     }
 
+    const reviewRow = (label: string, value: string) => (
+      <Box sx={{ py: { xs: 1.25, sm: 1 } }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.25 }}>
+          {label}
+        </Typography>
+        <Typography variant="body2" sx={{ lineHeight: 1.45, wordBreak: 'break-word' }}>
+          {value}
+        </Typography>
+      </Box>
+    );
+
     return (
-      <Stack spacing={2}>
-        <Typography variant="subtitle1">
+      <Stack spacing={{ xs: 2, sm: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           {t('signupPage.reviewTitle', 'Review your details')}
         </Typography>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography variant="body2">
-              <strong>{t('signupPage.review.name', 'Name')}:</strong>{' '}
-              {form.first_name} {form.last_name}
-            </Typography>
-            <Typography variant="body2">
-              <strong>{t('signupPage.review.email', 'Email')}:</strong> {form.email}
-            </Typography>
-            <Typography variant="body2">
-              <strong>{t('signupPage.review.phone', 'Phone')}:</strong> {form.phone_number}
-            </Typography>
-            <Typography variant="body2">
-              <strong>{t('signupPage.review.goal', 'Goal')}:</strong> {goalTitleForReview}
-            </Typography>
-            {form.user_type_id === 'business' && (
-              <Typography variant="body2">
-                <strong>{t('signupPage.review.business', 'Business')}:</strong>{' '}
-                {form.business_name} (
-                {form.main_interest === 'rent_items'
-                  ? t('completeProfile.mainInterest.rentItems', 'Renting out items')
-                  : t('completeProfile.mainInterest.sellItems', 'Selling products')}
-                )
-              </Typography>
+        <Paper variant="outlined" sx={{ p: 0, borderRadius: 2, overflow: 'hidden' }}>
+          <Box sx={{ px: { xs: 2, sm: 2 }, pt: 1.5, pb: 2 }}>
+            {reviewRow(
+              t('signupPage.review.name', 'Name'),
+              `${form.first_name} ${form.last_name}`.trim()
             )}
-            <Typography variant="body2">
-              <strong>{t('signupPage.review.address', 'Address')}:</strong> {renderReviewAddress()}
-            </Typography>
-          </Stack>
+            <Divider />
+            {reviewRow(t('signupPage.review.email', 'Email'), form.email)}
+            <Divider />
+            {reviewRow(t('signupPage.review.phone', 'Phone'), form.phone_number)}
+            <Divider />
+            {reviewRow(t('signupPage.review.goal', 'Goal'), goalTitleForReview)}
+            {form.user_type_id === 'business' && (
+              <>
+                <Divider />
+                {reviewRow(
+                  t('signupPage.review.business', 'Business'),
+                  `${form.business_name} (${form.main_interest === 'rent_items'
+                    ? t('completeProfile.mainInterest.rentItems', 'Renting out items')
+                    : t('completeProfile.mainInterest.sellItems', 'Selling products')})`
+                )}
+              </>
+            )}
+            <Divider />
+            {reviewRow(t('signupPage.review.address', 'Address'), renderReviewAddress())}
+          </Box>
         </Paper>
       </Stack>
     );
@@ -778,62 +812,182 @@ const SignupPage: React.FC = () => {
 
   const lastStep = activeStep === steps.length - 1;
   const nextDisabled = !canAdvanceFromStep() || saving;
+  const stepProgressPercent = ((activeStep + 1) / steps.length) * 100;
 
   return (
-    <Container maxWidth="sm" sx={{ py: 5 }}>
-      <Paper sx={{ p: 4, borderRadius: 3 }}>
-        <Stack spacing={2.5}>
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Logo variant="default" size="medium" />
+    <>
+    <Container
+      maxWidth="sm"
+      sx={{
+        py: { xs: 2, sm: 5 },
+        px: { xs: 2, sm: 3 },
+      }}
+    >
+      <Paper
+        elevation={isNarrow ? 0 : 1}
+        sx={{
+          p: { xs: 2, sm: 4 },
+          borderRadius: { xs: 2, sm: 3 },
+          border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' },
+          overflow: 'visible',
+        }}
+      >
+        <Stack spacing={{ xs: 2, sm: 2.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', pt: { xs: 0.5, sm: 0 } }}>
+            <Logo variant="default" size={isNarrow ? 'small' : 'medium'} />
           </Box>
-          <Typography variant="h4">
+          <Typography variant={isNarrow ? 'h5' : 'h4'} component="h1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
             {t('signupPage.title', 'Create your account')}
           </Typography>
-          <Typography color="text.secondary">{stepSubtitle}</Typography>
-          <Stepper
-            activeStep={activeStep}
-            alternativeLabel={!isNarrow}
-            sx={{ py: 1, flexWrap: 'wrap' }}
+          <Typography
+            color="text.secondary"
+            variant="body2"
+            sx={{ lineHeight: 1.5, fontSize: { xs: '0.9375rem', sm: '1rem' } }}
           >
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel sx={{ '& .MuiStepLabel-label': { fontSize: '0.75rem' } }}>
-                  {label}
-                </StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-          {error && <Alert severity="error">{error}</Alert>}
-          {renderStepBody()}
-          <Stack direction="row" spacing={2} justifyContent="space-between" flexWrap="wrap">
-            <Button onClick={handleBack} disabled={activeStep === 0 || saving}>
-              {t('signupPage.back', 'Back')}
-            </Button>
-            {!lastStep ? (
-              <Button variant="contained" onClick={handleNext} disabled={nextDisabled}>
-                {t('signupPage.next', 'Next')}
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                onClick={handleCreate}
-                disabled={nextDisabled}
-                startIcon={saving ? <CircularProgress size={18} /> : undefined}
+            {stepSubtitle}
+          </Typography>
+
+          {isNarrow ? (
+            <Box sx={{ mt: 0.5 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="baseline"
+                spacing={1}
+                sx={{ mb: 1 }}
               >
-                {saving
-                  ? t('signupPage.creating', 'Creating...')
-                  : t('signupPage.createAccount', 'Create account')}
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  {t('signupPage.stepProgress', 'Step {{current}} of {{total}}', {
+                    current: activeStep + 1,
+                    total: steps.length,
+                  })}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="primary"
+                  fontWeight={700}
+                  sx={{ textAlign: 'right', lineHeight: 1.2, maxWidth: '58%' }}
+                >
+                  {steps[activeStep]}
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={stepProgressPercent}
+                sx={{
+                  height: 8,
+                  borderRadius: 999,
+                  bgcolor: alpha(theme.palette.primary.main, 0.12),
+                  '& .MuiLinearProgress-bar': { borderRadius: 999 },
+                }}
+              />
+            </Box>
+          ) : (
+            <Stepper
+              activeStep={activeStep}
+              alternativeLabel
+              sx={{ py: 1.5, flexWrap: 'wrap' }}
+            >
+              {steps.map((label) => (
+                <Step key={label}>
+                  <StepLabel sx={{ '& .MuiStepLabel-label': { fontSize: '0.75rem' } }}>
+                    {label}
+                  </StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          )}
+
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
+          {renderStepBody()}
+
+          <Button
+            color="inherit"
+            onClick={() => setLoginDialogOpen(true)}
+            disabled={saving}
+            sx={{
+              alignSelf: { xs: 'center', sm: 'flex-start' },
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
+            {t('signupPage.alreadyHaveAccount', 'Already have an account? Log in')}
+          </Button>
+
+          <Box
+            sx={{
+              position: { xs: 'sticky', sm: 'static' },
+              bottom: 0,
+              zIndex: 8,
+              mx: { xs: -2, sm: 0 },
+              mt: { xs: 1, sm: 0 },
+              pt: { xs: 2, sm: 0 },
+              pb: {
+                xs: 'max(12px, env(safe-area-inset-bottom, 0px))',
+                sm: 0,
+              },
+              px: { xs: 2, sm: 0 },
+              bgcolor: {
+                xs: alpha(theme.palette.background.paper, 0.92),
+                sm: 'transparent',
+              },
+              backdropFilter: { xs: 'saturate(180%) blur(12px)', sm: 'none' },
+              borderTop: { xs: 1, sm: 0 },
+              borderColor: 'divider',
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={handleBack}
+                disabled={activeStep === 0 || saving}
+                sx={{
+                  minWidth: { xs: 96, sm: 'auto' },
+                  flexShrink: 0,
+                  py: 1.25,
+                  borderRadius: 2,
+                }}
+              >
+                {t('signupPage.back', 'Back')}
               </Button>
-            )}
-          </Stack>
-          <Box>
-            <Button onClick={() => navigate('/')} disabled={saving}>
-              {t('signupPage.alreadyHaveAccount', 'Already have an account? Log in')}
-            </Button>
+              {!lastStep ? (
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={handleNext}
+                  disabled={nextDisabled}
+                  sx={{ py: 1.25, borderRadius: 2, fontWeight: 700 }}
+                >
+                  {t('signupPage.next', 'Next')}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={handleCreate}
+                  disabled={nextDisabled}
+                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : undefined}
+                  sx={{ py: 1.25, borderRadius: 2, fontWeight: 700 }}
+                >
+                  {saving
+                    ? t('signupPage.creating', 'Creating...')
+                    : t('signupPage.createAccount', 'Create account')}
+                </Button>
+              )}
+            </Stack>
           </Box>
         </Stack>
       </Paper>
     </Container>
+    <LoginMethodDialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} />
+    </>
   );
 };
 
