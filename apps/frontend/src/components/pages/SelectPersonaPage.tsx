@@ -35,7 +35,7 @@ const SelectPersonaPage: React.FC = () => {
       setPicking(p);
       try {
         await setActivePersona(p);
-        navigate('/app');
+        navigate('/dashboard');
       } finally {
         setPicking(null);
       }
@@ -77,7 +77,7 @@ const SelectPersonaPage: React.FC = () => {
   }
 
   if (!needsPersonaSelection && userType) {
-    navigate('/app', { replace: true });
+    navigate('/dashboard', { replace: true });
     return null;
   }
 
