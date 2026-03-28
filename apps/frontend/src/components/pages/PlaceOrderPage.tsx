@@ -947,6 +947,15 @@ const PlaceOrderPage: React.FC = () => {
                               {t('orders.deliveryTo', 'Delivery to')}
                             </Typography>
                           </Box>
+                          {profile?.first_name && (
+                            <Typography
+                              variant="body2"
+                              fontWeight="medium"
+                              sx={{ mb: 0.75 }}
+                            >
+                              {profile.first_name}
+                            </Typography>
+                          )}
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
                             {address.address_line_1}
                             {address.address_line_2 &&
@@ -959,6 +968,22 @@ const PlaceOrderPage: React.FC = () => {
                             {address.city}, {address.state}{' '}
                             {address.postal_code}
                           </Typography>
+                          {address.instructions?.trim() && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 1 }}
+                            >
+                              <strong>
+                                {t(
+                                  'orders.deliveryInstructions',
+                                  'Delivery instructions'
+                                )}
+                                :
+                              </strong>{' '}
+                              {address.instructions}
+                            </Typography>
+                          )}
                         </Paper>
                       );
                     })()}
@@ -1345,6 +1370,15 @@ const PlaceOrderPage: React.FC = () => {
                               {t('orders.deliveryTo', 'Delivery to')}
                             </Typography>
                           </Box>
+                          {profile?.first_name && (
+                            <Typography
+                              variant="body2"
+                              fontWeight="medium"
+                              sx={{ mb: 0.75 }}
+                            >
+                              {profile.first_name}
+                            </Typography>
+                          )}
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
                             {address.address_line_1}
                             {address.address_line_2 &&
@@ -1357,6 +1391,22 @@ const PlaceOrderPage: React.FC = () => {
                             {address.city}, {address.state}{' '}
                             {address.postal_code}
                           </Typography>
+                          {address.instructions?.trim() && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 1 }}
+                            >
+                              <strong>
+                                {t(
+                                  'orders.deliveryInstructions',
+                                  'Delivery instructions'
+                                )}
+                                :
+                              </strong>{' '}
+                              {address.instructions}
+                            </Typography>
+                          )}
                         </Paper>
                       );
                     })()}
@@ -2324,9 +2374,22 @@ const PlaceOrderPage: React.FC = () => {
                             {selectedItem.business_location.address.state}{' '}
                             {selectedItem.business_location.address.postal_code}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {selectedItem.business_location.business.name}
-                          </Typography>
+                          {selectedItem.business_location.address
+                            .instructions?.trim() && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 1 }}
+                            >
+                              <strong>
+                                {t('addresses.howToFind', 'How to find')}:
+                              </strong>{' '}
+                              {
+                                selectedItem.business_location.address
+                                  .instructions
+                              }
+                            </Typography>
+                          )}
                         </Stack>
                       )}
                     </Paper>
@@ -2466,6 +2529,15 @@ const PlaceOrderPage: React.FC = () => {
                                   {t('orders.deliveryTo', 'Delivery to')}
                                 </Typography>
                               </Box>
+                              {profile?.first_name && (
+                                <Typography
+                                  variant="body2"
+                                  fontWeight="medium"
+                                  sx={{ mb: 0.75 }}
+                                >
+                                  {profile.first_name}
+                                </Typography>
+                              )}
                               <Typography variant="body2" sx={{ mb: 0.5 }}>
                                 {address.address_line_1}
                                 {address.address_line_2 &&
@@ -2478,6 +2550,22 @@ const PlaceOrderPage: React.FC = () => {
                                 {address.city}, {address.state}{' '}
                                 {address.postal_code}
                               </Typography>
+                              {address.instructions?.trim() && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 1 }}
+                                >
+                                  <strong>
+                                    {t(
+                                      'orders.deliveryInstructions',
+                                      'Delivery instructions'
+                                    )}
+                                    :
+                                  </strong>{' '}
+                                  {address.instructions}
+                                </Typography>
+                              )}
                             </Paper>
                           );
                         })()}

@@ -5,7 +5,6 @@ import {
   LocalShipping as DeliveryIcon,
   FlashOn,
   LocationOn as LocationIcon,
-  Person as PersonIcon,
   Phone,
 } from '@mui/icons-material';
 import {
@@ -399,7 +398,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
           </Box>
         </Box>
 
-        {/* Business and Client Info - Compact */}
+        {/* Business only (client / phone shown on delivery row when assigned) */}
         <Box sx={{ display: 'flex', gap: 2, mb: 1, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <BusinessIcon color="primary" sx={{ fontSize: 14 }} />
@@ -409,22 +408,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               sx={{ fontSize: '0.75rem' }}
             >
               {order.business?.name || t('common.business', 'Business')}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <PersonIcon color="primary" sx={{ fontSize: 14 }} />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontSize: '0.75rem' }}
-            >
-              {order.client?.user?.first_name}
-              {profile?.agent?.id &&
-                order.assigned_agent_id &&
-                order.assigned_agent_id === profile.agent.id &&
-                order.client?.user?.phone_number && (
-                  <> 📞 {order.client.user.phone_number}</>
-                )}
             </Typography>
           </Box>
         </Box>

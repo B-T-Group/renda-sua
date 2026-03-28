@@ -2076,6 +2076,7 @@
     "databaseTransactionStatus": "Database Transaction Status",
     "delivery": "Delivery",
     "deliveryAddress": "Delivery Address",
+    "deliveryInstructions": "Delivery instructions",
     "deliveryAgent": "Delivery Agent",
     "internalAgent": "Internal agent",
     "deliveryFee": "Delivery Fee",

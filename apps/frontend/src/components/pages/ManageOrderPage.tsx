@@ -983,37 +983,57 @@ const ManageOrderPage: React.FC = () => {
                           <Box sx={{ display: 'flex', gap: 2 }}>
                             <LocationOn color="secondary" />
                             <Box sx={{ flex: 1 }}>
+                              {order.client?.user?.first_name && (
+                                <Typography
+                                  variant="subtitle1"
+                                  fontWeight="medium"
+                                  gutterBottom
+                                >
+                                  {order.client.user.first_name}
+                                </Typography>
+                              )}
                               <Typography variant="body1" component="div">
                                 {formatAddress(order.delivery_address)}
-                                {order.delivery_address.instructions && (
-                                  <Typography variant="body2" color="text.secondary" component="span" display="block" sx={{ mt: 1 }}>
-                                    <strong>{t('addresses.howToFind', 'How to find')}:</strong>{' '}
-                                    {order.delivery_address.instructions}
-                                  </Typography>
-                                )}
-                                {profile?.agent?.id &&
-                                  order.assigned_agent_id &&
-                                  order.assigned_agent_id ===
-                                    profile.agent.id &&
-                                  order.client?.user?.phone_number && (
-                                    <Box
-                                      sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 0.5,
-                                        mt: 1,
-                                      }}
-                                    >
-                                      <Phone fontSize="small" color="action" />
-                                      <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                      >
-                                        {order.client.user.phone_number}
-                                      </Typography>
-                                    </Box>
-                                  )}
                               </Typography>
+                              {order.delivery_address.instructions?.trim() && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  display="block"
+                                  sx={{ mt: 1.5 }}
+                                >
+                                  <strong>
+                                    {t(
+                                      'orders.deliveryInstructions',
+                                      'Delivery instructions'
+                                    )}
+                                    :
+                                  </strong>{' '}
+                                  {order.delivery_address.instructions}
+                                </Typography>
+                              )}
+                              {profile?.agent?.id &&
+                                order.assigned_agent_id &&
+                                order.assigned_agent_id ===
+                                  profile.agent.id &&
+                                order.client?.user?.phone_number && (
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 0.5,
+                                      mt: 1.5,
+                                    }}
+                                  >
+                                    <Phone fontSize="small" color="action" />
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {order.client.user.phone_number}
+                                    </Typography>
+                                  </Box>
+                                )}
                             </Box>
                           </Box>
                         </Paper>

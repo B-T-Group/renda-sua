@@ -80,6 +80,7 @@ export interface InventoryItem {
       state: string;
       postal_code: string;
       country: string;
+      instructions?: string;
     };
   };
 }

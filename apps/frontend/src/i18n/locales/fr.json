@@ -2048,6 +2048,7 @@
     "databaseTransactionStatus": "Statut de Transaction de Base de Données",
     "delivery": "Livraison",
     "deliveryAddress": "Adresse de Livraison",
+    "deliveryInstructions": "Instructions de livraison",
     "deliveryAgent": "Agent de Livraison",
     "internalAgent": "Agent interne",
     "deliveryFee": "Frais de Livraison",

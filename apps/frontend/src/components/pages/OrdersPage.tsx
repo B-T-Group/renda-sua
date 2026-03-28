@@ -65,6 +65,24 @@ const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
 const getOrderStatusBoxColor = (status: string): string =>
   ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
 
+/** Higher rank = list first for agents (most advanced / actionable stage). */
+const AGENT_ORDER_STATUS_RELEVANCE: Record<string, number> = {
+  out_for_delivery: 100,
+  in_transit: 90,
+  picked_up: 80,
+  assigned_to_agent: 70,
+  ready_for_pickup: 60,
+  preparing: 45,
+  confirmed: 40,
+  pending_payment: 25,
+  pending: 20,
+  delivered: 15,
+  complete: 12,
+  failed: 8,
+  refunded: 8,
+  cancelled: 0,
+};
+
 // Loading Skeleton Components
 const OrderCardSkeleton: React.FC = () => (
   <Card sx={{ mb: 2 }}>
@@ -213,7 +231,14 @@ const OrdersPage: React.FC = () => {
     );
 
     const sortStatuses = (statuses: string[]) => {
-      return statuses.sort((a, b) => {
+      if (profile?.agent) {
+        return [...statuses].sort(
+          (a, b) =>
+            (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+            (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
+      return [...statuses].sort((a, b) => {
         const ia = statusOrder.indexOf(a);
         const ib = statusOrder.indexOf(b);
         const va = ia === -1 ? 999 : ia;
@@ -226,7 +251,7 @@ const OrdersPage: React.FC = () => {
       activeStatuses: sortStatuses(active),
       completedStatuses: sortStatuses(completed),
     };
-  }, [orders, statusOrder]);
+  }, [orders, statusOrder, profile?.agent]);
 
   // Count completed orders for the collapsible header
   const completedOrdersCount = useMemo(() => {
@@ -328,6 +353,12 @@ const OrdersPage: React.FC = () => {
     );
 
     return active.sort((a, b) => {
+      if (profile?.agent) {
+        return (
+          (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+          (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
       const ia = statusOrder.indexOf(a);
       const ib = statusOrder.indexOf(b);
       const va = ia === -1 ? 999 : ia;
@@ -340,6 +371,7 @@ const OrdersPage: React.FC = () => {
     tabGroups,
     activeStatuses,
     statusOrder,
+    profile?.agent,
   ]);
 
   const tabCompletedStatuses = useMemo(() => {
@@ -360,6 +392,12 @@ const OrdersPage: React.FC = () => {
     );
 
     return completed.sort((a, b) => {
+      if (profile?.agent) {
+        return (
+          (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+          (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
       const ia = statusOrder.indexOf(a);
       const ib = statusOrder.indexOf(b);
       const va = ia === -1 ? 999 : ia;
@@ -372,6 +410,7 @@ const OrdersPage: React.FC = () => {
     tabGroups,
     completedStatuses,
     statusOrder,
+    profile?.agent,
   ]);
 
   const tabCompletedOrdersCount = useMemo(() => {
@@ -770,7 +809,12 @@ const OrdersPage: React.FC = () => {
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {Object.entries(orderStats.byStatus)
-                .sort(([a], [b]) => a.localeCompare(b))
+                .sort(([a], [b]) =>
+                  profile?.agent
+                    ? (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+                      (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+                    : a.localeCompare(b)
+                )
                 .map(([status, n]) => (
                   <Box
                     key={status}
