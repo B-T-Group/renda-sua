@@ -1,19 +1,10 @@
-import { Cancel, Key } from '@mui/icons-material';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Typography,
-} from '@mui/material';
+import { Cancel } from '@mui/icons-material';
+import { Box, Button, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
 
 interface ClientActionsProps {
   order: OrderData;
@@ -23,6 +14,8 @@ interface ClientActionsProps {
     severity: 'success' | 'error' | 'warning' | 'info'
   ) => void;
   onShowHistory?: () => void;
+  /** When true, the delivery PIN control is not rendered here (shown elsewhere, e.g. order page header). */
+  hideDeliveryPin?: boolean;
 }
 
 const ClientActions: React.FC<ClientActionsProps> = ({
@@ -30,13 +23,10 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   onActionComplete,
   onShowNotification,
   onShowHistory,
+  hideDeliveryPin = false,
 }) => {
   const { t } = useTranslation();
-  const { getDeliveryPin } = useBackendOrders();
-  const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [pinDialogOpen, setPinDialogOpen] = useState(false);
-  const [deliveryPin, setDeliveryPin] = useState<string | null>(null);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -54,28 +44,9 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     onShowNotification?.(errorMessage, 'error');
   };
 
-  const handleViewDeliveryPin = async () => {
-    setLoading(true);
-    setDeliveryPin(null);
-    try {
-      const { pin } = await getDeliveryPin(order.id);
-      setDeliveryPin(pin);
-      setPinDialogOpen(true);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t('orders.deliveryPin.unavailable', 'Delivery PIN is not available. If the order was just paid, try again in a moment.');
-      onShowNotification?.(errorMessage, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const getAvailableActions = () => {
     const actions = [];
 
-    // Cancel action - available for pending_payment, pending, preparing, and ready_for_pickup statuses
     if (
       [
         'pending_payment',
@@ -90,22 +61,6 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         action: handleCancelClick,
         color: 'error' as const,
         icon: <Cancel />,
-        isPinAction: false,
-      });
-    }
-
-    // View delivery PIN - available once order is paid; client can retrieve multiple times until order is completed
-    if (
-      ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned_to_agent', 'picked_up', 'in_transit', 'out_for_delivery'].includes(
-        order.current_status
-      )
-    ) {
-      actions.push({
-        label: t('orders.deliveryPin.viewPin', 'View delivery PIN'),
-        action: handleViewDeliveryPin,
-        color: 'primary' as const,
-        icon: <Key />,
-        isPinAction: true,
       });
     }
 
@@ -113,44 +68,34 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   };
 
   const availableActions = getAvailableActions();
+  const showPin =
+    !hideDeliveryPin &&
+    [
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'assigned_to_agent',
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+    ].includes(order.current_status);
 
-  if (availableActions.length === 0) {
+  if (availableActions.length === 0 && !showPin) {
     return null;
   }
 
-  const pinAction = availableActions.find((a) => (a as { isPinAction?: boolean }).isPinAction);
-  const otherActions = availableActions.filter((a) => !(a as { isPinAction?: boolean }).isPinAction);
-
   return (
     <>
-      {availableActions.length > 0 && (
+      {(availableActions.length > 0 || showPin) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {pinAction && (
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              onClick={pinAction.action}
-              disabled={loading}
-              startIcon={
-                loading ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  pinAction.icon
-                )
-              }
-              sx={{
-                py: 1.5,
-                fontWeight: 600,
-                boxShadow: 2,
-                width: { xs: '100%', sm: 'auto' },
-                alignSelf: { sm: 'flex-start' },
-              }}
-            >
-              {pinAction.label}
-            </Button>
+          {showPin && (
+            <ClientDeliveryPinButton
+              orderId={order.id}
+              onShowNotification={onShowNotification}
+            />
           )}
-          {otherActions.length > 0 && (
+          {availableActions.length > 0 && (
             <Box
               sx={{
                 display: 'flex',
@@ -160,7 +105,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
                 justifyContent: { xs: 'stretch', sm: 'flex-end' },
               }}
             >
-              {otherActions.map((action, index) => (
+              {availableActions.map((action, index) => (
                 <Button
                   key={index}
                   variant="outlined"
@@ -180,7 +125,6 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         </Box>
       )}
 
-      {/* Cancellation Reason Modal */}
       <CancellationReasonModal
         open={cancelModalOpen}
         onClose={() => setCancelModalOpen(false)}
@@ -189,53 +133,6 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         onSuccess={handleCancelSuccess}
         onError={handleCancelError}
       />
-
-      {/* Delivery PIN dialog (client can view multiple times until order is completed) */}
-      <Dialog
-        open={pinDialogOpen}
-        onClose={() => {
-          setPinDialogOpen(false);
-          setDeliveryPin(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          {t('orders.deliveryPin.title', 'Delivery PIN')}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t(
-              'orders.deliveryPin.shareWithAgent',
-              'Share this PIN with your delivery agent. They will enter it to complete the delivery.'
-            )}
-          </Typography>
-          {deliveryPin && (
-            <Typography
-              variant="h4"
-              component="div"
-              sx={{
-                fontFamily: 'monospace',
-                letterSpacing: 4,
-                textAlign: 'center',
-                py: 2,
-              }}
-            >
-              {deliveryPin}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setPinDialogOpen(false);
-              setDeliveryPin(null);
-            }}
-          >
-            {t('common.close', 'Close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };

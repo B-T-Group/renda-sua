@@ -1,6 +1,7 @@
 import Close from '@mui/icons-material/Close';
 import LocalShipping from '@mui/icons-material/LocalShipping';
 import LocationOn from '@mui/icons-material/LocationOn';
+import Map from '@mui/icons-material/Map';
 import Store from '@mui/icons-material/Store';
 import {
     Box,
@@ -11,7 +12,6 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
-    Link,
     Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -195,14 +195,16 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
                   {new Date(agentLocation.updatedAt).toLocaleTimeString()}
                 </Typography>
                 {agentMapsUrl && (
-                  <Link
-                    component="button"
-                    variant="body2"
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    startIcon={<Map />}
                     onClick={openMapModal}
-                    sx={{ fontSize: '0.875rem', cursor: 'pointer' }}
+                    sx={{ alignSelf: 'flex-start', mt: 0.5, fontWeight: 600 }}
                   >
-                    {t('orders.viewOnMap', 'View on map')}
-                  </Link>
+                    {t('orders.viewOnMap', 'View agent location on map')}
+                  </Button>
                 )}
               </Box>
             </Box>
@@ -249,7 +251,7 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
       <DialogContent dividers sx={{ p: 0, overflow: 'hidden', display: 'flex' }}>
         {mapEmbedUrl && (
           <iframe
-            title={t('orders.viewOnMap', 'View on map')}
+            title={t('orders.viewOnMap', 'View agent location on map')}
             src={mapEmbedUrl}
             style={{
               border: 0,

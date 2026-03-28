@@ -69,6 +69,7 @@ import AgentOrderAlerts from '../orders/AgentOrderAlerts';
 import BusinessActions from '../orders/BusinessActions';
 import BusinessOrderAlerts from '../orders/BusinessOrderAlerts';
 import ClientActions from '../orders/ClientActions';
+import { ClientDeliveryPinButton } from '../orders/ClientDeliveryPinButton';
 import ClientOrderAlerts from '../orders/ClientOrderAlerts';
 import SEOHead from '../seo/SEOHead';
 
@@ -236,8 +237,7 @@ const ManageOrderPage: React.FC = () => {
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   } | null>(null);
-  // Set default tab to Delivery (1) for agents, Details (0) for others
-  const [activeTab, setActiveTab] = useState(profile?.agent ? 1 : 0);
+  const [activeTab, setActiveTab] = useState(0);
 
   // Helper functions
   const getStatusColor = (status: string) => {
@@ -328,12 +328,22 @@ const ManageOrderPage: React.FC = () => {
     }
   }, [orderId, fetchOrder]);
 
-  // Set default tab to Delivery for agents when component mounts
   useEffect(() => {
+    if (!order) return;
     if (profile?.agent) {
       setActiveTab(1);
+      return;
     }
-  }, [profile?.agent]);
+    if (order.current_status === 'out_for_delivery') {
+      setActiveTab(1);
+      return;
+    }
+    if (order.current_status === 'complete') {
+      setActiveTab(2);
+      return;
+    }
+    setActiveTab(0);
+  }, [order?.id, order?.current_status, profile?.agent]);
 
   const handleBack = () => {
     // Navigate back to the smart orders route
@@ -647,6 +657,22 @@ const ManageOrderPage: React.FC = () => {
               )}
               {profile?.client && <ClientOrderAlerts order={order as any} />}
               {/* eslint-enable @typescript-eslint/no-explicit-any */}
+
+              {profile?.client &&
+                order.current_status === 'out_for_delivery' && (
+                  <Stack spacing={2} sx={{ mb: 3 }}>
+                    <DeliveryTrackingMap
+                      orderId={order.id}
+                      pickupAddress={order.business_location?.address}
+                      deliveryAddress={order.delivery_address}
+                    />
+                    <ClientDeliveryPinButton
+                      orderId={order.id}
+                      fullWidth
+                      onShowNotification={handleShowNotification}
+                    />
+                  </Stack>
+                )}
 
               {/* Tabbed Content */}
               <Card sx={{ mb: 3 }}>
@@ -1240,7 +1266,8 @@ const ManageOrderPage: React.FC = () => {
                     {profile?.client &&
                       ['picked_up', 'in_transit', 'out_for_delivery'].includes(
                         order.current_status
-                      ) && (
+                      ) &&
+                      order.current_status !== 'out_for_delivery' && (
                         <DeliveryTrackingMap
                           orderId={order.id}
                           pickupAddress={order.business_location?.address}
@@ -1580,7 +1607,9 @@ const ManageOrderPage: React.FC = () => {
                         order={order}
                         onActionComplete={() => refetch()}
                         onShowNotification={handleShowNotification}
-                        onShowHistory={() => setHistoryDialogOpen(true)}
+                        hideDeliveryPin={
+                          order.current_status === 'out_for_delivery'
+                        }
                       />
                     )}
 

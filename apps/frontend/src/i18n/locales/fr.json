@@ -1698,7 +1698,7 @@
       },
       "trackOrder": {
         "q": "Comment suivre ma commande ?",
-        "a": "Vous pouvez suivre votre commande depuis votre tableau de bord ou la page de confirmation. Vous verrez les mises à jour de statut de la confirmation jusqu'à la livraison."
+        "a": "Vous pouvez suivre votre commande depuis votre tableau de bord ou la page de détails de la commande. Vous verrez les mises à jour de statut de la confirmation jusqu'à la livraison. Lorsque votre commande est en cours de livraison, vous pouvez voir la position en direct de votre livreur sur une carte (bouton « Voir la position de l'agent sur la carte » bien visible), ainsi que les adresses de retrait et de livraison."
       },
       "deliveryTime": {
         "q": "Combien de temps prend la livraison ?",
@@ -1948,7 +1948,7 @@
     "trackDelivery": "Suivez votre livraison",
     "driverLocation": "Position du chauffeur",
     "updatedAt": "Mis à jour",
-    "viewOnMap": "Voir sur la carte",
+    "viewOnMap": "Voir la position de l'agent sur la carte",
     "weight": "Poids",
     "business": {
       "actionRequired": {

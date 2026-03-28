@@ -34,7 +34,10 @@ const FAQ: React.FC = () => {
     {
       key: 'trackOrder',
       q: t('faq.client.trackOrder.q', 'How do I track my order?'),
-      a: t('faq.client.trackOrder.a', 'You can track your order from your dashboard or the order confirmation page. You will see status updates from order confirmation through to delivery.'),
+      a: t(
+        'faq.client.trackOrder.a',
+        'You can track your order from your dashboard or the order details page. You will see status updates from confirmation through to delivery. When your order is out for delivery, you can see your driver’s live location on a map (with a clear “View agent location on map” action), along with pickup and delivery addresses.'
+      ),
     },
     {
       key: 'deliveryTime',
