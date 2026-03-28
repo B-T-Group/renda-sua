@@ -30,7 +30,8 @@ module.exports = {
       styles: ['./src/styles.css'],
       outputHashing: process.env['NODE_ENV'] === 'production' ? 'all' : 'none',
       optimization: process.env['NODE_ENV'] === 'production',
-      sourceMap: false,
+      // Omit sourceMap here so Nx + project.json configurations control it
+      // (local/development: true, production: false).
     }),
     new NxReactWebpackPlugin({
       // Uncomment this line if you don't want to use SVGR

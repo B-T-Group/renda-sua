@@ -34,6 +34,7 @@
           "optimization": false,
           "extractLicenses": false,
           "inspect": false,
+          "sourceMap": true,
           "fileReplacements": [],
           "outputHashing": "none"
         },
@@ -41,6 +42,7 @@
           "optimization": false,
           "extractLicenses": false,
           "inspect": false,
+          "sourceMap": true,
           "fileReplacements": [
             {
               "replace": "apps/frontend/src/config/environment.ts",
@@ -53,6 +55,7 @@
           "optimization": true,
           "extractLicenses": true,
           "inspect": false,
+          "sourceMap": false,
           "fileReplacements": [
             {
               "replace": "apps/frontend/src/config/environment.ts",
