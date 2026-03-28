@@ -1,7 +1,8 @@
 // Environment configuration with validation
 const getEnvironment = () => {
   const hasuraUrl =
-    process.env.REACT_APP_HASURA_URL || 'http://localhost:8080/v1/graphql';
+    process.env.REACT_APP_HASURA_URL ||
+    'https://hasura-dev.rendasua.com/v1/graphql';
   const hasuraAdminSecret =
     process.env.REACT_APP_HASURA_ADMIN_SECRET || 'myadminsecretkey';
   const auth0Domain =

@@ -53,11 +53,21 @@ if (hasuraEc2Enabled) {
   };
 
   if (deployHasuraDev) {
+    const hasuraDevDomain = String(
+      app.node.tryGetContext('hasuraDevDomain') || 'hasura-dev.rendasua.com'
+    );
+    const hasuraDevCorsDefault = [
+      'https://dev.rendasua.com',
+      'http://localhost:4200',
+      'http://127.0.0.1:4200',
+      `https://${hasuraDevDomain}`,
+    ].join(',');
     new HasuraEc2EnvironmentStack(app, 'HasuraEc2InfrastructureDev', {
       ...commonProps,
       environment: 'dev',
-      domainName: String(
-        app.node.tryGetContext('hasuraDevDomain') || 'hasura-dev.rendasua.com'
+      domainName: hasuraDevDomain,
+      graphqlCorsDomain: String(
+        app.node.tryGetContext('hasuraDevGraphqlCorsDomain') || hasuraDevCorsDefault
       ),
       dbSecretArn: required('hasuraDevDbSecretArn'),
       adminSecretArn: required('hasuraDevAdminSecretArn'),
@@ -66,6 +76,14 @@ if (hasuraEc2Enabled) {
   }
 
   if (deployHasuraProd) {
+    const hasuraProdDomain = String(
+      app.node.tryGetContext('hasuraProdDomain') || 'hasura.rendasua.com'
+    );
+    const hasuraProdCorsDefault = [
+      'https://rendasua.com',
+      'https://www.rendasua.com',
+      `https://${hasuraProdDomain}`,
+    ].join(',');
     new HasuraEc2EnvironmentStack(app, 'HasuraEc2InfrastructureProd', {
       ...commonProps,
       environment: 'prod',
@@ -74,8 +92,10 @@ if (hasuraEc2Enabled) {
           app.node.tryGetContext('hasuraInstanceType') ||
           't4g.small'
       ),
-      domainName: String(
-        app.node.tryGetContext('hasuraProdDomain') || 'hasura.rendasua.com'
+      domainName: hasuraProdDomain,
+      graphqlCorsDomain: String(
+        app.node.tryGetContext('hasuraProdGraphqlCorsDomain') ||
+          hasuraProdCorsDefault
       ),
       dbSecretArn: required('hasuraProdDbSecretArn'),
       adminSecretArn: required('hasuraProdAdminSecretArn'),

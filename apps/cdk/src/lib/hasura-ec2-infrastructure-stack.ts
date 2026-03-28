@@ -7,6 +7,8 @@ import { Construct } from 'constructs';
 export interface HasuraEc2EnvironmentStackProps extends cdk.StackProps {
   readonly environment: 'dev' | 'prod';
   readonly domainName: string;
+  /** Comma-separated origins (with scheme) for HASURA_GRAPHQL_CORS_DOMAIN. */
+  readonly graphqlCorsDomain: string;
   readonly hostedZoneDomain: string;
   readonly dbSecretArn: string;
   readonly adminSecretArn: string;
@@ -49,7 +51,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
     });
 
     // Logical ID change forces new EC2 so user data re-runs (fixes not applied on in-place updates).
-    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2`, {
+    const instance = new ec2.Instance(this, `${namePrefix}HasuraEC2Instance`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(props.instanceType ?? 't4g.micro'),
@@ -177,6 +179,7 @@ export class HasuraEc2EnvironmentStack extends cdk.Stack {
       'HASURA_GRAPHQL_ENABLE_INTROSPECTION=true',
       'HASURA_GRAPHQL_ENABLE_SUBSCRIPTIONS=true',
       'HASURA_GRAPHQL_ENABLED_LOG_TYPES=startup,http-log,websocket-log,query-log',
+      `HASURA_GRAPHQL_CORS_DOMAIN=${props.graphqlCorsDomain}`,
       'EOF',
       `docker pull ${hasuraImage}`,
       'docker rm -f hasura || true',
