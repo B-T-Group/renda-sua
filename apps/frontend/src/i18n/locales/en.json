@@ -992,7 +992,7 @@
         "item_fault": "Item Fault"
       },
       "resolutionDescription": {
-        "agent_fault": "Client will be refunded. Agent hold will be released and deposited to your business account.",
+        "agent_fault": "Client will be refunded. The agent hold will be released and deposited into the agent's account.",
         "item_fault": "Both client and agent will be refunded. Inventory can optionally be restored.",
         "client_fault": "Both client and agent will be refunded. Client will be charged a failed delivery fee (split 50/50 between agent and business)."
       },
@@ -1757,7 +1757,7 @@
       },
       "failedDeliveries": {
         "q": "How are failed deliveries managed?",
-        "a": "When a delivery fails, the agent marks it with a failure reason. In your dashboard, go to Failed Deliveries to resolve it. Options: Agent Fault (client refunded, hold to business); Item Fault (client and agent refunded, optional inventory restore); Client Fault (both refunded, client charged a failed delivery fee split 50/50 between agent and business)."
+        "a": "When a delivery fails, the agent marks it with a failure reason. In your dashboard, go to Failed Deliveries to resolve it. Options: Agent Fault (client refunded; agent hold released to the agent); Item Fault (client and agent refunded, optional inventory restore); Client Fault (both refunded, client charged a failed delivery fee split 50/50 between agent and business)."
       },
       "addProducts": {
         "q": "How do I add products to sell?",
@@ -2139,7 +2139,8 @@
       "selectReason": "Select Failure Reason",
       "notesLabel": "Additional Notes (Optional)",
       "notesPlaceholder": "Add any additional details about why the delivery failed...",
-      "info": "This action will mark the delivery as failed. The business will be notified and will need to resolve this failed delivery.",
+      "info": "This action will mark the delivery as failed. The business will be notified and must resolve the case.",
+      "returnItemRefund": "Please return the item to the business. After the business resolves the case, your deposit hold will be released to your account, and you may receive a partial refund of the delivery fee depending on the failure reason.",
       "confirm": "Mark as Failed",
       "marking": "Marking as Failed...",
       "selectReasonRequired": "Please select a failure reason",
@@ -2370,7 +2371,10 @@
     "subcategory": "Subcategory",
     "weight": "Weight",
     "itemCard": {
-      "views": "{{count}} views"
+      "views": "{{count}} views",
+      "ratingAria": "Average rating {{avg}} out of 5, {{count}} ratings",
+      "ratingsCount_one": "{{count}} rating",
+      "ratingsCount_other": "{{count}} ratings"
     },
     "dealEndsOn": "Ends on {{date}}",
     "similarItems": "Similar Items",

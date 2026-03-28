@@ -11,17 +11,18 @@ import {
 } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
 import {
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    CardMedia,
-    Chip,
-    Dialog,
-    DialogContent,
-    IconButton,
-    Typography,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  CardMedia,
+  Chip,
+  Dialog,
+  DialogContent,
+  IconButton,
+  Rating,
+  Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -91,6 +92,12 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   };
 
   const primaryImage = getPrimaryImage(inventory);
+
+  const ratingCount = inventory.rating_count ?? 0;
+  const showAggregateRating =
+    ratingCount > 0 &&
+    inventory.avg_rating != null &&
+    Number.isFinite(inventory.avg_rating);
 
   const isUnavailable = inventory.computed_available_quantity <= 0;
 
@@ -248,6 +255,49 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             >
               {inventory.item.name}
             </Typography>
+            {showAggregateRating && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  flexWrap: 'wrap',
+                  mb: 0.75,
+                }}
+                aria-label={t('items.itemCard.ratingAria', {
+                  avg: inventory.avg_rating!.toFixed(1),
+                  count: ratingCount,
+                  defaultValue:
+                    'Average rating {{avg}} out of 5, {{count}} ratings',
+                })}
+              >
+                <Rating
+                  value={inventory.avg_rating!}
+                  readOnly
+                  precision={0.1}
+                  size="small"
+                  sx={{ color: 'warning.main' }}
+                />
+                <Typography
+                  component="span"
+                  variant="caption"
+                  fontWeight={700}
+                  color="text.primary"
+                >
+                  {inventory.avg_rating!.toFixed(1)}
+                </Typography>
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  {t('items.itemCard.ratingsCount', {
+                    count: ratingCount,
+                    defaultValue: '{{count}} ratings',
+                  })}
+                </Typography>
+              </Box>
+            )}
             {hasDealPrices && inventory.deal_end_at && (
               <Typography
                 variant="caption"
@@ -441,22 +491,6 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               </Box>
             )}
 
-            {/* Rating */}
-            {inventory.avg_rating != null &&
-              inventory.avg_rating > 0 && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontSize: '0.7rem' }}
-                  >
-                    {inventory.avg_rating.toFixed(1)} ★
-                    {typeof inventory.rating_count === 'number' &&
-                      inventory.rating_count > 0 &&
-                      ` (${inventory.rating_count})`}
-                  </Typography>
-                </Box>
-              )}
           </Box>
 
           {/* Compact Info Row */}

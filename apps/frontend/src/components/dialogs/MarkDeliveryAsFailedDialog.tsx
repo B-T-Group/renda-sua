@@ -167,12 +167,20 @@ const MarkDeliveryAsFailedDialog: React.FC<
 
           {/* Info Alert */}
           <Alert severity="info">
-            <Typography variant="body2">
-              {t(
-                'orders.failDelivery.info',
-                'This action will mark the delivery as failed. The business will be notified and will need to resolve this failed delivery.'
-              )}
-            </Typography>
+            <Stack spacing={1}>
+              <Typography variant="body2">
+                {t(
+                  'orders.failDelivery.info',
+                  'This action will mark the delivery as failed. The business will be notified and must resolve the case.'
+                )}
+              </Typography>
+              <Typography variant="body2">
+                {t(
+                  'orders.failDelivery.returnItemRefund',
+                  'Please return the item to the business. After the business resolves the case, your deposit hold will be released to your account, and you may receive a partial refund of the delivery fee depending on the failure reason.'
+                )}
+              </Typography>
+            </Stack>
           </Alert>
         </Stack>
       </DialogContent>

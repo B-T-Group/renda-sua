@@ -119,7 +119,7 @@ const ResolveFailedDeliveryDialog: React.FC<
       case 'agent_fault':
         return t(
           'business.failedDeliveries.resolutionDescription.agent_fault',
-          'Client will be refunded. Agent hold will be released and deposited to your business account.'
+          "Client will be refunded. The agent hold will be released and deposited into the agent's account."
         );
       case 'item_fault':
         return t(

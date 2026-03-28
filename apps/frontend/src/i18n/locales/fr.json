@@ -981,7 +981,7 @@
         "item_fault": "Problème d'article"
       },
       "resolutionDescription": {
-        "agent_fault": "Le client sera remboursé. La retenue de l'agent sera libérée et déposée sur votre compte d'entreprise.",
+        "agent_fault": "Le client sera remboursé. La retenue de l'agent sera libérée et versée sur le compte de l'agent.",
         "item_fault": "Le client et l'agent seront remboursés. L'inventaire peut être restauré en option.",
         "client_fault": "Le client et l'agent seront remboursés. Le client sera facturé des frais de livraison échouée (divisés 50/50 entre l'agent et l'entreprise)."
       },
@@ -1746,7 +1746,7 @@
       },
       "failedDeliveries": {
         "q": "Comment sont gérées les livraisons échouées ?",
-        "a": "Lorsqu'une livraison échoue, l'agent indique une raison. Dans votre tableau de bord, allez dans Livraisons échouées pour la résoudre. Options : Faute de l'agent (client remboursé, retenue à l'entreprise) ; Problème d'article (client et agent remboursés, restauration d'inventaire optionnelle) ; Faute du client (tous deux remboursés, frais de livraison échouée à la charge du client, partagés 50/50 entre agent et entreprise)."
+        "a": "Lorsqu'une livraison échoue, l'agent indique une raison. Dans votre tableau de bord, allez dans Livraisons échouées pour la résoudre. Options : Faute de l'agent (client remboursé, retenue de l'agent libérée vers son compte) ; Problème d'article (client et agent remboursés, restauration d'inventaire optionnelle) ; Faute du client (tous deux remboursés, frais de livraison échouée à la charge du client, partagés 50/50 entre agent et entreprise)."
       },
       "addProducts": {
         "q": "Comment ajouter des produits à vendre ?",
@@ -2111,7 +2111,8 @@
       "selectReason": "Sélectionner la raison de l'échec",
       "notesLabel": "Notes supplémentaires (optionnel)",
       "notesPlaceholder": "Ajoutez des détails supplémentaires sur la raison de l'échec de la livraison...",
-      "info": "Cette action marquera la livraison comme échouée. L'entreprise sera notifiée et devra résoudre cette livraison échouée.",
+      "info": "Cette action marquera la livraison comme échouée. L'entreprise sera notifiée et devra résoudre le dossier.",
+      "returnItemRefund": "Veuillez ramener l'article à l'entreprise. Après résolution par l'entreprise, votre caution sera libérée sur votre compte et une partie des frais de livraison pourra vous être remboursée selon la raison de l'échec.",
       "confirm": "Marquer comme échoué",
       "marking": "Marquage comme échoué...",
       "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
@@ -2333,7 +2334,10 @@
     "subcategory": "Sous-catégorie",
     "weight": "Poids",
     "itemCard": {
-      "views": "{{count}} vues"
+      "views": "{{count}} vues",
+      "ratingAria": "Note moyenne {{avg}} sur 5, {{count}} avis",
+      "ratingsCount_one": "{{count}} avis",
+      "ratingsCount_other": "{{count}} avis"
     },
     "dealEndsOn": "Se termine le {{date}}",
     "similarItems": "Articles similaires",

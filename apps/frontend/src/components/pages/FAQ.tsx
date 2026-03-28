@@ -98,7 +98,7 @@ const FAQ: React.FC = () => {
     {
       key: 'failedDeliveries',
       q: t('faq.business.failedDeliveries.q', 'How are failed deliveries managed?'),
-      a: t('faq.business.failedDeliveries.a', 'When a delivery fails, the agent marks it with a failure reason. In your dashboard, go to Failed Deliveries to resolve it. Options: Agent Fault (client refunded, hold to business); Item Fault (client and agent refunded, optional inventory restore); Client Fault (both refunded, client charged a failed delivery fee split 50/50 between agent and business).'),
+      a: t('faq.business.failedDeliveries.a', 'When a delivery fails, the agent marks it with a failure reason. In your dashboard, go to Failed Deliveries to resolve it. Options: Agent Fault (client refunded; agent hold released to the agent); Item Fault (client and agent refunded, optional inventory restore); Client Fault (both refunded, client charged a failed delivery fee split 50/50 between agent and business).'),
     },
     {
       key: 'addProducts',
