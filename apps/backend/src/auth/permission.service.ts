@@ -38,10 +38,6 @@ export class PermissionService {
           user_uploads_by_pk(id: $uploadId) {
             id
             user_id
-            user {
-              id
-              user_type_id
-            }
           }
         }
       `;
@@ -190,7 +186,7 @@ export class PermissionService {
       const currentUser = await this.hasuraUserService.getUser();
 
       // Business owners can access their own data
-      if (currentUser.user_type_id === 'business') {
+      if (currentUser.business) {
         const businessQuery = `
           query GetBusinessOwnership($userId: uuid!, $businessId: uuid!) {
             businesses(where: {user_id: {_eq: $userId}, id: {_eq: $businessId}}) {
@@ -208,7 +204,6 @@ export class PermissionService {
           return true;
         }
 
-        // Check if user is admin and can access any business data
         const isAdmin = await this.isBusinessAdmin(userId);
         return isAdmin;
       }
@@ -229,7 +224,7 @@ export class PermissionService {
     try {
       const currentUser = await this.hasuraUserService.getUser();
 
-      if (currentUser.user_type_id === 'business') {
+      if (currentUser.business) {
         return await this.isBusinessAdmin(userId);
       }
 

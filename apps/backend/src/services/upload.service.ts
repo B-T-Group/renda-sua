@@ -3,6 +3,7 @@ import { PermissionService } from '../auth/permission.service';
 import { AwsService } from '../aws/aws.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { resolveActivePersona } from '../users/persona.util';
 
 export interface UploadData {
   file_name: string;
@@ -150,6 +151,10 @@ export class UploadService {
     expires_at: Date;
   }> {
     const user = await this.hasuraUserService.getUser();
+    const persona = resolveActivePersona(
+      user,
+      this.hasuraUserService.getActivePersonaHeader()
+    );
 
     // Validate required fields
     if (
@@ -169,8 +174,7 @@ export class UploadService {
       throw new Error('File size exceeds maximum allowed size of 10MB');
     }
 
-    // Generate S3 key using the specified format: {user_type}/{user_id}/document_type_id/file_name
-    const key = `${user.user_type_id}/${user.id}/${uploadData.document_type_id}/${uploadData.file_name}`;
+    const key = `${persona}/${user.id}/${uploadData.document_type_id}/${uploadData.file_name}`;
 
     // Generate presigned URL for S3 upload
     const presignedUrlResponse =
@@ -181,7 +185,7 @@ export class UploadService {
         expiresIn: 3600, // 1 hour
         metadata: {
           'user-id': user.id,
-          'user-type': user.user_type_id,
+          'user-type': persona,
           'document-type-id': uploadData.document_type_id.toString(),
           'file-size': uploadData.file_size.toString(),
           'uploaded-at': new Date().toISOString(),

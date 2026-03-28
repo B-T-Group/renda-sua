@@ -5,12 +5,18 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from './SessionAuthContext';
 import { useApiClient } from '../hooks/useApiClient';
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
+import {
+  readStoredActivePersona,
+  writeStoredActivePersona,
+  clearStoredActivePersona,
+} from '../utils/activePersonaStorage';
 
 export interface Address {
   id: string;
@@ -82,6 +88,8 @@ export interface UserProfile {
   accounts?: Account[];
   created_at: string;
   updated_at: string;
+  /** From GET /users/me when backend sends it */
+  personas?: UserType[];
 }
 
 export interface UserProfileResponse {
@@ -97,6 +105,17 @@ export interface GetAccountsResponse {
 }
 
 export type UserType = 'client' | 'agent' | 'business';
+
+function derivePersonasFromProfile(userProfile: UserProfile): UserType[] {
+  if (userProfile.personas?.length) {
+    return [...new Set(userProfile.personas)];
+  }
+  const u: UserType[] = [];
+  if (userProfile.client) u.push('client');
+  if (userProfile.agent) u.push('agent');
+  if (userProfile.business) u.push('business');
+  return u;
+}
 
 const UPDATE_USER_PROFILE_PICTURE = `
   mutation UpdateUserProfilePicture($id: uuid!, $profile_picture_url: String) {
@@ -237,6 +256,11 @@ interface UserProfileContextType {
   loading: boolean;
   error: string | null;
   userType: UserType | null;
+  /** Enabled profile kinds for this account */
+  personas: UserType[];
+  /** More than one persona and no valid stored choice yet */
+  needsPersonaSelection: boolean;
+  setActivePersona: (persona: UserType) => Promise<void>;
   isProfileComplete: boolean;
   successMessage: string | null;
   errorMessage: string | null;
@@ -290,7 +314,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
 
-  const { isLoading } = useAuth0();
+  const { isLoading, getAccessTokenSilently } = useAuth0();
   const { isAuthenticated } = useSessionAuth();
   const apiClient = useApiClient();
   const { i18n } = useTranslation();
@@ -327,37 +351,49 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
         const userProfile = response.data.user;
         setProfile(userProfile);
 
-        // Apply user preferred language when logged in
         const lang = userProfile.preferred_language;
         if (lang === 'en' || lang === 'fr') {
           i18n.changeLanguage(lang);
         }
 
-        // Determine user type based on user_type_id
         const typeMap: Record<string, UserType> = {
           client: 'client',
           agent: 'agent',
           business: 'business',
         };
 
-        const type = typeMap[userProfile.user_type_id];
-        setUserType(type || null);
-
-        // Check if profile is complete based on user type
-        let complete = false;
-        switch (type) {
-          case 'client':
-            complete = !!userProfile.client;
-            break;
-          case 'agent':
-            complete = !!userProfile.agent;
-            break;
-          case 'business':
-            complete = !!userProfile.business;
-            break;
-          default:
-            complete = false;
+        const personasList = derivePersonasFromProfile(userProfile);
+        const stored = readStoredActivePersona();
+        let effective: UserType | null = null;
+        if (
+          stored?.userId === userProfile.id &&
+          personasList.includes(stored.persona)
+        ) {
+          effective = stored.persona;
+        } else if (personasList.length === 1) {
+          effective = personasList[0];
+          writeStoredActivePersona(userProfile.id, effective);
         }
+
+        if (!effective && personasList.length > 0) {
+          const legacy = typeMap[userProfile.user_type_id];
+          if (legacy && personasList.includes(legacy)) {
+            effective = legacy;
+            writeStoredActivePersona(userProfile.id, legacy);
+          }
+        }
+
+        setUserType(effective);
+
+        const personaComplete = (t: UserType): boolean => {
+          if (t === 'client') return !!userProfile.client;
+          if (t === 'agent') return !!userProfile.agent;
+          return !!userProfile.business;
+        };
+
+        const complete =
+          personasList.length > 0 &&
+          personasList.every((p) => personaComplete(p));
 
         setIsProfileComplete(complete);
       } else {
@@ -425,7 +461,37 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setErrorMessage(null);
     setAccounts([]);
     setAccountsError(null);
+    clearStoredActivePersona();
   };
+
+  const personas = useMemo(
+    () => (profile ? derivePersonasFromProfile(profile) : []),
+    [profile]
+  );
+
+  const needsPersonaSelection = useMemo(() => {
+    if (!profile?.id || personas.length <= 1) return false;
+    const s = readStoredActivePersona();
+    return !(s?.userId === profile.id && personas.includes(s.persona));
+  }, [profile?.id, personas]);
+
+  const setActivePersona = useCallback(
+    async (persona: UserType) => {
+      if (!apiClient || !profile?.id) return;
+      await apiClient.post('/users/me/active-persona', { persona });
+      writeStoredActivePersona(profile.id, persona);
+      setUserType(persona);
+      try {
+        await getAccessTokenSilently({
+          cacheMode: 'off',
+          authorizationParams: { active_persona: persona },
+        });
+      } catch (e) {
+        console.warn('Token refresh with active_persona:', e);
+      }
+    },
+    [apiClient, profile?.id, getAccessTokenSilently]
+  );
 
   const clearMessages = () => {
     setSuccessMessage(null);
@@ -586,6 +652,9 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     loading: loading || isLoading,
     error,
     userType,
+    personas,
+    needsPersonaSelection,
+    setActivePersona,
     isProfileComplete,
     successMessage,
     errorMessage,

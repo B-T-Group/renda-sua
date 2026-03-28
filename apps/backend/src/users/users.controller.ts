@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Param,
   Post,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,8 @@ import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { derivePersonas } from './persona.util';
+import { isPersonaId, PersonaId } from './persona.types';
 
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const PROFILE_PICTURE_ACCEPTED_TYPES = [
@@ -44,7 +47,7 @@ export class UsersController {
 
       return {
         success: true,
-        user,
+        user: { ...user, personas: derivePersonas(user) },
         userId: this.hasuraUserService.getUserId(),
         auth0User: {
           sub: auth0User.sub,
@@ -62,6 +65,62 @@ export class UsersController {
           error: error.message,
         },
         HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  @Post('me/personas/:persona')
+  @HttpCode(HttpStatus.OK)
+  async addPersona(
+    @Param('persona') personaParam: string,
+    @Body()
+    body: {
+      vehicle_type_id?: string;
+      name?: string;
+      main_interest?: 'sell_items' | 'rent_items';
+    }
+  ) {
+    const persona = personaParam?.trim().toLowerCase();
+    if (!isPersonaId(persona)) {
+      throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      return await this.ensurePersonaRecord(persona, body);
+    } catch (error: any) {
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to add persona' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post('me/active-persona')
+  @HttpCode(HttpStatus.OK)
+  async mirrorActivePersona(@Body() body: { persona: string }) {
+    const p = body?.persona?.trim().toLowerCase();
+    if (!isPersonaId(p)) {
+      throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      const user = await this.hasuraUserService.getUser();
+      this.assertUserHasPersona(user, p);
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation MirrorUserType($id: uuid!, $t: user_types_enum!) {
+          update_users_by_pk(pk_columns: { id: $id }, _set: { user_type_id: $t }) {
+            id
+            user_type_id
+          }
+        }
+      `,
+        { id: user.id, t: p }
+      );
+      return { success: true, persona: p };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message || 'Failed to update persona' },
+        HttpStatus.BAD_REQUEST
       );
     }
   }
@@ -445,6 +504,7 @@ export class UsersController {
       email: string;
       phone_number?: string;
       user_type_id: string;
+      personas?: PersonaId[];
       profile: {
         vehicle_type_id?: string;
         name?: string;
@@ -460,9 +520,12 @@ export class UsersController {
     }
   ) {
     try {
+      const personas = this.normalizeCreateUserPersonas(userData);
+      const wantsAddress = personas.some((p) =>
+        ['client', 'agent', 'business'].includes(p)
+      );
       const addressData =
-        userData.address &&
-        ['client', 'agent', 'business'].includes(userData.user_type_id)
+        userData.address && wantsAddress
           ? {
               address_line_1: userData.address.address_line_1,
               country: userData.address.country,
@@ -471,94 +534,80 @@ export class UsersController {
             }
           : null;
 
-      if (
-        ['client', 'agent', 'business'].includes(userData.user_type_id) &&
-        !addressData
-      ) {
+      if (wantsAddress && !addressData) {
         throw new Error('address is required for client, agent, and business');
       }
 
-      let result: any;
-
-      switch (userData.user_type_id) {
-        case 'client':
-          result = await this.hasuraSystemService.createUserWithClient({
-            email: userData.email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            phone_number: userData.phone_number,
-            user_type_id: userData.user_type_id,
-          });
-          if (addressData) {
+      if (personas.length > 0) {
+        const mi = userData.profile?.main_interest ?? 'sell_items';
+        if (mi !== 'sell_items' && mi !== 'rent_items') {
+          throw new Error('main_interest must be sell_items or rent_items');
+        }
+        const inserted = await this.hasuraSystemService.insertUserWithPersonas({
+          email: userData.email,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          phone_number: userData.phone_number ?? null,
+          email_verified: false,
+          personas,
+          vehicle_type_id: userData.profile?.vehicle_type_id,
+          business_name:
+            userData.profile?.name?.trim() ||
+            `${userData.first_name}'s Business`,
+          main_interest: mi,
+        });
+        if (addressData) {
+          if (inserted.client?.id) {
             await this.addressesService.createAddressForSignup(
-              result.client.id,
+              inserted.client.id,
               'client',
               addressData
             );
           }
-          return {
-            success: true,
-            user: result.user,
-            client: result.client,
-            userId: this.hasuraUserService.getUserId(),
-          };
-
-        case 'agent':
-          return await this.createAgentUser(userData, addressData);
-
-        case 'business':
-          if (!userData.profile.name) {
-            throw new Error('business name is required for business users');
-          }
-          {
-            const mi = userData.profile.main_interest ?? 'sell_items';
-            if (mi !== 'sell_items' && mi !== 'rent_items') {
-              throw new Error('main_interest must be sell_items or rent_items');
-            }
-            result = await this.hasuraSystemService.createUserWithBusiness(
-              {
-                email: userData.email,
-                first_name: userData.first_name,
-                last_name: userData.last_name,
-                phone_number: userData.phone_number,
-                user_type_id: userData.user_type_id,
-              },
-              {
-                name: userData.profile.name,
-                main_interest: mi,
-              }
+          if (inserted.agent?.id) {
+            await this.addressesService.createAddressForSignup(
+              inserted.agent.id,
+              'agent',
+              addressData
             );
           }
-          if (addressData) {
+          if (inserted.business?.id) {
             await this.addressesService.createAddressForSignup(
-              result.business.id,
+              inserted.business.id,
               'business',
               addressData
             );
           }
-          return {
-            success: true,
-            user: result.user,
-            business: result.business,
-            userId: this.hasuraUserService.getUserId(),
-          };
-
-        default: {
-          // For any other user type, just create the user without related records
-          const user = await this.hasuraSystemService.createUser({
-            email: userData.email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            phone_number: userData.phone_number,
-            user_type_id: userData.user_type_id,
-          });
-          return {
-            success: true,
-            user,
-            userId: this.hasuraUserService.getUserId(),
-          };
         }
+        if (inserted.agent?.id) {
+          await this.handleAgentReferralIfPresent(
+            inserted.agent.id,
+            userData.referral_agent_code,
+            userData.address?.country
+          );
+        }
+        return {
+          success: true,
+          user: inserted.user,
+          client: inserted.client,
+          agent: inserted.agent,
+          business: inserted.business,
+          userId: this.hasuraUserService.getUserId(),
+        };
       }
+
+      const user = await this.hasuraSystemService.createUser({
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        phone_number: userData.phone_number,
+        user_type_id: userData.user_type_id,
+      });
+      return {
+        success: true,
+        user,
+        userId: this.hasuraUserService.getUserId(),
+      };
     } catch (error: any) {
       throw new HttpException(
         {
@@ -570,66 +619,122 @@ export class UsersController {
     }
   }
 
-  private async createAgentUser(
-    userData: {
-      first_name: string;
-      last_name: string;
-      email: string;
-      phone_number?: string;
-      user_type_id: string;
-      profile: {
-        vehicle_type_id?: string;
-        name?: string;
-        main_interest?: 'sell_items' | 'rent_items';
-      };
-      address?: {
-        address_line_1: string;
-        country: string;
-        city: string;
-        state: string;
-      };
-      referral_agent_code?: string;
-    },
-    addressData: {
-      address_line_1: string;
-      country: string;
-      city: string;
-      state: string;
-    } | null
-  ) {
-    const result = await this.hasuraSystemService.createUserWithAgent(
-      {
-        email: userData.email,
-        first_name: userData.first_name,
-        last_name: userData.last_name,
-        phone_number: userData.phone_number,
-        user_type_id: userData.user_type_id,
-      },
-      {
-        vehicle_type_id: userData.profile.vehicle_type_id || 'other',
+  private normalizeCreateUserPersonas(userData: {
+    personas?: PersonaId[];
+    user_type_id: string;
+  }): PersonaId[] {
+    if (userData.personas?.length) {
+      const unique = [...new Set(userData.personas)];
+      if (!unique.every(isPersonaId)) {
+        throw new Error('Invalid personas');
       }
-    );
+      return unique;
+    }
+    if (
+      userData.user_type_id &&
+      ['client', 'agent', 'business'].includes(userData.user_type_id)
+    ) {
+      return [userData.user_type_id as PersonaId];
+    }
+    return [];
+  }
 
-    if (addressData) {
-      await this.addressesService.createAddressForSignup(
-        result.agent.id,
-        'agent',
-        addressData
+  private assertUserHasPersona(user: any, p: PersonaId) {
+    const has =
+      (p === 'client' && user.client) ||
+      (p === 'agent' && user.agent) ||
+      (p === 'business' && user.business);
+    if (!has) {
+      throw new HttpException(
+        'Persona is not enabled for this account',
+        HttpStatus.BAD_REQUEST
       );
     }
+  }
 
-    await this.handleAgentReferralIfPresent(
-      result.agent.id,
-      userData.referral_agent_code,
-      userData.address?.country
-    );
-
-    return {
-      success: true,
-      user: result.user,
-      agent: result.agent,
-      userId: this.hasuraUserService.getUserId(),
-    };
+  private async ensurePersonaRecord(
+    persona: PersonaId,
+    body: {
+      vehicle_type_id?: string;
+      name?: string;
+      main_interest?: 'sell_items' | 'rent_items';
+    }
+  ) {
+    const uid = this.hasuraUserService.getUserId();
+    const user = await this.hasuraUserService.getUser();
+    if (persona === 'client') {
+      if (user.client) return { success: true, client: user.client };
+      const r = await this.hasuraSystemService.executeMutation<{
+        insert_clients_one: { id: string };
+      }>(
+        `
+        mutation AddClient($userId: uuid!) {
+          insert_clients_one(object: { user_id: $userId }) {
+            id
+            user_id
+            created_at
+            updated_at
+          }
+        }
+      `,
+        { userId: uid }
+      );
+      return { success: true, client: r.insert_clients_one };
+    }
+    if (persona === 'agent') {
+      if (user.agent) return { success: true, agent: user.agent };
+      const vt = body.vehicle_type_id || 'other';
+      const r = await this.hasuraSystemService.executeMutation<{
+        insert_agents_one: { id: string };
+      }>(
+        `
+        mutation AddAgent($userId: uuid!, $vt: vehicle_types_enum!) {
+          insert_agents_one(object: { user_id: $userId, vehicle_type_id: $vt }) {
+            id
+            user_id
+            vehicle_type_id
+            created_at
+            updated_at
+          }
+        }
+      `,
+        { userId: uid, vt }
+      );
+      return { success: true, agent: r.insert_agents_one };
+    }
+    if (persona === 'business') {
+      if (user.business) return { success: true, business: user.business };
+      const name = body.name?.trim();
+      if (!name) {
+        throw new HttpException(
+          'Business name is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const mi = body.main_interest ?? 'sell_items';
+      if (mi !== 'sell_items' && mi !== 'rent_items') {
+        throw new HttpException('Invalid main_interest', HttpStatus.BAD_REQUEST);
+      }
+      const r = await this.hasuraSystemService.executeMutation<{
+        insert_businesses_one: { id: string };
+      }>(
+        `
+        mutation AddBusiness($userId: uuid!, $name: String!, $mi: business_main_interest_enum!) {
+          insert_businesses_one(object: { user_id: $userId, name: $name, main_interest: $mi }) {
+            id
+            user_id
+            name
+            main_interest
+            created_at
+            updated_at
+          }
+        }
+      `,
+        { userId: uid, name, mi }
+      );
+      return { success: true, business: r.insert_businesses_one };
+    }
+    throw new HttpException('Invalid persona', HttpStatus.BAD_REQUEST);
   }
 
   private async handleAgentReferralIfPresent(

@@ -17,6 +17,8 @@ import {
   GetUserByIdQuery,
   GetUserClientQuery,
 } from '../generated/graphql';
+import type { PersonaId } from '../users/persona.types';
+import { legacyUserTypeIdForPersonas } from '../users/persona.util';
 import {
   GET_ACCOUNT_BY_ID,
   GET_USER_ACCOUNT,
@@ -636,6 +638,133 @@ export class HasuraSystemService {
     });
 
     return result.insert_users_one;
+  }
+
+  /**
+   * Single insert with nested client and/or agent and/or business (signup / complete profile).
+   */
+  async insertUserWithPersonas(params: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone_number?: string | null;
+    email_verified?: boolean;
+    personas: PersonaId[];
+    vehicle_type_id?: string;
+    business_name?: string;
+    main_interest?: 'sell_items' | 'rent_items';
+  }): Promise<{
+    user: any;
+    client?: any;
+    agent?: any;
+    business?: any;
+  }> {
+    const { mutation, variables } = this.buildMultiPersonaUserInsert(params);
+    const result = await this.executeMutation(mutation, variables);
+    const u = result.insert_users_one;
+    return {
+      user: {
+        id: u.id,
+        email: u.email,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        phone_number: u.phone_number,
+        phone_number_verified: u.phone_number_verified,
+        email_verified: u.email_verified,
+        user_type_id: u.user_type_id,
+        created_at: u.created_at,
+        updated_at: u.updated_at,
+      },
+      client: u.client ?? undefined,
+      agent: u.agent ?? undefined,
+      business: u.business ?? undefined,
+    };
+  }
+
+  private buildMultiPersonaUserInsert(params: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone_number?: string | null;
+    email_verified?: boolean;
+    personas: PersonaId[];
+    vehicle_type_id?: string;
+    business_name?: string;
+    main_interest?: 'sell_items' | 'rent_items';
+  }): { mutation: string; variables: Record<string, unknown> } {
+    const { personas } = params;
+    const varDecls: string[] = [
+      '$email: String!',
+      '$first_name: String!',
+      '$last_name: String!',
+      '$phone_number: String',
+      '$email_verified: Boolean!',
+      '$user_type_id: user_types_enum!',
+    ];
+    const vars: Record<string, unknown> = {
+      email: params.email,
+      first_name: params.first_name,
+      last_name: params.last_name,
+      phone_number: params.phone_number ?? null,
+      email_verified: params.email_verified ?? false,
+      user_type_id: legacyUserTypeIdForPersonas(personas),
+    };
+    const objectFields = [
+      'email: $email',
+      'first_name: $first_name',
+      'last_name: $last_name',
+      'phone_number: $phone_number',
+      'email_verified: $email_verified',
+      'user_type_id: $user_type_id',
+    ];
+    const returnSel = [
+      'id',
+      'email',
+      'first_name',
+      'last_name',
+      'phone_number',
+      'phone_number_verified',
+      'email_verified',
+      'user_type_id',
+      'created_at',
+      'updated_at',
+    ];
+    if (personas.includes('client')) {
+      objectFields.push('client: { data: {} }');
+      returnSel.push('client { id user_id created_at updated_at }');
+    }
+    if (personas.includes('agent')) {
+      varDecls.push('$vehicle_type_id: vehicle_types_enum!');
+      vars.vehicle_type_id = params.vehicle_type_id || 'other';
+      objectFields.push(
+        'agent: { data: { vehicle_type_id: $vehicle_type_id } }'
+      );
+      returnSel.push(
+        'agent { id user_id vehicle_type_id is_verified created_at updated_at }'
+      );
+    }
+    if (personas.includes('business')) {
+      varDecls.push('$business_name: String!');
+      varDecls.push('$main_interest: business_main_interest_enum!');
+      vars.business_name = params.business_name ?? '';
+      vars.main_interest = params.main_interest ?? 'sell_items';
+      objectFields.push(
+        'business: { data: { name: $business_name, main_interest: $main_interest } }'
+      );
+      returnSel.push(
+        'business { id user_id name main_interest is_admin is_verified created_at updated_at }'
+      );
+    }
+    const mutation = `
+      mutation InsertUserMulti(${varDecls.join(', ')}) {
+        insert_users_one(object: {
+          ${objectFields.join('\n          ')}
+        }) {
+          ${returnSel.join('\n          ')}
+        }
+      }
+    `;
+    return { mutation, variables: vars };
   }
 
   /**

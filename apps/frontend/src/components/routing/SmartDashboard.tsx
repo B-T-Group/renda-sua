@@ -6,7 +6,7 @@ import AgentDashboard from '../pages/AgentDashboard';
 import BusinessDashboard from '../pages/BusinessDashboard';
 
 const SmartDashboard: React.FC = () => {
-  const { profile, loading } = useUserProfileContext();
+  const { loading, userType } = useUserProfileContext();
 
   if (loading) {
     return (
@@ -18,21 +18,16 @@ const SmartDashboard: React.FC = () => {
     );
   }
 
-  // Route to appropriate dashboard based on user type
-  if (profile?.agent) {
-    return <AgentDashboard />;
+  switch (userType) {
+    case 'agent':
+      return <AgentDashboard />;
+    case 'business':
+      return <BusinessDashboard />;
+    case 'client':
+      return <Navigate to="/items" replace />;
+    default:
+      return <AgentDashboard />;
   }
-
-  if (profile?.business) {
-    return <BusinessDashboard />;
-  }
-
-  if (profile?.client) {
-    return <Navigate to="/items" replace />;
-  }
-
-  // Fallback to agent dashboard if no specific type is found
-  return <AgentDashboard />;
 };
 
 export default SmartDashboard;

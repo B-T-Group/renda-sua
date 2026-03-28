@@ -9,6 +9,8 @@ import {
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import type { PersonaId } from '../users/persona.types';
+import { resolveActivePersona } from '../users/persona.util';
 
 export interface CreateAddressDto {
   address_line_1: string;
@@ -133,45 +135,6 @@ export class AddressesService {
     }
   }
 
-  private async getUserInfo(userId: string) {
-    const getUserQuery = `
-      query GetUserByIdForAddresses($userId: uuid!) {
-        users_by_pk(id: $userId) {
-          id
-          user_type_id
-          client {
-            id
-          }
-          agent {
-            id
-          }
-          business {
-            id
-          }
-        }
-      }
-    `;
-
-    const userResult = await this.hasuraSystemService.executeQuery(
-      getUserQuery,
-      {
-        userId,
-      }
-    );
-
-    if (!userResult.users_by_pk) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'User not found',
-        },
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    return userResult.users_by_pk;
-  }
-
   private async checkExistingAccount(userId: string, currency: string) {
     const checkExistingAccountQuery = `
       query CheckExistingAccount($userId: uuid!, $currency: currency_enum!) {
@@ -239,14 +202,13 @@ export class AddressesService {
    */
   private async ensureSinglePrimaryAddress(
     userId: string,
-    userType: string,
+    persona: PersonaId,
     excludeAddressId?: string
   ): Promise<void> {
     try {
-      // Get all address IDs for this user via junction tables
       let addressIdsQuery = '';
 
-      switch (userType) {
+      switch (persona) {
         case 'client':
           addressIdsQuery = `
             query GetClientAddressIds($userId: uuid!) {
@@ -284,15 +246,15 @@ export class AddressesService {
       );
 
       let addressIds: string[] = [];
-      if (userType === 'client') {
+      if (persona === 'client') {
         addressIds = (addressIdsResult.client_addresses || []).map(
           (ca: any) => ca.address_id
         );
-      } else if (userType === 'agent') {
+      } else if (persona === 'agent') {
         addressIds = (addressIdsResult.agent_addresses || []).map(
           (aa: any) => aa.address_id
         );
-      } else if (userType === 'business') {
+      } else if (persona === 'business') {
         addressIds = (addressIdsResult.business_addresses || []).map(
           (ba: any) => ba.address_id
         );
@@ -338,21 +300,19 @@ export class AddressesService {
     warning?: string;
   }> {
     try {
-      const userId = this.hasuraUserService.getUserId();
-      const user = await this.getUserInfo(userId);
+      const user = await this.hasuraUserService.getUser();
+      const persona = resolveActivePersona(
+        user,
+        this.hasuraUserService.getActivePersonaHeader()
+      );
 
-      // Geocode the address
       let coordinates: { latitude: number; longitude: number } | null = null;
       let warning = '';
 
       try {
         coordinates = await this.geocodeAddress(addressData);
         if (!coordinates) {
-          // For agent and business addresses, geocoding is crucial
-          if (
-            user.user_type_id === 'agent' ||
-            user.user_type_id === 'business'
-          ) {
+          if (persona === 'agent' || persona === 'business') {
             warning =
               "This address doesn't seem valid. Please verify the address details.";
           } else {
@@ -362,7 +322,7 @@ export class AddressesService {
         }
       } catch (error: any) {
         this.logger.error(`Geocoding error: ${error.message}`);
-        if (user.user_type_id === 'agent' || user.user_type_id === 'business') {
+        if (persona === 'agent' || persona === 'business') {
           warning =
             "This address doesn't seem valid. Please verify the address details.";
         } else {
@@ -371,9 +331,8 @@ export class AddressesService {
         }
       }
 
-      // Ensure only one primary address if this is being set as primary
       if (addressData.is_primary) {
-        await this.ensureSinglePrimaryAddress(user.id, user.user_type_id);
+        await this.ensureSinglePrimaryAddress(user.id, persona);
       }
 
       // Create the address first
@@ -446,8 +405,7 @@ export class AddressesService {
       let junctionMutation = '';
       let junctionVariables = {};
 
-      if (user.user_type_id === 'client') {
-        // Client
+      if (persona === 'client') {
         if (!user.client) {
           throw new HttpException(
             {
@@ -475,8 +433,7 @@ export class AddressesService {
           clientId: user.client.id,
           addressId: address.id,
         };
-      } else if (user.user_type_id === 'business') {
-        // Business
+      } else if (persona === 'business') {
         if (!user.business) {
           throw new HttpException(
             {
@@ -504,8 +461,7 @@ export class AddressesService {
           businessId: user.business.id,
           addressId: address.id,
         };
-      } else if (user.user_type_id === 'agent') {
-        // Agent
+      } else if (persona === 'agent') {
         if (!user.agent) {
           throw new HttpException(
             {
@@ -757,10 +713,12 @@ export class AddressesService {
     warning?: string;
   }> {
     try {
-      const userId = this.hasuraUserService.getUserId();
-      const user = await this.getUserInfo(userId);
+      const user = await this.hasuraUserService.getUser();
+      const persona = resolveActivePersona(
+        user,
+        this.hasuraUserService.getActivePersonaHeader()
+      );
 
-      // Check if address exists
       const address = await this.getAddressesByIds([addressId]);
       if (address.length === 0) {
         throw new HttpException(
@@ -774,30 +732,16 @@ export class AddressesService {
 
       const existingAddress = address[0];
 
-      // Verify address belongs to user via junction tables
-      let addressBelongsToUser = false;
       const checkOwnershipQuery = `
-        query CheckAddressOwnership($addressId: uuid!, $userId: uuid!) {
-          ${
-            user.user_type_id === 'client'
-              ? `
-            client_addresses(where: {address_id: {_eq: $addressId}, client: {user_id: {_eq: $userId}}}) {
-              id
-            }
-          `
-              : user.user_type_id === 'agent'
-              ? `
-            agent_addresses(where: {address_id: {_eq: $addressId}, agent: {user_id: {_eq: $userId}}}) {
-              id
-            }
-          `
-              : user.user_type_id === 'business'
-              ? `
-            business_addresses(where: {address_id: {_eq: $addressId}, business: {user_id: {_eq: $userId}}}) {
-              id
-            }
-          `
-              : ''
+        query CheckAddressOwnershipAny($addressId: uuid!, $userId: uuid!) {
+          client_addresses(where: {address_id: {_eq: $addressId}, client: {user_id: {_eq: $userId}}}) {
+            id
+          }
+          agent_addresses(where: {address_id: {_eq: $addressId}, agent: {user_id: {_eq: $userId}}}) {
+            id
+          }
+          business_addresses(where: {address_id: {_eq: $addressId}, business: {user_id: {_eq: $userId}}}) {
+            id
           }
         }
       `;
@@ -807,13 +751,10 @@ export class AddressesService {
         { addressId, userId: user.id }
       );
 
-      if (user.user_type_id === 'client') {
-        addressBelongsToUser = ownershipResult.client_addresses?.length > 0;
-      } else if (user.user_type_id === 'agent') {
-        addressBelongsToUser = ownershipResult.agent_addresses?.length > 0;
-      } else if (user.user_type_id === 'business') {
-        addressBelongsToUser = ownershipResult.business_addresses?.length > 0;
-      }
+      const addressBelongsToUser =
+        (ownershipResult.client_addresses?.length ?? 0) > 0 ||
+        (ownershipResult.agent_addresses?.length ?? 0) > 0 ||
+        (ownershipResult.business_addresses?.length ?? 0) > 0;
 
       if (!addressBelongsToUser) {
         throw new HttpException(
@@ -868,10 +809,7 @@ export class AddressesService {
 
           coordinates = await this.geocodeAddress(addressForGeocoding);
           if (!coordinates) {
-            if (
-              user.user_type_id === 'agent' ||
-              user.user_type_id === 'business'
-            ) {
+            if (persona === 'agent' || persona === 'business') {
               warning =
                 "This address doesn't seem valid. Please verify the address details.";
             } else {
@@ -881,10 +819,7 @@ export class AddressesService {
           }
         } catch (error: any) {
           this.logger.error(`Geocoding error: ${error.message}`);
-          if (
-            user.user_type_id === 'agent' ||
-            user.user_type_id === 'business'
-          ) {
+          if (persona === 'agent' || persona === 'business') {
             warning =
               "This address doesn't seem valid. Please verify the address details.";
           } else {
@@ -894,13 +829,8 @@ export class AddressesService {
         }
       }
 
-      // Ensure only one primary address if this is being set as primary
       if (addressData.is_primary === true) {
-        await this.ensureSinglePrimaryAddress(
-          user.id,
-          user.user_type_id,
-          addressId
-        );
+        await this.ensureSinglePrimaryAddress(user.id, persona, addressId);
       }
 
       // Build update object
@@ -1110,7 +1040,6 @@ export class AddressesService {
    */
   async getCurrentUserPrimaryAddress(): Promise<AddressResponse | null> {
     const user = await this.hasuraUserService.getUser();
-    console.log(user);
     return (
       user.addresses?.find((address) => address.is_primary) ||
       user.addresses?.[0] ||
@@ -1125,9 +1054,7 @@ export class AddressesService {
     locationId: string
   ): Promise<AddressResponse> {
     const userId = this.hasuraUserService.getUserId();
-    const user = await this.getUserInfo(userId);
 
-    // Verify business location exists and belongs to user's business
     const locationQuery = `
       query GetBusinessLocation($locationId: uuid!, $userId: uuid!) {
         business_locations(
@@ -1162,7 +1089,7 @@ export class AddressesService {
 
     const locationResult = await this.hasuraUserService.executeQuery(
       locationQuery,
-      { locationId, userId: user.id }
+      { locationId, userId }
     );
 
     if (
@@ -1193,9 +1120,7 @@ export class AddressesService {
     warning?: string;
   }> {
     const userId = this.hasuraUserService.getUserId();
-    const user = await this.getUserInfo(userId);
 
-    // Verify business location exists and belongs to user's business
     const locationQuery = `
       query GetBusinessLocation($locationId: uuid!, $userId: uuid!) {
         business_locations(
@@ -1213,7 +1138,7 @@ export class AddressesService {
 
     const locationResult = await this.hasuraUserService.executeQuery(
       locationQuery,
-      { locationId, userId: user.id }
+      { locationId, userId }
     );
 
     if (
@@ -1231,7 +1156,6 @@ export class AddressesService {
 
     const location = locationResult.business_locations[0];
 
-    // If address already exists, update it; otherwise create new
     if (location.address_id) {
       return this.updateBusinessLocationAddress(locationId, {
         ...addressData,
@@ -1354,9 +1278,7 @@ export class AddressesService {
     warning?: string;
   }> {
     const userId = this.hasuraUserService.getUserId();
-    const user = await this.getUserInfo(userId);
 
-    // Get business location and verify ownership
     const location = await this.getBusinessLocationAddress(locationId);
     const locationQuery = `
       query GetBusinessLocation($locationId: uuid!, $userId: uuid!) {
@@ -1375,7 +1297,7 @@ export class AddressesService {
 
     const locationResult = await this.hasuraUserService.executeQuery(
       locationQuery,
-      { locationId, userId: user.id }
+      { locationId, userId }
     );
 
     if (
@@ -1570,9 +1492,7 @@ export class AddressesService {
     message: string;
   }> {
     const userId = this.hasuraUserService.getUserId();
-    const user = await this.getUserInfo(userId);
 
-    // Get business location and verify ownership
     const locationQuery = `
       query GetBusinessLocation($locationId: uuid!, $userId: uuid!) {
         business_locations(
@@ -1589,7 +1509,7 @@ export class AddressesService {
 
     const locationResult = await this.hasuraUserService.executeQuery(
       locationQuery,
-      { locationId, userId: user.id }
+      { locationId, userId }
     );
 
     if (

@@ -14,7 +14,7 @@ export class BusinessAdminGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
       const user = await this.hasuraUserService.getUser();
-      const isBusiness = user.user_type_id === 'business' && user.business;
+      const isBusiness = !!user.business;
       if (!isBusiness) {
         throw new ForbiddenException(
           'Only business users can access admin APIs'

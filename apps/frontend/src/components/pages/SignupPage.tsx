@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   CircularProgress,
   Container,
   Divider,
@@ -91,6 +92,46 @@ const intentDefaults = (intent: SignupIntent | null) => {
   return { user_type_id: 'client' as UserType, main_interest: undefined };
 };
 
+function personasFromGoalIds(
+  ids: SignupGoalId[],
+  options: SignupGoalOption[]
+): UserType[] {
+  const s = new Set<UserType>();
+  for (const id of ids) {
+    const g = options.find((o) => o.id === id);
+    if (g) s.add(g.userType);
+  }
+  return Array.from(s);
+}
+
+function legacyUserTypeFromPersonas(personas: UserType[]): UserType {
+  const order: UserType[] = ['agent', 'business', 'client'];
+  for (const p of order) {
+    if (personas.includes(p)) return p;
+  }
+  return personas[0];
+}
+
+function nextMainInterestForGoals(
+  goalIds: SignupGoalId[],
+  options: SignupGoalOption[],
+  personas: UserType[],
+  current: MainInterest | undefined
+): MainInterest | undefined {
+  if (!personas.includes('business')) return current;
+  const biz = goalIds
+    .map((id) => options.find((g) => g.id === id))
+    .filter((g): g is SignupGoalOption => !!(g && g.userType === 'business'));
+  if (biz.length === 0) return current;
+  const hasRent = biz.some((g) => g.mainInterest === 'rent_items');
+  const hasSell = biz.some((g) => g.mainInterest === 'sell_items');
+  if (hasRent && hasSell) {
+    if (current === 'rent_items' || current === 'sell_items') return current;
+    return 'sell_items';
+  }
+  return biz[0].mainInterest ?? 'sell_items';
+}
+
 const SignupPage: React.FC = () => {
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
@@ -130,13 +171,13 @@ const SignupPage: React.FC = () => {
     loading: locationLoading,
     error: locationHookError,
   } = useCurrentLocation();
-  const [signupGoal, setSignupGoal] = useState<SignupGoalId>(
+  const [selectedGoalIds, setSelectedGoalIds] = useState<SignupGoalId[]>([
     defaults.user_type_id === 'business'
       ? defaults.main_interest === 'rent_items'
         ? 'rent_and_earn'
         : 'sell_items'
-      : 'browse_buy'
-  );
+      : 'browse_buy',
+  ]);
 
   const steps = useMemo(
     () => [
@@ -231,13 +272,31 @@ const SignupPage: React.FC = () => {
           ? 'rent_and_earn'
           : 'sell_items'
         : 'browse_buy';
-    setSignupGoal(initialGoal);
+    setSelectedGoalIds([initialGoal]);
     setForm((prev) => ({
       ...prev,
       user_type_id: defaults.user_type_id,
       main_interest: defaults.main_interest || prev.main_interest,
     }));
   }, [defaults]);
+
+  useEffect(() => {
+    const personas = personasFromGoalIds(selectedGoalIds, goalOptions);
+    if (personas.length === 0) return;
+    setForm((f) => {
+      const mi = nextMainInterestForGoals(
+        selectedGoalIds,
+        goalOptions,
+        personas,
+        f.main_interest
+      );
+      return {
+        ...f,
+        user_type_id: legacyUserTypeFromPersonas(personas),
+        main_interest: mi ?? f.main_interest,
+      };
+    });
+  }, [selectedGoalIds, goalOptions]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -259,19 +318,18 @@ const SignupPage: React.FC = () => {
     return City.getCitiesOfState(form.address.country, selectedStateCode);
   }, [form.address.country, selectedStateCode]);
 
-  const handleGoalSelect = (goalId: SignupGoalId) => {
-    const selected = goalOptions.find((option) => option.id === goalId);
-    if (!selected) return;
-    setSignupGoal(goalId);
-    setForm((prev) => ({
-      ...prev,
-      user_type_id: selected.userType,
-      main_interest:
-        selected.userType === 'business'
-          ? selected.mainInterest ?? 'sell_items'
-          : prev.main_interest,
-    }));
+  const handleGoalToggle = (goalId: SignupGoalId) => {
+    setSelectedGoalIds((prev) => {
+      const has = prev.includes(goalId);
+      if (has && prev.length <= 1) return prev;
+      return has ? prev.filter((id) => id !== goalId) : [...prev, goalId];
+    });
   };
+
+  const selectedPersonas = useMemo(
+    () => personasFromGoalIds(selectedGoalIds, goalOptions),
+    [selectedGoalIds, goalOptions]
+  );
 
   const handleAddressChange = (field: keyof SignupAddress, value: string) => {
     setForm((prev) => ({
@@ -368,11 +426,13 @@ const SignupPage: React.FC = () => {
             !emailTaken &&
             !checkingEmail
         );
-      case 1:
-        if (form.user_type_id === 'business') {
+      case 1: {
+        if (selectedPersonas.length === 0) return false;
+        if (selectedPersonas.includes('business')) {
           return Boolean(form.business_name.trim() && form.main_interest);
         }
-        return Boolean(signupGoal);
+        return selectedGoalIds.length > 0;
+      }
       case 2:
         return Boolean(
           form.address.address_line_1.trim() &&
@@ -383,7 +443,7 @@ const SignupPage: React.FC = () => {
       default:
         return true;
     }
-  }, [activeStep, form, emailTaken, checkingEmail, signupGoal]);
+  }, [activeStep, form, emailTaken, checkingEmail, selectedGoalIds, selectedPersonas]);
 
   const redirectToAuthAfterSignup = useCallback(
     async (emailNormalized: string) => {
@@ -408,15 +468,20 @@ const SignupPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      const personas = selectedPersonas;
       const payload = {
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
         phone_number: form.phone_number,
-        user_type_id: form.user_type_id,
+        personas,
+        user_type_id: legacyUserTypeFromPersonas(personas),
         profile: {
-          name: form.user_type_id === 'business' ? form.business_name : undefined,
-          main_interest: form.user_type_id === 'business' ? form.main_interest : undefined,
+          name: personas.includes('business') ? form.business_name : undefined,
+          main_interest: personas.includes('business')
+            ? form.main_interest
+            : undefined,
+          vehicle_type_id: personas.includes('agent') ? 'other' : undefined,
         },
         address: {
           address_line_1: form.address.address_line_1.trim(),
@@ -452,10 +517,19 @@ const SignupPage: React.FC = () => {
     setActiveStep((s) => Math.max(0, s - 1));
   };
 
-  const goalTitleForReview = useMemo(() => {
-    const g = goalOptions.find((o) => o.id === signupGoal);
-    return g?.title ?? '';
-  }, [goalOptions, signupGoal]);
+  const goalTitleForReview = useMemo(
+    () =>
+      selectedGoalIds
+        .map((id) => goalOptions.find((o) => o.id === id)?.title)
+        .filter(Boolean)
+        .join('; '),
+    [goalOptions, selectedGoalIds]
+  );
+
+  const showBusinessFocusPicker =
+    selectedPersonas.includes('business') &&
+    selectedGoalIds.includes('rent_and_earn') &&
+    selectedGoalIds.includes('sell_items');
 
   const renderReviewAddress = () => {
     const c = form.address.country;
@@ -559,8 +633,8 @@ const SignupPage: React.FC = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
             {t(
-              'signupPage.goalSectionHint',
-              'This helps us set up the right account experience for you.'
+              'signupPage.goalSectionHintMulti',
+              'Select all that apply—you can use more than one mode on one account.'
             )}
           </Typography>
           <Box
@@ -571,12 +645,13 @@ const SignupPage: React.FC = () => {
             }}
           >
             {goalOptions.map((goal) => {
-              const selected = signupGoal === goal.id;
+              const selected = selectedGoalIds.includes(goal.id);
               return (
                 <Card
                   key={goal.id}
                   elevation={selected ? 2 : 0}
                   sx={{
+                    position: 'relative',
                     cursor: 'pointer',
                     border: selected ? 2 : 1,
                     borderColor: selected ? goal.accent : 'divider',
@@ -591,9 +666,16 @@ const SignupPage: React.FC = () => {
                     },
                     '&:active': { transform: { xs: 'scale(0.98)', sm: 'none' } },
                   }}
-                  onClick={() => handleGoalSelect(goal.id)}
+                  onClick={() => handleGoalToggle(goal.id)}
                 >
                   <CardContent sx={{ py: { xs: 2, sm: 2 }, px: { xs: 2, sm: 1.5 } }}>
+                    <Checkbox
+                      checked={selected}
+                      size="small"
+                      onChange={() => handleGoalToggle(goal.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ position: 'absolute', top: 6, right: 6, zIndex: 1, p: 0.5 }}
+                    />
                     <Box sx={{ width: '100%', maxWidth: { xs: 80, sm: 92 }, mb: { xs: 1, sm: 1 }, mx: 'auto' }}>
                       <SignupGoalIllustration goalId={goal.id} accent={goal.accent} />
                     </Box>
@@ -608,24 +690,48 @@ const SignupPage: React.FC = () => {
               );
             })}
           </Box>
-          {form.user_type_id === 'business' && (
-            <TextField
-              fullWidth
-              label={t('signupPage.businessName', 'Business name')}
-              value={form.business_name}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, business_name: e.target.value }))
-              }
-              required
-              autoComplete="organization"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <BusinessIcon fontSize="small" color="action" />
-                  </InputAdornment>
-                ),
-              }}
-            />
+          {selectedPersonas.includes('business') && (
+            <>
+              <TextField
+                fullWidth
+                label={t('signupPage.businessName', 'Business name')}
+                value={form.business_name}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, business_name: e.target.value }))
+                }
+                required
+                autoComplete="organization"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <BusinessIcon fontSize="small" color="action" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              {showBusinessFocusPicker && (
+                <TextField
+                  select
+                  fullWidth
+                  required
+                  label={t('signupPage.primaryBusinessFocus', 'Primary business focus')}
+                  value={form.main_interest}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      main_interest: e.target.value as MainInterest,
+                    }))
+                  }
+                >
+                  <MenuItem value="sell_items">
+                    {t('completeProfile.mainInterest.sellItems', 'Selling products')}
+                  </MenuItem>
+                  <MenuItem value="rent_items">
+                    {t('completeProfile.mainInterest.rentItems', 'Renting out items')}
+                  </MenuItem>
+                </TextField>
+              )}
+            </>
           )}
         </Stack>
       );
@@ -791,8 +897,8 @@ const SignupPage: React.FC = () => {
             <Divider />
             {reviewRow(t('signupPage.review.phone', 'Phone'), form.phone_number)}
             <Divider />
-            {reviewRow(t('signupPage.review.goal', 'Goal'), goalTitleForReview)}
-            {form.user_type_id === 'business' && (
+            {reviewRow(t('signupPage.review.goal', 'Goals'), goalTitleForReview)}
+            {selectedPersonas.includes('business') && (
               <>
                 <Divider />
                 {reviewRow(

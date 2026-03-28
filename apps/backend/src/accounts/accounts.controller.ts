@@ -327,12 +327,10 @@ export class AccountsController {
     try {
       const userId = this.hasuraUserService.getUserId();
 
-      // First, get the current user to check their user_type_id
       const getUserQuery = `
         query GetUserByIdForAccount($userId: uuid!) {
           users_by_pk(id: $userId) {
             id
-            user_type_id
           }
         }
       `;

@@ -41,6 +41,7 @@ import RentalRequestSubmittedPage from '../components/pages/RentalRequestSubmitt
 import CategoriesManagementPage from '../components/pages/CategoriesManagementPage';
 import CheckoutPage from '../components/pages/CheckoutPage';
 import CompleteProfile from '../components/pages/CompleteProfile';
+import SelectPersonaPage from '../components/pages/SelectPersonaPage';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
@@ -383,6 +384,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <CompleteProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/select-persona"
+              element={
+                <ProtectedRoute>
+                  <SelectPersonaPage />
                 </ProtectedRoute>
               }
             />

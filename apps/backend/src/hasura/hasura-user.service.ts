@@ -588,6 +588,14 @@ export class HasuraUserService {
     return this.user_id;
   }
 
+  /** Raw `X-Active-Persona` header for multi-persona REST flows. */
+  getActivePersonaHeader(): string | undefined {
+    const h = this.request?.headers;
+    if (!h) return undefined;
+    const raw = h['x-active-persona'] ?? h['X-Active-Persona'];
+    return typeof raw === 'string' ? raw : undefined;
+  }
+
   /**
    * Check if the service is properly configured
    */
@@ -600,136 +608,102 @@ export class HasuraUserService {
     );
   }
 
-  /**
-   * Fetch all user addresses by user ID and user type
-   */
-  private async fetchUserAddresses(
-    userId: string,
-    userType: string
+  private formatAddressRow(address: any): Addresses & { formatted_address: string } {
+    const addressParts = [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ].filter((part) => part && String(part).trim() !== '');
+    return {
+      ...address,
+      formatted_address: addressParts.join(', '),
+    };
+  }
+
+  /** All addresses linked to any of the user’s client/agent/business profiles (deduped). */
+  private async fetchAllUserAddresses(
+    userId: string
   ): Promise<(Addresses & { formatted_address: string })[]> {
-    let query: string;
-
-    switch (userType) {
-      case 'client':
-        query = `
-          query GetAllClientAddresses($userId: uuid!) {
-            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
-              id
-              client_id
-              address_id
-              created_at
-              updated_at
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                latitude
-                longitude
-                created_at
-                updated_at
-              }
-            }
+    const query = `
+      query GetAllUserAddressesMerged($userId: uuid!) {
+        client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            latitude
+            longitude
+            created_at
+            updated_at
           }
-        `;
-        break;
-      case 'agent':
-        query = `
-          query GetAllAgentAddresses($userId: uuid!) {
-            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
-              id
-              agent_id
-              address_id
-              created_at
-              updated_at
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                latitude
-                longitude
-                created_at
-                updated_at
-              }
-            }
+        }
+        agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            latitude
+            longitude
+            created_at
+            updated_at
           }
-        `;
-        break;
-      case 'business':
-        query = `
-          query GetAllBusinessAddresses($userId: uuid!) {
-            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
-              id
-              business_id
-              address_id
-              created_at
-              updated_at
-              address {
-                id
-                address_line_1
-                address_line_2
-                city
-                state
-                postal_code
-                country
-                is_primary
-                address_type
-                latitude
-                longitude
-                created_at
-                updated_at
-              }
-            }
+        }
+        business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+          address {
+            id
+            address_line_1
+            address_line_2
+            city
+            state
+            postal_code
+            country
+            is_primary
+            address_type
+            latitude
+            longitude
+            created_at
+            updated_at
           }
-        `;
-        break;
-      default:
-        return [];
-    }
-
-    const addressResult = await this.executeQuery(query, {
+        }
+      }
+    `;
+    // User JWT has a single default role; junction tables are only exposed to matching
+    // roles (client/agent/business). Admin query + $userId is scoped to this session user.
+    const addressResult = await this.hasuraSystemService.executeQuery(query, {
       userId,
     });
-
-    const addresses =
-      addressResult.client_addresses ||
-      addressResult.agent_addresses ||
-      addressResult.business_addresses;
-
-    return (
-      addresses
-        ?.map((item: any) => {
-          const address = item.address;
-          if (!address) return null;
-
-          // Create formatted address by combining address fields
-          const addressParts = [
-            address.address_line_1,
-            address.address_line_2,
-            address.city,
-            address.state,
-            address.postal_code,
-            address.country,
-          ].filter((part) => part && part.trim() !== '');
-
-          return {
-            ...address,
-            formatted_address: addressParts.join(', '),
-          };
-        })
-        .filter(Boolean) || []
-    );
+    const rows = [
+      ...(addressResult.client_addresses || []),
+      ...(addressResult.agent_addresses || []),
+      ...(addressResult.business_addresses || []),
+    ];
+    const byId = new Map<
+      string,
+      Addresses & { formatted_address: string }
+    >();
+    for (const item of rows) {
+      const address = item?.address;
+      if (!address?.id) continue;
+      if (!byId.has(address.id)) {
+        byId.set(address.id, this.formatAddressRow(address));
+      }
+    }
+    return Array.from(byId.values());
   }
 
   /**
@@ -806,7 +780,7 @@ export class HasuraUserService {
         throw new Error('Invalid user type');
     }
 
-    const addressResult = await this.executeQuery(query, {
+    const addressResult = await this.hasuraSystemService.executeQuery(query, {
       userId,
     });
 
@@ -882,10 +856,7 @@ export class HasuraUserService {
       // Fetch addresses separately using the junction table queries
       // This is still more efficient than the original 4 sequential queries
       // (now 2 queries: user+relations, then addresses)
-      const addresses = await this.fetchUserAddresses(
-        user.id,
-        user.user_type_id
-      );
+      const addresses = await this.fetchAllUserAddresses(user.id);
       user.addresses = addresses as Addresses[];
 
       return user;

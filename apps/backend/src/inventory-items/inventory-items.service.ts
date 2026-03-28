@@ -1213,7 +1213,7 @@ export class InventoryItemsService {
     if (!clientId) return empty;
 
     const query = `
-      query GetPastOrderSignals($clientId: uuid!, $status: String!) {
+      query GetPastOrderSignals($clientId: uuid!, $status: order_status!) {
         orders(
           where: { client_id: { _eq: $clientId }, current_status: { _eq: $status } }
           order_by: { created_at: desc }

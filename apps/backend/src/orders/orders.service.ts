@@ -31,6 +31,7 @@ import { DeliveryPinService } from './delivery-pin.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { resolveActivePersona } from '../users/persona.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -2415,14 +2416,18 @@ export class OrdersService {
    */
   async getOrders(filters?: any): Promise<Orders[]> {
     const user = await this.hasuraUserService.getUser();
+    const persona = resolveActivePersona(
+      user,
+      this.hasuraUserService.getActivePersonaHeader()
+    );
     let personaFilter: any = {};
     const pendingClaimTransactionsByOrderNumber = new Map<
       string,
       { id: string; transaction_id?: string }
     >();
-    if (user.user_type_id === 'client' && user.client) {
+    if (persona === 'client' && user.client) {
       personaFilter = { client_id: { _eq: user.client.id } };
-    } else if (user.user_type_id === 'agent' && user.agent) {
+    } else if (persona === 'agent' && user.agent) {
       const pendingClaimTransactions =
         await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionsByCustomerEmail(
           user.email
@@ -2451,7 +2456,7 @@ export class OrdersService {
       } else {
         personaFilter = { assigned_agent_id: { _eq: user.agent.id } };
       }
-    } else if (user.user_type_id === 'business' && user.business) {
+    } else if (persona === 'business' && user.business) {
       personaFilter = { business_id: { _eq: user.business.id } };
     } else {
       throw new HttpException(

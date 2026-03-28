@@ -8,6 +8,7 @@ import {
     MoreVert,
     Person,
     ShoppingCart,
+    SwapHoriz,
 } from '@mui/icons-material';
 import {
     AppBar,
@@ -33,12 +34,16 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import { alpha } from '@mui/material/styles';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  useUserProfileContext,
+  UserType,
+} from '../../contexts/UserProfileContext';
 import LoginHeaderButton from '../auth/LoginHeaderButton';
 import SignupHeaderButton from '../auth/SignupHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
@@ -51,13 +56,58 @@ import UserBalanceSummary from '../common/UserBalanceSummary';
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
   const { isAuthenticated, user, logout } = useSessionAuth();
-  const { userType, profile } = useUserProfileContext();
+  const { userType, profile, personas, setActivePersona } =
+    useUserProfileContext();
+
+  const personaLabel = (p: UserType) => {
+    switch (p) {
+      case 'client':
+        return t('persona.client', 'Client');
+      case 'agent':
+        return t('persona.agent', 'Delivery agent');
+      case 'business':
+        return t('persona.business', 'Business');
+      default:
+        return p;
+    }
+  };
   const { getCartItemCount } = useCart();
   const { t } = useTranslation();
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const personaHeader = useMemo(() => {
+    if (!isAuthenticated || userType == null) {
+      return {
+        backgroundColor: theme.palette.primary.dark,
+        navActiveUnderline: '#93c5fd',
+      };
+    }
+    switch (userType) {
+      case 'client':
+        return {
+          backgroundColor: '#1565c0',
+          navActiveUnderline: '#90caf9',
+        };
+      case 'agent':
+        return {
+          backgroundColor: '#2e7d32',
+          navActiveUnderline: '#a5d6a7',
+        };
+      case 'business':
+        return {
+          backgroundColor: '#bf360c',
+          navActiveUnderline: '#ffcc80',
+        };
+      default:
+        return {
+          backgroundColor: theme.palette.primary.dark,
+          navActiveUnderline: '#93c5fd',
+        };
+    }
+  }, [isAuthenticated, userType, theme.palette.primary.dark]);
 
   // State for mobile drawer, user menu, and submenu
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -231,7 +281,7 @@ const Header: React.FC = () => {
           transform: 'translateX(-50%)',
           width: isActiveRoute(item.path) ? '100%' : '0%',
           height: '2px',
-          backgroundColor: '#93c5fd',
+          backgroundColor: personaHeader.navActiveUnderline,
           transition: 'width 0.3s ease-in-out',
         },
         position: 'relative',
@@ -279,10 +329,10 @@ const Header: React.FC = () => {
                 mx: 1,
                 mb: 0.5,
                 '&.Mui-selected': {
-                  backgroundColor: '#1e40af',
+                  backgroundColor: alpha(personaHeader.backgroundColor, 0.92),
                   color: 'white',
                   '&:hover': {
-                    backgroundColor: '#1e3a8a',
+                    backgroundColor: alpha(personaHeader.backgroundColor, 1),
                   },
                 },
               }}
@@ -397,6 +447,30 @@ const Header: React.FC = () => {
                 <ListItemText primary={t('auth.profile', 'Profile')} />
               </ListItemButton>
             </ListItem>
+            {personas.length > 1 &&
+              personas
+                .filter((p) => p !== userType)
+                .map((p) => (
+                  <ListItem key={p} disablePadding>
+                    <ListItemButton
+                      onClick={async () => {
+                        handleDrawerToggle();
+                        await setActivePersona(p);
+                        navigate('/app');
+                      }}
+                      sx={{ borderRadius: 1, mx: 1 }}
+                    >
+                      <ListItemIcon>
+                        <SwapHoriz />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={t('persona.switchTo', 'Switch to {{label}}', {
+                          label: personaLabel(p),
+                        })}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
             <ListItem disablePadding>
               <ListItemButton
                 onClick={() => {
@@ -423,8 +497,9 @@ const Header: React.FC = () => {
         position="sticky"
         elevation={0}
         sx={{
-          backgroundColor: theme.palette.primary.dark,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          backgroundColor: personaHeader.backgroundColor,
+          transition: 'background-color 0.35s ease',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
           color: '#ffffff',
           '& .MuiToolbar-root': {
             backgroundColor: 'transparent',
@@ -662,6 +737,28 @@ const Header: React.FC = () => {
                       </ListItemIcon>
                       Documents
                     </MenuItem>
+
+                    {personas.length > 1 &&
+                      personas
+                        .filter((p) => p !== userType)
+                        .map((p) => (
+                          <MenuItem
+                            key={p}
+                            onClick={async () => {
+                              handleUserMenuClose();
+                              await setActivePersona(p);
+                              navigate('/app');
+                            }}
+                            sx={{ py: 1.5 }}
+                          >
+                            <ListItemIcon>
+                              <SwapHoriz fontSize="small" />
+                            </ListItemIcon>
+                            {t('persona.switchTo', 'Switch to {{label}}', {
+                              label: personaLabel(p),
+                            })}
+                          </MenuItem>
+                        ))}
 
                     <Divider />
 

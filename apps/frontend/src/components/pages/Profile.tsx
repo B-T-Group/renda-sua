@@ -16,9 +16,17 @@ import {
   CardContent,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -27,8 +35,13 @@ import axios from 'axios';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  type UserProfile,
+  type UserType,
+  useUserProfileContext,
+} from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 
 import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import AddressManager from '../common/AddressManager';
@@ -36,6 +49,38 @@ import PhoneInput from '../common/PhoneInput';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+function resolveAddressEntity(
+  profile: UserProfile,
+  active: UserType | null
+): { entityType: UserType; entityId: string } {
+  if (active === 'agent' && profile.agent?.id) {
+    return { entityType: 'agent', entityId: profile.agent.id };
+  }
+  if (active === 'business' && profile.business?.id) {
+    return { entityType: 'business', entityId: profile.business.id };
+  }
+  if (active === 'client' && profile.client?.id) {
+    return { entityType: 'client', entityId: profile.client.id };
+  }
+  if (profile.client?.id) return { entityType: 'client', entityId: profile.client.id };
+  if (profile.agent?.id) return { entityType: 'agent', entityId: profile.agent.id };
+  if (profile.business?.id) {
+    return { entityType: 'business', entityId: profile.business.id };
+  }
+  return { entityType: 'client', entityId: '' };
+}
+
+function accountEntityTypeForProfile(
+  profile: UserProfile,
+  active: UserType | null
+): UserType {
+  if (active) return active;
+  if (profile.client) return 'client';
+  if (profile.agent) return 'agent';
+  if (profile.business) return 'business';
+  return 'client';
+}
 
 const Profile: React.FC = () => {
   const { t } = useTranslation();
@@ -59,11 +104,23 @@ const Profile: React.FC = () => {
     updateProfilePicture,
     clearMessages,
     refetch,
+    personas,
+    userType: activePersona,
   } = useUserProfileContext();
 
   const apiClient = useApiClient();
+  const { vehicleTypes } = useVehicleTypes();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [profilePictureUploading, setProfilePictureUploading] = useState(false);
+  const [personaSubmitting, setPersonaSubmitting] = useState(false);
+  const [personaError, setPersonaError] = useState<string | null>(null);
+  const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const [businessDialogOpen, setBusinessDialogOpen] = useState(false);
+  const [vehicleTypeId, setVehicleTypeId] = useState('other');
+  const [businessName, setBusinessName] = useState('');
+  const [businessMainInterest, setBusinessMainInterest] = useState<
+    'sell_items' | 'rent_items'
+  >('sell_items');
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -135,6 +192,47 @@ const Profile: React.FC = () => {
   };
 
   // Handle account creation from address creation
+  const postAddPersona = async (
+    persona: UserType,
+    body: Record<string, unknown> = {}
+  ) => {
+    if (!apiClient || !profile) return;
+    setPersonaSubmitting(true);
+    setPersonaError(null);
+    try {
+      await apiClient.post(`/users/me/personas/${persona}`, body);
+      await refetch();
+      setAgentDialogOpen(false);
+      setBusinessDialogOpen(false);
+      setBusinessName('');
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error ||
+        t('profile.addPersonaError', 'Could not update your account modes.');
+      setPersonaError(msg);
+    } finally {
+      setPersonaSubmitting(false);
+    }
+  };
+
+  const handleAddClientPersona = () => postAddPersona('client', {});
+
+  const handleConfirmAgentPersona = () =>
+    postAddPersona('agent', { vehicle_type_id: vehicleTypeId || 'other' });
+
+  const handleConfirmBusinessPersona = () => {
+    const fallback =
+      profile?.first_name?.trim() != null && profile.first_name.trim() !== ''
+        ? `${profile.first_name.trim()}'s Business`
+        : t('profile.defaultBusinessName', 'My business');
+    const name = businessName.trim() || fallback;
+    postAddPersona('business', {
+      name,
+      main_interest: businessMainInterest,
+    });
+  };
+
   const handleAccountCreated = async (account: {
     id: string;
     [key: string]: unknown;
@@ -171,6 +269,11 @@ const Profile: React.FC = () => {
     );
   }
 
+  const addressEntity =
+    profile && resolveAddressEntity(profile, activePersona);
+  const accountEntityType =
+    profile && accountEntityTypeForProfile(profile, activePersona);
+
   return (
     <Container
       maxWidth="lg"
@@ -194,6 +297,12 @@ const Profile: React.FC = () => {
             </Alert>
           )}
         </Stack>
+      )}
+
+      {personaError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setPersonaError(null)}>
+          {personaError}
+        </Alert>
       )}
 
       <Typography
@@ -272,7 +381,7 @@ const Profile: React.FC = () => {
                 </Typography>
               </Stack>
 
-              {profile?.user_type_id === 'agent' && !profile?.profile_picture_url && (
+              {profile?.agent && !profile?.profile_picture_url && (
                 <Alert severity="info" sx={{ mb: 2 }} icon={false}>
                   <Typography variant="body2">
                     {t(
@@ -376,6 +485,51 @@ const Profile: React.FC = () => {
         {/* Quick links: Documents and Addresses */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Stack spacing={2}>
+            {profile && (
+              <Card variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t('profile.accountModesTitle', 'Account modes')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {t(
+                    'profile.accountModesHint',
+                    'Add another role to shop, sell, rent, or deliver from the same login.'
+                  )}
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={1}>
+                  {!personas.includes('client') && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={personaSubmitting}
+                      onClick={handleAddClientPersona}
+                    >
+                      {t('profile.addClientMode', 'Create client account')}
+                    </Button>
+                  )}
+                  {!personas.includes('agent') && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={personaSubmitting}
+                      onClick={() => setAgentDialogOpen(true)}
+                    >
+                      {t('profile.addAgentMode', 'Become delivery agent')}
+                    </Button>
+                  )}
+                  {!personas.includes('business') && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={personaSubmitting}
+                      onClick={() => setBusinessDialogOpen(true)}
+                    >
+                      {t('profile.addBusinessMode', 'Become a business')}
+                    </Button>
+                  )}
+                </Stack>
+              </Card>
+            )}
             {/* Manage Documents */}
             <Card
               component={RouterLink}
@@ -461,14 +615,8 @@ const Profile: React.FC = () => {
                 </Box>
                 <CardContent sx={{ pt: 1.5, px: 2, pb: 2 }}>
                   <AddressManager
-                    entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
-                    entityId={
-                      profile.user_type_id === 'agent'
-                        ? profile.agent?.id || ''
-                        : profile.user_type_id === 'client'
-                          ? profile.client?.id || ''
-                          : profile.business?.id || ''
-                    }
+                    entityType={addressEntity?.entityType ?? 'client'}
+                    entityId={addressEntity?.entityId ?? ''}
                     showCoordinates={false}
                     onAccountCreated={handleAccountCreated}
                     embedded
@@ -497,7 +645,7 @@ const Profile: React.FC = () => {
           </Typography>
           <AccountManager
             ref={accountManagerRef}
-            entityType={profile.user_type_id as 'agent' | 'client' | 'business'}
+            entityType={accountEntityType ?? 'client'}
             entityId={profile.id}
             showTransactions={true}
             showTotalSummary={true}
@@ -507,6 +655,105 @@ const Profile: React.FC = () => {
           />
         </Box>
       )}
+
+      <Dialog
+        open={agentDialogOpen}
+        onClose={() => !personaSubmitting && setAgentDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {t('profile.addAgentDialogTitle', 'Delivery agent setup')}
+        </DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 1 }} size="small">
+            <InputLabel>{t('profile.vehicleType', 'Vehicle type')}</InputLabel>
+            <Select
+              label={t('profile.vehicleType', 'Vehicle type')}
+              value={vehicleTypeId}
+              onChange={(e) => setVehicleTypeId(String(e.target.value))}
+            >
+              {(vehicleTypes.length > 0
+                ? vehicleTypes
+                : [{ id: 'other', comment: t('profile.vehicleOther', 'Other') }]
+              ).map((vt) => (
+                <MenuItem key={vt.id} value={vt.id}>
+                  {vt.comment || vt.id}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+            {t(
+              'profile.addAgentDialogHint',
+              'Upload ID documents from Manage Documents when you are ready.'
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAgentDialogOpen(false)} disabled={personaSubmitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmAgentPersona}
+            disabled={personaSubmitting}
+          >
+            {t('profile.confirmAddAgent', 'Enable agent mode')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={businessDialogOpen}
+        onClose={() => !personaSubmitting && setBusinessDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {t('profile.addBusinessDialogTitle', 'Business profile')}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              label={t('completeProfile.businessNameLabel', 'Business name')}
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              placeholder={`${profile?.first_name ?? ''}'s Business`}
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel>{t('completeProfile.mainInterestLabel', 'Focus')}</InputLabel>
+              <Select
+                label={t('completeProfile.mainInterestLabel', 'Focus')}
+                value={businessMainInterest}
+                onChange={(e) =>
+                  setBusinessMainInterest(e.target.value as 'sell_items' | 'rent_items')
+                }
+              >
+                <MenuItem value="sell_items">
+                  {t('completeProfile.mainInterest.sellItems', 'Selling products')}
+                </MenuItem>
+                <MenuItem value="rent_items">
+                  {t('completeProfile.mainInterest.rentItems', 'Renting out items')}
+                </MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBusinessDialogOpen(false)} disabled={personaSubmitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmBusinessPersona}
+            disabled={personaSubmitting}
+          >
+            {t('profile.confirmAddBusiness', 'Enable business mode')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

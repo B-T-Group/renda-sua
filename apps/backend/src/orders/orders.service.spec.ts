@@ -82,6 +82,7 @@ describe('OrdersService', () => {
   beforeEach(async () => {
     const mockHasuraUserService = {
       getUser: jest.fn(),
+      getActivePersonaHeader: jest.fn().mockReturnValue(undefined),
       updateOrderStatus: jest.fn(),
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),

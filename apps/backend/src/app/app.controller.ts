@@ -11,6 +11,8 @@ import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { Public } from '../auth/public.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import type { PersonaId } from '../users/persona.types';
+import { isPersonaId } from '../users/persona.types';
 import { AppService } from './app.service';
 
 @Controller()
@@ -142,162 +144,44 @@ export class AppController {
     userData: {
       first_name: string;
       last_name: string;
-      user_type_id: string;
+      /** @deprecated use `personas` */
+      user_type_id?: string;
+      personas?: PersonaId[];
       profile: {
         vehicle_type_id?: string;
         name?: string;
+        main_interest?: 'sell_items' | 'rent_items';
       };
     }
   ) {
     try {
-      // Use system service to create user without authentication
       const email = `test-${Date.now()}@example.com`;
-
-      let result: any;
-
-      switch (userData.user_type_id) {
-        case 'client':
-          result = await this.hasuraSystemService.executeMutation(
-            `
-            mutation CreateUserWithClient($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!) {
-              insert_users_one(object: {
-                email: $email,
-                first_name: $first_name,
-                last_name: $last_name,
-                user_type_id: $user_type_id,
-                client: {
-                  data: {}
-                }
-              }) {
-                id
-                email
-                first_name
-                last_name
-                user_type_id
-                created_at
-                updated_at
-                clients {
-                  id
-                  user_id
-                  created_at
-                  updated_at
-                }
-              }
-            }
-          `,
-            {
-              email: email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              user_type_id: userData.user_type_id,
-            }
-          );
-          return {
-            success: true,
-            user: result.insert_users_one,
-            client: result.insert_users_one.clients[0],
-          };
-
-        case 'agent':
-          result = await this.hasuraSystemService.executeMutation(
-            `
-            mutation CreateUserWithAgent($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $vehicle_type_id: String!) {
-              insert_users_one(object: {
-                email: $email,
-                first_name: $first_name,
-                last_name: $last_name,
-                user_type_id: $user_type_id,
-                agent: {
-                  data: {
-                    vehicle_type_id: $vehicle_type_id
-                  }
-                }
-              }) {
-                id
-                email
-                first_name
-                last_name
-                user_type_id
-                created_at
-                updated_at
-                agents {
-                  id
-                  user_id
-                  vehicle_type_id
-                  created_at
-                  updated_at
-                }
-              }
-            }
-          `,
-            {
-              email: email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              user_type_id: userData.user_type_id,
-              vehicle_type_id: userData.profile.vehicle_type_id || 'other',
-            }
-          );
-          return {
-            success: true,
-            user: result.insert_users_one,
-            agent: result.insert_users_one.agents[0],
-          };
-
-        case 'business':
-          if (!userData.profile.name) {
-            throw new Error('business name is required for business users');
-          }
-          result = await this.hasuraSystemService.executeMutation(
-            `
-            mutation CreateUserWithBusiness($email: String!, $first_name: String!, $last_name: String!, $user_type_id: String!, $name: String!) {
-              insert_users_one(object: {
-                email: $email,
-                first_name: $first_name,
-                last_name: $last_name,
-                user_type_id: $user_type_id,
-                business: {
-                  data: {
-                    name: $name
-                  }
-                }
-              }) {
-                id
-                email
-                first_name
-                last_name
-                user_type_id
-                created_at
-                updated_at
-                business {
-                  id
-                  user_id
-                  name
-                  is_admin
-                  is_verified
-                  created_at
-                  updated_at
-                }
-              }
-            }
-          `,
-            {
-              email: email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              user_type_id: userData.user_type_id,
-              name: userData.profile.name,
-            }
-          );
-          return {
-            success: true,
-            user: result.insert_users_one,
-            business: result.insert_users_one.business,
-          };
-
-        default:
-          throw new Error('Invalid user type');
+      let personas: PersonaId[] = [];
+      if (userData.personas?.length) {
+        personas = [...new Set(userData.personas)].filter(isPersonaId);
+      } else if (userData.user_type_id && isPersonaId(userData.user_type_id)) {
+        personas = [userData.user_type_id];
       }
+      if (personas.length === 0) {
+        throw new Error('personas or user_type_id is required');
+      }
+      if (personas.includes('business') && !userData.profile?.name?.trim()) {
+        throw new Error('business name is required when business is in personas');
+      }
+      const inserted = await this.hasuraSystemService.insertUserWithPersonas({
+        email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        phone_number: null,
+        email_verified: false,
+        personas,
+        vehicle_type_id: userData.profile?.vehicle_type_id,
+        business_name:
+          userData.profile?.name?.trim() ||
+          `${userData.first_name}'s Business`,
+        main_interest: userData.profile?.main_interest ?? 'sell_items',
+      });
+      return { success: true, ...inserted };
     } catch (error: any) {
       throw new HttpException(
         {

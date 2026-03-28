@@ -10,7 +10,6 @@ import { CreateRatingDto, RatingType } from './dto/create-rating.dto';
 // User Profile Types
 interface UserProfile {
   id: string;
-  user_type_id: string;
   first_name: string;
   last_name: string;
   client?: { id: string };
@@ -304,7 +303,6 @@ export class RatingsService {
       query GetUserProfile($userId: uuid!) {
         users_by_pk(id: $userId) {
           id
-          user_type_id
           first_name
           last_name
           client {
@@ -339,20 +337,20 @@ export class RatingsService {
     switch (ratingType) {
       case RatingType.CLIENT_TO_AGENT:
         return (
-          userProfile.user_type_id === 'client' &&
-          order.client_id === userProfile.client?.id
+          !!userProfile.client &&
+          order.client_id === userProfile.client.id
         );
 
       case RatingType.CLIENT_TO_ITEM:
         return (
-          userProfile.user_type_id === 'client' &&
-          order.client_id === userProfile.client?.id
+          !!userProfile.client &&
+          order.client_id === userProfile.client.id
         );
 
       case RatingType.AGENT_TO_CLIENT:
         return (
-          userProfile.user_type_id === 'agent' &&
-          order.assigned_agent_id === userProfile.agent?.id
+          !!userProfile.agent &&
+          order.assigned_agent_id === userProfile.agent.id
         );
 
       default:

@@ -8,8 +8,14 @@ import ErrorPage from '../pages/ErrorPage';
 const ProfileRouter: React.FC = () => {
   const { isAuthenticated, user } = useAuth0();
   const navigate = useNavigate();
-  const { loading, error, userType, isProfileComplete, refetch } =
-    useUserProfileContext();
+  const {
+    loading,
+    error,
+    userType,
+    isProfileComplete,
+    refetch,
+    needsPersonaSelection,
+  } = useUserProfileContext();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -25,6 +31,11 @@ const ProfileRouter: React.FC = () => {
       if (shouldCompleteProfile) {
         // User not found or profile incomplete, redirect to complete profile
         navigate('/complete-profile');
+        return;
+      }
+
+      if (needsPersonaSelection) {
+        navigate('/select-persona');
         return;
       }
 
@@ -51,7 +62,16 @@ const ProfileRouter: React.FC = () => {
           break;
       }
     }
-  }, [isAuthenticated, loading, error, userType, isProfileComplete, navigate, user]);
+  }, [
+    isAuthenticated,
+    loading,
+    error,
+    userType,
+    isProfileComplete,
+    needsPersonaSelection,
+    navigate,
+    user,
+  ]);
 
   // Show loading while checking profile
   if (loading) {

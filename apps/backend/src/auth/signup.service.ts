@@ -1,6 +1,8 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import type { PersonaId } from '../users/persona.types';
+import { isPersonaId } from '../users/persona.types';
 import { Auth0Service } from './auth0.service';
 
 type SignupGoalId =
@@ -14,7 +16,10 @@ interface SignupStartPayload {
   last_name: string;
   email: string;
   phone_number?: string;
-  user_type_id: 'client' | 'agent' | 'business';
+  /** @deprecated use `personas`; kept for backward compatibility */
+  user_type_id?: 'client' | 'agent' | 'business';
+  /** When set (1–3 values), creates all selected profiles in one user row */
+  personas?: PersonaId[];
   signup_goal?: SignupGoalId;
   profile: {
     vehicle_type_id?: string;
@@ -38,12 +43,6 @@ export interface SignupCreatedUser {
   phone_number: string | null;
   email_verified: boolean;
 }
-
-type InsertUserWithProfiles = SignupCreatedUser & {
-  client?: { id: string } | null;
-  agent?: { id: string } | null;
-  business?: { id: string } | null;
-};
 
 @Injectable()
 export class SignupService {
@@ -81,13 +80,15 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
-    const { user, entity } = await this.createPendingUser({ ...payload, email });
-    if (payload.address && entity) {
-      await this.addressesService.createAddressForSignup(
-        entity.id,
-        entity.type,
-        payload.address
-      );
+    const { user, entities } = await this.createPendingUser({ ...payload, email });
+    if (payload.address && entities.length > 0) {
+      for (const entity of entities) {
+        await this.addressesService.createAddressForSignup(
+          entity.id,
+          entity.type,
+          payload.address
+        );
+      }
     }
     return { user };
   }
@@ -153,109 +154,74 @@ export class SignupService {
     return { user: update.update_users_by_pk };
   }
 
-  private mapInsertRow(row: InsertUserWithProfiles): {
-    user: SignupCreatedUser;
-    entity: { id: string; type: 'client' | 'agent' | 'business' } | null;
-  } {
-    const user: SignupCreatedUser = {
-      id: row.id,
-      email: row.email,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      user_type_id: row.user_type_id,
-      phone_number: row.phone_number,
-      email_verified: row.email_verified,
-    };
-    if (row.client?.id) {
-      return { user, entity: { id: row.client.id, type: 'client' } };
+  private normalizeSignupPersonas(payload: SignupStartPayload): PersonaId[] {
+    if (payload.personas?.length) {
+      const unique = [...new Set(payload.personas)];
+      if (!unique.every(isPersonaId)) {
+        throw new HttpException(
+          { success: false, error: 'Invalid personas' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return unique;
     }
-    if (row.agent?.id) {
-      return { user, entity: { id: row.agent.id, type: 'agent' } };
+    if (payload.user_type_id && isPersonaId(payload.user_type_id)) {
+      return [payload.user_type_id];
     }
-    if (row.business?.id) {
-      return { user, entity: { id: row.business.id, type: 'business' } };
-    }
-    return { user, entity: null };
+    throw new HttpException(
+      { success: false, error: 'personas or user_type_id is required' },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private entitiesFromInsert(row: {
+    client?: { id: string } | null;
+    agent?: { id: string } | null;
+    business?: { id: string } | null;
+  }): Array<{ id: string; type: PersonaId }> {
+    const out: Array<{ id: string; type: PersonaId }> = [];
+    if (row.client?.id) out.push({ id: row.client.id, type: 'client' });
+    if (row.agent?.id) out.push({ id: row.agent.id, type: 'agent' });
+    if (row.business?.id) out.push({ id: row.business.id, type: 'business' });
+    return out;
   }
 
   private async createPendingUser(
     payload: SignupStartPayload
   ): Promise<{
     user: SignupCreatedUser;
-    entity: { id: string; type: 'client' | 'agent' | 'business' } | null;
+    entities: Array<{ id: string; type: PersonaId }>;
   }> {
-    const baseInput = {
+    const personas = this.normalizeSignupPersonas(payload);
+    const businessName =
+      payload.profile?.name?.trim() ||
+      `${payload.first_name}'s Business`;
+    const inserted = await this.hasuraSystemService.insertUserWithPersonas({
       email: payload.email,
       first_name: payload.first_name,
       last_name: payload.last_name,
-      phone_number: payload.phone_number || null,
-      user_type_id: payload.user_type_id,
+      phone_number: payload.phone_number ?? null,
       email_verified: false,
+      personas,
+      vehicle_type_id: payload.profile?.vehicle_type_id,
+      business_name: businessName,
+      main_interest: payload.profile?.main_interest ?? 'sell_items',
+    });
+    const u = inserted.user;
+    const user: SignupCreatedUser = {
+      id: u.id,
+      email: u.email,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      user_type_id: u.user_type_id,
+      phone_number: u.phone_number ?? null,
+      email_verified: u.email_verified,
     };
-    const userFields = `
-      id
-      email
-      first_name
-      last_name
-      user_type_id
-      phone_number
-      email_verified
-      client { id }
-      agent { id }
-      business { id }
-    `;
-    if (payload.user_type_id === 'client') {
-      const result = await this.hasuraSystemService.executeMutation<{
-        insert_users_one: InsertUserWithProfiles;
-      }>(
-        `
-        mutation CreatePendingClient($object: users_insert_input!) {
-          insert_users_one(object: $object) { ${userFields} }
-        }
-      `,
-        { object: { ...baseInput, client: { data: {} } } }
-      );
-      return this.mapInsertRow(result.insert_users_one);
-    }
-    if (payload.user_type_id === 'agent') {
-      const result = await this.hasuraSystemService.executeMutation<{
-        insert_users_one: InsertUserWithProfiles;
-      }>(
-        `
-        mutation CreatePendingAgent($object: users_insert_input!) {
-          insert_users_one(object: $object) { ${userFields} }
-        }
-      `,
-        {
-          object: {
-            ...baseInput,
-            agent: { data: { vehicle_type_id: payload.profile.vehicle_type_id || 'other' } },
-          },
-        }
-      );
-      return this.mapInsertRow(result.insert_users_one);
-    }
-    const mainInterest = payload.profile.main_interest || 'sell_items';
-    const result = await this.hasuraSystemService.executeMutation<{
-      insert_users_one: InsertUserWithProfiles;
-    }>(
-      `
-      mutation CreatePendingBusiness($object: users_insert_input!) {
-        insert_users_one(object: $object) { ${userFields} }
-      }
-    `,
-      {
-        object: {
-          ...baseInput,
-          business: {
-            data: {
-              name: payload.profile.name || `${payload.first_name}'s Business`,
-              main_interest: mainInterest,
-            },
-          },
-        },
-      }
-    );
-    return this.mapInsertRow(result.insert_users_one);
+    const entities = this.entitiesFromInsert({
+      client: inserted.client,
+      agent: inserted.agent,
+      business: inserted.business,
+    });
+    return { user, entities };
   }
 }

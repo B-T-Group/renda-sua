@@ -1,6 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { useCallback, useMemo } from 'react';
 import { environment } from '../config/environment';
+import { activePersonaHeaderForUser } from '../utils/activePersonaStorage';
+import { decodeHasuraUserIdFromAccessToken } from '../utils/jwtHasura';
 import { useLoading } from '../contexts/LoadingContext';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
@@ -48,6 +50,11 @@ export const useApiClient = (): AxiosInstance => {
 
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
+            const uid = decodeHasuraUserIdFromAccessToken(token);
+            const persona = uid ? activePersonaHeaderForUser(uid) : undefined;
+            if (persona) {
+              config.headers['X-Active-Persona'] = persona;
+            }
           } else {
             config.headers['X-Hasura-Role'] = 'anonymous';
           }
@@ -102,6 +109,11 @@ export const useApiClient = (): AxiosInstance => {
             const originalRequest = error.config;
             if (originalRequest && newToken) {
               originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              const uid = decodeHasuraUserIdFromAccessToken(newToken);
+              const persona = uid ? activePersonaHeaderForUser(uid) : undefined;
+              if (persona) {
+                originalRequest.headers['X-Active-Persona'] = persona;
+              }
               return instance.request(originalRequest);
             }
           } catch (refreshError) {

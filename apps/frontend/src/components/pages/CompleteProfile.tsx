@@ -13,6 +13,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 import { City, State } from 'country-state-city';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -53,14 +54,16 @@ const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
 
+type PersonaKind = 'client' | 'business' | 'agent';
+
 interface ProfileData {
   first_name: string;
   last_name: string;
   email: string;
   phone_number: string;
   user_type_id: string;
-  /** Selected onboarding goal; drives user type + business main_interest */
-  signup_goal: SignupGoalId | '';
+  /** Multi-select goals; drives personas + business main_interest */
+  signup_goal_ids: SignupGoalId[];
   address: {
     address_line_1: string;
     country: string;
@@ -105,6 +108,45 @@ const SIGNUP_GOAL_FALLBACKS: Record<
   },
 };
 
+const GOAL_TO_PERSONA: Record<SignupGoalId, PersonaKind> = {
+  browse_buy: 'client',
+  rent_and_earn: 'business',
+  sell_items: 'business',
+  delivery_agent: 'agent',
+};
+
+function personasFromSignupGoalIds(ids: SignupGoalId[]): PersonaKind[] {
+  const s = new Set<PersonaKind>();
+  for (const id of ids) s.add(GOAL_TO_PERSONA[id]);
+  return Array.from(s);
+}
+
+function legacyUserTypeFromPersonas(personas: PersonaKind[]): PersonaKind {
+  const order: PersonaKind[] = ['agent', 'business', 'client'];
+  for (const p of order) {
+    if (personas.includes(p)) return p;
+  }
+  return personas[0];
+}
+
+function nextMainInterestForSignupGoals(
+  goalIds: SignupGoalId[],
+  personas: PersonaKind[],
+  current: 'sell_items' | 'rent_items' | undefined
+): 'sell_items' | 'rent_items' | undefined {
+  if (!personas.includes('business')) return current;
+  const bizGoals = goalIds.filter((id) => GOAL_TO_PERSONA[id] === 'business');
+  const hasRent = bizGoals.includes('rent_and_earn');
+  const hasSell = bizGoals.includes('sell_items');
+  if (hasRent && hasSell) {
+    if (current === 'rent_items' || current === 'sell_items') return current;
+    return 'sell_items';
+  }
+  if (bizGoals.includes('rent_and_earn')) return 'rent_items';
+  if (bizGoals.includes('sell_items')) return 'sell_items';
+  return 'sell_items';
+}
+
 const StepIconWrapper: React.FC<{
   completed?: boolean;
   active?: boolean;
@@ -148,7 +190,7 @@ const CompleteProfile: React.FC = () => {
     email: user?.email || '',
     phone_number: '',
     user_type_id: '',
-    signup_goal: '',
+    signup_goal_ids: [],
     address: {
       address_line_1: '',
       country: '',
@@ -164,17 +206,27 @@ const CompleteProfile: React.FC = () => {
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const idDocumentInputRef = useRef<HTMLInputElement>(null);
 
+  const selectedPersonas = useMemo(
+    () => personasFromSignupGoalIds(profileData.signup_goal_ids),
+    [profileData.signup_goal_ids]
+  );
+
+  const showBusinessFocusPicker =
+    selectedPersonas.includes('business') &&
+    profileData.signup_goal_ids.includes('rent_and_earn') &&
+    profileData.signup_goal_ids.includes('sell_items');
+
   const steps = useMemo(() => {
     const s1 = t('completeProfile.step.whatBringsYou', 'What brings you here');
     const s2 = t('completeProfile.step.address', 'Address');
     const s3 = t('completeProfile.step.personal', 'Personal information');
     const s4 = t('completeProfile.step.review', 'Review & submit');
     const sId = t('completeProfile.step.idDocument', 'ID document (optional)');
-    return profileData.user_type_id === 'agent'
+    return selectedPersonas.includes('agent')
       ? [s1, s2, s3, sId, s4]
       : [s1, s2, s3, s4];
-  }, [profileData.user_type_id, t]);
-  const isAgent = profileData.user_type_id === 'agent';
+  }, [selectedPersonas, t]);
+  const isAgent = selectedPersonas.includes('agent');
 
   const { documentTypes } = useDocumentManagement();
   const idDocumentTypes = useMemo(
@@ -209,6 +261,26 @@ const CompleteProfile: React.FC = () => {
     if (!profileData.address.country || !selectedStateCode) return [];
     return City.getCitiesOfState(profileData.address.country, selectedStateCode);
   }, [profileData.address.country, selectedStateCode]);
+
+  useEffect(() => {
+    const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);
+    if (personas.length === 0) return;
+    setProfileData((prev) => {
+      const mi = nextMainInterestForSignupGoals(
+        prev.signup_goal_ids,
+        personas,
+        prev.profile.main_interest
+      );
+      return {
+        ...prev,
+        user_type_id: legacyUserTypeFromPersonas(personas),
+        profile: {
+          ...prev.profile,
+          main_interest: mi ?? prev.profile.main_interest,
+        },
+      };
+    });
+  }, [profileData.signup_goal_ids]);
 
   const {
     result: referralLookup,
@@ -245,44 +317,15 @@ const CompleteProfile: React.FC = () => {
       });
     };
 
-  const handleGoalSelect = (goalId: SignupGoalId) => {
+  const handleGoalToggle = (goalId: SignupGoalId) => {
     setProfileData((prev) => {
-      if (goalId === 'browse_buy') {
-        return {
-          ...prev,
-          signup_goal: goalId,
-          user_type_id: 'client',
-          profile: {},
-        };
-      }
-      if (goalId === 'delivery_agent') {
-        return {
-          ...prev,
-          signup_goal: goalId,
-          user_type_id: 'agent',
-          profile: {},
-        };
-      }
-      if (goalId === 'rent_and_earn') {
-        return {
-          ...prev,
-          signup_goal: goalId,
-          user_type_id: 'business',
-          profile: {
-            ...prev.profile,
-            main_interest: 'rent_items',
-          },
-        };
-      }
-      return {
-        ...prev,
-        signup_goal: goalId,
-        user_type_id: 'business',
-        profile: {
-          ...prev.profile,
-          main_interest: 'sell_items',
-        },
-      };
+      const ids = prev.signup_goal_ids;
+      const has = ids.includes(goalId);
+      if (has && ids.length <= 1) return prev;
+      const signup_goal_ids = has
+        ? ids.filter((id) => id !== goalId)
+        : [...ids, goalId];
+      return { ...prev, signup_goal_ids };
     });
   };
 
@@ -321,10 +364,32 @@ const CompleteProfile: React.FC = () => {
     setError(null);
 
     try {
+      const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);
+      const createPayload = {
+        first_name: profileData.first_name,
+        last_name: profileData.last_name,
+        email: profileData.email,
+        phone_number: profileData.phone_number,
+        personas,
+        user_type_id: legacyUserTypeFromPersonas(personas),
+        profile: {
+          vehicle_type_id: personas.includes('agent')
+            ? profileData.profile.vehicle_type_id ?? 'other'
+            : undefined,
+          name: personas.includes('business')
+            ? profileData.profile.name
+            : undefined,
+          main_interest: personas.includes('business')
+            ? profileData.profile.main_interest
+            : undefined,
+        },
+        address: profileData.address,
+        referral_agent_code: profileData.referral_agent_code,
+      };
       const { data: createResponse } = await apiClient.post<{
         success: boolean;
         user?: { id: string };
-      }>('/users', profileData);
+      }>('/users', createPayload);
 
       if (!createResponse?.success || !createResponse?.user?.id) {
         throw new Error(
@@ -368,7 +433,7 @@ const CompleteProfile: React.FC = () => {
       }
 
       if (
-        profileData.user_type_id === 'agent' &&
+        personas.includes('agent') &&
         idDocumentFile &&
         idDocumentTypeId !== ''
       ) {
@@ -409,7 +474,7 @@ const CompleteProfile: React.FC = () => {
   const isStepValid = (step: number) => {
     switch (step) {
       case 0:
-        return profileData.signup_goal !== '';
+        return profileData.signup_goal_ids.length > 0;
       case 1: {
         const a = profileData.address;
         return !!(
@@ -420,12 +485,13 @@ const CompleteProfile: React.FC = () => {
         );
       }
       case 2: {
+        const personas = personasFromSignupGoalIds(profileData.signup_goal_ids);
         const hasRequiredFields =
           profileData.first_name &&
           profileData.last_name &&
-          profileData.user_type_id;
+          personas.length > 0;
 
-        if (profileData.user_type_id === 'business') {
+        if (personas.includes('business')) {
           return (
             hasRequiredFields &&
             !!profileData.profile.name &&
@@ -447,12 +513,14 @@ const CompleteProfile: React.FC = () => {
   };
 
   const renderReviewContent = () => {
-    const goalTitle = profileData.signup_goal
-      ? t(
-          `completeProfile.signupGoals.${profileData.signup_goal}.title`,
-          SIGNUP_GOAL_FALLBACKS[profileData.signup_goal].title
+    const goalTitle = profileData.signup_goal_ids
+      .map((gid) =>
+        t(
+          `completeProfile.signupGoals.${gid}.title`,
+          SIGNUP_GOAL_FALLBACKS[gid].title
         )
-      : '';
+      )
+      .join('; ');
     return (
       <Box
         sx={{
@@ -500,7 +568,7 @@ const CompleteProfile: React.FC = () => {
             </strong>{' '}
             {goalTitle}
           </Typography>
-          {profileData.user_type_id === 'business' &&
+          {selectedPersonas.includes('business') &&
             profileData.profile.name && (
               <Typography variant="body2" gutterBottom>
                 <strong>
@@ -513,7 +581,7 @@ const CompleteProfile: React.FC = () => {
                 {profileData.profile.name}
               </Typography>
             )}
-          {profileData.user_type_id === 'business' &&
+          {selectedPersonas.includes('business') &&
             profileData.profile.main_interest && (
               <Typography variant="body2" gutterBottom>
                 <strong>
@@ -606,8 +674,8 @@ const CompleteProfile: React.FC = () => {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               {t(
-                'completeProfile.whatBringsYouHint',
-                'Pick the option that fits you best—we will set up the right account type.'
+                'completeProfile.whatBringsYouHintMulti',
+                'Select all that apply—you can use more than one mode on one account.'
               )}
             </Typography>
 
@@ -631,11 +699,12 @@ const CompleteProfile: React.FC = () => {
                   delivery_agent: '#388e3c',
                 };
                 const accent = colors[goalId];
-                const selected = profileData.signup_goal === goalId;
+                const selected = profileData.signup_goal_ids.includes(goalId);
                 return (
                   <Card
                     key={goalId}
                     sx={{
+                      position: 'relative',
                       cursor: 'pointer',
                       border: selected ? 2 : 1,
                       borderColor: selected ? accent : 'divider',
@@ -645,7 +714,7 @@ const CompleteProfile: React.FC = () => {
                         boxShadow: 3,
                       },
                     }}
-                    onClick={() => handleGoalSelect(goalId)}
+                    onClick={() => handleGoalToggle(goalId)}
                   >
                     <CardContent
                       sx={{
@@ -657,6 +726,13 @@ const CompleteProfile: React.FC = () => {
                         px: 1.5,
                       }}
                     >
+                      <Checkbox
+                        checked={selected}
+                        size="small"
+                        onChange={() => handleGoalToggle(goalId)}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1, p: 0.5 }}
+                      />
                       <Box sx={{ width: '100%', maxWidth: 120, mb: 1.5 }}>
                         <SignupGoalIllustration goalId={goalId} accent={accent} />
                       </Box>
@@ -850,20 +926,51 @@ const CompleteProfile: React.FC = () => {
               useDevPhoneDropdown
             />
 
-            {profileData.user_type_id === 'business' && (
-              <TextField
-                label={t(
-                  'completeProfile.businessNameLabel',
-                  'Business name'
+            {selectedPersonas.includes('business') && (
+              <>
+                <TextField
+                  label={t(
+                    'completeProfile.businessNameLabel',
+                    'Business name'
+                  )}
+                  value={profileData.profile.name || ''}
+                  onChange={handleProfileChange('name')}
+                  fullWidth
+                  required
+                />
+                {showBusinessFocusPicker && (
+                  <FormControl fullWidth required>
+                    <InputLabel>
+                      {t('signupPage.primaryBusinessFocus', 'Primary business focus')}
+                    </InputLabel>
+                    <Select
+                      value={profileData.profile.main_interest ?? 'sell_items'}
+                      label={t('signupPage.primaryBusinessFocus', 'Primary business focus')}
+                      onChange={(e) =>
+                        setProfileData({
+                          ...profileData,
+                          profile: {
+                            ...profileData.profile,
+                            main_interest: e.target.value as
+                              | 'sell_items'
+                              | 'rent_items',
+                          },
+                        })
+                      }
+                    >
+                      <MenuItem value="sell_items">
+                        {t('completeProfile.mainInterest.sellItems', 'Selling products')}
+                      </MenuItem>
+                      <MenuItem value="rent_items">
+                        {t('completeProfile.mainInterest.rentItems', 'Renting out items')}
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
                 )}
-                value={profileData.profile.name || ''}
-                onChange={handleProfileChange('name')}
-                fullWidth
-                required
-              />
+              </>
             )}
 
-            {profileData.user_type_id === 'agent' && (
+            {selectedPersonas.includes('agent') && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <TextField
                   label={t(

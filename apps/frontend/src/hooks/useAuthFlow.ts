@@ -15,6 +15,7 @@ export const useAuthFlow = () => {
     error: profileError,
     userType,
     isProfileComplete,
+    needsPersonaSelection,
   } = useUserProfileContext();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
@@ -38,7 +39,11 @@ export const useAuthFlow = () => {
         // User doesn't have a profile, redirect to complete profile
         navigate('/complete-profile');
       } else if (profile && isProfileComplete) {
-        // User has a complete profile, redirect to appropriate page
+        if (needsPersonaSelection) {
+          navigate('/select-persona');
+          setIsCheckingProfile(false);
+          return;
+        }
         switch (userType) {
           case 'client':
             // Check if it's the first login
@@ -81,6 +86,7 @@ export const useAuthFlow = () => {
     profileError,
     userType,
     isProfileComplete,
+    needsPersonaSelection,
     location.pathname,
     navigate,
   ]);
