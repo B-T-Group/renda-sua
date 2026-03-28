@@ -2381,6 +2381,28 @@
     "outOfStock": "Out of Stock",
     "notAvailable": "Not Available"
   },
+  "persona": {
+    "selectKicker": "Welcome back",
+    "selectTitle": "How do you want to use Rendasua?",
+    "selectSubtitle": "Choose what you want to do today. You can switch anytime from your profile or the header.",
+    "selectLoading": "Loading your account",
+    "selectLoadingSubtitle": "Please wait",
+    "selectCard": {
+      "cta": "Continue as {{label}}",
+      "client": {
+        "title": "Client",
+        "description": "Browse items, place orders, and track deliveries to your door."
+      },
+      "agent": {
+        "title": "Delivery agent",
+        "description": "See available runs, complete pickups, and get paid for each delivery."
+      },
+      "business": {
+        "title": "Business",
+        "description": "Manage your catalog, orders, locations, and rentals in one place."
+      }
+    }
+  },
   "privacyPolicy": {
     "businessInfoText": "For business users, we collect additional information such as business name, business address, tax information, and business documents to verify and manage your business account.",
     "businessInformation": "Business Information",
@@ -2649,7 +2671,22 @@
     "changePhoto": "Change photo",
     "profilePictureHint": "JPG, PNG or WebP. Max 5MB.",
     "agentProfilePictureNote": "Add a profile picture so clients can see who is delivering their order. It helps build trust and makes handoffs smoother.",
-    "personalAddressesDescription": "Add and manage your delivery and billing addresses"
+    "personalAddressesDescription": "Add and manage your delivery and billing addresses",
+    "personaConfirm": {
+      "continue": "Continue",
+      "client": {
+        "title": "Enable shopping as a client?",
+        "body": "You can browse items, place orders, save delivery addresses, and use your client wallet. You can switch between client, agent, and business modes anytime from your profile or the header."
+      },
+      "agent": {
+        "title": "Become a delivery agent?",
+        "body": "You will see available orders and your active deliveries. On the next step you will choose a vehicle type. You may need to upload ID documents under Manage Documents before you can accept deliveries."
+      },
+      "business": {
+        "title": "Open a business profile?",
+        "body": "You can run a store: catalog, orders, locations, and rentals depending on your focus. On the next step you will enter your business name and whether you mainly sell products or rent items."
+      }
+    }
   },
   "public": {
     "items": {

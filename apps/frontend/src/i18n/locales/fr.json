@@ -2344,6 +2344,28 @@
     "outOfStock": "Rupture de stock",
     "notAvailable": "Non disponible"
   },
+  "persona": {
+    "selectKicker": "Bon retour",
+    "selectTitle": "Comment souhaitez-vous utiliser Rendasua ?",
+    "selectSubtitle": "Choisissez ce que vous voulez faire aujourd’hui. Vous pourrez changer de mode à tout moment depuis votre profil ou l’en-tête.",
+    "selectLoading": "Chargement de votre compte",
+    "selectLoadingSubtitle": "Veuillez patienter",
+    "selectCard": {
+      "cta": "Continuer en tant que {{label}}",
+      "client": {
+        "title": "Client",
+        "description": "Parcourez les articles, passez commande et suivez les livraisons jusqu’à votre porte."
+      },
+      "agent": {
+        "title": "Livreur",
+        "description": "Consultez les courses disponibles, effectuez les enlèvements et soyez rémunéré pour chaque livraison."
+      },
+      "business": {
+        "title": "Entreprise",
+        "description": "Gérez votre catalogue, vos commandes, vos points de vente et vos locations au même endroit."
+      }
+    }
+  },
   "privacyPolicy": {
     "businessInfoText": "Pour les utilisateurs d'entreprise, nous collectons des informations supplémentaires telles que le nom de l'entreprise, l'adresse de l'entreprise, informations fiscales et documents d'entreprise pour vérifier et gérer votre compte d'entreprise.",
     "businessInformation": "Informations d'Entreprise",
@@ -2612,7 +2634,22 @@
     "changePhoto": "Changer la photo",
     "profilePictureHint": "JPG, PNG ou WebP. Max 5 Mo.",
     "agentProfilePictureNote": "Ajoutez une photo de profil pour que les clients voient qui livre leur commande. Cela renforce la confiance et facilite les remises.",
-    "personalAddressesDescription": "Ajoutez et gérez vos adresses de livraison et de facturation"
+    "personalAddressesDescription": "Ajoutez et gérez vos adresses de livraison et de facturation",
+    "personaConfirm": {
+      "continue": "Continuer",
+      "client": {
+        "title": "Activer le mode client ?",
+        "body": "Vous pourrez parcourir les articles, passer des commandes, enregistrer des adresses de livraison et utiliser votre portefeuille client. Vous pourrez passer du mode client à agent ou entreprise à tout moment depuis votre profil ou l’en-tête."
+      },
+      "agent": {
+        "title": "Devenir livreur ?",
+        "body": "Vous verrez les commandes disponibles et vos livraisons en cours. À l’étape suivante, vous choisirez un type de véhicule. Des pièces d’identité pourront être exigées sous Gérer les documents avant d’accepter des courses."
+      },
+      "business": {
+        "title": "Créer un profil entreprise ?",
+        "body": "Vous pourrez gérer une boutique : catalogue, commandes, emplacements et locations selon votre activité. À l’étape suivante, vous indiquerez le nom de l’entreprise et si vous vendez surtout des produits ou louez des articles."
+      }
+    }
   },
   "public": {
     "items": {

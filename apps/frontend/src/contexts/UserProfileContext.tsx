@@ -356,32 +356,28 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
           i18n.changeLanguage(lang);
         }
 
-        const typeMap: Record<string, UserType> = {
-          client: 'client',
-          agent: 'agent',
-          business: 'business',
-        };
-
         const personasList = derivePersonasFromProfile(userProfile);
-        const stored = readStoredActivePersona();
+        let stored = readStoredActivePersona();
+        if (
+          stored?.userId === userProfile.id &&
+          !personasList.includes(stored.persona as UserType)
+        ) {
+          clearStoredActivePersona();
+          stored = null;
+        }
+
         let effective: UserType | null = null;
         if (
           stored?.userId === userProfile.id &&
-          personasList.includes(stored.persona)
+          personasList.includes(stored.persona as UserType)
         ) {
-          effective = stored.persona;
+          effective = stored.persona as UserType;
         } else if (personasList.length === 1) {
           effective = personasList[0];
           writeStoredActivePersona(userProfile.id, effective);
         }
-
-        if (!effective && personasList.length > 0) {
-          const legacy = typeMap[userProfile.user_type_id];
-          if (legacy && personasList.includes(legacy)) {
-            effective = legacy;
-            writeStoredActivePersona(userProfile.id, legacy);
-          }
-        }
+        // Multiple personas: do not infer from users.user_type_id — user must pick
+        // on /select-persona (or use a stored choice from this device).
 
         setUserType(effective);
 

@@ -44,6 +44,7 @@ import {
   useUserProfileContext,
   UserType,
 } from '../../contexts/UserProfileContext';
+import { PERSONA_HEADER_COLORS } from '../../constants/personaTheme';
 import LoginHeaderButton from '../auth/LoginHeaderButton';
 import SignupHeaderButton from '../auth/SignupHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
@@ -87,20 +88,14 @@ const Header: React.FC = () => {
     }
     switch (userType) {
       case 'client':
-        return {
-          backgroundColor: '#1565c0',
-          navActiveUnderline: '#90caf9',
-        };
       case 'agent':
+      case 'business': {
+        const c = PERSONA_HEADER_COLORS[userType];
         return {
-          backgroundColor: '#2e7d32',
-          navActiveUnderline: '#a5d6a7',
+          backgroundColor: c.main,
+          navActiveUnderline: c.navUnderline,
         };
-      case 'business':
-        return {
-          backgroundColor: '#bf360c',
-          navActiveUnderline: '#ffcc80',
-        };
+      }
       default:
         return {
           backgroundColor: theme.palette.primary.dark,

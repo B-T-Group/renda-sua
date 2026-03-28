@@ -1,7 +1,13 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
 import LoadingScreen from '../components/common/LoadingScreen';
@@ -85,7 +91,15 @@ function App() {
   const { isAuthenticated, isCheckingProfile } = useAuthFlow();
   const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
-  const { userType, profile, refetch } = useUserProfileContext();
+  const navigate = useNavigate();
+  const {
+    userType,
+    profile,
+    refetch,
+    needsPersonaSelection,
+    isProfileComplete,
+    loading: profileLoading,
+  } = useUserProfileContext();
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -127,6 +141,27 @@ function App() {
 
   // Detect and store country for anonymous users (for inventory-items country_code)
   useDetectedCountry();
+
+  useEffect(() => {
+    if (!isAuthenticated || profileLoading || isLoading) return;
+    if (!isProfileComplete || !needsPersonaSelection) return;
+    const path = location.pathname;
+    if (path === '/select-persona' || path.startsWith('/select-persona/')) {
+      return;
+    }
+    if (path === '/complete-profile' || path.startsWith('/complete-profile/')) {
+      return;
+    }
+    navigate('/select-persona', { replace: true });
+  }, [
+    isAuthenticated,
+    profileLoading,
+    isLoading,
+    isProfileComplete,
+    needsPersonaSelection,
+    location.pathname,
+    navigate,
+  ]);
 
   // Only show loading for auth flow when on /app route
   const shouldShowLoading = useMemo(() => {

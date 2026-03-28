@@ -19,6 +19,7 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   Divider,
   FormControl,
@@ -82,6 +83,27 @@ function accountEntityTypeForProfile(
   return 'client';
 }
 
+const PERSONA_CONFIRM_DEFAULTS: Record<
+  UserType,
+  { title: string; body: string }
+> = {
+  client: {
+    title: 'Enable shopping as a client?',
+    body:
+      'You can browse items, place orders, save delivery addresses, and use your client wallet. You can switch between client, agent, and business modes anytime from your profile or the header.',
+  },
+  agent: {
+    title: 'Become a delivery agent?',
+    body:
+      'You will see available orders and your active deliveries. On the next step you will choose a vehicle type. You may need to upload ID documents under Manage Documents before you can accept deliveries.',
+  },
+  business: {
+    title: 'Open a business profile?',
+    body:
+      'You can run a store: catalog, orders, locations, and rentals depending on your focus. On the next step you will enter your business name and whether you mainly sell products or rent items.',
+  },
+};
+
 const Profile: React.FC = () => {
   const { t } = useTranslation();
   const [editingProfile, setEditingProfile] = useState(false);
@@ -121,6 +143,8 @@ const Profile: React.FC = () => {
   const [businessMainInterest, setBusinessMainInterest] = useState<
     'sell_items' | 'rent_items'
   >('sell_items');
+  const [personaConfirmTarget, setPersonaConfirmTarget] =
+    useState<UserType | null>(null);
 
   // Ref to access AccountManager's refresh function
   const accountManagerRef = useRef<AccountManagerRef | null>(null);
@@ -216,7 +240,22 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleAddClientPersona = () => postAddPersona('client', {});
+  const closePersonaConfirm = () => setPersonaConfirmTarget(null);
+
+  const handlePersonaConfirmContinue = () => {
+    if (!personaConfirmTarget) return;
+    const target = personaConfirmTarget;
+    setPersonaConfirmTarget(null);
+    if (target === 'client') {
+      void postAddPersona('client', {});
+      return;
+    }
+    if (target === 'agent') {
+      setAgentDialogOpen(true);
+      return;
+    }
+    setBusinessDialogOpen(true);
+  };
 
   const handleConfirmAgentPersona = () =>
     postAddPersona('agent', { vehicle_type_id: vehicleTypeId || 'other' });
@@ -502,7 +541,7 @@ const Profile: React.FC = () => {
                       size="small"
                       variant="outlined"
                       disabled={personaSubmitting}
-                      onClick={handleAddClientPersona}
+                      onClick={() => setPersonaConfirmTarget('client')}
                     >
                       {t('profile.addClientMode', 'Create client account')}
                     </Button>
@@ -512,7 +551,7 @@ const Profile: React.FC = () => {
                       size="small"
                       variant="outlined"
                       disabled={personaSubmitting}
-                      onClick={() => setAgentDialogOpen(true)}
+                      onClick={() => setPersonaConfirmTarget('agent')}
                     >
                       {t('profile.addAgentMode', 'Become delivery agent')}
                     </Button>
@@ -522,7 +561,7 @@ const Profile: React.FC = () => {
                       size="small"
                       variant="outlined"
                       disabled={personaSubmitting}
-                      onClick={() => setBusinessDialogOpen(true)}
+                      onClick={() => setPersonaConfirmTarget('business')}
                     >
                       {t('profile.addBusinessMode', 'Become a business')}
                     </Button>
@@ -655,6 +694,46 @@ const Profile: React.FC = () => {
           />
         </Box>
       )}
+
+      <Dialog
+        open={personaConfirmTarget !== null}
+        onClose={closePersonaConfirm}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="persona-confirm-title"
+        aria-describedby="persona-confirm-description"
+        PaperProps={{ sx: { borderRadius: 0 } }}
+      >
+        {personaConfirmTarget ? (
+          <>
+            <DialogTitle id="persona-confirm-title">
+              {t(
+                `profile.personaConfirm.${personaConfirmTarget}.title`,
+                PERSONA_CONFIRM_DEFAULTS[personaConfirmTarget].title
+              )}
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText
+                id="persona-confirm-description"
+                sx={{ color: 'text.secondary' }}
+              >
+                {t(
+                  `profile.personaConfirm.${personaConfirmTarget}.body`,
+                  PERSONA_CONFIRM_DEFAULTS[personaConfirmTarget].body
+                )}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={closePersonaConfirm}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button variant="contained" onClick={handlePersonaConfirmContinue}>
+                {t('profile.personaConfirm.continue', 'Continue')}
+              </Button>
+            </DialogActions>
+          </>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={agentDialogOpen}
