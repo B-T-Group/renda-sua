@@ -1196,6 +1196,7 @@
       "actions": {
         "refresh": "Rafraîchir",
         "associateItem": "Associer un article",
+        "openLinkedItem": "Ouvrir l'article",
         "cleanup": "Nettoyer l'image",
         "replace": "Remplacer l'image",
         "delete": "Supprimer l'image"
@@ -1466,6 +1467,7 @@
       "locationAccount": "Compte de l'emplacement",
       "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
       "addAddressFirst": "Ajoutez d'abord une adresse professionnelle avant d'ajouter des emplacements.",
+      "addBusinessAddress": "Ajouter une adresse professionnelle",
       "countryReadOnly": "Le pays est défini selon l'adresse de votre entreprise et ne peut pas être modifié."
     },
     "orders": {

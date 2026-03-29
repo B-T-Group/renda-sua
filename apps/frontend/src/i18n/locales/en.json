@@ -1207,6 +1207,7 @@
       "actions": {
         "refresh": "Refresh",
         "associateItem": "Associate item",
+        "openLinkedItem": "Open item",
         "cleanup": "Cleanup picture",
         "replace": "Replace image",
         "delete": "Delete image"
@@ -1477,6 +1478,7 @@
       "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addAddressFirst": "Add a business address first before adding locations.",
+      "addBusinessAddress": "Add business address",
       "countryReadOnly": "Country is set from your business address and cannot be changed."
     },
     "orders": {

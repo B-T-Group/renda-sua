@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
+  OpenInNew as OpenInNewIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Tag as TagIcon,
@@ -1600,6 +1601,23 @@ const BusinessImagesPage: React.FC = () => {
                       </CardContent>
                       <CardActions sx={{ px: 2, pb: 2 }}>
                         <Stack spacing={1} sx={{ width: '100%' }}>
+                          {img.item_id && img.item && (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<OpenInNewIcon />}
+                              onClick={() =>
+                                navigate(`/business/items/edit/${img.item_id}`)
+                              }
+                              disabled={submitting}
+                              fullWidth
+                            >
+                              {t(
+                                'business.images.actions.openLinkedItem',
+                                'Open item'
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="small"
                             variant="outlined"

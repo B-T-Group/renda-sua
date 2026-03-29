@@ -23,7 +23,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountManager } from '../../hooks/useAccountManager';
@@ -36,15 +36,35 @@ import {
 import LocationCard from '../business/LocationCard';
 import LocationCardSkeleton from '../business/LocationCardSkeleton';
 import LocationModal from '../business/LocationModal';
+import AddressDialog, {
+  type AddressFormData,
+} from '../dialogs/AddressDialog';
 import SEOHead from '../seo/SEOHead';
+
+const INITIAL_BUSINESS_ADDRESS_FORM: AddressFormData = {
+  address_line_1: '',
+  address_line_2: '',
+  city: '',
+  state: '',
+  postal_code: '',
+  country: '',
+  address_type: 'home',
+  is_primary: true,
+};
 
 const BusinessLocationsPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, refetch: refetchProfile } = useUserProfileContext();
+  const { profile, refetch: refetchProfile, addAddress } =
+    useUserProfileContext();
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [businessAddressDialogOpen, setBusinessAddressDialogOpen] =
+    useState(false);
+  const [businessAddressForm, setBusinessAddressForm] =
+    useState<AddressFormData>(() => ({ ...INITIAL_BUSINESS_ADDRESS_FORM }));
+  const [savingBusinessAddress, setSavingBusinessAddress] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<BusinessLocation | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -70,6 +90,77 @@ const BusinessLocationsPage: React.FC = () => {
   });
 
   const canAddLocation = !!primaryAddressCountry;
+
+  const openBusinessAddressDialog = useCallback(() => {
+    setBusinessAddressForm({ ...INITIAL_BUSINESS_ADDRESS_FORM });
+    setBusinessAddressDialogOpen(true);
+  }, []);
+
+  const closeBusinessAddressDialog = useCallback(() => {
+    if (!savingBusinessAddress) setBusinessAddressDialogOpen(false);
+  }, [savingBusinessAddress]);
+
+  const saveBusinessAddress = useCallback(async () => {
+    const businessId = profile?.business?.id;
+    if (!businessId) return;
+    const { address_line_1, city, country, state } = businessAddressForm;
+    if (
+      !address_line_1?.trim() ||
+      !city?.trim() ||
+      !country?.trim() ||
+      !state?.trim()
+    ) {
+      enqueueSnackbar(
+        t(
+          'addresses.addressDialog.requiredFields',
+          'Please fill in all required fields (address, city, state, country).'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
+    setSavingBusinessAddress(true);
+    try {
+      const success = await addAddress(
+        {
+          ...businessAddressForm,
+          address_line_1: address_line_1.trim(),
+          address_line_2: businessAddressForm.address_line_2?.trim() || '',
+          city: city.trim(),
+          state: state.trim(),
+          country: country.trim(),
+          postal_code: businessAddressForm.postal_code?.trim() || '',
+          address_type: businessAddressForm.address_type || 'home',
+          is_primary: businessAddressForm.is_primary ?? true,
+        },
+        'business',
+        businessId
+      );
+      if (success) {
+        setBusinessAddressDialogOpen(false);
+        await fetchLocations();
+      } else {
+        enqueueSnackbar(
+          t('addresses.saveError', 'Failed to save address. Please try again.'),
+          { variant: 'error' }
+        );
+      }
+    } catch {
+      enqueueSnackbar(
+        t('addresses.saveError', 'Failed to save address. Please try again.'),
+        { variant: 'error' }
+      );
+    } finally {
+      setSavingBusinessAddress(false);
+    }
+  }, [
+    profile?.business?.id,
+    businessAddressForm,
+    addAddress,
+    enqueueSnackbar,
+    t,
+    fetchLocations,
+  ]);
 
   // Fetch locations when component mounts or business ID changes
   useEffect(() => {
@@ -268,7 +359,26 @@ const BusinessLocationsPage: React.FC = () => {
         </Stack>
 
         {!locationsLoading && !canAddLocation && profile?.business && (
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Alert
+            severity="info"
+            sx={{
+              mt: 2,
+              '& .MuiAlert-message': { width: '100%' },
+            }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={openBusinessAddressDialog}
+                sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                {t(
+                  'business.locations.addBusinessAddress',
+                  'Add business address'
+                )}
+              </Button>
+            }
+          >
             {t(
               'business.locations.addAddressFirst',
               'Add a business address first before adding locations.'
@@ -489,6 +599,20 @@ const BusinessLocationsPage: React.FC = () => {
         loading={locationsLoading}
         error={locationsError}
         warning={locationsWarning}
+      />
+
+      <AddressDialog
+        open={businessAddressDialogOpen}
+        onClose={closeBusinessAddressDialog}
+        onSave={saveBusinessAddress}
+        addressData={businessAddressForm}
+        onAddressChange={setBusinessAddressForm}
+        loading={savingBusinessAddress}
+        title={t(
+          'business.locations.addBusinessAddress',
+          'Add business address'
+        )}
+        fullScreen={isMobile}
       />
 
       {/* Delete Confirmation Dialog */}
