@@ -253,6 +253,7 @@ export class AccountsController {
                   is_active: { type: 'boolean' },
                   created_at: { type: 'string' },
                   updated_at: { type: 'string' },
+                  business_location_id: { type: 'string', nullable: true },
                 },
               },
             },

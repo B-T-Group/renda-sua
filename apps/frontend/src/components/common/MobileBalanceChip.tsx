@@ -18,7 +18,10 @@ import { useSnackbar } from 'notistack';
 import { useAccountSubscription } from '../../hooks/useAccountSubscription';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  isLegacyWalletAccount,
+  useUserProfileContext,
+} from '../../contexts/UserProfileContext';
 import WithdrawModal from '../business/WithdrawModal';
 
 const XAF_CURRENCY = 'XAF';
@@ -86,7 +89,9 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     total_balance: number;
   } | null>(null);
 
-  const xafAccount = accounts.find((a) => a.currency === XAF_CURRENCY);
+  const xafAccount = accounts.find(
+    (a) => a.currency === XAF_CURRENCY && isLegacyWalletAccount(a)
+  );
   const displayAccount = liveXafAccount ?? xafAccount ?? null;
 
   useAccountSubscription({

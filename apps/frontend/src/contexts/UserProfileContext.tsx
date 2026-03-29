@@ -43,6 +43,15 @@ export interface Account {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** When set, account is scoped to a business location; header balance uses legacy (null) wallets only. */
+  business_location_id?: string | null;
+}
+
+/** Personal / legacy wallet: not tied to a specific business location. */
+export function isLegacyWalletAccount(
+  account: Pick<Account, 'business_location_id'>
+): boolean {
+  return account.business_location_id == null;
 }
 
 export interface UserProfile {

@@ -3,7 +3,10 @@ import { Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import {
+  isLegacyWalletAccount,
+  useUserProfileContext,
+} from '../../contexts/UserProfileContext';
 
 interface UserBalanceSummaryProps {
   compact?: boolean;
@@ -25,8 +28,8 @@ const UserBalanceSummary: React.FC<UserBalanceSummaryProps> = ({
     navigate('/profile');
   };
 
-  // Filter accounts with balance > 0
-  const accountsWithBalance = accounts.filter(
+  const legacyAccounts = accounts.filter(isLegacyWalletAccount);
+  const accountsWithBalance = legacyAccounts.filter(
     (account) => account.total_balance > 0
   );
 
