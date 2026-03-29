@@ -38,7 +38,7 @@ import {
 import { alpha } from '@mui/material/styles';
 import { City, State } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
@@ -50,6 +50,7 @@ import {
 import LoginMethodDialog from '../auth/LoginMethodDialog';
 import Logo from '../common/Logo';
 import PhoneInput from '../common/PhoneInput';
+import SignupAccountCreatedAnimation from '../onboarding/SignupAccountCreatedAnimation';
 import { SignupGoalIllustration, type SignupGoalId } from '../onboarding/SignupGoalIllustration';
 
 const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
@@ -173,6 +174,9 @@ const SignupPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [locationBanner, setLocationBanner] = useState<string | null>(null);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  /** After `/auth/signup/start` succeeds; user confirms before Auth0 OTP login. */
+  const [postSignupEmail, setPostSignupEmail] = useState<string | null>(null);
+  const [verifyRedirectLoading, setVerifyRedirectLoading] = useState(false);
   const {
     getCurrentLocation,
     loading: locationLoading,
@@ -483,6 +487,16 @@ const SignupPage: React.FC = () => {
     [loginWithRedirect, navigate]
   );
 
+  const handleVerifyEmailContinue = useCallback(async () => {
+    if (!postSignupEmail) return;
+    setVerifyRedirectLoading(true);
+    try {
+      await redirectToAuthAfterSignup(postSignupEmail);
+    } finally {
+      setVerifyRedirectLoading(false);
+    }
+  }, [postSignupEmail, redirectToAuthAfterSignup]);
+
   const handleCreate = async () => {
     setSaving(true);
     setError(null);
@@ -516,7 +530,7 @@ const SignupPage: React.FC = () => {
       const emailNormalized = data.user.email.trim().toLowerCase();
       sessionStorage.setItem('pendingSignupUserId', data.user.id);
       sessionStorage.setItem('pendingSignupEmail', emailNormalized);
-      await redirectToAuthAfterSignup(emailNormalized);
+      setPostSignupEmail(emailNormalized);
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -939,6 +953,7 @@ const SignupPage: React.FC = () => {
   const lastStep = activeStep === steps.length - 1;
   const nextDisabled = !canAdvanceFromStep() || saving;
   const stepProgressPercent = ((activeStep + 1) / steps.length) * 100;
+  const showAccountCreated = Boolean(postSignupEmail);
 
   return (
     <>
@@ -966,26 +981,69 @@ const SignupPage: React.FC = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', pt: { xs: 0.5, sm: 0 } }}>
             <Logo variant="default" size={isNarrow ? 'small' : 'medium'} />
           </Box>
-          <Typography
-            variant={isNarrow ? 'h5' : 'h4'}
-            component="h1"
-            sx={{ fontWeight: 700, lineHeight: 1.25, textAlign: 'center' }}
-          >
-            {t('signupPage.title', 'Create your account')}
-          </Typography>
-          <Typography
-            color="text.secondary"
-            variant="body2"
-            sx={{
-              lineHeight: 1.5,
-              fontSize: { xs: '0.9375rem', sm: '1rem' },
-              textAlign: 'center',
-            }}
-          >
-            {stepSubtitle}
-          </Typography>
+          {showAccountCreated ? (
+            <>
+              <Typography
+                variant={isNarrow ? 'h5' : 'h4'}
+                component="h1"
+                sx={{ fontWeight: 700, lineHeight: 1.25, textAlign: 'center' }}
+              >
+                {t(
+                  'signupPage.accountCreatedTitle',
+                  'Account successfully created'
+                )}
+              </Typography>
+              <Stack
+                spacing={2}
+                alignItems="center"
+                sx={{ py: { xs: 0.5, sm: 1 } }}
+                role="status"
+                aria-live="polite"
+              >
+                <SignupAccountCreatedAnimation />
+              </Stack>
+              <Typography
+                color="text.secondary"
+                variant="body2"
+                component="div"
+                sx={{
+                  lineHeight: 1.55,
+                  fontSize: { xs: '0.9375rem', sm: '1rem' },
+                  textAlign: 'center',
+                  '& strong': { color: 'text.primary', fontWeight: 700 },
+                }}
+              >
+                <Trans
+                  i18nKey="signupPage.accountCreatedBody"
+                  values={{ email: postSignupEmail ?? '' }}
+                  components={{ bold: <strong /> }}
+                />
+              </Typography>
+            </>
+          ) : (
+            <>
+              <Typography
+                variant={isNarrow ? 'h5' : 'h4'}
+                component="h1"
+                sx={{ fontWeight: 700, lineHeight: 1.25, textAlign: 'center' }}
+              >
+                {t('signupPage.title', 'Create your account')}
+              </Typography>
+              <Typography
+                color="text.secondary"
+                variant="body2"
+                sx={{
+                  lineHeight: 1.5,
+                  fontSize: { xs: '0.9375rem', sm: '1rem' },
+                  textAlign: 'center',
+                }}
+              >
+                {stepSubtitle}
+              </Typography>
+            </>
+          )}
 
-          {isNarrow ? (
+          {!showAccountCreated && isNarrow ? (
             <Box sx={{ mt: 0.5 }}>
               <Stack
                 direction="row"
@@ -1020,7 +1078,7 @@ const SignupPage: React.FC = () => {
                 }}
               />
             </Box>
-          ) : (
+          ) : !showAccountCreated ? (
             <Stepper
               activeStep={activeStep}
               alternativeLabel
@@ -1034,27 +1092,29 @@ const SignupPage: React.FC = () => {
                 </Step>
               ))}
             </Stepper>
-          )}
+          ) : null}
 
-          {error && (
+          {error && !showAccountCreated && (
             <Alert severity="error" sx={{ borderRadius: 0 }}>
               {error}
             </Alert>
           )}
-          {renderStepBody()}
+          {!showAccountCreated ? renderStepBody() : null}
 
-          <Button
-            color="inherit"
-            onClick={() => setLoginDialogOpen(true)}
-            disabled={saving}
-            sx={{
-              alignSelf: { xs: 'center', sm: 'flex-start' },
-              textTransform: 'none',
-              fontWeight: 600,
-            }}
-          >
-            {t('signupPage.alreadyHaveAccount', 'Already have an account? Log in')}
-          </Button>
+          {!showAccountCreated && (
+            <Button
+              color="inherit"
+              onClick={() => setLoginDialogOpen(true)}
+              disabled={saving}
+              sx={{
+                alignSelf: { xs: 'center', sm: 'flex-start' },
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              {t('signupPage.alreadyHaveAccount', 'Already have an account? Log in')}
+            </Button>
+          )}
 
           <Box
             sx={{
@@ -1079,45 +1139,70 @@ const SignupPage: React.FC = () => {
             }}
           >
             <Stack direction="row" spacing={1.5} alignItems="center">
-              <Button
-                variant="outlined"
-                size="large"
-                onClick={handleBack}
-                disabled={activeStep === 0 || saving}
-                sx={{
-                  minWidth: { xs: 96, sm: 'auto' },
-                  flexShrink: 0,
-                  py: 1.25,
-                  borderRadius: 0,
-                }}
-              >
-                {t('signupPage.back', 'Back')}
-              </Button>
-              {!lastStep ? (
+              {showAccountCreated ? (
                 <Button
                   variant="contained"
                   size="large"
                   fullWidth
-                  onClick={handleNext}
-                  disabled={nextDisabled}
+                  onClick={() => void handleVerifyEmailContinue()}
+                  disabled={verifyRedirectLoading}
+                  startIcon={
+                    verifyRedirectLoading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : undefined
+                  }
                   sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
                 >
-                  {t('signupPage.next', 'Next')}
+                  {t(
+                    'signupPage.verifyEmailToContinue',
+                    'Verify your email to continue'
+                  )}
                 </Button>
               ) : (
-                <Button
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  onClick={handleCreate}
-                  disabled={nextDisabled}
-                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : undefined}
-                  sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
-                >
-                  {saving
-                    ? t('signupPage.creating', 'Creating...')
-                    : t('signupPage.createAccount', 'Create account')}
-                </Button>
+                <>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    onClick={handleBack}
+                    disabled={activeStep === 0 || saving}
+                    sx={{
+                      minWidth: { xs: 96, sm: 'auto' },
+                      flexShrink: 0,
+                      py: 1.25,
+                      borderRadius: 0,
+                    }}
+                  >
+                    {t('signupPage.back', 'Back')}
+                  </Button>
+                  {!lastStep ? (
+                    <Button
+                      variant="contained"
+                      size="large"
+                      fullWidth
+                      onClick={handleNext}
+                      disabled={nextDisabled}
+                      sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
+                    >
+                      {t('signupPage.next', 'Next')}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      size="large"
+                      fullWidth
+                      onClick={handleCreate}
+                      disabled={nextDisabled}
+                      startIcon={
+                        saving ? <CircularProgress size={20} color="inherit" /> : undefined
+                      }
+                      sx={{ py: 1.25, borderRadius: 0, fontWeight: 700 }}
+                    >
+                      {saving
+                        ? t('signupPage.creating', 'Creating...')
+                        : t('signupPage.createAccount', 'Create account')}
+                    </Button>
+                  )}
+                </>
               )}
             </Stack>
           </Box>

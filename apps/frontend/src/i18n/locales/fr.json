@@ -553,6 +553,9 @@
     "businessName": "Nom de l'entreprise",
     "creating": "Création...",
     "createAccount": "Créer le compte",
+    "accountCreatedTitle": "Compte créé avec succès",
+    "accountCreatedBody": "Cliquez sur le bouton ci-dessous pour vérifier votre adresse e-mail. Un code à usage unique sera envoyé à <bold>{{email}}</bold>.",
+    "verifyEmailToContinue": "Vérifier mon e-mail pour continuer",
     "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",
     "createAccountError": "Impossible de créer le compte pour le moment."
   },

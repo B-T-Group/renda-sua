@@ -564,6 +564,9 @@
     "businessName": "Business name",
     "creating": "Creating...",
     "createAccount": "Create account",
+    "accountCreatedTitle": "Account successfully created",
+    "accountCreatedBody": "Please click the button below to verify your email. A one-time code will be sent to <bold>{{email}}</bold>.",
+    "verifyEmailToContinue": "Verify your email to continue",
     "alreadyHaveAccount": "Already have an account? Log in",
     "createAccountError": "Unable to create account at this time."
   },
