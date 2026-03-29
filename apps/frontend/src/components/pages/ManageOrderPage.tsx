@@ -203,7 +203,7 @@ const ManageOrderPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { orderId } = useParams<{ orderId: string }>();
-  const { profile } = useUserProfileContext();
+  const { profile, userType: activePersona } = useUserProfileContext();
   const { accounts } = useAccountInfo();
 
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
@@ -330,7 +330,7 @@ const ManageOrderPage: React.FC = () => {
 
   useEffect(() => {
     if (!order) return;
-    if (profile?.agent) {
+    if (activePersona === 'agent') {
       setActiveTab(1);
       return;
     }
@@ -343,7 +343,7 @@ const ManageOrderPage: React.FC = () => {
       return;
     }
     setActiveTab(0);
-  }, [order?.id, order?.current_status, profile?.agent]);
+  }, [order?.id, order?.current_status, activePersona]);
 
   const handleBack = () => {
     // Navigate back to the smart orders route
@@ -474,9 +474,9 @@ const ManageOrderPage: React.FC = () => {
           // Add bottom padding on mobile for agents to account for sticky action bar + bottom nav
           // Add bottom padding on mobile for clients to account for bottom nav (64px) + action buttons
           paddingBottom:
-            profile?.agent && isMobile
+            activePersona === 'agent' && isMobile
               ? { xs: '200px', md: 4 }
-              : profile?.client && isMobile
+              : activePersona === 'client' && isMobile
                 ? { xs: '140px', md: 4 }
                 : 4,
         }}
@@ -648,17 +648,21 @@ const ManageOrderPage: React.FC = () => {
             <Grid size={{ xs: 12, md: 8 }}>
               {/* Persona-specific alerts */}
               {/* eslint-disable @typescript-eslint/no-explicit-any */}
-              {profile?.agent && <AgentOrderAlerts order={order as any} />}
-              {profile?.business && (
+              {activePersona === 'agent' && (
+                <AgentOrderAlerts order={order as any} />
+              )}
+              {activePersona === 'business' && (
                 <BusinessOrderAlerts
                   order={order as any}
                   onCancelOrder={handleCancelOrder}
                 />
               )}
-              {profile?.client && <ClientOrderAlerts order={order as any} />}
+              {activePersona === 'client' && (
+                <ClientOrderAlerts order={order as any} />
+              )}
               {/* eslint-enable @typescript-eslint/no-explicit-any */}
 
-              {profile?.client &&
+              {activePersona === 'client' &&
                 order.current_status === 'out_for_delivery' && (
                   <Stack spacing={2} sx={{ mb: 3 }}>
                     <DeliveryTrackingMap
@@ -931,7 +935,8 @@ const ManageOrderPage: React.FC = () => {
                               >
                                 {order.client.user.email}
                               </Typography>
-                              {profile?.agent?.id &&
+                              {activePersona === 'agent' &&
+                                profile?.agent?.id &&
                                 order.assigned_agent_id &&
                                 order.assigned_agent_id === profile.agent.id &&
                                 order.client.user.phone_number && (
@@ -1038,7 +1043,8 @@ const ManageOrderPage: React.FC = () => {
                                   {order.delivery_address.instructions}
                                 </Typography>
                               )}
-                              {profile?.agent?.id &&
+                              {activePersona === 'agent' &&
+                                profile?.agent?.id &&
                                 order.assigned_agent_id &&
                                 order.assigned_agent_id ===
                                   profile.agent.id &&
@@ -1263,7 +1269,7 @@ const ManageOrderPage: React.FC = () => {
                     </Box>
 
                     {/* Track your delivery - client only when order is in transit */}
-                    {profile?.client &&
+                    {activePersona === 'client' &&
                       ['picked_up', 'in_transit', 'out_for_delivery'].includes(
                         order.current_status
                       ) &&
@@ -1371,7 +1377,8 @@ const ManageOrderPage: React.FC = () => {
                     <OrderRatingsDisplay
                       ratings={ratings}
                       userType={
-                        profile?.user_type_id as 'client' | 'agent' | 'business'
+                        (activePersona ??
+                          'client') as 'client' | 'agent' | 'business'
                       }
                     />
                     {ratings.length === 0 && (
@@ -1384,8 +1391,9 @@ const ManageOrderPage: React.FC = () => {
               </Card>
 
               {/* Messages Section */}
-              {(!profile?.agent ||
-                order.assigned_agent_id === profile?.agent?.id) && (
+              {(activePersona !== 'agent' ||
+                (profile?.agent?.id &&
+                  order.assigned_agent_id === profile.agent.id)) && (
                 <Card>
                   <CardContent sx={{ p: 3 }}>
                     <UserMessagesComponent
@@ -1463,7 +1471,7 @@ const ManageOrderPage: React.FC = () => {
 
                   {/* Price Breakdown */}
                   <Box sx={{ mb: 2 }}>
-                    {profile?.agent ? (
+                    {activePersona === 'agent' ? (
                       // Agent view: Show only delivery commission
                       order.delivery_commission !== undefined && (
                         <Box
@@ -1537,7 +1545,7 @@ const ManageOrderPage: React.FC = () => {
 
                   <Divider sx={{ my: 2 }} />
 
-                  {!profile?.agent &&
+                  {activePersona !== 'agent' &&
                     order.subtotal !== undefined &&
                     (order.base_delivery_fee !== undefined ||
                       order.per_km_delivery_fee !== undefined) && (
@@ -1571,7 +1579,7 @@ const ManageOrderPage: React.FC = () => {
                   {/* Action Buttons */}
                   <Stack spacing={2}>
                     {/* Persona-specific actions */}
-                    {profile?.agent && (
+                    {activePersona === 'agent' && (
                       <>
                         {order.current_status === 'ready_for_pickup' && (
                           <Alert severity="info" icon={<RefreshIcon />}>
@@ -1594,7 +1602,7 @@ const ManageOrderPage: React.FC = () => {
                         </Box>
                       </>
                     )}
-                    {profile?.business && (
+                    {activePersona === 'business' && (
                       <BusinessActions
                         order={order}
                         onActionComplete={() => refetch()}
@@ -1602,7 +1610,7 @@ const ManageOrderPage: React.FC = () => {
                         onShowHistory={() => setHistoryDialogOpen(true)}
                       />
                     )}
-                    {profile?.client && (
+                    {activePersona === 'client' && (
                       <ClientActions
                         order={order}
                         onActionComplete={() => refetch()}
@@ -1615,7 +1623,8 @@ const ManageOrderPage: React.FC = () => {
 
                     {/* Rating button */}
                     {order.current_status === 'complete' &&
-                      profile?.user_type_id !== 'business' &&
+                      activePersona &&
+                      activePersona !== 'business' &&
                       ratings.length === 0 && (
                         <Button
                           variant="contained"
@@ -1639,7 +1648,7 @@ const ManageOrderPage: React.FC = () => {
                     </Button>
 
                     {/* Report issue - client only for delivered/failed/complete/refunded */}
-                    {profile?.client &&
+                    {activePersona === 'client' &&
                       ['delivered', 'failed', 'complete', 'refunded'].includes(
                         order.current_status
                       ) && (
@@ -1661,7 +1670,7 @@ const ManageOrderPage: React.FC = () => {
         </Container>
 
         {/* Mobile Sticky Action Bar for Agents */}
-        {profile?.agent && isMobile && (
+        {activePersona === 'agent' && isMobile && (
           <Box
             sx={{
               position: 'fixed',
@@ -1768,7 +1777,9 @@ const ManageOrderPage: React.FC = () => {
         onClose={() => setRatingDialogOpen(false)}
         orderId={order.id}
         orderNumber={order.order_number}
-        userType={profile?.user_type_id as 'client' | 'agent' | 'business'}
+        userType={
+          (activePersona ?? 'client') as 'client' | 'agent' | 'business'
+        }
         orderStatus={order.current_status}
         orderData={order}
         onRatingSubmitted={() => {

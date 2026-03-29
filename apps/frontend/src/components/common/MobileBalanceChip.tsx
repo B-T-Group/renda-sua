@@ -111,15 +111,15 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: XAF_CURRENCY,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
 
   const formatCurrency = (amount: number, currency: string) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
-      minimumFractionDigits: 0,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
 
