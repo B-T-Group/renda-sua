@@ -24,6 +24,8 @@ select_permissions:
         - delivery_fees
         - currency
         - status
+        - item_settlement_completed_at
+        - delivery_settlement_completed_at
         - created_at
         - updated_at
       filter:
@@ -45,6 +47,8 @@ select_permissions:
         - delivery_fees
         - currency
         - status
+        - item_settlement_completed_at
+        - delivery_settlement_completed_at
         - created_at
         - updated_at
       filter:

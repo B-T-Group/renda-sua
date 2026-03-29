@@ -38,6 +38,8 @@ def get_or_create_order_hold(
         delivery_fees
         currency
         status
+        item_settlement_completed_at
+        delivery_settlement_completed_at
         created_at
         updated_at
       }
@@ -63,6 +65,14 @@ def get_or_create_order_hold(
                 delivery_fees=float(hold_data["delivery_fees"]),
                 currency=hold_data["currency"],
                 status=hold_data["status"],
+                item_settlement_completed_at=parse_datetime(hold_data["item_settlement_completed_at"])
+                if hold_data.get("item_settlement_completed_at")
+                else None,
+                delivery_settlement_completed_at=parse_datetime(
+                    hold_data["delivery_settlement_completed_at"]
+                )
+                if hold_data.get("delivery_settlement_completed_at")
+                else None,
                 created_at=parse_datetime(hold_data["created_at"]),
                 updated_at=parse_datetime(hold_data["updated_at"]),
             )
@@ -99,6 +109,8 @@ def get_or_create_order_hold(
             delivery_fees
             currency
             status
+            item_settlement_completed_at
+            delivery_settlement_completed_at
             created_at
             updated_at
           }
@@ -131,6 +143,14 @@ def get_or_create_order_hold(
             delivery_fees=float(hold_data["delivery_fees"]),
             currency=hold_data["currency"],
             status=hold_data["status"],
+            item_settlement_completed_at=parse_datetime(hold_data["item_settlement_completed_at"])
+            if hold_data.get("item_settlement_completed_at")
+            else None,
+            delivery_settlement_completed_at=parse_datetime(
+                hold_data["delivery_settlement_completed_at"]
+            )
+            if hold_data.get("delivery_settlement_completed_at")
+            else None,
             created_at=parse_datetime(hold_data["created_at"]),
             updated_at=parse_datetime(hold_data["updated_at"]),
         )

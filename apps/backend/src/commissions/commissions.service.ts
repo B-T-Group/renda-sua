@@ -193,53 +193,58 @@ export class CommissionsService {
   }
 
   /**
-   * Distribute commissions for a completed order
+   * Distribute item-side commissions and business subtotal (on agent pickup).
+   */
+  async distributeItemCommissions(order: any): Promise<void> {
+    const breakdown = await this.calculateCommissions(order);
+    const rendasuaHQUser = await this.getRendasuaHQUser();
+    if (!rendasuaHQUser) {
+      throw new Error('RendaSua HQ user not found');
+    }
+    const partners = await this.getActivePartners();
+    await this.processItemCommissions(
+      order,
+      breakdown.itemCommission,
+      rendasuaHQUser,
+      partners
+    );
+    await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
+  }
+
+  /**
+   * Distribute delivery fee commissions (on order completion).
+   */
+  async distributeDeliveryCommissions(order: any): Promise<void> {
+    const breakdown = await this.calculateCommissions(order);
+    const rendasuaHQUser = await this.getRendasuaHQUser();
+    if (!rendasuaHQUser) {
+      throw new Error('RendaSua HQ user not found');
+    }
+    const partners = await this.getActivePartners();
+    await this.processBaseDeliveryFeeCommissions(
+      order,
+      breakdown.baseDeliveryFee,
+      rendasuaHQUser,
+      partners
+    );
+    await this.processPerKmDeliveryFeeCommissions(
+      order,
+      breakdown.perKmDeliveryFee,
+      rendasuaHQUser,
+      partners
+    );
+  }
+
+  /**
+   * Distribute all commissions (item + delivery); use split methods for phased settlement.
    */
   async distributeCommissions(order: any): Promise<void> {
     try {
       this.logger.log(
         `Starting commission distribution for order ${order.order_number}`
       );
-
-      // Calculate commission breakdown
-      const breakdown = await this.calculateCommissions(order);
-
-      // Get RendaSua HQ user
-      const rendasuaHQUser = await this.getRendasuaHQUser();
-      if (!rendasuaHQUser) {
-        throw new Error('RendaSua HQ user not found');
-      }
-
-      // Get active partners
-      const partners = await this.getActivePartners();
-
-      // Process base delivery fee commissions
-      await this.processBaseDeliveryFeeCommissions(
-        order,
-        breakdown.baseDeliveryFee,
-        rendasuaHQUser,
-        partners
-      );
-
-      // Process per-km delivery fee commissions
-      await this.processPerKmDeliveryFeeCommissions(
-        order,
-        breakdown.perKmDeliveryFee,
-        rendasuaHQUser,
-        partners
-      );
-
-      // Process item commissions
-      await this.processItemCommissions(
-        order,
-        breakdown.itemCommission,
-        rendasuaHQUser,
-        partners
-      );
-
-      // Process order subtotal (business payment)
-      await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
-
+      await this.distributeItemCommissions(order);
+      await this.distributeDeliveryCommissions(order);
       this.logger.log(
         `Successfully distributed commissions for order ${order.order_number}`
       );

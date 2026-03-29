@@ -684,7 +684,7 @@ export class MobilePaymentsController {
 
               if (transaction.payment_entity === 'order') {
                 // Process order payment using the refactored method
-                await this.ordersService.processOrderPayment(transaction);
+                await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
               } else if (transaction.payment_entity === 'claim_order') {
                 // Process claim order payment
                 await this.ordersService.processClaimOrderPayment(transaction);
@@ -822,7 +822,7 @@ export class MobilePaymentsController {
               );
 
               if (transaction.payment_entity === 'order') {
-                await this.ordersService.processOrderPayment(transaction);
+                await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
               } else if (transaction.payment_entity === 'claim_order') {
                 await this.ordersService.processClaimOrderPayment(transaction);
               } else if (transaction.payment_entity === 'rental_booking') {

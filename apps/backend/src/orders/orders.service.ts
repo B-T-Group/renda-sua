@@ -91,6 +91,12 @@ export interface CompleteDeliveryRequest {
   overwriteCode?: string;
 }
 
+/** order_holds row including settlement timestamps (GraphQL schema after migration). */
+type OrderHoldWithSettlement = Order_Holds & {
+  item_settlement_completed_at?: string | null;
+  delivery_settlement_completed_at?: string | null;
+};
+
 // Custom interface for complex order data with all relationships
 export interface OrderWithDetails {
   id: string;
@@ -1523,6 +1529,7 @@ export class OrdersService {
         `Cannot pick up order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    await this.processOrderPayment(request.orderId);
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'picked_up'
@@ -1779,6 +1786,8 @@ export class OrdersService {
       }
       await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
     }
+
+    await this.processOrderDeliveryPayment(request.orderId);
 
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
@@ -2298,25 +2307,34 @@ export class OrdersService {
       );
     }
 
-    // Credit the client with the client_hold_amount
-    if (orderHold.client_hold_amount > 0) {
-      const clientAccount = await this.hasuraSystemService.getAccount(
-        order.client.user_id,
-        order.currency
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+
+    if (!clientAccount) {
+      throw new HttpException(
+        'Client account not found',
+        HttpStatus.NOT_FOUND
       );
+    }
 
-      if (!clientAccount) {
-        throw new HttpException(
-          'Client account not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
-
+    if (Number(orderHold.client_hold_amount) > 0) {
       await this.accountsService.registerTransaction({
         accountId: clientAccount.id,
-        amount: orderHold.client_hold_amount,
+        amount: Number(orderHold.client_hold_amount),
         transactionType: 'release',
         memo: `Refund for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+    }
+
+    if (Number(orderHold.delivery_fees) > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: Number(orderHold.delivery_fees),
+        transactionType: 'release',
+        memo: `Refund delivery hold for order ${order.order_number}`,
         referenceId: order.id,
       });
     }
@@ -2327,9 +2345,10 @@ export class OrdersService {
       'refunded'
     );
 
-    // Update order hold status to completed
     await this.updateOrderHold(orderHold.id, {
       status: 'completed',
+      client_hold_amount: 0,
+      delivery_fees: 0,
     });
 
     await this.createStatusHistoryEntry(
@@ -4019,9 +4038,9 @@ export class OrdersService {
   }
 
   /**
-   * Process order payment - handles hold transactions and notifications
+   * Finalize order after wallet/mobile incoming payment: holds, order_hold row, notifications.
    */
-  async processOrderPayment(transaction: any): Promise<void> {
+  async finalizeOrderAfterIncomingPayment(transaction: any): Promise<void> {
     try {
       const order = await this.getOrderByNumber(transaction.reference);
       await this.finalizeClientOrderPayment(order, transaction.account_id);
@@ -5130,7 +5149,7 @@ export class OrdersService {
   async getOrCreateOrderHold(
     orderId: string,
     deliveryFees = 0
-  ): Promise<Order_Holds> {
+  ): Promise<OrderHoldWithSettlement> {
     // First, try to get the existing order hold
     const getOrderHoldQuery = `
       query GetOrderHold($orderId: uuid!) {
@@ -5144,6 +5163,8 @@ export class OrdersService {
           delivery_fees
           currency
           status
+          item_settlement_completed_at
+          delivery_settlement_completed_at
           created_at
           updated_at
         }
@@ -5194,6 +5215,8 @@ export class OrdersService {
             delivery_fees
             currency
             status
+            item_settlement_completed_at
+            delivery_settlement_completed_at
             created_at
             updated_at
           }
@@ -5228,6 +5251,8 @@ export class OrdersService {
       agent_hold_amount?: number;
       delivery_fees?: number;
       agent_id?: string | null;
+      item_settlement_completed_at?: string | null;
+      delivery_settlement_completed_at?: string | null;
     }
   ): Promise<any> {
     const updateOrderHoldMutation = `
@@ -5242,6 +5267,8 @@ export class OrdersService {
         delivery_fees
         currency
         status
+        item_settlement_completed_at
+        delivery_settlement_completed_at
         created_at
         updated_at
       }
@@ -5266,6 +5293,14 @@ export class OrdersService {
           delivery_fees:
             updates.delivery_fees != null ? updates.delivery_fees : undefined,
           agent_id: updates.agent_id ?? undefined,
+          item_settlement_completed_at:
+            updates.item_settlement_completed_at !== undefined
+              ? updates.item_settlement_completed_at
+              : undefined,
+          delivery_settlement_completed_at:
+            updates.delivery_settlement_completed_at !== undefined
+              ? updates.delivery_settlement_completed_at
+              : undefined,
         },
       }
     );
@@ -5335,81 +5370,170 @@ export class OrdersService {
     });
   }
 
-  async releaseHoldAndProcessPayment(referenceId: string): Promise<void> {
-    const order = await this.getOrderDetails(referenceId);
-
+  /**
+   * Release item/subtotal client hold, record item payment, distribute item/business commissions.
+   * Idempotent via order_holds.item_settlement_completed_at. Call while status is assigned_to_agent (pickup) or picked_up (retry).
+   */
+  async processOrderPayment(orderId: string): Promise<void> {
+    const order = await this.getOrderDetails(orderId);
     if (
       !order ||
-      !order.business ||
-      !order.business.user_id ||
-      !order.client_id
+      !order.business?.user_id ||
+      !order.client_id ||
+      !order.client?.user_id
     ) {
-      throw new Error('Order, business user, or client not found');
+      throw new HttpException(
+        'Order, business user, or client not found',
+        HttpStatus.BAD_REQUEST
+      );
     }
 
-    const orderHold = await this.getOrCreateOrderHold(referenceId);
+    const orderHold = await this.getOrCreateOrderHold(orderId);
+    if (orderHold.item_settlement_completed_at) {
+      return;
+    }
 
-    // Release holds first
-    if (order.assigned_agent) {
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      order.assigned_agent.user_id,
+    const itemStatuses = ['assigned_to_agent', 'picked_up'];
+    if (!itemStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const subtotalPortion = Number(orderHold.client_hold_amount);
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
       order.currency
     );
+    if (!clientAccount) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: orderHold.agent_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}`,
-      referenceId: referenceId,
+    if (subtotalPortion > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: subtotalPortion,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number} (items)`,
+        referenceId: orderId,
+      });
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: subtotalPortion,
+        transactionType: 'payment',
+        memo: `Order item payment for order ${order.order_number}`,
+        referenceId: orderId,
+      });
+    }
+
+    try {
+      await this.commissionsService.distributeItemCommissions(order);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed item commission distribution for order ${order.order_number}: ${error.message}`
+      );
+    }
+
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: 0,
+      item_settlement_completed_at: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Release agent hold and delivery client hold, record delivery payment, distribute delivery commissions.
+   * Idempotent via order_holds.delivery_settlement_completed_at. Call while out_for_delivery (before complete) or complete (retry).
+   */
+  async processOrderDeliveryPayment(orderId: string): Promise<void> {
+    const order = await this.getOrderDetails(orderId);
+    if (
+      !order ||
+      !order.business?.user_id ||
+      !order.client_id ||
+      !order.client?.user_id
+    ) {
+      throw new HttpException(
+        'Order, business user, or client not found',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const orderHold = await this.getOrCreateOrderHold(orderId);
+    if (orderHold.delivery_settlement_completed_at) {
+      return;
+    }
+
+    if (!orderHold.item_settlement_completed_at) {
+      throw new HttpException(
+        'Item settlement must complete before delivery settlement',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const deliveryStatuses = ['out_for_delivery', 'complete'];
+    if (!deliveryStatuses.includes(order.current_status)) {
+      throw new HttpException(
+        `Delivery settlement requires out_for_delivery or complete; got ${order.current_status}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (order.assigned_agent) {
+      const agentAccount = await this.hasuraSystemService.getAccount(
+        order.assigned_agent.user_id,
+        order.currency
+      );
+      const agentHoldAmt = Number(orderHold.agent_hold_amount);
+      if (agentAccount && agentHoldAmt > 0) {
+        await this.accountsService.registerTransaction({
+          accountId: agentAccount.id,
+          amount: agentHoldAmt,
+          transactionType: 'release',
+          memo: `Hold released for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      }
     }
 
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
     );
+    if (!clientAccount) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
 
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: orderHold.client_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}`,
-      referenceId: referenceId,
-    });
+    const deliveryAmt = Number(orderHold.delivery_fees);
+    if (deliveryAmt > 0) {
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: deliveryAmt,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number} delivery fee`,
+        referenceId: orderId,
+      });
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: deliveryAmt,
+        transactionType: 'payment',
+        memo: `Order delivery payment for order ${order.order_number}`,
+        referenceId: orderId,
+      });
+    }
 
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: orderHold.delivery_fees,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number} delivery fee`,
-      referenceId: referenceId,
-    });
-
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: order.total_amount,
-      transactionType: 'payment',
-      memo: `Order payment received for order ${order.order_number}`,
-      referenceId: referenceId,
-    });
-
-    // Now distribute commissions using the new commission system
     try {
-      await this.commissionsService.distributeCommissions(order);
-      this.logger.log(
-        `Successfully distributed commissions for order ${order.order_number}`
-      );
+      await this.commissionsService.distributeDeliveryCommissions(order);
     } catch (error: any) {
       this.logger.error(
-        `Failed to distribute commissions for order ${order.order_number}: ${error.message}`
+        `Failed delivery commission distribution for order ${order.order_number}: ${error.message}`
       );
-      // Don't fail the order completion if commission distribution fails
-      // The order should still be marked as complete
     }
 
     await this.updateOrderHold(orderHold.id, {
+      delivery_fees: 0,
       status: 'completed',
+      delivery_settlement_completed_at: new Date().toISOString(),
     });
   }
 

@@ -325,8 +325,9 @@ def release_hold_and_process_payment(
     hasura_admin_secret: str
 ) -> Dict[str, Any]:
     """
-    Release holds and process payment for a completed order.
-    This replicates the logic from OrdersService.releaseHoldAndProcessPayment.
+    Legacy single-step settlement (deprecated). Item and delivery settlement now run in NestJS
+    (processOrderPayment on pickup, processOrderDeliveryPayment on complete). Not invoked from
+    order.completed handler.
     
     Args:
         order_id: Order ID
@@ -519,41 +520,13 @@ def handle_order_completed(event: Dict[str, Any]) -> Dict[str, Any]:
     if not message:
         log_error("Failed to parse event message in handle_order_completed")
         return {"success": False, "error": "Failed to parse event message"}
-    
+
     environment = os.environ.get("ENVIRONMENT", "development")
-    hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-    
-    if not hasura_endpoint:
-        log_error("GRAPHQL_ENDPOINT not configured")
-        return {"success": False, "error": "GRAPHQL_ENDPOINT not configured"}
-    
-    # Get Hasura admin secret
-    try:
-        hasura_admin_secret = get_hasura_admin_secret(environment)
-    except ValueError as e:
-        log_error("Failed to retrieve Hasura admin secret", error=e)
-        return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
-    
-    # Process payment and release holds
-    payment_result = release_hold_and_process_payment(
-        message.orderId,
-        hasura_endpoint,
-        hasura_admin_secret
-    )
-    
-    if not payment_result.get("success"):
-        log_error("Payment processing failed", order_id=message.orderId, error=payment_result.get("error"))
-        # Still try to send notifications even if payment processing fails
-        # (for backward compatibility with existing notification logic)
-    
-    # Also process the order event for notifications (existing behavior)
-    # Order status will be fetched from the order in process_order_event
+    # Settlement (item at pickup, delivery at complete) runs in NestJS; this handler only notifies.
     notification_result = process_order_event(message.orderId, "order.completed", environment, order_status=None)
-    
-    # Return combined result
+
     return {
-        "success": payment_result.get("success", False) and notification_result.get("success", False),
-        "payment_processing": payment_result,
+        "success": notification_result.get("success", False),
         "notifications": notification_result,
     }
 
@@ -630,6 +603,12 @@ def process_cancellation_financials(
             return {"success": False, "error": "Failed to get or create order hold"}
         
         log_info("Order hold retrieved", order_id=order_id, hold_id=order_hold.id)
+
+        if getattr(order_hold, "item_settlement_completed_at", None):
+            log_info(
+                "Item settlement already applied; releasing only remaining held amounts",
+                order_id=order_id,
+            )
         
         # Release agent hold if agent is assigned
         if order.assigned_agent and order.assigned_agent.user_id:

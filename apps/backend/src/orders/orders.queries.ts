@@ -350,6 +350,8 @@ export const GET_ORDER_BY_ID = gql`
         delivery_fees
         currency
         status
+        item_settlement_completed_at
+        delivery_settlement_completed_at
         created_at
         updated_at
       }

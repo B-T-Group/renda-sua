@@ -21,3 +21,5 @@ class OrderHold(BaseModel):
     order_id: str
     status: str
     updated_at: datetime.datetime
+    item_settlement_completed_at: Optional[datetime.datetime] = None
+    delivery_settlement_completed_at: Optional[datetime.datetime] = None
