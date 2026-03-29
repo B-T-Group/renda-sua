@@ -9,11 +9,9 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -92,9 +90,6 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
 
   const finalAddressTypeOptions =
     addressTypeOptions || defaultAddressTypeOptions;
-  const [hasPostalCode, setHasPostalCode] = useState<boolean>(
-    (addressData?.postal_code ?? '').trim() !== ''
-  );
 
   // Location data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -588,38 +583,6 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             mt: 1,
           }}
         >
-          {/* Ask if user has a postal code */}
-          <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={hasPostalCode}
-                  onChange={(e) => {
-                    const value = e.target.checked;
-                    setHasPostalCode(value);
-                    if (!value) {
-                      onAddressChange({
-                        address_line_1: addressData?.address_line_1 || '',
-                        address_line_2: addressData?.address_line_2 || '',
-                        city: addressData?.city || '',
-                        state: addressData?.state || '',
-                        postal_code: '',
-                        country: addressData?.country || '',
-                        address_type: addressData?.address_type || 'home',
-                        is_primary: addressData?.is_primary || false,
-                        latitude: addressData?.latitude,
-                        longitude: addressData?.longitude,
-                      });
-                    }
-                  }}
-                />
-              }
-              label={t(
-                'addresses.addressDialog.hasPostalCode',
-                'Do you have a postal code?'
-              )}
-            />
-          </Box>
           {/* Address Line 1 */}
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
             <TextField
@@ -730,15 +693,16 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             </Select>
           </FormControl>
 
-          {/* Postal Code */}
-          {hasPostalCode ? (
-            <TextField
-              fullWidth
-              label={t('addresses.addressDialog.postalCode', 'Postal Code')}
-              value={addressData?.postal_code || ''}
-              onChange={(e) => handleInputChange('postal_code', e.target.value)}
-            />
-          ) : null}
+          {/* Postal Code (optional) */}
+          <TextField
+            fullWidth
+            label={t(
+              'addresses.addressDialog.postalCodeOptional',
+              'Postal code (optional)'
+            )}
+            value={addressData?.postal_code || ''}
+            onChange={(e) => handleInputChange('postal_code', e.target.value)}
+          />
 
           {/* Address Type (optional) */}
           {showAddressType && (

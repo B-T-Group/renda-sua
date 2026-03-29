@@ -145,33 +145,40 @@ export const useBusinessLocations = (
             'Business ID is required to create a business location'
           );
         }
-        if (!data.address) {
-          throw new Error('Address data is required');
+        if (!data.address && !data.address_id) {
+          throw new Error('Address data or address_id is required');
         }
         if (!apiClient) {
           throw new Error('API client not available');
         }
-        // Always use backend REST endpoint: country from business primary address, account created, validation (e.g. add-address-first).
-        const response = await apiClient.post<{
-          success: boolean;
-          message?: string;
-          data?: { business_location?: BusinessLocation };
-        }>('/business-items/locations', {
+        const basePayload = {
           name: data.name,
-          address: {
-            address_line_1: data.address.address_line_1,
-            address_line_2: data.address.address_line_2,
-            city: data.address.city,
-            state: data.address.state,
-            postal_code: data.address.postal_code,
-            instructions: data.address.instructions,
-          },
           phone: data.phone,
           email: data.email,
           location_type: data.location_type ?? 'store',
           is_primary: data.is_primary ?? false,
-          rendasua_item_commission_percentage: data.rendasua_item_commission_percentage ?? null,
-        });
+          rendasua_item_commission_percentage:
+            data.rendasua_item_commission_percentage ?? null,
+        };
+        const body =
+          data.address_id && !data.address
+            ? { ...basePayload, address_id: data.address_id }
+            : {
+                ...basePayload,
+                address: {
+                  address_line_1: data.address!.address_line_1,
+                  address_line_2: data.address!.address_line_2,
+                  city: data.address!.city,
+                  state: data.address!.state,
+                  postal_code: data.address!.postal_code,
+                  instructions: data.address!.instructions,
+                },
+              };
+        const response = await apiClient.post<{
+          success: boolean;
+          message?: string;
+          data?: { business_location?: BusinessLocation };
+        }>('/business-items/locations', body);
         if (response.data.success && response.data.data?.business_location) {
           await fetchLocations();
           if (onAddressCreated) {

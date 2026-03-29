@@ -92,6 +92,7 @@
       "latitude": "Latitude (Optionnel)",
       "longitude": "Longitude (Optionnel)",
       "postalCode": "Code postal",
+      "postalCodeOptional": "Code postal (optionnel)",
       "primaryAddress": "Adresse principale",
       "requiredFields": "Veuillez remplir tous les champs obligatoires (adresse, ville, état, pays).",
       "save": "Enregistrer",
@@ -1468,7 +1469,16 @@
       "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
       "addAddressFirst": "Ajoutez d'abord une adresse professionnelle avant d'ajouter des emplacements.",
       "addBusinessAddress": "Ajouter une adresse professionnelle",
-      "countryReadOnly": "Le pays est défini selon l'adresse de votre entreprise et ne peut pas être modifié."
+      "addAddress": "Ajouter une adresse",
+      "addLocationAddress": "Ajouter l'adresse de l'emplacement",
+      "countryReadOnly": "Le pays est défini selon l'adresse de votre entreprise et ne peut pas être modifié.",
+      "currentAddress": "Adresse actuelle",
+      "editAddress": "Modifier l'adresse",
+      "editLocationAddress": "Modifier l'adresse de l'emplacement",
+      "noLocationAddressHint": "Aucune adresse renseignée. Ajoutez une adresse propre à l'emplacement ou réutilisez l'adresse de votre profil entreprise.",
+      "useBusinessProfileAddress": "Utiliser l'adresse du profil entreprise",
+      "useDifferentAddress": "Utiliser une autre adresse",
+      "usingBusinessProfileAddress": "Adresse du profil entreprise utilisée"
     },
     "orders": {
       "agentAssigned": "🚚 Excellent ! Un agent a réclamé cette commande et arrivera bientôt. Préparez la commande pour un transfert rapide.",
@@ -2347,6 +2357,10 @@
     "notAvailable": "Non disponible"
   },
   "persona": {
+    "client": "Client",
+    "agent": "Agent de livraison",
+    "business": "Entreprise",
+    "switchTo": "Passer à {{label}}",
     "selectKicker": "Bon retour",
     "selectTitle": "Comment souhaitez-vous utiliser Rendasua ?",
     "selectSubtitle": "Choisissez ce que vous voulez faire aujourd’hui. Vous pourrez changer de mode à tout moment depuis votre profil ou l’en-tête.",

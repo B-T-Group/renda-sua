@@ -18,14 +18,29 @@ import {
   Typography,
 } from '@mui/material';
 import { State } from 'country-state-city';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Address } from '../../contexts/UserProfileContext';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   AddBusinessLocationData,
   BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+
+function profileAddressToFormData(addr: Address): AddressFormData {
+  const state = State.getStateByCodeAndCountry(addr.state, addr.country);
+  return {
+    address_line_1: addr.address_line_1,
+    address_line_2: addr.address_line_2 || '',
+    city: addr.city,
+    state: state?.name ?? addr.state,
+    postal_code: addr.postal_code,
+    country: addr.country,
+    instructions: addr.instructions || '',
+  };
+}
 
 interface LocationModalProps {
   open: boolean;
@@ -52,10 +67,19 @@ const LocationModal: React.FC<LocationModalProps> = ({
   warning = null,
 }) => {
   const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
   const isEditing = !!location;
   const effectiveCountry = isEditing
     ? location?.address?.country
     : businessPrimaryCountry;
+
+  const businessProfileAddress = useMemo(() => {
+    const list = profile?.addresses;
+    if (!list?.length) return null;
+    return list.find((a) => a.is_primary) ?? list[0];
+  }, [profile?.addresses]);
+
+  const [reuseProfileAddress, setReuseProfileAddress] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState<AddBusinessLocationData>({
@@ -73,7 +97,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     address_line_2: '',
     city: '',
     state: '',
-    postal_code: '00000',
+    postal_code: '',
     country: '',
     instructions: '',
   });
@@ -127,21 +151,46 @@ const LocationModal: React.FC<LocationModalProps> = ({
         address_line_2: '',
         city: '',
         state: '',
-        postal_code: '00000',
+        postal_code: '',
         country: businessPrimaryCountry ?? '',
         instructions: '',
       });
+      setReuseProfileAddress(false);
     }
   }, [location, open, businessPrimaryCountry]);
 
   const handleSave = async () => {
-    console.log('LocationModal: handleSave called');
-    console.log('LocationModal: formData:', formData);
-    console.log('LocationModal: addressData:', addressData);
+    if (!formData.name.trim()) return;
 
-    // Validate required fields
-    if (!formData.name.trim()) {
-      console.log('LocationModal: Name is required');
+    const commission = formData.rendasua_item_commission_percentage ?? null;
+
+    if (isEditing) {
+      if (
+        !addressData.address_line_1.trim() ||
+        !addressData.city.trim() ||
+        !addressData.state.trim() ||
+        !addressData.country.trim()
+      ) {
+        return;
+      }
+      await onSave({
+        ...formData,
+        rendasua_item_commission_percentage: commission,
+        address: {
+          ...addressData,
+          postal_code: addressData.postal_code?.trim() || '',
+          state: addressData.state?.trim() || undefined,
+          address_line_2: addressData.address_line_2?.trim() || undefined,
+        },
+      });
+      return;
+    }
+
+    if (reuseProfileAddress && formData.address_id) {
+      await onSave({
+        ...formData,
+        rendasua_item_commission_percentage: commission,
+      });
       return;
     }
 
@@ -149,24 +198,21 @@ const LocationModal: React.FC<LocationModalProps> = ({
       !addressData.address_line_1.trim() ||
       !addressData.city.trim() ||
       !addressData.state.trim() ||
-      !addressData.postal_code.trim() ||
       !addressData.country.trim()
     ) {
       return;
     }
 
-    const locationData = {
+    await onSave({
       ...formData,
-      rendasua_item_commission_percentage:
-        formData.rendasua_item_commission_percentage ?? null,
+      rendasua_item_commission_percentage: commission,
       address: {
         ...addressData,
+        postal_code: addressData.postal_code?.trim() || '',
         state: addressData.state?.trim() || undefined,
         address_line_2: addressData.address_line_2?.trim() || undefined,
       },
-    };
-
-    await onSave(locationData);
+    });
   };
 
   const handleClose = () => {
@@ -176,11 +222,42 @@ const LocationModal: React.FC<LocationModalProps> = ({
   };
 
   const handleAddressSave = () => {
+    setReuseProfileAddress(false);
+    setFormData((prev) => ({ ...prev, address_id: '' }));
     setAddressDialogOpen(false);
   };
 
+  const applyBusinessProfileAddress = () => {
+    if (!businessProfileAddress) return;
+    setReuseProfileAddress(true);
+    setFormData((prev) => ({
+      ...prev,
+      address_id: businessProfileAddress.id,
+    }));
+    setAddressData(profileAddressToFormData(businessProfileAddress));
+  };
+
+  const openCustomAddressDialog = () => {
+    setReuseProfileAddress(false);
+    setFormData((prev) => ({ ...prev, address_id: '' }));
+    setAddressData({
+      address_line_1: '',
+      address_line_2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      country: businessPrimaryCountry ?? '',
+      instructions: '',
+    });
+    setAddressDialogOpen(true);
+  };
+
   const hasAddress =
-    addressData.address_line_1 && addressData.city && addressData.country;
+    !!(addressData.address_line_1 && addressData.city && addressData.country);
+  const canSaveAddress =
+    isEditing ||
+    (reuseProfileAddress && !!formData.address_id) ||
+    hasAddress;
 
   return (
     <>
@@ -318,12 +395,25 @@ const LocationModal: React.FC<LocationModalProps> = ({
                     mb: 2,
                   }}
                 >
+                  {reuseProfileAddress && !isEditing && (
+                    <Typography
+                      variant="caption"
+                      color="primary"
+                      display="block"
+                      sx={{ mb: 1, fontWeight: 600 }}
+                    >
+                      {t(
+                        'business.locations.usingBusinessProfileAddress',
+                        'Using your business profile address'
+                      )}
+                    </Typography>
+                  )}
                   <Typography
                     variant="body2"
                     color="text.secondary"
                     gutterBottom
                   >
-                    Current Address:
+                    {t('business.locations.currentAddress', 'Current address')}
                   </Typography>
                   <Typography variant="body1">
                     {addressData.address_line_1}
@@ -339,18 +429,58 @@ const LocationModal: React.FC<LocationModalProps> = ({
                 </Box>
               ) : (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  No address configured. Please add an address for this
-                  location.
+                  {t(
+                    'business.locations.noLocationAddressHint',
+                    'No address configured. Add a location-specific address or reuse your business profile address.'
+                  )}
                 </Alert>
               )}
 
-              <Button
-                variant="outlined"
-                onClick={() => setAddressDialogOpen(true)}
-                fullWidth
-              >
-                {hasAddress ? 'Edit Address' : 'Add Address'}
-              </Button>
+              <Stack spacing={1}>
+                {!isEditing && businessProfileAddress && (
+                  <Button
+                    variant="outlined"
+                    onClick={applyBusinessProfileAddress}
+                    fullWidth
+                  >
+                    {t(
+                      'business.locations.useBusinessProfileAddress',
+                      'Use business profile address'
+                    )}
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    if (isEditing) {
+                      setAddressDialogOpen(true);
+                      return;
+                    }
+                    if (hasAddress && !reuseProfileAddress) {
+                      setAddressDialogOpen(true);
+                      return;
+                    }
+                    openCustomAddressDialog();
+                  }}
+                  fullWidth
+                >
+                  {isEditing || (hasAddress && !reuseProfileAddress)
+                    ? t('business.locations.editAddress', 'Edit address')
+                    : t('business.locations.addAddress', 'Add address')}
+                </Button>
+                {!isEditing && reuseProfileAddress && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={openCustomAddressDialog}
+                  >
+                    {t(
+                      'business.locations.useDifferentAddress',
+                      'Use a different address instead'
+                    )}
+                  </Button>
+                )}
+              </Stack>
             </Box>
           </Stack>
         </DialogContent>
@@ -361,7 +491,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || !hasAddress}
+            disabled={loading || !canSaveAddress}
             startIcon={loading && <CircularProgress size={20} />}
           >
             {loading
@@ -375,7 +505,11 @@ const LocationModal: React.FC<LocationModalProps> = ({
 
       <AddressDialog
         open={addressDialogOpen}
-        title={hasAddress ? 'Edit Location Address' : 'Add Location Address'}
+        title={
+          hasAddress
+            ? t('business.locations.editLocationAddress', 'Edit location address')
+            : t('business.locations.addLocationAddress', 'Add location address')
+        }
         addressData={addressData}
         readOnlyCountry={effectiveCountry || undefined}
         onClose={() => setAddressDialogOpen(false)}

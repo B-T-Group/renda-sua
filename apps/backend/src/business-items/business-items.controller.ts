@@ -153,26 +153,33 @@ export class BusinessItemsController {
   @Post('locations')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Create a business location (address country = business primary address; creates location account)',
+    summary:
+      'Create a business location (new address lines, or reuse address_id linked to the business; creates location account)',
   })
   @ApiResponse({ status: 201, description: 'Location created successfully' })
-  @ApiResponse({ status: 400, description: 'Business has no address' })
+  @ApiResponse({ status: 400, description: 'Invalid body or business has no address for new-address flow' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['name', 'address'],
+      required: ['name'],
       properties: {
         name: { type: 'string' },
+        address_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'Use an existing address already linked to the business (business_addresses). Mutually exclusive with address.',
+        },
         address: {
           type: 'object',
-          required: ['address_line_1', 'city', 'state', 'postal_code'],
+          required: ['address_line_1', 'city', 'state'],
           properties: {
             address_line_1: { type: 'string' },
             address_line_2: { type: 'string' },
             city: { type: 'string' },
             state: { type: 'string' },
-            postal_code: { type: 'string' },
+            postal_code: { type: 'string', description: 'Optional; empty string allowed' },
           },
         },
         phone: { type: 'string' },
@@ -187,13 +194,14 @@ export class BusinessItemsController {
     @Body()
     body: {
       name: string;
-      address: {
+      address?: {
         address_line_1: string;
         address_line_2?: string;
         city: string;
         state: string;
         postal_code: string;
       };
+      address_id?: string;
       phone?: string;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';

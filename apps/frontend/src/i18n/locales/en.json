@@ -92,6 +92,7 @@
       "latitude": "Latitude (Optional)",
       "longitude": "Longitude (Optional)",
       "postalCode": "Postal Code",
+      "postalCodeOptional": "Postal code (optional)",
       "primaryAddress": "Primary Address",
       "requiredFields": "Please fill in all required fields (address, city, state, country).",
       "save": "Save",
@@ -1479,7 +1480,16 @@
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addAddressFirst": "Add a business address first before adding locations.",
       "addBusinessAddress": "Add business address",
-      "countryReadOnly": "Country is set from your business address and cannot be changed."
+      "addAddress": "Add address",
+      "addLocationAddress": "Add location address",
+      "countryReadOnly": "Country is set from your business address and cannot be changed.",
+      "currentAddress": "Current address",
+      "editAddress": "Edit address",
+      "editLocationAddress": "Edit location address",
+      "noLocationAddressHint": "No address configured. Add a location-specific address or reuse your business profile address.",
+      "useBusinessProfileAddress": "Use business profile address",
+      "useDifferentAddress": "Use a different address instead",
+      "usingBusinessProfileAddress": "Using your business profile address"
     },
     "orders": {
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",
@@ -2384,6 +2394,10 @@
     "notAvailable": "Not Available"
   },
   "persona": {
+    "client": "Client",
+    "agent": "Delivery agent",
+    "business": "Business",
+    "switchTo": "Switch to {{label}}",
     "selectKicker": "Welcome back",
     "selectTitle": "How do you want to use Rendasua?",
     "selectSubtitle": "Choose what you want to do today. You can switch anytime from your profile or the header.",

@@ -526,20 +526,21 @@ export class BusinessItemsService {
 
   /**
    * Create a business location with address and account.
-   * Country is forced to the business's primary address country.
-   * Fails if business has no address.
+   * Provide either a new `address` (country = business primary) or an existing
+   * `address_id` already linked to the business in business_addresses.
    */
   async createBusinessLocation(
     businessId: string,
     data: {
       name: string;
-      address: {
+      address?: {
         address_line_1: string;
         address_line_2?: string;
         city: string;
         state: string;
         postal_code: string;
       };
+      address_id?: string;
       phone?: string;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -547,17 +548,47 @@ export class BusinessItemsService {
       rendasua_item_commission_percentage?: number | null;
     }
   ): Promise<any> {
-    const country = await this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId);
-    if (!country) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Add a business address first before adding locations.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    const addressMutation = `
+    let addressId: string;
+    if (data.address_id) {
+      if (data.address) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Send either address or address_id, not both.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const owns =
+        await this.hasuraSystemService.verifyBusinessAddressOwnership(
+          businessId,
+          data.address_id
+        );
+      if (!owns) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Invalid address_id for this business.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      addressId = data.address_id;
+    } else if (data.address) {
+      const country =
+        await this.hasuraSystemService.getBusinessPrimaryAddressCountry(
+          businessId
+        );
+      if (!country) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Add a business address first before adding locations.',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const addressMutation = `
       mutation CreateAddress($addressLine1: String!, $addressLine2: String, $city: String!, $state: String!, $postalCode: String!, $country: String!) {
         insert_addresses_one(object: {
           address_line_1: $addressLine1,
@@ -570,22 +601,30 @@ export class BusinessItemsService {
         }) { id }
       }
     `;
-    const addressResult = await this.hasuraSystemService.executeMutation<{ insert_addresses_one: { id: string } }>(
-      addressMutation,
-      {
+      const addressResult = await this.hasuraSystemService.executeMutation<{
+        insert_addresses_one: { id: string };
+      }>(addressMutation, {
         addressLine1: data.address.address_line_1,
         addressLine2: data.address.address_line_2 ?? null,
         city: data.address.city,
         state: data.address.state,
         postalCode: data.address.postal_code ?? '',
         country,
+      });
+      addressId = addressResult.insert_addresses_one?.id ?? '';
+      if (!addressId) {
+        throw new HttpException(
+          { success: false, error: 'Failed to create address' },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
       }
-    );
-    const addressId = addressResult.insert_addresses_one?.id;
-    if (!addressId) {
+    } else {
       throw new HttpException(
-        { success: false, error: 'Failed to create address' },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        {
+          success: false,
+          error: 'Either address or address_id is required.',
+        },
+        HttpStatus.BAD_REQUEST
       );
     }
     const locationMutation = `

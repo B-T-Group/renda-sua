@@ -259,6 +259,30 @@ export class HasuraSystemService {
     return first ?? null;
   }
 
+  /** True if this address is linked to the business via business_addresses. */
+  async verifyBusinessAddressOwnership(
+    businessId: string,
+    addressId: string
+  ): Promise<boolean> {
+    const query = `
+      query VerifyBusinessAddress($businessId: uuid!, $addressId: uuid!) {
+        business_addresses(
+          where: {
+            business_id: { _eq: $businessId }
+            address_id: { _eq: $addressId }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const result = await this.executeQuery<{
+      business_addresses: Array<{ id: string }>;
+    }>(query, { businessId, addressId });
+    return (result.business_addresses?.length ?? 0) > 0;
+  }
+
   /**
    * Ensure an account exists for a business location (creates if missing).
    * Uses location's address country for currency. Call after inserting a business_location.
