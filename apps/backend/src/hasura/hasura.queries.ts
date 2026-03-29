@@ -84,6 +84,7 @@ export const GET_USER_ACCOUNT = gql`
         business_location_id: { _is_null: true }
         is_active: { _eq: true }
       }
+      order_by: { created_at: asc }
     ) {
       id
       user_id
@@ -91,6 +92,7 @@ export const GET_USER_ACCOUNT = gql`
       available_balance
       withheld_balance
       business_location_id
+      created_at
     }
   }
 `;
@@ -105,6 +107,7 @@ export const GET_USER_ACCOUNT_BY_LOCATION = gql`
         business_location_id: { _eq: $businessLocationId }
         is_active: { _eq: true }
       }
+      order_by: { created_at: asc }
     ) {
       id
       user_id
@@ -112,6 +115,7 @@ export const GET_USER_ACCOUNT_BY_LOCATION = gql`
       available_balance
       withheld_balance
       business_location_id
+      created_at
     }
   }
 `;

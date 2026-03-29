@@ -8,12 +8,23 @@ Rules for database migrations and schema management in the rendasua project usin
 
 ### Migration Management
 
-1. **Use Hasura for Migrations**: This project uses Hasura for database migrations, NOT Supabase.
+1. **Always create migrations with the Hasura CLI (required)**  
+   Do **not** hand-create migration folders or pick version timestamps manually. Duplicate version numbers cause `found duplicate migrations for version …` and failed applies.
+
+   ```bash
+   cd apps/hasura
+   hasura migrate create <migration-name> --database-name Rendasua
+   ```
+
+   Then edit the generated `up.sql` / `down.sql` under `migrations/Rendasua/<version>_<migration-name>/`.  
+   Exception: fixing a broken duplicate version may require renaming/removing folders explicitly—prefer CLI for all new work.
+
+2. **Use Hasura for Migrations**: This project uses Hasura for database migrations, NOT Supabase.
 
    ```bash
    # ✅ Good - Use Hasura CLI
-   hasura migration create <migration_name>
-   hasura migrate apply
+   hasura migrate create <migration-name> --database-name Rendasua
+   hasura migrate apply --database-name Rendasua
    hasura metadata apply
 
    # ❌ Bad - Don't use Supabase CLI
@@ -22,29 +33,29 @@ Rules for database migrations and schema management in the rendasua project usin
    supabase db push
    ```
 
-2. **Migration File Locations**:
+3. **Migration File Locations**:
 
    - Hasura migrations: `apps/hasura/migrations/Rendasua/`
    - Metadata: `apps/hasura/metadata/`
    - Never use: `apps/hasura/supabase/migrations/`
 
-3. **Hasura CLI Commands**:
+4. **Hasura CLI Commands**:
 
    ```bash
    # Navigate to hasura directory
    cd apps/hasura
 
-   # Create new migration
-   hasura migration create <migration_name>
+   # Create new migration (assigns unique version automatically)
+   hasura migrate create <migration-name> --database-name Rendasua
 
    # Apply migrations
-   hasura migrate apply
+   hasura migrate apply --database-name Rendasua
 
    # Apply metadata
    hasura metadata apply
 
    # Check status
-   hasura migrate status
+   hasura migrate status --database-name Rendasua
 
    # Console for schema management
    hasura console
@@ -64,8 +75,8 @@ Rules for database migrations and schema management in the rendasua project usin
 
    - Make changes in Hasura console
    - Export metadata: `hasura metadata export`
-   - Create migration: `hasura migration create <name>`
-   - Apply changes: `hasura migrate apply`
+   - Create migration: `hasura migrate create <migration-name> --database-name Rendasua`
+   - Apply changes: `hasura migrate apply --database-name Rendasua`
 
 3. **Foreign Key Constraints**: Always create proper foreign key constraints in migrations:
 

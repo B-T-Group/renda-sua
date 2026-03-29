@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
 import {
@@ -11,7 +11,6 @@ import {
 import {
   Addresses,
   GetAccountByIdQuery,
-  GetUserAccountQuery,
   GetUserAgentQuery,
   GetUserBusinessQuery,
   GetUserByIdQuery,
@@ -30,8 +29,20 @@ import {
   GET_USER_CLIENT,
 } from './hasura.queries';
 
+/** Row from account lookup queries; used for explicit location vs legacy matching. */
+type UserAccountLookupRow = {
+  id: string;
+  user_id: string;
+  currency: string;
+  available_balance: number;
+  withheld_balance: number;
+  business_location_id?: string | null;
+  created_at: string;
+};
+
 @Injectable()
 export class HasuraSystemService {
+  private readonly logger = new Logger(HasuraSystemService.name);
   private readonly hasuraUrl: string;
   private readonly adminSecret: string;
   private readonly client: GraphQLClient;
@@ -213,39 +224,57 @@ export class HasuraSystemService {
   }
 
   /**
+   * Prefer one account from a list: location-scoped when businessLocationId is set, else legacy (null location).
+   * If multiple rows match (data issue), uses oldest created_at and logs a warning.
+   */
+  private pickUserAccount(
+    accounts: UserAccountLookupRow[] | undefined | null,
+    businessLocationId?: string | null
+  ): UserAccountLookupRow | null {
+    const list = accounts ?? [];
+    const useLocation =
+      businessLocationId != null && businessLocationId !== '';
+    const matches = useLocation
+      ? list.filter((a) => a.business_location_id === businessLocationId)
+      : list.filter((a) => a.business_location_id == null);
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    this.logger.warn(
+      `Multiple active accounts match user/currency${useLocation ? ` (location=${businessLocationId})` : ' (legacy, null location)'}; ` +
+        `using oldest by created_at (count=${matches.length})`
+    );
+    return [...matches].sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )[0];
+  }
+
+  /**
    * Get user account by userId and currency.
-   * When businessLocationId is provided, returns the location-scoped account; otherwise the legacy (no location) account.
+   * When businessLocationId is provided, returns the account for that location; otherwise the legacy account (business_location_id IS NULL).
    */
   async getAccount(
     userId: string,
     currency: string,
     businessLocationId?: string | null
   ): Promise<any> {
-    if (businessLocationId) {
-      const result = await this.executeQuery(GET_USER_ACCOUNT_BY_LOCATION, {
+    const hasLocation =
+      businessLocationId != null && businessLocationId !== '';
+    const result = await this.executeQuery<{ accounts: UserAccountLookupRow[] }>(
+      hasLocation ? GET_USER_ACCOUNT_BY_LOCATION : GET_USER_ACCOUNT,
+      hasLocation
+        ? { userId, currency, businessLocationId }
+        : { userId, currency }
+    );
+    let account = this.pickUserAccount(result.accounts, businessLocationId);
+    if (!account) {
+      account = await this.createUserAccount(
         userId,
         currency,
-        businessLocationId,
-      });
-      let account = (result as any).accounts?.[0] ?? null;
-      if (!account) {
-        account = await this.createUserAccount(
-          userId,
-          currency,
-          0,
-          0,
-          businessLocationId
-        );
-      }
-      return account;
-    }
-    const result = await this.executeQuery<GetUserAccountQuery>(
-      GET_USER_ACCOUNT,
-      { userId, currency }
-    );
-    let account = result.accounts[0] || null;
-    if (!account) {
-      account = await this.createUserAccount(userId, currency);
+        0,
+        0,
+        hasLocation ? businessLocationId : null
+      );
     }
     return account;
   }
