@@ -127,6 +127,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - auto_withdraw_commissions
       filter:
         user:
           id:
@@ -144,6 +145,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - auto_withdraw_commissions
       filter:
         user:
           id:
@@ -161,6 +163,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - auto_withdraw_commissions
       filter:
         user:
           id:
@@ -178,6 +181,7 @@ select_permissions:
         - is_internal
         - onboarding_complete
         - status
+        - auto_withdraw_commissions
       filter:
         user:
           id:
@@ -190,6 +194,7 @@ update_permissions:
         - updated_at
         - is_verified
         - onboarding_complete
+        - auto_withdraw_commissions
       filter:
         user:
           id:
