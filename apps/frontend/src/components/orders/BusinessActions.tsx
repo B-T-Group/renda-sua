@@ -225,7 +225,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'confirmed':
         actions.push({
-          label: t('orderActions.readyForPickup', 'Ready for Pickup'),
+          label: t('orderActions.readyForPickup', 'Set as ready'),
           action: handleCompletePreparation,
           color: 'success' as const,
           icon: <CheckCircle />,

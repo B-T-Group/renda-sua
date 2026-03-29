@@ -326,7 +326,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
         });
       } else if (currentStatus === 'confirmed' || currentStatus === 'preparing') {
         actions.push({
-          label: t('orders.actions.readyForPickup', 'Ready for Pickup'),
+          label: t('orders.actions.readyForPickup', 'Set as ready'),
           onClick: handleFinishPreparing,
           color: 'success',
           loading: loadingAction === 'finishPreparing',

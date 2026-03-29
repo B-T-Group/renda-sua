@@ -1519,6 +1519,7 @@
       "completeNotice": "Order is complete. Thank you for using our platform!",
       "confirmTitle": "Confirm Status Update",
       "confirmedNotice": "✅ Order confirmed! Begin preparation immediately. Quality preparation ensures customer satisfaction and positive reviews.",
+      "preparingNotice": "👨‍🍳 Preparation in progress. Complete carefully, then use Set as ready to notify available agents.",
       "deliveredNotice": "🎉 Order delivered successfully! Customer received their {{revenue}} order. Excellent service provided!",
       "failedNotice": "🚨 Delivery failed! This impacts customer satisfaction and your {{revenue}} revenue. Contact support immediately to resolve and potentially reassign to another agent.",
       "filters": {
@@ -1944,7 +1945,7 @@
     "pickUp": "Pick Up",
     "printLabel": "Print label",
     "refundOrder": "Refund Order",
-    "readyForPickup": "Ready for Pickup"
+    "readyForPickup": "Set as ready"
   },
   "orderHistory": {
     "changedBy": "Changed by",
@@ -1963,7 +1964,7 @@
       "confirmOrder": "Confirm Order",
       "finishPreparing": "Finish Preparing",
       "rateOrder": "Rate Order",
-      "readyForPickup": "Ready for Pickup",
+      "readyForPickup": "Set as ready",
       "refund": "Refund",
       "startPreparing": "Start Preparing",
       "viewHistory": "View History",
@@ -1999,7 +2000,7 @@
         "delivered": "Action Required: Complete order",
         "pending": "Action Required: Confirm this order",
         "preparing": "Action Required: Complete preparation",
-        "readyForPickup": "Action Required: Mark as ready for pickup"
+        "readyForPickup": "Action Required: Set as ready"
       }
     },
     "businessInfo": "Business Information",
@@ -2371,7 +2372,7 @@
       "loadError": "Failed to load orders.",
       "genericError": "Failed to apply batch action. Please try again.",
       "actions": {
-        "completePreparation": "Ready for pickup (confirmed → ready for pickup)",
+        "completePreparation": "Set as ready (confirmed → ready for pickup)",
         "pickUp": "Pick up (assigned → picked up)",
         "startTransit": "Start transit (picked up → in transit)",
         "outForDelivery": "Out for delivery (picked up / in transit → out for delivery)",

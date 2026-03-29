@@ -137,6 +137,11 @@ const OrdersPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { profile } = useUserProfileContext();
+  /** Orders UI follows `users.user_type_id`, not nested client/agent/business rows. */
+  const isOrdersAgent = profile?.user_type_id === 'agent';
+  const isOrdersBusiness = profile?.user_type_id === 'business';
+  const isOrdersClient = profile?.user_type_id === 'client';
+
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
     status: '',
@@ -231,7 +236,7 @@ const OrdersPage: React.FC = () => {
     );
 
     const sortStatuses = (statuses: string[]) => {
-      if (profile?.agent) {
+      if (isOrdersAgent) {
         return [...statuses].sort(
           (a, b) =>
             (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
@@ -251,7 +256,7 @@ const OrdersPage: React.FC = () => {
       activeStatuses: sortStatuses(active),
       completedStatuses: sortStatuses(completed),
     };
-  }, [orders, statusOrder, profile?.agent]);
+  }, [orders, statusOrder, isOrdersAgent]);
 
   // Count completed orders for the collapsible header
   const completedOrdersCount = useMemo(() => {
@@ -353,7 +358,7 @@ const OrdersPage: React.FC = () => {
     );
 
     return active.sort((a, b) => {
-      if (profile?.agent) {
+      if (isOrdersAgent) {
         return (
           (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
           (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
@@ -371,7 +376,7 @@ const OrdersPage: React.FC = () => {
     tabGroups,
     activeStatuses,
     statusOrder,
-    profile?.agent,
+    isOrdersAgent,
   ]);
 
   const tabCompletedStatuses = useMemo(() => {
@@ -392,7 +397,7 @@ const OrdersPage: React.FC = () => {
     );
 
     return completed.sort((a, b) => {
-      if (profile?.agent) {
+      if (isOrdersAgent) {
         return (
           (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
           (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
@@ -410,7 +415,7 @@ const OrdersPage: React.FC = () => {
     tabGroups,
     completedStatuses,
     statusOrder,
-    profile?.agent,
+    isOrdersAgent,
   ]);
 
   const tabCompletedOrdersCount = useMemo(() => {
@@ -425,23 +430,23 @@ const OrdersPage: React.FC = () => {
 
   // Determine page titles and content based on user type
   const getPageTitle = () => {
-    if (profile?.business) {
+    if (isOrdersBusiness) {
       return t('business.orders.title', 'Business Orders');
-    } else if (profile?.agent) {
-      return t('agent.orders.title', 'Agent Orders');
-    } else {
-      return t('client.orders.title', 'My Orders');
     }
+    if (isOrdersAgent) {
+      return t('agent.orders.title', 'Agent Orders');
+    }
+    return t('client.orders.title', 'My Orders');
   };
 
   const getPageSubtitle = () => {
-    if (profile?.business) {
+    if (isOrdersBusiness) {
       return t('business.orders.subtitle', 'Manage your business orders');
-    } else if (profile?.agent) {
-      return t('agent.orders.subtitle', 'Manage assigned deliveries');
-    } else {
-      return t('client.orders.subtitle', 'Track your orders and deliveries');
     }
+    if (isOrdersAgent) {
+      return t('agent.orders.subtitle', 'Manage assigned deliveries');
+    }
+    return t('client.orders.subtitle', 'Track your orders and deliveries');
   };
 
   // Calculate order stats (excluding cancelled from total; breakdown by status)
@@ -609,7 +614,7 @@ const OrdersPage: React.FC = () => {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {profile?.business && (
+              {isOrdersBusiness && (
                 <Button
                   variant="contained"
                   color="primary"
@@ -637,7 +642,7 @@ const OrdersPage: React.FC = () => {
           </Box>
 
           {/* Address Alert - Only for clients */}
-          {profile?.client && <AddressAlert />}
+          {isOrdersClient && <AddressAlert />}
         </Box>
 
         {/* Stats Cards */}
@@ -810,7 +815,7 @@ const OrdersPage: React.FC = () => {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {Object.entries(orderStats.byStatus)
                 .sort(([a], [b]) =>
-                  profile?.agent
+                  isOrdersAgent
                     ? (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
                       (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
                     : a.localeCompare(b)

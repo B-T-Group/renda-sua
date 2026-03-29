@@ -145,10 +145,12 @@ export async function businessConfirmAndPrepareOrder(
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(3000);
 
-  // Wait for the order status to update to "confirmed" by checking for the "Ready for Pickup" button
+  // Wait for the order status to update to "confirmed" by checking for the ready action button
   // This button appears when status is "confirmed" (no more "Start Preparing" step)
   const readyForPickupButton = page
-    .getByRole('button', { name: /ready for pickup|complete.*preparation/i })
+    .getByRole('button', {
+      name: /set as ready|ready for pickup|complete.*preparation|marquer comme prêt|prêt pour/i,
+    })
     .first();
 
   // Wait up to 20 seconds for the button to appear (order confirmation might take time)

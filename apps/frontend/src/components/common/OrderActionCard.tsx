@@ -64,7 +64,7 @@ const OrderActionCard: React.FC<OrderActionCardProps> = ({
               icon: <Info />,
               message: t(
                 'orders.business.actionRequired.readyForPickup',
-                'Action Required: Mark as ready for pickup'
+                'Action Required: Set as ready'
               ),
               action: 'complete_preparation',
             };

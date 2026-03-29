@@ -1507,6 +1507,7 @@
       "completeNotice": "La commande est terminée. Merci d'utiliser notre plateforme !",
       "confirmTitle": "Confirmer la mise à jour du statut",
       "confirmedNotice": "✅ Commande confirmée ! Commencez la préparation immédiatement. Une préparation de qualité assure la satisfaction du client et des avis positifs.",
+      "preparingNotice": "👨‍🍳 Préparation en cours. Terminez soigneusement, puis utilisez « Marquer comme prêt » pour prévenir les agents disponibles.",
       "deliveredNotice": "🎉 Commande livrée avec succès ! Le client a reçu sa commande de {{revenue}}. Excellent service fourni !",
       "failedNotice": "🚨 Livraison échouée ! Cela affecte la satisfaction du client et vos revenus de {{revenue}}. Contactez le support immédiatement pour résoudre et potentiellement réassigner à un autre agent.",
       "filters": {
@@ -1932,7 +1933,7 @@
     "pickUp": "Récupérer",
     "printLabel": "Imprimer l'étiquette",
     "refundOrder": "Rembourser la Commande",
-    "readyForPickup": "Prêt pour enlèvement"
+    "readyForPickup": "Marquer comme prêt"
   },
   "orderHistory": {
     "changedBy": "Modifié par",
@@ -1951,7 +1952,7 @@
       "confirmOrder": "Confirmer la Commande",
       "finishPreparing": "Terminer la Préparation",
       "rateOrder": "Évaluer la Commande",
-      "readyForPickup": "Prêt pour enlèvement",
+      "readyForPickup": "Marquer comme prêt",
       "refund": "Rembourser",
       "startPreparing": "Commencer la préparation",
       "viewHistory": "Voir l'historique",
@@ -1987,7 +1988,7 @@
         "delivered": "Action Requise : Terminer la commande",
         "pending": "Action Requise : Confirmer cette commande",
         "preparing": "Action Requise : Terminer la préparation",
-        "readyForPickup": "Action Requise : Marquer comme prêt pour enlèvement"
+        "readyForPickup": "Action Requise : Marquer comme prêt"
       }
     },
     "businessInfo": "Informations sur l'Entreprise",
@@ -2334,7 +2335,7 @@
       "loadError": "Échec du chargement des commandes.",
       "genericError": "Échec de l'application de l'action par lot. Veuillez réessayer.",
       "actions": {
-        "completePreparation": "Prêt pour enlèvement (confirmée → prête pour enlèvement)",
+        "completePreparation": "Marquer comme prêt (confirmée → prête pour enlèvement)",
         "pickUp": "Récupérer (assignée → récupérée)",
         "startTransit": "Démarrer le transit (récupérée → en transit)",
         "outForDelivery": "En livraison (récupérée / en transit → en livraison)",
