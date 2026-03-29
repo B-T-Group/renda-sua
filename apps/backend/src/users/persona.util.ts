@@ -73,6 +73,47 @@ export function resolveActivePersona(
 }
 
 /**
+ * Like {@link resolveActivePersona}, but if the user has multiple personas and
+ * the header is absent, uses {@link legacyUserTypeIdForPersonas} so JWT-only
+ * calls (e.g. right after signup, before the app sends X-Active-Persona) still work.
+ * If a header is present it must match an enabled persona (same as strict mode).
+ */
+export function resolveActivePersonaWithDefault(
+  user: UserPersonaShape,
+  headerRaw: string | undefined
+): PersonaId {
+  const personas = derivePersonas(user);
+  if (personas.length === 0) {
+    throw new HttpException(
+      'No persona profiles found for this user',
+      HttpStatus.FORBIDDEN
+    );
+  }
+  const header = normalizeHeader(headerRaw);
+  if (personas.length === 1) {
+    const only = personas[0];
+    if (!header) return only;
+    if (header !== only) {
+      throw new HttpException(
+        `X-Active-Persona must be "${only}" for this account`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return only;
+  }
+  if (header) {
+    if (!personas.includes(header)) {
+      throw new HttpException(
+        `X-Active-Persona "${header}" is not enabled for this account`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return header;
+  }
+  return legacyUserTypeIdForPersonas(personas);
+}
+
+/**
  * Same as resolveActivePersona but returns null when the header is missing
  * for multi-persona users (no 400). For optional UX endpoints only.
  */

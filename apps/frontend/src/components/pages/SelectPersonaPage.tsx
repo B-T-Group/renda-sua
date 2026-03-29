@@ -105,7 +105,13 @@ const SelectPersonaPage: React.FC = () => {
       <Container maxWidth="md" disableGutters sx={{ px: { xs: 0, sm: 2 } }}>
         <Stack
           spacing={{ xs: 0.75, sm: 1 }}
-          sx={{ mb: { xs: 2, sm: 3 }, textAlign: 'center', px: { xs: 0.5, sm: 0 } }}
+          alignItems="center"
+          sx={{
+            mb: { xs: 2, sm: 3 },
+            textAlign: 'center',
+            px: { xs: 0.5, sm: 0 },
+            width: '100%',
+          }}
         >
           <Typography
             variant="overline"
@@ -137,7 +143,9 @@ const SelectPersonaPage: React.FC = () => {
           </Typography>
           <Typography
             color="text.secondary"
+            component="p"
             sx={{
+              alignSelf: 'center',
               width: '100%',
               maxWidth: 480,
               mx: 'auto',
@@ -145,6 +153,7 @@ const SelectPersonaPage: React.FC = () => {
               lineHeight: 1.55,
               fontSize: { xs: '0.8125rem', sm: '0.9375rem' },
               px: { xs: 0.5, sm: 0 },
+              boxSizing: 'border-box',
             }}
           >
             {t(

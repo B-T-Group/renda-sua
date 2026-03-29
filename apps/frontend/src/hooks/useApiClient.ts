@@ -12,6 +12,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   if (!url) return false;
   const substrings = [
     '/users/me',
+    '/auth/email-availability',
     '/pdf/shipping-labels',
     '/locations/',
     '/notifications/',

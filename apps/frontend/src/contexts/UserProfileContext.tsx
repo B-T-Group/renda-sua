@@ -468,8 +468,16 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const needsPersonaSelection = useMemo(() => {
     if (!profile?.id || personas.length <= 1) return false;
     const s = readStoredActivePersona();
-    return !(s?.userId === profile.id && personas.includes(s.persona));
-  }, [profile?.id, personas]);
+    if (s?.userId === profile.id && personas.includes(s.persona as UserType)) {
+      return false;
+    }
+    // After setActivePersona, localStorage updates before this memo re-ran; include userType
+    // so we don’t keep stale `true` and bounce back to /select-persona from App.tsx.
+    if (userType && personas.includes(userType)) {
+      return false;
+    }
+    return true;
+  }, [profile?.id, personas, userType]);
 
   const setActivePersona = useCallback(
     async (persona: UserType) => {

@@ -92,6 +92,13 @@ const intentDefaults = (intent: SignupIntent | null) => {
   return { user_type_id: 'client' as UserType, main_interest: undefined };
 };
 
+/** Enough structure for a real address; avoids availability calls while the user is still typing. */
+function isValidEmailFormat(email: string): boolean {
+  const s = email.trim();
+  if (!s) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(s);
+}
+
 function personasFromGoalIds(
   ids: SignupGoalId[],
   options: SignupGoalOption[]
@@ -395,24 +402,36 @@ const SignupPage: React.FC = () => {
   }, [getCurrentLocation, t]);
 
   useEffect(() => {
-    if (!form.email || form.email.length < 5) {
+    const email = form.email.trim();
+    if (!isValidEmailFormat(email)) {
       setEmailTaken(false);
+      setCheckingEmail(false);
       return;
     }
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
+      setCheckingEmail(true);
       try {
-        setCheckingEmail(true);
-        const { data } = await apiClient.get<{ taken: boolean }>('/auth/email-availability', {
-          params: { email: form.email },
-        });
+        const { data } = await apiClient.get<{ taken: boolean }>(
+          '/auth/email-availability',
+          { params: { email }, signal: controller.signal }
+        );
+        if (controller.signal.aborted) return;
         setEmailTaken(Boolean(data?.taken));
       } catch {
+        if (controller.signal.aborted) return;
         setEmailTaken(false);
       } finally {
-        setCheckingEmail(false);
+        if (!controller.signal.aborted) {
+          setCheckingEmail(false);
+        }
       }
-    }, 450);
-    return () => clearTimeout(timeout);
+    }, 500);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+      setCheckingEmail(false);
+    };
   }, [apiClient, form.email]);
 
   const canAdvanceFromStep = useCallback((): boolean => {

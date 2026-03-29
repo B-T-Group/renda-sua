@@ -10,7 +10,7 @@ import {
   Clients,
   Users,
 } from '../generated/graphql';
-import { resolveActivePersona } from '../users/persona.util';
+import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { HasuraSystemService } from './hasura-system.service';
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
@@ -751,7 +751,7 @@ export class HasuraUserService {
       };
 
       // Addresses for the active persona only (client → client_addresses, etc.).
-      const activePersona = resolveActivePersona(
+      const activePersona = resolveActivePersonaWithDefault(
         {
           client: user.client,
           agent: user.agent,
