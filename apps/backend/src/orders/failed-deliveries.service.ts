@@ -68,7 +68,11 @@ export class FailedDeliveriesService {
     }
   ) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business || user.business.id !== businessId) {
+    if (
+      user.user_type_id !== 'business' ||
+      !user.business ||
+      user.business.id !== businessId
+    ) {
       throw new HttpException(
         'Access denied. You can only view failed deliveries for your own business.',
         HttpStatus.FORBIDDEN
@@ -239,6 +243,7 @@ export class FailedDeliveriesService {
     // Verify business ownership
     const user = await this.hasuraUserService.getUser();
     if (
+      user.user_type_id !== 'business' ||
       !user.business ||
       failedDelivery.order.business_id !== user.business.id
     ) {
@@ -256,7 +261,7 @@ export class FailedDeliveriesService {
    */
   async resolveFailedDelivery(orderId: string, resolution: ResolutionRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business) {
+    if (user.user_type_id !== 'business' || !user.business) {
       throw new HttpException(
         'Only business users can resolve failed deliveries',
         HttpStatus.FORBIDDEN

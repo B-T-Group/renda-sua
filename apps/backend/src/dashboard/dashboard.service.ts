@@ -26,7 +26,7 @@ export class DashboardService {
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business?.id) {
+    if (user.user_type_id !== 'business' || !user.business?.id) {
       throw new HttpException(
         'Dashboard aggregates require a business user',
         HttpStatus.FORBIDDEN

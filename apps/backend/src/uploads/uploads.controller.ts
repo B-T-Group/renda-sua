@@ -13,7 +13,7 @@ import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { PermissionService } from '../auth/permission.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { UploadService } from '../services/upload.service';
-import { resolveActivePersonaLenient } from '../users/persona.util';
+import { resolveActivePersonaWithDefault } from '../users/persona.util';
 
 export interface UploadData {
   file_name: string;
@@ -44,11 +44,11 @@ export class UploadsController {
   })
   async getMeHasIdDocument(): Promise<{ hasIdDocument: boolean }> {
     const user = await this.hasuraUserService.getUser();
-    const persona = resolveActivePersonaLenient(
+    const active = resolveActivePersonaWithDefault(
       user,
       this.hasuraUserService.getActivePersonaHeader()
     );
-    if (persona !== 'agent' || !user.agent) {
+    if (active !== 'agent' || !user.agent?.id) {
       return { hasIdDocument: false };
     }
     return this.uploadService.hasIdDocument(user.id);

@@ -2333,6 +2333,15 @@
     "item": "item",
     "items": "items",
     "cancelledByCustomer": "Cancelled by customer",
+    "card": {
+      "deliveryAddress": "Delivery address",
+      "preferredDelivery": "Preferred delivery",
+      "amounts": "Amounts",
+      "lineItems": "Items in this order",
+      "hideItems": "Hide items",
+      "showItems": "Show items ({{count}})",
+      "sku": "SKU"
+    },
     "inclDelivery": "incl.",
     "viewMyOrders": "View My Orders",
     "viewOrderDetails": "View Order Details",

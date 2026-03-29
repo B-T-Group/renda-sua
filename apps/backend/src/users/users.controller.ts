@@ -17,7 +17,7 @@ import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { derivePersonas } from './persona.util';
+import { derivePersonas, userHasPersona } from './persona.util';
 import { isPersonaId, PersonaId } from './persona.types';
 
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -640,11 +640,7 @@ export class UsersController {
   }
 
   private assertUserHasPersona(user: any, p: PersonaId) {
-    const has =
-      (p === 'client' && user.client) ||
-      (p === 'agent' && user.agent) ||
-      (p === 'business' && user.business);
-    if (!has) {
+    if (!userHasPersona(user, p)) {
       throw new HttpException(
         'Persona is not enabled for this account',
         HttpStatus.BAD_REQUEST
@@ -663,7 +659,8 @@ export class UsersController {
     const uid = this.hasuraUserService.getUserId();
     const user = await this.hasuraUserService.getUser();
     if (persona === 'client') {
-      if (user.client) return { success: true, client: user.client };
+      if (userHasPersona(user, 'client'))
+        return { success: true, client: user.client };
       const r = await this.hasuraSystemService.executeMutation<{
         insert_clients_one: { id: string };
       }>(
@@ -682,7 +679,8 @@ export class UsersController {
       return { success: true, client: r.insert_clients_one };
     }
     if (persona === 'agent') {
-      if (user.agent) return { success: true, agent: user.agent };
+      if (userHasPersona(user, 'agent'))
+        return { success: true, agent: user.agent };
       const vt = body.vehicle_type_id || 'other';
       const r = await this.hasuraSystemService.executeMutation<{
         insert_agents_one: { id: string };
@@ -703,7 +701,8 @@ export class UsersController {
       return { success: true, agent: r.insert_agents_one };
     }
     if (persona === 'business') {
-      if (user.business) return { success: true, business: user.business };
+      if (userHasPersona(user, 'business'))
+        return { success: true, business: user.business };
       const name = body.name?.trim();
       if (!name) {
         throw new HttpException(

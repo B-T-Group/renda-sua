@@ -31,7 +31,12 @@ import { DeliveryPinService } from './delivery-pin.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
-import { resolveActivePersona } from '../users/persona.util';
+import type { PersonaId } from '../users/persona.types';
+import {
+  resolveActivePersona,
+  resolveActivePersonaWithDefault,
+  userHasPersona,
+} from '../users/persona.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -310,6 +315,50 @@ export class OrdersService {
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryPinService: DeliveryPinService
   ) {}
+
+  private requireActivePersona(
+    user: any,
+    persona: PersonaId,
+    message: string
+  ): void {
+    const active = resolveActivePersonaWithDefault(
+      user,
+      this.hasuraUserService.getActivePersonaHeader()
+    );
+    if (active !== persona) {
+      throw new HttpException(message, HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private requireAgentRecord(user: any) {
+    if (!user.agent?.id) {
+      throw new HttpException(
+        'Agent profile is missing',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return user.agent;
+  }
+
+  private requireClientRecord(user: any) {
+    if (!user.client?.id) {
+      throw new HttpException(
+        'Client profile is missing',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return user.client;
+  }
+
+  private requireBusinessRecord(user: any) {
+    if (!user.business?.id) {
+      throw new HttpException(
+        'Business profile is missing',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return user.business;
+  }
 
   private computeUnitPriceFromInventory(
     businessInventory: any,
@@ -649,7 +698,7 @@ export class OrdersService {
   } | null> {
     try {
       const user = await this.hasuraUserService.getUser();
-      if (!user?.agent) {
+      if (!userHasPersona(user, 'agent') || !user.agent) {
         return { isAgent: false, isVerified: false };
       }
 
@@ -966,11 +1015,11 @@ export class OrdersService {
 
   async confirmOrder(request: ConfirmOrderRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business)
-      throw new HttpException(
-        'Only business users can confirm orders',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can confirm orders'
+    );
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -1055,11 +1104,11 @@ export class OrdersService {
 
   async completePreparation(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business)
-      throw new HttpException(
-        'Only business users can complete order preparation',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can complete order preparation'
+    );
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -1102,12 +1151,13 @@ export class OrdersService {
 
   async claimOrder(request: GetOrderRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can get orders',
-        HttpStatus.FORBIDDEN
-      );
-    const agentStatus = await this.getAgentStatus(user.agent.id);
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can get orders'
+    );
+    const agent = this.requireAgentRecord(user);
+    const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
         'Your account is suspended. You cannot claim orders. Contact support.',
@@ -1124,7 +1174,7 @@ export class OrdersService {
       );
 
     // Check if order requires internal agent (high-value orders)
-    if (order.verified_agent_delivery && !user.agent.is_internal) {
+    if (order.verified_agent_delivery && !agent.is_internal) {
       throw new HttpException(
         'This order requires an internal agent. Contact support to become an internal agent.',
         HttpStatus.FORBIDDEN
@@ -1178,7 +1228,7 @@ export class OrdersService {
 
     await this.updateOrderHold(orderHold.id, {
       agent_hold_amount: holdAmount,
-      agent_id: user.agent.id,
+      agent_id: agent.id,
     });
 
     if (holdAmount > 0) {
@@ -1193,7 +1243,7 @@ export class OrdersService {
 
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
-      user.agent.id,
+      agent.id,
       'assigned_to_agent'
     );
     await this.createStatusHistoryEntry(
@@ -1213,12 +1263,13 @@ export class OrdersService {
 
   async claimOrderWithTopup(request: GetOrderRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can claim orders',
-        HttpStatus.FORBIDDEN
-      );
-    const agentStatus = await this.getAgentStatus(user.agent.id);
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can claim orders'
+    );
+    const agent = this.requireAgentRecord(user);
+    const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
         'Your account is suspended. You cannot claim orders. Contact support.',
@@ -1240,7 +1291,7 @@ export class OrdersService {
       );
 
     // Check if order requires internal agent (high-value orders)
-    if (order.verified_agent_delivery && !user.agent.is_internal) {
+    if (order.verified_agent_delivery && !agent.is_internal) {
       throw new HttpException(
         'This order requires an internal agent. Contact support to become an internal agent.',
         HttpStatus.FORBIDDEN
@@ -1257,11 +1308,11 @@ export class OrdersService {
       const orderHold = await this.getOrCreateOrderHold(order.id);
       await this.updateOrderHold(orderHold.id, {
         agent_hold_amount: 0,
-        agent_id: user.agent.id,
+        agent_id: agent.id,
       });
       const updatedOrder = await this.assignOrderToAgent(
         request.orderId,
-        user.agent.id,
+        agent.id,
         'assigned_to_agent'
       );
       await this.createStatusHistoryEntry(
@@ -1433,12 +1484,12 @@ export class OrdersService {
 
   async cancelClaimRequest(request: GetOrderRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agent users can cancel claim requests',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can cancel claim requests'
+    );
+    const agent = this.requireAgentRecord(user);
 
     const order = await this.getOrderWithItems(request.orderId);
     if (!order) {
@@ -1452,7 +1503,7 @@ export class OrdersService {
       );
     }
 
-    if (order.assigned_agent_id && order.assigned_agent_id !== user.agent.id) {
+    if (order.assigned_agent_id && order.assigned_agent_id !== agent.id) {
       throw new HttpException(
         'You are not authorized to cancel this claim request',
         HttpStatus.FORBIDDEN
@@ -1511,15 +1562,16 @@ export class OrdersService {
 
   async pickUpOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can pick up orders',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can pick up orders'
+    );
+    const agent = this.requireAgentRecord(user);
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.assigned_agent_id !== user.agent.id)
+    if (order.assigned_agent_id !== agent.id)
       throw new HttpException(
         'Only the assigned agent can pick up this order',
         HttpStatus.FORBIDDEN
@@ -1559,15 +1611,16 @@ export class OrdersService {
 
   async startTransit(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can start transit',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can start transit'
+    );
+    const agent = this.requireAgentRecord(user);
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.assigned_agent_id !== user.agent.id)
+    if (order.assigned_agent_id !== agent.id)
       throw new HttpException(
         'Only the assigned agent can start transit for this order',
         HttpStatus.FORBIDDEN
@@ -1606,15 +1659,16 @@ export class OrdersService {
 
   async outForDelivery(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can mark orders as out for delivery',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can mark orders as out for delivery'
+    );
+    const agent = this.requireAgentRecord(user);
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.assigned_agent_id !== user.agent.id)
+    if (order.assigned_agent_id !== agent.id)
       throw new HttpException(
         'Only the assigned agent can mark this order as out for delivery',
         HttpStatus.FORBIDDEN
@@ -1684,12 +1738,12 @@ export class OrdersService {
    */
   async completeDelivery(request: CompleteDeliveryRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agent users can complete delivery',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can complete delivery'
+    );
+    const agent = this.requireAgentRecord(user);
     const hasPin = !!request.pin?.trim();
     const hasOverwrite = !!request.overwriteCode?.trim();
     if (!hasPin && !hasOverwrite) {
@@ -1709,7 +1763,7 @@ export class OrdersService {
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.assigned_agent_id !== user.agent.id) {
+    if (order.assigned_agent_id !== agent.id) {
       throw new HttpException(
         'Only the assigned agent can complete this delivery',
         HttpStatus.FORBIDDEN
@@ -1758,7 +1812,7 @@ export class OrdersService {
         await this.incrementOrderDeliveryPinAttempts(request.orderId);
         if (newAttempts >= this.deliveryPinService.getMaxPinAttempts()) {
           await this.recordPinFailedStrikeAndMaybeSuspend(
-            user.agent.id,
+            agent.id,
             request.orderId
           );
           throw new HttpException(
@@ -1954,17 +2008,17 @@ export class OrdersService {
    */
   async getDeliveryPinForClient(orderId: string): Promise<{ pin: string } | null> {
     const user = await this.hasuraUserService.getUser();
-    if (!user.client) {
-      throw new HttpException(
-        'Only the order client can retrieve the delivery PIN',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'client',
+      'Only the order client can retrieve the delivery PIN'
+    );
+    this.requireClientRecord(user);
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.client_id !== user.client.id) {
+    if (order.client?.user_id !== user.id) {
       throw new HttpException(
         'Only the order client can retrieve the delivery PIN',
         HttpStatus.FORBIDDEN
@@ -2003,17 +2057,17 @@ export class OrdersService {
     overwriteCode: string;
   }> {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business) {
-      throw new HttpException(
-        'Only the order business can generate an overwrite code',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only the order business can generate an overwrite code'
+    );
+    const business = this.requireBusinessRecord(user);
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.business_id !== user.business.id) {
+    if (order.business_id !== business.id) {
       throw new HttpException(
         'Only the order business can generate an overwrite code',
         HttpStatus.FORBIDDEN
@@ -2046,11 +2100,12 @@ export class OrdersService {
 
   async failDelivery(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent)
-      throw new HttpException(
-        'Only agent users can mark deliveries as failed',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can mark deliveries as failed'
+    );
+    const agent = this.requireAgentRecord(user);
 
     if (!request.failure_reason_id) {
       throw new HttpException(
@@ -2062,7 +2117,7 @@ export class OrdersService {
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (order.assigned_agent_id !== user.agent.id)
+    if (order.assigned_agent_id !== agent.id)
       throw new HttpException(
         'Only the assigned agent can mark this delivery as failed',
         HttpStatus.FORBIDDEN
@@ -2157,7 +2212,7 @@ export class OrdersService {
     const user = await this.hasuraUserService.getUser();
 
     // Allow both business users and clients to cancel orders
-    if (!user.business && !user.client)
+    if (!userHasPersona(user, 'business') && !userHasPersona(user, 'client'))
       throw new HttpException(
         'Only business users and clients can cancel orders',
         HttpStatus.FORBIDDEN
@@ -2168,8 +2223,11 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
 
     // Check authorization - business can cancel their orders, client can cancel their own orders
-    const isBusinessOwner = user.business && order.business.user_id === user.id;
-    const isOrderOwner = user.client && order.client_id === user.client.id;
+    const isBusinessOwner =
+      userHasPersona(user, 'business') && order.business.user_id === user.id;
+    const isOrderOwner =
+      userHasPersona(user, 'client') &&
+      order.client?.user_id === user.id;
 
     if (!isBusinessOwner && !isOrderOwner)
       throw new HttpException(
@@ -2274,11 +2332,11 @@ export class OrdersService {
 
   async refundOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.business)
-      throw new HttpException(
-        'Only business users can refund orders',
-        HttpStatus.FORBIDDEN
-      );
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only business users can refund orders'
+    );
 
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
@@ -2444,9 +2502,21 @@ export class OrdersService {
       string,
       { id: string; transaction_id?: string }
     >();
-    if (persona === 'client' && user.client) {
+    if (persona === 'client') {
+      if (!user.client?.id) {
+        throw new HttpException(
+          'Invalid user persona for orders query',
+          HttpStatus.FORBIDDEN
+        );
+      }
       personaFilter = { client_id: { _eq: user.client.id } };
-    } else if (persona === 'agent' && user.agent) {
+    } else if (persona === 'agent') {
+      if (!user.agent?.id) {
+        throw new HttpException(
+          'Invalid user persona for orders query',
+          HttpStatus.FORBIDDEN
+        );
+      }
       const pendingClaimTransactions =
         await this.mobilePaymentsDatabaseService.getPendingClaimOrderTransactionsByCustomerEmail(
           user.email
@@ -2475,7 +2545,13 @@ export class OrdersService {
       } else {
         personaFilter = { assigned_agent_id: { _eq: user.agent.id } };
       }
-    } else if (persona === 'business' && user.business) {
+    } else if (persona === 'business') {
+      if (!user.business?.id) {
+        throw new HttpException(
+          'Invalid user persona for orders query',
+          HttpStatus.FORBIDDEN
+        );
+      }
       personaFilter = { business_id: { _eq: user.business.id } };
     } else {
       throw new HttpException(
@@ -2595,6 +2671,8 @@ export class OrdersService {
               item_images(order_by: { display_order: asc }) {
                 id
                 image_url
+                image_type
+                display_order
               }
             }
           }
@@ -2698,14 +2776,14 @@ export class OrdersService {
 
   async getOpenOrders() {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agent users can view open orders',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can view open orders'
+    );
+    const agent = this.requireAgentRecord(user);
 
-    if (!user.agent.is_verified) {
+    if (!agent.is_verified) {
       return { success: true, orders: [] };
     }
 
@@ -2827,7 +2905,7 @@ export class OrdersService {
     const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
     const transformedOrders = this.transformOrdersForAgentSync(
       filteredOrders,
-      user.agent.is_verified || false,
+      agent.is_verified || false,
       commissionConfig,
       holdPercentage
     );
@@ -2844,12 +2922,12 @@ export class OrdersService {
     orderId: string
   ): Promise<ClaimAvailabilityResponse> {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agent users can claim orders',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can claim orders'
+    );
+    const agent = this.requireAgentRecord(user);
 
     const order = await this.getOrderWithItems(orderId);
     if (!order) {
@@ -2860,7 +2938,7 @@ export class OrdersService {
       await this.agentHoldService.getHoldPercentageForAgent();
     const holdAmount = (order.subtotal * holdPercentage) / 100;
 
-    const agentStatus = await this.getAgentStatus(user.agent.id);
+    const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       return this.createClaimAvailabilityFailure(
         holdAmount,
@@ -2882,7 +2960,7 @@ export class OrdersService {
       );
     }
 
-    if (order.verified_agent_delivery && !user.agent.is_internal) {
+    if (order.verified_agent_delivery && !agent.is_internal) {
       return this.createClaimAvailabilityFailure(
         holdAmount,
         'This order requires an internal agent. Contact support to become an internal agent.'
@@ -2950,7 +3028,7 @@ export class OrdersService {
     let hasAccess = false;
     let accessReason = '';
 
-    if (user.business) {
+    if (userHasPersona(user, 'business') && user.business) {
       // Business users can access if they own the order or are admin
       if (order.business_id === user.business.id) {
         hasAccess = true;
@@ -2959,11 +3037,15 @@ export class OrdersService {
         hasAccess = true;
         accessReason = 'admin_business';
       }
-    } else if (user.client && order.client_id === user.client.id) {
+    } else if (
+      userHasPersona(user, 'client') &&
+      order.client?.user_id === user.id
+    ) {
       // Client can access their own orders
       hasAccess = true;
       accessReason = 'order_client';
     } else if (
+      userHasPersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
@@ -2983,7 +3065,7 @@ export class OrdersService {
     // Get comprehensive order data with all relationships
     // For agents, exclude financial fields (total_amount, order_holds, order item prices)
     // but keep base_delivery_fee, per_km_delivery_fee, and subtotal for commission and hold amount calculation
-    const isAgent = user.agent !== null;
+    const isAgent = userHasPersona(user, 'agent');
     const query = isAgent
       ? `
       query GetOrderById($orderId: uuid!) {
@@ -3297,6 +3379,7 @@ export class OrdersService {
                 id
                 image_url
                 alt_text
+                image_type
                 display_order
               }
             }
@@ -3438,20 +3521,21 @@ export class OrdersService {
     // Check access permissions (same logic as getOrderById)
     let hasAccess = false;
 
-    if (user.business) {
-      // Business users can access if they own the order or are admin
+    if (userHasPersona(user, 'business') && user.business) {
       if (order.business_id === user.business.id || user.business.is_admin) {
         hasAccess = true;
       }
-    } else if (user.client && order.client_id === user.client.id) {
-      // Client can access their own orders
+    } else if (
+      userHasPersona(user, 'client') &&
+      order.client?.user_id === user.id
+    ) {
       hasAccess = true;
     } else if (
+      userHasPersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
     ) {
-      // Agent can access orders assigned to them
       hasAccess = true;
     }
 
@@ -3520,20 +3604,21 @@ export class OrdersService {
     // Check access permissions (same logic as getOrderById)
     let hasAccess = false;
 
-    if (user.business) {
-      // Business users can access if they own the order or are admin
+    if (userHasPersona(user, 'business') && user.business) {
       if (order.business_id === user.business.id || user.business.is_admin) {
         hasAccess = true;
       }
-    } else if (user.client && order.client_id === user.client.id) {
-      // Client can access their own orders
+    } else if (
+      userHasPersona(user, 'client') &&
+      order.client?.user_id === user.id
+    ) {
       hasAccess = true;
     } else if (
+      userHasPersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
     ) {
-      // Agent can access orders assigned to them
       hasAccess = true;
     }
 
@@ -3601,12 +3686,12 @@ export class OrdersService {
 
   async dropOrder(request: OrderStatusChangeRequest) {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agent users can drop orders',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agent users can drop orders'
+    );
+    const agent = this.requireAgentRecord(user);
     // Get the order and check if assigned to this agent and in assigned_to_agent status
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
@@ -3617,7 +3702,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
-    if (order.assigned_agent_id !== user.agent.id) {
+    if (order.assigned_agent_id !== agent.id) {
       throw new HttpException(
         'You are not assigned to this order',
         HttpStatus.FORBIDDEN
@@ -3646,7 +3731,7 @@ export class OrdersService {
     );
 
     const agentAccount = await this.hasuraSystemService.getAccount(
-      user.agent.user_id,
+      user.id,
       order.currency
     );
 
@@ -3836,17 +3921,17 @@ export class OrdersService {
     message?: string;
   }> {
     const user = await this.hasuraUserService.getUser();
-    if (!user.agent) {
-      throw new HttpException(
-        'Only agents can access order earnings',
-        HttpStatus.FORBIDDEN
-      );
-    }
+    this.requireActivePersona(
+      user,
+      'agent',
+      'Only agents can access order earnings'
+    );
+    const agent = this.requireAgentRecord(user);
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.assigned_agent_id !== user.agent.id) {
+    if (order.assigned_agent_id !== agent.id) {
       throw new HttpException(
         'Unauthorized to access this order earnings',
         HttpStatus.FORBIDDEN
@@ -3860,7 +3945,7 @@ export class OrdersService {
         per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
         currency: order.currency ?? 'XAF',
       },
-      user.agent.is_verified ?? false,
+      agent.is_verified ?? false,
       config
     );
     return {
@@ -4180,7 +4265,7 @@ export class OrdersService {
 
       const user = await this.hasuraSystemService.getUserById(account.user_id);
 
-      if (!user || !user.agent) {
+      if (!user || user.user_type_id !== 'agent' || !user.agent) {
         throw new HttpException(
           'User or agent not found',
           HttpStatus.NOT_FOUND
@@ -4553,9 +4638,8 @@ export class OrdersService {
     // Get the current user
     const user = await this.hasuraUserService.getUser();
 
-    if (!user.client) {
-      throw new Error('Client not found');
-    }
+    this.requireActivePersona(user, 'client', 'Only clients can create orders');
+    const client = this.requireClientRecord(user);
 
     // Validate delivery address ID
     if (!client_delivery_address_id) {
@@ -4996,7 +5080,7 @@ export class OrdersService {
     const orderResult = await this.hasuraSystemService.executeMutation(
       createOrderMutation,
       {
-        clientId: user.client.id,
+        clientId: client.id,
         businessId: business_id,
         businessLocationId: business_location_id,
         deliveryAddressId: delivery_address_id,

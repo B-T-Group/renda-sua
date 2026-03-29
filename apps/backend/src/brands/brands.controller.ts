@@ -131,7 +131,7 @@ export class BrandsController {
     try {
       const user = await this.hasuraUserService.getUser();
 
-      if (!user?.business) {
+      if (user.user_type_id !== 'business' || !user.business) {
         throw new HttpException(
           {
             success: false,

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { userHasPersona } from '../users/persona.util';
 
 export interface HoldPercentageConfig {
   internalAgentHoldPercentage: number;
@@ -72,7 +73,7 @@ export class AgentHoldService {
       isVerified = !!agent.is_verified;
     } else {
       const user = await this.hasuraUserService.getUser();
-      if (!user?.agent) {
+      if (!userHasPersona(user, 'agent') || !user.agent) {
         this.logger.warn('No agent on user, defaulting to unverified hold %');
         const config = await this.getHoldPercentageConfigs();
         return config.unverifiedAgentHoldPercentage;

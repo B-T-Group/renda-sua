@@ -12,6 +12,7 @@ import { Public } from '../auth/public.decorator';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
 import { AgentReferralsService } from './agent-referrals.service';
 
@@ -112,6 +113,20 @@ export class AgentsController {
     private readonly agentReferralsService: AgentReferralsService
   ) {}
 
+  private requireAgentActor(user: any): string {
+    const active = resolveActivePersonaWithDefault(
+      user,
+      this.hasuraUserService.getActivePersonaHeader()
+    );
+    if (active !== 'agent' || !user.agent?.id) {
+      throw new HttpException(
+        { success: false, error: 'User is not an agent' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    return user.agent.id;
+  }
+
   @Public()
   @Get('public/by-code/:agentCode')
   @ApiOperation({
@@ -162,17 +177,7 @@ export class AgentsController {
     try {
       // Get the current agent's ID
       const user = await this.hasuraUserService.getUser();
-      if (!user.agent) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'User is not an agent',
-          },
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      const agentId = user.agent.id;
+      const agentId = this.requireAgentActor(user);
 
       // Query for active orders assigned to this agent
       // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
@@ -353,17 +358,7 @@ export class AgentsController {
   async getEarningsSummary() {
     try {
       const user = await this.hasuraUserService.getUser();
-      if (!user?.agent) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'User is not an agent',
-          },
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      const agentId = user.agent.id;
+      const agentId = this.requireAgentActor(user);
       const agentUserId = user.id;
 
       // Start and end of today (server date, UTC)
@@ -586,17 +581,7 @@ export class AgentsController {
 
       // Get the current agent's ID
       const user = await this.hasuraUserService.getUser();
-      if (!user.agent) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'User is not an agent',
-          },
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      const agentId = user.agent.id;
+      const agentId = this.requireAgentActor(user);
 
       // Update the order with the agent ID and status
       const mutation = `
@@ -658,17 +643,7 @@ export class AgentsController {
     try {
       // Get the current agent's ID
       const user = await this.hasuraUserService.getUser();
-      if (!user.agent) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'User is not an agent',
-          },
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      const agentId = user.agent.id;
+      const agentId = this.requireAgentActor(user);
 
       // Update the agent's onboarding_complete status
       const mutation = `

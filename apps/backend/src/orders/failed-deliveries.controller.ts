@@ -179,7 +179,7 @@ export class FailedDeliveriesController {
       // Get business ID from authenticated user
       const user = await this.hasuraUserService.getUser();
 
-      if (!user.business) {
+      if (user.user_type_id !== 'business' || !user.business) {
         throw new HttpException(
           'Only business users can access failed deliveries',
           HttpStatus.FORBIDDEN

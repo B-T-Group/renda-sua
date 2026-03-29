@@ -291,7 +291,7 @@ export class RentalItemImagesController {
   async cleanup(@Param('id') id: string) {
     const user = await this.hasuraUserService.getUser();
     const businessId = user?.business?.id;
-    if (!businessId) {
+    if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN
@@ -320,7 +320,7 @@ export class RentalItemImagesController {
   private async requireBusinessId(): Promise<string> {
     const user = await this.hasuraUserService.getUser();
     const businessId = user?.business?.id;
-    if (!businessId) {
+    if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN

@@ -300,7 +300,7 @@ export class BusinessImagesController {
   async cleanupImage(@Param('id') id: string) {
     const user = await this.hasuraUserService.getUser();
     const businessId = user?.business?.id;
-    if (!businessId) {
+    if (user.user_type_id !== 'business' || !businessId) {
       throw new HttpException(
         { success: false, error: 'User has no business' },
         HttpStatus.FORBIDDEN

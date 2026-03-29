@@ -2296,6 +2296,15 @@
     "viewAndTakeAction": "Voir et Agir",
     "viewDetails": "Voir les Détails",
     "cancelledByCustomer": "Annulé par le client",
+    "card": {
+      "deliveryAddress": "Adresse de livraison",
+      "preferredDelivery": "Livraison souhaitée",
+      "amounts": "Montants",
+      "lineItems": "Articles de cette commande",
+      "hideItems": "Masquer les articles",
+      "showItems": "Voir les articles ({{count}})",
+      "sku": "SKU"
+    },
     "inclDelivery": "incl.",
     "viewMyOrders": "Voir Mes Commandes",
     "viewOrderDetails": "Voir les Détails de la Commande",

@@ -7,6 +7,26 @@ export interface UserPersonaShape {
   business?: { id: string } | null;
 }
 
+/** Which profile rows exist (single place that reads client/agent/business relations). */
+export function personasFromProfileRelations(user: UserPersonaShape): PersonaId[] {
+  const out: PersonaId[] = [];
+  if (user.client) out.push('client');
+  if (user.agent) out.push('agent');
+  if (user.business) out.push('business');
+  return out;
+}
+
+/**
+ * Whether the user has a given profile type. Prefer `user.personas` from getUser() on HasuraUserService.
+ */
+export function userHasPersona(
+  user: UserPersonaShape & { personas?: PersonaId[] },
+  p: PersonaId
+): boolean {
+  if (user.personas?.length) return user.personas.includes(p);
+  return personasFromProfileRelations(user).includes(p);
+}
+
 /** Stable `users.user_type_id` for DB compatibility when a user has multiple profiles. */
 export function legacyUserTypeIdForPersonas(personas: PersonaId[]): PersonaId {
   const order: PersonaId[] = ['agent', 'business', 'client'];
@@ -16,12 +36,11 @@ export function legacyUserTypeIdForPersonas(personas: PersonaId[]): PersonaId {
   return personas[0];
 }
 
-export function derivePersonas(user: UserPersonaShape): PersonaId[] {
-  const out: PersonaId[] = [];
-  if (user.client) out.push('client');
-  if (user.agent) out.push('agent');
-  if (user.business) out.push('business');
-  return out;
+export function derivePersonas(
+  user: UserPersonaShape & { personas?: PersonaId[] }
+): PersonaId[] {
+  if (user.personas?.length) return [...user.personas];
+  return personasFromProfileRelations(user);
 }
 
 function normalizeHeader(raw: string | undefined): PersonaId | undefined {
@@ -35,7 +54,7 @@ function normalizeHeader(raw: string | undefined): PersonaId | undefined {
  * Multiple personas require a valid header matching an existing profile.
  */
 export function resolveActivePersona(
-  user: UserPersonaShape,
+  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
   headerRaw: string | undefined
 ): PersonaId {
   const personas = derivePersonas(user);
@@ -79,7 +98,7 @@ export function resolveActivePersona(
  * If a header is present it must match an enabled persona (same as strict mode).
  */
 export function resolveActivePersonaWithDefault(
-  user: UserPersonaShape,
+  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
   headerRaw: string | undefined
 ): PersonaId {
   const personas = derivePersonas(user);
@@ -110,7 +129,13 @@ export function resolveActivePersonaWithDefault(
     }
     return header;
   }
-  return legacyUserTypeIdForPersonas(personas);
+  const fromType =
+    user.user_type_id &&
+    isPersonaId(user.user_type_id) &&
+    personas.includes(user.user_type_id)
+      ? user.user_type_id
+      : undefined;
+  return fromType ?? legacyUserTypeIdForPersonas(personas);
 }
 
 /**
@@ -118,7 +143,7 @@ export function resolveActivePersonaWithDefault(
  * for multi-persona users (no 400). For optional UX endpoints only.
  */
 export function resolveActivePersonaLenient(
-  user: UserPersonaShape,
+  user: UserPersonaShape & { user_type_id?: string; personas?: PersonaId[] },
   headerRaw: string | undefined
 ): PersonaId | null {
   const personas = derivePersonas(user);

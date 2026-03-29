@@ -10,7 +10,11 @@ import {
   Clients,
   Users,
 } from '../generated/graphql';
-import { resolveActivePersonaWithDefault } from '../users/persona.util';
+import {
+  personasFromProfileRelations,
+  resolveActivePersonaWithDefault,
+} from '../users/persona.util';
+import type { PersonaId } from '../users/persona.types';
 import { HasuraSystemService } from './hasura-system.service';
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
@@ -721,6 +725,7 @@ export class HasuraUserService {
       agent?: Agents;
       business?: Businesses;
       addresses?: Addresses[];
+      personas?: PersonaId[];
     }
   > {
     if (!this.user_id || this.user_id === 'anonymous') {
@@ -737,17 +742,25 @@ export class HasuraUserService {
         throw new Error(`User not found for id: ${this.user_id}`);
       }
 
+      const personas = personasFromProfileRelations({
+        client: userData.client,
+        agent: userData.agent,
+        business: userData.business,
+      });
+
       // Build the user object with client/agent/business data
       const user: Users & {
         client?: Clients;
         agent?: Agents;
         business?: Businesses;
         addresses?: Addresses[];
+        personas?: PersonaId[];
       } = {
         ...userData,
         client: userData.client || undefined,
         agent: userData.agent || undefined,
         business: userData.business || undefined,
+        personas,
       };
 
       // Addresses for the active persona only (client → client_addresses, etc.).
@@ -756,6 +769,8 @@ export class HasuraUserService {
           client: user.client,
           agent: user.agent,
           business: user.business,
+          user_type_id: user.user_type_id,
+          personas: user.personas,
         },
         this.getActivePersonaHeader()
       );

@@ -10,7 +10,7 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { PersonaId } from '../users/persona.types';
-import { resolveActivePersona } from '../users/persona.util';
+import { resolveActivePersona, userHasPersona } from '../users/persona.util';
 
 export interface CreateAddressDto {
   address_line_1: string;
@@ -406,7 +406,7 @@ export class AddressesService {
       let junctionVariables = {};
 
       if (persona === 'client') {
-        if (!user.client) {
+        if (!userHasPersona(user, 'client') || !user.client?.id) {
           throw new HttpException(
             {
               success: false,
@@ -434,7 +434,7 @@ export class AddressesService {
           addressId: address.id,
         };
       } else if (persona === 'business') {
-        if (!user.business) {
+        if (!userHasPersona(user, 'business') || !user.business?.id) {
           throw new HttpException(
             {
               success: false,
@@ -462,7 +462,7 @@ export class AddressesService {
           addressId: address.id,
         };
       } else if (persona === 'agent') {
-        if (!user.agent) {
+        if (!userHasPersona(user, 'agent') || !user.agent?.id) {
           throw new HttpException(
             {
               success: false,

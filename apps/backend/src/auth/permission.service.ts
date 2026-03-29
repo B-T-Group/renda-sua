@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { userHasPersona } from '../users/persona.util';
 
 @Injectable()
 export class PermissionService {
@@ -186,7 +187,7 @@ export class PermissionService {
       const currentUser = await this.hasuraUserService.getUser();
 
       // Business owners can access their own data
-      if (currentUser.business) {
+      if (userHasPersona(currentUser, 'business')) {
         const businessQuery = `
           query GetBusinessOwnership($userId: uuid!, $businessId: uuid!) {
             businesses(where: {user_id: {_eq: $userId}, id: {_eq: $businessId}}) {
@@ -224,7 +225,7 @@ export class PermissionService {
     try {
       const currentUser = await this.hasuraUserService.getUser();
 
-      if (currentUser.business) {
+      if (userHasPersona(currentUser, 'business')) {
         return await this.isBusinessAdmin(userId);
       }
 

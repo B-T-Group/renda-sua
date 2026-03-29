@@ -8,6 +8,7 @@ import {
   NotificationsService,
 } from '../notifications/notifications.service';
 import { OrderQueueService } from './order-queue.service';
+import { userHasPersona } from '../users/persona.util';
 
 @Injectable()
 export class OrderStatusService {
@@ -61,17 +62,18 @@ export class OrderStatusService {
       throw new Error('Order not found');
     }
 
-    // Validate user permissions
-    const isBusinessOwner = !!(
-      user.business && order.business.user_id === user.id
-    );
+    // Validate user permissions (ownership via order graph; profile via personas)
+    const isBusinessOwner =
+      userHasPersona(user, 'business') &&
+      order.business.user_id === user.id;
     const isAssignedAgent = !!(
-      user.agent &&
       order.assigned_agent_id &&
       order.assigned_agent.user_id === user.id
     );
-    const isAnyAgent = !!user.agent;
-    const isClient = user.client?.id === order.client_id;
+    const isAnyAgent = userHasPersona(user, 'agent');
+    const isClient =
+      userHasPersona(user, 'client') &&
+      order.client?.user_id === user.id;
 
     // Special case: Agent can assign ready_for_pickup orders to themselves
     if (
