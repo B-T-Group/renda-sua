@@ -69,10 +69,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         ) : null}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} disabled={loading} color="inherit">
+        <Button type="button" onClick={onCancel} disabled={loading} color="inherit">
           {cancelText || t('common.no')}
         </Button>
         <Button
+          type="button"
           onClick={onConfirm}
           color={confirmColor}
           variant="contained"

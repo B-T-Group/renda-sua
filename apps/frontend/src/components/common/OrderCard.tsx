@@ -6,6 +6,9 @@ import {
   FlashOn,
   LocalShipping as LocalShippingIcon,
   LocationOn,
+  Person,
+  Phone,
+  Scale,
   Schedule as ScheduleIcon,
   ShoppingBag,
 } from '@mui/icons-material';
@@ -18,9 +21,11 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Link,
   Stack,
   Tooltip,
   Typography,
+  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -34,8 +39,10 @@ import {
 } from '../../hooks/useBackendOrders';
 import { useApiClient } from '../../hooks/useApiClient';
 import type { OrderData } from '../../hooks/useOrderById';
+import ClientActions from '../orders/ClientActions';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
+import AgentActions from '../orders/AgentActions';
 
 interface ItemImageRow {
   image_url: string;
@@ -51,6 +58,8 @@ interface OrderItem {
   total_price?: number;
   item?: {
     sku?: string;
+    weight?: number;
+    weight_unit?: string;
     item_images?: ItemImageRow[];
     item_sub_category?: {
       name: string;
@@ -130,6 +139,45 @@ function formatDeliveryScheduleLabel(order: {
   return null;
 }
 
+const AGENT_SHOW_CLIENT_CONTACT_STATUSES = new Set([
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'complete',
+]);
+
+type AgentOrderWeightResult =
+  | { kind: 'total'; value: number; unit: string; partial: boolean }
+  | { kind: 'mixed' }
+  | { kind: 'none' };
+
+function totalOrderItemsWeight(
+  orderItems: OrderItem[] | undefined | null
+): AgentOrderWeightResult {
+  if (!orderItems?.length) return { kind: 'none' };
+  const byUnit: Record<string, number> = {};
+  let linesWithWeight = 0;
+  const linesTotal = orderItems.length;
+  for (const line of orderItems) {
+    const w = line.item?.weight;
+    if (w == null || Number(w) <= 0) continue;
+    linesWithWeight += 1;
+    const u = (line.item?.weight_unit || 'kg').trim() || 'kg';
+    byUnit[u] = (byUnit[u] ?? 0) + Number(w) * (line.quantity ?? 0);
+  }
+  const keys = Object.keys(byUnit).filter((k) => byUnit[k] > 0);
+  if (keys.length === 0) return { kind: 'none' };
+  if (keys.length > 1) return { kind: 'mixed' };
+  const unit = keys[0];
+  return {
+    kind: 'total',
+    value: Math.round(byUnit[unit] * 100) / 100,
+    unit,
+    partial: linesWithWeight < linesTotal,
+  };
+}
+
 interface OrderCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
@@ -140,6 +188,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
+  const agentCardStackActions = useMediaQuery(theme.breakpoints.down('sm'));
   const { profile } = useUserProfileContext();
   const apiClient = useApiClient();
   const { enqueueSnackbar } = useSnackbar();
@@ -436,20 +485,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
           loading: loadingAction === 'completeOrder',
         });
       }
-    } else if (
-      userType === 'agent' &&
-      currentStatus === 'ready_for_pickup' &&
-      order.is_claim_pending
-    ) {
-      actions.push({
-        label: t(
-          'orders.claimPending.cancelRequest',
-          'Cancel claim request'
-        ),
-        onClick: handleCancelClaimRequest,
-        color: 'error',
-        loading: loadingAction === 'cancelClaimRequest',
-      });
     }
 
     return actions;
@@ -482,6 +517,16 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
         .filter(Boolean)
         .join(', ')
     : '';
+
+  const agentOrderWeight = totalOrderItemsWeight(order.order_items);
+  const showAgentClientContact =
+    userType === 'agent' &&
+    AGENT_SHOW_CLIENT_CONTACT_STATUSES.has(currentStatus) &&
+    order.client?.user;
+  const showAgentCancelClaim =
+    userType === 'agent' &&
+    currentStatus === 'ready_for_pickup' &&
+    order.is_claim_pending;
 
   const orderImageBox = (px: number) => (
     <Box
@@ -858,69 +903,405 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
           <Divider />
           {actionsRow}
         </CardContent>
-      ) : (
+      ) : userType === 'agent' ? (
         <CardContent
           sx={{
             flex: 1,
-            p: 1.5,
-            py: 1.25,
-            '&:last-child': { pb: 1.25 },
+            p: 2.5,
+            py: 2,
+            '&:last-child': { pb: 2.5 },
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { sm: 'center' },
-            gap: { xs: 1, sm: 2 },
+            flexDirection: 'column',
+            gap: 2,
             minWidth: 0,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1, minWidth: 0 }}>
-            {orderImageBox(48)}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            {orderImageBox(88)}
+            <Box sx={{ flex: 1, minWidth: 200 }}>
               {statusChipRow}
               <Stack
                 direction="row"
                 flexWrap="wrap"
                 alignItems="center"
-                sx={{ typography: 'caption', color: 'text.secondary', gap: { xs: 1, sm: 2 } }}
+                sx={{
+                  typography: 'body2',
+                  color: 'text.secondary',
+                  gap: 2,
+                  mt: 0.75,
+                }}
               >
                 <Stack direction="row" alignItems="center" gap={0.5}>
-                  <ScheduleIcon sx={{ fontSize: 14 }} />
+                  <ScheduleIcon sx={{ fontSize: 18 }} />
+                  <span>{formatDate(order.created_at)}</span>
+                </Stack>
+                <Stack direction="row" alignItems="center" gap={0.5}>
+                  <ShoppingBag sx={{ fontSize: 18 }} />
+                  <span>
+                    <strong>{itemCount}</strong>{' '}
+                    {itemCount === 1
+                      ? t('orders.item', 'item')
+                      : t('orders.items', 'items')}
+                  </span>
+                </Stack>
+              </Stack>
+            </Box>
+            <Box sx={{ minWidth: 140 }}>{pricingBlock}</Box>
+          </Box>
+
+          {addressLines.length > 0 ? (
+            <Box>
+              <Stack direction="row" gap={1.25} alignItems="flex-start">
+                <LocationOn
+                  color="action"
+                  sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }}
+                />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    fontWeight={600}
+                    display="block"
+                    gutterBottom
+                  >
+                    {t('orders.card.deliveryAddress', 'Delivery address')}
+                  </Typography>
+                  {addressLines.map((line, i) => (
+                    <Typography
+                      key={i}
+                      variant="body2"
+                      sx={{ wordBreak: 'break-word' }}
+                    >
+                      {line}
+                    </Typography>
+                  ))}
+                </Box>
+              </Stack>
+            </Box>
+          ) : null}
+
+          {scheduleLabel ? (
+            <Stack direction="row" gap={1.25} alignItems="flex-start">
+              <ScheduleIcon
+                color="action"
+                sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }}
+              />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  display="block"
+                  gutterBottom
+                >
+                  {t('orders.card.preferredDelivery', 'Preferred delivery')}
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                  {scheduleLabel}
+                </Typography>
+              </Box>
+            </Stack>
+          ) : null}
+
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ gap: 2 }}
+          >
+            <Stack direction="row" gap={1} alignItems="flex-start" flex={1}>
+              <ShoppingBag color="action" sx={{ fontSize: 22, mt: 0.25 }} />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  display="block"
+                >
+                  {t('orders.card.itemSummary', 'Items')}
+                </Typography>
+                <Typography variant="body2">
+                  {t('orders.card.itemUnitsLines', '{{units}} units · {{lines}} lines', {
+                    units: itemCount,
+                    lines: lineItemCount,
+                  })}
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack direction="row" gap={1} alignItems="flex-start" flex={1}>
+              <Scale color="action" sx={{ fontSize: 22, mt: 0.25 }} />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  display="block"
+                >
+                  {t('orders.card.totalWeight', 'Total weight')}
+                </Typography>
+                {agentOrderWeight.kind === 'total' ? (
+                  <>
+                    <Typography variant="body2">
+                      {agentOrderWeight.value} {agentOrderWeight.unit}
+                    </Typography>
+                    {agentOrderWeight.partial ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {t(
+                          'orders.card.weightPartial',
+                          'Some items have no weight'
+                        )}
+                      </Typography>
+                    ) : null}
+                  </>
+                ) : null}
+                {agentOrderWeight.kind === 'mixed' ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t(
+                      'orders.card.mixedWeightUnits',
+                      'Mixed units — see item list'
+                    )}
+                  </Typography>
+                ) : null}
+                {agentOrderWeight.kind === 'none' ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t(
+                      'orders.card.weightNotListed',
+                      'Not listed on items'
+                    )}
+                  </Typography>
+                ) : null}
+              </Box>
+            </Stack>
+          </Stack>
+
+          {showAgentClientContact && order.client?.user ? (
+            <Stack direction="row" gap={1.25} alignItems="flex-start">
+              <Person
+                color="action"
+                sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }}
+              />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  display="block"
+                  gutterBottom
+                >
+                  {t('orders.card.client', 'Client')}
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {order.client.user.first_name} {order.client.user.last_name}
+                </Typography>
+                {order.client.user.phone_number ? (
+                  <Stack direction="row" alignItems="center" gap={0.5} mt={0.5}>
+                    <Phone sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Link
+                      href={`tel:${order.client.user.phone_number}`}
+                      underline="hover"
+                      variant="body2"
+                    >
+                      {order.client.user.phone_number}
+                    </Link>
+                  </Stack>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('orders.card.clientPhone', 'Phone')}: —
+                  </Typography>
+                )}
+              </Box>
+            </Stack>
+          ) : null}
+
+          <Divider />
+
+          <Stack spacing={1.5}>
+            {showAgentCancelClaim ? (
+              <Button
+                variant="outlined"
+                color="error"
+                size="medium"
+                onClick={handleCancelClaimRequest}
+                disabled={
+                  loadingAction === 'cancelClaimRequest' || !!loadingAction
+                }
+                startIcon={
+                  loadingAction === 'cancelClaimRequest' ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : undefined
+                }
+                sx={{ textTransform: 'none', fontWeight: 600, alignSelf: 'stretch' }}
+              >
+                {t(
+                  'orders.claimPending.cancelRequest',
+                  'Cancel claim request'
+                )}
+              </Button>
+            ) : null}
+            <AgentActions
+              order={order as OrderData}
+              onActionComplete={onActionComplete}
+              onShowNotification={(message, severity) =>
+                enqueueSnackbar(message, { variant: severity })
+              }
+              mobileView={agentCardStackActions}
+            />
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="text"
+                size="small"
+                color={
+                  isCompleted || isCancelled ? 'inherit' : 'primary'
+                }
+                onClick={() => navigate(`/orders/${order.id}`)}
+                endIcon={<ArrowForward fontSize="small" />}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  color:
+                    isCompleted || isCancelled ? 'text.secondary' : undefined,
+                }}
+              >
+                {t('orders.details', 'Details')}
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      ) : (
+        <CardContent
+          sx={{
+            flex: 1,
+            p: 2.5,
+            py: 2,
+            '&:last-child': { pb: 2.5 },
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            minWidth: 0,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            {orderImageBox(80)}
+            <Box sx={{ flex: 1, minWidth: 200 }}>
+              {statusChipRow}
+              {order.business?.name ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.75, fontWeight: 500 }}
+                >
+                  {order.business.name}
+                </Typography>
+              ) : null}
+              <Stack
+                direction="row"
+                flexWrap="wrap"
+                alignItems="center"
+                sx={{
+                  typography: 'body2',
+                  color: 'text.secondary',
+                  gap: 2,
+                  mt: 1,
+                }}
+              >
+                <Stack direction="row" alignItems="center" gap={0.75}>
+                  <ScheduleIcon sx={{ fontSize: 18 }} />
                   <span>{formatDate(order.created_at)}</span>
                 </Stack>
                 {addressShort ? (
-                  <Stack direction="row" alignItems="center" gap={0.5} sx={{ minWidth: 0 }}>
-                    <LocationOn sx={{ fontSize: 14 }} />
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={0.75}
+                    sx={{ minWidth: 0 }}
+                  >
+                    <LocationOn sx={{ fontSize: 18 }} />
                     <Tooltip title={addressFull || addressShort} enterDelay={300}>
                       <Typography
                         component="span"
-                        noWrap
-                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: { xs: 120, md: 200 } }}
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: { xs: 200, sm: 280 },
+                        }}
                       >
                         {addressShort}
                       </Typography>
                     </Tooltip>
                   </Stack>
                 ) : null}
-                <Stack direction="row" alignItems="center" gap={0.5}>
-                  <ShoppingBag sx={{ fontSize: 14 }} />
+                <Stack direction="row" alignItems="center" gap={0.75}>
+                  <ShoppingBag sx={{ fontSize: 18 }} />
                   <span>
-                    {itemCount}{' '}
-                    {itemCount === 1 ? t('orders.item', 'item') : t('orders.items', 'items')}
+                    <strong>{itemCount}</strong>{' '}
+                    {itemCount === 1
+                      ? t('orders.item', 'item')
+                      : t('orders.items', 'items')}
                   </span>
                 </Stack>
               </Stack>
             </Box>
+            <Box sx={{ minWidth: 160, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}>
+              {pricingBlock}
+            </Box>
           </Box>
+
+          {scheduleLabel ? (
+            <Stack direction="row" gap={1.25} alignItems="flex-start">
+              <ScheduleIcon
+                color="action"
+                sx={{ fontSize: 22, mt: 0.25, flexShrink: 0 }}
+              />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  fontWeight={600}
+                  display="block"
+                  gutterBottom
+                >
+                  {t('orders.card.preferredDelivery', 'Preferred delivery')}
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                  {scheduleLabel}
+                </Typography>
+              </Box>
+            </Stack>
+          ) : null}
+
+          <Divider />
+
+          <ClientActions
+            order={order as OrderData}
+            onActionComplete={onActionComplete}
+            deliveryPinFullWidth
+            onShowNotification={(message, severity) =>
+              enqueueSnackbar(message, { variant: severity })
+            }
+          />
 
           <Box
             sx={{
               display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              alignItems: { xs: 'stretch', sm: 'center' },
+              flexWrap: 'wrap',
               gap: 1,
-              flexShrink: 0,
+              alignItems: 'center',
+              justifyContent: 'flex-end',
             }}
           >
-            {pricingBlock}
             {actionsRow}
           </Box>
         </CardContent>

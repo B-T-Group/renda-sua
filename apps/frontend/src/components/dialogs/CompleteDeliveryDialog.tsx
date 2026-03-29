@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -33,6 +33,7 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submitLockRef = useRef(false);
 
   const handleSubmit = async () => {
     if (pin.length !== PIN_LENGTH) {
@@ -44,6 +45,8 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
       );
       return;
     }
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     setError(null);
     setLoading(true);
     try {
@@ -55,6 +58,7 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
       setError(err.message || 'Failed to complete delivery');
     } finally {
       setLoading(false);
+      submitLockRef.current = false;
     }
   };
 
@@ -95,10 +99,11 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button type="button" onClick={handleClose} disabled={loading}>
           {t('common.cancel', 'Cancel')}
         </Button>
         <Button
+          type="button"
           variant="contained"
           onClick={handleSubmit}
           disabled={loading || pin.length !== PIN_LENGTH}

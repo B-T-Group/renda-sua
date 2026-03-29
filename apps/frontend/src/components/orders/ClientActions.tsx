@@ -16,6 +16,8 @@ interface ClientActionsProps {
   onShowHistory?: () => void;
   /** When true, the delivery PIN control is not rendered here (shown elsewhere, e.g. order page header). */
   hideDeliveryPin?: boolean;
+  /** Stretch the PIN button to the container width (e.g. order list cards). */
+  deliveryPinFullWidth?: boolean;
 }
 
 const ClientActions: React.FC<ClientActionsProps> = ({
@@ -24,6 +26,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   onShowNotification,
   onShowHistory,
   hideDeliveryPin = false,
+  deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -93,6 +96,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
             <ClientDeliveryPinButton
               orderId={order.id}
               onShowNotification={onShowNotification}
+              fullWidth={deliveryPinFullWidth}
+              size="medium"
             />
           )}
           {availableActions.length > 0 && (

@@ -10,7 +10,7 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { PersonaId } from '../users/persona.types';
-import { resolveActivePersona, userHasPersona } from '../users/persona.util';
+import { getActivePersonaOrThrow } from '../users/persona.util';
 
 export interface CreateAddressDto {
   address_line_1: string;
@@ -301,10 +301,7 @@ export class AddressesService {
   }> {
     try {
       const user = await this.hasuraUserService.getUser();
-      const persona = resolveActivePersona(
-        user,
-        this.hasuraUserService.getActivePersonaHeader()
-      );
+      const persona = getActivePersonaOrThrow(user);
 
       let coordinates: { latitude: number; longitude: number } | null = null;
       let warning = '';
@@ -406,7 +403,7 @@ export class AddressesService {
       let junctionVariables = {};
 
       if (persona === 'client') {
-        if (!userHasPersona(user, 'client') || !user.client?.id) {
+        if (!user.client?.id) {
           throw new HttpException(
             {
               success: false,
@@ -434,7 +431,7 @@ export class AddressesService {
           addressId: address.id,
         };
       } else if (persona === 'business') {
-        if (!userHasPersona(user, 'business') || !user.business?.id) {
+        if (!user.business?.id) {
           throw new HttpException(
             {
               success: false,
@@ -462,7 +459,7 @@ export class AddressesService {
           addressId: address.id,
         };
       } else if (persona === 'agent') {
-        if (!userHasPersona(user, 'agent') || !user.agent?.id) {
+        if (!user.agent?.id) {
           throw new HttpException(
             {
               success: false,
@@ -714,10 +711,7 @@ export class AddressesService {
   }> {
     try {
       const user = await this.hasuraUserService.getUser();
-      const persona = resolveActivePersona(
-        user,
-        this.hasuraUserService.getActivePersonaHeader()
-      );
+      const persona = getActivePersonaOrThrow(user);
 
       const address = await this.getAddressesByIds([addressId]);
       if (address.length === 0) {

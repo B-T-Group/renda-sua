@@ -38,7 +38,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
@@ -77,6 +77,24 @@ const AGENT_ORDER_STATUS_RELEVANCE: Record<string, number> = {
   pending_payment: 25,
   pending: 20,
   delivered: 15,
+  complete: 12,
+  failed: 8,
+  refunded: 8,
+  cancelled: 0,
+};
+
+/** Higher rank = list first for clients (in-progress delivery and payment first). */
+const CLIENT_ORDER_STATUS_RELEVANCE: Record<string, number> = {
+  out_for_delivery: 100,
+  in_transit: 95,
+  picked_up: 90,
+  assigned_to_agent: 85,
+  ready_for_pickup: 75,
+  preparing: 65,
+  confirmed: 55,
+  pending_payment: 48,
+  pending: 42,
+  delivered: 30,
   complete: 12,
   failed: 8,
   refunded: 8,
@@ -243,6 +261,13 @@ const OrdersPage: React.FC = () => {
             (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
         );
       }
+      if (isOrdersClient) {
+        return [...statuses].sort(
+          (a, b) =>
+            (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+            (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
       return [...statuses].sort((a, b) => {
         const ia = statusOrder.indexOf(a);
         const ib = statusOrder.indexOf(b);
@@ -256,7 +281,7 @@ const OrdersPage: React.FC = () => {
       activeStatuses: sortStatuses(active),
       completedStatuses: sortStatuses(completed),
     };
-  }, [orders, statusOrder, isOrdersAgent]);
+  }, [orders, statusOrder, isOrdersAgent, isOrdersClient]);
 
   // Count completed orders for the collapsible header
   const completedOrdersCount = useMemo(() => {
@@ -364,6 +389,12 @@ const OrdersPage: React.FC = () => {
           (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
         );
       }
+      if (isOrdersClient) {
+        return (
+          (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+          (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
       const ia = statusOrder.indexOf(a);
       const ib = statusOrder.indexOf(b);
       const va = ia === -1 ? 999 : ia;
@@ -377,6 +408,7 @@ const OrdersPage: React.FC = () => {
     activeStatuses,
     statusOrder,
     isOrdersAgent,
+    isOrdersClient,
   ]);
 
   const tabCompletedStatuses = useMemo(() => {
@@ -403,6 +435,12 @@ const OrdersPage: React.FC = () => {
           (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
         );
       }
+      if (isOrdersClient) {
+        return (
+          (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+          (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+        );
+      }
       const ia = statusOrder.indexOf(a);
       const ib = statusOrder.indexOf(b);
       const va = ia === -1 ? 999 : ia;
@@ -416,6 +454,7 @@ const OrdersPage: React.FC = () => {
     completedStatuses,
     statusOrder,
     isOrdersAgent,
+    isOrdersClient,
   ]);
 
   const tabCompletedOrdersCount = useMemo(() => {
@@ -484,10 +523,6 @@ const OrdersPage: React.FC = () => {
       byStatus,
     };
   }, [orders]);
-
-  useEffect(() => {
-    fetchOrders({});
-  }, [fetchOrders]);
 
   // Filters Component for reuse in drawer and desktop
   const FiltersContent = () => (
@@ -818,7 +853,10 @@ const OrdersPage: React.FC = () => {
                   isOrdersAgent
                     ? (AGENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
                       (AGENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
-                    : a.localeCompare(b)
+                    : isOrdersClient
+                      ? (CLIENT_ORDER_STATUS_RELEVANCE[b] ?? 0) -
+                        (CLIENT_ORDER_STATUS_RELEVANCE[a] ?? 0)
+                      : a.localeCompare(b)
                 )
                 .map(([status, n]) => (
                   <Box

@@ -75,11 +75,13 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     refetchAccounts,
   } = useUserProfileContext();
   const { initiatePayment, loading: withdrawLoading } = useMobilePayments();
+  /** Mirrors DB `users.user_type_id` after persona switch (see setActivePersona). */
+  const agentAutoWithdrawEnabled = profile?.user_type_id === 'agent';
   const {
     autoWithdrawCommissions,
     loading: agentAutoWithdrawLoading,
     setAutoWithdraw: setAgentAutoWithdraw,
-  } = useAgentAutoWithdrawCommissions(!!profile?.agent);
+  } = useAgentAutoWithdrawCommissions(agentAutoWithdrawEnabled);
   const { execute: executeTransactionsQuery } = useGraphQLRequest<{
     account_transactions: AccountTransaction[];
   }>(GET_ACCOUNT_TRANSACTIONS, { showLoading: false });
@@ -311,7 +313,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
             {t('accounts.withdraw')}
           </MenuItem>
         )}
-        {profile?.agent && (
+        {agentAutoWithdrawEnabled && (
           <>
             <Divider sx={{ my: 0.5 }} />
             <MenuItem

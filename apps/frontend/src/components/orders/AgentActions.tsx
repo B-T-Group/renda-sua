@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_FEATURES } from '../../constants/appFeatures';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -46,7 +46,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 }) => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
-  const agentOrders = useAgentOrders();
+  const agentOrders = useAgentOrders({ skipInitialListFetch: true });
   const [loading, setLoading] = useState(false);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
@@ -64,6 +64,19 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const [claimHoldAmount, setClaimHoldAmount] = useState(
     order.agent_hold_amount || 0
   );
+
+  /** Blocks double-submit before React re-renders `loading` onto buttons. */
+  const actionInFlightRef = useRef(false);
+
+  const runExclusiveAction = async (fn: () => Promise<void>): Promise<void> => {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    try {
+      await fn();
+    } finally {
+      actionInFlightRef.current = false;
+    }
+  };
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -98,26 +111,28 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setLoading(true);
-    try {
-      const result = await agentOrders.pickUpOrder(order.id);
-      onShowNotification?.(
-        t(
-          'messages.orderPickupSuccess',
-          `Order ${result.order_number} picked up successfully`
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderPickupError', 'Failed to pick up order'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        const result = await agentOrders.pickUpOrder(order.id);
+        onShowNotification?.(
+          t(
+            'messages.orderPickupSuccess',
+            `Order ${result.order_number} picked up successfully`
+          ),
+          'success'
+        );
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t('messages.orderPickupError', 'Failed to pick up order'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   const handleClaim = async () => {
@@ -129,44 +144,46 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setLoading(true);
-    try {
-      const claimAvailability: ClaimAvailabilityResult =
-        await agentOrders.checkClaimAvailability(order.id);
-      setClaimHoldAmount(claimAvailability.holdAmount || 0);
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        const claimAvailability: ClaimAvailabilityResult =
+          await agentOrders.checkClaimAvailability(order.id);
+        setClaimHoldAmount(claimAvailability.holdAmount || 0);
 
-      if (!claimAvailability.orderOpenStatus) {
+        if (!claimAvailability.orderOpenStatus) {
+          onShowNotification?.(
+            claimAvailability.message ||
+              t(
+                'orders.orderNoLongerOpenMessage',
+                'This order is no longer open for claim.'
+              ),
+            'warning'
+          );
+          onActionComplete?.();
+          return;
+        }
+
+        if (claimAvailability.hasEnoughFundsForHold) {
+          setShowClaimConfirmation(true);
+        } else {
+          setShowClaimDialog(true);
+        }
+      } catch (error: any) {
+        if (hasSufficientFunds()) {
+          setShowClaimConfirmation(true);
+        } else {
+          setShowClaimDialog(true);
+        }
         onShowNotification?.(
-          claimAvailability.message ||
-            t(
-              'orders.orderNoLongerOpenMessage',
-              'This order is no longer open for claim.'
-            ),
-          'warning'
+          error.message ||
+            t('messages.orderClaimError', 'Failed to check claim availability'),
+          'error'
         );
-        onActionComplete?.();
-        return;
+      } finally {
+        setLoading(false);
       }
-
-      if (claimAvailability.hasEnoughFundsForHold) {
-        setShowClaimConfirmation(true);
-      } else {
-        setShowClaimDialog(true);
-      }
-    } catch (error: any) {
-      if (hasSufficientFunds()) {
-        setShowClaimConfirmation(true);
-      } else {
-        setShowClaimDialog(true);
-      }
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderClaimError', 'Failed to check claim availability'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   const handleConfirmClaim = async () => {
@@ -178,94 +195,99 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setShowClaimConfirmation(false);
-    setLoading(true);
-    try {
-      const claimAvailability = await agentOrders.checkClaimAvailability(
-        order.id
-      );
-      setClaimHoldAmount(claimAvailability.holdAmount || 0);
-      if (!claimAvailability.orderOpenStatus) {
+    await runExclusiveAction(async () => {
+      setShowClaimConfirmation(false);
+      setLoading(true);
+      try {
+        const claimAvailability = await agentOrders.checkClaimAvailability(
+          order.id
+        );
+        setClaimHoldAmount(claimAvailability.holdAmount || 0);
+        if (!claimAvailability.orderOpenStatus) {
+          onShowNotification?.(
+            claimAvailability.message ||
+              t(
+                'orders.orderNoLongerOpenMessage',
+                'This order is no longer open for claim.'
+              ),
+            'warning'
+          );
+          onActionComplete?.();
+          return;
+        }
+        if (claimAvailability.needsTopUpToClaim) {
+          setShowClaimDialog(true);
+          return;
+        }
+
+        const result = await agentOrders.getOrderForPickup(order.id);
         onShowNotification?.(
-          claimAvailability.message ||
-            t(
-              'orders.orderNoLongerOpenMessage',
-              'This order is no longer open for claim.'
-            ),
-          'warning'
+          t(
+            'messages.orderAssignedSuccess',
+            `Order ${result.order.order_number} claimed successfully`
+          ),
+          'success'
         );
         onActionComplete?.();
-        return;
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t('messages.orderClaimError', 'Failed to claim order'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
       }
-      if (claimAvailability.needsTopUpToClaim) {
-        setShowClaimDialog(true);
-        return;
-      }
-
-      const result = await agentOrders.getOrderForPickup(order.id);
-      onShowNotification?.(
-        t(
-          'messages.orderAssignedSuccess',
-          `Order ${result.order.order_number} claimed successfully`
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message || t('messages.orderClaimError', 'Failed to claim order'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   const handleClaimWithTopup = async (phoneNumber?: string) => {
-    setLoading(true);
-    setClaimError(undefined);
-    setClaimSuccess(false);
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      setClaimError(undefined);
+      setClaimSuccess(false);
 
-    try {
-      const claimAvailability = await agentOrders.checkClaimAvailability(
-        order.id
-      );
-      setClaimHoldAmount(claimAvailability.holdAmount || 0);
-
-      if (!claimAvailability.orderOpenStatus) {
-        setShowClaimDialog(false);
-        onShowNotification?.(
-          claimAvailability.message ||
-            t(
-              'orders.orderNoLongerOpenMessage',
-              'This order is no longer open for claim.'
-            ),
-          'warning'
+      try {
+        const claimAvailability = await agentOrders.checkClaimAvailability(
+          order.id
         );
+        setClaimHoldAmount(claimAvailability.holdAmount || 0);
+
+        if (!claimAvailability.orderOpenStatus) {
+          setShowClaimDialog(false);
+          onShowNotification?.(
+            claimAvailability.message ||
+              t(
+                'orders.orderNoLongerOpenMessage',
+                'This order is no longer open for claim.'
+              ),
+            'warning'
+          );
+          onActionComplete?.();
+          return;
+        }
+
+        if (claimAvailability.hasEnoughFundsForHold) {
+          setShowClaimDialog(false);
+          setShowClaimConfirmation(true);
+          return;
+        }
+
+        await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
+        setClaimSuccess(true);
         onActionComplete?.();
-        return;
+      } catch (error: any) {
+        setClaimError(
+          error.message ||
+            t(
+              'messages.orderClaimWithTopupError',
+              'Failed to claim order with topup'
+            )
+        );
+      } finally {
+        setLoading(false);
       }
-
-      if (claimAvailability.hasEnoughFundsForHold) {
-        setShowClaimDialog(false);
-        setShowClaimConfirmation(true);
-        return;
-      }
-
-      await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
-      setClaimSuccess(true);
-      onActionComplete?.();
-    } catch (error: any) {
-      setClaimError(
-        error.message ||
-          t(
-            'messages.orderClaimWithTopupError',
-            'Failed to claim order with topup'
-          )
-      );
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   const handleCloseClaimDialog = () => {
@@ -283,25 +305,27 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setLoading(true);
-    try {
-      const result = await agentOrders.dropOrder(order.id);
-      onShowNotification?.(
-        t(
-          'messages.orderDropSuccess',
-          `Order ${result.order_number} dropped successfully`
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message || t('messages.orderDropError', 'Failed to drop order'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        const result = await agentOrders.dropOrder(order.id);
+        onShowNotification?.(
+          t(
+            'messages.orderDropSuccess',
+            `Order ${result.order_number} dropped successfully`
+          ),
+          'success'
+        );
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message || t('messages.orderDropError', 'Failed to drop order'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   const handleStatusUpdateDirect = async (newStatus: string) => {
@@ -313,33 +337,35 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setLoading(true);
-    try {
-      await agentOrders.updateOrderStatusAction(order.id, newStatus);
-      const statusLabels: Record<string, string> = {
-        out_for_delivery: t(
-          'orderActions.markAsOutForDelivery',
-          'Mark as Out for Delivery'
-        ),
-        delivered: t('orderActions.markAsDelivered', 'Mark as Delivered'),
-      };
-      onShowNotification?.(
-        t(
-          'messages.orderStatusUpdated',
-          `Order status updated to ${statusLabels[newStatus] || newStatus}`
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderStatusUpdateError', 'Failed to update order status'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        await agentOrders.updateOrderStatusAction(order.id, newStatus);
+        const statusLabels: Record<string, string> = {
+          out_for_delivery: t(
+            'orderActions.markAsOutForDelivery',
+            'Mark as Out for Delivery'
+          ),
+          delivered: t('orderActions.markAsDelivered', 'Mark as Delivered'),
+        };
+        onShowNotification?.(
+          t(
+            'messages.orderStatusUpdated',
+            `Order status updated to ${statusLabels[newStatus] || newStatus}`
+          ),
+          'success'
+        );
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t('messages.orderStatusUpdateError', 'Failed to update order status'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   const handleStatusUpdate = async (newStatus: string) => {
@@ -395,28 +421,33 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const handleConfirmStatusUpdate = async () => {
     if (!pendingAction || !profile?.id) return;
 
-    setLoading(true);
-    try {
-      await agentOrders.updateOrderStatusAction(order.id, pendingAction.action);
-      onShowNotification?.(
-        t(
-          'messages.orderStatusUpdated',
-          `Order status updated to ${pendingAction.label}`
-        ),
-        'success'
-      );
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
-          t('messages.orderStatusUpdateError', 'Failed to update order status'),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-      setConfirmationOpen(false);
-      setPendingAction(null);
-    }
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        await agentOrders.updateOrderStatusAction(
+          order.id,
+          pendingAction.action
+        );
+        onShowNotification?.(
+          t(
+            'messages.orderStatusUpdated',
+            `Order status updated to ${pendingAction.label}`
+          ),
+          'success'
+        );
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t('messages.orderStatusUpdateError', 'Failed to update order status'),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+        setConfirmationOpen(false);
+        setPendingAction(null);
+      }
+    });
   };
 
   const handleConfirmFailDelivery = async (
@@ -431,32 +462,37 @@ const AgentActions: React.FC<AgentActionsProps> = ({
       return;
     }
 
-    setLoading(true);
-    try {
-      await agentOrders.updateOrderStatusAction(
-        order.id,
-        'failed',
-        notes,
-        failureReasonId
-      );
-      onShowNotification?.(
-        t('messages.orderStatusUpdated', 'Order marked as failed successfully'),
-        'success'
-      );
-      setShowFailDeliveryDialog(false);
-      onActionComplete?.();
-    } catch (error: any) {
-      onShowNotification?.(
-        error.message ||
+    await runExclusiveAction(async () => {
+      setLoading(true);
+      try {
+        await agentOrders.updateOrderStatusAction(
+          order.id,
+          'failed',
+          notes,
+          failureReasonId
+        );
+        onShowNotification?.(
           t(
-            'messages.orderStatusUpdateError',
-            'Failed to mark delivery as failed'
+            'messages.orderStatusUpdated',
+            'Order marked as failed successfully'
           ),
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
+          'success'
+        );
+        setShowFailDeliveryDialog(false);
+        onActionComplete?.();
+      } catch (error: any) {
+        onShowNotification?.(
+          error.message ||
+            t(
+              'messages.orderStatusUpdateError',
+              'Failed to mark delivery as failed'
+            ),
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   const handleCancelStatusUpdate = () => {
@@ -579,6 +615,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           const button = (
             <Button
               key={index}
+              type="button"
               variant={mobileView ? 'contained' : isClaimAction ? 'contained' : 'outlined'}
               color={action.color}
               onClick={action.action}

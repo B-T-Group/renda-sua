@@ -19,7 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FailureReason,
@@ -45,6 +45,7 @@ const MarkDeliveryAsFailedDialog: React.FC<
   const [failureReasons, setFailureReasons] = useState<FailureReason[]>([]);
   const [selectedReasonId, setSelectedReasonId] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const confirmLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -84,10 +85,14 @@ const MarkDeliveryAsFailedDialog: React.FC<
       return;
     }
 
+    if (confirmLockRef.current) return;
+    confirmLockRef.current = true;
     try {
       await onConfirm(selectedReasonId, notes.trim() || undefined);
     } catch (err: any) {
       // Error handling is done in parent component
+    } finally {
+      confirmLockRef.current = false;
     }
   };
 
@@ -185,10 +190,11 @@ const MarkDeliveryAsFailedDialog: React.FC<
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button type="button" onClick={onClose} disabled={loading}>
           {t('common.cancel', 'Cancel')}
         </Button>
         <Button
+          type="button"
           onClick={handleConfirm}
           variant="contained"
           color="error"

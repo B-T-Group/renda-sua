@@ -2311,7 +2311,15 @@
       "lineItems": "Articles de cette commande",
       "hideItems": "Masquer les articles",
       "showItems": "Voir les articles ({{count}})",
-      "sku": "SKU"
+      "sku": "SKU",
+      "itemSummary": "Articles",
+      "itemUnitsLines": "{{units}} unités · {{lines}} lignes",
+      "totalWeight": "Poids total",
+      "weightNotListed": "Non renseigné sur les articles",
+      "mixedWeightUnits": "Unités variées — voir la liste",
+      "weightPartial": "Certains articles sans poids",
+      "client": "Client",
+      "clientPhone": "Téléphone"
     },
     "inclDelivery": "incl.",
     "viewMyOrders": "Voir Mes Commandes",

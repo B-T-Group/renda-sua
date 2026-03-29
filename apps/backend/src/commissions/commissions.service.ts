@@ -752,11 +752,11 @@ export class CommissionsService {
       {
         amount: ctx.amount,
         currency: ctx.currency,
-        description: `Commission payout order ${ctx.order.order_number}`,
+        description: `Comm. order ${ctx.order.order_number}`,
         customerPhone: phone,
         accountId: ctx.accountId,
         mtnUserId,
-        withdrawalMemoPrefix: 'Auto commission payout',
+        withdrawalMemoPrefix: 'Auto payout',
       },
       { throwOnWithdrawalFailure: false }
     );

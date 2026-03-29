@@ -494,6 +494,9 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
       await apiClient.post('/users/me/active-persona', { persona });
       writeStoredActivePersona(profile.id, persona);
       setUserType(persona);
+      setProfile((prev) =>
+        prev ? { ...prev, user_type_id: persona } : null
+      );
       try {
         await getAccessTokenSilently({
           cacheMode: 'off',

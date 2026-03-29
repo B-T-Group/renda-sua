@@ -37,7 +37,7 @@ import {
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
-import { userHasPersona } from '../users/persona.util';
+import { isActivePersona } from '../users/persona.util';
 import * as Q from './rentals-queries';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
@@ -327,7 +327,7 @@ export class RentalsService {
 
   async createRentalRequest(dto: CreateRentalRequestDto) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'client') || !user.client?.id) {
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can create requests', HttpStatus.FORBIDDEN);
     }
     const listing = await this.fetchListing(dto.rentalLocationListingId);
@@ -423,7 +423,7 @@ export class RentalsService {
 
   async respondToRentalRequest(requestId: string, dto: RespondRentalRequestDto) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'business') || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Only businesses can respond', HttpStatus.FORBIDDEN);
     }
     const req = await this.fetchRequest(requestId);
@@ -583,7 +583,7 @@ export class RentalsService {
 
   async cancelClientRentalRequest(requestId: string): Promise<{ success: boolean }> {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'client') || !user.client?.id) {
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can cancel requests', HttpStatus.FORBIDDEN);
     }
     const req = await this.fetchRequest(requestId);
@@ -949,7 +949,7 @@ export class RentalsService {
 
   private async requireBusinessId(): Promise<string> {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'business') || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException(
         { success: false, error: 'Business profile required' },
         HttpStatus.FORBIDDEN
@@ -960,7 +960,7 @@ export class RentalsService {
 
   private async requireClientId(): Promise<string> {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'client') || !user.client?.id) {
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException(
         { success: false, error: 'Client profile required' },
         HttpStatus.FORBIDDEN
@@ -1109,7 +1109,7 @@ export class RentalsService {
 
   async createRentalBooking(dto: CreateRentalBookingDto) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'client') || !user.client?.id) {
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can book', HttpStatus.FORBIDDEN);
     }
     const req = await this.fetchRequest(dto.rentalRequestId);
@@ -1511,9 +1511,9 @@ export class RentalsService {
       throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
     }
     const isClient =
-      userHasPersona(user, 'client') && user.client?.id === booking.client_id;
+      isActivePersona(user, 'client') && user.client?.id === booking.client_id;
     const isBusiness =
-      userHasPersona(user, 'business') &&
+      isActivePersona(user, 'business') &&
       user.business?.id === booking.business_id;
     if (!isClient && !isBusiness) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
@@ -1530,7 +1530,7 @@ export class RentalsService {
 
   async getStartPinForClient(bookingId: string) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'client') || !user.client?.id) {
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
       throw new HttpException('Only clients can get the start PIN', HttpStatus.FORBIDDEN);
     }
     const booking = await this.fetchBooking(bookingId);
@@ -1564,7 +1564,7 @@ export class RentalsService {
 
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'business') || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Only businesses can verify', HttpStatus.FORBIDDEN);
     }
     const booking = await this.fetchBooking(bookingId);
@@ -1595,7 +1595,7 @@ export class RentalsService {
 
   async generateStartOverwriteCode(bookingId: string) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'business') || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
     }
     const booking = await this.fetchBooking(bookingId);
@@ -1613,7 +1613,7 @@ export class RentalsService {
 
   async confirmRentalReturn(bookingId: string) {
     const user = await this.hasuraUserService.getUser();
-    if (!userHasPersona(user, 'business') || !user.business?.id) {
+    if (!isActivePersona(user, 'business') || !user.business?.id) {
       throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
     }
     const booking = await this.fetchBooking(bookingId);

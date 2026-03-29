@@ -208,7 +208,16 @@ const categorizeOrders = <T extends Order>(orders: T[]) => {
   return categorized;
 };
 
-export const useAgentOrders = () => {
+export interface UseAgentOrdersOptions {
+  /**
+   * When true, skips GET /orders on mount. Use when a parent already loaded
+   * the list (e.g. OrdersPage + AgentActions per card).
+   */
+  skipInitialListFetch?: boolean;
+}
+
+export const useAgentOrders = (options?: UseAgentOrdersOptions) => {
+  const skipInitialListFetch = options?.skipInitialListFetch === true;
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersWithDistance, setOrdersWithDistance] = useState<
     (Order & {
@@ -244,7 +253,7 @@ export const useAgentOrders = () => {
       businessEstTime: string;
     })[],
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skipInitialListFetch);
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
@@ -310,10 +319,11 @@ export const useAgentOrders = () => {
   }, [apiClient]);
 
   useEffect(() => {
+    if (skipInitialListFetch) return;
     setTimeout(() => {
       fetchAllOrders();
     }, 0);
-  }, [fetchAllOrders]);
+  }, [fetchAllOrders, skipInitialListFetch]);
 
   const pickUpOrder = useCallback(
     async (orderId: string) => {

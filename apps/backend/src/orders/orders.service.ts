@@ -35,7 +35,7 @@ import type { PersonaId } from '../users/persona.types';
 import {
   resolveActivePersona,
   resolveActivePersonaWithDefault,
-  userHasPersona,
+  isActivePersona,
 } from '../users/persona.util';
 
 export interface OrderStatusChangeRequest {
@@ -698,7 +698,7 @@ export class OrdersService {
   } | null> {
     try {
       const user = await this.hasuraUserService.getUser();
-      if (!userHasPersona(user, 'agent') || !user.agent) {
+      if (!isActivePersona(user, 'agent') || !user.agent) {
         return { isAgent: false, isVerified: false };
       }
 
@@ -2212,7 +2212,7 @@ export class OrdersService {
     const user = await this.hasuraUserService.getUser();
 
     // Allow both business users and clients to cancel orders
-    if (!userHasPersona(user, 'business') && !userHasPersona(user, 'client'))
+    if (!isActivePersona(user, 'business') && !isActivePersona(user, 'client'))
       throw new HttpException(
         'Only business users and clients can cancel orders',
         HttpStatus.FORBIDDEN
@@ -2224,9 +2224,9 @@ export class OrdersService {
 
     // Check authorization - business can cancel their orders, client can cancel their own orders
     const isBusinessOwner =
-      userHasPersona(user, 'business') && order.business.user_id === user.id;
+      isActivePersona(user, 'business') && order.business.user_id === user.id;
     const isOrderOwner =
-      userHasPersona(user, 'client') &&
+      isActivePersona(user, 'client') &&
       order.client?.user_id === user.id;
 
     if (!isBusinessOwner && !isOrderOwner)
@@ -3028,7 +3028,7 @@ export class OrdersService {
     let hasAccess = false;
     let accessReason = '';
 
-    if (userHasPersona(user, 'business') && user.business) {
+    if (isActivePersona(user, 'business') && user.business) {
       // Business users can access if they own the order or are admin
       if (order.business_id === user.business.id) {
         hasAccess = true;
@@ -3038,14 +3038,14 @@ export class OrdersService {
         accessReason = 'admin_business';
       }
     } else if (
-      userHasPersona(user, 'client') &&
+      isActivePersona(user, 'client') &&
       order.client?.user_id === user.id
     ) {
       // Client can access their own orders
       hasAccess = true;
       accessReason = 'order_client';
     } else if (
-      userHasPersona(user, 'agent') &&
+      isActivePersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
@@ -3065,7 +3065,7 @@ export class OrdersService {
     // Get comprehensive order data with all relationships
     // For agents, exclude financial fields (total_amount, order_holds, order item prices)
     // but keep base_delivery_fee, per_km_delivery_fee, and subtotal for commission and hold amount calculation
-    const isAgent = userHasPersona(user, 'agent');
+    const isAgent = isActivePersona(user, 'agent');
     const query = isAgent
       ? `
       query GetOrderById($orderId: uuid!) {
@@ -3521,17 +3521,17 @@ export class OrdersService {
     // Check access permissions (same logic as getOrderById)
     let hasAccess = false;
 
-    if (userHasPersona(user, 'business') && user.business) {
+    if (isActivePersona(user, 'business') && user.business) {
       if (order.business_id === user.business.id || user.business.is_admin) {
         hasAccess = true;
       }
     } else if (
-      userHasPersona(user, 'client') &&
+      isActivePersona(user, 'client') &&
       order.client?.user_id === user.id
     ) {
       hasAccess = true;
     } else if (
-      userHasPersona(user, 'agent') &&
+      isActivePersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
@@ -3604,17 +3604,17 @@ export class OrdersService {
     // Check access permissions (same logic as getOrderById)
     let hasAccess = false;
 
-    if (userHasPersona(user, 'business') && user.business) {
+    if (isActivePersona(user, 'business') && user.business) {
       if (order.business_id === user.business.id || user.business.is_admin) {
         hasAccess = true;
       }
     } else if (
-      userHasPersona(user, 'client') &&
+      isActivePersona(user, 'client') &&
       order.client?.user_id === user.id
     ) {
       hasAccess = true;
     } else if (
-      userHasPersona(user, 'agent') &&
+      isActivePersona(user, 'agent') &&
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)

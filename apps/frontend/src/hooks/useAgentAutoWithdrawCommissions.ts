@@ -26,12 +26,17 @@ export function useAgentAutoWithdrawCommissions(enabled: boolean) {
   }, [apiClient, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setAutoWithdrawCommissions(false);
+      setLoading(false);
+      return;
+    }
     void fetchPreference();
-  }, [fetchPreference]);
+  }, [enabled, fetchPreference]);
 
   const setAutoWithdraw = useCallback(
     async (next: boolean) => {
-      if (!apiClient) return;
+      if (!enabled || !apiClient) return;
       setLoading(true);
       try {
         await apiClient.patch('/agents/me/auto-withdraw-commissions', {
@@ -42,7 +47,7 @@ export function useAgentAutoWithdrawCommissions(enabled: boolean) {
         setLoading(false);
       }
     },
-    [apiClient]
+    [apiClient, enabled]
   );
 
   return {

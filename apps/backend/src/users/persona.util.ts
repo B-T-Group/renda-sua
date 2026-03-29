@@ -17,7 +17,10 @@ export function personasFromProfileRelations(user: UserPersonaShape): PersonaId[
 }
 
 /**
- * Whether the user has a given profile type. Prefer `user.personas` from getUser() on HasuraUserService.
+ * Whether the user has a given profile row (client / agent / business). Use for onboarding and
+ * “can this account enable persona X?” — not for request authorization.
+ * For “who is acting in this session?” use {@link isActivePersona} / {@link getActivePersonaOrThrow}
+ * (`users.user_type_id`).
  */
 export function userHasPersona(
   user: UserPersonaShape & { personas?: PersonaId[] },
@@ -25,6 +28,41 @@ export function userHasPersona(
 ): boolean {
   if (user.personas?.length) return user.personas.includes(p);
   return personasFromProfileRelations(user).includes(p);
+}
+
+/**
+ * True when the session’s active persona is `p` (DB `users.user_type_id`).
+ * Use for authorization and API behavior when the user may have multiple profiles.
+ */
+export function isActivePersona(
+  user: { user_type_id?: string | null },
+  p: PersonaId
+): boolean {
+  const id = user.user_type_id;
+  return typeof id === 'string' && isPersonaId(id) && id === p;
+}
+
+/**
+ * Active persona from `users.user_type_id`, validated against enabled profiles.
+ * Throws if missing, invalid, or not backed by a profile row.
+ */
+export function getActivePersonaOrThrow(
+  user: UserPersonaShape & { user_type_id?: string | null; personas?: PersonaId[] }
+): PersonaId {
+  const id = user.user_type_id;
+  if (!id || !isPersonaId(id)) {
+    throw new HttpException(
+      'Active persona (user_type_id) is missing or invalid',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+  if (!userHasPersona(user, id)) {
+    throw new HttpException(
+      'Active persona does not match an enabled profile for this account',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+  return id;
 }
 
 /** Stable `users.user_type_id` for DB compatibility when a user has multiple profiles. */

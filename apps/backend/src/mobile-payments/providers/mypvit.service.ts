@@ -15,6 +15,7 @@ export interface MyPVitPaymentRequest {
   merchant_operation_account_code: string;
   transaction_type: string;
   owner_charge: string;
+  /** Max 15 characters (MyPVit API constraint). */
   free_info?: string;
 }
 
@@ -148,6 +149,7 @@ export class MyPVitService {
         `Initiating payment for account: ${paymentRequest.customer_account_number}`
       );
 
+      const freeInfo = paymentRequest.free_info?.slice(0, 15);
       const payload = {
         amount: paymentRequest.amount,
         reference: reference,
@@ -158,7 +160,9 @@ export class MyPVitService {
           paymentRequest.merchant_operation_account_code,
         transaction_type: paymentRequest.transaction_type,
         owner_charge: paymentRequest.owner_charge,
-        free_info: paymentRequest.free_info,
+        ...(freeInfo !== undefined && freeInfo !== ''
+          ? { free_info: freeInfo }
+          : {}),
       };
 
       // Get the current secret key from AWS Secrets Manager

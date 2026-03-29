@@ -2348,7 +2348,15 @@
       "lineItems": "Items in this order",
       "hideItems": "Hide items",
       "showItems": "Show items ({{count}})",
-      "sku": "SKU"
+      "sku": "SKU",
+      "itemSummary": "Items",
+      "itemUnitsLines": "{{units}} units · {{lines}} lines",
+      "totalWeight": "Total weight",
+      "weightNotListed": "Not listed on items",
+      "mixedWeightUnits": "Mixed units — see item list",
+      "weightPartial": "Some items have no weight",
+      "client": "Client",
+      "clientPhone": "Phone"
     },
     "inclDelivery": "incl.",
     "viewMyOrders": "View My Orders",
