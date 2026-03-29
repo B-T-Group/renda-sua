@@ -6,16 +6,19 @@ import {
   CircularProgress,
   Divider,
   Drawer,
+  FormControlLabel,
   List,
   ListItem,
   Menu,
   MenuItem,
+  Switch,
   Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useAccountSubscription } from '../../hooks/useAccountSubscription';
+import { useAgentAutoWithdrawCommissions } from '../../hooks/useAgentAutoWithdrawCommissions';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useMobilePayments } from '../../hooks/useMobilePayments';
 import {
@@ -72,6 +75,11 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     refetchAccounts,
   } = useUserProfileContext();
   const { initiatePayment, loading: withdrawLoading } = useMobilePayments();
+  const {
+    autoWithdrawCommissions,
+    loading: agentAutoWithdrawLoading,
+    setAutoWithdraw: setAgentAutoWithdraw,
+  } = useAgentAutoWithdrawCommissions(!!profile?.agent);
   const { execute: executeTransactionsQuery } = useGraphQLRequest<{
     account_transactions: AccountTransaction[];
   }>(GET_ACCOUNT_TRANSACTIONS, { showLoading: false });
@@ -302,6 +310,57 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
           <MenuItem onClick={handleWithdrawClick} sx={{ py: 1.5 }}>
             {t('accounts.withdraw')}
           </MenuItem>
+        )}
+        {profile?.agent && (
+          <>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              disableRipple
+              onClick={(e) => e.stopPropagation()}
+              sx={{
+                cursor: 'default',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                py: 1.5,
+                whiteSpace: 'normal',
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={autoWithdrawCommissions}
+                    disabled={agentAutoWithdrawLoading}
+                    onChange={(_, v) => {
+                      void setAgentAutoWithdraw(v);
+                    }}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" component="span" display="block">
+                      {t(
+                        'agent.autoWithdrawCommissions',
+                        'Auto-send commissions to my phone'
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {t(
+                        'agent.autoWithdrawCommissionsHint',
+                        'When on, delivery fees are sent to your profile phone after each credit. Off by default until you enable this.'
+                      )}
+                    </Typography>
+                  </Box>
+                }
+                sx={{ m: 0, alignItems: 'flex-start', gap: 1 }}
+              />
+            </MenuItem>
+          </>
         )}
       </Menu>
 

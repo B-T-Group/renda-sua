@@ -107,6 +107,7 @@ const GET_BUSINESS_LOCATIONS = `
       is_active
       is_primary
       rendasua_item_commission_percentage
+      auto_withdraw_commissions
       created_at
       updated_at
       address {
@@ -546,6 +547,7 @@ export class BusinessItemsService {
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
+      auto_withdraw_commissions?: boolean;
     }
   ): Promise<any> {
     let addressId: string;
@@ -628,7 +630,7 @@ export class BusinessItemsService {
       );
     }
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric, $autoWithdraw: Boolean!) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -638,6 +640,7 @@ export class BusinessItemsService {
           phone: $phone,
           email: $email,
           rendasua_item_commission_percentage: $commission,
+          auto_withdraw_commissions: $autoWithdraw,
           is_active: true
         }) {
           id
@@ -647,6 +650,8 @@ export class BusinessItemsService {
           location_type
           is_primary
           is_active
+          rendasua_item_commission_percentage
+          auto_withdraw_commissions
           address { id address_line_1 address_line_2 city state postal_code country }
         }
       }
@@ -660,6 +665,7 @@ export class BusinessItemsService {
       phone: data.phone ?? null,
       email: data.email ?? null,
       commission: data.rendasua_item_commission_percentage ?? null,
+      autoWithdraw: data.auto_withdraw_commissions ?? true,
     });
     const location = (locationResult as any).insert_business_locations_one;
     if (!location?.id) {
@@ -687,6 +693,7 @@ export class BusinessItemsService {
       is_active?: boolean;
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
+      auto_withdraw_commissions?: boolean;
     }
   ): Promise<any> {
     const query = `
@@ -715,6 +722,7 @@ export class BusinessItemsService {
           phone
           email
           rendasua_item_commission_percentage
+          auto_withdraw_commissions
           location_type
           is_active
           is_primary

@@ -95,6 +95,11 @@ export class BusinessItemsController {
         is_active: { type: 'boolean' },
         is_primary: { type: 'boolean' },
         rendasua_item_commission_percentage: { type: 'number', nullable: true },
+        auto_withdraw_commissions: {
+          type: 'boolean',
+          description:
+            'When true, order payouts are sent automatically to this location phone when configured.',
+        },
       },
     },
   })
@@ -109,6 +114,7 @@ export class BusinessItemsController {
       is_active?: boolean;
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
+      auto_withdraw_commissions?: boolean;
     }
   ) {
     const user = await this.hasuraUserService.getUser();
@@ -187,6 +193,10 @@ export class BusinessItemsController {
         location_type: { type: 'string', enum: ['store', 'warehouse', 'office', 'pickup_point'] },
         is_primary: { type: 'boolean' },
         rendasua_item_commission_percentage: { type: 'number', nullable: true },
+        auto_withdraw_commissions: {
+          type: 'boolean',
+          description: 'Defaults to true when omitted.',
+        },
       },
     },
   })
@@ -207,6 +217,7 @@ export class BusinessItemsController {
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
+      auto_withdraw_commissions?: boolean;
     }
   ) {
     const user = await this.hasuraUserService.getUser();

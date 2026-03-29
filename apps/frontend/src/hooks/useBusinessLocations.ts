@@ -25,6 +25,8 @@ export interface BusinessLocation {
   updated_at: string;
   /** Overrides application default. Null = use platform default (e.g. 5%). */
   rendasua_item_commission_percentage?: number | null;
+  /** When true, order payouts are auto-sent to this location's phone when set. */
+  auto_withdraw_commissions?: boolean;
 }
 
 export interface AddBusinessLocationData {
@@ -37,6 +39,8 @@ export interface AddBusinessLocationData {
   is_primary?: boolean;
   /** Optional. Leave empty to use platform default (e.g. 5%). */
   rendasua_item_commission_percentage?: number | null;
+  /** Defaults to true when omitted (server default). */
+  auto_withdraw_commissions?: boolean;
   address?: {
     address_line_1: string;
     address_line_2?: string;
@@ -58,6 +62,7 @@ export interface UpdateBusinessLocationData {
   is_active?: boolean;
   is_primary?: boolean;
   rendasua_item_commission_percentage?: number | null;
+  auto_withdraw_commissions?: boolean;
   address?: {
     address_line_1?: string;
     address_line_2?: string;
@@ -159,6 +164,9 @@ export const useBusinessLocations = (
           is_primary: data.is_primary ?? false,
           rendasua_item_commission_percentage:
             data.rendasua_item_commission_percentage ?? null,
+          ...(data.auto_withdraw_commissions !== undefined && {
+            auto_withdraw_commissions: data.auto_withdraw_commissions,
+          }),
         };
         const body =
           data.address_id && !data.address
@@ -232,6 +240,9 @@ export const useBusinessLocations = (
           ...(locationData.rendasua_item_commission_percentage !== undefined && {
             rendasua_item_commission_percentage:
               locationData.rendasua_item_commission_percentage,
+          }),
+          ...(locationData.auto_withdraw_commissions !== undefined && {
+            auto_withdraw_commissions: locationData.auto_withdraw_commissions,
           }),
         };
         if (Object.keys(locationFields).length > 0) {

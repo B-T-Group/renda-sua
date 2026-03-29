@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
+import { GiveChangePayoutService } from './give-change-payout.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsController } from './mobile-payments.controller';
 import { MobilePaymentsService } from './mobile-payments.service';
@@ -13,9 +14,14 @@ import { RentalsModule } from '../rentals/rentals.module';
   providers: [
     MobilePaymentsService,
     MobilePaymentsDatabaseService,
+    GiveChangePayoutService,
     MyPVitService,
     FreemopayService,
   ],
-  exports: [MobilePaymentsService, MobilePaymentsDatabaseService],
+  exports: [
+    MobilePaymentsService,
+    MobilePaymentsDatabaseService,
+    GiveChangePayoutService,
+  ],
 })
 export class MobilePaymentsModule {}

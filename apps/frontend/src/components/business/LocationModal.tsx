@@ -90,6 +90,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     location_type: 'store',
     is_primary: false,
     rendasua_item_commission_percentage: null,
+    auto_withdraw_commissions: true,
   });
 
   const [addressData, setAddressData] = useState<AddressFormData>({
@@ -117,6 +118,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         is_primary: location.is_primary,
         rendasua_item_commission_percentage:
           location.rendasua_item_commission_percentage ?? null,
+        auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
       });
 
       // Special case to account for legacy state values in the database not saved as state name but saved as state code
@@ -144,6 +146,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         location_type: 'store',
         is_primary: false,
         rendasua_item_commission_percentage: null,
+        auto_withdraw_commissions: true,
       });
 
       setAddressData({
@@ -347,6 +350,30 @@ const LocationModal: React.FC<LocationModalProps> = ({
                 sx={{ flex: 1, minWidth: 200 }}
               />
             </Box>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.auto_withdraw_commissions !== false}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      auto_withdraw_commissions: e.target.checked,
+                    }))
+                  }
+                />
+              }
+              label={t(
+                'business.locations.autoWithdrawCommissions',
+                'Automatically send payouts to this phone'
+              )}
+            />
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t(
+                'business.locations.autoWithdrawCommissionsHint',
+                'Requires a valid phone number above. You can turn this off anytime.'
+              )}
+            </Typography>
 
             <TextField
               label={t('business.locations.commissionLabel', 'RendaSua commission')}

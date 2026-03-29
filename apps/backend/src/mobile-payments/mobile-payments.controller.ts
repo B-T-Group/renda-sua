@@ -15,6 +15,7 @@ import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from '../orders/orders.service';
 import { RentalsService } from '../rentals/rentals.service';
+import { GiveChangePayoutService } from './give-change-payout.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -75,6 +76,7 @@ export class MobilePaymentsController {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
+    private readonly giveChangePayoutService: GiveChangePayoutService,
     private readonly ordersService: OrdersService,
     private readonly rentalsService: RentalsService,
     private readonly hasuraUserService: HasuraUserService
@@ -209,6 +211,49 @@ export class MobilePaymentsController {
         );
       }
 
+      const isGiveChange =
+        paymentRequest.transactionType === 'GIVE_CHANGE' &&
+        !!paymentRequest.accountId;
+
+      if (isGiveChange) {
+        const accountId = paymentRequest.accountId as string;
+        let initiatorUserId: string | undefined;
+        try {
+          const user = await this.hasuraUserService.getUser();
+          initiatorUserId = user.id;
+        } catch {
+          this.logger.warn('Could not get user ID for payment initiation');
+        }
+        const result =
+          await this.giveChangePayoutService.executeGiveChangePayout(
+            {
+              amount: paymentRequest.amount,
+              currency: paymentRequest.currency,
+              description: paymentRequest.description,
+              customerPhone: paymentRequest.customerPhone ?? '',
+              accountId,
+              provider: paymentRequest.provider,
+              paymentMethod: paymentRequest.paymentMethod,
+              callbackUrl: paymentRequest.callbackUrl,
+              withdrawalMemoPrefix: 'Mobile payment give change',
+            },
+            {
+              throwOnWithdrawalFailure: true,
+              initiatorUserId,
+            }
+          );
+        return {
+          success: result.success,
+          data: {
+            transactionId: result.data?.transactionId ?? '',
+            providerTransactionId: result.data?.providerTransactionId,
+            paymentUrl: result.data?.paymentUrl,
+            message: result.data?.message,
+            provider: result.data?.provider,
+          },
+        };
+      }
+
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
         paymentRequest.callbackUrl ||
@@ -261,75 +306,6 @@ export class MobilePaymentsController {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
         });
-
-        // For GIVE_CHANGE transactions, withdraw from account only after successful payment initiation
-        if (
-          paymentRequest.transactionType === 'GIVE_CHANGE' &&
-          paymentRequest.accountId
-        ) {
-          try {
-            const withdrawalResult =
-              await this.accountsService.registerTransaction({
-                accountId: paymentRequest.accountId,
-                amount: paymentRequest.amount,
-                transactionType: 'withdrawal',
-                memo: `Mobile payment give change - ${reference}`,
-                referenceId: transaction.id,
-              });
-
-            if (withdrawalResult.success) {
-              this.logger.log(
-                `Successfully withdrew ${paymentRequest.amount} ${paymentRequest.currency} from account ${paymentRequest.accountId} for give change`
-              );
-              this.logger.debug(
-                `New balance after withdrawal: ${JSON.stringify(withdrawalResult.newBalance)}`
-              );
-            } else {
-              this.logger.error(
-                `Failed to withdraw from account ${paymentRequest.accountId}: ${withdrawalResult.error}`
-              );
-              // Update transaction status to failed
-              await this.databaseService.updateTransaction(transaction.id, {
-                status: 'failed',
-                error_message: `Withdrawal failed: ${withdrawalResult.error}`,
-                error_code: 'WITHDRAWAL_FAILED',
-              });
-              throw new HttpException(
-                {
-                  success: false,
-                  message: 'Failed to process withdrawal',
-                  error: 'WITHDRAWAL_FAILED',
-                  data: {
-                    accountId: paymentRequest.accountId,
-                    amount: paymentRequest.amount,
-                    error: withdrawalResult.error,
-                  },
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-              );
-            }
-          } catch (withdrawalError) {
-            this.logger.error(
-              `Error withdrawing from account ${paymentRequest.accountId}: ${String(
-                (withdrawalError as any)?.message || withdrawalError
-              )}`
-            );
-            // Update transaction status to failed
-            await this.databaseService.updateTransaction(transaction.id, {
-              status: 'failed',
-              error_message: 'Withdrawal processing error',
-              error_code: 'WITHDRAWAL_ERROR',
-            });
-            throw new HttpException(
-              {
-                success: false,
-                message: 'Failed to process withdrawal',
-                error: 'WITHDRAWAL_ERROR',
-              },
-              HttpStatus.INTERNAL_SERVER_ERROR
-            );
-          }
-        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
@@ -349,6 +325,9 @@ export class MobilePaymentsController {
         },
       };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,

@@ -5,9 +5,16 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -690,6 +697,119 @@ export class AgentsController {
         {
           success: false,
           error: error.message || 'Failed to complete onboarding',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('me/auto-withdraw-commissions')
+  @ApiOperation({
+    summary: 'Get automatic commission payout preference',
+  })
+  @ApiResponse({ status: 200, description: 'Current preference' })
+  @ApiResponse({ status: 403, description: 'Not an agent' })
+  async getAutoWithdrawCommissions() {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+
+      const query = `
+        query AgentAutoWithdrawGet($id: uuid!) {
+          agents_by_pk(id: $id) {
+            auto_withdraw_commissions
+          }
+        }
+      `;
+
+      const result = await this.hasuraUserService.executeQuery<{
+        agents_by_pk: { auto_withdraw_commissions: boolean } | null;
+      }>(query, { id: agentId });
+
+      return {
+        success: true,
+        data: {
+          auto_withdraw_commissions:
+            result.agents_by_pk?.auto_withdraw_commissions === true,
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to load preference',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Patch('me/auto-withdraw-commissions')
+  @ApiOperation({
+    summary: 'Set automatic commission payout to your mobile wallet',
+    description:
+      'When enabled, delivery commissions are sent to your profile phone after each credit. Off by default until you opt in.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['auto_withdraw_commissions'],
+      properties: {
+        auto_withdraw_commissions: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Preference updated' })
+  @ApiResponse({ status: 403, description: 'Not an agent' })
+  async setAutoWithdrawCommissions(
+    @Body() body: { auto_withdraw_commissions: boolean }
+  ) {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      const agentId = this.requireAgentActor(user);
+
+      const mutation = `
+        mutation SetAgentAutoWithdraw($id: uuid!, $auto: Boolean!) {
+          update_agents_by_pk(
+            pk_columns: { id: $id }
+            _set: {
+              auto_withdraw_commissions: $auto
+              updated_at: "now()"
+            }
+          ) {
+            id
+            auto_withdraw_commissions
+          }
+        }
+      `;
+
+      const result = await this.hasuraUserService.executeMutation(mutation, {
+        id: agentId,
+        auto: body.auto_withdraw_commissions,
+      });
+
+      if (!result.update_agents_by_pk) {
+        throw new HttpException(
+          { success: false, error: 'Agent not found or could not be updated' },
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return {
+        success: true,
+        agent: result.update_agents_by_pk,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message || 'Failed to update preference',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

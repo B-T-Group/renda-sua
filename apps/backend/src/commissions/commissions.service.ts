@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
 
@@ -10,7 +11,9 @@ export class CommissionsService {
 
   constructor(
     private readonly accountsService: AccountsService,
-    private readonly hasuraSystemService: HasuraSystemService
+    private readonly hasuraSystemService: HasuraSystemService,
+    @Inject(forwardRef(() => GiveChangePayoutService))
+    private readonly giveChangePayoutService: GiveChangePayoutService
   ) {}
 
   /**
@@ -689,12 +692,113 @@ export class CommissionsService {
       this.logger.log(
         `Paid ${amount} ${currency} commission to ${recipientType} for order ${order.order_number}`
       );
+
+      if (transaction.success && transaction.transactionId) {
+        try {
+          await this.tryAutoWithdrawAfterCommission({
+            order,
+            recipientUserId,
+            recipientType,
+            accountId: account.id,
+            amount,
+            currency,
+            businessLocationId,
+          });
+        } catch (error: any) {
+          this.logger.warn(
+            `Auto-withdraw after commission failed (non-fatal): ${error.message}`
+          );
+        }
+      }
     } catch (error: any) {
       this.logger.error(
         `Failed to pay commission to ${recipientType}: ${error.message}`
       );
       throw error;
     }
+  }
+
+  private async tryAutoWithdrawAfterCommission(ctx: {
+    order: any;
+    recipientUserId: string;
+    recipientType: 'partner' | 'rendasua' | 'agent' | 'business';
+    accountId: string;
+    amount: number;
+    currency: string;
+    businessLocationId?: string | null;
+  }): Promise<void> {
+    if (ctx.amount <= 0) return;
+
+    let phone: string;
+    let mtnUserId: string;
+
+    if (ctx.recipientType === 'business' && ctx.businessLocationId) {
+      const loc = await this.getLocationAutoWithdraw(ctx.businessLocationId);
+      if (!loc || loc.auto_withdraw_commissions === false) return;
+      phone = (loc.phone ?? '').trim();
+      if (!phone) return;
+      mtnUserId = ctx.recipientUserId;
+    } else if (ctx.recipientType === 'agent') {
+      const ag = await this.getAgentAutoWithdraw(ctx.recipientUserId);
+      if (!ag || ag.auto_withdraw_commissions !== true) return;
+      phone = (ag.phone ?? '').trim();
+      if (!phone) return;
+      mtnUserId = ctx.recipientUserId;
+    } else {
+      return;
+    }
+
+    await this.giveChangePayoutService.executeGiveChangePayout(
+      {
+        amount: ctx.amount,
+        currency: ctx.currency,
+        description: `Commission payout order ${ctx.order.order_number}`,
+        customerPhone: phone,
+        accountId: ctx.accountId,
+        mtnUserId,
+        withdrawalMemoPrefix: 'Auto commission payout',
+      },
+      { throwOnWithdrawalFailure: false }
+    );
+  }
+
+  private async getLocationAutoWithdraw(
+    locationId: string
+  ): Promise<{ auto_withdraw_commissions: boolean; phone?: string | null } | null> {
+    const query = `
+      query LocAutoWithdraw($id: uuid!) {
+        business_locations_by_pk(id: $id) {
+          auto_withdraw_commissions
+          phone
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      id: locationId,
+    });
+    return res.business_locations_by_pk ?? null;
+  }
+
+  private async getAgentAutoWithdraw(
+    userId: string
+  ): Promise<{ auto_withdraw_commissions: boolean; phone?: string | null } | null> {
+    const query = `
+      query AgentAutoWithdraw($uid: uuid!) {
+        agents(where: { user_id: { _eq: $uid } }, limit: 1) {
+          auto_withdraw_commissions
+          user { phone_number }
+        }
+      }
+    `;
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      uid: userId,
+    });
+    const row = res.agents?.[0];
+    if (!row) return null;
+    return {
+      auto_withdraw_commissions: Boolean(row.auto_withdraw_commissions),
+      phone: row.user?.phone_number,
+    };
   }
 
   /**

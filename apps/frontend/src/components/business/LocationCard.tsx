@@ -160,6 +160,52 @@ const LocationCard: React.FC<LocationCardProps> = ({
             </Typography>
           </Box>
 
+          {/* Auto-withdraw to mobile (commission payouts) */}
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'business.locations.autoWithdrawStatus',
+                  'Auto payouts to phone'
+                )}
+                :
+              </Typography>
+              <Chip
+                size="small"
+                label={
+                  location.auto_withdraw_commissions !== false
+                    ? t('business.locations.autoWithdrawOn', 'On')
+                    : t('business.locations.autoWithdrawOff', 'Off')
+                }
+                color={
+                  location.auto_withdraw_commissions !== false
+                    ? 'success'
+                    : 'default'
+                }
+                variant={
+                  location.auto_withdraw_commissions !== false
+                    ? 'filled'
+                    : 'outlined'
+                }
+                sx={{ height: 22, fontWeight: 600, fontSize: '0.75rem' }}
+              />
+            </Stack>
+            {location.auto_withdraw_commissions !== false &&
+              !location.phone?.trim() && (
+                <Typography
+                  variant="caption"
+                  color="warning.main"
+                  display="block"
+                  sx={{ mt: 0.5 }}
+                >
+                  {t(
+                    'business.locations.autoWithdrawNeedsPhone',
+                    'Add a phone number above for automatic payouts to work.'
+                  )}
+                </Typography>
+              )}
+          </Box>
+
           {/* Location account balance */}
           {account && (
             <Box

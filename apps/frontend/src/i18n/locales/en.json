@@ -353,6 +353,8 @@
     }
   },
   "agent": {
+    "autoWithdrawCommissions": "Auto-send commissions to my phone",
+    "autoWithdrawCommissionsHint": "When on, delivery fees are sent to your profile phone after each credit. Off by default until you enable this.",
     "suspendedBanner": "Your account is suspended. You cannot claim new orders. If you believe this is an error, please contact support.",
     "suspendedCannotClaim": "Your account is suspended. You cannot claim orders. Contact support.",
     "addressPrompt": {
@@ -1509,7 +1511,13 @@
       "noLocationAddressHint": "No address configured. Add a location-specific address or reuse your business profile address.",
       "useBusinessProfileAddress": "Use business profile address",
       "useDifferentAddress": "Use a different address instead",
-      "usingBusinessProfileAddress": "Using your business profile address"
+      "usingBusinessProfileAddress": "Using your business profile address",
+      "autoWithdrawCommissions": "Automatically send payouts to this phone",
+      "autoWithdrawCommissionsHint": "Requires a valid phone number above. You can turn this off anytime.",
+      "autoWithdrawStatus": "Auto payouts to phone",
+      "autoWithdrawOn": "On",
+      "autoWithdrawOff": "Off",
+      "autoWithdrawNeedsPhone": "Add a phone number above for automatic payouts to work."
     },
     "orders": {
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",
