@@ -1,5 +1,6 @@
 import {
   Add as AddIcon,
+  ArrowBack as ArrowBackIcon,
   LocationOn as LocationOnIcon,
   Store as StoreIcon,
 } from '@mui/icons-material';
@@ -25,6 +26,7 @@ import {
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAccountManager } from '../../hooks/useAccountManager';
 import {
@@ -54,6 +56,7 @@ const INITIAL_BUSINESS_ADDRESS_FORM: AddressFormData = {
 
 const BusinessLocationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
@@ -321,6 +324,22 @@ const BusinessLocationsPage: React.FC = () => {
 
       {/* Header */}
       <Box sx={{ mb: 4 }}>
+        <Button
+          variant="outlined"
+          color="inherit"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/dashboard')}
+          sx={{
+            mb: 2,
+            borderColor: 'divider',
+            alignSelf: 'flex-start',
+          }}
+        >
+          {t(
+            'business.locations.backToDashboard',
+            'Back to dashboard'
+          )}
+        </Button>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           justifyContent="space-between"

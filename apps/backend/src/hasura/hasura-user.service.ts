@@ -12,7 +12,6 @@ import {
 } from '../generated/graphql';
 import { resolveActivePersona } from '../users/persona.util';
 import { HasuraSystemService } from './hasura-system.service';
-import { GET_USER_BY_ID_WITH_RELATIONS } from './hasura.queries';
 
 const HASURA_JWT_CLAIMS_NAMESPACE = 'https://hasura.io/jwt/claims';
 
@@ -731,14 +730,9 @@ export class HasuraUserService {
     }
 
     try {
-      const userResult = await this.executeQuery<any>(
-        GET_USER_BY_ID_WITH_RELATIONS,
-        {
-          userId: this.user_id,
-        }
+      const userData = await this.hasuraSystemService.getUserByIdWithRelations(
+        this.user_id
       );
-
-      const userData = userResult.users_by_pk;
       if (!userData) {
         throw new Error(`User not found for id: ${this.user_id}`);
       }

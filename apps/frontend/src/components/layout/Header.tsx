@@ -35,7 +35,8 @@ import {
     useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useMemo, useState } from 'react';
+import { useSnackbar } from 'notistack';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
@@ -52,13 +53,22 @@ import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
 import MobileBalanceChip from '../common/MobileBalanceChip';
+import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
   const { isAuthenticated, user, logout } = useSessionAuth();
-  const { userType, profile, personas, setActivePersona } =
-    useUserProfileContext();
+  const {
+    userType,
+    profile,
+    personas,
+    setActivePersona,
+    refetch,
+    refetchAccounts,
+  } = useUserProfileContext();
+  const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
 
   const personaLabel = (p: UserType) => {
     switch (p) {
@@ -73,7 +83,6 @@ const Header: React.FC = () => {
     }
   };
   const { getCartItemCount } = useCart();
-  const { t } = useTranslation();
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -110,6 +119,32 @@ const Header: React.FC = () => {
     null
   );
   const [submenuAnchor, setSubmenuAnchor] = useState<null | HTMLElement>(null);
+  const [personaSwitching, setPersonaSwitching] = useState(false);
+  const [switchingToLabel, setSwitchingToLabel] = useState('');
+
+  const handlePersonaSwitch = useCallback(
+    async (p: UserType, label: string) => {
+      setSwitchingToLabel(label);
+      setPersonaSwitching(true);
+      try {
+        await setActivePersona(p);
+        await refetch();
+        await refetchAccounts();
+        window.location.assign(`${window.location.origin}/dashboard`);
+      } catch (error: unknown) {
+        console.error('Persona switch failed:', error);
+        enqueueSnackbar(
+          t(
+            'persona.switchError',
+            'Could not switch persona. Please try again.'
+          ),
+          { variant: 'error' }
+        );
+        setPersonaSwitching(false);
+      }
+    },
+    [setActivePersona, refetch, refetchAccounts, enqueueSnackbar, t]
+  );
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -448,10 +483,9 @@ const Header: React.FC = () => {
                 .map((p) => (
                   <ListItem key={p} disablePadding>
                     <ListItemButton
-                      onClick={async () => {
+                      onClick={() => {
                         handleDrawerToggle();
-                        await setActivePersona(p);
-                        navigate('/app');
+                        void handlePersonaSwitch(p, personaLabel(p));
                       }}
                       sx={{ borderRadius: 1, mx: 1 }}
                     >
@@ -488,6 +522,10 @@ const Header: React.FC = () => {
 
   return (
     <>
+      <PersonaSwitchOverlay
+        open={personaSwitching}
+        targetLabel={switchingToLabel}
+      />
       <AppBar
         position="sticky"
         elevation={0}
@@ -739,10 +777,9 @@ const Header: React.FC = () => {
                         .map((p) => (
                           <MenuItem
                             key={p}
-                            onClick={async () => {
+                            onClick={() => {
                               handleUserMenuClose();
-                              await setActivePersona(p);
-                              navigate('/app');
+                              void handlePersonaSwitch(p, personaLabel(p));
                             }}
                             sx={{ py: 1.5 }}
                           >

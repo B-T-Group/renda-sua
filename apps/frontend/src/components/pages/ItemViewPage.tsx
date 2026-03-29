@@ -927,10 +927,7 @@ export default function ItemViewPage() {
                                 size="small"
                                 onClick={() => handleManageDeals(inventory)}
                               >
-                                {t(
-                                  'business.items.deals.manage',
-                                  'Manage deals'
-                                )}
+                                {t('business.items.deals.manage', 'Manage deals')}
                               </Button>
                             </Stack>
                           </CardContent>

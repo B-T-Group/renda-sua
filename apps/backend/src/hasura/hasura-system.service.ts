@@ -26,6 +26,7 @@ import {
   GET_USER_AGENT,
   GET_USER_BUSINESS,
   GET_USER_BY_ID,
+  GET_USER_BY_ID_WITH_RELATIONS,
   GET_USER_CLIENT,
 } from './hasura.queries';
 
@@ -144,6 +145,18 @@ export class HasuraSystemService {
       userId,
     });
     return result.users_by_pk;
+  }
+
+  /**
+   * User row with client, agent, and business relations (admin).
+   * Needed for /users/me personas: user-scoped GraphQL can hide relations under RLS.
+   */
+  async getUserByIdWithRelations(userId: string): Promise<any> {
+    const result = await this.executeQuery<any>(
+      GET_USER_BY_ID_WITH_RELATIONS,
+      { userId }
+    );
+    return result.users_by_pk ?? null;
   }
 
   /**

@@ -211,7 +211,11 @@ export default function ImageUploadDialog({
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6" component="div">
-            {t('business.inventory.uploadImagesFor', { itemName })}
+            {t(
+              'business.inventory.uploadImagesFor',
+              'Upload images for {{itemName}}',
+              { itemName }
+            )}
           </Typography>
           <IconButton
             edge="end"
