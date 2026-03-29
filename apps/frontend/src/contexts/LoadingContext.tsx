@@ -3,6 +3,7 @@ import React, {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useState,
 } from 'react';
 
@@ -23,27 +24,32 @@ interface LoadingProviderProps {
 export const LoadingProvider: React.FC<LoadingProviderProps> = ({
   children,
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingCount, setLoadingCount] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('');
 
   const showLoading = useCallback((message?: string) => {
-    setIsLoading(true);
+    setLoadingCount((c) => c + 1);
     if (message) {
       setLoadingMessage(message);
     }
   }, []);
 
   const hideLoading = useCallback(() => {
-    setIsLoading(false);
-    setLoadingMessage('');
+    setLoadingCount((c) => Math.max(0, c - 1));
   }, []);
 
   const updateLoadingMessage = useCallback((message: string) => {
     setLoadingMessage(message);
   }, []);
 
+  useEffect(() => {
+    if (loadingCount === 0) {
+      setLoadingMessage('');
+    }
+  }, [loadingCount]);
+
   const value: LoadingContextType = {
-    isLoading,
+    isLoading: loadingCount > 0,
     loadingMessage,
     showLoading,
     hideLoading,

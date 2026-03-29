@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Stack,
   Typography,
 } from '@mui/material';
@@ -14,12 +15,15 @@ import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useAws } from '../../../../hooks/useAws';
 import { presignUploadLibraryImage } from '../onboardingPresignedUpload';
+import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 interface FirstSaleItemUploadStepProps {
+  intent?: SaleItemFromImageIntent;
   onComplete: (imageIds: string[], primaryFile: File) => void;
 }
 
 const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
+  intent = 'first',
   onComplete,
 }) => {
   const { t } = useTranslation();
@@ -123,7 +127,9 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
     <Stack spacing={2}>
       <Typography variant="body1" color="text.secondary">
         {t(
-          'business.onboarding.firstSale.upload.hint',
+          intent === 'first'
+            ? 'business.onboarding.firstSale.upload.hint'
+            : 'business.onboarding.firstSale.upload.hintAdditional',
           'Add one or more photos of your product. You can create the listing from the first image and attach the rest to the same item.'
         )}
       </Typography>
@@ -195,8 +201,18 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           variant="contained"
           onClick={() => void uploadAll()}
           disabled={busy || submitting || !files.length}
+          startIcon={
+            busy || submitting ? (
+              <CircularProgress color="inherit" size={18} />
+            ) : undefined
+          }
         >
-          {t('business.onboarding.firstSale.upload.continue', 'Continue')}
+          {busy || submitting
+            ? t(
+                'business.onboarding.firstSale.upload.uploading',
+                'Uploading…'
+              )
+            : t('business.onboarding.firstSale.upload.continue', 'Continue')}
         </Button>
       </Stack>
     </Stack>

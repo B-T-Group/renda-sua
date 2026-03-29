@@ -18,11 +18,23 @@ import FirstSaleItemCreateStep, {
 import FirstSaleItemLocationStep from './FirstSaleItemLocationStep';
 import FirstSaleItemSuccessStep from './FirstSaleItemSuccessStep';
 import FirstSaleItemUploadStep from './FirstSaleItemUploadStep';
+import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
-const FirstSaleItemFlow: React.FC = () => {
+export type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
+
+export interface FirstSaleItemFlowProps {
+  /** `first`: onboarding copy & exit to dashboard. `additional`: catalog copy & exit to items. */
+  intent?: SaleItemFromImageIntent;
+}
+
+const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
+  intent = 'first',
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const isFirst = intent === 'first';
+  const exitPath = isFirst ? '/dashboard' : '/business/items';
   const [step, setStep] = useState(0);
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [primaryImagePreviewUrl, setPrimaryImagePreviewUrl] = useState<
@@ -53,16 +65,26 @@ const FirstSaleItemFlow: React.FC = () => {
     <Container maxWidth="sm" sx={{ py: 4 }}>
       <Button
         startIcon={<BackIcon />}
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate(exitPath)}
         sx={{ mb: 2 }}
       >
-        {t('business.onboarding.firstSale.back', 'Back')}
+        {isFirst
+          ? t('business.onboarding.firstSale.back', 'Back')
+          : t(
+              'business.onboarding.firstSale.backToItems',
+              'Back to items'
+            )}
       </Button>
       <Typography variant="h4" gutterBottom>
-        {t(
-          'business.onboarding.firstSale.title',
-          'Add your first product'
-        )}
+        {isFirst
+          ? t(
+              'business.onboarding.firstSale.title',
+              'Add your first product'
+            )
+          : t(
+              'business.onboarding.firstSale.titleAdditional',
+              'Add a product from photos'
+            )}
       </Typography>
       <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>
         {labels.map((label) => (
@@ -74,6 +96,7 @@ const FirstSaleItemFlow: React.FC = () => {
       <Paper sx={{ p: 3 }}>
         {step === 0 && (
           <FirstSaleItemUploadStep
+            intent={intent}
             onComplete={(ids, primaryFile) => {
               setPrimaryImagePreviewUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev);
@@ -100,7 +123,9 @@ const FirstSaleItemFlow: React.FC = () => {
             onComplete={() => setStep(3)}
           />
         )}
-        {step === 3 && item && <FirstSaleItemSuccessStep item={item} />}
+        {step === 3 && item && (
+          <FirstSaleItemSuccessStep item={item} intent={intent} />
+        )}
       </Paper>
     </Container>
   );

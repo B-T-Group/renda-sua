@@ -51,6 +51,7 @@ import SelectPersonaPage from '../components/pages/SelectPersonaPage';
 import { DocumentManagementPage } from '../components/pages/DocumentManagementPage';
 import FailedDeliveriesPage from '../components/pages/FailedDeliveriesPage';
 import FirstRentalItemOnboardingPage from '../components/pages/FirstRentalItemOnboardingPage';
+import AddSaleItemFromImagePage from '../components/pages/AddSaleItemFromImagePage';
 import FirstSaleItemOnboardingPage from '../components/pages/FirstSaleItemOnboardingPage';
 import ItemFormPage from '../components/pages/ItemFormPage';
 import OtpAuthPage from '../components/pages/OtpAuthPage';
@@ -484,16 +485,6 @@ function App() {
               }
             />
 
-            {/* Item View route */}
-            <Route
-              path="/business/items/:itemId"
-              element={
-                <ProtectedRoute>
-                  <ItemViewPage />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Business routes */}
             <Route
               path="/business/analytics"
@@ -516,6 +507,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessItemsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/items/add-from-image"
+              element={
+                <ProtectedRoute>
+                  <AddSaleItemFromImagePage />
                 </ProtectedRoute>
               }
             />
@@ -636,6 +635,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ItemFormPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Item detail (after static /business/items/* paths) */}
+            <Route
+              path="/business/items/:itemId"
+              element={
+                <ProtectedRoute>
+                  <ItemViewPage />
                 </ProtectedRoute>
               }
             />

@@ -4,27 +4,38 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
+import type { SaleItemFromImageIntent } from './saleItemFromImageIntent';
 
 interface FirstSaleItemSuccessStepProps {
   item: CreatedSaleItemSummary;
+  intent?: SaleItemFromImageIntent;
 }
 
 const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
   item,
+  intent = 'first',
 }) => {
   const { t } = useTranslation();
+  const isFirst = intent === 'first';
   return (
     <Stack spacing={3} alignItems="center" sx={{ py: 2 }}>
       <CheckIcon color="success" sx={{ fontSize: 56 }} />
       <Typography variant="h5" textAlign="center">
-        {t(
-          'business.onboarding.firstSale.success.title',
-          'Your first product is live'
-        )}
+        {isFirst
+          ? t(
+              'business.onboarding.firstSale.success.title',
+              'Your first product is live'
+            )
+          : t(
+              'business.onboarding.firstSale.success.titleAdditional',
+              'Your product is live'
+            )}
       </Typography>
       <Typography variant="body1" color="text.secondary" textAlign="center">
         {t(
-          'business.onboarding.firstSale.success.body',
+          isFirst
+            ? 'business.onboarding.firstSale.success.body'
+            : 'business.onboarding.firstSale.success.bodyAdditional',
           '{{name}} is on your catalog and available at the location you chose.',
           { name: item.name }
         )}
@@ -39,12 +50,17 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
         <Button
           variant="contained"
           component={RouterLink}
-          to="/dashboard"
+          to={isFirst ? '/dashboard' : '/business/items'}
         >
-          {t(
-            'business.onboarding.firstSale.success.dashboard',
-            'Back to dashboard'
-          )}
+          {isFirst
+            ? t(
+                'business.onboarding.firstSale.success.dashboard',
+                'Back to dashboard'
+              )
+            : t(
+                'business.onboarding.firstSale.success.backToItems',
+                'Back to items'
+              )}
         </Button>
         <Button
           variant="outlined"

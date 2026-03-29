@@ -1,5 +1,6 @@
 import {
   Add as AddIcon,
+  AddPhotoAlternate as AddPhotoAlternateIcon,
   Check as CheckIcon,
   CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
@@ -1230,16 +1231,61 @@ const BusinessItemsPage: React.FC = () => {
           >
             {t('business.items.csvUpload')}
           </Button>
+          <Tooltip title={t('business.locations.refreshLocations')}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => void handleRefreshLocations()}
+              disabled={loading}
+              size="medium"
+              sx={{ borderRadius: 0 }}
+            >
+              {t('business.locations.refresh')}
+            </Button>
+          </Tooltip>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<AddPhotoAlternateIcon />}
+            onClick={() => navigate('/business/items/add-from-image')}
+            size="medium"
+            sx={{ borderRadius: 0 }}
+          >
+            {t('business.items.addFromImage', 'Add from image')}
+          </Button>
           <Button
             variant="contained"
             color="error"
             startIcon={<AddIcon />}
-            onClick={() => navigate('/business/items/new')}
+            onClick={() => {
+              if (businessLocations.length === 0) {
+                enqueueSnackbar(
+                  t('business.inventory.noLocationsError'),
+                  { variant: 'error' }
+                );
+                return;
+              }
+              void refetchPageData();
+              setShowAddItemDialog(true);
+            }}
+            disabled={businessLocations.length === 0}
             size="medium"
             sx={{ borderRadius: 0 }}
           >
             {t('business.items.addItem')}
           </Button>
+          {businessLocations.length === 0 && (
+            <Button
+              variant="outlined"
+              startIcon={<LocationOnIcon />}
+              onClick={() => navigate('/business/locations')}
+              color="primary"
+              size="medium"
+              sx={{ borderRadius: 0 }}
+            >
+              {t('business.locations.addLocation')}
+            </Button>
+          )}
         </Stack>
       </Stack>
 
@@ -1375,69 +1421,6 @@ const BusinessItemsPage: React.FC = () => {
         <TabPanel value={tabValue} index={0}>
           {/* Table View */}
           <Box sx={{ mb: 0.5 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={0.5}
-            >
-              <Typography variant="h6">
-                {t('business.items.tableView')}
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Tooltip title={t('business.items.downloadTemplate')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => {
-                      setSelectedDownloadLocationId(null);
-                      setDownloadLocationDialogOpen(true);
-                    }}
-                    disabled={loading || !items || items.length === 0}
-                  >
-                    {t('business.items.download')}
-                  </Button>
-                </Tooltip>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                  onClick={() => setShowCSVUploadDialog(true)}
-                >
-                  {t('business.items.csvUpload')}
-                </Button>
-                <Tooltip title={t('business.locations.refreshLocations')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={handleRefreshLocations}
-                    disabled={loading}
-                  >
-                    {t('business.locations.refresh')}
-                  </Button>
-                </Tooltip>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (businessLocations.length === 0) {
-                        enqueueSnackbar(
-                          t('business.inventory.noLocationsError'),
-                          { variant: 'error' }
-                        );
-                        return;
-                      }
-                      refetchPageData();
-                      setShowAddItemDialog(true);
-                    }}
-                    disabled={businessLocations.length === 0}
-                  >
-                    {t('business.items.addItem')}
-                  </Button>
-                </span>
-              </Stack>
-            </Box>
-
             {/* Filters */}
             <ItemsFilterBar
               filters={filters}
@@ -1494,78 +1477,6 @@ const BusinessItemsPage: React.FC = () => {
         <TabPanel value={tabValue} index={1}>
           {/* Cards View */}
           <Box sx={{ mb: 3 }}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-            >
-              <Typography variant="h6">
-                {t('business.items.cardsView')}
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Tooltip title={t('business.items.downloadTemplate')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => {
-                      setSelectedDownloadLocationId(null);
-                      setDownloadLocationDialogOpen(true);
-                    }}
-                    disabled={loading || !items || items.length === 0}
-                  >
-                    {t('business.items.download')}
-                  </Button>
-                </Tooltip>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                  onClick={() => setShowCSVUploadDialog(true)}
-                >
-                  {t('business.items.csvUpload')}
-                </Button>
-                <Tooltip title={t('business.locations.refreshLocations')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={handleRefreshLocations}
-                    disabled={loading}
-                  >
-                    {t('business.locations.refresh')}
-                  </Button>
-                </Tooltip>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (businessLocations.length === 0) {
-                        enqueueSnackbar(
-                          t('business.inventory.noLocationsError'),
-                          { variant: 'error' }
-                        );
-                        return;
-                      }
-                      navigate('/business/items/add');
-                    }}
-                    disabled={businessLocations.length === 0}
-                  >
-                    {t('business.items.addItem')}
-                  </Button>
-                </span>
-                {businessLocations.length === 0 && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<LocationOnIcon />}
-                    onClick={() => navigate('/business/locations')}
-                    color="primary"
-                  >
-                    {t('business.locations.addLocation')}
-                  </Button>
-                )}
-              </Stack>
-            </Box>
-
             {/* Filters */}
             <ItemsFilterBar
               filters={filters}

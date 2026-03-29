@@ -755,8 +755,12 @@
       "firstSale": {
         "seoTitle": "Ajouter votre premier produit",
         "seoDescription": "Assistant : photos, fiche produit, mise en stock sur un emplacement.",
+        "seoTitleAdditional": "Ajouter un produit à partir de photos",
+        "seoDescriptionAdditional": "Téléversez des photos, créez votre produit et ajoutez-le à un emplacement.",
         "title": "Ajouter votre premier produit",
+        "titleAdditional": "Ajouter un produit à partir de photos",
         "back": "Retour",
+        "backToItems": "Retour aux articles",
         "steps": {
           "upload": "Photos",
           "create": "Détails du produit",
@@ -765,9 +769,11 @@
         },
         "upload": {
           "hint": "Ajoutez une ou plusieurs photos. La première sert à créer la fiche ; les autres peuvent être liées au même article.",
+          "hintAdditional": "Ajoutez des photos pour votre nouveau produit. La première sert à créer la fiche ; les autres peuvent être liées au même article.",
           "clearPhotoNote": "Utilisez une photo nette et bien éclairée sur un fond simple pour que les acheteurs (et l’IA, si vous l’utilisez) voient bien les détails.",
           "previewCaption": "L’aperçu montre uniquement la première image.",
           "chooseFiles": "Choisir des images",
+          "uploading": "Téléversement…",
           "continue": "Continuer",
           "presignError": "Échec de préparation du téléversement",
           "noIds": "Aucun identifiant d’image renvoyé",
@@ -802,8 +808,11 @@
         },
         "success": {
           "title": "Votre premier produit est en ligne",
+          "titleAdditional": "Votre produit est en ligne",
           "body": "{{name}} figure au catalogue sur l’emplacement choisi.",
+          "bodyAdditional": "{{name}} figure au catalogue sur l’emplacement choisi.",
           "dashboard": "Retour au tableau de bord",
+          "backToItems": "Retour aux articles",
           "viewItem": "Voir le produit"
         }
       },
@@ -1302,6 +1311,7 @@
       "active": "Actif",
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Ajouter un article",
+      "addFromImage": "Ajouter à partir d’une image",
       "addItemDescription": "Ajouter un nouvel article à votre catalogue d'entreprise",
       "addPaymentFee": "Ajouter les frais de paiement de 3,5 %",
       "backToItem": "Retour à l'article",

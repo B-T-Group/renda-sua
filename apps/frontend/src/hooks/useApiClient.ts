@@ -7,6 +7,25 @@ import { useLoading } from '../contexts/LoadingContext';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 
+/** Avoid stacking the global LoadingScreen on flows that already show inline loading. */
+function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const substrings = [
+    '/users/me',
+    '/pdf/shipping-labels',
+    '/locations/',
+    '/notifications/',
+    '/ai/image-item-suggestions',
+    '/business-items/create-from-image',
+    '/aws/presigned-url/image',
+    '/business-images/bulk',
+  ];
+  if (substrings.some((s) => url.includes(s))) return true;
+  if (url.includes('disassociate-item')) return false;
+  if (url.includes('/associate-item')) return true;
+  return false;
+}
+
 export const useApiClient = (): AxiosInstance => {
   const { isAuthenticated, getAccessToken, logout } = useSessionAuth();
 
@@ -68,17 +87,7 @@ export const useApiClient = (): AxiosInstance => {
         config.headers['X-Hasura-Role'] = 'anonymous';
       }
 
-      // Show loading for API calls (except for specific endpoints that don't need loading)
-      const skipLoadingEndpoints = [
-        '/users/me',
-        '/pdf/shipping-labels',
-        '/locations/',
-        '/notifications/',
-      ];
-      if (
-        showLoading &&
-        !skipLoadingEndpoints.some((e) => config.url?.includes(e))
-      ) {
+      if (showLoading && !shouldSkipGlobalLoadingForUrl(config.url)) {
         showLoading();
       }
 

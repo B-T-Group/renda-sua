@@ -766,8 +766,12 @@
       "firstSale": {
         "seoTitle": "Add your first product",
         "seoDescription": "Guided setup: upload photos, create your product, add it to a location.",
+        "seoTitleAdditional": "Add a product from photos",
+        "seoDescriptionAdditional": "Upload photos, create your product, add it to a location.",
         "title": "Add your first product",
+        "titleAdditional": "Add a product from photos",
         "back": "Back",
+        "backToItems": "Back to items",
         "steps": {
           "upload": "Photos",
           "create": "Product details",
@@ -776,9 +780,11 @@
         },
         "upload": {
           "hint": "Add one or more photos of your product. You can create the listing from the first image and attach the rest to the same item.",
+          "hintAdditional": "Add photos for your new product. The first image is used to create the listing; you can attach the rest to the same item.",
           "clearPhotoNote": "Use a clear, well-lit photo of your product on a simple background so buyers (and AI, if you use it) can see details easily.",
           "previewCaption": "Preview shows your first image only.",
           "chooseFiles": "Choose images",
+          "uploading": "Uploading…",
           "continue": "Continue",
           "presignError": "Failed to prepare image upload",
           "noIds": "Upload did not return image ids",
@@ -813,8 +819,11 @@
         },
         "success": {
           "title": "Your first product is live",
+          "titleAdditional": "Your product is live",
           "body": "{{name}} is on your catalog and available at the location you chose.",
+          "bodyAdditional": "{{name}} is on your catalog and available at the location you chose.",
           "dashboard": "Back to dashboard",
+          "backToItems": "Back to items",
           "viewItem": "View product"
         }
       },
@@ -1313,6 +1322,7 @@
       "active": "Active",
       "addFirstImage": "Upload images to showcase your product to customers",
       "addItem": "Add Item",
+      "addFromImage": "Add from image",
       "addItemDescription": "Add a new item to your business catalog",
       "addPaymentFee": "Add 3.5% Payment Fee",
       "backToItem": "Back to Item",
