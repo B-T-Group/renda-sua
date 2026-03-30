@@ -221,6 +221,18 @@ export class MobilePaymentsService {
     return 'mypvit';
   }
 
+  /** Account withdrawals (GIVE_CHANGE): only valid CM or GA MSISDN. */
+  isWithdrawalDestinationCmOrGa(customerPhone?: string): boolean {
+    if (!customerPhone?.trim()) {
+      return false;
+    }
+    const v = validatePhoneNumber(customerPhone);
+    if (!v.isValid) {
+      return false;
+    }
+    return v.regionCode === 'CM' || v.regionCode === 'GA';
+  }
+
   /**
    * Get available payment providers
    */

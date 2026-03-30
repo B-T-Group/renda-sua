@@ -211,6 +211,43 @@ export class MobilePaymentsController {
         );
       }
 
+      const isAccountWithdrawal =
+        !!paymentRequest.accountId &&
+        paymentRequest.transactionType === 'GIVE_CHANGE';
+
+      if (isAccountWithdrawal) {
+        if (paymentRequest.amount < 150) {
+          throw new HttpException(
+            {
+              success: false,
+              message:
+                'Withdrawal amount must be greater than or equal to 150',
+              error: 'MIN_WITHDRAW_AMOUNT',
+              data: {
+                minAmount: 150,
+                currency: paymentRequest.currency,
+              },
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+        if (
+          !this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
+            paymentRequest.customerPhone
+          )
+        ) {
+          throw new HttpException(
+            {
+              success: false,
+              message:
+                'Withdrawals are only supported to Cameroon (+237) or Gabon (+241) mobile numbers',
+              error: 'WITHDRAW_PHONE_REGION_NOT_ALLOWED',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
+
       const isMobileMoney =
         !paymentRequest.paymentMethod ||
         paymentRequest.paymentMethod === 'mobile_money';

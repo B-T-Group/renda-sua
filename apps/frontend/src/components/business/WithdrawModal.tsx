@@ -18,6 +18,19 @@ import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
+const MIN_WITHDRAW_AMOUNT = 150;
+
+function isCmOrGaPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('237')) {
+    return digits.length >= 12;
+  }
+  if (digits.startsWith('241')) {
+    return digits.length >= 11;
+  }
+  return false;
+}
+
 interface WithdrawModalProps {
   open: boolean;
   onClose: () => void;
@@ -51,17 +64,14 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
 
-  // Lock payment method to Airtel Money only
   const [paymentMethod] = useState<PaymentMethod>('airtel-money');
 
-  // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
     if (userPhoneNumber) {
       setPhoneNumber(userPhoneNumber);
     }
   }, [userPhoneNumber]);
 
-  // Reset state when modal opens/closes
   useEffect(() => {
     if (!open) {
       setError('');
@@ -71,11 +81,27 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   }, [open]);
 
-  const getPhoneNumberHint = () => withdrawalPhoneNote ?? '';
+  const note = withdrawalPhoneNote ?? '';
+  const cmGaHint = t(
+    'accounts.withdrawPhoneCmGaHint',
+    'Use a Cameroon (+237) or Gabon (+241) mobile number.'
+  );
+  const getPhoneNumberHint = () =>
+    [note, cmGaHint].filter(Boolean).join(' ') || cmGaHint;
 
   const handleConfirm = async () => {
     if (!phoneNumber.trim()) {
       setError(t('accounts.phoneNumberRequired'));
+      return;
+    }
+
+    if (!isCmOrGaPhone(phoneNumber)) {
+      setError(
+        t(
+          'accounts.withdrawPhoneCmGaOnly',
+          'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
+        )
+      );
       return;
     }
 
@@ -85,6 +111,17 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
 
     const amountValue = parseFloat(amount);
+    if (amountValue < MIN_WITHDRAW_AMOUNT) {
+      setError(
+        t(
+          'accounts.minWithdrawAmount',
+          'Withdrawal amount must be greater than or equal to {{min}} {{currency}}',
+          { min: MIN_WITHDRAW_AMOUNT, currency }
+        )
+      );
+      return;
+    }
+
     if (amountValue > availableBalance) {
       setError(t('accounts.insufficientFunds'));
       return;
@@ -94,8 +131,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     setSuccess('');
 
     try {
-      const success = await onConfirm(phoneNumber, amount, paymentMethod);
-      if (success) {
+      const ok = await onConfirm(phoneNumber, amount, paymentMethod);
+      if (ok) {
         setSuccess(t('accounts.withdrawRequestSent'));
         setShowResult(true);
         setTimeout(() => {
@@ -104,7 +141,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
       } else {
         setError(t('accounts.withdrawFailed'));
       }
-    } catch (error) {
+    } catch {
       setError(t('accounts.withdrawFailed'));
     }
   };
@@ -115,13 +152,34 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
       minimumFractionDigits: 2,
-    }).format(amount);
+    }).format(value);
   };
+
+  const parsedAmount = parseFloat(amount);
+  const amountOk =
+    Number.isFinite(parsedAmount) &&
+    parsedAmount >= MIN_WITHDRAW_AMOUNT &&
+    parsedAmount <= availableBalance;
+  const balanceAllowsWithdraw = availableBalance >= MIN_WITHDRAW_AMOUNT;
+  const phoneOk = phoneNumber.trim() && isCmOrGaPhone(phoneNumber);
+  const canSubmit =
+    balanceAllowsWithdraw &&
+    phoneOk &&
+    amountOk &&
+    !loading &&
+    !showResult;
+
+  const amountNumericInvalid =
+    !amount.trim() ||
+    !Number.isFinite(parsedAmount) ||
+    parsedAmount < MIN_WITHDRAW_AMOUNT ||
+    parsedAmount > availableBalance;
+  const amountFieldError = !!error && amountNumericInvalid;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -142,7 +200,6 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
           </Box>
         ) : (
           <Box sx={{ pt: 1 }}>
-            {/* Available Balance Display */}
             <Box
               sx={{
                 mb: 3,
@@ -159,18 +216,27 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </Typography>
             </Box>
 
-            {/* Phone Number Input */}
+            {!balanceAllowsWithdraw && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t(
+                  'accounts.withdrawBalanceBelowMin',
+                  'You need at least {{min}} {{currency}} available to withdraw.',
+                  { min: MIN_WITHDRAW_AMOUNT, currency }
+                )}
+              </Alert>
+            )}
+
             <PhoneInput
               value={phoneNumber}
               onChange={(value) => setPhoneNumber(value || '')}
               label={t('accounts.phoneNumber')}
               placeholder={t('accounts.phoneNumberPlaceholder')}
-              helperText={getPhoneNumberHint() || undefined}
-              disabled={loading}
+              helperText={getPhoneNumberHint()}
+              disabled={loading || !balanceAllowsWithdraw}
               defaultCountry="CM"
+              onlyCountries={['CM', 'GA']}
             />
 
-            {/* Amount Input */}
             <TextField
               fullWidth
               label={t('accounts.amount')}
@@ -178,23 +244,31 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
               onChange={(e) => setAmount(e.target.value)}
               type="number"
               placeholder={t('accounts.amountPlaceholder')}
+              error={amountFieldError}
+              helperText={
+                amountFieldError
+                  ? error
+                  : t(
+                      'accounts.withdrawAmountHelper',
+                      'Minimum withdrawal: {{min}} {{currency}}',
+                      { min: MIN_WITHDRAW_AMOUNT, currency }
+                    )
+              }
               inputProps={{
-                min: 0,
+                min: MIN_WITHDRAW_AMOUNT,
                 max: availableBalance,
                 step: 0.01,
               }}
-              sx={{ mb: 3 }}
-              disabled={loading}
+              sx={{ mb: 2, mt: 1 }}
+              disabled={loading || !balanceAllowsWithdraw}
             />
 
-            {/* Error Display */}
-            {error && (
+            {error && !amountFieldError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
               </Alert>
             )}
 
-            {/* Success Display */}
             {success && (
               <Alert severity="success" sx={{ mb: 2 }}>
                 {success}
@@ -210,7 +284,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
         <Button
           onClick={handleConfirm}
           variant="contained"
-          disabled={loading || showResult}
+          disabled={!canSubmit}
           startIcon={loading ? <CircularProgress size={16} /> : null}
           sx={{
             background: 'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
