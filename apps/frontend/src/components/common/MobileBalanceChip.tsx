@@ -316,13 +316,15 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
         {agentAutoWithdrawEnabled && (
           <>
             <Divider sx={{ my: 0.5 }} />
-            <MenuItem
-              disableRipple
-              onClick={(e) => e.stopPropagation()}
+            {/*
+              Use ListItem instead of MenuItem: MenuItem is ButtonBase and steals
+              pointer events from the nested Switch so toggles often do nothing.
+            */}
+            <ListItem
+              alignItems="flex-start"
               sx={{
                 cursor: 'default',
                 flexDirection: 'column',
-                alignItems: 'stretch',
                 py: 1.5,
                 whiteSpace: 'normal',
               }}
@@ -333,13 +335,22 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
                     size="small"
                     checked={autoWithdrawCommissions}
                     disabled={agentAutoWithdrawLoading}
-                    onChange={(_, v) => {
-                      void setAgentAutoWithdraw(v);
+                    onChange={async (_, v) => {
+                      const ok = await setAgentAutoWithdraw(v);
+                      if (!ok) {
+                        enqueueSnackbar(
+                          t(
+                            'agent.autoWithdrawUpdateFailed',
+                            'Could not update auto-payout. Try again.'
+                          ),
+                          { variant: 'error' }
+                        );
+                      }
                     }}
                   />
                 }
                 label={
-                  <Box>
+                  <Box component="span">
                     <Typography variant="body2" component="span" display="block">
                       {t(
                         'agent.autoWithdrawCommissions',
@@ -361,7 +372,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
                 }
                 sx={{ m: 0, alignItems: 'flex-start', gap: 1 }}
               />
-            </MenuItem>
+            </ListItem>
           </>
         )}
       </Menu>

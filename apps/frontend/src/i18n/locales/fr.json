@@ -355,6 +355,7 @@
   "agent": {
     "autoWithdrawCommissions": "Envoyer automatiquement les commissions sur mon téléphone",
     "autoWithdrawCommissionsHint": "Si activé, les frais de livraison sont envoyés sur le téléphone de votre profil après chaque crédit. Désactivé par défaut jusqu'à activation.",
+    "autoWithdrawUpdateFailed": "Impossible de mettre à jour le paiement automatique. Réessayez.",
     "addressPrompt": {
       "addAddress": "Ajouter une Adresse",
       "benefit1": "Recevoir des commandes près de votre emplacement",

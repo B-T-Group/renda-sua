@@ -35,14 +35,17 @@ export function useAgentAutoWithdrawCommissions(enabled: boolean) {
   }, [enabled, fetchPreference]);
 
   const setAutoWithdraw = useCallback(
-    async (next: boolean) => {
-      if (!enabled || !apiClient) return;
+    async (next: boolean): Promise<boolean> => {
+      if (!enabled || !apiClient) return false;
       setLoading(true);
       try {
         await apiClient.patch('/agents/me/auto-withdraw-commissions', {
           auto_withdraw_commissions: next,
         });
         setAutoWithdrawCommissions(next);
+        return true;
+      } catch {
+        return false;
       } finally {
         setLoading(false);
       }

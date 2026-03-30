@@ -355,6 +355,7 @@
   "agent": {
     "autoWithdrawCommissions": "Auto-send commissions to my phone",
     "autoWithdrawCommissionsHint": "When on, delivery fees are sent to your profile phone after each credit. Off by default until you enable this.",
+    "autoWithdrawUpdateFailed": "Could not update auto-payout. Try again.",
     "suspendedBanner": "Your account is suspended. You cannot claim new orders. If you believe this is an error, please contact support.",
     "suspendedCannotClaim": "Your account is suspended. You cannot claim orders. Contact support.",
     "addressPrompt": {
