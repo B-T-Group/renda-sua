@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -107,67 +112,38 @@ export class OrderStatusService {
       );
     }
 
-    // Update order status
-    let updateOrderMutation: string;
-    let mutationVariables: any;
-
-    if (
-      order.current_status === 'ready_for_pickup' &&
+    const previousStatus = order.current_status;
+    const assignToAgent =
+      previousStatus === 'ready_for_pickup' &&
       newStatus === 'assigned_to_agent' &&
-      isAnyAgent
-    ) {
-      // Special case: Assign order to agent and update status
-      updateOrderMutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $newStatus: order_status!, $agentId: uuid!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { 
-              current_status: $newStatus,
-              assigned_agent_id: $agentId,
-              updated_at: "now()"
-            }
-          ) {
-            id
-            order_number
-            current_status
-            assigned_agent_id
-            updated_at
-          }
-        }
-      `;
-      mutationVariables = {
-        orderId,
-        newStatus,
-        agentId: user.agent!.id,
-      };
-    } else {
-      // Regular status update
-      updateOrderMutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $newStatus: order_status!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { 
-              current_status: $newStatus,
-              updated_at: "now()"
-            }
-          ) {
-            id
-            order_number
-            current_status
-            updated_at
-          }
-        }
-      `;
-      mutationVariables = {
-        orderId,
-        newStatus,
-      };
+      isAnyAgent;
+    let agentIdForAssign: string | undefined;
+    if (assignToAgent) {
+      if (!user.agent?.id) {
+        throw new Error('Agent record required to assign order');
+      }
+      agentIdForAssign = user.agent.id;
     }
+    const { mutation: updateOrderMutation, variables: mutationVariables } =
+      this.buildConditionalStatusMutation(
+        orderId,
+        previousStatus,
+        newStatus,
+        assignToAgent,
+        agentIdForAssign
+      );
 
-    const updateResult = await this.hasuraSystemService.executeMutation(
-      updateOrderMutation,
-      mutationVariables
+    const updateResult = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number; returning: any[] };
+    }>(updateOrderMutation, mutationVariables);
+
+    const batch = updateResult.update_orders;
+    this.ensureSingleStatusRowUpdated(
+      batch?.affected_rows,
+      previousStatus,
+      newStatus
     );
+    const updatedRow = batch.returning[0];
 
     // Send status change notifications
     try {
@@ -181,11 +157,11 @@ export class OrderStatusService {
         if (notificationsEnabled) {
           await this.notificationsService.sendOrderStatusChangeNotifications(
             orderDetails,
-            order.current_status
+            previousStatus
           );
         } else {
           this.logger.log(
-            `Order status change notifications disabled for order ${orderId} (${order.current_status} → ${newStatus})`
+            `Order status change notifications disabled for order ${orderId} (${previousStatus} → ${newStatus})`
           );
         }
       }
@@ -215,7 +191,108 @@ export class OrderStatusService {
       }
     }
 
-    return updateResult.update_orders_by_pk;
+    return updatedRow;
+  }
+
+  private buildConditionalStatusMutation(
+    orderId: string,
+    previousStatus: string,
+    newStatus: string,
+    assignToAgent: boolean,
+    agentId?: string
+  ): { mutation: string; variables: Record<string, string> } {
+    if (assignToAgent) {
+      if (!agentId) {
+        throw new Error('Agent id required for assign mutation');
+      }
+      return {
+        mutation: `
+        mutation UpdateOrderStatusConditional(
+          $orderId: uuid!
+          $previousStatus: order_status!
+          $newStatus: order_status!
+          $agentId: uuid!
+        ) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              current_status: { _eq: $previousStatus }
+            }
+            _set: {
+              current_status: $newStatus
+              assigned_agent_id: $agentId
+              updated_at: "now()"
+            }
+          ) {
+            affected_rows
+            returning {
+              id
+              order_number
+              current_status
+              assigned_agent_id
+              updated_at
+            }
+          }
+        }
+      `,
+        variables: {
+          orderId,
+          previousStatus,
+          newStatus,
+          agentId,
+        },
+      };
+    }
+    return {
+      mutation: `
+        mutation UpdateOrderStatusConditional(
+          $orderId: uuid!
+          $previousStatus: order_status!
+          $newStatus: order_status!
+        ) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              current_status: { _eq: $previousStatus }
+            }
+            _set: {
+              current_status: $newStatus
+              updated_at: "now()"
+            }
+          ) {
+            affected_rows
+            returning {
+              id
+              order_number
+              current_status
+              updated_at
+            }
+          }
+        }
+      `,
+      variables: {
+        orderId,
+        previousStatus,
+        newStatus,
+      },
+    };
+  }
+
+  private ensureSingleStatusRowUpdated(
+    affectedRows: number | undefined,
+    previousStatus: string,
+    newStatus: string
+  ): void {
+    if (affectedRows === 1) {
+      return;
+    }
+    this.logger.warn(
+      `Conditional order status update affected ${affectedRows ?? 0} row(s): ${previousStatus} → ${newStatus}`
+    );
+    throw new HttpException(
+      'Order status already changed. Please refresh and try again.',
+      HttpStatus.CONFLICT
+    );
   }
 
   /**

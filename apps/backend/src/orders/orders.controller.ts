@@ -167,6 +167,12 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
+  @ApiOperation({ summary: 'Update order status' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Order status was already updated (concurrent request or stale state)',
+  })
   async updateOrderStatus(
     @Param('id') orderId: string,
     @Body() updateData: UpdateOrderStatusRequest

@@ -752,7 +752,7 @@ export class CommissionsService {
       {
         amount: ctx.amount,
         currency: ctx.currency,
-        description: `Comm. order ${ctx.order.order_number}`,
+        description: `Comm order ${ctx.order.order_number}`,
         customerPhone: phone,
         accountId: ctx.accountId,
         mtnUserId,
