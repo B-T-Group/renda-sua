@@ -31,6 +31,8 @@ export interface ItemsPageFilterState {
   category: string;
   subcategory: string;
   brand: string;
+  /** Business location display name (`business_location.name`) */
+  location: string;
 }
 
 interface ItemsPageFilterProps {
@@ -86,7 +88,15 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       )
     ).sort();
 
-    return { categories, subcategories, brands };
+    const locations = Array.from(
+      new Set(
+        items
+          .map((item) => item.business_location?.name?.trim())
+          .filter(Boolean) as string[]
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    return { categories, subcategories, brands, locations };
   }, [items, filters.category]);
 
   const filteredItems = useMemo(() => {
@@ -96,7 +106,9 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         const matchesSearch =
           item.item.name.toLowerCase().includes(term) ||
           item.item.description?.toLowerCase().includes(term) ||
-          item.item.brand?.name?.toLowerCase().includes(term);
+          item.item.brand?.name?.toLowerCase().includes(term) ||
+          item.business_location?.name?.toLowerCase().includes(term) ||
+          item.business_location?.business?.name?.toLowerCase().includes(term);
         if (!matchesSearch) return false;
       }
 
@@ -115,6 +127,13 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       }
 
       if (filters.brand && item.item.brand?.name !== filters.brand) {
+        return false;
+      }
+
+      if (
+        filters.location &&
+        item.business_location?.name !== filters.location
+      ) {
         return false;
       }
 
@@ -140,6 +159,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       category: '',
       subcategory: '',
       brand: '',
+      location: '',
     });
   };
 
@@ -148,6 +168,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     filters.category,
     filters.subcategory,
     filters.brand,
+    filters.location,
   ].filter(Boolean).length;
 
   const getActiveFilterChips = () => {
@@ -174,6 +195,12 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       chips.push({
         label: `${t('common.brand', 'Brand')}: ${filters.brand}`,
         onDelete: () => handleFilterChange('brand', ''),
+      });
+    }
+    if (filters.location) {
+      chips.push({
+        label: `${t('common.location', 'Location')}: ${filters.location}`,
+        onDelete: () => handleFilterChange('location', ''),
       });
     }
     return chips;
@@ -230,6 +257,22 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         </Select>
       </FormControl>
 
+      <FormControl fullWidth size="small">
+        <InputLabel>{t('common.location', 'Location')}</InputLabel>
+        <Select
+          value={filters.location}
+          onChange={(e) => handleFilterChange('location', e.target.value)}
+          label={t('common.location', 'Location')}
+        >
+          <MenuItem value="">{t('common.all', 'All')}</MenuItem>
+          {filterOptions.locations.map((loc) => (
+            <MenuItem key={loc} value={loc}>
+              {loc}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
       {activeFiltersCount > 0 && (
         <Button
           fullWidth
@@ -256,6 +299,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
             <Skeleton variant="rectangular" width={120} height={56} />
             <Skeleton variant="rectangular" width={140} height={56} />
             <Skeleton variant="rectangular" width={100} height={56} />
+            <Skeleton variant="rectangular" width={130} height={56} />
           </Box>
         </Stack>
       </Box>
@@ -297,7 +341,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         /* Desktop: inline filters */
         <Box>
           <Grid container sx={{ width: '100%' }} spacing={2}>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>{t('common.category', 'Category')}</InputLabel>
                 <Select
@@ -316,7 +360,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>
                   {t('common.subcategory', 'Subcategory')}
@@ -338,7 +382,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>{t('common.brand', 'Brand')}</InputLabel>
                 <Select
@@ -352,6 +396,25 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                   {filterOptions.brands.map((b) => (
                     <MenuItem key={b} value={b}>
                       {b}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>{t('common.location', 'Location')}</InputLabel>
+                <Select
+                  value={filters.location}
+                  onChange={(e) =>
+                    handleFilterChange('location', e.target.value)
+                  }
+                  label={t('common.location', 'Location')}
+                >
+                  <MenuItem value="">{t('common.all', 'All')}</MenuItem>
+                  {filterOptions.locations.map((loc) => (
+                    <MenuItem key={loc} value={loc}>
+                      {loc}
                     </MenuItem>
                   ))}
                 </Select>

@@ -70,6 +70,7 @@ const ItemsPage: React.FC = () => {
     category: '',
     subcategory: '',
     brand: '',
+    location: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
@@ -93,7 +94,11 @@ const ItemsPage: React.FC = () => {
   const displayItems = useMemo(() => {
     if (filteredItems.length > 0) return filteredItems;
     const noFilters =
-      !searchTerm && !filters.category && !filters.subcategory && !filters.brand;
+      !searchTerm &&
+      !filters.category &&
+      !filters.subcategory &&
+      !filters.brand &&
+      !filters.location;
     if (noFilters) return inventoryItems;
     return [];
   }, [filteredItems, inventoryItems, searchTerm, filters]);
@@ -101,7 +106,15 @@ const ItemsPage: React.FC = () => {
   // Reset to first page when filters or sort change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filters.category, filters.subcategory, filters.brand, sort, showUnavailable]);
+  }, [
+    searchTerm,
+    filters.category,
+    filters.subcategory,
+    filters.brand,
+    filters.location,
+    sort,
+    showUnavailable,
+  ]);
 
   // Pagination
   const totalPages = Math.ceil(displayItems.length / itemsPerPage);
@@ -219,12 +232,21 @@ const ItemsPage: React.FC = () => {
 
   // Check if any filters are active
   const hasActiveFilters = Boolean(
-    searchTerm || filters.category || filters.subcategory || filters.brand
+    searchTerm ||
+      filters.category ||
+      filters.subcategory ||
+      filters.brand ||
+      filters.location
   );
 
   const handleClearAllFilters = () => {
     setSearchTerm('');
-    setFilters({ category: '', subcategory: '', brand: '' });
+    setFilters({
+      category: '',
+      subcategory: '',
+      brand: '',
+      location: '',
+    });
   };
 
   if (error) {

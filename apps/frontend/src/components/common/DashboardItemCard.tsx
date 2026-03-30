@@ -5,6 +5,7 @@ import {
   Palette,
   Scale,
   ShoppingCart,
+  Store,
   Straighten,
   Verified,
   Visibility as VisibilityIcon,
@@ -339,10 +340,16 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             </Box>
           </Box>
 
-          {/* Business Information - Compact */}
+          {/* Business + store location */}
           <Box sx={{ mb: 1 }}>
             <Box
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                mb: 0.25,
+                flexWrap: 'wrap',
+              }}
             >
               <Business fontSize="small" color="primary" />
               <Typography
@@ -355,14 +362,43 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               {inventory.business_location.business.is_verified && (
                 <Verified fontSize="small" color="success" />
               )}
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: '0.7rem', ml: 0.5 }}
-              >
-                • {inventory.business_location.address.city}
-              </Typography>
+              {!inventory.business_location.name?.trim() && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.7rem', ml: 0.5 }}
+                >
+                  • {inventory.business_location.address.city}
+                </Typography>
+              )}
             </Box>
+            {inventory.business_location.name?.trim() && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Store fontSize="small" color="primary" />
+                <Typography
+                  variant="caption"
+                  fontWeight={600}
+                  color="text.primary"
+                  sx={{ fontSize: '0.7rem' }}
+                >
+                  {inventory.business_location.name.trim()}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.7rem' }}
+                >
+                  • {inventory.business_location.address.city}
+                </Typography>
+              </Box>
+            )}
           </Box>
 
           {/* Key Details - Horizontal Layout */}
