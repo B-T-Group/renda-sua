@@ -615,6 +615,7 @@ const BusinessLocationsPage: React.FC = () => {
         onSave={handleSaveLocation}
         location={editingLocation}
         businessPrimaryCountry={primaryAddressCountry}
+        businessId={profile?.business?.id ?? null}
         loading={locationsLoading}
         error={locationsError}
         warning={locationsWarning}

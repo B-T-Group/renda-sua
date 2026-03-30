@@ -1516,7 +1516,14 @@
       "autoWithdrawStatus": "Versements auto sur téléphone",
       "autoWithdrawOn": "Activé",
       "autoWithdrawOff": "Désactivé",
-      "autoWithdrawNeedsPhone": "Ajoutez un numéro de téléphone ci-dessus pour activer les versements automatiques."
+      "autoWithdrawNeedsPhone": "Ajoutez un numéro de téléphone ci-dessus pour activer les versements automatiques.",
+      "logoLabel": "Logo de l'emplacement",
+      "logoUrl": "URL de l'image du logo",
+      "logoUrlHint": "Collez une URL d'image publique, ou téléversez un fichier vers S3.",
+      "logoUpload": "Téléverser une image",
+      "logoClear": "Retirer le logo",
+      "logoUploadError": "Échec du téléversement du logo",
+      "logoBusinessRequired": "Le profil entreprise est requis pour téléverser un logo"
     },
     "orders": {
       "agentAssigned": "🚚 Excellent ! Un agent a réclamé cette commande et arrivera bientôt. Préparez la commande pour un transfert rapide.",

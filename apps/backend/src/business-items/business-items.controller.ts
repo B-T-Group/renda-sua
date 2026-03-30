@@ -100,6 +100,11 @@ export class BusinessItemsController {
           description:
             'When true, order payouts are sent automatically to this location phone when configured.',
         },
+        logo_url: {
+          type: 'string',
+          nullable: true,
+          description: 'Public URL for the location logo (S3 or external). Empty clears.',
+        },
       },
     },
   })
@@ -115,6 +120,7 @@ export class BusinessItemsController {
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
+      logo_url?: string | null;
     }
   ) {
     const user = await this.hasuraUserService.getUser();
@@ -197,6 +203,11 @@ export class BusinessItemsController {
           type: 'boolean',
           description: 'Defaults to true when omitted.',
         },
+        logo_url: {
+          type: 'string',
+          nullable: true,
+          description: 'Optional public URL for the location logo.',
+        },
       },
     },
   })
@@ -218,6 +229,7 @@ export class BusinessItemsController {
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
+      logo_url?: string | null;
     }
   ) {
     const user = await this.hasuraUserService.getUser();

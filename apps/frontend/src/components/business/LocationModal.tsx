@@ -1,5 +1,6 @@
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   CircularProgress,
@@ -17,16 +18,20 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { Store as StoreIcon } from '@mui/icons-material';
 import { State } from 'country-state-city';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useSnackbar } from 'notistack';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAws } from '../../hooks/useAws';
 import {
   AddBusinessLocationData,
   BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
+import { presignUploadLibraryImage } from './onboarding/onboardingPresignedUpload';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
 function profileAddressToFormData(addr: Address): AddressFormData {
@@ -51,6 +56,8 @@ interface LocationModalProps {
   location?: BusinessLocation | null;
   /** Business primary address country. When set, country is read-only and derived from business address. */
   businessPrimaryCountry?: string | null;
+  /** Required for uploading a logo to S3 from this dialog. */
+  businessId?: string | null;
   loading?: boolean;
   error?: string | null;
   warning?: string | null;
@@ -62,11 +69,16 @@ const LocationModal: React.FC<LocationModalProps> = ({
   onSave,
   location,
   businessPrimaryCountry = null,
+  businessId = null,
   loading = false,
   error = null,
   warning = null,
 }) => {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
+  const { generateImageUploadUrl } = useAws();
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
   const isEditing = !!location;
   const effectiveCountry = isEditing
@@ -91,6 +103,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     is_primary: false,
     rendasua_item_commission_percentage: null,
     auto_withdraw_commissions: true,
+    logo_url: '',
   });
 
   const [addressData, setAddressData] = useState<AddressFormData>({
@@ -119,6 +132,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         rendasua_item_commission_percentage:
           location.rendasua_item_commission_percentage ?? null,
         auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
+        logo_url: location.logo_url ?? '',
       });
 
       // Special case to account for legacy state values in the database not saved as state name but saved as state code
@@ -147,6 +161,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         is_primary: false,
         rendasua_item_commission_percentage: null,
         auto_withdraw_commissions: true,
+        logo_url: '',
       });
 
       setAddressData({
@@ -161,6 +176,48 @@ const LocationModal: React.FC<LocationModalProps> = ({
       setReuseProfileAddress(false);
     }
   }, [location, open, businessPrimaryCountry]);
+
+  const bucketName =
+    process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
+
+  const handleLogoFileSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !businessId) {
+      if (!businessId) {
+        enqueueSnackbar(
+          t(
+            'business.locations.logoBusinessRequired',
+            'Business profile is required to upload a logo'
+          ),
+          { variant: 'warning' }
+        );
+      }
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const { image_url } = await presignUploadLibraryImage(
+        file,
+        bucketName,
+        `businesses/${businessId}/location-logos`,
+        generateImageUploadUrl,
+        t('business.locations.logoUploadError', 'Failed to upload logo')
+      );
+      setFormData((prev) => ({ ...prev, logo_url: image_url }));
+    } catch (err: unknown) {
+      enqueueSnackbar(
+        err instanceof Error
+          ? err.message
+          : t('business.locations.logoUploadError', 'Failed to upload logo'),
+        { variant: 'error' }
+      );
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!formData.name.trim()) return;
@@ -179,6 +236,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
       await onSave({
         ...formData,
         rendasua_item_commission_percentage: commission,
+        logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
         address: {
           ...addressData,
           postal_code: addressData.postal_code?.trim() || '',
@@ -193,6 +251,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
       await onSave({
         ...formData,
         rendasua_item_commission_percentage: commission,
+        logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
       });
       return;
     }
@@ -209,6 +268,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     await onSave({
       ...formData,
       rendasua_item_commission_percentage: commission,
+      logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
       address: {
         ...addressData,
         postal_code: addressData.postal_code?.trim() || '',
@@ -292,6 +352,80 @@ const LocationModal: React.FC<LocationModalProps> = ({
               fullWidth
               required
             />
+
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {t('business.locations.logoLabel', 'Location logo')}
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                <Avatar
+                  src={formData.logo_url?.trim() || undefined}
+                  variant="rounded"
+                  sx={{
+                    width: 72,
+                    height: 72,
+                    bgcolor: 'action.hover',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <StoreIcon sx={{ color: 'text.secondary', fontSize: 36 }} />
+                </Avatar>
+                <Stack spacing={1} sx={{ flex: 1, minWidth: 200 }}>
+                  <TextField
+                    label={t('business.locations.logoUrl', 'Logo image URL')}
+                    value={formData.logo_url}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        logo_url: e.target.value,
+                      }))
+                    }
+                    fullWidth
+                    size="small"
+                    placeholder="https://"
+                    helperText={t(
+                      'business.locations.logoUrlHint',
+                      'Paste a public image URL, or upload a file to store on S3.'
+                    )}
+                  />
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <input
+                      ref={logoFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handleLogoFileSelected}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={loading || uploadingLogo || !businessId}
+                      onClick={() => logoFileInputRef.current?.click()}
+                      startIcon={
+                        uploadingLogo ? (
+                          <CircularProgress color="inherit" size={16} />
+                        ) : undefined
+                      }
+                    >
+                      {t('business.locations.logoUpload', 'Upload image')}
+                    </Button>
+                    {formData.logo_url ? (
+                      <Button
+                        variant="text"
+                        size="small"
+                        color="inherit"
+                        onClick={() =>
+                          setFormData((prev) => ({ ...prev, logo_url: '' }))
+                        }
+                      >
+                        {t('business.locations.logoClear', 'Remove logo')}
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </Stack>
+              </Stack>
+            </Box>
 
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <FormControl sx={{ flex: 1, minWidth: 200 }}>

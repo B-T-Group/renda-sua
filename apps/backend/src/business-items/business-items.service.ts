@@ -108,6 +108,7 @@ const GET_BUSINESS_LOCATIONS = `
       is_primary
       rendasua_item_commission_percentage
       auto_withdraw_commissions
+      logo_url
       created_at
       updated_at
       address {
@@ -548,6 +549,7 @@ export class BusinessItemsService {
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
+      logo_url?: string | null;
     }
   ): Promise<any> {
     let addressId: string;
@@ -629,8 +631,12 @@ export class BusinessItemsService {
         HttpStatus.BAD_REQUEST
       );
     }
+    const logoUrl =
+      data.logo_url != null && String(data.logo_url).trim() !== ''
+        ? String(data.logo_url).trim()
+        : null;
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric, $autoWithdraw: Boolean!) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $email: String, $commission: numeric, $autoWithdraw: Boolean!, $logoUrl: String) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -641,6 +647,7 @@ export class BusinessItemsService {
           email: $email,
           rendasua_item_commission_percentage: $commission,
           auto_withdraw_commissions: $autoWithdraw,
+          logo_url: $logoUrl,
           is_active: true
         }) {
           id
@@ -652,6 +659,7 @@ export class BusinessItemsService {
           is_active
           rendasua_item_commission_percentage
           auto_withdraw_commissions
+          logo_url
           address { id address_line_1 address_line_2 city state postal_code country }
         }
       }
@@ -666,6 +674,7 @@ export class BusinessItemsService {
       email: data.email ?? null,
       commission: data.rendasua_item_commission_percentage ?? null,
       autoWithdraw: data.auto_withdraw_commissions ?? true,
+      logoUrl,
     });
     const location = (locationResult as any).insert_business_locations_one;
     if (!location?.id) {
@@ -694,6 +703,7 @@ export class BusinessItemsService {
       is_primary?: boolean;
       rendasua_item_commission_percentage?: number | null;
       auto_withdraw_commissions?: boolean;
+      logo_url?: string | null;
     }
   ): Promise<any> {
     const query = `
@@ -714,6 +724,10 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
+    const setInput: Record<string, unknown> = { ...data };
+    if (setInput.logo_url === '') {
+      setInput.logo_url = null;
+    }
     const updateMutation = `
       mutation UpdateBusinessLocation($id: uuid!, $data: business_locations_set_input!) {
         update_business_locations_by_pk(pk_columns: { id: $id }, _set: $data) {
@@ -723,6 +737,7 @@ export class BusinessItemsService {
           email
           rendasua_item_commission_percentage
           auto_withdraw_commissions
+          logo_url
           location_type
           is_active
           is_primary
@@ -732,7 +747,7 @@ export class BusinessItemsService {
     `;
     const result = await this.hasuraUserService.executeMutation(updateMutation, {
       id: locationId,
-      data,
+      data: setInput,
     });
     return result?.update_business_locations_by_pk ?? null;
   }

@@ -1527,7 +1527,14 @@
       "autoWithdrawStatus": "Auto payouts to phone",
       "autoWithdrawOn": "On",
       "autoWithdrawOff": "Off",
-      "autoWithdrawNeedsPhone": "Add a phone number above for automatic payouts to work."
+      "autoWithdrawNeedsPhone": "Add a phone number above for automatic payouts to work.",
+      "logoLabel": "Location logo",
+      "logoUrl": "Logo image URL",
+      "logoUrlHint": "Paste a public image URL, or upload a file to store on S3.",
+      "logoUpload": "Upload image",
+      "logoClear": "Remove logo",
+      "logoUploadError": "Failed to upload logo",
+      "logoBusinessRequired": "Business profile is required to upload a logo"
     },
     "orders": {
       "agentAssigned": "🚚 Great! An agent has claimed this order and will arrive soon. Have the order ready for quick handoff.",

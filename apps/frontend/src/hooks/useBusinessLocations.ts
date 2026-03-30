@@ -27,6 +27,8 @@ export interface BusinessLocation {
   rendasua_item_commission_percentage?: number | null;
   /** When true, order payouts are auto-sent to this location's phone when set. */
   auto_withdraw_commissions?: boolean;
+  /** Public URL for location logo (S3 or external). */
+  logo_url?: string | null;
 }
 
 export interface AddBusinessLocationData {
@@ -41,6 +43,7 @@ export interface AddBusinessLocationData {
   rendasua_item_commission_percentage?: number | null;
   /** Defaults to true when omitted (server default). */
   auto_withdraw_commissions?: boolean;
+  logo_url?: string | null;
   address?: {
     address_line_1: string;
     address_line_2?: string;
@@ -63,6 +66,7 @@ export interface UpdateBusinessLocationData {
   is_primary?: boolean;
   rendasua_item_commission_percentage?: number | null;
   auto_withdraw_commissions?: boolean;
+  logo_url?: string | null;
   address?: {
     address_line_1?: string;
     address_line_2?: string;
@@ -167,6 +171,9 @@ export const useBusinessLocations = (
           ...(data.auto_withdraw_commissions !== undefined && {
             auto_withdraw_commissions: data.auto_withdraw_commissions,
           }),
+          ...(data.logo_url !== undefined && {
+            logo_url: data.logo_url?.trim() ? data.logo_url.trim() : null,
+          }),
         };
         const body =
           data.address_id && !data.address
@@ -243,6 +250,11 @@ export const useBusinessLocations = (
           }),
           ...(locationData.auto_withdraw_commissions !== undefined && {
             auto_withdraw_commissions: locationData.auto_withdraw_commissions,
+          }),
+          ...(locationData.logo_url !== undefined && {
+            logo_url: locationData.logo_url?.trim()
+              ? locationData.logo_url.trim()
+              : null,
           }),
         };
         if (Object.keys(locationFields).length > 0) {

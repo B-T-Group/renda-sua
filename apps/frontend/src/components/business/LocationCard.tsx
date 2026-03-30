@@ -5,8 +5,10 @@ import {
   Email as EmailIcon,
   LocationOn as LocationIcon,
   Phone as PhoneIcon,
+  Store as StoreIcon,
 } from '@mui/icons-material';
 import {
+  Avatar,
   Box,
   Button,
   Card,
@@ -87,13 +89,29 @@ const LocationCard: React.FC<LocationCardProps> = ({
       }}
     >
       <CardContent sx={{ flexGrow: 1, pb: 1, px: 2, pt: 2 }}>
-        {/* Header with Name and Delete Button */}
+        {/* Header: logo, name, delete */}
         <Box
           display="flex"
           justifyContent="space-between"
           alignItems="flex-start"
           mb={2}
+          gap={1.5}
         >
+          <Avatar
+            src={location.logo_url?.trim() || undefined}
+            variant="rounded"
+            alt=""
+            sx={{
+              width: 56,
+              height: 56,
+              flexShrink: 0,
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <StoreIcon sx={{ color: 'text.secondary' }} />
+          </Avatar>
           <Typography
             variant="h6"
             component="div"
@@ -101,6 +119,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
               fontWeight: 700,
               fontSize: '1.1rem',
               flex: 1,
+              minWidth: 0,
               pr: 1,
               wordBreak: 'break-word',
             }}

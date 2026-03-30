@@ -57,6 +57,7 @@ insert_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - created_at
         - updated_at
 select_permissions:
@@ -75,6 +76,7 @@ select_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - created_at
         - updated_at
       filter: {}
@@ -93,6 +95,7 @@ select_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - created_at
         - updated_at
       filter: {}
@@ -111,6 +114,7 @@ select_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - created_at
         - updated_at
       filter:
@@ -133,6 +137,7 @@ select_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - created_at
         - updated_at
       filter: {}
@@ -150,6 +155,7 @@ select_permissions:
         - phone
         - operating_hours
         - rendasua_item_commission_percentage
+        - logo_url
         - created_at
         - updated_at
       filter: {}
@@ -168,6 +174,7 @@ update_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - logo_url
         - updated_at
       filter:
         business:
