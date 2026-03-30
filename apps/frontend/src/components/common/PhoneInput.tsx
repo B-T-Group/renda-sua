@@ -40,6 +40,8 @@ interface PhoneInputProps {
   defaultCountry?: string;
   margin?: 'none' | 'dense' | 'normal';
   onlyCountries?: string[];
+  /** Fires when the country selector changes (ISO2, e.g. CM, GA) */
+  onCountryChange?: (country?: string) => void;
   /** In development, render a dropdown of DEV_PHONE_NUMBERS instead of free-form input (profile/signup) */
   useDevPhoneDropdown?: boolean;
   /** Optional start adornment (e.g. phone icon) for both dev dropdown and standard input */
@@ -61,6 +63,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   defaultCountry = 'US',
   margin = 'normal',
   onlyCountries,
+  onCountryChange,
   useDevPhoneDropdown = false,
   startAdornment,
   squareEdges = false,
@@ -164,6 +167,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   return (
     <Box
       sx={{
+        position: 'relative',
         width: fullWidth ? '100%' : 'auto',
         mb: margin === 'normal' ? 2 : margin === 'dense' ? 1 : 0,
       }}
@@ -206,6 +210,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
             defaultCountry={defaultCountry as any}
             value={value || ''}
             onChange={onChange as any}
+            onCountryChange={onCountryChange as any}
             placeholder={placeholder}
             disabled={disabled}
             required={required}

@@ -4,6 +4,8 @@ export interface NotificationData {
   clientName: string;
   clientEmail: string;
   businessName: string;
+  /** Store or location name (e.g. Downtown Store), when available */
+  businessLocationName?: string;
   businessEmail: string;
   businessVerified?: boolean;
   agentName?: string;

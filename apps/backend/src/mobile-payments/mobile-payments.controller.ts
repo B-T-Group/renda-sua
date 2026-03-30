@@ -15,7 +15,10 @@ import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from '../orders/orders.service';
 import { RentalsService } from '../rentals/rentals.service';
-import { GiveChangePayoutService } from './give-change-payout.service';
+import {
+  GiveChangePayoutService,
+  type GiveChangeProvider,
+} from './give-change-payout.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -189,20 +192,42 @@ export class MobilePaymentsController {
         }
       }
 
-      // Validate Airtel and MOOV providers only work with XAF currency
+      const resolvedProvider =
+        this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+
+      const isAccountTopUpPayment =
+        !!paymentRequest.accountId &&
+        paymentRequest.transactionType !== 'GIVE_CHANGE';
+
+      if (isAccountTopUpPayment && paymentRequest.amount < 150) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Top-up amount must be greater than or equal to 150',
+            error: 'MIN_TOP_UP_AMOUNT',
+            data: { minAmount: 150, currency: paymentRequest.currency },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const isMobileMoney =
+        !paymentRequest.paymentMethod ||
+        paymentRequest.paymentMethod === 'mobile_money';
+
       if (
-        (paymentRequest.provider === 'airtel' ||
-          paymentRequest.provider === 'moov') &&
-        paymentRequest.currency !== 'XAF'
+        isMobileMoney &&
+        paymentRequest.currency !== 'XAF' &&
+        (resolvedProvider === 'mypvit' || resolvedProvider === 'freemopay')
       ) {
         throw new HttpException(
           {
             success: false,
             message:
-              'Airtel Money and MOOV Money are only supported for XAF currency',
+              'Mobile money payments are only supported for XAF currency',
             error: 'UNSUPPORTED_CURRENCY',
             data: {
-              provider: paymentRequest.provider,
+              provider: resolvedProvider,
               currency: paymentRequest.currency,
               supportedCurrency: 'XAF',
             },
@@ -232,7 +257,7 @@ export class MobilePaymentsController {
               description: paymentRequest.description,
               customerPhone: paymentRequest.customerPhone ?? '',
               accountId,
-              provider: paymentRequest.provider,
+              provider: resolvedProvider as GiveChangeProvider,
               paymentMethod: paymentRequest.paymentMethod,
               callbackUrl: paymentRequest.callbackUrl,
               withdrawalMemoPrefix: 'Mobile payment give change',
@@ -272,7 +297,7 @@ export class MobilePaymentsController {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         description: paymentRequest.description,
-        provider: paymentRequest.provider || 'mypvit',
+        provider: resolvedProvider,
         payment_method: paymentRequest.paymentMethod || 'mobile_money',
         customer_phone: paymentRequest.customerPhone,
         customer_email: paymentRequest.customerEmail,

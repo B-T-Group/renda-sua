@@ -30,6 +30,7 @@
     "amount": "Montant",
     "amountPlaceholder": "Entrez le montant à retirer",
     "amountRequired": "Le montant est requis",
+    "minTopUpAmount": "Le montant doit être supérieur ou égal à {{min}} {{currency}}",
     "available": "Disponible",
     "availableBalance": "Solde disponible",
     "balance": "Solde",
@@ -44,6 +45,8 @@
     "noTransactions": "Aucune transaction trouvée",
     "paymentMessages": {
       "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
+      "topUpInfoCM": "Rechargez avec MTN Mobile Money ou Orange Money.",
+      "topUpInfoGA": "Rechargez avec Airtel Money ou Moov Money.",
       "airtelMoneySuccess": "Demande de recharge envoyée avec succès."
     },
     "paymentMethod": "Méthode de Paiement",
@@ -62,6 +65,7 @@
     "summary": "Résumé du compte",
     "title": "Comptes",
     "topUpSuccess": "Demande de recharge envoyée avec succès ! Votre compte sera mis à jour sous peu.",
+    "topUpAmountHelper": "Saisissez un montant d'au moins {{min}} à ajouter à votre compte {{currency}}",
     "totalBalance": "Solde total",
     "transactionHistory": "Historique des transactions",
     "type": "Type",

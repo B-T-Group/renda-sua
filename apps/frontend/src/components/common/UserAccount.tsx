@@ -273,14 +273,12 @@ const UserAccount: React.FC<UserAccountProps> = ({
     try {
       // Use initiatePayment for Airtel and MOOV, requestTopUp for MTN MoMo
       if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
-        const provider = paymentMethod === 'airtel-money' ? 'airtel' : 'moov';
         await initiatePayment({
           amount: parseFloat(amount),
           currency: account.currency,
           description: 'Account Top Up',
           customerPhone: phoneNumber,
           accountId: account.id,
-          provider,
           paymentMethod: 'mobile_money',
           transactionType: 'PAYMENT',
         });

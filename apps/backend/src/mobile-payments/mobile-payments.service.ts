@@ -195,6 +195,9 @@ export interface PaymentProvider {
   isAvailable: boolean;
 }
 
+/** Integration used for persistence and API responses (only two backends). */
+export type MobilePaymentIntegrationProvider = 'freemopay' | 'mypvit';
+
 @Injectable()
 export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
@@ -210,7 +213,7 @@ export class MobilePaymentsService {
     this.providers.set('freemopay', freemopayService);
   }
 
-  getProvider(phoneNumber: string): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' | 'freemopay' {
+  getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
     const res = detectCameroonPhone(phoneNumber);
     if (res) {
       return 'freemopay';
@@ -299,14 +302,6 @@ export class MobilePaymentsService {
 
       // Determine the best provider based on request
       const provider = this.selectProvider(paymentRequest);
-
-      if (!provider) {
-        return {
-          success: false,
-          message: 'No suitable payment provider available',
-          errorCode: 'NO_PROVIDER_AVAILABLE',
-        };
-      }
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
@@ -710,22 +705,39 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Select the best payment provider based on request
+   * Resolved integration for DB / public responses: always freemopay or mypvit.
    */
-  private selectProvider(request: MobilePaymentRequest): string | null {
+  resolveProviderFromRequest(
+    request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider'>
+  ): MobilePaymentIntegrationProvider {
     if (request.customerPhone) {
       const res = detectCameroonPhone(request.customerPhone);
       if (res) {
         return 'freemopay';
       }
     }
-
-    // If provider is explicitly specified, use it
-    if (request.provider) {
-      return request.provider;
+    if (request.provider === 'freemopay') {
+      return 'freemopay';
     }
+    return 'mypvit';
+  }
 
-    // Default to MyPVit for now (Gabon)
+  /**
+   * Route to the correct SDK: CM -> freemopay; explicit mtn -> MTN MoMo; else MyPVit (airtel/moov/mypvit/…).
+   */
+  private selectProvider(request: MobilePaymentRequest): string {
+    if (request.customerPhone) {
+      const res = detectCameroonPhone(request.customerPhone);
+      if (res) {
+        return 'freemopay';
+      }
+    }
+    if (request.provider === 'freemopay') {
+      return 'freemopay';
+    }
+    if (request.provider === 'mtn') {
+      return 'mtn';
+    }
     return 'mypvit';
   }
 

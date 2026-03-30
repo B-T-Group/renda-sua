@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Order Confirmation - Rendasua</title>
+    <title>Order Placed - Rendasua</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -43,13 +43,6 @@
         padding: 15px 0;
         border-top: 2px solid #2c3e50;
       }
-      .status-badge {
-        background: #f39c12;
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-size: 0.9em;
-      }
       .footer {
         text-align: center;
         margin-top: 30px;
@@ -60,7 +53,7 @@
   </head>
   <body>
     <div class="header">
-      <h1>🛒 Order Confirmed!</h1>
+      <h1>🛒 Order Placed Successfully!</h1>
       <p>Thank you for choosing Rendasua</p>
     </div>
 
@@ -75,11 +68,8 @@
       <div class="order-details">
         <h3>Order Details</h3>
         <p><strong>Order Number:</strong> {{{orderNumber}}}</p>
-        <p>
-          <strong>Status:</strong>
-          <span class="status-badge">{{{orderStatus}}}</span>
-        </p>
         <p><strong>Business:</strong> {{{businessName}}}</p>
+        {{{BUSINESS_LOCATION_SECTION_HTML}}}
         <p><strong>Delivery Address:</strong> {{{deliveryAddress}}}</p>
         {{{ESTIMATED_DELIVERY_SECTION_HTML}}} {{{SPECIAL_INSTRUCTIONS_SECTION_HTML}}}
       </div>

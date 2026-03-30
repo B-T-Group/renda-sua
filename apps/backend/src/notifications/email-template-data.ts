@@ -69,6 +69,16 @@ export function buildAgentNameSection(
   return `<p><strong>${L.agent}</strong> ${esc(agentName)}</p>`;
 }
 
+export function buildBusinessLocationSection(
+  name: string | undefined,
+  locale: EmailLocale
+): string {
+  const n = name?.trim();
+  if (!n) return '';
+  const label = locale === 'fr' ? 'Lieu' : 'Location';
+  return `<p><strong>${label} :</strong> ${esc(n)}</p>`;
+}
+
 export function buildOrderItemsHtml(
   items: NotificationData['orderItems'],
   currency: string,
@@ -118,7 +128,7 @@ export function buildResendTemplateVariables(
 ): Record<string, string | number> {
   const variant = options?.orderItemsVariant ?? 'default';
   const cur = data.currency || 'USD';
-  const htmlBlocks = {
+  const htmlBlocks: Record<string, string> = {
     ORDER_ITEMS_HTML: buildOrderItemsHtml(data.orderItems || [], cur, variant),
     ESTIMATED_DELIVERY_SECTION_HTML: buildEstimatedDeliverySection(
       data.estimatedDeliveryTime,
@@ -130,6 +140,10 @@ export function buildResendTemplateVariables(
     ),
     NOTES_SECTION_HTML: buildNotesSection(data.notes, locale),
     AGENT_NAME_SECTION_HTML: buildAgentNameSection(data.agentName, locale),
+    BUSINESS_LOCATION_SECTION_HTML:
+      userType === 'client'
+        ? buildBusinessLocationSection(data.businessLocationName, locale)
+        : '',
   };
   const estRaw = data.estimatedDeliveryTime;
   const est =

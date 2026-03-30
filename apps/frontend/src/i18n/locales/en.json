@@ -30,6 +30,7 @@
     "amount": "Amount",
     "amountPlaceholder": "Enter amount",
     "amountRequired": "Amount is required",
+    "minTopUpAmount": "Amount must be greater than or equal to {{min}} {{currency}}",
     "available": "Available",
     "availableBalance": "Available Balance",
     "balance": "Balance",
@@ -44,6 +45,8 @@
     "noTransactions": "No transactions found",
     "paymentMessages": {
       "airtelMoneyInfo": "Top up your account using Airtel Money",
+      "topUpInfoCM": "Top up using MTN Mobile Money or Orange Money.",
+      "topUpInfoGA": "Top up using Airtel Money or Moov Money.",
       "airtelMoneySuccess": "Topup request successfully sent."
     },
     "paymentMethod": "Payment Method",
@@ -62,6 +65,7 @@
     "summary": "Summary",
     "title": "Accounts",
     "topUpSuccess": "Top-up request sent successfully! Your account will be updated shortly.",
+    "topUpAmountHelper": "Enter an amount of at least {{min}} to add to your {{currency}} account",
     "totalBalance": "Total Balance",
     "transactionHistory": "Transaction History",
     "type": "Type",

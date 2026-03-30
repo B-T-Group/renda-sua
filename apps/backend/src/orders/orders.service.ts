@@ -21,7 +21,10 @@ import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
-import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import {
+  MobilePaymentIntegrationProvider,
+  MobilePaymentsService,
+} from '../mobile-payments/mobile-payments.service';
 import {
   NotificationData,
   NotificationsService,
@@ -3993,6 +3996,7 @@ export class OrdersService {
           }
           business_location {
             id
+            name
             address_id
             business {
               id
@@ -4207,6 +4211,7 @@ export class OrdersService {
         clientPreferredLanguage: (order.client?.user as { preferred_language?: string })
           ?.preferred_language,
         businessName: order.business_location.business.name,
+        businessLocationName: order.business_location?.name || undefined,
         businessEmail: order.business_location.business.user.email,
         businessPreferredLanguage: (
           order.business_location.business.user as { preferred_language?: string }
@@ -4225,7 +4230,8 @@ export class OrdersService {
             totalPrice: item.total_price || 0,
           })) || [],
         subtotal: order.subtotal || 0,
-        deliveryFee: order.base_delivery_fee || 0,
+        deliveryFee:
+          (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
         fastDeliveryFee: order.per_km_delivery_fee || 0,
         taxAmount: order.tax_amount || 0,
         totalAmount: order.total_amount || 0,
@@ -4582,12 +4588,9 @@ export class OrdersService {
   }
 
   /**
-   * Get payment provider based on phone number.
-   * Delegates to MobilePaymentsService: Gabon -> mypvit/airtel/moov, Cameroon -> freemopay.
+   * Get payment integration (MyPVit vs Freemopay) from phone number.
    */
-  private getProvider(
-    phoneNumber: string
-  ): 'airtel' | 'mypvit' | 'moov' | 'mtn' | 'orange' | 'freemopay' {
+  private getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
     if (!phoneNumber) {
       throw new HttpException(
         {

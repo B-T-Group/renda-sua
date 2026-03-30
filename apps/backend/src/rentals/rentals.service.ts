@@ -1372,8 +1372,7 @@ export class RentalsService {
 
     const provider = this.mobilePaymentsService.getProvider(params.phoneNumber);
 
-    const isMyPVitLike =
-      provider === 'mypvit' || provider === 'airtel' || provider === 'moov';
+    const isMyPVitLike = provider === 'mypvit';
 
     // MyPVit-style providers validate:
     // - `reference` must be alphanumeric
