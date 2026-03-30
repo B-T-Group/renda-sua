@@ -53,7 +53,9 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { reasons, loading: loadingReasons } = useCancellationReasons(persona);
+  const { reasons, loading: loadingReasons } = useCancellationReasons(persona, {
+    enabled: open,
+  });
   const { cancelOrder } = useBackendOrders();
   const { getCancellationFee, error: feeError } = useCancellationFee();
 

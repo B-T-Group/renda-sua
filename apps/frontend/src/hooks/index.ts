@@ -79,7 +79,10 @@ export type { SupportedPaymentSystem } from './useSupportedPaymentSystems';
 
 // Cancellation hooks
 export { useCancellationReasons } from './useCancellationReasons';
-export type { CancellationReason } from './useCancellationReasons';
+export type {
+  CancellationReason,
+  UseCancellationReasonsOptions,
+} from './useCancellationReasons';
 
 // AWS hooks
 export { useAws } from './useAws';

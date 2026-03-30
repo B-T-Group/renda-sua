@@ -29,19 +29,29 @@ const GET_CANCELLATION_REASONS = gql`
   }
 `;
 
-export const useCancellationReasons = (persona: 'client' | 'business') => {
+export interface UseCancellationReasonsOptions {
+  /** When false, skips fetching until true (e.g. only when a modal is open). Default true. */
+  enabled?: boolean;
+}
+
+export const useCancellationReasons = (
+  persona: 'client' | 'business',
+  options?: UseCancellationReasonsOptions
+) => {
+  const enabled = options?.enabled !== false;
   const { data, loading, error, execute } = useGraphQLRequest<
     CancellationReasonsResponse,
     { persona: string }
   >(GET_CANCELLATION_REASONS, { showLoading: false });
 
   useEffect(() => {
-    execute({ persona });
-  }, [persona, execute]);
+    if (!enabled) return;
+    void execute({ persona });
+  }, [enabled, persona, execute]);
 
   return {
     reasons: data?.order_cancellation_reasons || [],
-    loading,
+    loading: enabled ? loading : false,
     error,
   };
 };
