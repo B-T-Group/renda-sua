@@ -75,6 +75,7 @@ import LandingPage from '../components/pages/LandingPage';
 import ManageOrderPage from '../components/pages/ManageOrderPage';
 import { MessagesCenterPage } from '../components/pages/MessagesCenterPage';
 import OrderConfirmationPage from '../components/pages/OrderConfirmationPage';
+import AnonAddressPage from '../components/pages/AnonAddressPage';
 import PlaceOrderPage from '../components/pages/PlaceOrderPage';
 import Profile from '../components/pages/Profile';
 import SupportPage from '../components/pages/SupportPage';
@@ -291,6 +292,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PlaceOrderPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/items/:id/place_order/anon-address"
+              element={
+                <ProtectedRoute>
+                  <AnonAddressPage />
                 </ProtectedRoute>
               }
             />

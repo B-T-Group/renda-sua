@@ -444,6 +444,11 @@ const PlaceOrderPage: React.FC = () => {
     return params.get('anon') === '1';
   }, [location.search]);
 
+  const anonAddressDone = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('anonAddressDone') === '1';
+  }, [location.search]);
+
   // Get inventory item
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
     useInventoryItem(id || null);
@@ -528,11 +533,17 @@ const PlaceOrderPage: React.FC = () => {
   // Anonymous flow: if user has no addresses, prompt for one
   useEffect(() => {
     if (!isAnonFlow) return;
+    if (anonAddressDone) return;
     if (addressesLoading) return;
     if (didAutoOpenAnonAddress) return;
     if (addresses.length > 0) return;
 
     setDidAutoOpenAnonAddress(true);
+    if (isMobile) {
+      navigate(`/items/${id}/place_order/anon-address?anon=1`, { replace: true });
+      return;
+    }
+
     setAddressDialogMode('anon');
     setAddressFormData({
       address_line_1: '',
@@ -545,7 +556,16 @@ const PlaceOrderPage: React.FC = () => {
       is_primary: true,
     });
     setAddressDialogOpen(true);
-  }, [addresses.length, addressesLoading, didAutoOpenAnonAddress, isAnonFlow]);
+  }, [
+    addresses.length,
+    addressesLoading,
+    anonAddressDone,
+    didAutoOpenAnonAddress,
+    id,
+    isAnonFlow,
+    isMobile,
+    navigate,
+  ]);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
