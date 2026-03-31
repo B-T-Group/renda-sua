@@ -653,7 +653,7 @@ export class MobilePaymentsController {
   @Public()
   @Post('callback/freemopay')
   async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
-    this.logger.log('freemopayCallback', JSON.stringify(callbackData));
+    this.logger.log('freemopayCallback', callbackData);
     try {
       if (!callbackData.reference || !callbackData.status) {
         this.logger.error(
