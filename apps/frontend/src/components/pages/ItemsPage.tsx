@@ -1,6 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
-    AccountCircle as AccountIcon,
     Assignment,
     Inventory,
     Search as SearchIcon,
@@ -398,47 +397,6 @@ const ItemsPage: React.FC = () => {
             </Box>
           </Paper>
         )}
-
-        {/* Authentication CTA - Only for non-authenticated users */}
-        {!isAuthenticated && (
-          <Alert
-            severity="info"
-            icon={<AccountIcon />}
-            action={
-              <Button
-                variant="contained"
-                size="medium"
-                onClick={handleLogin}
-                sx={{
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  minWidth: 120,
-                }}
-              >
-                {t('public.items.authCta.button', 'Sign In')}
-              </Button>
-            }
-            sx={{
-              mb: 4,
-              '& .MuiAlert-message': {
-                width: '100%',
-              },
-            }}
-          >
-            <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-              {t('public.items.authCta.title', 'Sign in to place orders')}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ color: 'text.secondary', mt: 0.5 }}
-            >
-              {t(
-                'public.items.authCta.description',
-                'Create an account to browse and order items.'
-              )}
-            </Typography>
-          </Alert>
-        )}
       </Box>
 
       {/* Items Section */}
@@ -458,6 +416,23 @@ const ItemsPage: React.FC = () => {
             ? t('dashboard.availableItems', 'Available Items')
             : t('public.items.availableItems', 'Available Items')}
         </Typography>
+
+        {/* Unified filter for all users (contains search bar) */}
+        <ItemsPageFilter
+          items={inventoryItems}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onFilterChange={setFilteredItems}
+          loading={loading}
+          onLocationFilterChange={(name) => {
+            if (!name) {
+              setBusinessLocationId(null);
+            }
+          }}
+          onClearFilters={() => setBusinessLocationId(null)}
+        />
 
         {/* Sort / filter bar */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -533,23 +508,6 @@ const ItemsPage: React.FC = () => {
             label={t('public.items.showUnavailable', 'Show unavailable')}
           />
         </Box>
-
-        {/* Unified filter for all users */}
-        <ItemsPageFilter
-          items={inventoryItems}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          filters={filters}
-          onFiltersChange={setFilters}
-          onFilterChange={setFilteredItems}
-          loading={loading}
-          onLocationFilterChange={(name) => {
-            if (!name) {
-              setBusinessLocationId(null);
-            }
-          }}
-          onClearFilters={() => setBusinessLocationId(null)}
-        />
 
         {/* Items Grid */}
         {loading ? (

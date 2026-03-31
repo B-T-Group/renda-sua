@@ -324,6 +324,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         sx={{
           display: 'flex',
           justifyContent: 'center',
+          mt: 2,
           mb: 2,
         }}
       >
