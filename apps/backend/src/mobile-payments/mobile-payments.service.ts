@@ -4,8 +4,8 @@ import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service'
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
-  FreemopayWithdrawalRequest,
   FreemopayService,
+  FreemopayWithdrawalRequest,
 } from './providers/freemopay.service';
 import {
   MyPVitPaymentRequest,
@@ -323,7 +323,7 @@ export class MobilePaymentsService {
         }
 
         this.logger.log(
-          `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}`
+          `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
         );
       }
 
