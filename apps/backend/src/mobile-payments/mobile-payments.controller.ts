@@ -399,8 +399,10 @@ export class MobilePaymentsController {
         transactionId
       );
       if (transaction) {
+        const persistedStatus =
+          status.status === 'ambiguous' ? 'pending' : status.status;
         await this.databaseService.updateTransaction(transactionId, {
-          status: status.status,
+          status: persistedStatus,
           error_message: status.message,
         });
       }

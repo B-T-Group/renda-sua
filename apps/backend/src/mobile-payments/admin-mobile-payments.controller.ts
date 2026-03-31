@@ -170,11 +170,14 @@ export class AdminMobilePaymentsController {
       );
     }
 
-    if (live.status === 'pending') {
+    if (live.status === 'pending' || live.status === 'ambiguous') {
       return {
         success: true,
         replayed: false,
-        message: 'Provider still pending',
+        message:
+          live.status === 'ambiguous'
+            ? 'Provider status uncertain; try again later'
+            : 'Provider still pending',
         data: { providerStatus: live, provider },
       };
     }

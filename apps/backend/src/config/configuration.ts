@@ -120,6 +120,8 @@ export interface MyPVitConfig {
   airtelMerchantOperationAccountCode: string; // RENAMED from merchantOperationAccountCode
   moovMerchantOperationAccountCode: string; // NEW
   paymentEndpointCode: string;
+  /** Path segment for MyPVit status API (e.g. `/CODE/status/...`). */
+  statusEndpointCode: string;
 }
 
 export interface FreemopayConfig {
@@ -184,6 +186,8 @@ export interface Configuration {
 // Secrets are now loaded in main.ts before NestJS starts
 // This function is synchronous and reads from process.env
 export default (): Configuration => {
+  const mypvitEnvironment =
+    (process.env.MYPVIT_ENVIRONMENT as 'test' | 'production') || 'test';
 
   return {
     GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY || '',
@@ -213,8 +217,7 @@ export default (): Configuration => {
       merchantSlug: process.env.MYPVIT_MERCHANT_SLUG || 'MR_1755783875',
       airtelSecretKey: process.env.AIRTEL_MYPVIT_SECRET_KEY || '', // RENAMED
       moovSecretKey: process.env.MOOV_MYPVIT_SECRET_KEY || '', // NEW
-      environment:
-        (process.env.MYPVIT_ENVIRONMENT as 'test' | 'production') || 'test',
+      environment: mypvitEnvironment,
       callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
       secretRefreshUrlCode:
         process.env.MYPVIT_SECRET_REFRESH_URL_CODE || 'TRUVU',
@@ -226,6 +229,11 @@ export default (): Configuration => {
         'ACC_68A722C33473B', // NEW
       paymentEndpointCode:
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
+      statusEndpointCode:
+        process.env.MYPVIT_STATUS_ENDPOINT_CODE ||
+        (mypvitEnvironment === 'production'
+          ? 'XI1OVAQBUCK8WEJC'
+          : 'RYXA6SLFNRBFFQJX'),
     },
     freemopay: {
       baseUrl: process.env.FREEMOPAY_BASE_URL || 'https://api-v2.freemopay.com',

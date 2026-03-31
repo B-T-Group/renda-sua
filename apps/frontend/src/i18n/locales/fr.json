@@ -172,6 +172,13 @@
       "dbReference": "Référence (base)",
       "provider": "Prestataire",
       "liveStatus": "Statut en direct",
+      "liveStatusLabels": {
+        "pending": "En attente",
+        "success": "Réussi",
+        "failed": "Échoué",
+        "cancelled": "Annulé",
+        "ambiguous": "Incertain (réessayer plus tard)"
+      },
       "message": "Message",
       "resolveReplayed": "Transaction finalisée à partir du statut prestataire.",
       "resolveNoReplay": "Aucun rejeu : toujours en attente chez le prestataire ou déjà finalisé."
@@ -2810,7 +2817,9 @@
         "topRated": "Mieux notés",
         "deals": "Offres"
       },
-      "showUnavailable": "Afficher les indisponibles"
+      "showUnavailable": "Afficher les indisponibles",
+      "topLocationsTitle": "Lieux populaires par nombre d’articles",
+      "unnamedLocation": "Magasin"
     },
     "deals": {
       "title": "Offres en cours",

@@ -74,6 +74,7 @@ export interface InventoryItem {
     name: string;
     location_type: string;
     is_primary: boolean;
+    logo_url?: string | null;
     business: {
       id: string;
       name: string;
@@ -112,6 +113,7 @@ export interface GetInventoryItemsQuery {
   state?: string;
   sort?: InventorySortMode;
   include_unavailable?: boolean;
+  business_location_id?: string;
 }
 
 export interface PaginatedInventoryItems {
@@ -128,7 +130,7 @@ export interface ApiResponse {
   message: string;
 }
 
-const ALLOWED_ANONYMOUS_COUNTRIES = ['CM', 'GA'];
+export const INVENTORY_ANONYMOUS_COUNTRY_CODES = ['CM', 'GA'];
 
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { isAuthenticated } = useAuth0();
@@ -169,7 +171,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
           : null;
       const code = detected?.toUpperCase();
-      if (code && ALLOWED_ANONYMOUS_COUNTRIES.includes(code)) {
+      if (code && INVENTORY_ANONYMOUS_COUNTRY_CODES.includes(code)) {
         country_code = code;
       }
       state = undefined;
@@ -192,6 +194,9 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.sort && { sort: query.sort }),
           ...(query.include_unavailable !== undefined && {
             include_unavailable: query.include_unavailable,
+          }),
+          ...(query.business_location_id?.trim() && {
+            business_location_id: query.business_location_id.trim(),
           }),
         },
         signal: controller.signal,
@@ -232,7 +237,21 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
         abortControllerRef.current = null;
       }
     }
-  }, [isAuthenticated, query.page, query.limit, query.is_active, query.search, query.category, query.brand, query.min_price, query.max_price, query.currency, query.sort, query.include_unavailable]);
+  }, [
+    isAuthenticated,
+    query.page,
+    query.limit,
+    query.is_active,
+    query.search,
+    query.category,
+    query.brand,
+    query.min_price,
+    query.max_price,
+    query.currency,
+    query.sort,
+    query.include_unavailable,
+    query.business_location_id,
+  ]);
 
   useEffect(() => {
     fetchInventoryItems();

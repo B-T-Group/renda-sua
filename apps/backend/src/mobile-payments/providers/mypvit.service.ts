@@ -33,18 +33,47 @@ export interface MyPVitPaymentResponse {
   merchant_operation_account_code?: string;
 }
 
+/** Documented MyPVit transaction statuses from the status API. */
+export type MyPVitProviderStatus =
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'AMBIGUOUS';
+
 export interface MyPVitTransactionStatus {
   transactionId: string;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | string;
+  /** PENDING | SUCCESS | FAILED | AMBIGUOUS (uncertain — recheck later). */
+  status: MyPVitProviderStatus | string;
   status_code?: string;
   amount?: number;
+  fees?: number;
   currency?: string;
   reference?: string;
   reference_id?: string;
   merchant_reference_id?: string;
   operator?: string;
   merchant_operation_account_code?: string;
+  customer_account_number?: string;
   message?: string;
+}
+
+/** Body shape for GET `/{code}/status?transactionId=...&accountOperationCode=...&transactionOperation=PAYMENT`. */
+interface MyPVitStatusApiBody {
+  date?: string;
+  /** PENDING, SUCCESS, FAILED, or AMBIGUOUS per MyPVit docs. */
+  status?: string;
+  amount?: number;
+  fees?: number;
+  operator?: string;
+  merchant_reference_id?: string;
+  customer_account_number?: string;
+  merchant_operation_account_code?: string;
+  currency?: string;
+  reference?: string;
+  reference_id?: string;
+  transaction_id?: string;
+  message?: string;
+  status_code?: string;
 }
 
 @Injectable()
@@ -77,6 +106,8 @@ export class MyPVitService {
         mypvitConfig?.moovMerchantOperationAccountCode || 'ACC_68F90896204C1',
       paymentEndpointCode:
         mypvitConfig?.paymentEndpointCode || 'X5T3RIBYQUDFBZSH',
+      statusEndpointCode:
+        mypvitConfig?.statusEndpointCode || 'RYXA6SLFNRBFFQJX',
     };
 
     // Log secret key status for debugging
@@ -226,7 +257,7 @@ export class MyPVitService {
   }
 
   /**
-   * Check transaction status using STATUS API
+   * Check transaction status using STATUS API (query params per MyPVit docs).
    */
   async checkTransactionStatus(
     transactionId: string,
@@ -234,47 +265,57 @@ export class MyPVitService {
   ): Promise<MyPVitTransactionStatus> {
     try {
       this.logger.log(`Checking transaction status for: ${transactionId}`);
-
-      // Get the current secret key from AWS Secrets Manager
       const secretKey = await this.getCurrentSecretKey(phoneNumber);
-
+      const accountOperationCode = this.getMerchantOperationAccountCode(
+        phoneNumber ?? ''
+      );
       const response = await this.httpClient.get(
-        `/RYXA6SLFNRBFFQJX/status/${transactionId}`,
+        `/${this.config.statusEndpointCode}/status`,
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Secret': secretKey,
-            'X-Callback-MediaType': 'application/json',
+          params: {
+            transactionId,
+            accountOperationCode,
+            transactionOperation: 'PAYMENT',
           },
+          headers: { 'X-Secret': secretKey },
         }
       );
-
-      // Check if the response indicates success based on status_code
-      if (response.data.status_code === '200') {
-        return {
-          transactionId:
-            response.data.reference_id || response.data.transaction_id,
-          status: response.data.status,
-          status_code: response.data.status_code,
-          amount: response.data.amount,
-          currency: response.data.currency,
-          reference: response.data.reference,
-          reference_id: response.data.reference_id,
-          merchant_reference_id: response.data.merchant_reference_id,
-          operator: response.data.operator,
-          merchant_operation_account_code:
-            response.data.merchant_operation_account_code,
-          message: response.data.message,
-        };
-      } else {
-        throw new Error(
-          response.data.message || 'Failed to check transaction status'
-        );
-      }
-    } catch (error) {
+      return this.mapStatusApiResponse(response.data, transactionId);
+    } catch (error: any) {
       this.logger.error('Failed to check transaction status:', error);
       throw error;
     }
+  }
+
+  private mapStatusApiResponse(
+    data: MyPVitStatusApiBody,
+    fallbackTransactionId: string
+  ): MyPVitTransactionStatus {
+    if (typeof data?.status !== 'string') {
+      const msg = data?.message;
+      throw new Error(
+        typeof msg === 'string' ? msg : 'Invalid status response'
+      );
+    }
+    return {
+      transactionId:
+        data.merchant_reference_id ||
+        data.reference_id ||
+        data.transaction_id ||
+        fallbackTransactionId,
+      status: data.status,
+      status_code: data.status_code,
+      amount: data.amount,
+      fees: data.fees,
+      currency: data.currency,
+      reference: data.reference ?? data.merchant_reference_id,
+      reference_id: data.reference_id,
+      merchant_reference_id: data.merchant_reference_id,
+      operator: data.operator,
+      merchant_operation_account_code: data.merchant_operation_account_code,
+      customer_account_number: data.customer_account_number,
+      message: data.message,
+    };
   }
 
   /**
@@ -316,7 +357,7 @@ export class MyPVitService {
       const secretKey = await this.getCurrentSecretKey(phoneNumber);
 
       const response = await this.httpClient.post(
-        `/RYXA6SLFNRBFFQJX/status/${transactionId}/cancel`,
+        `/${this.config.statusEndpointCode}/status/${transactionId}/cancel`,
         {},
         {
           headers: {
@@ -354,7 +395,7 @@ export class MyPVitService {
       if (filters?.offset) params.append('offset', filters.offset.toString());
 
       const response = await this.httpClient.get(
-        `/RYXA6SLFNRBFFQJX/status?${params.toString()}`
+        `/${this.config.statusEndpointCode}/status?${params.toString()}`
       );
 
       if (response.data.success) {

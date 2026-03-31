@@ -412,7 +412,10 @@ const AdminPendingMobilePaymentsPage: React.FC = () => {
                   )}
                   :
                 </strong>{' '}
-                {statusPayload.data.providerStatus.status}
+                {t(
+                  `admin.pendingMobilePayments.liveStatusLabels.${statusPayload.data.providerStatus.status}`,
+                  statusPayload.data.providerStatus.status
+                )}
               </Typography>
               <Typography variant="body2">
                 <strong>

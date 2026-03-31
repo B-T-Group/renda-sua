@@ -180,7 +180,8 @@ export interface MobilePaymentResponse {
 
 export interface MobileTransactionStatus {
   transactionId: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  /** Normalized provider status; `ambiguous` maps MyPVit AMBIGUOUS (uncertain, recheck later). */
+  status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
   amount: number;
   currency: string;
   reference: string;
@@ -455,11 +456,7 @@ export class MobilePaymentsService {
           );
           status = {
             transactionId: mypvitStatus.transactionId,
-            status: mypvitStatus.status as
-              | 'pending'
-              | 'success'
-              | 'failed'
-              | 'cancelled',
+            status: this.mapMypvitStatusToMobile(mypvitStatus.status),
             amount: mypvitStatus.amount || 0,
             currency: mypvitStatus.currency || 'XAF',
             reference: mypvitStatus.reference || '',
@@ -494,6 +491,25 @@ export class MobilePaymentsService {
     } catch (error) {
       this.logger.error('Failed to check transaction status:', error);
       throw error;
+    }
+  }
+
+  private mapMypvitStatusToMobile(
+    raw: string
+  ): MobileTransactionStatus['status'] {
+    switch (raw?.toUpperCase()) {
+      case 'SUCCESS':
+        return 'success';
+      case 'FAILED':
+        return 'failed';
+      case 'PENDING':
+        return 'pending';
+      case 'AMBIGUOUS':
+        return 'ambiguous';
+      case 'CANCELLED':
+        return 'cancelled';
+      default:
+        return 'pending';
     }
   }
 

@@ -233,6 +233,21 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       {/* Content Section - Bottom */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ flexGrow: 1, p: 1.5, pb: 1 }}>
+          {inventory.business_location.logo_url ? (
+            <Box
+              component="img"
+              src={inventory.business_location.logo_url}
+              alt={inventory.business_location.name || ''}
+              sx={{
+                maxHeight: 40,
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+                mb: 1,
+                alignSelf: 'flex-start',
+              }}
+            />
+          ) : null}
           {/* Header with Brand and Availability */}
           <Box sx={{ mb: 1 }}>
             {inventory.item.brand && (

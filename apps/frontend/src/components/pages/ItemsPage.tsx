@@ -31,6 +31,7 @@ import {
     InventorySortMode,
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { useTopInventoryLocations } from '../../hooks/useTopInventoryLocations';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import AddressAlert from '../common/AddressAlert';
 import DashboardItemCard from '../common/DashboardItemCard';
@@ -76,7 +77,16 @@ const ItemsPage: React.FC = () => {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [showUnavailable, setShowUnavailable] = useState(false);
+  const [businessLocationId, setBusinessLocationId] = useState<string | null>(
+    null
+  );
   const itemsPerPage = 100;
+
+  const { locations: topLocations, loading: topLocationsLoading } =
+    useTopInventoryLocations({
+      limit: 5,
+      include_unavailable: showUnavailable,
+    });
 
   // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
   const { inventoryItems, loading, error } = useInventoryItems({
@@ -85,6 +95,7 @@ const ItemsPage: React.FC = () => {
     is_active: true,
     sort,
     include_unavailable: showUnavailable,
+    business_location_id: businessLocationId ?? undefined,
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
@@ -114,6 +125,7 @@ const ItemsPage: React.FC = () => {
     filters.location,
     sort,
     showUnavailable,
+    businessLocationId,
   ]);
 
   // Pagination
@@ -236,17 +248,32 @@ const ItemsPage: React.FC = () => {
       filters.category ||
       filters.subcategory ||
       filters.brand ||
-      filters.location
+      filters.location ||
+      businessLocationId
   );
 
   const handleClearAllFilters = () => {
     setSearchTerm('');
+    setBusinessLocationId(null);
     setFilters({
       category: '',
       subcategory: '',
       brand: '',
       location: '',
     });
+  };
+
+  const handleSelectTopLocation = (loc: {
+    id: string;
+    name: string;
+  }) => {
+    if (businessLocationId === loc.id) {
+      setBusinessLocationId(null);
+      setFilters((f) => ({ ...f, location: '' }));
+    } else {
+      setBusinessLocationId(loc.id);
+      setFilters((f) => ({ ...f, location: loc.name }));
+    }
   };
 
   if (error) {
@@ -485,6 +512,112 @@ const ItemsPage: React.FC = () => {
           })}
         </Box>
 
+        {!topLocationsLoading && topLocations.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 1, fontWeight: 600 }}
+            >
+              {t(
+                'public.items.topLocationsTitle',
+                'Popular locations by item count'
+              )}
+            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                alignItems: 'center',
+              }}
+            >
+              {topLocations.map((loc) => {
+                const selected = businessLocationId === loc.id;
+                return (
+                  <Button
+                    key={loc.id}
+                    onClick={() => handleSelectTopLocation(loc)}
+                    variant={selected ? 'contained' : 'outlined'}
+                    color={selected ? 'primary' : 'inherit'}
+                    size="small"
+                    sx={(theme) => ({
+                      textTransform: 'none',
+                      borderRadius: 2,
+                      py: 0.75,
+                      px: 1.25,
+                      flexShrink: 0,
+                      ...(selected
+                        ? {
+                            color: theme.palette.primary.contrastText,
+                            fontWeight: 700,
+                            boxShadow: theme.shadows[4],
+                            border: `2px solid ${theme.palette.primary.dark}`,
+                            '&:hover': {
+                              bgcolor: theme.palette.primary.dark,
+                              color: theme.palette.primary.contrastText,
+                            },
+                          }
+                        : {}),
+                    })}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        maxWidth: 280,
+                        color: 'inherit',
+                      }}
+                    >
+                      {loc.logo_url ? (
+                        <Box
+                          component="img"
+                          src={loc.logo_url}
+                          alt={loc.name || ''}
+                          sx={{
+                            maxHeight: 32,
+                            width: 'auto',
+                            objectFit: 'contain',
+                            display: 'block',
+                          }}
+                        />
+                      ) : null}
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        noWrap
+                        sx={{
+                          maxWidth: 160,
+                          color: 'inherit',
+                        }}
+                      >
+                        {loc.name || t('public.items.unnamedLocation', 'Store')}
+                      </Typography>
+                      <Chip
+                        label={loc.item_count}
+                        size="small"
+                        color={selected ? undefined : 'primary'}
+                        variant={selected ? 'filled' : 'outlined'}
+                        sx={(theme) => ({
+                          height: 22,
+                          fontWeight: 700,
+                          '& .MuiChip-label': { px: 0.75 },
+                          ...(selected && {
+                            bgcolor: theme.palette.common.white,
+                            color: theme.palette.primary.dark,
+                            border: `1px solid ${theme.palette.primary.dark}`,
+                          }),
+                        })}
+                      />
+                    </Box>
+                  </Button>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+
         {/* Show unavailable toggle */}
         <Box sx={{ mb: 2 }}>
           <FormControlLabel
@@ -508,6 +641,12 @@ const ItemsPage: React.FC = () => {
           onFiltersChange={setFilters}
           onFilterChange={setFilteredItems}
           loading={loading}
+          onLocationFilterChange={(name) => {
+            if (!name) {
+              setBusinessLocationId(null);
+            }
+          }}
+          onClearFilters={() => setBusinessLocationId(null)}
         />
 
         {/* Items Grid */}

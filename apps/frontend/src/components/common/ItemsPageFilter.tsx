@@ -43,6 +43,10 @@ interface ItemsPageFilterProps {
   onFiltersChange: (filters: ItemsPageFilterState) => void;
   onFilterChange: (filteredItems: InventoryItem[]) => void;
   loading?: boolean;
+  /** When the location dropdown changes (e.g. cleared), sync backend location filter. */
+  onLocationFilterChange?: (locationName: string) => void;
+  /** Called when user clears all filters from this panel. */
+  onClearFilters?: () => void;
 }
 
 const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
@@ -53,6 +57,8 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   onFiltersChange,
   onFilterChange,
   loading = false,
+  onLocationFilterChange,
+  onClearFilters,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -151,6 +157,9 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       [field]: value,
       ...(field === 'category' ? { subcategory: '' } : {}),
     });
+    if (field === 'location') {
+      onLocationFilterChange?.(value);
+    }
   };
 
   const handleClearFilters = () => {
@@ -161,6 +170,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       brand: '',
       location: '',
     });
+    onClearFilters?.();
   };
 
   const activeFiltersCount = [

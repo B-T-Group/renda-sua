@@ -12,6 +12,7 @@ import type {
   GetInventoryItemsQuery,
   InventoryItem,
   PaginatedInventoryItems,
+  TopInventoryLocationRow,
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
 
@@ -30,12 +31,77 @@ interface GetInventoryItemsQueryParams {
   state?: string;
   sort?: string;
   include_unavailable?: string;
+  business_location_id?: string;
 }
 
 @ApiTags('Inventory Items')
 @Controller('inventory-items')
 export class InventoryItemsController {
   constructor(private readonly inventoryItemsService: InventoryItemsService) {}
+
+  @Public()
+  @Get('top-locations')
+  @ApiOperation({
+    summary:
+      'Top business locations by in-catalog item count (same rules as inventory list)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Max locations to return (default 5, max 20)',
+  })
+  @ApiQuery({
+    name: 'country_code',
+    required: false,
+    type: String,
+    description: 'Same as inventory list (anonymous catalog scope)',
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    type: String,
+    description: 'Optional state filter (with country_code)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Top locations with item counts and optional logo_url',
+  })
+  async getTopInventoryLocations(
+    @Query('limit') limit?: string,
+    @Query('country_code') country_code?: string,
+    @Query('state') state?: string,
+    @Query('is_active') is_active?: string,
+    @Query('include_unavailable') include_unavailable?: string
+  ): Promise<{
+    success: boolean;
+    data: { locations: TopInventoryLocationRow[] };
+    message: string;
+  }> {
+    const n = limit ? Math.min(parseInt(limit, 10) || 5, 20) : 5;
+    const locations = await this.inventoryItemsService.getTopInventoryLocations(
+      n,
+      {
+        country_code,
+        state,
+        is_active:
+          is_active === 'true'
+            ? true
+            : is_active === 'false'
+              ? false
+              : undefined,
+        include_unavailable:
+          include_unavailable !== undefined
+            ? include_unavailable === 'true'
+            : undefined,
+      }
+    );
+    return {
+      success: true,
+      data: { locations },
+      message: 'Top locations retrieved successfully',
+    };
+  }
 
   @Public()
   @Get()
@@ -153,6 +219,12 @@ export class InventoryItemsController {
     description:
       'Include items with zero stock (default: false). When false, only items with computed_available_quantity > 0 are returned.',
   })
+  @ApiQuery({
+    name: 'business_location_id',
+    required: false,
+    type: String,
+    description: 'Filter to a single business location (UUID)',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -195,6 +267,7 @@ export class InventoryItemsController {
           query.include_unavailable !== undefined
             ? query.include_unavailable === 'true'
             : undefined,
+        business_location_id: query.business_location_id?.trim() || undefined,
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

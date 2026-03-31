@@ -172,6 +172,13 @@
       "dbReference": "DB reference",
       "provider": "Provider",
       "liveStatus": "Live status",
+      "liveStatusLabels": {
+        "pending": "Pending",
+        "success": "Success",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "ambiguous": "Uncertain (check again later)"
+      },
       "message": "Message",
       "resolveReplayed": "Transaction finalized from provider status.",
       "resolveNoReplay": "No replay: provider still pending or already finalized."
@@ -2847,7 +2854,9 @@
         "topRated": "Top rated",
         "deals": "Deals"
       },
-      "showUnavailable": "Show unavailable"
+      "showUnavailable": "Show unavailable",
+      "topLocationsTitle": "Popular locations by item count",
+      "unnamedLocation": "Store"
     },
     "deals": {
       "title": "Current Deals",

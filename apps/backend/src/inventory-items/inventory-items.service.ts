@@ -81,6 +81,7 @@ export interface InventoryItem {
     name: string;
     location_type: string;
     is_primary: boolean;
+    logo_url?: string | null;
     business: {
       id: string;
       name: string;
@@ -112,6 +113,15 @@ export interface GetInventoryItemsQuery {
   state?: string;
   sort?: InventorySortMode;
   include_unavailable?: boolean;
+  /** When set, only inventory rows for this business location (UUID). */
+  business_location_id?: string;
+}
+
+export interface TopInventoryLocationRow {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  item_count: number;
 }
 
 export interface PaginatedInventoryItems {
@@ -123,6 +133,8 @@ export interface PaginatedInventoryItems {
 }
 
 const INVENTORY_DISTANCE_CACHE_TTL = 7776000; // 3 months in seconds
+/** Cap rows scanned to rank locations by item count (avoids unbounded reads). */
+const TOP_LOCATIONS_INVENTORY_SCAN_LIMIT = 20000;
 
 @Injectable()
 export class InventoryItemsService {
@@ -135,6 +147,225 @@ export class InventoryItemsService {
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly configService: ConfigService
   ) {}
+
+  private async resolveInventoryListGeo(
+    query: GetInventoryItemsQuery
+  ): Promise<{
+    country_code?: string;
+    state?: string;
+    clientId: string | null;
+  }> {
+    let country_code = query.country_code;
+    let state = query.state;
+    let clientId: string | null = null;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      clientId = user?.client?.id ?? null;
+      const addresses = user.addresses;
+      if (addresses?.length) {
+        const primary =
+          addresses.find((a) => a.is_primary === true) ?? addresses[0];
+        if (primary?.country) {
+          country_code = primary.country;
+          state = primary.state ?? state;
+        }
+      }
+    } catch {
+      // Anonymous or invalid token
+    }
+    return { country_code, state, clientId };
+  }
+
+  private async buildInventoryCatalogWhere(params: {
+    is_active: boolean;
+    include_unavailable: boolean;
+    search?: string;
+    category?: string;
+    brand?: string;
+    min_price?: number;
+    max_price?: number;
+    currency?: string;
+    business_location_id?: string;
+    country_code?: string;
+    state?: string;
+  }): Promise<{ unsupported: true } | { where: Record<string, unknown> }> {
+    const {
+      is_active,
+      include_unavailable,
+      search,
+      category,
+      brand,
+      min_price,
+      max_price,
+      currency,
+      business_location_id,
+      country_code,
+      state,
+    } = params;
+
+    const whereConditions: any[] = [];
+    whereConditions.push({ is_active: { _eq: is_active } });
+    whereConditions.push({
+      business_location: {
+        business: { is_verified: { _eq: true } },
+      },
+    });
+    if (!include_unavailable) {
+      whereConditions.push({ computed_available_quantity: { _gt: 0 } });
+    }
+    if (business_location_id?.trim()) {
+      whereConditions.push({
+        business_location_id: { _eq: business_location_id.trim() },
+      });
+    }
+    if (search) {
+      whereConditions.push({
+        _or: [
+          { item: { name: { _ilike: `%${search}%` } } },
+          { item: { description: { _ilike: `%${search}%` } } },
+          { item: { sku: { _ilike: `%${search}%` } } },
+          { item: { brand: { name: { _ilike: `%${search}%` } } } },
+        ],
+      });
+    }
+    if (category) {
+      whereConditions.push({
+        item: {
+          item_sub_category: {
+            item_category: { name: { _ilike: `%${category}%` } },
+          },
+        },
+      });
+    }
+    if (brand) {
+      whereConditions.push({
+        item: { brand: { name: { _ilike: `%${brand}%` } } },
+      });
+    }
+    if (min_price !== undefined) {
+      whereConditions.push({ selling_price: { _gte: min_price } });
+    }
+    if (max_price !== undefined) {
+      whereConditions.push({ selling_price: { _lte: max_price } });
+    }
+    if (currency) {
+      whereConditions.push({ item: { currency: { _eq: currency } } });
+    }
+
+    if (country_code || state) {
+      const ok = await this.validateLocationSupport(country_code, state);
+      if (!ok) {
+        return { unsupported: true };
+      }
+    }
+
+    let supportedLocationFilter: any = {};
+    if (country_code || state) {
+      const locationConditions: any[] = [];
+      if (country_code) {
+        locationConditions.push({
+          business_location: {
+            address: { country: { _eq: country_code } },
+          },
+        });
+      }
+      if (state) {
+        locationConditions.push({
+          business_location: {
+            address: { state: { _eq: state } },
+          },
+        });
+      }
+      supportedLocationFilter = { _and: locationConditions };
+    } else {
+      supportedLocationFilter = {
+        business_location: {
+          address: {
+            country: {
+              _in: await this.getSupportedCountryCodes(),
+            },
+          },
+        },
+      };
+    }
+    whereConditions.push(supportedLocationFilter);
+    const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
+    return { where };
+  }
+
+  /**
+   * Top business locations by number of catalog inventory rows (same visibility rules as list).
+   */
+  async getTopInventoryLocations(
+    limit = 5,
+    query: Pick<
+      GetInventoryItemsQuery,
+      'country_code' | 'state' | 'is_active' | 'include_unavailable'
+    > = {}
+  ): Promise<TopInventoryLocationRow[]> {
+    const take = Math.min(Math.max(limit, 1), 20);
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const is_active = query.is_active !== undefined ? query.is_active : true;
+    const include_unavailable = query.include_unavailable ?? false;
+    const built = await this.buildInventoryCatalogWhere({
+      is_active,
+      include_unavailable,
+      country_code,
+      state,
+    });
+    if ('unsupported' in built) {
+      return [];
+    }
+    const { where } = built;
+    const scanQuery = `
+      query ScanLocIds($where: business_inventory_bool_exp!, $lim: Int!) {
+        business_inventory(where: $where, limit: $lim) {
+          business_location_id
+        }
+      }
+    `;
+    const scanResult = await this.hasuraSystemService.executeQuery(scanQuery, {
+      where,
+      lim: TOP_LOCATIONS_INVENTORY_SCAN_LIMIT,
+    });
+    const rows: { business_location_id: string }[] =
+      scanResult.business_inventory ?? [];
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const id = r.business_location_id;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const topPairs = sorted.slice(0, take);
+    if (topPairs.length === 0) {
+      return [];
+    }
+    const ids = topPairs.map(([id]) => id);
+    const locQuery = `
+      query TopLocDetails($ids: [uuid!]!) {
+        business_locations(where: { id: { _in: $ids } }) {
+          id
+          name
+          logo_url
+        }
+      }
+    `;
+    const locRes = await this.hasuraSystemService.executeQuery(locQuery, {
+      ids,
+    });
+    const locRows: Array<{ id: string; name: string; logo_url?: string | null }> =
+      locRes.business_locations ?? [];
+    const byId = new Map(locRows.map((l) => [l.id, l]));
+    return topPairs.map(([id, item_count]) => {
+      const loc = byId.get(id);
+      return {
+        id,
+        name: loc?.name ?? '',
+        logo_url: loc?.logo_url ?? null,
+        item_count,
+      };
+    });
+  }
 
   /**
    * Get paginated inventory items with optional filters.
@@ -154,153 +385,37 @@ export class InventoryItemsService {
       max_price,
       currency,
       is_active = true,
-      country_code: queryCountryCode,
-      state: queryState,
       sort = 'relevance',
       include_unavailable = false,
+      business_location_id,
     } = query;
 
-    // Resolve country_code and state: prefer logged-in user's address when JWT present
-    let country_code = queryCountryCode;
-    let state = queryState;
-    let clientId: string | null = null;
-    try {
-      const user = await this.hasuraUserService.getUser();
-      clientId = user?.client?.id ?? null;
-      const addresses = user.addresses;
-      if (addresses?.length) {
-        const primary =
-          addresses.find((a) => a.is_primary === true) ?? addresses[0];
-        if (primary?.country) {
-          country_code = primary.country;
-          state = primary.state ?? state;
-        }
-      }
-    } catch {
-      // Anonymous or invalid token: use query params as-is
-    }
+    const { country_code, state, clientId } =
+      await this.resolveInventoryListGeo(query);
 
-    // Build where conditions
-    const whereConditions: any[] = [];
-
-    // Only show active items by default
-    whereConditions.push({ is_active: { _eq: is_active } });
-
-    // Only show items from verified businesses
-    whereConditions.push({
-      business_location: {
-        business: { is_verified: { _eq: true } },
-      },
+    const built = await this.buildInventoryCatalogWhere({
+      is_active,
+      include_unavailable,
+      search,
+      category,
+      brand,
+      min_price,
+      max_price,
+      currency,
+      business_location_id,
+      country_code,
+      state,
     });
-
-    // Hide unavailable (zero stock) unless explicitly requested
-    if (!include_unavailable) {
-      whereConditions.push({ computed_available_quantity: { _gt: 0 } });
-    }
-
-    // Search filter
-    if (search) {
-      whereConditions.push({
-        _or: [
-          { item: { name: { _ilike: `%${search}%` } } },
-          { item: { description: { _ilike: `%${search}%` } } },
-          { item: { sku: { _ilike: `%${search}%` } } },
-          { item: { brand: { name: { _ilike: `%${search}%` } } } },
-        ],
-      });
-    }
-
-    // Category filter
-    if (category) {
-      whereConditions.push({
-        item: {
-          item_sub_category: {
-            item_category: { name: { _ilike: `%${category}%` } },
-          },
-        },
-      });
-    }
-
-    // Brand filter
-    if (brand) {
-      whereConditions.push({
-        item: { brand: { name: { _ilike: `%${brand}%` } } },
-      });
-    }
-
-    // Price filters
-    if (min_price !== undefined) {
-      whereConditions.push({ selling_price: { _gte: min_price } });
-    }
-    if (max_price !== undefined) {
-      whereConditions.push({ selling_price: { _lte: max_price } });
-    }
-
-    // Currency filter
-    if (currency) {
-      whereConditions.push({ item: { currency: { _eq: currency } } });
-    }
-
-    // Location filtering - only show items from supported locations
-    // First, validate that requested location is supported
-    if (country_code || state) {
-      const isLocationSupported = await this.validateLocationSupport(
-        country_code,
-        state
-      );
-      if (!isLocationSupported) {
-        // Return empty results if location is not supported
-        return {
-          items: [],
-          total: 0,
-          page,
-          limit,
-          totalPages: 0,
-        };
-      }
-    }
-
-    // Build location filter
-    let supportedLocationFilter: any = {};
-
-    if (country_code || state) {
-      // If specific country/state is requested, filter by it
-      const locationConditions: any[] = [];
-
-      if (country_code) {
-        locationConditions.push({
-          business_location: {
-            address: { country: { _eq: country_code } },
-          },
-        });
-      }
-
-      if (state) {
-        locationConditions.push({
-          business_location: {
-            address: { state: { _eq: state } },
-          },
-        });
-      }
-
-      supportedLocationFilter = { _and: locationConditions };
-    } else {
-      // If no specific location requested, still filter by supported locations only
-      // This ensures we only show items from countries/states that are supported
-      supportedLocationFilter = {
-        business_location: {
-          address: {
-            country: {
-              _in: await this.getSupportedCountryCodes(),
-            },
-          },
-        },
+    if ('unsupported' in built) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
       };
     }
-
-    whereConditions.push(supportedLocationFilter);
-
-    const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
+    const { where } = built;
 
     // Calculate offset
     const offset = (page - 1) * limit;
@@ -372,6 +487,7 @@ export class InventoryItemsService {
             name
             location_type
             is_primary
+            logo_url
             business {
               id
               name
@@ -553,6 +669,7 @@ export class InventoryItemsService {
             name
             location_type
             is_primary
+            logo_url
             business {
               id
               name
@@ -715,6 +832,7 @@ export class InventoryItemsService {
               name
               location_type
               is_primary
+              logo_url
               business { id name is_verified }
               address {
                 id
