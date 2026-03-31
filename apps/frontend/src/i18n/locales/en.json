@@ -2020,6 +2020,7 @@
   "orders": {
     "completeOrder": "Complete Order",
     "orderImages": "Order Images",
+    "anonDeliveryAddressPrompt": "Where do you want this item delivered?",
     "actions": {
       "cancel": "Cancel",
       "completeOrder": "Complete Order",
@@ -2318,7 +2319,7 @@
     "paymentStatus": "Payment",
     "phoneNumberNotSupported": "Phone Number Not Supported",
     "phoneNumberRequired": "Phone number is required when using a different phone number",
-    "phoneNumberRequiredMessage": "Please add your phone number to receive payment requests",
+    "phoneNumberRequiredMessage": "Phone number is required for mobile payments.",
     "pickupAddress": "Pickup from",
     "pickupLocation": "Pickup Location",
     "routeInfo": "Route Information",

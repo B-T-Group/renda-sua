@@ -2008,6 +2008,7 @@
   "orders": {
     "completeOrder": "Terminer la Commande",
     "orderImages": "Images de la commande",
+    "anonDeliveryAddressPrompt": "Où souhaitez-vous être livré pour cet article ?",
     "actions": {
       "cancel": "Annuler",
       "completeOrder": "Terminer la Commande",
@@ -2288,7 +2289,7 @@
     "paymentStatus": "Paiement",
     "phoneNumberNotSupported": "Numéro de Téléphone Non Pris en Charge",
     "phoneNumberRequired": "Le numéro de téléphone est requis lors de l'utilisation d'un numéro de téléphone différent",
-    "phoneNumberRequiredMessage": "Veuillez ajouter votre numéro de téléphone pour recevoir les demandes de paiement",
+    "phoneNumberRequiredMessage": "Le numéro de téléphone est requis pour les paiements mobiles.",
     "pickupAddress": "Récupérer depuis",
     "pickupLocation": "Lieu de Récupération",
     "routeInfo": "Informations sur l'Itinéraire",

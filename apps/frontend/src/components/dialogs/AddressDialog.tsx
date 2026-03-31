@@ -37,11 +37,14 @@ export interface AddressFormData {
 interface AddressDialogProps {
   open: boolean;
   title?: string;
+  subtitle?: string;
   addressData?: AddressFormData;
   loading?: boolean;
   showAddressType?: boolean;
   showIsPrimary?: boolean;
   showCoordinates?: boolean;
+  hideAddressLine2?: boolean;
+  hidePostalCode?: boolean;
   addressTypeOptions?: Array<{ value: string; label: string }>;
   /** Use full-screen dialog on small viewports (e.g. mobile) for better UX */
   fullScreen?: boolean;
@@ -55,11 +58,14 @@ interface AddressDialogProps {
 const AddressDialog: React.FC<AddressDialogProps> = ({
   open,
   title,
+  subtitle,
   addressData,
   loading = false,
   showAddressType = true,
   showIsPrimary = true,
   showCoordinates = true,
+  hideAddressLine2 = false,
+  hidePostalCode = false,
   addressTypeOptions,
   fullScreen = false,
   readOnlyCountry = null,
@@ -549,6 +555,11 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
     >
       <DialogTitle>{dialogTitle}</DialogTitle>
       <DialogContent>
+        {subtitle && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {subtitle}
+          </Typography>
+        )}
         {/* Get Current Location Button */}
         <Box sx={{ mb: 3 }}>
           <Button
@@ -600,19 +611,21 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           </Box>
 
           {/* Address Line 2 */}
-          <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-            <TextField
-              fullWidth
-              label={t(
-                'addresses.addressDialog.addressLine2',
-                'Address Line 2 (Optional)'
-              )}
-              value={addressData?.address_line_2 || ''}
-              onChange={(e) =>
-                handleInputChange('address_line_2', e.target.value)
-              }
-            />
-          </Box>
+          {!hideAddressLine2 && (
+            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+              <TextField
+                fullWidth
+                label={t(
+                  'addresses.addressDialog.addressLine2',
+                  'Address Line 2 (Optional)'
+                )}
+                value={addressData?.address_line_2 || ''}
+                onChange={(e) =>
+                  handleInputChange('address_line_2', e.target.value)
+                }
+              />
+            </Box>
+          )}
 
           {/* Instructions (how to find the location) */}
           <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
@@ -694,15 +707,17 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           </FormControl>
 
           {/* Postal Code (optional) */}
-          <TextField
-            fullWidth
-            label={t(
-              'addresses.addressDialog.postalCodeOptional',
-              'Postal code (optional)'
-            )}
-            value={addressData?.postal_code || ''}
-            onChange={(e) => handleInputChange('postal_code', e.target.value)}
-          />
+          {!hidePostalCode && (
+            <TextField
+              fullWidth
+              label={t(
+                'addresses.addressDialog.postalCodeOptional',
+                'Postal code (optional)'
+              )}
+              value={addressData?.postal_code || ''}
+              onChange={(e) => handleInputChange('postal_code', e.target.value)}
+            />
+          )}
 
           {/* Address Type (optional) */}
           {showAddressType && (

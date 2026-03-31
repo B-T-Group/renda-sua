@@ -62,10 +62,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [emailNormalized]
   );
 
-  const returnTo = useMemo(
+  const returnToPathWithAnon = useMemo(
     () => `/items/${inventoryItemId}/place_order?anon=1`,
     [inventoryItemId]
   );
+
 
   const redirectToOtp = useCallback(
     async (screenHint: 'login' | 'signup') => {
@@ -76,7 +77,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             login_hint: emailNormalized,
             screen_hint: screenHint,
           },
-          appState: { returnTo },
+          appState: { returnTo: returnToPathWithAnon },
         });
       } catch (redirectErr: any) {
         // Fallback: send to existing OTP page if Auth0 redirect fails
@@ -84,7 +85,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         navigate('/auth/otp');
       }
     },
-    [emailNormalized, loginWithRedirect, navigate, returnTo]
+    [emailNormalized, loginWithRedirect, navigate, returnToPathWithAnon]
   );
 
   const handleContinue = useCallback(async () => {

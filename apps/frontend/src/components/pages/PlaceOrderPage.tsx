@@ -646,7 +646,10 @@ const PlaceOrderPage: React.FC = () => {
     const trimmed = missingPhoneNumber.trim();
     if (!trimmed) {
       setMissingPhoneError(
-        t('orders.phoneNumberRequired', 'Phone number is required')
+        t(
+          'orders.phoneNumberRequiredMessage',
+          'Phone number is required for mobile payments.'
+        )
       );
       return;
     }
@@ -2944,10 +2947,20 @@ const PlaceOrderPage: React.FC = () => {
             ? t('orders.addDeliveryAddress', 'Add Delivery Address')
             : t('orders.addDeliveryAddress', 'Add Delivery Address')
         }
+        subtitle={
+          addressDialogMode === 'anon'
+            ? t(
+                'orders.anonDeliveryAddressPrompt',
+                'Where do you want this item delivered?'
+              )
+            : undefined
+        }
         addressData={addressFormData}
         loading={loading}
         showAddressType={addressDialogMode !== 'anon'}
         showIsPrimary={addressDialogMode !== 'anon'}
+        hideAddressLine2={addressDialogMode === 'anon'}
+        hidePostalCode={addressDialogMode === 'anon'}
         showCoordinates={false}
         fullScreen={isMobile}
         onClose={handleCloseAddressDialog}
@@ -2966,7 +2979,10 @@ const PlaceOrderPage: React.FC = () => {
         slotProps={{ paper: { sx: { borderRadius: 0 } } }}
       >
         <DialogTitle>
-          {t('orders.phoneNumberRequired', 'Phone number is required')}
+          {t(
+            'orders.phoneNumberRequiredMessage',
+            'Phone number is required for mobile payments.'
+          )}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>

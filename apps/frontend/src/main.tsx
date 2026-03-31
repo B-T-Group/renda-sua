@@ -3,7 +3,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useNavigate } from 'react-router-dom';
 import './styles/apple-fonts.css';
 
 import App from './app/app';
@@ -49,18 +49,35 @@ const auth0Config = {
   },
 };
 
+const Auth0ProviderWithNavigate: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const navigate = useNavigate();
+  return (
+    <Auth0Provider
+      {...auth0Config}
+      onRedirectCallback={(appState) => {
+        const target = (appState as any)?.returnTo || '/';
+        navigate(target, { replace: true });
+      }}
+    >
+      {children}
+    </Auth0Provider>
+  );
+};
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
 root.render(
   <StrictMode>
-    <Auth0Provider {...auth0Config}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <BrowserRouter
-          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-        >
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Auth0ProviderWithNavigate>
           <AnalyticsInit />
           <LoadingProvider>
             <SessionAuthProvider>
@@ -73,8 +90,8 @@ root.render(
               </UserProfileProvider>
             </SessionAuthProvider>
           </LoadingProvider>
-        </BrowserRouter>
-      </ThemeProvider>
-    </Auth0Provider>
+        </Auth0ProviderWithNavigate>
+      </BrowserRouter>
+    </ThemeProvider>
   </StrictMode>
 );
