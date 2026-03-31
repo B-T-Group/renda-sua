@@ -593,7 +593,6 @@ export class MobilePaymentsDatabaseService {
         mobile_payment_transactions(
           where: {
             status: { _eq: "pending" }
-            provider: { _in: ["mypvit", "freemopay"] }
           }
           order_by: { created_at: desc }
           limit: ${limit}
