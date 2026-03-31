@@ -23,6 +23,7 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InventoryItem } from '../../hooks/useInventoryItems';
@@ -328,22 +329,90 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
       >
         <TextField
           fullWidth
-          placeholder={t('public.items.searchPlaceholder', 'Search items...')}
+          size="medium"
+          variant="outlined"
+          label={t('public.items.searchLabel', 'Search items')}
+          placeholder={t(
+            'public.items.searchPlaceholder',
+            'Name, brand, SKU, or store…'
+          )}
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
+          autoComplete="off"
+          inputProps={{
+            'aria-label': t(
+              'public.items.searchAria',
+              'Search the item catalog'
+            ),
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon color="action" />
+                <SearchIcon
+                  sx={{
+                    color: 'text.secondary',
+                    opacity: 0.9,
+                    fontSize: 22,
+                  }}
+                />
               </InputAdornment>
             ),
+            endAdornment: searchTerm ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  edge="end"
+                  aria-label={t('public.items.clearSearch', 'Clear search')}
+                  onClick={() => onSearchChange('')}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
           }}
-          sx={{
-            maxWidth: 400,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
+          sx={(theme) => ({
+            maxWidth: 480,
+            '& .MuiInputLabel-root': {
+              fontWeight: 500,
             },
-          }}
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 2.5,
+              minHeight: 52,
+              pl: 0.25,
+              bgcolor:
+                theme.palette.mode === 'dark'
+                  ? alpha(theme.palette.common.white, 0.06)
+                  : alpha(theme.palette.common.black, 0.03),
+              transition: theme.transitions.create(
+                ['box-shadow', 'background-color', 'border-color'],
+                { duration: theme.transitions.duration.shorter }
+              ),
+              '&:hover': {
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.09)
+                    : alpha(theme.palette.common.black, 0.05),
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: alpha(theme.palette.primary.main, 0.45),
+                },
+              },
+              '&.Mui-focused': {
+                bgcolor: theme.palette.background.paper,
+                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                  borderWidth: 1,
+                },
+              },
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: theme.palette.divider,
+              },
+              '& .MuiOutlinedInput-input': {
+                py: 1.25,
+                typography: 'body1',
+              },
+            },
+          })}
         />
       </Box>
 
