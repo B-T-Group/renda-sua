@@ -4221,7 +4221,8 @@ export class OrdersService {
         agentPreferredLanguage: (
           order.assigned_agent?.user as { preferred_language?: string }
         )?.preferred_language,
-        orderStatus: order.current_status,
+        // DB was just set to pending in updateOrderStatusAndPaymentStatus above
+        orderStatus: 'pending',
         orderItems:
           order.order_items?.map((item: any) => ({
             name: item.item_name || 'Unknown Item',
