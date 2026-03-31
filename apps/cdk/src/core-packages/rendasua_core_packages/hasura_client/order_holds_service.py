@@ -25,7 +25,7 @@ def get_or_create_order_hold(
     Returns:
         OrderHold object, None if error
     """
-    # First, try to get existing order hold
+    # First, try to get existing order hold (omit settlement timestamp columns so older Hasura/DBs without migration still work)
     query = """
     query GetOrderHold($orderId: uuid!) {
       order_holds(where: { order_id: { _eq: $orderId } }) {
@@ -38,8 +38,6 @@ def get_or_create_order_hold(
         delivery_fees
         currency
         status
-        item_settlement_completed_at
-        delivery_settlement_completed_at
         created_at
         updated_at
       }
@@ -109,8 +107,6 @@ def get_or_create_order_hold(
             delivery_fees
             currency
             status
-            item_settlement_completed_at
-            delivery_settlement_completed_at
             created_at
             updated_at
           }
