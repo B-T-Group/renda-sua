@@ -322,6 +322,17 @@ const LocationModal: React.FC<LocationModalProps> = ({
     (reuseProfileAddress && !!formData.address_id) ||
     hasAddress;
 
+  const hasLocationLogo = !!formData.logo_url?.trim();
+  const locationNameHelperText = hasLocationLogo
+    ? t(
+        'business.locations.locationNameHintWithLogo',
+        'If a logo is set, enter only the city where this shop is located (the logo already identifies your business).'
+      )
+    : t(
+        'business.locations.locationNameHintWithoutLogo',
+        'Without a logo, enter your shop name and the city, e.g. Rendasua - Akwa.'
+      );
+
   return (
     <>
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -351,6 +362,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
               }
               fullWidth
               required
+              helperText={locationNameHelperText}
             />
 
             <Box>

@@ -1,11 +1,5 @@
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import {
-  Avatar,
-  Box,
-  ButtonBase,
-  Skeleton,
-  Typography,
-} from '@mui/material';
+import { Box, ButtonBase, Skeleton, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -79,35 +73,43 @@ function LocationPill({
           color: selected ? 'primary.contrastText' : 'text.primary',
         }}
       >
-        <Avatar
-          variant="rounded"
-          src={loc.logo_url || undefined}
-          alt={loc.logo_url ? name : ''}
-          sx={{
-            width: 44,
-            height: 44,
-            flexShrink: 0,
-            bgcolor: selected
-              ? alpha(theme.palette.common.white, 0.2)
-              : alpha(theme.palette.primary.main, 0.12),
-            color: selected ? 'primary.contrastText' : 'primary.main',
-            border: '1px solid',
-            borderColor: selected
-              ? alpha(theme.palette.common.white, 0.35)
-              : alpha(theme.palette.primary.main, 0.2),
-            fontSize: '1.1rem',
-            fontWeight: 700,
-            '& .MuiAvatar-img': {
-              width: 'auto',
-              height: 'auto',
-              maxWidth: '100%',
-              maxHeight: '100%',
+        {loc.logo_url ? (
+          <img
+            src={loc.logo_url}
+            alt={name}
+            width={44}
+            height={44}
+            style={{
+              flexShrink: 0,
               objectFit: 'contain',
-            },
-          }}
-        >
-          {name.slice(0, 1).toUpperCase()}
-        </Avatar>
+              display: 'block',
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+              borderRadius: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: selected
+                ? alpha(theme.palette.common.white, 0.2)
+                : alpha(theme.palette.primary.main, 0.12),
+              color: selected ? 'primary.contrastText' : 'primary.main',
+              border: '1px solid',
+              borderColor: selected
+                ? alpha(theme.palette.common.white, 0.35)
+                : alpha(theme.palette.primary.main, 0.2),
+              fontSize: '1.1rem',
+              fontWeight: 700,
+            }}
+          >
+            {name.slice(0, 1).toUpperCase()}
+          </Box>
+        )}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             variant="body2"

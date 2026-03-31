@@ -1515,6 +1515,8 @@
       "locationDeleted": "Emplacement supprimé avec succès",
       "location": "Emplacement",
       "locationName": "Nom de l'emplacement",
+      "locationNameHintWithLogo": "Si un logo est défini, indiquez uniquement la ville où se trouve la boutique (le logo identifie déjà votre commerce).",
+      "locationNameHintWithoutLogo": "Sans logo, indiquez le nom de la boutique et la ville, par ex. Rendasua - Akwa.",
       "locationType": "Type d'emplacement",
       "locationUpdated": "Emplacement mis à jour avec succès",
       "locationsRefreshed": "Emplacements actualisés avec succès",

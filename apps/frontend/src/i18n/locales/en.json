@@ -1526,6 +1526,8 @@
       "locationDeleted": "Location deleted successfully",
       "location": "Location",
       "locationName": "Location Name",
+      "locationNameHintWithLogo": "If a logo is set, enter only the city where this shop is located (the logo already identifies your business).",
+      "locationNameHintWithoutLogo": "Without a logo, enter your shop name and the city, e.g. Rendasua - Akwa.",
       "locationType": "Location Type",
       "locationUpdated": "Location updated successfully",
       "locationsRefreshed": "Locations refreshed successfully",
