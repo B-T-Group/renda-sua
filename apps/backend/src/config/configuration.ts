@@ -106,6 +106,11 @@ export interface GoogleCacheConfig {
 }
 
 export interface OpenAIConfig {
+  /** Used for image cleanup/edits only (OpenAI Images API). */
+  apiKey: string;
+}
+
+export interface DeepseekConfig {
   apiKey: string;
 }
 
@@ -177,6 +182,7 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  deepseek: DeepseekConfig;
   notification: NotificationConfig;
   push: PushConfig;
   sms: SmsConfig;
@@ -343,6 +349,9 @@ export default (): Configuration => {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
+    },
+    deepseek: {
+      apiKey: process.env.DEEPSEEK_API_KEY || '',
     },
     notification: {
       orderStatusChangeEnabled:

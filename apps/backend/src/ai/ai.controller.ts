@@ -34,7 +34,7 @@ export class AiController {
   @ApiOperation({
     summary: 'Generate AI-powered product description',
     description:
-      'Generate a compelling product description using OpenAI GPT-3.5-turbo based on product details',
+      'Generate a compelling product description using DeepSeek (chat API) based on product details',
   })
   @ApiBody({
     type: GenerateDescriptionDto,
@@ -77,7 +77,7 @@ export class AiController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Too Many Requests - OpenAI API rate limit exceeded',
+    description: 'Too Many Requests - DeepSeek API rate limit exceeded',
   })
   @ApiResponse({
     status: 500,
@@ -90,7 +90,7 @@ export class AiController {
           type: 'string',
           example: 'Failed to generate product description',
         },
-        error: { type: 'string', example: 'OpenAI API error' },
+        error: { type: 'string', example: 'DeepSeek API error' },
       },
     },
   })

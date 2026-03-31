@@ -1,29 +1,9 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import type { ChatCompletionRequest } from './chat-completion.types';
+import { DeepseekService } from './deepseek.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
-
-export interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant';
-  // For vision requests, content can be rich (text + image_url).
-  // For simple chat, it will be a string.
-  content: any;
-}
-
-export interface OpenAIRequest {
-  model: string;
-  messages: OpenAIMessage[];
-  max_tokens?: number;
-  temperature?: number;
-}
-
-export interface OpenAIResponse {
-  choices: Array<{
-    message: {
-      content: any;
-    };
-  }>;
-}
 
 export interface GenerateDescriptionResponse {
   success: boolean;
@@ -66,10 +46,12 @@ export interface RentalImageSuggestionResult {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private readonly openaiApiUrl = 'https://api.openai.com/v1/chat/completions';
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly deepseekService: DeepseekService
+  ) {}
 
   async generateProductDescription(
     dto: GenerateDescriptionDto
@@ -77,19 +59,10 @@ export class AiService {
     try {
       this.logger.log(`Generating description for product: ${dto.name}`);
 
-      const apiKey = this.configService.get<string>('openai.apiKey');
-      if (!apiKey) {
-        this.logger.error('OpenAI API key not configured');
-        throw new HttpException(
-          'OpenAI API key not configured',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-
       const prompt = this.buildPrompt(dto);
 
-      const request: OpenAIRequest = {
-        model: 'gpt-3.5-turbo',
+      const request: ChatCompletionRequest = {
+        model: this.deepseekService.defaultChatModel,
         messages: [
           {
             role: 'system',
@@ -104,22 +77,17 @@ export class AiService {
         temperature: 0.7,
       };
 
-      const response = await axios.post<OpenAIResponse>(
-        this.openaiApiUrl,
+      const response = await this.deepseekService.chatCompletions(
         request,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          timeout: 30000, // 30 seconds timeout
-        }
+        30000
       );
 
-      const description = response.data.choices?.[0]?.message?.content?.trim();
+      const rawDesc = response.choices?.[0]?.message?.content;
+      const description =
+        typeof rawDesc === 'string' ? rawDesc.trim() : undefined;
 
       if (!description) {
-        this.logger.error('No description generated from OpenAI');
+        this.logger.error('No description generated from DeepSeek');
         throw new HttpException(
           'No description generated',
           HttpStatus.INTERNAL_SERVER_ERROR
@@ -150,20 +118,19 @@ export class AiService {
         const axiosError = error as { response?: { status: number } };
         if (axiosError.response?.status === 401) {
           throw new HttpException(
-            'Invalid OpenAI API key',
+            'Invalid DeepSeek API key',
             HttpStatus.UNAUTHORIZED
           );
         }
 
         if (axiosError.response?.status === 429) {
           throw new HttpException(
-            'OpenAI API rate limit exceeded. Please try again later.',
+            'DeepSeek API rate limit exceeded. Please try again later.',
             HttpStatus.TOO_MANY_REQUESTS
           );
         }
       }
 
-      // Handle timeout errors
       if (error && typeof error === 'object' && 'code' in error) {
         const timeoutError = error as { code?: string };
         if (timeoutError.code === 'ECONNABORTED') {
@@ -344,15 +311,6 @@ export class AiService {
     defaultCurrency?: string;
     preferredLanguage?: string | null;
   }): Promise<ImageItemSuggestionResult> {
-    const apiKey = this.configService.get<string>('openai.apiKey');
-    if (!apiKey) {
-      this.logger.error('OpenAI API key not configured');
-      throw new HttpException(
-        'OpenAI API key not configured',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-
     const defaultCurrency = input.defaultCurrency || 'XAF';
     const descriptionLanguage = this.resolvePreferredLanguage(
       input.preferredLanguage
@@ -408,8 +366,8 @@ Return ONLY a single JSON object with this exact shape:
 Do not include any explanation outside of the JSON.
 The "description" field MUST be written in ${languageLabel}.`;
 
-    const request: OpenAIRequest = {
-      model: 'gpt-4o-mini',
+    const request: ChatCompletionRequest = {
+      model: this.deepseekService.defaultChatModel,
       messages: [
         {
           role: 'system',
@@ -434,19 +392,12 @@ The "description" field MUST be written in ${languageLabel}.`;
       this.logger.log(
         `Generating image item suggestions for image: ${input.imageUrl}`
       );
-      const response = await axios.post<OpenAIResponse>(
-        this.openaiApiUrl,
+      const response = await this.deepseekService.chatCompletions(
         request,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          timeout: 40000,
-        }
+        40000
       );
 
-      const rawContent = response.data.choices?.[0]?.message?.content;
+      const rawContent = response.choices?.[0]?.message?.content;
       const contentString =
         typeof rawContent === 'string'
           ? rawContent
@@ -511,6 +462,9 @@ The "description" field MUST be written in ${languageLabel}.`;
         dimensions: lookup.dimensions ?? suggestion.dimensions,
       };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Failed to generate image item suggestions for image: ${input.imageUrl}`,
         error
@@ -539,13 +493,6 @@ The "description" field MUST be written in ${languageLabel}.`;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
   }): Promise<RentalImageSuggestionResult> {
-    const apiKey = this.configService.get<string>('openai.apiKey');
-    if (!apiKey) {
-      throw new HttpException(
-        'OpenAI API key not configured',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
     const defaultCurrency = input.defaultCurrency || 'XAF';
     const descriptionLanguage = this.resolvePreferredLanguage(
       input.preferredLanguage
@@ -558,12 +505,14 @@ The "description" field MUST be written in ${languageLabel}.`;
     );
     try {
       return await this.requestRentalImageSuggestions(
-        apiKey,
         input.imageUrl,
         userText,
         defaultCurrency
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Rental image suggestions failed for ${input.imageUrl}`,
         error
@@ -621,13 +570,12 @@ No markdown, no explanation outside JSON.`;
   }
 
   private async requestRentalImageSuggestions(
-    apiKey: string,
     imageUrl: string,
     userText: string,
     defaultCurrency: string
   ): Promise<RentalImageSuggestionResult> {
-    const request: OpenAIRequest = {
-      model: 'gpt-4o-mini',
+    const request: ChatCompletionRequest = {
+      model: this.deepseekService.defaultChatModel,
       messages: [
         {
           role: 'system',
@@ -645,23 +593,16 @@ No markdown, no explanation outside JSON.`;
       max_tokens: 500,
       temperature: 0.2,
     };
-    const response = await axios.post<OpenAIResponse>(
-      this.openaiApiUrl,
+    const response = await this.deepseekService.chatCompletions(
       request,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        timeout: 45000,
-      }
+      45000
     );
-    const rawContent = response.data.choices?.[0]?.message?.content;
-    const contentString = this.normalizeOpenAiTextContent(rawContent);
+    const rawContent = response.choices?.[0]?.message?.content;
+    const contentString = this.normalizeChatMessageContent(rawContent);
     return this.parseRentalSuggestionJson(contentString, defaultCurrency);
   }
 
-  private normalizeOpenAiTextContent(rawContent: unknown): string {
+  private normalizeChatMessageContent(rawContent: unknown): string {
     if (typeof rawContent === 'string') return rawContent;
     if (Array.isArray(rawContent)) {
       return rawContent.map((p: any) => p?.text || '').join('\n');
