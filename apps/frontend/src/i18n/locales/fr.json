@@ -2816,6 +2816,13 @@
         "description": "Créez un compte pour parcourir et commander des articles.",
         "title": "Connectez-vous pour passer des commandes"
       },
+      "checkoutDialog": {
+        "title": "Continuer vers le paiement",
+        "subtitle": "Entrez votre email pour continuer. Nous l’utiliserons pour votre reçu, les mises à jour de commande et pour créer votre compte.",
+        "emailLabel": "Adresse email",
+        "continue": "Continuer",
+        "noPasswordHelper": "Aucun mot de passe nécessaire, nous vous enverrons un code à usage unique."
+      },
       "sort": {
         "relevance": "Pour vous",
         "fastest": "Plus rapide",

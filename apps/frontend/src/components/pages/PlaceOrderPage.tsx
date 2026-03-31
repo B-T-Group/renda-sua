@@ -23,7 +23,9 @@ import {
   CircularProgress,
   Container,
   Dialog,
+  DialogActions,
   DialogContent,
+  DialogTitle,
   Divider,
   FormControl,
   FormControlLabel,
@@ -45,7 +47,7 @@ import {
 import { parsePhoneNumber } from 'libphonenumber-js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -362,6 +364,7 @@ const PlaceOrderPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const apiClient = useApiClient();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
   const theme = useTheme();
@@ -389,6 +392,10 @@ const PlaceOrderPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [missingPhoneDialogOpen, setMissingPhoneDialogOpen] = useState(false);
+  const [missingPhoneNumber, setMissingPhoneNumber] = useState('');
+  const [missingPhoneSaving, setMissingPhoneSaving] = useState(false);
+  const [missingPhoneError, setMissingPhoneError] = useState<string | null>(null);
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
@@ -417,6 +424,10 @@ const PlaceOrderPage: React.FC = () => {
 
   // Address Dialog State
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [addressDialogMode, setAddressDialogMode] = useState<'normal' | 'anon'>(
+    'normal'
+  );
+  const [didAutoOpenAnonAddress, setDidAutoOpenAnonAddress] = useState(false);
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     address_line_1: '',
     address_line_2: '',
@@ -427,6 +438,11 @@ const PlaceOrderPage: React.FC = () => {
     address_type: 'home',
     is_primary: false,
   });
+
+  const isAnonFlow = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('anon') === '1';
+  }, [location.search]);
 
   // Get inventory item
   const { inventoryItem: selectedItem, loading: inventoryLoading } =
@@ -508,6 +524,28 @@ const PlaceOrderPage: React.FC = () => {
       );
     }
   }, [addresses, selectedAddressId]);
+
+  // Anonymous flow: if user has no addresses, prompt for one
+  useEffect(() => {
+    if (!isAnonFlow) return;
+    if (addressesLoading) return;
+    if (didAutoOpenAnonAddress) return;
+    if (addresses.length > 0) return;
+
+    setDidAutoOpenAnonAddress(true);
+    setAddressDialogMode('anon');
+    setAddressFormData({
+      address_line_1: '',
+      address_line_2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      country: '',
+      address_type: 'home',
+      is_primary: true,
+    });
+    setAddressDialogOpen(true);
+  }, [addresses.length, addressesLoading, didAutoOpenAnonAddress, isAnonFlow]);
 
   const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -592,6 +630,79 @@ const PlaceOrderPage: React.FC = () => {
     }
   };
 
+  const handleSubmitWithPhoneGate = useCallback(async () => {
+    // Only gate when using profile phone (not override) and it's missing
+    const hasProfilePhone = Boolean(profile?.phone_number?.trim());
+    if (!useDifferentPhone && !hasProfilePhone) {
+      setMissingPhoneError(null);
+      setMissingPhoneNumber('');
+      setMissingPhoneDialogOpen(true);
+      return;
+    }
+    await handleSubmit();
+  }, [handleSubmit, profile?.phone_number, useDifferentPhone]);
+
+  const handleSaveMissingPhone = useCallback(async () => {
+    const trimmed = missingPhoneNumber.trim();
+    if (!trimmed) {
+      setMissingPhoneError(
+        t('orders.phoneNumberRequired', 'Phone number is required')
+      );
+      return;
+    }
+
+    // Validate supported country using existing helper
+    try {
+      const parsed = parsePhoneNumber(trimmed);
+      const countryCode = parsed?.country || null;
+      const supported = countryCode ? isCountrySupported(countryCode) : false;
+      if (!supported) {
+        setMissingPhoneError(
+          t(
+            'accounts.withdrawPhoneCmGaOnly',
+            'Only Cameroon (+237) or Gabon (+241) phone numbers are accepted.'
+          )
+        );
+        return;
+      }
+    } catch {
+      setMissingPhoneError(
+        t('orders.invalidPhoneNumber', 'Invalid phone number format')
+      );
+      return;
+    }
+
+    setMissingPhoneSaving(true);
+    setMissingPhoneError(null);
+    try {
+      await apiClient.post('/users/me/update', {
+        firstName: profile?.first_name ?? '',
+        lastName: profile?.last_name ?? '',
+        phoneNumber: trimmed,
+      });
+      await refetchProfile();
+      setMissingPhoneDialogOpen(false);
+      await handleSubmit();
+    } catch (saveErr: any) {
+      const msg =
+        saveErr?.response?.data?.error ||
+        saveErr?.response?.data?.message ||
+        t('accounts.withdrawFailed', 'Please try again.');
+      setMissingPhoneError(msg);
+    } finally {
+      setMissingPhoneSaving(false);
+    }
+  }, [
+    apiClient,
+    handleSubmit,
+    isCountrySupported,
+    missingPhoneNumber,
+    profile?.first_name,
+    profile?.last_name,
+    refetchProfile,
+    t,
+  ]);
+
   const handlePageBack = () => {
     navigate(-1);
   };
@@ -603,6 +714,7 @@ const PlaceOrderPage: React.FC = () => {
 
   const handleCloseAddressDialog = () => {
     setAddressDialogOpen(false);
+    setAddressDialogMode('normal');
     // Reset form data
     setAddressFormData({
       address_line_1: '',
@@ -625,8 +737,12 @@ const PlaceOrderPage: React.FC = () => {
       // Ensure required fields are set
       const addressData = {
         ...addressFormData,
-        address_type: addressFormData.address_type || 'home',
-        is_primary: addressFormData.is_primary || false,
+        address_type:
+          addressDialogMode === 'anon'
+            ? 'home'
+            : addressFormData.address_type || 'home',
+        is_primary:
+          addressDialogMode === 'anon' ? true : addressFormData.is_primary || false,
       };
 
       // Add the address using the address manager
@@ -748,16 +864,17 @@ const PlaceOrderPage: React.FC = () => {
   }
 
   // Calculate if order can be placed
-  const canPlaceOrder =
+  const hasProfilePhone = Boolean(profile?.phone_number?.trim());
+  const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&
     selectedAddressId &&
-    addresses.length > 0 &&
-    // If using different phone, require override phone number to be entered and valid
-    // If not using different phone, require profile phone number to be valid
+    addresses.length > 0;
+  const canPlaceOrder =
     (useDifferentPhone
       ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
-      : profile?.phone_number && phoneValidation.isValid);
+      : !hasProfilePhone || phoneValidation.isValid) &&
+    baseCanPlaceOrder;
 
   // Step validation function (mobile: 3 steps with merged step 0; desktop: 4 steps)
   const isStepValid = (step: number): boolean => {
@@ -2001,7 +2118,7 @@ const PlaceOrderPage: React.FC = () => {
                 </Button>
                 {activeStep === steps.length - 1 ? (
                   <Button
-                    onClick={handleSubmit}
+                    onClick={handleSubmitWithPhoneGate}
                     variant="contained"
                     fullWidth
                     disabled={!canPlaceOrder || loading}
@@ -2806,7 +2923,7 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFeeError={deliveryFeeError}
               requiresFastDelivery={requiresFastDelivery}
               formatCurrency={formatCurrency}
-              onSubmit={handleSubmit}
+              onSubmit={handleSubmitWithPhoneGate}
               loading={loading}
               disabled={!canPlaceOrder}
               isMobile={isMobile}
@@ -2822,17 +2939,80 @@ const PlaceOrderPage: React.FC = () => {
       {/* Address Dialog */}
       <AddressDialog
         open={addressDialogOpen}
-        title={t('orders.addDeliveryAddress', 'Add Delivery Address')}
+        title={
+          addressDialogMode === 'anon'
+            ? t('orders.addDeliveryAddress', 'Add Delivery Address')
+            : t('orders.addDeliveryAddress', 'Add Delivery Address')
+        }
         addressData={addressFormData}
         loading={loading}
-        showAddressType={true}
-        showIsPrimary={true}
+        showAddressType={addressDialogMode !== 'anon'}
+        showIsPrimary={addressDialogMode !== 'anon'}
         showCoordinates={false}
         fullScreen={isMobile}
         onClose={handleCloseAddressDialog}
         onSave={handleSaveAddress}
         onAddressChange={handleAddressChange}
       />
+
+      <Dialog
+        open={missingPhoneDialogOpen}
+        onClose={() => {
+          if (!missingPhoneSaving) setMissingPhoneDialogOpen(false);
+        }}
+        fullWidth
+        maxWidth="xs"
+        fullScreen={isMobile}
+        slotProps={{ paper: { sx: { borderRadius: 0 } } }}
+      >
+        <DialogTitle>
+          {t('orders.phoneNumberRequired', 'Phone number is required')}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'orders.phoneNumberNeededForOrder',
+                'Please add a phone number to complete your order.'
+              )}
+            </Typography>
+
+            {missingPhoneError && <Alert severity="error">{missingPhoneError}</Alert>}
+
+            <PhoneInput
+              value={missingPhoneNumber}
+              onChange={(value) => setMissingPhoneNumber(value || '')}
+              label={t('accounts.phoneNumber', 'Phone Number')}
+              helperText={t(
+                'accounts.withdrawPhoneCmGaHint',
+                'Use a Cameroon (+237) or Gabon (+241) phone number.'
+              )}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setMissingPhoneDialogOpen(false)}
+            disabled={missingPhoneSaving}
+            sx={{ borderRadius: 0 }}
+          >
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveMissingPhone}
+            disabled={missingPhoneSaving}
+            sx={{ borderRadius: 0 }}
+            startIcon={
+              missingPhoneSaving ? <CircularProgress size={18} /> : <Phone />
+            }
+          >
+            {missingPhoneSaving
+              ? t('common.saving', 'Saving...')
+              : t('common.continue', 'Continue')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Placing order overlay with animation */}
       <PlacingOrderOverlay open={loading} />

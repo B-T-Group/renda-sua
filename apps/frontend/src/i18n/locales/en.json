@@ -2853,6 +2853,13 @@
         "description": "Create an account to browse and order items.",
         "title": "Sign in to place orders"
       },
+      "checkoutDialog": {
+        "title": "Continue to checkout",
+        "subtitle": "Enter your email to continue. We’ll use it for your receipt, order updates, and to create your account.",
+        "emailLabel": "Email address",
+        "continue": "Continue",
+        "noPasswordHelper": "No password needed, we will send you a one time code."
+      },
       "sort": {
         "relevance": "Relevance",
         "fastest": "Fastest",

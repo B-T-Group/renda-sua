@@ -29,6 +29,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 
 interface DashboardItemCardProps {
   item: InventoryItem;
@@ -69,6 +70,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
   const { t } = useTranslation();
 
   const hasDealPrices =
@@ -101,6 +103,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     Number.isFinite(inventory.avg_rating);
 
   const isUnavailable = inventory.computed_available_quantity <= 0;
+
+  const checkoutPriceText = hasDealPrices
+    ? formatCurrency(inventory.discounted_price!, inventory.item.currency)
+    : formatCurrency(inventory.selling_price, inventory.item.currency);
 
   return (
     <Card
@@ -704,7 +710,15 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               Available to Clients Only
             </Button>
           ) : isPublicView ? (
-            null
+            <Button
+              variant="contained"
+              startIcon={<ShoppingCart />}
+              onClick={() => setAnonBuyNowOpen(true)}
+              size="small"
+              sx={{ width: '75%', alignSelf: 'center' }}
+            >
+              {buyNowButtonText}
+            </Button>
           ) : showCartButtons && onAddToCart ? (
             <Box
               sx={{
@@ -757,6 +771,18 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           )}
         </CardActions>
       </Box>
+
+      <AnonymousBuyNowDialog
+        open={anonBuyNowOpen}
+        inventoryItemId={inventory.id}
+        item={{
+          title: inventory.item.name,
+          imageUrl: primaryImage,
+          priceText: checkoutPriceText,
+          quantity: 1,
+        }}
+        onClose={() => setAnonBuyNowOpen(false)}
+      />
 
       {/* Image lightbox */}
       <Dialog
