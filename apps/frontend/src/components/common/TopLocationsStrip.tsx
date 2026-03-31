@@ -40,8 +40,10 @@ function LocationPill({
       focusRipple
       aria-pressed={selected}
       sx={{
+        touchAction: 'manipulation',
         display: 'block',
-        width: { xs: 168, sm: 184 },
+        width: { xs: '100%', sm: 184 },
+        minWidth: 0,
         flexShrink: 0,
         textAlign: 'left',
         borderRadius: 2.5,
@@ -146,7 +148,8 @@ function LoadingPills() {
           key={i}
           variant="rounded"
           sx={{
-            width: { xs: 168, sm: 184 },
+            width: { xs: '100%', sm: 184 },
+            minWidth: 0,
             height: 76,
             flexShrink: 0,
             borderRadius: 2.5,
@@ -193,17 +196,21 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 1,
+          gap: { xs: 0.75, sm: 1 },
           mb: 1.75,
+          textAlign: { xs: 'center', sm: 'left' },
+          px: { xs: 0.5, sm: 0 },
         }}
       >
         <StorefrontOutlinedIcon
           sx={{
-            fontSize: 20,
+            fontSize: { xs: 22, sm: 20 },
             color: 'primary.main',
             opacity: 0.9,
+            flexShrink: 0,
           }}
         />
         <Typography
@@ -211,9 +218,11 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
           variant="overline"
           sx={{
             fontWeight: 700,
-            letterSpacing: '0.12em',
+            letterSpacing: { xs: '0.08em', sm: '0.12em' },
             color: 'text.secondary',
-            lineHeight: 1.2,
+            lineHeight: 1.25,
+            maxWidth: { xs: '100%', sm: 'none' },
+            whiteSpace: { xs: 'normal', sm: 'nowrap' },
           }}
         >
           {t(
@@ -225,21 +234,15 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
 
       <Box
         sx={{
-          display: 'flex',
-          gap: 1.5,
-          flexWrap: { xs: 'nowrap', sm: 'wrap' },
-          justifyContent: { xs: 'flex-start', sm: 'center' },
-          alignItems: 'stretch',
-          overflowX: { xs: 'auto', sm: 'visible' },
-          pb: { xs: 0.5, sm: 0 },
-          mx: { xs: -0.5, sm: 0 },
-          px: { xs: 0.5, sm: 0 },
-          scrollbarWidth: 'thin',
-          '&::-webkit-scrollbar': { height: 5 },
-          '&::-webkit-scrollbar-thumb': {
-            borderRadius: 4,
-            bgcolor: alpha(theme.palette.text.secondary, 0.35),
+          display: { xs: 'grid', sm: 'flex' },
+          gridTemplateColumns: {
+            xs: 'repeat(2, minmax(0, 1fr))',
+            sm: 'none',
           },
+          gap: 1.5,
+          flexWrap: { xs: 'unset', sm: 'wrap' },
+          justifyContent: { sm: 'center' },
+          alignItems: 'stretch',
         }}
       >
         {loading ? (
