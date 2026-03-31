@@ -221,6 +221,28 @@ export class MobilePaymentsService {
     return 'mypvit';
   }
 
+  /** National MSISDN digits for synthetic MyPVit callbacks (admin replay). */
+  nationalCustomerIdForMypvit(customerPhone?: string | null): string {
+    if (!customerPhone?.trim()) {
+      return '';
+    }
+    return removeCountryCode(customerPhone);
+  }
+
+  resolveAdminIntegrationProvider(
+    customerPhone: string | undefined | null,
+    storedProvider: string
+  ): MobilePaymentIntegrationProvider {
+    if (customerPhone?.trim()) {
+      return this.getProvider(customerPhone);
+    }
+    const p = storedProvider?.toLowerCase();
+    if (p === 'mypvit' || p === 'freemopay') {
+      return p;
+    }
+    throw new Error('UNSUPPORTED_INTEGRATION_PROVIDER');
+  }
+
   /** Account withdrawals (GIVE_CHANGE): only valid CM or GA MSISDN. */
   isWithdrawalDestinationCmOrGa(customerPhone?: string): boolean {
     if (!customerPhone?.trim()) {

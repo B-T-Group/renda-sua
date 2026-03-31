@@ -149,6 +149,33 @@
     }
   },
   "admin": {
+    "pendingMobilePayments": {
+      "pageTitle": "Paiements mobiles en attente",
+      "pageDescription": "Consultez les transactions MyPVit et Freemopay bloquées. Affichez le statut chez le prestataire ou finalisez lorsque le statut est définitif.",
+      "pageKeywords": "admin, mobile money, paiements, rapprochement",
+      "noBusinessProfile": "Profil entreprise introuvable",
+      "unauthorized": "Vous n’êtes pas autorisé à accéder à cette page",
+      "reference": "Référence",
+      "amount": "Montant",
+      "currency": "Devise",
+      "description": "Description",
+      "createdAt": "Créé le",
+      "pendingFor": "En attente depuis",
+      "customerPhone": "Téléphone client",
+      "actions": "Actions",
+      "empty": "Aucun paiement d’intégration en attente.",
+      "viewStatus": "Voir le statut",
+      "resolve": "Résoudre",
+      "missingProviderId": "Identifiant de transaction prestataire manquant",
+      "statusDialogTitle": "Statut prestataire",
+      "dbStatus": "Statut (base)",
+      "dbReference": "Référence (base)",
+      "provider": "Prestataire",
+      "liveStatus": "Statut en direct",
+      "message": "Message",
+      "resolveReplayed": "Transaction finalisée à partir du statut prestataire.",
+      "resolveNoReplay": "Aucun rejeu : toujours en attente chez le prestataire ou déjà finalisé."
+    },
     "businesses": {
       "imageCleanupEnabled": "Nettoyage d'image activé"
     },
@@ -737,6 +764,8 @@
       "adminManagementHint": "Outils de plateforme visibles uniquement par les administrateurs.",
       "countryOnboarding": "Intégration pays",
       "countryOnboardingDescription": "Assistant pour configurer les créneaux de livraison et les régions prises en charge pour un pays",
+      "pendingMobilePaymentsModule": "Paiements mobiles en attente",
+      "pendingMobilePaymentsModuleDescription": "Transactions MyPVit ou Freemopay bloquées : statut prestataire et rejeu des callbacks",
       "firstItem": {
         "saleTitle": "Ajoutez votre premier produit",
         "saleBody": "Téléversez des photos, créez l’article avec l’IA ou manuellement, puis ajoutez-le à un emplacement pour la vente.",

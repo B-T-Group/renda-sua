@@ -268,9 +268,7 @@ export class FreemopayService {
     if (!_payload || typeof _payload !== 'object') return false;
     const p = _payload as Record<string, unknown>;
     return (
-      typeof p.reference === 'string' &&
-      (typeof p.externalId === 'string' || typeof p.merchantRef === 'string') &&
-      typeof p.status === 'string'
+      typeof p.reference === 'string' && typeof p.status === 'string'
     );
   }
 

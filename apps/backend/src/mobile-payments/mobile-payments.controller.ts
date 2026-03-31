@@ -13,12 +13,15 @@ import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { OrdersService } from '../orders/orders.service';
-import { RentalsService } from '../rentals/rentals.service';
 import {
   GiveChangePayoutService,
   type GiveChangeProvider,
 } from './give-change-payout.service';
+import type {
+  FreemopayCallbackDto,
+  MyPVitCallbackDto,
+} from './mobile-payment-callback.dto';
+import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
@@ -47,29 +50,6 @@ export interface PaymentCallbackDto {
   timestamp?: string;
 }
 
-export interface MyPVitCallbackDto {
-  transactionId: string;
-  merchantReferenceId: string;
-  status: 'SUCCESS' | 'FAILED';
-  amount: number;
-  customerID: string;
-  fees: number;
-  chargeOwner: string;
-  transactionOperation: string;
-  operator: string;
-  code: number;
-}
-
-export interface FreemopayCallbackDto {
-  reference: string;
-  externalId?: string;
-  merchantRef?: string;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED';
-  amount?: number;
-  reason?: string;
-  message?: string;
-}
-
 @Controller('mobile-payments')
 @Throttle({ short: { limit: 20, ttl: 60000 } })
 export class MobilePaymentsController {
@@ -80,9 +60,8 @@ export class MobilePaymentsController {
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
     private readonly giveChangePayoutService: GiveChangePayoutService,
-    private readonly ordersService: OrdersService,
-    private readonly rentalsService: RentalsService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly callbackProcessor: MobilePaymentCallbackProcessor
   ) {}
 
   /**
@@ -629,33 +608,12 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Common rental booking payment callback handler.
-   * Note: booking should remain retryable on payment failure (no auto-expire).
-   */
-  private async handleRentalBookingCallback(
-    transaction: { entity_id?: string; reference?: string; payment_entity?: string },
-    wasSuccess: boolean
-  ): Promise<void> {
-    const bookingNumber = transaction.entity_id || transaction.reference || 'unknown';
-
-    if (!wasSuccess) {
-      this.logger.log(
-        `Rental booking payment callback FAILED for booking ${bookingNumber} (will keep booking retryable).`
-      );
-      return;
-    }
-
-    await this.rentalsService.processRentalBookingPayment(transaction);
-  }
-
-  /**
    * Payment callback endpoint for MyPVIT
    */
   @Public()
   @Post('callback/mypvit')
   async mypvitCallback(@Body() callbackData: MyPVitCallbackDto) {
     try {
-      // Validate required fields
       if (
         !callbackData.transactionId ||
         !callbackData.merchantReferenceId ||
@@ -670,117 +628,11 @@ export class MobilePaymentsController {
         );
       }
 
-      // Log the callback
-      await this.databaseService.logCallback(
-        callbackData.transactionId,
-        callbackData
-      );
-
-      // Find transaction by merchant reference ID
-      const transaction = await this.databaseService.getTransactionByReference(
-        callbackData.merchantReferenceId
-      );
-
-      if (transaction) {
-        // Map MyPVIT status to our status format
-        const status = callbackData.status === 'SUCCESS' ? 'success' : 'failed';
-
-        await this.databaseService.updateTransaction(transaction.id, {
-          status,
-          transaction_id: callbackData.transactionId,
-          error_message:
-            callbackData.status === 'FAILED' ? 'Payment failed' : undefined,
-        });
-
-        this.logger.log(
-          `Updated transaction ${transaction.id} with status: ${status}`
-        );
-
-        // If payment is successful, credit the account only for PAYMENT transactions
-        if (
-          callbackData.status === 'SUCCESS' &&
-          transaction.account_id &&
-          transaction.transaction_type === 'PAYMENT'
-        ) {
-          try {
-            const creditResult = await this.accountsService.registerTransaction(
-              {
-                accountId: transaction.account_id,
-                amount: transaction.amount,
-                transactionType: 'deposit',
-                memo: `Mobile payment deposit - ${transaction.reference}`,
-                referenceId: transaction.id,
-              }
-            );
-
-            if (creditResult.success) {
-              this.logger.log(
-                `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
-              );
-              this.logger.debug(
-                `New balance after credit: ${JSON.stringify(
-                  creditResult.newBalance
-                )}`
-              );
-
-              if (transaction.payment_entity === 'order') {
-                // Process order payment using the refactored method
-                await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
-              } else if (transaction.payment_entity === 'claim_order') {
-                // Process claim order payment
-                await this.ordersService.processClaimOrderPayment(transaction);
-              } else if (transaction.payment_entity === 'rental_booking') {
-                await this.handleRentalBookingCallback(transaction, true);
-              }
-            } else {
-              this.logger.error(
-                `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
-              );
-            }
-          } catch (creditError) {
-            this.logger.error(
-              `Error crediting account ${transaction.account_id}: ${String(
-                (creditError as any)?.message || creditError
-              )}`
-            );
-          }
-        }
-      } else {
-        this.logger.warn(
-          `Transaction not found for reference: ${callbackData.merchantReferenceId}`
-        );
-      }
-
-      if (
-        callbackData.status === 'FAILED' &&
-        transaction?.payment_entity === 'order'
-      ) {
-        const order = await this.ordersService.getOrderByNumber(
-          transaction.reference
-        );
-        await this.ordersService.onOrderPaymentFailed(order.id);
-      } else if (
-        callbackData.status === 'FAILED' &&
-        transaction?.payment_entity === 'claim_order'
-      ) {
-        // For claim order payment failures, we don't need to cancel the order
-        // since the order wasn't claimed yet - just log the failure
-        this.logger.log(
-          `Claim order payment failed for order ${transaction.reference}`
-        );
-      } else if (
-        callbackData.status === 'FAILED' &&
-        transaction?.payment_entity === 'rental_booking'
-      ) {
-        await this.handleRentalBookingCallback(transaction, false);
-      }
-
-      // Return success response
-      return {
-        responseCode: callbackData.code,
-        transactionId: callbackData.transactionId,
-      };
+      return await this.callbackProcessor.processMypvitCallback(callbackData);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error('MyPVIT callback processing error:', error);
       throw new HttpException(
         {
@@ -801,121 +653,26 @@ export class MobilePaymentsController {
   async freemopayCallback(@Body() callbackData: FreemopayCallbackDto) {
     this.logger.log('freemopayCallback', JSON.stringify(callbackData));
     try {
-      const externalId =
-        callbackData.externalId;
-      if (!callbackData.reference || !externalId || !callbackData.status) {
-        this.logger.error('Missing required callback data (reference, externalId/merchantRef, status)');
+      if (!callbackData.reference || !callbackData.status) {
+        this.logger.error(
+          'Missing required callback data (reference, status)'
+        );
         throw new HttpException(
           {
             success: false,
-            message: 'Missing required callback data (reference, externalId/merchantRef, status)',
+            message: 'Missing required callback data (reference, status)',
           },
           HttpStatus.BAD_REQUEST
         );
       }
 
-      const transaction = await this.databaseService.getTransactionByTransactionId(
-        callbackData.reference
+      return await this.callbackProcessor.processFreemopayCallback(
+        callbackData
       );
-
-
-      if (transaction) {
-
-        await this.databaseService.logCallback(transaction.id, callbackData);
-
-        const status =
-          callbackData.status === 'SUCCESS' ? 'success' : 'failed';
-
-        await this.databaseService.updateTransaction(transaction.id, {
-          status,
-          transaction_id: callbackData.reference,
-          error_message:
-            callbackData.status === 'FAILED'
-              ? callbackData.reason ||
-                callbackData.message ||
-                'Payment failed'
-              : undefined,
-        });
-
-        this.logger.log(
-          `Updated transaction ${transaction.id} with status: ${status}`
-        );
-
-        if (
-          callbackData.status === 'SUCCESS' &&
-          transaction.account_id &&
-          transaction.transaction_type === 'PAYMENT'
-        ) {
-          try {
-            const creditResult = await this.accountsService.registerTransaction(
-              {
-                accountId: transaction.account_id,
-                amount: transaction.amount,
-                transactionType: 'deposit',
-                memo: `Mobile payment deposit - ${transaction.reference}`,
-                referenceId: transaction.id,
-              }
-            );
-
-            if (creditResult.success) {
-              this.logger.log(
-                `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
-              );
-
-              if (transaction.payment_entity === 'order') {
-                await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
-              } else if (transaction.payment_entity === 'claim_order') {
-                await this.ordersService.processClaimOrderPayment(transaction);
-              } else if (transaction.payment_entity === 'rental_booking') {
-                await this.handleRentalBookingCallback(transaction, true);
-              }
-            } else {
-              this.logger.error(
-                `Failed to credit account ${transaction.account_id}: ${creditResult.error}`
-              );
-            }
-          } catch (creditError) {
-            this.logger.error(
-              `Error crediting account ${transaction.account_id}:`,
-              creditError
-            );
-          }
-        }
-      } else {
-        this.logger.warn(
-          `Transaction not found for reference: ${externalId}`
-        );
-      }
-
-      if (transaction) {
-        if (
-          callbackData.status === 'FAILED' &&
-          transaction.payment_entity === 'order'
-        ) {
-          const order = await this.ordersService.getOrderByNumber(
-            transaction.reference
-          );
-          await this.ordersService.onOrderPaymentFailed(order.id);
-        } else if (
-          callbackData.status === 'FAILED' &&
-          transaction.payment_entity === 'claim_order'
-        ) {
-          this.logger.log(
-            `Claim order payment failed for order ${transaction.reference}`
-          );
-        } else if (
-          callbackData.status === 'FAILED' &&
-          transaction.payment_entity === 'rental_booking'
-        ) {
-          await this.handleRentalBookingCallback(transaction, false);
-        }
-      }
-
-      return {
-        received: true,
-        reference: callbackData.reference,
-      };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error('Freemopay callback processing error:', error);
       throw new HttpException(
         {

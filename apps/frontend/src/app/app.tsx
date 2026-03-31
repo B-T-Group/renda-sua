@@ -20,6 +20,7 @@ import Header from '../components/layout/Header';
 import AboutUsPage from '../components/pages/AboutUsPage';
 import AdminCommissionAccounts from '../components/pages/AdminCommissionAccounts';
 import AdminConfigurationPage from '../components/pages/AdminConfigurationPage';
+import AdminPendingMobilePaymentsPage from '../components/pages/AdminPendingMobilePaymentsPage';
 import AdminManageAgents from '../components/pages/AdminManageAgents';
 import AdminManageBusinesses from '../components/pages/AdminManageBusinesses';
 import AdminManageClients from '../components/pages/AdminManageClients';
@@ -384,6 +385,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminCommissionAccounts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/pending-mobile-payments"
+              element={
+                <ProtectedRoute>
+                  <AdminPendingMobilePaymentsPage />
                 </ProtectedRoute>
               }
             />

@@ -149,6 +149,33 @@
     }
   },
   "admin": {
+    "pendingMobilePayments": {
+      "pageTitle": "Pending mobile payments",
+      "pageDescription": "Review stuck MyPVit and Freemopay transactions. View live provider status or resolve when the provider reports success or failure.",
+      "pageKeywords": "admin, mobile money, payments, reconciliation",
+      "noBusinessProfile": "Business profile not found",
+      "unauthorized": "You are not authorized to access this page",
+      "reference": "Reference",
+      "amount": "Amount",
+      "currency": "Currency",
+      "description": "Description",
+      "createdAt": "Created",
+      "pendingFor": "Pending for",
+      "customerPhone": "Customer phone",
+      "actions": "Actions",
+      "empty": "No pending integration payments.",
+      "viewStatus": "View status",
+      "resolve": "Resolve",
+      "missingProviderId": "Provider transaction id is missing",
+      "statusDialogTitle": "Provider status",
+      "dbStatus": "DB status",
+      "dbReference": "DB reference",
+      "provider": "Provider",
+      "liveStatus": "Live status",
+      "message": "Message",
+      "resolveReplayed": "Transaction finalized from provider status.",
+      "resolveNoReplay": "No replay: provider still pending or already finalized."
+    },
     "businesses": {
       "imageCleanupEnabled": "Image cleanup enabled"
     },
@@ -748,6 +775,8 @@
       "adminManagementHint": "Platform tools visible to administrators only.",
       "countryOnboarding": "Country onboarding",
       "countryOnboardingDescription": "Multi-step wizard to configure delivery slots and supported states for a country",
+      "pendingMobilePaymentsModule": "Pending mobile payments",
+      "pendingMobilePaymentsModuleDescription": "Stuck MyPVit or Freemopay transactions: view provider status and replay callbacks",
       "firstItem": {
         "saleTitle": "Add your first product",
         "saleBody": "Upload photos, create your item with AI or manually, then add it to a location so customers can buy.",

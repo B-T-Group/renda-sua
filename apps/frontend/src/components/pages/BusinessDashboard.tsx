@@ -17,6 +17,7 @@ import {
   Storefront as RentalCatalogIcon,
   Group as UsersIcon,
   Image as ImageIcon,
+  Payments as PaymentsIcon,
   Public as PublicIcon,
 } from '@mui/icons-material';
 import {
@@ -324,6 +325,20 @@ const BusinessDashboard: React.FC = () => {
       count: null,
       color: '#00838f',
       path: '/admin/country-onboarding',
+    },
+    {
+      title: t(
+        'business.dashboard.pendingMobilePaymentsModule',
+        'Pending mobile payments'
+      ),
+      description: t(
+        'business.dashboard.pendingMobilePaymentsModuleDescription',
+        'Stuck MyPVit or Freemopay transactions: view provider status and replay callbacks'
+      ),
+      icon: <PaymentsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#5e35b1',
+      path: '/admin/pending-mobile-payments',
     },
   ];
 
