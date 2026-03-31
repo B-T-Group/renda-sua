@@ -81,6 +81,7 @@ import SupportPage from '../components/pages/SupportPage';
 import SupportTicketsPage from '../components/pages/SupportTicketsPage';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
+import SmartHome from '../components/routing/SmartHome';
 import SmartOrders from '../components/routing/SmartOrders';
 import { useLoading } from '../contexts/LoadingContext';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
@@ -214,13 +215,15 @@ function App() {
           maxWidth="xl"
           sx={{
             px:
-              location.pathname === '/items'
+              location.pathname === '/items' ||
+              location.pathname.startsWith('/items/')
                 ? { xs: 0.5, sm: 1 }
                 : { xs: 1.5, sm: 2, md: 3 },
           }}
         >
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<SmartHome />} />
+            <Route path="/who-we-are" element={<LandingPage />} />
             <Route
               path="/auth/login"
               element={<Navigate to="/" replace />}
@@ -698,8 +701,8 @@ function App() {
               }
             />
 
-            {/* Catch-all route - redirect to landing page */}
-            <Route path="*" element={<LandingPage />} />
+            {/* Unknown paths: same persona rules as home */}
+            <Route path="*" element={<SmartHome />} />
           </Routes>
         </Container>
       </Box>

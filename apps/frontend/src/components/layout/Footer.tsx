@@ -117,6 +117,15 @@ const Footer: React.FC = () => {
                     variant="body2"
                     color="grey.400"
                     component={RouterLink}
+                    to="/who-we-are"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    {t('footer.whoWeAre', 'Who we are')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="grey.400"
+                    component={RouterLink}
                     to="/about"
                     style={{ textDecoration: 'none', color: 'inherit' }}
                   >

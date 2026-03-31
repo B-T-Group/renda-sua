@@ -1,4 +1,4 @@
-import { Handshake, Home, ShoppingBag } from '@mui/icons-material';
+import { Handshake, ShoppingBag } from '@mui/icons-material';
 import { Box, Paper, useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,6 @@ const GuestBottomNav: React.FC = () => {
     return null;
   }
 
-  const isHomeActive = location.pathname === '/';
   const isItemsActive =
     location.pathname === '/items' || location.pathname.startsWith('/items/');
   const isRentalsActive =
@@ -80,25 +79,7 @@ const GuestBottomNav: React.FC = () => {
           justifyContent: 'space-around',
         }}
       >
-        {/* Home */}
-        <Box
-          onClick={() => handleNavigate('/')}
-          sx={navItemSx(isHomeActive)}
-          role="button"
-          aria-label={t('common.home', 'Home')}
-        >
-          <Home
-            sx={{
-              fontSize: 24,
-              color: isHomeActive ? 'primary.main' : 'text.secondary',
-            }}
-          />
-          <Box component="span" sx={labelSx(isHomeActive)}>
-            {t('common.home', 'Home')}
-          </Box>
-        </Box>
-
-        {/* Browse Items */}
+        {/* Catalog (same as site home for guests) */}
         <Box
           onClick={() => handleNavigate('/items')}
           sx={navItemSx(isItemsActive)}
