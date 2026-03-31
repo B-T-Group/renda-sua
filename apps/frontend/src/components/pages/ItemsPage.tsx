@@ -38,6 +38,7 @@ import DashboardItemCard from '../common/DashboardItemCard';
 import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
+import TopLocationsStrip from '../common/TopLocationsStrip';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import SEOHead from '../seo/SEOHead';
@@ -512,111 +513,12 @@ const ItemsPage: React.FC = () => {
           })}
         </Box>
 
-        {!topLocationsLoading && topLocations.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color="text.secondary"
-              sx={{ mb: 1, fontWeight: 600 }}
-            >
-              {t(
-                'public.items.topLocationsTitle',
-                'Popular locations by item count'
-              )}
-            </Typography>
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 1,
-                alignItems: 'center',
-              }}
-            >
-              {topLocations.map((loc) => {
-                const selected = businessLocationId === loc.id;
-                return (
-                  <Button
-                    key={loc.id}
-                    onClick={() => handleSelectTopLocation(loc)}
-                    variant={selected ? 'contained' : 'outlined'}
-                    color={selected ? 'primary' : 'inherit'}
-                    size="small"
-                    sx={(theme) => ({
-                      textTransform: 'none',
-                      borderRadius: 2,
-                      py: 0.75,
-                      px: 1.25,
-                      flexShrink: 0,
-                      ...(selected
-                        ? {
-                            color: theme.palette.primary.contrastText,
-                            fontWeight: 700,
-                            boxShadow: theme.shadows[4],
-                            border: `2px solid ${theme.palette.primary.dark}`,
-                            '&:hover': {
-                              bgcolor: theme.palette.primary.dark,
-                              color: theme.palette.primary.contrastText,
-                            },
-                          }
-                        : {}),
-                    })}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        maxWidth: 280,
-                        color: 'inherit',
-                      }}
-                    >
-                      {loc.logo_url ? (
-                        <Box
-                          component="img"
-                          src={loc.logo_url}
-                          alt={loc.name || ''}
-                          sx={{
-                            maxHeight: 32,
-                            width: 'auto',
-                            objectFit: 'contain',
-                            display: 'block',
-                          }}
-                        />
-                      ) : null}
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        noWrap
-                        sx={{
-                          maxWidth: 160,
-                          color: 'inherit',
-                        }}
-                      >
-                        {loc.name || t('public.items.unnamedLocation', 'Store')}
-                      </Typography>
-                      <Chip
-                        label={loc.item_count}
-                        size="small"
-                        color={selected ? undefined : 'primary'}
-                        variant={selected ? 'filled' : 'outlined'}
-                        sx={(theme) => ({
-                          height: 22,
-                          fontWeight: 700,
-                          '& .MuiChip-label': { px: 0.75 },
-                          ...(selected && {
-                            bgcolor: theme.palette.common.white,
-                            color: theme.palette.primary.dark,
-                            border: `1px solid ${theme.palette.primary.dark}`,
-                          }),
-                        })}
-                      />
-                    </Box>
-                  </Button>
-                );
-              })}
-            </Box>
-          </Box>
-        )}
+        <TopLocationsStrip
+          locations={topLocations}
+          loading={topLocationsLoading}
+          selectedId={businessLocationId}
+          onSelect={handleSelectTopLocation}
+        />
 
         {/* Show unavailable toggle */}
         <Box sx={{ mb: 2 }}>

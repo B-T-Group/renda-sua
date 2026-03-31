@@ -2856,6 +2856,9 @@
       },
       "showUnavailable": "Show unavailable",
       "topLocationsTitle": "Popular locations by item count",
+      "topLocationsHint": "Tap a location to filter the catalog.",
+      "topLocationsItemCount_one": "{{count}} item",
+      "topLocationsItemCount_other": "{{count}} items",
       "unnamedLocation": "Store"
     },
     "deals": {

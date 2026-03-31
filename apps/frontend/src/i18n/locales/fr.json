@@ -2819,6 +2819,9 @@
       },
       "showUnavailable": "Afficher les indisponibles",
       "topLocationsTitle": "Lieux populaires par nombre d’articles",
+      "topLocationsHint": "Touchez un lieu pour filtrer le catalogue.",
+      "topLocationsItemCount_one": "{{count}} article",
+      "topLocationsItemCount_other": "{{count}} articles",
       "unnamedLocation": "Magasin"
     },
     "deals": {
