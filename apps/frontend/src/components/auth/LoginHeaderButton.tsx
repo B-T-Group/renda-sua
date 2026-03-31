@@ -1,5 +1,5 @@
 import { Login } from '@mui/icons-material';
-import { Button } from '@mui/material';
+import { Button, IconButton } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -23,34 +23,51 @@ const LoginHeaderButton: React.FC<LoginHeaderButtonProps> = ({ inverted, compact
 
   return (
     <>
-      <Button
-        variant={inverted ? 'outlined' : 'contained'}
-        color="primary"
-        size={compact ? 'small' : 'medium'}
-        startIcon={compact ? undefined : <Login fontSize="small" />}
-        onClick={() => setDialogOpen(true)}
-        sx={{
-          borderRadius: 0,
-          px: compact ? { xs: 0.75, sm: 1 } : { xs: 2, sm: 3 },
-          py: compact ? 0.5 : 1,
-          my: compact ? 0 : { xs: 0.5, sm: 0 },
-          minWidth: compact ? 0 : undefined,
-          fontSize: compact ? '0.75rem' : '1rem',
-          fontWeight: 600,
-          lineHeight: compact ? 1.2 : undefined,
-          whiteSpace: 'nowrap',
-          ...(inverted && {
-            color: '#ffffff',
-            borderColor: 'rgba(255,255,255,0.8)',
+      {compact ? (
+        <IconButton
+          aria-label={t('auth.signIn', 'Sign In')}
+          onClick={() => setDialogOpen(true)}
+          size="small"
+          sx={{
+            color: inverted ? 'rgba(255,255,255,0.92)' : 'primary.main',
             '&:hover': {
-              borderColor: '#ffffff',
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: inverted
+                ? 'rgba(255,255,255,0.08)'
+                : 'rgba(25, 118, 210, 0.08)',
             },
-          }),
-        }}
-      >
-        {t('auth.signIn', 'Sign In')}
-      </Button>
+          }}
+        >
+          <Login fontSize="small" />
+        </IconButton>
+      ) : (
+        <Button
+          variant={inverted ? 'text' : 'contained'}
+          color="primary"
+          size="medium"
+          startIcon={<Login fontSize="small" />}
+          onClick={() => setDialogOpen(true)}
+          sx={{
+            borderRadius: 0,
+            px: { xs: 1.25, sm: 1.5 },
+            py: 0.75,
+            my: { xs: 0.5, sm: 0 },
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            textTransform: 'none',
+            whiteSpace: 'nowrap',
+            ...(inverted && {
+              color: 'rgba(255,255,255,0.92)',
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                textDecoration: 'underline',
+                textUnderlineOffset: '3px',
+              },
+            }),
+          }}
+        >
+          {t('auth.signIn', 'Sign In')}
+        </Button>
+      )}
       <LoginMethodDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
     </>
   );

@@ -47,7 +47,6 @@ import {
 } from '../../contexts/UserProfileContext';
 import { PERSONA_HEADER_COLORS } from '../../constants/personaTheme';
 import LoginHeaderButton from '../auth/LoginHeaderButton';
-import SignupHeaderButton from '../auth/SignupHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
 import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
@@ -835,7 +834,6 @@ const Header: React.FC = () => {
                   sx={{ flexShrink: 0 }}
                 >
                   <LoginHeaderButton inverted compact={isMobile} />
-                  <SignupHeaderButton inverted compact={isMobile} />
                 </Stack>
               )}
 

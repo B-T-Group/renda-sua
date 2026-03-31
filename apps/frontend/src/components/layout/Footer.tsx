@@ -10,11 +10,13 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import Logo from '../common/Logo';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const Footer: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const currentYear = new Date().getFullYear();
+  const { isAuthenticated } = useSessionAuth();
 
   return (
     <Box
@@ -113,6 +115,17 @@ const Footer: React.FC = () => {
                   {t('footer.company')}
                 </Typography>
                 <Stack spacing={0.5}>
+                  {!isAuthenticated && (
+                    <Typography
+                      variant="body2"
+                      color="grey.400"
+                      component={RouterLink}
+                      to="/signup"
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      {t('auth.signUp', "S'inscrire")}
+                    </Typography>
+                  )}
                   <Typography
                     variant="body2"
                     color="grey.400"
