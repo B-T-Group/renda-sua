@@ -1460,7 +1460,7 @@ const BusinessItemsPage: React.FC = () => {
                   initialState={{
                     pagination: {
                       paginationModel: {
-                        pageSize: 25,
+                        pageSize: 100,
                       },
                     },
                   }}

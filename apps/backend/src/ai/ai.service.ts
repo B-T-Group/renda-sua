@@ -557,6 +557,7 @@ You are also given one or more product images (main image first). Use OCR and vi
 Rules:
 - Do NOT output price or currency (they are managed separately).
 - The "description", categoryName, subCategoryName MUST be written in ${languageLabel}.
+- Suggestions for categoryName and subCategoryName should be short and concise and one word related to the product and shoud not take into account the existing categoryName and subCategoryName.
 - Tags MUST be provided in BOTH languages: English and French and should be short and concise and one word related to the product, at most 5 tags per language.
 - Prefer small, justified improvements; keep names truthful to what is visible.
 - If a field should stay as-is, repeat the current value or omit if unchanged.
