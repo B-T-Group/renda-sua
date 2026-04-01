@@ -11,6 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 import type {
@@ -342,6 +343,7 @@ export class MtnMomoController {
   /**
    * Webhook endpoint for MTN MoMo callbacks
    */
+  @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   async handleWebhook(@Body() callbackData: any) {
