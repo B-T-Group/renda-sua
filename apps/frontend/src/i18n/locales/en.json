@@ -1672,6 +1672,7 @@
     "close": "Close",
     "closed": "Closed",
     "confirm": "Confirm",
+    "continue": "Continue",
     "days": {
       "friday": "Friday",
       "monday": "Monday",
@@ -2320,6 +2321,7 @@
     "phoneNumberNotSupported": "Phone Number Not Supported",
     "phoneNumberRequired": "Phone number is required when using a different phone number",
     "phoneNumberRequiredMessage": "Phone number is required for mobile payments.",
+    "phoneNumberNeededForOrder": "Please add a phone number to complete your order.",
     "pickupAddress": "Pickup from",
     "pickupLocation": "Pickup Location",
     "routeInfo": "Route Information",

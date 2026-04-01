@@ -1660,6 +1660,7 @@
     "close": "Fermer",
     "closed": "Fermé",
     "confirm": "Confirmer",
+    "continue": "Continuer",
     "days": {
       "friday": "Vendredi",
       "monday": "Lundi",
@@ -2290,6 +2291,7 @@
     "phoneNumberNotSupported": "Numéro de Téléphone Non Pris en Charge",
     "phoneNumberRequired": "Le numéro de téléphone est requis lors de l'utilisation d'un numéro de téléphone différent",
     "phoneNumberRequiredMessage": "Le numéro de téléphone est requis pour les paiements mobiles.",
+    "phoneNumberNeededForOrder": "Veuillez ajouter un numéro de téléphone pour finaliser votre commande.",
     "pickupAddress": "Récupérer depuis",
     "pickupLocation": "Lieu de Récupération",
     "routeInfo": "Informations sur l'Itinéraire",
