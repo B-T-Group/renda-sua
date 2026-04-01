@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -118,11 +119,13 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
   const [aiPayload, setAiPayload] = useState<ItemRefinementSuggestionData | null>(
     null
   );
-  const [suggestedTagsFr, setSuggestedTagsFr] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
-  const [newTagName, setNewTagName] = useState('');
+  const [suggestedTagOptions, setSuggestedTagOptions] = useState<string[]>([]);
+  const [selectedSuggestedTagNames, setSelectedSuggestedTagNames] = useState<
+    string[]
+  >([]);
   const itemRef = useRef(item);
   itemRef.current = item;
+  const currentItem = itemRef.current;
 
   useEffect(() => {
     if (!open || !item?.id) {
@@ -190,23 +193,30 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
     );
     setLockedPrice(data.price ?? cur.price ?? 0);
     setLockedCurrency(data.currency ?? cur.currency ?? 'USD');
-    setSuggestedTagsFr(data.suggestedTagsFr ?? []);
 
-    const existing = (cur.item_tags ?? [])
-      .map((it: any) => it?.tag)
-      .filter((tg: any) => tg?.id && tg?.name) as Tag[];
-    const suggestedEn = (data.suggestedTagsEn ?? [])
-      .map((n) => availableTags.find((t) => t.name.toLowerCase() === n.toLowerCase()))
-      .filter(Boolean) as Tag[];
-    setSelectedTags(suggestedEn.length ? suggestedEn : existing);
+    const normalize = (s: string) => s.trim().toLowerCase();
+    const aiSuggested = [
+      ...(data.suggestedTagsFr ?? []),
+      ...(data.suggestedTagsEn ?? []),
+    ]
+      .map((s) => s?.trim?.() ?? '')
+      .filter(Boolean);
+    const uniqueSuggested = Array.from(
+      new Map(aiSuggested.map((s) => [normalize(s), s])).values()
+    );
+
+    const existingTagNames = (cur.item_tags ?? [])
+      .map((it: any) => it?.tag?.name)
+      .filter((n: any): n is string => typeof n === 'string' && !!n.trim());
+
+    const options = uniqueSuggested.length
+      ? uniqueSuggested
+      : Array.from(new Map(existingTagNames.map((s) => [normalize(s), s])).values());
+
+    setSuggestedTagOptions(options);
+    setSelectedSuggestedTagNames(options);
     // Intentionally only when a new AI payload arrives; brands/subcategories read from latest render.
   }, [aiPayload]);
-
-  useEffect(() => {
-    if (!open) {
-      setNewTagName('');
-    }
-  }, [open]);
 
   useEffect(() => {
     if (error) {
@@ -262,9 +272,34 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
         { skipRefetch: true }
       );
 
+      const normalize = (s: string) => s.trim().toLowerCase();
+      const uniqueSelectedNames = Array.from(
+        new Map(
+          selectedSuggestedTagNames
+            .map((s) => s?.trim?.() ?? '')
+            .filter(Boolean)
+            .map((s) => [normalize(s), s] as const)
+        ).values()
+      );
+
+      const resolvedTags: Tag[] = [];
+      for (const tagName of uniqueSelectedNames) {
+        const existing = availableTags.find(
+          (t) => normalize(t.name) === normalize(tagName)
+        );
+        if (existing) {
+          resolvedTags.push(existing);
+          continue;
+        }
+        const created = await createTag(tagName);
+        if (created) {
+          resolvedTags.push(created);
+        }
+      }
+
       await setItemTags(
         item.id,
-        selectedTags
+        resolvedTags
           .map((t) => t.id)
           .filter((id): id is string => typeof id === 'string' && !!id)
       );
@@ -285,33 +320,23 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
     }
   };
 
-  const handleCreateTag = async () => {
-    const name = newTagName.trim();
-    if (!name) return;
-    try {
-      const created = await createTag(name);
-      if (created) {
-        setSelectedTags((prev) => {
-          const merged = [...prev, created];
-          const unique = Array.from(new Map(merged.map((t) => [t.id, t])).values());
-          return unique;
-        });
-        setNewTagName('');
-      }
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message ||
-          t('business.items.failedToCreateTag', 'Failed to create tag'),
-        { variant: 'error' }
-      );
-    }
-  };
-
   const formatMoney = (amount: number, currency: string) =>
     new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency: currency || 'USD',
     }).format(amount);
+
+  const currentText = (value: unknown): string => {
+    if (value == null) return '';
+    const s = String(value).trim();
+    return s;
+  };
+
+  const currentHelperText = (value: unknown): string | undefined => {
+    const s = currentText(value);
+    if (!s) return undefined;
+    return t('common.current', 'Current: {{value}}', { value: s });
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -359,6 +384,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               onChange={(e) => setName(e.target.value)}
               fullWidth
               required
+              helperText={currentHelperText(currentItem?.name)}
             />
             <TextField
               label={t('business.items.description', 'Description')}
@@ -367,6 +393,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               fullWidth
               multiline
               minRows={3}
+              helperText={currentHelperText(currentItem?.description)}
             />
             <Typography variant="caption" color="text.secondary">
               {t(
@@ -393,6 +420,13 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                 ))}
               </Select>
             </FormControl>
+            {currentItem?.item_sub_category ? (
+              <Typography variant="caption" color="text.secondary">
+                {t('common.current', 'Current: {{value}}', {
+                  value: `${currentItem.item_sub_category.item_category?.name} — ${currentItem.item_sub_category.name}`,
+                })}
+              </Typography>
+            ) : null}
             <FormControl fullWidth size="small">
               <InputLabel id="refine-brand-label">
                 {t('business.items.brand', 'Brand')}
@@ -413,18 +447,27 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                 ))}
               </Select>
             </FormControl>
+            {currentItem?.brand?.name ? (
+              <Typography variant="caption" color="text.secondary">
+                {t('common.current', 'Current: {{value}}', {
+                  value: currentItem.brand.name,
+                })}
+              </Typography>
+            ) : null}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 label={t('business.items.sku', 'SKU')}
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
                 fullWidth
+                helperText={currentHelperText(currentItem?.sku)}
               />
               <TextField
                 label={t('business.items.model', 'Model')}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 fullWidth
+                helperText={currentHelperText(currentItem?.model)}
               />
             </Stack>
             <TextField
@@ -432,6 +475,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               value={color}
               onChange={(e) => setColor(e.target.value)}
               fullWidth
+              helperText={currentHelperText(currentItem?.color)}
             />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
@@ -440,12 +484,22 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                 onChange={(e) => setWeight(e.target.value)}
                 type="number"
                 fullWidth
+                helperText={
+                  currentItem?.weight != null
+                    ? t('common.current', 'Current: {{value}}', {
+                        value: `${currentItem.weight}${
+                          currentItem.weight_unit ? ` ${currentItem.weight_unit}` : ''
+                        }`,
+                      })
+                    : undefined
+                }
               />
               <TextField
                 label={t('business.items.weightUnit', 'Weight Unit')}
                 value={weightUnit}
                 onChange={(e) => setWeightUnit(e.target.value)}
                 fullWidth
+                helperText={currentHelperText(currentItem?.weight_unit)}
               />
             </Stack>
             <TextField
@@ -453,6 +507,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               value={dimensions}
               onChange={(e) => setDimensions(e.target.value)}
               fullWidth
+              helperText={currentHelperText(currentItem?.dimensions)}
             />
             <Box>
               <FormControlLabel
@@ -491,6 +546,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                 type="number"
                 inputProps={{ min: 1 }}
                 fullWidth
+                helperText={currentHelperText(currentItem?.min_order_quantity)}
               />
               <TextField
                 label={t('business.items.maxOrderQuantity', 'Max Order Quantity')}
@@ -498,6 +554,7 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
                 onChange={(e) => setMaxOrder(e.target.value)}
                 type="number"
                 fullWidth
+                helperText={currentHelperText(currentItem?.max_order_quantity)}
               />
             </Stack>
 
@@ -507,53 +564,40 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               </Typography>
               <Autocomplete
                 multiple
-                options={availableTags}
-                getOptionLabel={(option) =>
-                  typeof option === 'string' ? option : option.name
+                options={suggestedTagOptions}
+                value={selectedSuggestedTagNames}
+                onChange={(_, newValue) => setSelectedSuggestedTagNames(newValue)}
+                disableCloseOnSelect
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      variant="outlined"
+                      label={option}
+                      {...getTagProps({ index })}
+                      key={`${option}-${index}`}
+                    />
+                  ))
                 }
-                value={selectedTags}
-                onChange={(_, newValue) =>
-                  setSelectedTags(newValue as Tag[])
-                }
+                renderOption={(props, option, { selected }) => (
+                  <li {...props} key={option}>
+                    <Checkbox sx={{ mr: 1 }} checked={selected} />
+                    {option}
+                  </li>
+                )}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label={t('business.items.addTag', 'Add tag')}
-                    placeholder={t('business.items.addTag', 'Add tag')}
+                    label={t(
+                      'business.items.refineWithAi.suggestedTagsLabel',
+                      'Suggested tags (FR + EN)'
+                    )}
+                    placeholder={t(
+                      'business.items.refineWithAi.suggestedTagsPlaceholder',
+                      'Deselect any tags that do not make sense'
+                    )}
                   />
                 )}
               />
-              <Stack direction="row" spacing={1} alignItems="center">
-                <TextField
-                  size="small"
-                  placeholder={t('business.items.createNewTag', 'Create new tag')}
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleCreateTag();
-                    }
-                  }}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={handleCreateTag}
-                  disabled={!newTagName.trim()}
-                >
-                  {t('business.items.createNewTag', 'Create new tag')}
-                </Button>
-              </Stack>
-              {suggestedTagsFr.length > 0 && (
-                <Typography variant="caption" color="text.secondary">
-                  {t(
-                    'business.items.refineWithAi.suggestedTagsFr',
-                    'AI suggested tags (French)'
-                  )}
-                  {`: ${suggestedTagsFr.join(', ')}`}
-                </Typography>
-              )}
             </Stack>
           </Stack>
         )}

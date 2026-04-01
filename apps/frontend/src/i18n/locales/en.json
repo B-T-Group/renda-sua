@@ -1484,7 +1484,9 @@
         "apply": "Apply changes",
         "categoryHint": "Choose category and subcategory from your catalogue; AI suggestions are hints.",
         "priceLocked": "Price and currency are not changed here",
-        "suggestedTagsFr": "AI suggested tags (French)"
+        "suggestedTagsFr": "AI suggested tags (French)",
+        "suggestedTagsLabel": "Suggested tags (FR + EN)",
+        "suggestedTagsPlaceholder": "Deselect any tags that do not make sense"
       },
       "price": "Price",
       "primary": "Primary",

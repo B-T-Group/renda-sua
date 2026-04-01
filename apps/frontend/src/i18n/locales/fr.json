@@ -1473,7 +1473,9 @@
         "apply": "Appliquer les modifications",
         "categoryHint": "Choisissez la catégorie dans votre catalogue ; les suggestions IA sont indicatives.",
         "priceLocked": "Le prix et la devise ne sont pas modifiés ici",
-        "suggestedTagsFr": "Étiquettes suggérées par l'IA (français)"
+        "suggestedTagsFr": "Étiquettes suggérées par l'IA (français)",
+        "suggestedTagsLabel": "Étiquettes suggérées (FR + EN)",
+        "suggestedTagsPlaceholder": "Décochez les étiquettes qui n'ont pas de sens"
       },
       "price": "Price",
       "primary": "Primary",

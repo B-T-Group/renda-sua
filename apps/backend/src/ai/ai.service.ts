@@ -557,9 +557,10 @@ You are also given one or more product images (main image first). Use OCR and vi
 Rules:
 - Do NOT output price or currency (they are managed separately).
 - The "description", categoryName, subCategoryName MUST be written in ${languageLabel}.
-- Tags MUST be provided in BOTH languages: English and French.
+- Tags MUST be provided in BOTH languages: English and French and should be short and concise and one word related to the product, at most 5 tags per language.
 - Prefer small, justified improvements; keep names truthful to what is visible.
 - If a field should stay as-is, repeat the current value or omit if unchanged.
+- Only specify dimensions/weight/weightUnit if they are visible on the image.
 
 Return ONLY a single JSON object with this exact shape (null allowed for unknowns):
 {
@@ -597,9 +598,10 @@ Do not include any text outside the JSON.`;
       );
       const rawContent = response.choices?.[0]?.message?.content;
       const contentString = this.messageContentToString(rawContent);
+      const jsonString = this.coerceJsonObjectString(contentString);
       let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(contentString) as Record<string, unknown>;
+        parsed = JSON.parse(jsonString) as Record<string, unknown>;
       } catch (parseError: unknown) {
         this.logger.error(
           'Failed to parse JSON from item refinement',
@@ -639,6 +641,17 @@ Do not include any text outside the JSON.`;
         .join('\n');
     }
     return String(raw ?? '');
+  }
+
+  private coerceJsonObjectString(input: string): string {
+    const trimmed = input.trim();
+    const fenceMatch = trimmed.match(
+      /^```(?:json)?\s*([\s\S]*?)\s*```$/i
+    );
+    if (fenceMatch?.[1]) {
+      return fenceMatch[1].trim();
+    }
+    return trimmed;
   }
 
   private mapParsedItemRefinement(

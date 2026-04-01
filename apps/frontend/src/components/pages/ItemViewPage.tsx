@@ -1,6 +1,7 @@
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  AutoFixHigh as AutoFixHighIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
   PhotoCamera as PhotoCameraIcon,
@@ -39,6 +40,7 @@ import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
+import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
 
 // Type for business_inventories from Item interface
@@ -63,8 +65,16 @@ export default function ItemViewPage() {
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
   const [manageDealsInventory, setManageDealsInventory] =
     useState<BusinessInventoryItem | ItemBusinessInventory | null>(null);
+  const [showRefineAiDialog, setShowRefineAiDialog] = useState(false);
 
-  const { fetchSingleItem } = useItems(profile?.business?.id);
+  const {
+    fetchSingleItem,
+    brands,
+    itemSubCategories,
+    fetchBrands,
+    fetchItemSubCategories,
+    updateItem,
+  } = useItems(profile?.business?.id);
   const { fetchBusinessLocations } = useBusinessInventory();
 
   const fetchItemDetails = useCallback(async () => {
@@ -102,6 +112,13 @@ export default function ItemViewPage() {
     }
   }, [profile?.business?.id, fetchBusinessLocations]);
 
+  useEffect(() => {
+    if (profile?.business?.id) {
+      fetchBrands().catch(() => undefined);
+      fetchItemSubCategories().catch(() => undefined);
+    }
+  }, [profile?.business?.id, fetchBrands, fetchItemSubCategories]);
+
   const handleEditItem = () => {
     if (item?.id) {
       navigate(`/business/items/edit/${item.id}`);
@@ -127,6 +144,10 @@ export default function ItemViewPage() {
     inventory: BusinessInventoryItem | ItemBusinessInventory
   ) => {
     setManageDealsInventory(inventory);
+  };
+
+  const handleRefineWithAi = () => {
+    setShowRefineAiDialog(true);
   };
 
   const handleBack = () => {
@@ -500,9 +521,25 @@ export default function ItemViewPage() {
             {/* Item Details Card */}
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom fontWeight="bold">
-                  {t('business.items.details', 'Item Details')}
-                </Typography>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={1}
+                >
+                  <Typography variant="h6" gutterBottom fontWeight="bold">
+                    {t('business.items.details', 'Item Details')}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AutoFixHighIcon />}
+                    onClick={handleRefineWithAi}
+                    sx={{ mb: 0.5 }}
+                  >
+                    {t('business.items.refineWithAi.title', 'Refine with AI')}
+                  </Button>
+                </Stack>
                 <Divider sx={{ mb: 2 }} />
 
                 <Stack spacing={2}>
@@ -1205,6 +1242,18 @@ export default function ItemViewPage() {
         inventoryItem={
           (manageDealsInventory as unknown as BusinessInventoryItem) || null
         }
+      />
+
+      <RefineItemWithAiDialog
+        open={showRefineAiDialog}
+        item={item}
+        brands={brands}
+        itemSubCategories={itemSubCategories}
+        onClose={() => setShowRefineAiDialog(false)}
+        onApplied={() => {
+          fetchItemDetails();
+        }}
+        updateItem={updateItem}
       />
     </Container>
   );
