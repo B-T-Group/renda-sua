@@ -8,6 +8,7 @@ import {
   Logger,
   Param,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -341,25 +342,31 @@ export class MtnMomoController {
   }
 
   /**
-   * Webhook endpoint for MTN MoMo callbacks
+   * Webhook endpoint for MTN MoMo callbacks (POST or PUT)
    */
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhook(@Body() callbackData: any) {
+  async handleWebhookPost(@Body() callbackData: unknown) {
+    return this.processMtnMomoWebhook(callbackData);
+  }
+
+  @Public()
+  @Put('webhook')
+  @HttpCode(HttpStatus.OK)
+  async handleWebhookPut(@Body() callbackData: unknown) {
+    return this.processMtnMomoWebhook(callbackData);
+  }
+
+  private async processMtnMomoWebhook(callbackData: unknown) {
     try {
       this.logger.log(`Webhook received: ${JSON.stringify(callbackData)}`);
-
       await this.mtnMomoService.handleCallback(callbackData);
-
-      return {
-        success: true,
-        message: 'Webhook processed successfully',
-      };
-    } catch (error) {
-      this.logger.error(
-        `Webhook processing error: ${(error as Error).message}`
-      );
+      return { success: true, message: 'Webhook processed successfully' };
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(`Webhook processing error: ${msg}`);
       throw error;
     }
   }
