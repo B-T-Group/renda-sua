@@ -1476,6 +1476,16 @@
       "optionalDetails": "Optional Details",
       "orderLimits": "Order Limits",
       "perishable": "Perishable",
+      "refineWithAi": {
+        "title": "Refine with AI",
+        "tooltip": "Refine product with AI",
+        "loading": "Analyzing item and images...",
+        "error": "Failed to get AI suggestions",
+        "apply": "Apply changes",
+        "categoryHint": "Choose category and subcategory from your catalogue; AI suggestions are hints.",
+        "priceLocked": "Price and currency are not changed here",
+        "suggestedTagsFr": "AI suggested tags (French)"
+      },
       "price": "Price",
       "primary": "Primary",
       "productDetails": "Product Details",

@@ -34,6 +34,31 @@ export interface ImageItemSuggestionResult {
   dimensions?: string | null;
 }
 
+/** AI refinement for an existing catalog item (price/currency excluded). */
+export interface ItemRefinementSuggestionResult {
+  name?: string;
+  categoryName?: string;
+  subCategoryName?: string;
+  brandName?: string;
+  description?: string;
+  sku?: string;
+  model?: string;
+  color?: string;
+  /** Suggested search tags in English (lowercase keywords). */
+  suggestedTagsEn?: string[];
+  /** Suggested search tags in French (lowercase keywords). */
+  suggestedTagsFr?: string[];
+  barcodeValues?: string[] | null;
+  weight?: number | null;
+  weightUnit?: string | null;
+  dimensions?: string | null;
+  isFragile?: boolean | null;
+  isPerishable?: boolean | null;
+  requiresSpecialHandling?: boolean | null;
+  minOrderQuantity?: number | null;
+  maxOrderQuantity?: number | null;
+}
+
 /** AI extraction for rental catalog items (vision). */
 export interface RentalImageSuggestionResult {
   name?: string;
@@ -375,13 +400,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         },
         {
           role: 'user',
-          content: [
-            { type: 'text', text: userText },
-            {
-              type: 'image_url',
-              image_url: { url: input.imageUrl },
-            },
-          ],
+          content: `${userText}\n\nImage URL: ${input.imageUrl}`,
         },
       ],
       max_tokens: 400,
@@ -398,17 +417,12 @@ The "description" field MUST be written in ${languageLabel}.`;
       );
 
       const rawContent = response.choices?.[0]?.message?.content;
-      const contentString =
-        typeof rawContent === 'string'
-          ? rawContent
-          : Array.isArray(rawContent)
-          ? rawContent.map((p: any) => p?.text || '').join('\n')
-          : String(rawContent ?? '');
+      const contentString = this.messageContentToString(rawContent);
 
-      let parsed: any;
+      let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(contentString);
-      } catch (parseError: any) {
+        parsed = JSON.parse(contentString) as Record<string, unknown>;
+      } catch (parseError: unknown) {
         this.logger.error(
           'Failed to parse JSON from image item suggestions',
           parseError
@@ -417,20 +431,29 @@ The "description" field MUST be written in ${languageLabel}.`;
       }
 
       const suggestion: ImageItemSuggestionResult = {
-        name: parsed.name ?? undefined,
-        categoryName: parsed.categoryName ?? undefined,
-        subCategoryName: parsed.subCategoryName ?? undefined,
-        brandName: parsed.brandName ?? undefined,
-        description: parsed.description ?? undefined,
+        name: typeof parsed.name === 'string' ? parsed.name : undefined,
+        categoryName:
+          typeof parsed.categoryName === 'string' ? parsed.categoryName : undefined,
+        subCategoryName:
+          typeof parsed.subCategoryName === 'string'
+            ? parsed.subCategoryName
+            : undefined,
+        brandName:
+          typeof parsed.brandName === 'string' ? parsed.brandName : undefined,
+        description:
+          typeof parsed.description === 'string' ? parsed.description : undefined,
         price:
           typeof parsed.price === 'number'
             ? parsed.price
             : parsed.price != null
             ? Number(parsed.price) || null
             : null,
-        currency: parsed.currency ?? defaultCurrency,
+        currency:
+          typeof parsed.currency === 'string' ? parsed.currency : defaultCurrency,
         barcodeValues: Array.isArray(parsed.barcodeValues)
-          ? parsed.barcodeValues
+          ? (parsed.barcodeValues as unknown[]).filter(
+              (v): v is string => typeof v === 'string'
+            )
           : null,
         weight:
           typeof parsed.weight === 'number'
@@ -438,8 +461,9 @@ The "description" field MUST be written in ${languageLabel}.`;
             : parsed.weight != null
             ? Number(parsed.weight) || null
             : null,
-        weightUnit: parsed.weightUnit ?? null,
-        dimensions: parsed.dimensions ?? null,
+        weightUnit: typeof parsed.weightUnit === 'string' ? parsed.weightUnit : null,
+        dimensions:
+          typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
       };
       const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
       if (!barcode) {
@@ -461,7 +485,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
         dimensions: lookup.dimensions ?? suggestion.dimensions,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
@@ -484,6 +508,220 @@ The "description" field MUST be written in ${languageLabel}.`;
         dimensions: null,
       };
     }
+  }
+
+  async generateItemRefinementSuggestions(input: {
+    itemSnapshot: Record<string, unknown>;
+    imageUrls: string[];
+    preferredLanguage?: string | null;
+  }): Promise<ItemRefinementSuggestionResult> {
+    const descriptionLanguage = this.resolvePreferredLanguage(
+      input.preferredLanguage
+    );
+    const languageLabel =
+      descriptionLanguage === 'fr' ? 'French' : 'English';
+    const userText = this.buildItemRefinementPrompt(
+      input.itemSnapshot,
+      languageLabel
+    );
+    const imageUrlsText = input.imageUrls.length
+      ? `\n\nImage URLs:\n${input.imageUrls.map((u) => `- ${u}`).join('\n')}`
+      : '';
+    const request: ChatCompletionRequest = {
+      model: this.deepseekService.defaultChatModel,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You refine e-commerce product listings using catalog data and product photos. Never invent a new price or currency.',
+        },
+        { role: 'user', content: `${userText}${imageUrlsText}` },
+      ],
+      max_tokens: 700,
+      temperature: 0.2,
+    };
+    return this.runItemRefinementCompletion(request);
+  }
+
+  private buildItemRefinementPrompt(
+    item: Record<string, unknown>,
+    languageLabel: string
+  ): string {
+    const json = JSON.stringify(item, null, 2);
+    return `
+You are refining an existing product listing. Current catalog fields (JSON):
+${json}
+
+You are also given one or more product images (main image first). Use OCR and visual cues together with the existing fields to suggest improved, accurate catalog content.
+
+Rules:
+- Do NOT output price or currency (they are managed separately).
+- The "description", categoryName, subCategoryName MUST be written in ${languageLabel}.
+- Tags MUST be provided in BOTH languages: English and French.
+- Prefer small, justified improvements; keep names truthful to what is visible.
+- If a field should stay as-is, repeat the current value or omit if unchanged.
+
+Return ONLY a single JSON object with this exact shape (null allowed for unknowns):
+{
+  "name": string | null,
+  "categoryName": string | null,
+  "subCategoryName": string | null,
+  "brandName": string | null,
+  "description": string | null,
+  "sku": string | null,
+  "model": string | null,
+  "color": string | null,
+  "suggestedTagsEn": string[] | null,
+  "suggestedTagsFr": string[] | null,
+  "barcodeValues": string[] | null,
+  "weight": number | null,
+  "weightUnit": string | null,
+  "dimensions": string | null,
+  "isFragile": boolean | null,
+  "isPerishable": boolean | null,
+  "requiresSpecialHandling": boolean | null,
+  "minOrderQuantity": number | null,
+  "maxOrderQuantity": number | null
+}
+
+Do not include any text outside the JSON.`;
+  }
+
+  private async runItemRefinementCompletion(
+    request: ChatCompletionRequest
+  ): Promise<ItemRefinementSuggestionResult> {
+    try {
+      const response = await this.deepseekService.chatCompletions(
+        request,
+        90000
+      );
+      const rawContent = response.choices?.[0]?.message?.content;
+      const contentString = this.messageContentToString(rawContent);
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(contentString) as Record<string, unknown>;
+      } catch (parseError: unknown) {
+        this.logger.error(
+          'Failed to parse JSON from item refinement',
+          parseError
+        );
+        parsed = {};
+      }
+      const suggestion = this.mapParsedItemRefinement(parsed);
+      return this.mergeBarcodeLookup(suggestion);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error('Failed to generate item refinement suggestions', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to refine item with AI',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  private messageContentToString(raw: unknown): string {
+    if (typeof raw === 'string') {
+      return raw;
+    }
+    if (Array.isArray(raw)) {
+      return raw
+        .map((p) => {
+          if (!p || typeof p !== 'object') return '';
+          const rec = p as Record<string, unknown>;
+          return typeof rec.text === 'string' ? rec.text : '';
+        })
+        .join('\n');
+    }
+    return String(raw ?? '');
+  }
+
+  private mapParsedItemRefinement(
+    parsed: Record<string, unknown>
+  ): ItemRefinementSuggestionResult {
+    const num = (v: unknown): number | null => {
+      if (typeof v === 'number' && !Number.isNaN(v)) {
+        return v;
+      }
+      if (v != null && v !== '') {
+        const n = Number(v);
+        return Number.isNaN(n) ? null : n;
+      }
+      return null;
+    };
+    const bool = (v: unknown): boolean | null =>
+      typeof v === 'boolean' ? v : null;
+    const tags = (v: unknown): string[] | undefined => {
+      if (!Array.isArray(v)) return undefined;
+      const out = v
+        .map((x) => (typeof x === 'string' ? x.trim() : ''))
+        .filter(Boolean)
+        .map((s) => s.toLowerCase());
+      return out.length ? Array.from(new Set(out)) : [];
+    };
+    return {
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      categoryName:
+        typeof parsed.categoryName === 'string'
+          ? parsed.categoryName
+          : undefined,
+      subCategoryName:
+        typeof parsed.subCategoryName === 'string'
+          ? parsed.subCategoryName
+          : undefined,
+      brandName:
+        typeof parsed.brandName === 'string' ? parsed.brandName : undefined,
+      description:
+        typeof parsed.description === 'string' ? parsed.description : undefined,
+      sku: typeof parsed.sku === 'string' ? parsed.sku : undefined,
+      model: typeof parsed.model === 'string' ? parsed.model : undefined,
+      color: typeof parsed.color === 'string' ? parsed.color : undefined,
+      suggestedTagsEn: tags(parsed.suggestedTagsEn),
+      suggestedTagsFr: tags(parsed.suggestedTagsFr),
+      barcodeValues: Array.isArray(parsed.barcodeValues)
+        ? (parsed.barcodeValues as unknown[]).filter(
+            (x): x is string => typeof x === 'string'
+          )
+        : null,
+      weight: num(parsed.weight),
+      weightUnit:
+        typeof parsed.weightUnit === 'string' ? parsed.weightUnit : undefined,
+      dimensions:
+        typeof parsed.dimensions === 'string' ? parsed.dimensions : undefined,
+      isFragile: bool(parsed.isFragile),
+      isPerishable: bool(parsed.isPerishable),
+      requiresSpecialHandling: bool(parsed.requiresSpecialHandling),
+      minOrderQuantity: num(parsed.minOrderQuantity),
+      maxOrderQuantity: num(parsed.maxOrderQuantity),
+    };
+  }
+
+  private async mergeBarcodeLookup(
+    suggestion: ItemRefinementSuggestionResult
+  ): Promise<ItemRefinementSuggestionResult> {
+    const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
+    if (!barcode) {
+      return suggestion;
+    }
+    const lookup = await this.lookupProductByBarcode(barcode);
+    if (!lookup) {
+      return suggestion;
+    }
+    return {
+      ...suggestion,
+      name: lookup.name || suggestion.name,
+      brandName: lookup.brandName || suggestion.brandName,
+      categoryName: lookup.categoryName || suggestion.categoryName,
+      subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
+      weight: lookup.weight ?? suggestion.weight,
+      weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
+      dimensions: lookup.dimensions ?? suggestion.dimensions,
+    };
   }
 
   async generateRentalImageSuggestions(input: {
@@ -509,7 +747,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         userText,
         defaultCurrency
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
@@ -584,10 +822,7 @@ No markdown, no explanation outside JSON.`;
         },
         {
           role: 'user',
-          content: [
-            { type: 'text', text: userText },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
+          content: `${userText}\n\nImage URL: ${imageUrl}`,
         },
       ],
       max_tokens: 500,
@@ -598,16 +833,8 @@ No markdown, no explanation outside JSON.`;
       45000
     );
     const rawContent = response.choices?.[0]?.message?.content;
-    const contentString = this.normalizeChatMessageContent(rawContent);
+    const contentString = this.messageContentToString(rawContent);
     return this.parseRentalSuggestionJson(contentString, defaultCurrency);
-  }
-
-  private normalizeChatMessageContent(rawContent: unknown): string {
-    if (typeof rawContent === 'string') return rawContent;
-    if (Array.isArray(rawContent)) {
-      return rawContent.map((p: any) => p?.text || '').join('\n');
-    }
-    return String(rawContent ?? '');
   }
 
   private parseRentalSuggestionJson(
@@ -617,7 +844,7 @@ No markdown, no explanation outside JSON.`;
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(contentString) as Record<string, unknown>;
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
       this.logger.error('Failed to parse rental suggestion JSON', parseError);
       return { currency: defaultCurrency };
     }

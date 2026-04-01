@@ -17,6 +17,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/locations/',
     '/notifications/',
     '/ai/image-item-suggestions',
+    '/ai/item-refinement-suggestions',
     '/business-items/create-from-image',
     '/aws/presigned-url/image',
     '/business-images/bulk',

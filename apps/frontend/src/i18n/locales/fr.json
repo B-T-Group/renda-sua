@@ -1465,6 +1465,16 @@
       "optionalDetails": "Optional Details",
       "orderLimits": "Limites de commande",
       "perishable": "Périssable",
+      "refineWithAi": {
+        "title": "Affiner avec l'IA",
+        "tooltip": "Affiner le produit avec l'IA",
+        "loading": "Analyse de l'article et des images...",
+        "error": "Échec des suggestions IA",
+        "apply": "Appliquer les modifications",
+        "categoryHint": "Choisissez la catégorie dans votre catalogue ; les suggestions IA sont indicatives.",
+        "priceLocked": "Le prix et la devise ne sont pas modifiés ici",
+        "suggestedTagsFr": "Étiquettes suggérées par l'IA (français)"
+      },
       "price": "Price",
       "primary": "Primary",
       "productDetails": "Product Details",

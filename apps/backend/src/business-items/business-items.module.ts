@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BusinessItemsController } from './business-items.controller';
 import { BusinessItemsService } from './business-items.service';
 import { ItemDealsService } from '../item-deals/item-deals.service';
@@ -6,7 +6,7 @@ import { BusinessImagesModule } from '../business-images/business-images.module'
 import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [BusinessImagesModule, AiModule],
+  imports: [BusinessImagesModule, forwardRef(() => AiModule)],
   controllers: [BusinessItemsController],
   providers: [BusinessItemsService, ItemDealsService],
   exports: [BusinessItemsService, ItemDealsService],

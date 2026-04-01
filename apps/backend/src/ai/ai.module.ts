@@ -5,9 +5,15 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { DeepseekService } from './deepseek.service';
 import { BusinessImagesModule } from '../business-images/business-images.module';
+import { BusinessItemsModule } from '../business-items/business-items.module';
 
 @Module({
-  imports: [ConfigModule, AuthModule, forwardRef(() => BusinessImagesModule)],
+  imports: [
+    ConfigModule,
+    AuthModule,
+    forwardRef(() => BusinessImagesModule),
+    forwardRef(() => BusinessItemsModule),
+  ],
   controllers: [AiController],
   providers: [DeepseekService, AiService],
   exports: [AiService],

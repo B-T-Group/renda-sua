@@ -1,6 +1,7 @@
 import {
   Add as AddIcon,
   AddPhotoAlternate as AddPhotoAlternateIcon,
+  AutoAwesome as AutoAwesomeIcon,
   Check as CheckIcon,
   CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
@@ -74,6 +75,7 @@ import CSVUploadDialog from '../business/CSVUploadDialog';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
+import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
 
 interface TabPanelProps {
@@ -256,6 +258,7 @@ const BusinessItemsPage: React.FC = () => {
     string | null
   >(null);
   const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
+  const [refineAiItem, setRefineAiItem] = useState<Item | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -945,7 +948,7 @@ const BusinessItemsPage: React.FC = () => {
     {
       field: 'actions',
       headerName: t('common.actions'),
-      width: 180,
+      width: 220,
       renderCell: (params: GridRenderCellParams) => {
         const isEditing = editingCell?.rowId === params.row.id && draftValues;
         if (isEditing) {
@@ -999,6 +1002,18 @@ const BusinessItemsPage: React.FC = () => {
               >
                 <EditIcon />
               </IconButton>
+            </Tooltip>
+            <Tooltip title={t('business.items.refineWithAi.tooltip', 'Refine product with AI')}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => setRefineAiItem(params.row as Item)}
+                  disabled={!params.row.item_images?.length}
+                  sx={{ color: theme.palette.secondary.main }}
+                >
+                  <AutoAwesomeIcon />
+                </IconButton>
+              </span>
             </Tooltip>
             {params.row.business_inventories?.[0] && (
               <Tooltip title={t('business.inventory.restock')}>
@@ -1560,6 +1575,18 @@ const BusinessItemsPage: React.FC = () => {
         open={Boolean(manageDealsItem)}
         onClose={() => setManageDealsItem(null)}
         inventoryItem={manageDealsItem}
+      />
+
+      <RefineItemWithAiDialog
+        open={Boolean(refineAiItem)}
+        item={refineAiItem}
+        brands={brands}
+        itemSubCategories={itemSubCategories}
+        onClose={() => setRefineAiItem(null)}
+        onApplied={() => {
+          refetchPageData();
+        }}
+        updateItem={updateItem}
       />
 
       {/* Download CSV – location select */}
