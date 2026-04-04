@@ -155,6 +155,15 @@ export interface SmsConfig {
   twilioPhoneNumber: string;
 }
 
+/** MTN SMS v3 API (api.mtn.com) — OAuth + short code from opco. */
+export interface MtnSmsConfig {
+  clientId: string;
+  clientSecret: string;
+  serviceCode: string;
+  baseUrl: string;
+  senderAddress?: string;
+}
+
 export interface PdfEndpointConfig {
   apiToken: string;
   sandbox: boolean;
@@ -186,6 +195,7 @@ export interface Configuration {
   notification: NotificationConfig;
   push: PushConfig;
   sms: SmsConfig;
+  mtnSms: MtnSmsConfig;
   pdfEndpoint: PdfEndpointConfig;
 }
 
@@ -368,6 +378,13 @@ export default (): Configuration => {
       twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
       twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
       twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER ?? '',
+    },
+    mtnSms: {
+      clientId: process.env.MTN_SMS_CLIENT_ID ?? '',
+      clientSecret: process.env.MTN_SMS_CLIENT_SECRET ?? '',
+      serviceCode: process.env.MTN_SMS_SERVICE_CODE ?? '',
+      baseUrl: process.env.MTN_SMS_BASE_URL ?? 'https://api.mtn.com',
+      senderAddress: process.env.MTN_SMS_SENDER_ADDRESS,
     },
     pdfEndpoint: {
       apiToken: process.env.PDF_ENDPOINT_TOKEN || '',
