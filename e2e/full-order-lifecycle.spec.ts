@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import {
-  agentDeliverOrder,
+  agentCompleteDeliveryWithPin,
   businessConfirmAndPrepareOrder,
-  clientCompleteOrder,
+  clientGetDeliveryPinFromOrdersPage,
   clientPlaceFirstItemOrder,
   signInUser,
   signOut,
@@ -35,40 +35,26 @@ test.describe('Order Lifecycle E2E Tests', () => {
     ).toBeVisible({ timeout: 10000 });
     await businessConfirmAndPrepareOrder(page);
     await signOut(page);
-    // Expect to be on the home page after completing preparation
-    await expect(page).toHaveURL(/\/$/);
   });
 
   test('agent can deliver order', async ({ page }) => {
-    test.setTimeout(60000);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    await signInUser(page, 'agent');
-    await agentDeliverOrder(page);
-    // Wait for delivered status to appear - could be in alert, status badge, or page text
-    // Check for multiple possible text patterns that indicate delivery success
-    await expect(
-      page.getByText(/delivered|excellent work|successfully delivered/i).first()
-    ).toBeVisible({
-      timeout: 15000,
-    });
-    await signOut(page);
-  });
-
-  test('client can complete order', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     await signInUser(page, 'client');
-    await clientCompleteOrder(page);
-    // The success modal is already verified in clientCompleteOrder helper
-    // Optionally close the modal to complete the test
-    const closeButton = page.getByRole('button', { name: /close/i });
-    if (await closeButton.isVisible().catch(() => false)) {
-      await closeButton.click();
-      await page.waitForLoadState('networkidle');
-    }
+    const deliveryPin = await clientGetDeliveryPinFromOrdersPage(page);
+    await signOut(page);
+
+    await signInUser(page, 'agent');
+    await agentCompleteDeliveryWithPin(page, deliveryPin);
+    await expect(
+      page.getByText(/delivered|excellent work|successfully delivered/i).first()
+    ).toBeVisible({
+      timeout: 20000,
+    });
+    await signOut(page);
   });
+
+  
 });

@@ -41,6 +41,12 @@ import {
   resolveActivePersonaWithDefault,
   isActivePersona,
 } from '../users/persona.util';
+import {
+  DEFAULT_USER_TIMEZONE,
+  isValidIanaTimezone,
+  parseCalendarDatePartsFromPreferredDate,
+  timezoneFromAddressCountryCode,
+} from '../users/user-timezone.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -722,7 +728,7 @@ export class OrdersService {
     windowId: string,
     orderId: string,
     confirmedBy: string,
-    countryCode?: string
+    timezone: string
   ): Promise<string> {
     // Verify the delivery window exists and belongs to this order
     const query = `
@@ -764,20 +770,12 @@ export class OrdersService {
       );
     }
 
-    // Get timezone for the country (default to UTC if not found)
-    const timezone = countryCode
-      ? await this.deliveryConfigService.getTimezone(countryCode)
-      : 'Africa/Libreville';
-
-    // Validate that the window is at least 2 hours in the future
-    // Get current time in the specified timezone
     const now = this.getCurrentTimeInTimezone(timezone);
-    const windowDate = new Date(window.preferred_date);
     const [startHours, startMinutes] = window.time_slot_start
       .split(':')
       .map(Number);
     const windowDateTime = this.createDateTimeInTimezone(
-      windowDate,
+      window.preferred_date,
       startHours,
       startMinutes,
       timezone
@@ -836,7 +834,7 @@ export class OrdersService {
     },
     orderId: string,
     confirmedBy: string,
-    countryCode?: string
+    timezone: string
   ): Promise<string> {
     // First, get the slot details to extract time_slot_start and time_slot_end
     const slotQuery = `
@@ -869,18 +867,10 @@ export class OrdersService {
       );
     }
 
-    // Get timezone for the country (default to UTC if not found)
-    const timezone = countryCode
-      ? await this.deliveryConfigService.getTimezone(countryCode)
-      : 'UTC';
-
-    // Validate that the window is at least 2 hours in the future
-    // Get current time in the specified timezone
     const now = this.getCurrentTimeInTimezone(timezone);
-    const windowDate = new Date(details.preferred_date);
     const [startHours, startMinutes] = slot.start_time.split(':').map(Number);
     const windowDateTime = this.createDateTimeInTimezone(
-      windowDate,
+      details.preferred_date,
       startHours,
       startMinutes,
       timezone
@@ -1058,24 +1048,25 @@ export class OrdersService {
 
     let confirmedWindowId: string;
 
-    // Get country code from order's delivery address
     const countryCode = order.delivery_address?.country || 'GA';
+    const deliveryTimezone = await this.resolveOrderDeliveryTimezone(
+      order,
+      countryCode
+    );
 
     if (request.delivery_time_window_id) {
-      // Confirm existing delivery window
       confirmedWindowId = await this.confirmExistingDeliveryWindow(
         request.delivery_time_window_id,
         request.orderId,
         user.id,
-        countryCode
+        deliveryTimezone
       );
     } else if (request.delivery_window_details) {
-      // Create new confirmed delivery window
       confirmedWindowId = await this.createConfirmedDeliveryWindow(
         request.delivery_window_details,
         request.orderId,
         user.id,
-        countryCode
+        deliveryTimezone
       );
     } else {
       throw new HttpException(
@@ -3704,26 +3695,40 @@ export class OrdersService {
     return new Date();
   }
 
+  private async resolveOrderDeliveryTimezone(
+    order: Orders,
+    countryCode: string
+  ): Promise<string> {
+    const clientTz = order.client?.user?.timezone;
+    if (clientTz && isValidIanaTimezone(clientTz)) {
+      return clientTz;
+    }
+    const configTz = await this.deliveryConfigService.getTimezone(countryCode);
+    if (configTz && isValidIanaTimezone(configTz)) {
+      return configTz;
+    }
+    const fromCountry = timezoneFromAddressCountryCode(
+      order.delivery_address?.country ?? countryCode
+    );
+    if (isValidIanaTimezone(fromCountry)) {
+      return fromCountry;
+    }
+    return DEFAULT_USER_TIMEZONE;
+  }
+
   /**
    * Create a date-time in the specified timezone and convert it to UTC for comparison
-   * @param date - Date object (date part only)
-   * @param hours - Hours (0-23) in the timezone
-   * @param minutes - Minutes (0-59) in the timezone
-   * @param timezone - IANA timezone identifier (e.g., 'Africa/Libreville')
-   * @returns Date object in UTC representing the specified date-time in the timezone
    */
   private createDateTimeInTimezone(
-    date: Date,
+    preferredDate: string | Date,
     hours: number,
     minutes: number,
     timezone: string
   ): Date {
     try {
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1; // Luxon uses 1-based months
-      const day = date.getDate();
+      const { year, month, day } =
+        parseCalendarDatePartsFromPreferredDate(preferredDate);
 
-      // Create a DateTime in the specified timezone with the given date and time
       const dateTimeInTimezone = DateTime.fromObject(
         {
           year,
@@ -3780,6 +3785,9 @@ export class OrdersService {
           delivery_address_id
           client {
             user_id
+            user {
+              timezone
+            }
           }
           business {
             user_id

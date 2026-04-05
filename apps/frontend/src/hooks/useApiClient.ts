@@ -21,6 +21,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/business-items/create-from-image',
     '/aws/presigned-url/image',
     '/business-images/bulk',
+    '/orders/complete-delivery',
   ];
   if (substrings.some((s) => url.includes(s))) return true;
   if (url.includes('disassociate-item')) return false;

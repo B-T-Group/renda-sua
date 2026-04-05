@@ -123,11 +123,24 @@ export interface OrderDetails {
   order_items?: any[];
 }
 
+/** NestJS HttpException: prefer `message` over generic `error` (e.g. "Forbidden"). */
+function getHttpExceptionMessage(err: any, fallback: string): string {
+  const data = err.response?.data;
+  if (typeof data?.message === 'string') return data.message;
+  if (Array.isArray(data?.message)) return data.message.join(', ');
+  if (typeof data?.error === 'string') return data.error;
+  if (typeof err?.message === 'string') return err.message;
+  return fallback;
+}
+
 export const useBackendOrders = () => {
   const [error, setError] = useState<string | null>(null);
   const apiClient = useApiClient();
   const { callWithLoading } = useApiWithLoading({
     loadingMessage: 'common.updatingOrder',
+  });
+  const { callWithLoading: callWithoutGlobalOverlay } = useApiWithLoading({
+    showLoading: false,
   });
 
   const createOrder = async (
@@ -725,7 +738,7 @@ export const useBackendOrders = () => {
       );
     }
 
-    return callWithLoading(async () => {
+    return callWithoutGlobalOverlay(async () => {
       try {
         const response = await apiClient.post<OrderStatusChangeResponse>(
           '/orders/complete-delivery',
@@ -740,15 +753,14 @@ export const useBackendOrders = () => {
 
         return response.data;
       } catch (err: any) {
-        const errorMessage =
-          err.response?.data?.error ||
-          err.response?.data?.message ||
-          err.message ||
-          'Failed to complete delivery';
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to complete delivery'
+        );
         setError(errorMessage);
         throw new Error(errorMessage);
       }
-    }, 'orders.completingDelivery');
+    });
   };
 
   const getDeliveryPin = async (

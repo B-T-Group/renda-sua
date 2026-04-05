@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -35,6 +35,14 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const submitLockRef = useRef(false);
 
+  useEffect(() => {
+    if (open) {
+      setPin('');
+      setError(null);
+      submitLockRef.current = false;
+    }
+  }, [open]);
+
   const handleSubmit = async () => {
     if (pin.length !== PIN_LENGTH) {
       setError(
@@ -70,8 +78,17 @@ const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({
     }
   };
 
+  const handleDialogClose = (
+    _event: object,
+    reason: 'backdropClick' | 'escapeKeyDown'
+  ) => {
+    if (loading) return;
+    if (error && reason === 'backdropClick') return;
+    handleClose();
+  };
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleDialogClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         {t('orders.completeDelivery.title', 'Complete Delivery')} – {orderNumber}
       </DialogTitle>

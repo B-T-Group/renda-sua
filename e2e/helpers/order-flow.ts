@@ -231,7 +231,7 @@ async function completeConfirmOrderModal(page: Page): Promise<void> {
   await page.waitForTimeout(500);
   await clickEnabledConfirmInModal(modal, page);
   await page.waitForLoadState('networkidle');
-  await modal.waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {});
+  await modal.waitFor({ state: 'hidden', timeout: 20000 }).catch(() => undefined);
 }
 
 async function clickSetAsReadyForOrderNumber(
@@ -263,6 +263,139 @@ export async function businessConfirmAndPrepareOrder(page: Page): Promise<void> 
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1000);
+}
+
+/** Client: open Orders, filter ready_for_pickup, read PIN from modal. Caller must be signed in as client. */
+export async function clientGetDeliveryPinFromOrdersPage(
+  page: Page
+): Promise<string> {
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('link', { name: /^Orders$|^Commandes$/i }).first().click();
+  await page.waitForURL(/\/orders(?:\?|$)/, { timeout: 20000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1500);
+  await page.locator('div.MuiSelect-select[role="combobox"]').first().click();
+  await page
+    .locator('[role="option"][data-value="ready_for_pickup"]')
+    .click();
+  await page.getByRole('button', { name: /^Search$|^Rechercher$/i }).first().click();
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(2000);
+  await page
+    .getByRole('button', { name: /View delivery PIN/i })
+    .first()
+    .click();
+  const pinDialog = page.getByRole('dialog');
+  await pinDialog.waitFor({ state: 'visible', timeout: 20000 });
+  const pinEl = pinDialog.locator('.MuiTypography-h4');
+  await expect(pinEl).toHaveText(/\d{4}/, { timeout: 20000 });
+  const pin = (await pinEl.textContent())?.trim() ?? '';
+  await pinDialog.getByRole('button', { name: /^Close$|^Fermer$/i }).click();
+  await pinDialog.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => undefined);
+  return pin;
+}
+
+function isOrderDetailPathname(pathname: string): boolean {
+  return /^\/orders\/[^/]+$/.test(pathname) && pathname !== '/orders';
+}
+
+async function confirmAgentClaimModal(page: Page): Promise<void> {
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible', timeout: 20000 });
+  await dialog
+    .getByRole('button', {
+      name: /Confirm.*Claim|Confirmer et Réclamer|Claim Order|Réclamer la Commande/i,
+    })
+    .click();
+  await page.waitForLoadState('networkidle');
+}
+
+async function waitForAgentOrderDetailAfterClaim(page: Page): Promise<void> {
+  const goBtn = page.getByRole('button', {
+    name: /Go to Order|Voir la commande/i,
+  });
+  for (let i = 0; i < 90; i++) {
+    if (isOrderDetailPathname(new URL(page.url()).pathname)) {
+      await page.waitForLoadState('domcontentloaded');
+      return;
+    }
+    if (await goBtn.isVisible().catch(() => false)) {
+      await page.waitForTimeout(10000);
+      await goBtn.click();
+      await page.waitForURL(
+        (u) => isOrderDetailPathname(u.pathname),
+        { timeout: 45000 }
+      );
+      await page.waitForLoadState('domcontentloaded');
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error('Timed out waiting for agent order detail');
+}
+
+async function confirmStatusChangeIfShown(page: Page): Promise<void> {
+  const dlg = page.getByRole('dialog');
+  const confirmBtn = dlg.getByRole('button', { name: /^Confirm$|^Confirmer$/i });
+  if (await confirmBtn.isVisible().catch(() => false)) {
+    await confirmBtn.click();
+    await page.waitForLoadState('networkidle');
+  }
+}
+
+async function fillDeliveryPinInCompleteDialog(
+  page: Page,
+  deliveryPin: string
+): Promise<void> {
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible', timeout: 15000 });
+  const digits = deliveryPin.replace(/\D/g, '').slice(0, 4).split('');
+  const inputs = dialog.locator('input[inputmode="numeric"]');
+  for (let i = 0; i < digits.length; i++) {
+    await inputs.nth(i).fill(digits[i]);
+  }
+  await dialog
+    .getByRole('button', {
+      name: /Complete delivery|Compléter la livraison/i,
+    })
+    .click();
+  await page.waitForLoadState('networkidle');
+}
+
+/** Agent: claim order, reach detail, pick up → out for delivery → complete with PIN. Caller must be signed in as agent. */
+export async function agentCompleteDeliveryWithPin(
+  page: Page,
+  deliveryPin: string
+): Promise<void> {
+  await page.goto('/orders');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1500);
+  await page
+    .getByRole('button', {
+      name: /Claim Order|Réclamer la Commande|Réclamer la commande/i,
+    })
+    .first()
+    .click();
+  await confirmAgentClaimModal(page);
+  await waitForAgentOrderDetailAfterClaim(page);
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: /Pick Up|Récupérer/i }).first().click();
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(800);
+  await page
+    .getByRole('button', {
+      name: /Mark as Out for Delivery|Marquer comme En Livraison/i,
+    })
+    .first()
+    .click();
+  await confirmStatusChangeIfShown(page);
+  await page.waitForTimeout(1000);
+  await page
+    .getByRole('button', { name: /Complete delivery|Compléter la livraison/i })
+    .first()
+    .click();
+  await fillDeliveryPinInCompleteDialog(page, deliveryPin);
 }
 
 export async function agentDeliverOrder(page: Page): Promise<void> {
