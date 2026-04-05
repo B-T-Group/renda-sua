@@ -5,7 +5,7 @@ import {
   clientGetDeliveryPinFromOrdersPage,
   clientPlaceFirstItemOrder,
   signInUser,
-  signOut,
+  signOut
 } from './helpers/order-flow';
 
 test.describe('Order Lifecycle E2E Tests', () => {
@@ -44,6 +44,7 @@ test.describe('Order Lifecycle E2E Tests', () => {
 
     await signInUser(page, 'client');
     const deliveryPin = await clientGetDeliveryPinFromOrdersPage(page);
+    console.log('deliveryPin', deliveryPin);
     await signOut(page);
 
     await signInUser(page, 'agent');

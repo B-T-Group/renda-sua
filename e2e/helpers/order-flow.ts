@@ -368,7 +368,7 @@ export async function agentCompleteDeliveryWithPin(
   page: Page,
   deliveryPin: string
 ): Promise<void> {
-  await page.goto('/orders');
+  await page.goto('/open-orders');
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1500);
   await page
