@@ -1,0 +1,62 @@
+table:
+  name: order_refund_requests
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - client_id
+        - business_id
+        - reason
+        - client_notes
+        - status
+        - business_note
+        - rejection_reason
+        - refund_item_amount
+        - refund_delivery_fee
+        - inspection_acknowledged_at
+        - created_at
+        - updated_at
+        - resolved_at
+      filter:
+        client:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: false
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - client_id
+        - business_id
+        - reason
+        - client_notes
+        - status
+        - business_note
+        - rejection_reason
+        - refund_item_amount
+        - refund_delivery_fee
+        - inspection_acknowledged_at
+        - created_at
+        - updated_at
+        - resolved_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true

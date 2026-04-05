@@ -41,6 +41,7 @@
 - "!include public_order_holds.yaml"
 - "!include public_order_items.yaml"
 - "!include public_order_label_prints.yaml"
+- "!include public_order_refund_requests.yaml"
 - "!include public_order_status_history.yaml"
 - "!include public_orders.yaml"
 - "!include public_partners.yaml"

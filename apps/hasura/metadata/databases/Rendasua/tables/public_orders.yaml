@@ -64,6 +64,15 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+  - name: order_refund_requests
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: order_refund_requests
+          schema: public
   - name: order_status_history
     using:
       manual_configuration:
@@ -139,6 +148,7 @@ select_permissions:
         - payment_source
         - created_at
         - updated_at
+        - completed_at
         - requires_fast_delivery
         - verified_agent_delivery
         - delivery_pin_attempts
@@ -174,6 +184,7 @@ select_permissions:
         - payment_source
         - created_at
         - updated_at
+        - completed_at
         - requires_fast_delivery
         - verified_agent_delivery
         - delivery_overwrite_code_used_at
@@ -208,6 +219,7 @@ select_permissions:
         - payment_source
         - created_at
         - updated_at
+        - completed_at
         - requires_fast_delivery
         - verified_agent_delivery
       filter:
