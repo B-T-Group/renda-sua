@@ -11,6 +11,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { PersonaId } from '../users/persona.types';
 import { getActivePersonaOrThrow } from '../users/persona.util';
+import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
 
 export interface CreateAddressDto {
   address_line_1: string;
@@ -302,6 +303,8 @@ export class AddressesService {
     try {
       const user = await this.hasuraUserService.getUser();
       const persona = getActivePersonaOrThrow(user);
+      const addressCountBefore =
+        await this.hasuraSystemService.countLinkedAddressesForUser(user.id);
 
       let coordinates: { latitude: number; longitude: number } | null = null;
       let warning = '';
@@ -495,6 +498,13 @@ export class AddressesService {
         );
       }
 
+      if (addressCountBefore === 0) {
+        await this.hasuraSystemService.setUserTimezone(
+          user.id,
+          timezoneFromAddressCountryCode(addressData.country)
+        );
+      }
+
       // Get currency from country and create account if needed
       const currency = await this.getCurrencyFromCountry(addressData.country);
       let accountCreated = null;
@@ -534,6 +544,7 @@ export class AddressesService {
    * No geocoding; postal_code defaults to empty string.
    */
   async createAddressForSignup(
+    userId: string,
     entityId: string,
     entityType: 'client' | 'agent' | 'business',
     addressData: {
@@ -543,6 +554,9 @@ export class AddressesService {
       state: string;
     }
   ): Promise<AddressResponse> {
+    const addressCountBefore =
+      await this.hasuraSystemService.countLinkedAddressesForUser(userId);
+
     const createAddressMutation = `
       mutation CreateAddressForSignup(
         $addressLine1: String!,
@@ -650,6 +664,13 @@ export class AddressesService {
       if (locationId) {
         await this.hasuraSystemService.ensureAccountForBusinessLocation(locationId);
       }
+    }
+
+    if (addressCountBefore === 0) {
+      await this.hasuraSystemService.setUserTimezone(
+        userId,
+        timezoneFromAddressCountryCode(addressData.country)
+      );
     }
 
     return address as AddressResponse;

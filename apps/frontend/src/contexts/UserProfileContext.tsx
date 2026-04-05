@@ -63,6 +63,8 @@ export interface UserProfile {
   phone_number?: string;
   profile_picture_url?: string;
   preferred_language?: string;
+  /** IANA timezone (e.g. Africa/Douala) */
+  timezone?: string;
   user_type_id: string;
   client?: {
     id: string;
@@ -283,7 +285,8 @@ interface UserProfileContextType {
     userId: string,
     firstName: string,
     lastName: string,
-    phoneNumber: string
+    phoneNumber: string,
+    timezone: string
   ) => Promise<boolean>;
   updateProfilePicture: (
     userId: string,
@@ -518,7 +521,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     userId: string,
     firstName: string,
     lastName: string,
-    phoneNumber: string
+    phoneNumber: string,
+    timezone: string
   ): Promise<boolean> => {
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -535,6 +539,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
           firstName,
           lastName,
           phoneNumber,
+          timezone,
         }
       );
 

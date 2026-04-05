@@ -36128,6 +36128,8 @@ export type Users = {
   /** User preferred UI language: en or fr */
   preferred_language: Scalars['String']['output'];
   profile_picture_url?: Maybe<Scalars['String']['output']>;
+  /** IANA timezone identifier */
+  timezone: Scalars['String']['output'];
   /** An array relationship */
   ratings_given: Array<Ratings>;
   /** An aggregate relationship */
@@ -36463,6 +36465,8 @@ export type Users_Insert_Input = {
   /** User preferred UI language: en or fr */
   preferred_language?: InputMaybe<Scalars['String']['input']>;
   profile_picture_url?: InputMaybe<Scalars['String']['input']>;
+  /** IANA timezone identifier */
+  timezone?: InputMaybe<Scalars['String']['input']>;
   ratings_given?: InputMaybe<Ratings_Arr_Rel_Insert_Input>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_messages?: InputMaybe<User_Messages_Arr_Rel_Insert_Input>;
@@ -36613,6 +36617,8 @@ export enum Users_Select_Column {
   /** column name */
   ProfilePictureUrl = 'profile_picture_url',
   /** column name */
+  Timezone = 'timezone',
+  /** column name */
   UpdatedAt = 'updated_at',
   /** column name */
   UserTypeId = 'user_type_id'
@@ -36650,6 +36656,8 @@ export type Users_Set_Input = {
   /** User preferred UI language: en or fr */
   preferred_language?: InputMaybe<Scalars['String']['input']>;
   profile_picture_url?: InputMaybe<Scalars['String']['input']>;
+  /** IANA timezone identifier */
+  timezone?: InputMaybe<Scalars['String']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_type_id?: InputMaybe<User_Types_Enum>;
 };

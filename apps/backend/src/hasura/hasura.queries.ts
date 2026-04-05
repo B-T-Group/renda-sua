@@ -14,6 +14,7 @@ export const GET_USER_BY_ID_WITH_RELATIONS = gql`
       user_type_id
       profile_picture_url
       preferred_language
+      timezone
       created_at
       updated_at
       client {

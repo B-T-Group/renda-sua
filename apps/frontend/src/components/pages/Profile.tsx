@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material';
 import {
   Alert,
+  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -33,7 +34,7 @@ import {
   Typography,
 } from '@mui/material';
 import axios from 'axios';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -50,6 +51,20 @@ import PhoneInput from '../common/PhoneInput';
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+function listIanaTimezones(): string[] {
+  try {
+    const fn = (
+      Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
+    ).supportedValuesOf;
+    if (typeof fn === 'function') {
+      return fn.call(Intl, 'timeZone');
+    }
+  } catch {
+    /* ignore */
+  }
+  return ['Africa/Douala', 'Africa/Libreville', 'America/Toronto', 'UTC'];
+}
 
 function resolveAddressEntity(
   profile: UserProfile,
@@ -113,7 +128,17 @@ const Profile: React.FC = () => {
     first_name: '',
     last_name: '',
     phone_number: '',
+    timezone: 'Africa/Douala',
   });
+
+  const timezoneOptions = useMemo(() => {
+    const base = listIanaTimezones();
+    const tz = profileForm.timezone;
+    if (tz && !base.includes(tz)) {
+      return [tz, ...base];
+    }
+    return base;
+  }, [profileForm.timezone]);
 
   // Get profile data from UserProfileContext
   const {
@@ -156,6 +181,7 @@ const Profile: React.FC = () => {
         first_name: profile.first_name || '',
         last_name: profile.last_name || '',
         phone_number: profile.phone_number || '',
+        timezone: profile.timezone || 'Africa/Douala',
       });
     }
   }, [profile]);
@@ -167,7 +193,8 @@ const Profile: React.FC = () => {
       profile.id,
       profileForm.first_name,
       profileForm.last_name,
-      profileForm.phone_number
+      profileForm.phone_number,
+      profileForm.timezone
     );
 
     if (success) {
@@ -478,6 +505,30 @@ const Profile: React.FC = () => {
                     margin="normal"
                     useDevPhoneDropdown
                   />
+                  <Autocomplete
+                    size="small"
+                    options={timezoneOptions}
+                    value={profileForm.timezone}
+                    onChange={(_, v) =>
+                      setProfileForm((prev) => ({
+                        ...prev,
+                        timezone: v || 'Africa/Douala',
+                      }))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label={t(
+                          'profile.timezoneLabel',
+                          'Time zone (IANA)'
+                        )}
+                        helperText={t(
+                          'profile.timezoneHelper',
+                          'Used for dates and times in your account. You can change this anytime.'
+                        )}
+                      />
+                    )}
+                  />
                   <Button
                     variant="contained"
                     startIcon={<SaveIcon />}
@@ -513,6 +564,14 @@ const Profile: React.FC = () => {
                             day: 'numeric',
                           })
                         : '—'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {t('profile.timezoneLabel', 'Time zone (IANA)')}
+                    </Typography>
+                    <Typography variant="body2">
+                      {profile?.timezone || 'Africa/Douala'}
                     </Typography>
                   </Box>
                 </Stack>

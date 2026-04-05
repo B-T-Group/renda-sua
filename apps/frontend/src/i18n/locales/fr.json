@@ -2830,6 +2830,8 @@
     "phone": "Téléphone",
     "phoneNumber": "Numéro de Téléphone",
     "phoneNumberHelper": "Ce numéro de téléphone doit être votre numéro de mobile money et sera utilisé pour les paiements associés à votre compte.",
+    "timezoneLabel": "Fuseau horaire (IANA)",
+    "timezoneHelper": "Utilisé pour les dates et heures de votre compte. Vous pouvez le modifier à tout moment.",
     "title": "Paramètres du Profil",
     "uploadDocuments": "Télécharger des Documents",
     "uploadDocumentsDescription": "Téléchargez des documents importants pour la vérification de votre compte.",

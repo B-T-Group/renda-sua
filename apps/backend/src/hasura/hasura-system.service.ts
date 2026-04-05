@@ -170,6 +170,58 @@ export class HasuraSystemService {
     return result.users_by_pk ?? null;
   }
 
+  /** Counts addresses linked to this user across client, agent, and business personas. */
+  async countLinkedAddressesForUser(userId: string): Promise<number> {
+    const result = await this.executeQuery<{
+      ca: { aggregate: { count: number } | null } | null;
+      aa: { aggregate: { count: number } | null } | null;
+      ba: { aggregate: { count: number } | null } | null;
+    }>(
+      `
+      query CountUserAddresses($uid: uuid!) {
+        ca: client_addresses_aggregate(
+          where: { client: { user_id: { _eq: $uid } } }
+        ) {
+          aggregate {
+            count
+          }
+        }
+        aa: agent_addresses_aggregate(
+          where: { agent: { user_id: { _eq: $uid } } }
+        ) {
+          aggregate {
+            count
+          }
+        }
+        ba: business_addresses_aggregate(
+          where: { business: { user_id: { _eq: $uid } } }
+        ) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `,
+      { uid: userId }
+    );
+    const n = (x: { aggregate: { count: number } | null } | null) =>
+      x?.aggregate?.count ?? 0;
+    return n(result.ca) + n(result.aa) + n(result.ba);
+  }
+
+  async setUserTimezone(userId: string, timezone: string): Promise<void> {
+    await this.executeMutation(
+      `
+      mutation SetUserTimezone($id: uuid!, $tz: String!) {
+        update_users_by_pk(pk_columns: { id: $id }, _set: { timezone: $tz }) {
+          id
+        }
+      }
+    `,
+      { id: userId, tz: timezone }
+    );
+  }
+
   /**
    * Get client by user ID
    */

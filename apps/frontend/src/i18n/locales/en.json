@@ -2867,6 +2867,8 @@
     "phone": "Phone",
     "phoneNumber": "Phone Number",
     "phoneNumberHelper": "This phone number should be your mobile money phone number and will be used for payments associated with your account.",
+    "timezoneLabel": "Time zone (IANA)",
+    "timezoneHelper": "Used for dates and times in your account. You can change this anytime.",
     "title": "Profile Settings",
     "uploadDocuments": "Upload Documents",
     "uploadDocumentsDescription": "Upload important documents for your account verification.",

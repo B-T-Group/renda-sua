@@ -82,8 +82,10 @@ export class SignupService {
     }
     const { user, entities } = await this.createPendingUser({ ...payload, email });
     if (payload.address && entities.length > 0) {
+      const uid = user.id;
       for (const entity of entities) {
         await this.addressesService.createAddressForSignup(
+          uid,
           entity.id,
           entity.type,
           payload.address

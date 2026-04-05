@@ -19,6 +19,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { derivePersonas, userHasPersona } from './persona.util';
 import { isPersonaId, PersonaId } from './persona.types';
+import {
+  DEFAULT_USER_TIMEZONE,
+  isValidIanaTimezone,
+} from './user-timezone.util';
 
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const PROFILE_PICTURE_ACCEPTED_TYPES = [
@@ -133,15 +137,32 @@ export class UsersController {
       lastName: string;
       phoneNumber?: string;
       preferredLanguage?: 'en' | 'fr';
+      timezone?: string;
     }
   ) {
     try {
       const currentUser = await this.hasuraUserService.getUser();
+      const existingTz = currentUser.timezone ?? DEFAULT_USER_TIMEZONE;
+      let timezoneToSave = existingTz;
+      if (body.timezone !== undefined) {
+        const trimmed = body.timezone.trim();
+        if (!isValidIanaTimezone(trimmed)) {
+          throw new HttpException(
+            {
+              success: false,
+              error:
+                'Invalid timezone. Use an IANA identifier (e.g. Africa/Douala).',
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+        timezoneToSave = trimmed;
+      }
       const mutation = `
-        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String, $preferred_language: String) {
+        mutation UpdateUser($id: uuid!, $first_name: String!, $last_name: String!, $phone_number: String, $preferred_language: String, $timezone: String!) {
           update_users_by_pk(
             pk_columns: { id: $id }
-            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, preferred_language: $preferred_language }
+            _set: { first_name: $first_name, last_name: $last_name, phone_number: $phone_number, preferred_language: $preferred_language, timezone: $timezone }
           ) {
             id
             email
@@ -151,6 +172,7 @@ export class UsersController {
             user_type_id
             profile_picture_url
             preferred_language
+            timezone
             created_at
             updated_at
           }
@@ -165,6 +187,7 @@ export class UsersController {
           body.preferredLanguage !== undefined
             ? body.preferredLanguage
             : (currentUser as any).preferred_language ?? 'fr',
+        timezone: timezoneToSave,
       });
       return {
         success: true,
@@ -557,8 +580,10 @@ export class UsersController {
           main_interest: mi,
         });
         if (addressData) {
+          const uid = inserted.user.id;
           if (inserted.client?.id) {
             await this.addressesService.createAddressForSignup(
+              uid,
               inserted.client.id,
               'client',
               addressData
@@ -566,6 +591,7 @@ export class UsersController {
           }
           if (inserted.agent?.id) {
             await this.addressesService.createAddressForSignup(
+              uid,
               inserted.agent.id,
               'agent',
               addressData
@@ -573,6 +599,7 @@ export class UsersController {
           }
           if (inserted.business?.id) {
             await this.addressesService.createAddressForSignup(
+              uid,
               inserted.business.id,
               'business',
               addressData
