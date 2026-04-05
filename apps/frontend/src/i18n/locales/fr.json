@@ -753,6 +753,8 @@
       "subtitleRentalFocused": "Votre tableau de bord met les locations en avant — catalogue, réservations et photothèque location en tête.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "refundsTitle": "Demandes de remboursement",
+      "refundsDescription": "Examiner et traiter les retours et remboursements clients",
       "verified": "Vérifié",
       "unverified": "Non vérifié",
       "notVerified": "Non vérifié",
@@ -1747,6 +1749,11 @@
       "picked_up": "Récupéré",
       "preparing": "En préparation",
       "ready_for_pickup": "Prêt pour le ramassage",
+      "refund_approved_full": "Remboursement approuvé (total)",
+      "refund_approved_partial": "Remboursement approuvé (partiel)",
+      "refund_approved_replace": "Remplacement approuvé (livraison gratuite)",
+      "refund_rejected": "Remboursement refusé",
+      "refund_requested": "Remboursement demandé",
       "refunded": "Remboursé"
     },
     "orderNumber": "Commande #{{orderNumber}}",
@@ -1793,8 +1800,23 @@
   "faq": {
     "sections": {
       "client": "Pour les clients",
+      "refundPolicy": "Politique de remboursement",
       "deliveryAgent": "Pour les agents de livraison",
       "business": "Pour les entreprises"
+    },
+    "refundPolicy": {
+      "window": {
+        "q": "Quand puis-je demander un remboursement ?",
+        "a": "Vous pouvez envoyer une demande dans les 3 jours calendaires suivant la finalisation de la commande (livraison confirmée avec votre code PIN). Passé ce délai, contactez le support ou l'entreprise directement."
+      },
+      "process": {
+        "q": "Comment fonctionne le processus de remboursement ?",
+        "a": "Indiquez le motif et les détails depuis votre commande. L'entreprise peut vous demander de rapporter l'article à son adresse enregistrée pour inspection. Ensuite, elle peut approuver un remboursement total, un remboursement partiel, refuser la demande, ou proposer un remplacement avec livraison gratuite plutôt qu'un remboursement sur votre portefeuille."
+      },
+      "replaceItem": {
+        "q": "Qu'est-ce que « remplacer l'article » ?",
+        "a": "Si l'entreprise choisit cette résolution, elle remplace le produit et prend en charge la livraison vers vous—aucun remboursement n'est crédité sur votre portefeuille pour cette commande. Coordonnez les détails de livraison avec l'entreprise."
+      }
     },
     "client": {
       "howToOrder": {
@@ -2114,6 +2136,52 @@
     "refreshAfterHoldPayment": "Si vous avez confirmé le paiement de retenue, veuillez cliquer sur le bouton d'actualisation en haut pour mettre à jour le statut de la commande et le solde de votre compte.",
     "confirmOrder": "Confirmer la Commande",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
+    "refunds": {
+      "requestButton": "Demander un remboursement",
+      "submitted": "Demande de remboursement envoyée",
+      "dialogTitle": "Demander un remboursement",
+      "stepRequest": "Demande",
+      "stepNext": "Étapes suivantes",
+      "policyHint": "Vous pouvez demander un remboursement dans les 3 jours suivant la livraison. Les remboursements portent sur les articles, pas sur les frais de livraison, sauf décision contraire de l'entreprise.",
+      "reasonLabel": "Motif",
+      "notesLabel": "Détails supplémentaires (facultatif)",
+      "notesPlaceholder": "Décrivez le problème...",
+      "nextStepsTitle": "La suite",
+      "bringToBusiness": "Ramenez l'article à l'adresse enregistrée de l'entreprise ci-dessous pour inspection. Les remboursements concernent le montant des articles ({{amount}} {{currency}}), pas les frais de livraison ({{delivery}} {{currency}}), sauf approbation contraire.",
+      "businessAddress": "Adresse de l'entreprise",
+      "noBusinessAddress": "Adresse non disponible. Contactez l'entreprise.",
+      "submit": "Envoyer la demande",
+      "reasons": {
+        "notDelivered": "Article non livré",
+        "wrongItem": "Mauvais article",
+        "damaged": "Article endommagé",
+        "quality": "Problème de qualité",
+        "missingParts": "Pièces ou accessoires manquants",
+        "other": "Autre"
+      },
+      "businessTitle": "Demandes de remboursement",
+      "businessSubtitle": "Traitez les demandes ouvertes. Inspectez les retours avant d'approuver.",
+      "empty": "Aucune demande de remboursement en attente.",
+      "orderNumber": "Commande {{n}}",
+      "viewOrder": "Voir la commande",
+      "approveFull": "Approuver total",
+      "approvePartial": "Partiel",
+      "replaceItem": "Remplacer l'article",
+      "reject": "Refuser",
+      "dialogApproveFull": "Approuver le remboursement intégral",
+      "dialogApprovePartial": "Approuver un remboursement partiel",
+      "dialogApproveReplace": "Approuver le remplacement",
+      "dialogReject": "Refuser la demande",
+      "replaceExplanation": "Vous remplacez l'article et organisez la livraison au client sans frais de livraison. Aucun remboursement sur portefeuille n'est émis pour cette résolution.",
+      "itemSubtotalLabel": "Sous-total articles",
+      "inspectionLabel": "J'ai inspecté l'article retourné",
+      "refundDeliveryToo": "Rembourser aussi les frais de livraison",
+      "partialAmount": "Montant du remboursement (articles)",
+      "partialHint": "Doit être supérieur à 0 et inférieur au sous-total des articles.",
+      "rejectionReason": "Motif du refus",
+      "businessNote": "Note interne (facultatif)",
+      "manageInDashboard": "Gérer la demande de remboursement"
+    },
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
     "orderCompletionSuccessTitle": "🎉 Commande Terminée avec Succès !",
     "orderCompletionSuccessMessage": "Félicitations ! Votre commande a été terminée avec succès. Nous espérons que vous avez apprécié votre achat et nous avons hâte de vous servir à nouveau bientôt !",

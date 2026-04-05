@@ -234,6 +234,14 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onActionComplete }) => {
         return 'warning';
       case 'complete':
         return 'success';
+      case 'refund_requested':
+        return 'warning';
+      case 'refund_approved_full':
+      case 'refund_approved_partial':
+      case 'refund_approved_replace':
+        return 'info';
+      case 'refund_rejected':
+        return 'error';
       default:
         return 'default';
     }

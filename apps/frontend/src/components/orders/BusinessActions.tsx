@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   ConfirmOrderData,
   useBackendOrders,
@@ -54,6 +55,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   onShowHistory,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const {
     confirmOrder,
     completePreparation,
@@ -274,6 +276,33 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         }
         break;
 
+      case 'complete':
+        if (order.payment_status !== 'pending') {
+          actions.push({
+            label: t('orderActions.refundOrder', 'Refund Order'),
+            action: handleRefundOrder,
+            color: 'warning' as const,
+            icon: <RefundIcon />,
+          });
+        }
+        break;
+
+      case 'refund_requested':
+        actions.push({
+          label: t('orders.refunds.manageInDashboard', 'Manage refund request'),
+          action: () => navigate('/business/refunds'),
+          color: 'warning' as const,
+          icon: <RefundIcon />,
+        });
+        break;
+
+      case 'refund_approved_full':
+      case 'refund_approved_partial':
+      case 'refund_approved_replace':
+      case 'refund_rejected':
+      case 'refunded':
+        break;
+
       case 'failed':
       case 'cancelled':
         // Only show refund option if payment is not pending
@@ -291,7 +320,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         // For other statuses, businesses can generally refund
         // But not if payment is still pending
         if (
-          !['complete', 'refunded'].includes(order.current_status) &&
+          ![
+            'complete',
+            'refunded',
+            'refund_requested',
+            'refund_approved_full',
+            'refund_approved_partial',
+            'refund_approved_replace',
+            'refund_rejected',
+          ].includes(order.current_status) &&
           order.payment_status !== 'pending'
         ) {
           actions.push({

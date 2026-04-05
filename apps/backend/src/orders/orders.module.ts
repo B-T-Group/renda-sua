@@ -13,6 +13,8 @@ import { PdfModule } from '../pdf/pdf.module';
 import { DeliveryPinService } from './delivery-pin.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { OrderRefundsController } from './order-refunds.controller';
+import { OrderRefundsService } from './order-refunds.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { OrdersController } from './orders.controller';
@@ -33,9 +35,10 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     PdfModule,
     LocationsModule,
   ],
-  controllers: [OrdersController, FailedDeliveriesController],
+  controllers: [OrderRefundsController, OrdersController, FailedDeliveriesController],
   providers: [
     OrdersService,
+    OrderRefundsService,
     OrderStatusService,
     OrderQueueService,
     WaitAndExecuteScheduleService,

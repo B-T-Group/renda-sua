@@ -107,8 +107,49 @@ const FAQ: React.FC = () => {
     },
   ];
 
+  const refundPolicyFaqs: FaqItem[] = [
+    {
+      key: 'window',
+      q: t(
+        'faq.refundPolicy.window.q',
+        'When can I request a refund?'
+      ),
+      a: t(
+        'faq.refundPolicy.window.a',
+        'You can submit a refund request within 3 calendar days after your order is marked complete (delivery confirmed with your PIN). After that window, use support or contact the business directly.'
+      ),
+    },
+    {
+      key: 'process',
+      q: t(
+        'faq.refundPolicy.process.q',
+        'How does the refund process work?'
+      ),
+      a: t(
+        'faq.refundPolicy.process.a',
+        'Submit a reason and details from your order. The business may ask you to return the item to their registered address for inspection. Depending on the outcome, they can approve a full refund, a partial refund, reject the request, or offer to replace the item with free delivery instead of a monetary refund.'
+      ),
+    },
+    {
+      key: 'replaceItem',
+      q: t(
+        'faq.refundPolicy.replaceItem.q',
+        'What is “replace item”?'
+      ),
+      a: t(
+        'faq.refundPolicy.replaceItem.a',
+        'If the business chooses this resolution, they replace the product and cover delivery to you—no refund is posted to your wallet for that order. Coordinate any new delivery details with the business as needed.'
+      ),
+    },
+  ];
+
   const sections = [
     { titleKey: 'faq.sections.client', titleDefault: 'For Clients', items: clientFaqs },
+    {
+      titleKey: 'faq.sections.refundPolicy',
+      titleDefault: 'Refund Policy',
+      items: refundPolicyFaqs,
+    },
     { titleKey: 'faq.sections.deliveryAgent', titleDefault: 'For Delivery Agents', items: agentFaqs },
     { titleKey: 'faq.sections.business', titleDefault: 'For Businesses', items: businessFaqs },
   ];

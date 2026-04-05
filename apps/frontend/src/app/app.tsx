@@ -32,6 +32,7 @@ import ApplicationSetupPage from '../components/pages/ApplicationSetupPage';
 import AppRedirect from '../components/pages/AppRedirect';
 import BrandsManagementPage from '../components/pages/BrandsManagementPage';
 import BusinessAnalyticsPage from '../components/pages/BusinessAnalyticsPage';
+import BusinessRefundRequestsPage from '../components/pages/BusinessRefundRequestsPage';
 import BusinessImagesPage from '../components/pages/BusinessImagesPage';
 import BusinessItemsPage from '../components/pages/BusinessItemsPage';
 import BusinessLocationsPage from '../components/pages/BusinessLocationsPage';
@@ -512,6 +513,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessAnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/refunds"
+              element={
+                <ProtectedRoute>
+                  <BusinessRefundRequestsPage />
                 </ProtectedRoute>
               }
             />

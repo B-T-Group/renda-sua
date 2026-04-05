@@ -25,6 +25,7 @@ export interface OrderData {
   verified_agent_delivery: boolean;
   created_at: string;
   updated_at: string;
+  completed_at?: string | null;
   access_reason: string;
   delivery_commission?: number; // Computed field for agents
   agent_hold_amount?: number; // Amount required by agent to claim this order

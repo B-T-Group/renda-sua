@@ -1,9 +1,11 @@
-import { Cancel } from '@mui/icons-material';
+import { Cancel, Undo } from '@mui/icons-material';
 import { Box, Button, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import { isWithinRefundWindow } from '../../hooks/useOrderRefunds';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import ClientRefundRequestDialog from '../dialogs/ClientRefundRequestDialog';
 import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
 
 interface ClientActionsProps {
@@ -30,6 +32,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
 }) => {
   const { t } = useTranslation();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -64,6 +67,18 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         action: handleCancelClick,
         color: 'error' as const,
         icon: <Cancel />,
+      });
+    }
+
+    if (
+      order.current_status === 'complete' &&
+      isWithinRefundWindow(order.completed_at)
+    ) {
+      actions.push({
+        label: t('orders.refunds.requestButton', 'Request refund'),
+        action: () => setRefundOpen(true),
+        color: 'warning' as const,
+        icon: <Undo />,
       });
     }
 
@@ -137,6 +152,19 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         persona="client"
         onSuccess={handleCancelSuccess}
         onError={handleCancelError}
+      />
+      <ClientRefundRequestDialog
+        open={refundOpen}
+        onClose={() => setRefundOpen(false)}
+        order={order}
+        onSuccess={() => {
+          onShowNotification?.(
+            t('orders.refunds.submitted', 'Refund request submitted'),
+            'success'
+          );
+          onActionComplete?.();
+        }}
+        onError={(msg) => onShowNotification?.(msg, 'error')}
       />
     </>
   );

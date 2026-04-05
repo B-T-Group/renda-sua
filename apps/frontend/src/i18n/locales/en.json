@@ -764,6 +764,8 @@
       "subtitleRentalFocused": "Your dashboard highlights rentals first—catalog, bookings, and your rental image library are front and center.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
+      "refundsTitle": "Refund requests",
+      "refundsDescription": "Review and resolve client return and refund requests",
       "verified": "Verified",
       "unverified": "Unverified",
       "notVerified": "Not verified",
@@ -1759,6 +1761,11 @@
       "picked_up": "Picked Up",
       "preparing": "Preparing",
       "ready_for_pickup": "Ready for Pickup",
+      "refund_approved_full": "Refund approved (full)",
+      "refund_approved_partial": "Refund approved (partial)",
+      "refund_approved_replace": "Replacement approved (free delivery)",
+      "refund_rejected": "Refund rejected",
+      "refund_requested": "Refund requested",
       "refunded": "Refunded"
     },
     "orderNumber": "Order #{{orderNumber}}",
@@ -1804,8 +1811,23 @@
   "faq": {
     "sections": {
       "client": "For Clients",
+      "refundPolicy": "Refund Policy",
       "deliveryAgent": "For Delivery Agents",
       "business": "For Businesses"
+    },
+    "refundPolicy": {
+      "window": {
+        "q": "When can I request a refund?",
+        "a": "You can submit a refund request within 3 calendar days after your order is marked complete (delivery confirmed with your PIN). After that window, use support or contact the business directly."
+      },
+      "process": {
+        "q": "How does the refund process work?",
+        "a": "Submit a reason and details from your order. The business may ask you to return the item to their registered address for inspection. Depending on the outcome, they can approve a full refund, a partial refund, reject the request, or offer to replace the item with free delivery instead of a monetary refund."
+      },
+      "replaceItem": {
+        "q": "What is “replace item”?",
+        "a": "If the business chooses this resolution, they replace the product and cover delivery to you—no refund is posted to your wallet for that order. Coordinate any new delivery details with the business as needed."
+      }
     },
     "client": {
       "howToOrder": {
@@ -2146,6 +2168,52 @@
       "shareWithAgent": "Share this code with the delivery agent so they can complete the order without the client PIN.",
       "generated": "Overwrite code generated. Share it with the agent.",
       "error": "Failed to generate overwrite code"
+    },
+    "refunds": {
+      "requestButton": "Request refund",
+      "submitted": "Refund request submitted",
+      "dialogTitle": "Request a refund",
+      "stepRequest": "Request",
+      "stepNext": "Next steps",
+      "policyHint": "You can request a refund within 3 days of delivery completion. Item refunds exclude the delivery fee unless the business decides otherwise.",
+      "reasonLabel": "Reason",
+      "notesLabel": "Additional details (optional)",
+      "notesPlaceholder": "Describe the issue...",
+      "nextStepsTitle": "What happens next",
+      "bringToBusiness": "Bring the item to the business registered address below for inspection. Refunds apply to the item total ({{amount}} {{currency}}), not the delivery fee ({{delivery}} {{currency}}), unless the business approves otherwise.",
+      "businessAddress": "Business address",
+      "noBusinessAddress": "Address not on file. Contact the business.",
+      "submit": "Submit request",
+      "reasons": {
+        "notDelivered": "Item was not delivered",
+        "wrongItem": "Wrong item",
+        "damaged": "Damaged item",
+        "quality": "Quality issue",
+        "missingParts": "Missing parts or accessories",
+        "other": "Other"
+      },
+      "businessTitle": "Refund requests",
+      "businessSubtitle": "Review open client refund requests. Inspect returned items before approving.",
+      "empty": "No pending refund requests.",
+      "orderNumber": "Order {{n}}",
+      "viewOrder": "View order",
+      "approveFull": "Approve full",
+      "approvePartial": "Partial",
+      "replaceItem": "Replace item",
+      "reject": "Reject",
+      "dialogApproveFull": "Approve full refund",
+      "dialogApprovePartial": "Approve partial refund",
+      "dialogApproveReplace": "Approve item replacement",
+      "dialogReject": "Reject refund request",
+      "replaceExplanation": "You will replace the item and arrange delivery to the client at no delivery charge. No wallet refund is issued for this resolution.",
+      "itemSubtotalLabel": "Item subtotal",
+      "inspectionLabel": "I have inspected the returned item",
+      "refundDeliveryToo": "Also refund delivery fees",
+      "partialAmount": "Refund amount (items)",
+      "partialHint": "Must be greater than 0 and less than the item subtotal.",
+      "rejectionReason": "Rejection reason",
+      "businessNote": "Internal note (optional)",
+      "manageInDashboard": "Manage refund request"
     },
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",

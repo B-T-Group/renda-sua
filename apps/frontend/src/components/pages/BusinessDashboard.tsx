@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   Payments as PaymentsIcon,
   Public as PublicIcon,
+  MoneyOff as RefundsIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -103,6 +104,17 @@ const BusinessDashboard: React.FC = () => {
       color: '#d32f2f',
       path: '/business/failed-deliveries',
       showBadge: pendingFailedDeliveriesCount > 0,
+    },
+    {
+      title: t('business.dashboard.refundsTitle', 'Refund requests'),
+      description: t(
+        'business.dashboard.refundsDescription',
+        'Review and resolve client return and refund requests'
+      ),
+      icon: <RefundsIcon sx={{ fontSize: 40 }} />,
+      count: null,
+      color: '#00897b',
+      path: '/business/refunds',
     },
   ];
 

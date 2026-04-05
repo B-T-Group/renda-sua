@@ -31,6 +31,7 @@ import {
 } from '../notifications/notifications.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DeliveryPinService } from './delivery-pin.service';
+import { OrderRefundsService } from './order-refunds.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderStatusService } from './order-status.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -130,6 +131,7 @@ export interface OrderWithDetails {
   verified_agent_delivery?: boolean;
   created_at: string;
   updated_at: string;
+  completed_at?: string | null;
   access_reason: string;
   client?: {
     id: string;
@@ -316,7 +318,8 @@ export class OrdersService {
     private readonly pdfService: PdfService,
     private readonly orderQueueService: OrderQueueService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
-    private readonly deliveryPinService: DeliveryPinService
+    private readonly deliveryPinService: DeliveryPinService,
+    private readonly orderRefundsService: OrderRefundsService
   ) {}
 
   private requireActivePersona(
@@ -1850,6 +1853,7 @@ export class OrdersService {
       request.orderId,
       'complete'
     );
+    await this.setOrderCompletedAt(request.orderId);
     await this.createStatusHistoryEntry(
       request.orderId,
       'complete',
@@ -1888,6 +1892,24 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Delivery completed successfully',
     };
+  }
+
+  private async setOrderCompletedAt(orderId: string): Promise<void> {
+    const at = new Date().toISOString();
+    const mutation = `
+      mutation SetOrderCompletedAt($orderId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { completed_at: $at, updated_at: "now()" }
+        ) {
+          id
+        }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      at,
+    });
   }
 
   private async incrementOrderDeliveryPinAttempts(orderId: string): Promise<void> {
@@ -2334,98 +2356,10 @@ export class OrdersService {
   }
 
   async refundOrder(request: OrderStatusChangeRequest) {
-    const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only business users can refund orders'
-    );
-
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-
-    if (order.business.user_id !== user.id)
-      throw new HttpException(
-        'Unauthorized to refund this order',
-        HttpStatus.FORBIDDEN
-      );
-
-    // Check if order can be refunded - only delivered or failed orders
-    const refundableStatuses = ['delivered', 'failed'];
-    if (!refundableStatuses.includes(order.current_status))
-      throw new HttpException(
-        `Cannot refund order in ${order.current_status} status. Only delivered or failed orders can be refunded.`,
-        HttpStatus.BAD_REQUEST
-      );
-
-    // Get order hold details
-    const orderHold = await this.getOrCreateOrderHold(request.orderId);
-    if (!orderHold) {
-      throw new HttpException(
-        'Order hold details not found',
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    const clientAccount = await this.hasuraSystemService.getAccount(
-      order.client.user_id,
-      order.currency
-    );
-
-    if (!clientAccount) {
-      throw new HttpException(
-        'Client account not found',
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    if (Number(orderHold.client_hold_amount) > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: Number(orderHold.client_hold_amount),
-        transactionType: 'release',
-        memo: `Refund for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-    }
-
-    if (Number(orderHold.delivery_fees) > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: Number(orderHold.delivery_fees),
-        transactionType: 'release',
-        memo: `Refund delivery hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-    }
-
-    // Update order status to refunded
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    return this.orderRefundsService.legacyDirectFullRefund(
       request.orderId,
-      'refunded'
-    );
-
-    await this.updateOrderHold(orderHold.id, {
-      status: 'completed',
-      client_hold_amount: 0,
-      delivery_fees: 0,
-    });
-
-    await this.createStatusHistoryEntry(
-      request.orderId,
-      'refunded',
-      'Order refunded by business',
-      'business',
-      user.id,
       request.notes
     );
-
-    return {
-      success: true,
-      order: updatedOrder,
-      message: 'Order refunded successfully',
-    };
   }
 
   /**
@@ -3095,6 +3029,7 @@ export class OrdersService {
           verified_agent_delivery
           created_at
           updated_at
+          completed_at
           client {
             id
             user_id
@@ -3278,6 +3213,7 @@ export class OrdersService {
           verified_agent_delivery
           created_at
           updated_at
+          completed_at
           client {
             id
             user_id
@@ -3838,6 +3774,7 @@ export class OrdersService {
           tax_amount
           total_amount
           currency
+          completed_at
           business_id
           client_id
           delivery_address_id
