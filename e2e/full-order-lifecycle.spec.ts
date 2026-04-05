@@ -4,9 +4,7 @@ import {
   businessConfirmAndPrepareOrder,
   clientCompleteOrder,
   clientPlaceFirstItemOrder,
-  signInAgent,
-  signInBusiness,
-  signInClient,
+  signInUser,
   signOut,
 } from './helpers/order-flow';
 
@@ -15,14 +13,14 @@ test.describe('Order Lifecycle E2E Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await signInClient(page);
+    await signInUser(page, 'client');
     await expect(
       page.getByText('Client Dashboard', { exact: false })
     ).toBeVisible({ timeout: 10000 });
     await clientPlaceFirstItemOrder(page);
-    await expect(page.getByText(/order.*confirm|success/i)).toBeVisible({
-      timeout: 10000,
-    });
+    await expect(
+      page.getByText('Client Dashboard', { exact: false })
+    ).toBeVisible({ timeout: 10000 });
     await signOut(page);
   });
 
@@ -31,7 +29,7 @@ test.describe('Order Lifecycle E2E Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await signInBusiness(page);
+    await signInUser(page, 'business');
     await expect(
       page.getByRole('heading', { name: 'Welcome to your business' })
     ).toBeVisible({ timeout: 10000 });
@@ -46,7 +44,7 @@ test.describe('Order Lifecycle E2E Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await signInAgent(page);
+    await signInUser(page, 'agent');
     await agentDeliverOrder(page);
     // Wait for delivered status to appear - could be in alert, status badge, or page text
     // Check for multiple possible text patterns that indicate delivery success
@@ -63,7 +61,7 @@ test.describe('Order Lifecycle E2E Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await signInClient(page);
+    await signInUser(page, 'client');
     await clientCompleteOrder(page);
     // The success modal is already verified in clientCompleteOrder helper
     // Optionally close the modal to complete the test

@@ -1,4 +1,4 @@
-import { expect, Page } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 
 const CLIENT_EMAIL = 'besongsamueloru+test@gmail.com';
 const CLIENT_PASSWORD = '{Shaddy12}';
@@ -7,33 +7,106 @@ const BUSINESS_PASSWORD = '{Shaddy12}';
 const AGENT_EMAIL = 'besongsamueloru+agent@gmail.com';
 const AGENT_PASSWORD = '{Shaddy12}';
 
-export async function signInClient(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Sign In' }).click();
-  await page.getByRole('textbox', { name: 'Email address' }).fill(CLIENT_EMAIL);
-  await page.getByRole('textbox', { name: 'Password' }).fill(CLIENT_PASSWORD);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+export type SignInUserType = 'client' | 'agent' | 'business';
+
+function personaSelectButton(page: Page, persona: SignInUserType) {
+  const name: Record<SignInUserType, RegExp> = {
+    client:
+      /^Client$|Continue as Client|Continuer en tant que Client/i,
+    agent:
+      /^Delivery agent$|^Livreur$|Continue as Delivery agent|Continuer en tant que Livreur/i,
+    business:
+      /^Business$|^Entreprise$|Continue as Business|Continuer en tant que Entreprise/i,
+  };
+  return page.getByRole('button', { name: name[persona] });
 }
 
-export async function signInBusiness(page: Page): Promise<void> {
+async function openAuth0FromLoginMethodDialog(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Sign In' }).click();
   await page
-    .getByRole('textbox', { name: 'Email address' })
-    .fill(BUSINESS_EMAIL);
-  await page.getByRole('textbox', { name: 'Password' }).fill(BUSINESS_PASSWORD);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    .getByRole('dialog')
+    .getByRole('button', { name: /Login with email\/password/i })
+    .click();
+  await page.waitForURL(/auth0\.com/i, { timeout: 45000 });
+}
+
+async function auth0ClickContinue(page: Page): Promise<void> {
+  await page
+    .getByRole('button', { name: /^Continue$/i })
+    .or(page.getByRole('button', { name: /^Next$/i }))
+    .first()
+    .click();
+}
+
+async function auth0FillEmailAndContinue(page: Page, email: string): Promise<void> {
+  const emailInput = page
+    .locator('input[name="username"]')
+    .or(page.locator('#username'))
+    .or(page.locator('input[type="email"]'))
+    .first();
+  await emailInput.waitFor({ state: 'visible', timeout: 30000 });
+  await emailInput.fill(email);
+  await auth0ClickContinue(page);
+}
+
+async function auth0FillPasswordAndContinue(page: Page, password: string): Promise<void> {
+  const passwordInput = page.locator('input[type="password"]').first();
+  await passwordInput.waitFor({ state: 'visible', timeout: 30000 });
+  await passwordInput.fill(password);
+  await page
+    .getByRole('button', { name: /^Continue$/i })
+    .or(page.getByRole('button', { name: /^Log [Ii]n$/ }))
+    .or(page.getByRole('button', { name: /^Next$/i }))
+    .first()
+    .click();
+}
+
+async function waitUntilLeftAuth0(page: Page): Promise<void> {
+  await page.waitForURL((u) => !u.hostname.includes('auth0.com'), {
+    timeout: 120000,
+  });
+}
+
+async function selectPersonaIfShown(
+  page: Page,
+  persona: SignInUserType
+): Promise<void> {
+  const card = personaSelectButton(page, persona);
+  try {
+    await card.waitFor({ state: 'visible', timeout: 25000 });
+  } catch {
+    return;
+  }
+  await card.click();
+}
+
+async function signInWithEmailPasswordPersona(
+  page: Page,
+  email: string,
+  password: string,
+  persona: SignInUserType
+): Promise<void> {
+  await openAuth0FromLoginMethodDialog(page);
+  await auth0FillEmailAndContinue(page, email);
+  await auth0FillPasswordAndContinue(page, password);
+  await waitUntilLeftAuth0(page);
+  await page.waitForLoadState('domcontentloaded');
+  await selectPersonaIfShown(page, persona);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
 }
 
-export async function signInAgent(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Sign In' }).click();
-  await page.getByRole('textbox', { name: 'Email address' }).fill(AGENT_EMAIL);
-  await page.getByRole('textbox', { name: 'Password' }).fill(AGENT_PASSWORD);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+export async function signInUser(
+  page: Page,
+  userType: SignInUserType
+): Promise<void> {
+  const creds: Record<SignInUserType, { email: string; password: string }> = {
+    client: { email: CLIENT_EMAIL, password: CLIENT_PASSWORD },
+    agent: { email: AGENT_EMAIL, password: AGENT_PASSWORD },
+    business: { email: BUSINESS_EMAIL, password: BUSINESS_PASSWORD },
+  };
+  const { email, password } = creds[userType];
+  await signInWithEmailPasswordPersona(page, email, password, userType);
 }
 
 export async function signOut(page: Page): Promise<void> {
@@ -50,117 +123,146 @@ export async function signOut(page: Page): Promise<void> {
   await page.waitForTimeout(2000);
 }
 
+async function assertOrderPlacedAndGoToDashboard(page: Page): Promise<void> {
+  await expect(
+    page.getByText(/Order Placed Successfully|Commande Passée avec Succès/i)
+  ).toBeVisible({ timeout: 20000 });
+  await page
+    .getByRole('button', {
+      name: /Go to Dashboard|Aller au Tableau de Bord/i,
+    })
+    .click();
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+}
+
 export async function clientPlaceFirstItemOrder(page: Page): Promise<void> {
-  await page.getByRole('textbox', { name: 'Search items...' }).fill('Computer');
+  await page.goto('/items');
+  await page.waitForLoadState('domcontentloaded');
+  const catalogSearch = page.getByRole('textbox', {
+    name: /Search items|Search the item catalog|Rechercher des articles|Rechercher dans le catalogue/i,
+  });
+  await catalogSearch.waitFor({ state: 'visible', timeout: 20000 });
+  await catalogSearch.fill('Computer');
   await page.waitForTimeout(1000);
   await page.getByRole('button', { name: 'Buy Now' }).first().click();
   await page.getByRole('button', { name: 'Confirm Order' }).click();
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+  await assertOrderPlacedAndGoToDashboard(page);
 }
 
-async function selectTab(page: Page, tabName: string): Promise<void> {
-  // Find the tab by its label text (case-insensitive)
-  const tab = page
-    .getByRole('tab')
-    .filter({ hasText: new RegExp(tabName, 'i') })
-    .first();
-  await tab.click({ timeout: 10000 });
-  await page.waitForTimeout(1000); // Wait for orders to filter
+async function clickBusinessDashboardOrdersManage(page: Page): Promise<void> {
+  const ordersHeading = page.getByRole('heading', {
+    name: /^Orders$|^Commandes$/i,
+  });
+  const card = page.locator('.MuiCard-root').filter({ has: ordersHeading }).first();
+  await card.getByRole('button', { name: /^Manage$|^Gérer$/i }).click();
+  await page.waitForURL(/\/orders(?:\?|$)/, { timeout: 20000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1500);
 }
 
-async function businessConfirmOrder(page: Page): Promise<void> {
-  await page.goto('/orders');
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
-  // Select the "Pending" tab to view all pending orders
-  await selectTab(page, 'Pending');
-  // Click on the first order's "View Details" button to navigate to order details page
-  await page
-    .getByRole('button', { name: /view details/i })
-    .first()
-    .click({ timeout: 10000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
-  // Click the "Confirm Order" button on the order details page
-  await page.getByRole('button', { name: 'Confirm Order' }).first().click();
-  // Wait for the modal to appear and any backdrop to be ready
-  await page.waitForTimeout(1000);
-  // Wait for the modal dialog to be visible
-  const modal = page.getByRole('dialog');
-  await modal.waitFor({ state: 'visible', timeout: 10000 });
-  // Wait a bit more for the modal content to fully load
-  await page.waitForTimeout(1000);
-
-  // Check if there are existing delivery windows (radio buttons)
-  const existingWindowRadio = page.locator('input[type="radio"]').first();
-  const hasExistingWindows = await existingWindowRadio
-    .isVisible()
-    .catch(() => false);
-
-  if (hasExistingWindows) {
-    // Select the first existing delivery window
-    await existingWindowRadio.click({ timeout: 10000 });
-    await page.waitForTimeout(1000);
-  } else {
-    // Wait for the DeliveryTimeWindowSelector to load and auto-select a slot
-    // The selector should auto-select based on initialWindowValue
-    // Wait for any loading indicators to disappear
-    await page.waitForTimeout(3000);
-  }
-
-  // Wait for the "Confirm Order" button in the modal to be enabled
-  // The button is disabled until a delivery window is selected
-  const confirmButton = modal.getByRole('button', { name: 'Confirm Order' });
-
-  // Wait for the button to be enabled (not disabled)
-  // Retry checking until it's enabled, with a timeout
-  let attempts = 0;
-  const maxAttempts = 30; // 15 seconds with 500ms intervals
-  while (attempts < maxAttempts) {
-    const isDisabled = await confirmButton
-      .evaluate((el) => el.hasAttribute('disabled'))
-      .catch(() => true);
-    if (!isDisabled) {
-      break;
-    }
-    await page.waitForTimeout(500);
-    attempts++;
-  }
-
-  // Ensure any backdrop is not blocking clicks
-  await page.waitForTimeout(500);
-
-  // Click the "Confirm Order" button in the modal
-  await confirmButton.click({ timeout: 10000 });
-  await page.waitForLoadState('networkidle');
-}
-
-export async function businessConfirmAndPrepareOrder(
-  page: Page
-): Promise<void> {
-  await businessConfirmOrder(page);
-  // After confirming, we're still on the order details page
-  // Wait for the modal to close and page to update
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(3000);
-
-  // Wait for the order status to update to "confirmed" by checking for the ready action button
-  // This button appears when status is "confirmed" (no more "Start Preparing" step)
-  const readyForPickupButton = page
-    .getByRole('button', {
-      name: /set as ready|ready for pickup|complete.*preparation|marquer comme prêt|prêt pour/i,
+function firstOrderCardWithConfirmButton(page: Page): Locator {
+  return page
+    .locator('.MuiCard-root')
+    .filter({
+      has: page.getByRole('button', {
+        name: /Confirm Order|Confirmer la Commande/i,
+      }),
     })
     .first();
+}
 
-  // Wait up to 20 seconds for the button to appear (order confirmation might take time)
-  await readyForPickupButton.waitFor({ state: 'visible', timeout: 20000 });
-  await readyForPickupButton.click({ timeout: 10000 });
+async function readHashOrderNumberFromCard(card: Locator): Promise<string> {
+  const raw =
+    (await card.getByText(/^#\d+$/).first().textContent())?.trim() ?? '';
+  return raw.replace(/^#/, '');
+}
+
+async function selectDeliveryWindowInConfirmModal(
+  page: Page,
+  modal: Locator
+): Promise<void> {
+  const inputRadio = modal.locator('input[type="radio"]').first();
+  try {
+    await inputRadio.waitFor({ state: 'attached', timeout: 12000 });
+    await inputRadio.click({ force: true });
+    return;
+  } catch {
+    /* selector or new-window flow may load later */
+  }
+  const byRole = modal.getByRole('radio').first();
+  if (await byRole.isVisible().catch(() => false)) {
+    await byRole.click();
+    return;
+  }
+  await page.waitForTimeout(3000);
+}
+
+async function clickEnabledConfirmInModal(modal: Locator, page: Page): Promise<void> {
+  const confirmButton = modal.getByRole('button', {
+    name: /Confirm Order|Confirmer la Commande/i,
+  });
+  for (let i = 0; i < 30; i++) {
+    const disabled = await confirmButton
+      .evaluate((el) => el.hasAttribute('disabled'))
+      .catch(() => true);
+    if (!disabled) break;
+    await page.waitForTimeout(500);
+  }
+  await confirmButton.click({ timeout: 10000 });
+}
+
+async function openConfirmModalForFirstPendingOrder(page: Page): Promise<string> {
+  const pendingCard = firstOrderCardWithConfirmButton(page);
+  await pendingCard.waitFor({ state: 'visible', timeout: 25000 });
+  const orderNumber = await readHashOrderNumberFromCard(pendingCard);
+  await pendingCard
+    .getByRole('button', { name: /Confirm Order|Confirmer la Commande/i })
+    .click();
+  return orderNumber;
+}
+
+async function completeConfirmOrderModal(page: Page): Promise<void> {
+  const modal = page.getByRole('dialog');
+  await modal.waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForTimeout(500);
+  await selectDeliveryWindowInConfirmModal(page, modal);
+  await page.waitForTimeout(500);
+  await clickEnabledConfirmInModal(modal, page);
   await page.waitForLoadState('networkidle');
-  // Navigate to home page
-  await page.goto('/');
+  await modal.waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {});
+}
+
+async function clickSetAsReadyForOrderNumber(
+  page: Page,
+  orderNumber: string
+): Promise<void> {
+  const card = page
+    .locator('.MuiCard-root')
+    .filter({ has: page.getByText(`#${orderNumber}`, { exact: true }) })
+    .first();
+  await card
+    .getByRole('button', {
+      name: /Set as ready|Marquer comme prêt|ready for pickup|prêt pour ramassage|Action Requise.*Marquer comme prêt/i,
+    })
+    .click({ timeout: 20000 });
+}
+
+export async function businessConfirmAndPrepareOrder(page: Page): Promise<void> {
+  await page.goto('/dashboard');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1000);
+  await clickBusinessDashboardOrdersManage(page);
+  const orderNumber = await openConfirmModalForFirstPendingOrder(page);
+  await completeConfirmOrderModal(page);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
+  await clickSetAsReadyForOrderNumber(page, orderNumber);
+  await page.waitForLoadState('networkidle');
+  await page.goto('/');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1000);
 }
 
 export async function agentDeliverOrder(page: Page): Promise<void> {
