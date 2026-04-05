@@ -2180,7 +2180,15 @@
       "partialHint": "Doit être supérieur à 0 et inférieur au sous-total des articles.",
       "rejectionReason": "Motif du refus",
       "businessNote": "Note interne (facultatif)",
-      "manageInDashboard": "Gérer la demande de remboursement"
+      "manageInDashboard": "Gérer la demande de remboursement",
+      "clientDetails": "Client",
+      "requestedOn": "Demandé le",
+      "clientMessage": "Message du client",
+      "deliverTo": "Adresse de livraison",
+      "orderItemsHeading": "Articles de cette commande",
+      "deliveryFeesLabel": "Frais de livraison",
+      "totalLabel": "Total de la commande",
+      "lineTotal": "Total ligne"
     },
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
     "orderCompletionSuccessTitle": "🎉 Commande Terminée avec Succès !",
@@ -2350,6 +2358,14 @@
     "orderCount": "{{count}} Commandes Passées",
     "ordersDetails": "Détails des Commandes",
     "orderProgress": "Progression de la Commande",
+    "refundProgress": {
+      "title": "Statut du remboursement",
+      "stepRequested": "Remboursement demandé",
+      "stepReview": "Examen par le commerce",
+      "stepRefunded": "Remboursé",
+      "stepDeclined": "Demande refusée",
+      "mobileLabel": "Progression du remboursement"
+    },
     "orderStatus": "Statut de la Commande",
     "orderTime": "Heure de la Commande",
     "otherReasonPlaceholder": "Entrez votre raison d'annulation de cette commande...",

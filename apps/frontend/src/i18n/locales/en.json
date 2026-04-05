@@ -2213,7 +2213,15 @@
       "partialHint": "Must be greater than 0 and less than the item subtotal.",
       "rejectionReason": "Rejection reason",
       "businessNote": "Internal note (optional)",
-      "manageInDashboard": "Manage refund request"
+      "manageInDashboard": "Manage refund request",
+      "clientDetails": "Client",
+      "requestedOn": "Requested on",
+      "clientMessage": "Client message",
+      "deliverTo": "Delivery address",
+      "orderItemsHeading": "Items in this order",
+      "deliveryFeesLabel": "Delivery fees",
+      "totalLabel": "Order total",
+      "lineTotal": "Line total"
     },
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",
@@ -2378,6 +2386,14 @@
     "orderCount": "{{count}} Orders Placed",
     "ordersDetails": "Orders Details",
     "orderProgress": "Order Progress",
+    "refundProgress": {
+      "title": "Refund status",
+      "stepRequested": "Refund requested",
+      "stepReview": "Business review",
+      "stepRefunded": "Refunded",
+      "stepDeclined": "Request declined",
+      "mobileLabel": "Refund progress"
+    },
     "orderStatus": "Order Status",
     "orderSummary": "Order Summary",
     "dealEnds": "Deal ends on {{date}}",

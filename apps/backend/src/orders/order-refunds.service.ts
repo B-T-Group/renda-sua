@@ -119,10 +119,26 @@ export class OrderRefundsService {
             order_number
             current_status
             subtotal
+            total_amount
             base_delivery_fee
             per_km_delivery_fee
             currency
             completed_at
+            order_items {
+              id
+              item_name
+              quantity
+              unit_price
+              total_price
+            }
+            delivery_address {
+              address_line_1
+              address_line_2
+              city
+              state
+              postal_code
+              country
+            }
             client {
               user {
                 first_name
