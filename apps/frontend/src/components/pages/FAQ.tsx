@@ -1,199 +1,332 @@
+import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  alpha,
   Box,
+  Button,
+  Chip,
   Container,
-  Divider,
+  InputAdornment,
+  Paper,
+  Stack,
+  TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  buildFaqSections,
+  FaqItem,
+  FaqSectionId,
+  FaqSectionModel,
+} from './faqPageData';
 
-interface FaqItem {
-  key: string;
-  q: string;
-  a: string;
+const SECTION_ICONS: Record<FaqSectionId, React.ReactElement> = {
+  clients: <PersonOutlineOutlinedIcon />,
+  refund: <AssignmentReturnOutlinedIcon />,
+  agents: <LocalShippingOutlinedIcon />,
+  business: <StorefrontOutlinedIcon />,
+};
+
+function filterSections(
+  sections: FaqSectionModel[],
+  query: string
+): FaqSectionModel[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return sections;
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) =>
+          item.q.toLowerCase().includes(q) || item.a.toLowerCase().includes(q)
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 const FAQ: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const [search, setSearch] = useState('');
 
-  const clientFaqs: FaqItem[] = [
-    {
-      key: 'howToOrder',
-      q: t('faq.client.howToOrder.q', 'How do I place an order?'),
-      a: t('faq.client.howToOrder.a', 'Browse items, add them to your cart, and go to checkout. Choose your delivery address and confirm. A payment request will be sent to your mobile phone to complete the order.'),
-    },
-    {
-      key: 'paymentMethods',
-      q: t('faq.client.paymentMethods.q', 'What payment methods are accepted?'),
-      a: t('faq.client.paymentMethods.a', 'We accept mobile money: Airtel Money, MTN Mobile Money, and Moov Money. At checkout, a payment request is sent to your phone—approve it to confirm your order.'),
-    },
-    {
-      key: 'trackOrder',
-      q: t('faq.client.trackOrder.q', 'How do I track my order?'),
-      a: t(
-        'faq.client.trackOrder.a',
-        'You can track your order from your dashboard or the order details page. You will see status updates from confirmation through to delivery. When your order is out for delivery, you can see your driver’s live location on a map (with a clear “View agent location on map” action), along with pickup and delivery addresses.'
-      ),
-    },
-    {
-      key: 'deliveryTime',
-      q: t('faq.client.deliveryTime.q', 'How long does delivery take?'),
-      a: t('faq.client.deliveryTime.a', 'Delivery times depend on your location and the seller. Standard delivery is typically within 24–48 hours. Fast delivery options may be available at checkout for quicker delivery.'),
-    },
-    {
-      key: 'cancelOrder',
-      q: t('faq.client.cancelOrder.q', 'Can I cancel my order?'),
-      a: t('faq.client.cancelOrder.a', 'Orders can be cancelled within a short time after placement if they have not yet been confirmed by the business. After that, contact support or the business for cancellation requests.'),
-    },
-    {
-      key: 'deliveryCompletion',
-      q: t('faq.client.deliveryCompletion.q', 'How is my delivery completed?'),
-      a: t('faq.client.deliveryCompletion.a', 'You can add delivery instructions (e.g. building name, landmark, floor) when placing your order or in your address, so the agent can find you easily. The agent can also call you if needed. When the agent arrives, they will ask you for a PIN. You receive this PIN in your order details or via the app—share it with the agent so they can complete the delivery. Once they enter the PIN, the delivery is marked complete and payments are released to the business and the agent.'),
-    },
-  ];
+  const sections = useMemo(() => buildFaqSections(t), [t]);
+  const visibleSections = useMemo(
+    () => filterSections(sections, search),
+    [sections, search]
+  );
 
-  const agentFaqs: FaqItem[] = [
-    {
-      key: 'hold',
-      q: t('faq.agent.hold.q', 'How much is held from my earnings?'),
-      a: t('faq.agent.hold.a', 'A percentage of your earnings is held as a guarantee: unverified agents 100%, verified agents 80%, internal agents 0%. Verify your account and add a profile picture to reduce your hold amount.'),
-    },
-    {
-      key: 'verifiedLessHold',
-      q: t('faq.agent.verifiedLessHold.q', 'Why do verified agents have less hold?'),
-      a: t('faq.agent.verifiedLessHold.a', 'Verified agents have a lower hold (80%) because they have completed identity verification. Unverified agents have 100% held; internal (Rendasua) agents 0%. The hold is released when the order is delivered successfully.'),
-    },
-    {
-      key: 'claimOrder',
-      q: t('faq.agent.claimOrder.q', 'How do I claim an order for delivery?'),
-      a: t('faq.agent.claimOrder.a', 'Open the available orders list and choose an order to claim. To secure the order, you will receive a payment request on your phone for the hold amount—approve it to claim. Once the order is delivered, the hold is released and you receive your delivery fee.'),
-    },
-    {
-      key: 'whenReleased',
-      q: t('faq.agent.whenReleased.q', 'When is my hold amount released?'),
-      a: t('faq.agent.whenReleased.a', 'Your hold amount is released when the order is marked as delivered. The delivery fee is then credited to your account. If a delivery fails, resolution (e.g. agent fault, client fault) determines how funds are handled.'),
-    },
-    {
-      key: 'completeDelivery',
-      q: t('faq.agent.completeDelivery.q', 'How do I complete a delivery?'),
-      a: t('faq.agent.completeDelivery.a', 'Use the delivery address and any instructions the client added (e.g. building, landmark) to find them. You can also call the client if you need directions. When you reach the client, ask them for their delivery PIN—they get it from their order details or the app. Enter the PIN in the app to mark the delivery as complete. Once you confirm with the PIN, the order is closed and payments are transferred to the business and to you (your hold is released and your delivery fee is credited).'),
-    },
-  ];
+  const scrollTo = (id: FaqSectionId) => {
+    document.getElementById(`faq-section-${id}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
 
-  const businessFaqs: FaqItem[] = [
-    {
-      key: 'verification',
-      q: t('faq.business.verification.q', 'How long does business verification take?'),
-      a: t('faq.business.verification.a', 'Business verification typically takes 2–3 business days after all required documents are submitted. You can check your verification status in your business dashboard.'),
-    },
-    {
-      key: 'settlementRelease',
-      q: t('faq.business.settlementRelease.q', 'When are my settlements released?'),
-      a: t('faq.business.settlementRelease.a', 'Settlements are released within 24–48 hours after order completion, depending on payment processing. You can view payouts and account balance in your business accounts section.'),
-    },
-    {
-      key: 'failedDeliveries',
-      q: t('faq.business.failedDeliveries.q', 'How are failed deliveries managed?'),
-      a: t('faq.business.failedDeliveries.a', 'When a delivery fails, the agent marks it with a failure reason. In your dashboard, go to Failed Deliveries to resolve it. Options: Agent Fault (client refunded; agent hold released to the agent); Item Fault (client and agent refunded, optional inventory restore); Client Fault (both refunded, client charged a failed delivery fee split 50/50 between agent and business).'),
-    },
-    {
-      key: 'addProducts',
-      q: t('faq.business.addProducts.q', 'How do I add products to sell?'),
-      a: t('faq.business.addProducts.a', 'From your business dashboard, go to Items. You can create new items with name, price, category, images, and tags, then add them to your locations with stock and selling price. You can also bulk-upload via CSV.'),
-    },
-  ];
-
-  const refundPolicyFaqs: FaqItem[] = [
-    {
-      key: 'window',
-      q: t(
-        'faq.refundPolicy.window.q',
-        'When can I request a refund?'
-      ),
-      a: t(
-        'faq.refundPolicy.window.a',
-        'You can submit a refund request within 3 calendar days after your order is marked complete (delivery confirmed with your PIN). After that window, use support or contact the business directly.'
-      ),
-    },
-    {
-      key: 'process',
-      q: t(
-        'faq.refundPolicy.process.q',
-        'How does the refund process work?'
-      ),
-      a: t(
-        'faq.refundPolicy.process.a',
-        'Submit a reason and details from your order. The business may ask you to return the item to their registered address for inspection. Depending on the outcome, they can approve a full refund, a partial refund, reject the request, or offer to replace the item with free delivery instead of a monetary refund.'
-      ),
-    },
-    {
-      key: 'replaceItem',
-      q: t(
-        'faq.refundPolicy.replaceItem.q',
-        'What is “replace item”?'
-      ),
-      a: t(
-        'faq.refundPolicy.replaceItem.a',
-        'If the business chooses this resolution, they replace the product and cover delivery to you—no refund is posted to your wallet for that order. Coordinate any new delivery details with the business as needed.'
-      ),
-    },
-  ];
-
-  const sections = [
-    { titleKey: 'faq.sections.client', titleDefault: 'For Clients', items: clientFaqs },
-    {
-      titleKey: 'faq.sections.refundPolicy',
-      titleDefault: 'Refund Policy',
-      items: refundPolicyFaqs,
-    },
-    { titleKey: 'faq.sections.deliveryAgent', titleDefault: 'For Delivery Agents', items: agentFaqs },
-    { titleKey: 'faq.sections.business', titleDefault: 'For Businesses', items: businessFaqs },
-  ];
+  const primarySoft = alpha(theme.palette.primary.main, 0.08);
+  const primaryBorder = alpha(theme.palette.primary.main, 0.12);
 
   return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {t('faq.title', 'Frequently Asked Questions')}
-        </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          {t('faq.subtitle', 'Find answers to common questions')}
-        </Typography>
-      </Box>
-
-      {sections.map((section, sectionIndex) => (
-        <Box key={section.titleKey} sx={{ mb: 4 }}>
-          <Typography
-            variant="h6"
-            component="h2"
-            fontWeight={700}
-            sx={{ mb: 2 }}
+    <Box
+      sx={{
+        minHeight: '100%',
+        background: (muiTheme) =>
+          `linear-gradient(180deg, ${alpha(muiTheme.palette.primary.main, 0.06)} 0%, ${muiTheme.palette.background.default} 28%)`,
+      }}
+    >
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2.5, sm: 3, md: 4 },
+            mb: 3,
+            borderRadius: 3,
+            border: `1px solid ${primaryBorder}`,
+            background: `linear-gradient(135deg, ${primarySoft} 0%, ${theme.palette.background.paper} 55%)`,
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            justifyContent="space-between"
           >
-            {t(section.titleKey, section.titleDefault)}
+            <Stack direction="row" spacing={2} alignItems="flex-start">
+              <Box
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  bgcolor: alpha(theme.palette.primary.main, 0.12),
+                  color: 'primary.main',
+                  display: 'flex',
+                }}
+              >
+                <HelpOutlineIcon sx={{ fontSize: 32 }} />
+              </Box>
+              <Box>
+                <Typography
+                  variant="h4"
+                  component="h1"
+                  sx={{
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
+                    fontSize: { xs: '1.5rem', sm: '2rem' },
+                  }}
+                >
+                  {t('faq.title', 'Frequently Asked Questions')}
+                </Typography>
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                  sx={{ mt: 0.75, maxWidth: 560, lineHeight: 1.6 }}
+                >
+                  {t('faq.subtitle', 'Find answers to common questions')}
+                </Typography>
+              </Box>
+            </Stack>
+          </Stack>
+
+          <TextField
+            fullWidth
+            size="small"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('faq.searchPlaceholder', 'Search questions and answers…')}
+            sx={{ mt: 3 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 1.5, mb: 0.5 }}
+          >
+            {t('faq.jumpToSection', 'Jump to section')}
           </Typography>
-          <Divider sx={{ mb: 2 }} />
-          {section.items.map((item) => (
-            <Accordion key={`${section.titleKey}-${item.key}`} sx={{ mb: 1 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {item.q}
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body1" color="text.secondary">
-                  {item.a}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          ))}
-        </Box>
-      ))}
-    </Container>
+          <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1}>
+            {sections.map((section) => (
+              <Chip
+                key={section.id}
+                icon={SECTION_ICONS[section.id]}
+                label={t(section.titleKey, section.titleDefault)}
+                onClick={() => scrollTo(section.id)}
+                variant="outlined"
+                color="primary"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: 500,
+                  '& .MuiChip-icon': { ml: 0.5 },
+                }}
+              />
+            ))}
+          </Stack>
+        </Paper>
+
+        {visibleSections.length === 0 ? (
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 4,
+              textAlign: 'center',
+              borderRadius: 3,
+              borderStyle: 'dashed',
+            }}
+          >
+            <Typography color="text.secondary">
+              {t('faq.noResults', 'No questions match your search. Try different keywords.')}
+            </Typography>
+          </Paper>
+        ) : (
+          <Stack spacing={3}>
+            {visibleSections.map((section) => (
+              <FaqSectionBlock
+                key={section.id}
+                section={section}
+                icon={SECTION_ICONS[section.id]}
+                theme={theme}
+              />
+            ))}
+          </Stack>
+        )}
+
+        <Paper
+          variant="outlined"
+          sx={{
+            mt: 4,
+            p: { xs: 2.5, sm: 3 },
+            borderRadius: 3,
+            textAlign: 'center',
+            bgcolor: alpha(theme.palette.primary.main, 0.04),
+            borderColor: primaryBorder,
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            {t('faq.needMoreHelp', 'Still need help?')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'support.seo.description',
+              'Get help with orders, deliveries, payments, and account issues. Contact our support team 24/7.'
+            )}
+          </Typography>
+          <Button
+            component={RouterLink}
+            to="/support"
+            variant="contained"
+            size="medium"
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          >
+            {t('faq.visitSupport', 'Visit support center')}
+          </Button>
+        </Paper>
+      </Container>
+    </Box>
   );
 };
+
+interface FaqSectionBlockProps {
+  section: FaqSectionModel;
+  icon: React.ReactElement;
+  theme: ReturnType<typeof useTheme>;
+}
+
+function FaqSectionBlock({ section, icon, theme }: FaqSectionBlockProps) {
+  const { t } = useTranslation();
+  const divider = alpha(theme.palette.divider, 0.9);
+
+  return (
+    <Paper
+      id={`faq-section-${section.id}`}
+      elevation={0}
+      sx={{
+        borderRadius: 3,
+        border: `1px solid ${divider}`,
+        overflow: 'hidden',
+        scrollMarginTop: 96,
+      }}
+    >
+      <Box
+        sx={{
+          px: { xs: 2, sm: 2.5 },
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          bgcolor: alpha(theme.palette.primary.main, 0.04),
+          borderBottom: `1px solid ${divider}`,
+        }}
+      >
+        <Box
+          sx={{
+            color: 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            '& svg': { fontSize: 26 },
+          }}
+        >
+          {icon}
+        </Box>
+        <Typography variant="h6" component="h2" fontWeight={700}>
+          {t(section.titleKey, section.titleDefault)}
+        </Typography>
+      </Box>
+      <Box sx={{ px: { xs: 1, sm: 1.5 }, py: 1 }}>
+        {section.items.map((item: FaqItem) => (
+          <Accordion
+            key={`${section.id}-${item.key}`}
+            disableGutters
+            elevation={0}
+            sx={{
+              '&:before': { display: 'none' },
+              borderRadius: '12px !important',
+              mb: 1,
+              border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+              overflow: 'hidden',
+              '&:last-of-type': { mb: 0 },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              sx={{
+                px: 2,
+                minHeight: 56,
+                '& .MuiAccordionSummary-content': { my: 1.25 },
+              }}
+            >
+              <Typography variant="subtitle1" fontWeight={600} component="span">
+                {item.q}
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2, pt: 0, pb: 2.5 }}>
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ lineHeight: 1.75 }}
+              >
+                {item.a}
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+      </Box>
+    </Paper>
+  );
+}
 
 export default FAQ;

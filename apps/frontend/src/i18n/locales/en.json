@@ -1896,7 +1896,12 @@
       }
     },
     "subtitle": "Find answers to common questions",
-    "title": "Frequently Asked Questions"
+    "title": "Frequently Asked Questions",
+    "searchPlaceholder": "Search questions and answers…",
+    "noResults": "No questions match your search. Try different keywords.",
+    "needMoreHelp": "Still need help?",
+    "visitSupport": "Visit support center",
+    "jumpToSection": "Jump to section"
   },
   "footer": {
     "about": "About Us",

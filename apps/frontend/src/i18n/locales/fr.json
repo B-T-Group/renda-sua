@@ -1885,7 +1885,12 @@
       }
     },
     "subtitle": "Trouvez des réponses aux questions courantes",
-    "title": "Questions fréquemment posées"
+    "title": "Questions fréquemment posées",
+    "searchPlaceholder": "Rechercher dans les questions et réponses…",
+    "noResults": "Aucune question ne correspond à votre recherche. Essayez d'autres mots-clés.",
+    "needMoreHelp": "Besoin d'aide supplémentaire ?",
+    "visitSupport": "Accéder au centre d'aide",
+    "jumpToSection": "Aller à la section"
   },
   "footer": {
     "about": "À Propos",
