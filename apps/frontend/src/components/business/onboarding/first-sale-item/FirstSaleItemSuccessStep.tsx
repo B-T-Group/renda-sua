@@ -1,5 +1,5 @@
 import { CheckCircle as CheckIcon } from '@mui/icons-material';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
@@ -16,9 +16,11 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
   intent = 'first',
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const isFirst = intent === 'first';
   return (
-    <Stack spacing={3} alignItems="center" sx={{ py: 2 }}>
+    <Stack spacing={3} alignItems="center" sx={{ py: { xs: 1, sm: 2 }, px: { xs: 0.5, sm: 0 } }}>
       <CheckIcon color="success" sx={{ fontSize: 56 }} />
       <Typography variant="h5" textAlign="center">
         {isFirst
@@ -40,17 +42,17 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
           { name: item.name }
         )}
       </Typography>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: 1,
-        }}
+      <Stack
+        spacing={1}
+        sx={{ width: '100%', maxWidth: 400 }}
       >
         <Button
           variant="contained"
           component={RouterLink}
           to={isFirst ? '/dashboard' : '/business/items'}
+          fullWidth={isNarrow}
+          size="large"
+          sx={{ minHeight: 48 }}
         >
           {isFirst
             ? t(
@@ -66,13 +68,16 @@ const FirstSaleItemSuccessStep: React.FC<FirstSaleItemSuccessStepProps> = ({
           variant="outlined"
           component={RouterLink}
           to={`/business/items/${item.id}`}
+          fullWidth={isNarrow}
+          size="large"
+          sx={{ minHeight: 48 }}
         >
           {t(
             'business.onboarding.firstSale.success.viewItem',
             'View product'
           )}
         </Button>
-      </Box>
+      </Stack>
     </Stack>
   );
 };

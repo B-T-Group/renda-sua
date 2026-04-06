@@ -814,6 +814,8 @@
         "titleAdditional": "Ajouter un produit à partir de photos",
         "back": "Retour",
         "backToItems": "Retour aux articles",
+        "stepProgress": "Étape {{current}} sur {{total}}",
+        "previousStep": "Étape précédente",
         "steps": {
           "upload": "Photos",
           "create": "Détails du produit",
@@ -834,9 +836,9 @@
           "error": "Échec du téléversement"
         },
         "create": {
-          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de la photo.",
+          "hint": "Renseignez les champs ci-dessous. Vous pouvez demander une suggestion IA à partir de toutes vos photos.",
           "fillWithAi": "Remplir avec l’IA",
-          "aiWorking": "Analyse de votre image…",
+          "aiWorking": "Analyse de vos images…",
           "name": "Nom",
           "category": "Catégorie",
           "subCategory": "Sous-catégorie",
@@ -845,8 +847,12 @@
           "price": "Prix",
           "currency": "Devise",
           "continue": "Continuer",
+          "saveContinue": "Enregistrer et continuer",
           "nameRequired": "Indiquez un nom de produit",
-          "success": "Produit créé"
+          "success": "Produit créé",
+          "loadError": "Impossible de charger le produit",
+          "updateSuccess": "Produit mis à jour",
+          "updateError": "Échec de la mise à jour"
         },
         "location": {
           "hint": "Choisissez l’emplacement du stock. Vous pouvez en créer un nouveau.",

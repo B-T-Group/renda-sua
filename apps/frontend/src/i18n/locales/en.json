@@ -825,6 +825,8 @@
         "titleAdditional": "Add a product from photos",
         "back": "Back",
         "backToItems": "Back to items",
+        "stepProgress": "Step {{current}} of {{total}}",
+        "previousStep": "Previous step",
         "steps": {
           "upload": "Photos",
           "create": "Product details",
@@ -845,7 +847,7 @@
           "error": "Failed to upload images"
         },
         "create": {
-          "hint": "Fill in the details below. Optionally use AI once to suggest fields from your photo.",
+          "hint": "Fill in the details below. Optionally use AI once to suggest fields from all your photos.",
           "fillWithAi": "Fill details with AI",
           "aiWorking": "Analyzing your image…",
           "name": "Name",
@@ -856,8 +858,12 @@
           "price": "Price",
           "currency": "Currency",
           "continue": "Continue",
+          "saveContinue": "Save & continue",
           "nameRequired": "Please enter a product name",
-          "success": "Product created"
+          "success": "Product created",
+          "loadError": "Could not load product",
+          "updateSuccess": "Product updated",
+          "updateError": "Update failed"
         },
         "location": {
           "hint": "Choose where this product is stocked. You can add a new location if needed.",

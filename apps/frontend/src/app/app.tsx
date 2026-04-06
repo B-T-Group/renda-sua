@@ -10,7 +10,6 @@ import {
 } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import LoadingPage from '../components/common/LoadingPage';
-import LoadingScreen from '../components/common/LoadingScreen';
 import AgentOnboardingModal from '../components/dialogs/AgentOnboardingModal';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
 import ClientBottomNav from '../components/layout/ClientBottomNav';
@@ -85,7 +84,6 @@ import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
 import SmartOrders from '../components/routing/SmartOrders';
-import { useLoading } from '../contexts/LoadingContext';
 import { useAgentLocationTracker } from '../hooks/useAgentLocationTracker';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
@@ -94,7 +92,6 @@ import { usePushSubscription } from '../hooks/usePushSubscription';
 function App() {
   const { isLoading } = useAuth0();
   const { isAuthenticated, isCheckingProfile } = useAuthFlow();
-  const { isLoading: isApiLoading, loadingMessage } = useLoading();
   const location = useLocation();
   const navigate = useNavigate();
   const {
@@ -735,9 +732,6 @@ function App() {
 
       {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
       <GuestBottomNav />
-
-      {/* Global API Loading Screen */}
-      <LoadingScreen open={isApiLoading} message={loadingMessage} />
 
       {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
       <AgentOnboardingModal

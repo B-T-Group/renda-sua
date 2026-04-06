@@ -135,10 +135,15 @@ export class AiController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['imageId'],
       properties: {
         imageId: { type: 'string', format: 'uuid' },
+        imageIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+        },
       },
+      description:
+        'Send imageIds (all photos to analyze) or legacy single imageId.',
     },
   })
   @ApiResponse({
@@ -167,7 +172,9 @@ export class AiController {
       },
     },
   })
-  async getImageItemSuggestions(@Body() body: { imageId: string }) {
+  async getImageItemSuggestions(
+    @Body() body: { imageId?: string; imageIds?: string[] }
+  ) {
     const user = await this.hasuraUserService.getUser();
     const businessId = user?.business?.id;
     if (!businessId) {
@@ -176,22 +183,41 @@ export class AiController {
         HttpStatus.FORBIDDEN
       );
     }
-    if (!body?.imageId) {
+    const ids =
+      body.imageIds?.length && Array.isArray(body.imageIds)
+        ? [...new Set(body.imageIds.filter(Boolean))]
+        : body.imageId
+        ? [body.imageId]
+        : [];
+    if (!ids.length) {
       throw new HttpException(
-        { success: false, error: 'imageId is required' },
+        { success: false, error: 'imageId or imageIds is required' },
         HttpStatus.BAD_REQUEST
       );
     }
 
-    const image = await this.businessImagesService.getImageForBusiness(
-      businessId,
-      body.imageId
+    const images = await Promise.all(
+      ids.map((id) =>
+        this.businessImagesService.getImageForBusiness(businessId, id)
+      )
     );
+    if (images.some((img) => !img)) {
+      throw new HttpException(
+        { success: false, error: 'One or more images not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
 
+    const captions = images
+      .map((img) => img!.caption)
+      .filter((c): c is string => !!c?.trim());
+    const alts = images
+      .map((img) => img!.alt_text)
+      .filter((a): a is string => !!a?.trim());
     const suggestion = await this.aiService.generateImageItemSuggestions({
-      imageUrl: image.image_url,
-      caption: image.caption,
-      altText: image.alt_text,
+      imageUrls: images.map((img) => img!.image_url),
+      caption: captions.length ? captions.join(' | ') : null,
+      altText: alts.length ? alts.join(' | ') : null,
       defaultCurrency: 'XAF',
       preferredLanguage: user?.preferred_language ?? 'en',
     });
@@ -199,7 +225,7 @@ export class AiController {
     if (suggestion.barcodeValues?.length) {
       await this.businessImagesService.storeBarcodeValuesOnImage(
         businessId,
-        image.id,
+        images[0]!.id,
         suggestion.barcodeValues
       );
     }

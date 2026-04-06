@@ -1,18 +1,13 @@
 import {
-  Add as AddIcon,
   AddPhotoAlternate as AddPhotoAlternateIcon,
   AutoAwesome as AutoAwesomeIcon,
   Check as CheckIcon,
   CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
   Delete as DeleteIcon,
-  Download as DownloadIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
-  LocationOn as LocationOnIcon,
-  Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
-  Upload as UploadIcon,
   Visibility as ViewIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -34,7 +29,6 @@ import {
   FormControl,
   Grid,
   IconButton,
-  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -68,10 +62,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
-import AddItemDialog from '../business/AddItemDialog';
 import BusinessItemCardView from '../business/BusinessItemCardView';
-import { CSV_ITEMS_TEMPLATE_HEADERS } from '../business/csvItemsTemplate';
-import CSVUploadDialog from '../business/CSVUploadDialog';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
@@ -244,19 +235,12 @@ const BusinessItemsPage: React.FC = () => {
     error: profileError,
   } = useUserProfileContext();
   const [tabValue, setTabValue] = useState(0);
-  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [showCSVUploadDialog, setShowCSVUploadDialog] = useState(false);
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [updatingInventoryItem, setUpdatingInventoryItem] = useState<any>(null);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [downloadLocationDialogOpen, setDownloadLocationDialogOpen] =
-    useState(false);
-  const [selectedDownloadLocationId, setSelectedDownloadLocationId] = useState<
-    string | null
-  >(null);
   const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
   const [refineAiItem, setRefineAiItem] = useState<Item | null>(null);
 
@@ -394,19 +378,6 @@ const BusinessItemsPage: React.FC = () => {
     setManageDealsItem(inventoryItem);
   };
 
-  const handleRefreshLocations = async () => {
-    try {
-      await refetchPageData();
-      enqueueSnackbar(t('business.locations.locationsRefreshed'), {
-        variant: 'success',
-      });
-    } catch (error) {
-      enqueueSnackbar(t('business.locations.refreshError'), {
-        variant: 'error',
-      });
-    }
-  };
-
   const startInlineEdit = (row: Item, field: EditableField) => {
     setEditingCell({ rowId: row.id, field });
     setDraftValues({
@@ -474,113 +445,6 @@ const BusinessItemsPage: React.FC = () => {
     } finally {
       setInlineUpdateLoading(false);
     }
-  };
-
-  const escapeCsvValue = (v: string | number | boolean | undefined | null): string => {
-    const s = String(v ?? '');
-    if (/[,\n"]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-
-  const downloadItemsCSV = (locationId: string | null) => {
-    if (!items || items.length === 0) {
-      enqueueSnackbar(t('business.items.noItemsToDownload'), {
-        variant: 'warning',
-      });
-      return;
-    }
-
-    const headers = [...CSV_ITEMS_TEMPLATE_HEADERS];
-    const rows: string[][] = [];
-
-    for (const item of items) {
-      let invs = item.business_inventories ?? [];
-      if (locationId) {
-        invs = invs.filter((inv) => inv.business_location_id === locationId);
-        if (invs.length === 0) continue;
-      }
-
-      const mainImage = item.item_images?.find((img) => img.image_type === 'main');
-
-      if (invs.length === 0) {
-        rows.push([
-          escapeCsvValue(item.name ?? ''),
-          escapeCsvValue(item.description ?? ''),
-          escapeCsvValue(item.price ?? ''),
-          escapeCsvValue(item.currency ?? 'USD'),
-          escapeCsvValue(item.sku ?? ''),
-          escapeCsvValue(item.weight ?? ''),
-          escapeCsvValue(item.weight_unit ?? ''),
-          escapeCsvValue(item.dimensions ?? ''),
-          escapeCsvValue(item.color ?? ''),
-          escapeCsvValue(item.model ?? ''),
-          escapeCsvValue(item.is_fragile ?? false),
-          escapeCsvValue(item.is_perishable ?? false),
-          escapeCsvValue(item.requires_special_handling ?? false),
-          escapeCsvValue(item.min_order_quantity ?? 1),
-          escapeCsvValue(item.max_order_quantity ?? ''),
-          escapeCsvValue(item.is_active ?? true),
-          escapeCsvValue(item.item_sub_category_id ?? ''),
-          escapeCsvValue(item.brand_id ?? ''),
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          escapeCsvValue(mainImage?.image_url ?? ''),
-          escapeCsvValue(mainImage?.alt_text ?? ''),
-          '',
-        ]);
-        continue;
-      }
-
-      for (const inv of invs) {
-        const loc = inv.business_location;
-        rows.push([
-          escapeCsvValue(item.name ?? ''),
-          escapeCsvValue(item.description ?? ''),
-          escapeCsvValue(item.price ?? ''),
-          escapeCsvValue(item.currency ?? 'USD'),
-          escapeCsvValue(item.sku ?? ''),
-          escapeCsvValue(item.weight ?? ''),
-          escapeCsvValue(item.weight_unit ?? ''),
-          escapeCsvValue(item.dimensions ?? ''),
-          escapeCsvValue(item.color ?? ''),
-          escapeCsvValue(item.model ?? ''),
-          escapeCsvValue(item.is_fragile ?? false),
-          escapeCsvValue(item.is_perishable ?? false),
-          escapeCsvValue(item.requires_special_handling ?? false),
-          escapeCsvValue(item.min_order_quantity ?? 1),
-          escapeCsvValue(item.max_order_quantity ?? ''),
-          escapeCsvValue(item.is_active ?? true),
-          escapeCsvValue(item.item_sub_category_id ?? ''),
-          escapeCsvValue(item.brand_id ?? ''),
-          escapeCsvValue(loc?.name ?? ''),
-          escapeCsvValue(inv.quantity ?? ''),
-          escapeCsvValue(inv.reserved_quantity ?? ''),
-          escapeCsvValue(inv.reorder_point ?? ''),
-          escapeCsvValue(inv.reorder_quantity ?? ''),
-          escapeCsvValue(inv.unit_cost ?? ''),
-          escapeCsvValue(inv.selling_price ?? ''),
-          escapeCsvValue(mainImage?.image_url ?? ''),
-          escapeCsvValue(mainImage?.alt_text ?? ''),
-          escapeCsvValue(''),
-        ]);
-      }
-    }
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `items_export_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-
-    enqueueSnackbar(t('business.items.downloadSuccess'), { variant: 'success' });
   };
 
   const getStockStatus = (quantity: number, reorderPoint: number) => {
@@ -1226,40 +1090,6 @@ const BusinessItemsPage: React.FC = () => {
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Button
             variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => {
-              setSelectedDownloadLocationId(null);
-              setDownloadLocationDialogOpen(true);
-            }}
-            disabled={loading || !items || items.length === 0}
-            size="medium"
-            sx={{ borderRadius: 0 }}
-          >
-            {t('business.items.export')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<UploadIcon />}
-            onClick={() => setShowCSVUploadDialog(true)}
-            size="medium"
-            sx={{ borderRadius: 0 }}
-          >
-            {t('business.items.csvUpload')}
-          </Button>
-          <Tooltip title={t('business.locations.refreshLocations')}>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={() => void handleRefreshLocations()}
-              disabled={loading}
-              size="medium"
-              sx={{ borderRadius: 0 }}
-            >
-              {t('business.locations.refresh')}
-            </Button>
-          </Tooltip>
-          <Button
-            variant="outlined"
             color="error"
             startIcon={<AddPhotoAlternateIcon />}
             onClick={() => navigate('/business/items/add-from-image')}
@@ -1268,39 +1098,6 @@ const BusinessItemsPage: React.FC = () => {
           >
             {t('business.items.addFromImage', 'Add from image')}
           </Button>
-          <Button
-            variant="contained"
-            color="error"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              if (businessLocations.length === 0) {
-                enqueueSnackbar(
-                  t('business.inventory.noLocationsError'),
-                  { variant: 'error' }
-                );
-                return;
-              }
-              void refetchPageData();
-              setShowAddItemDialog(true);
-            }}
-            disabled={businessLocations.length === 0}
-            size="medium"
-            sx={{ borderRadius: 0 }}
-          >
-            {t('business.items.addItem')}
-          </Button>
-          {businessLocations.length === 0 && (
-            <Button
-              variant="outlined"
-              startIcon={<LocationOnIcon />}
-              onClick={() => navigate('/business/locations')}
-              color="primary"
-              size="medium"
-              sx={{ borderRadius: 0 }}
-            >
-              {t('business.locations.addLocation')}
-            </Button>
-          )}
         </Stack>
       </Stack>
 
@@ -1538,17 +1335,6 @@ const BusinessItemsPage: React.FC = () => {
       </Paper>
 
       {/* Dialogs */}
-      <AddItemDialog
-        open={showAddItemDialog}
-        onClose={() => setShowAddItemDialog(false)}
-        businessId={profile.business.id}
-        businessLocations={businessLocations}
-        items={items}
-        brands={brands}
-        itemSubCategories={itemSubCategories}
-        loading={loading}
-      />
-
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}
@@ -1562,13 +1348,6 @@ const BusinessItemsPage: React.FC = () => {
         onInventoryUpdated={() => {
           refetchPageData();
         }}
-      />
-
-      <CSVUploadDialog
-        open={showCSVUploadDialog}
-        onClose={() => setShowCSVUploadDialog(false)}
-        businessId={profile.business.id}
-        onUploadSuccess={refetchPageData}
       />
 
       <ManageDealsDialog
@@ -1588,56 +1367,6 @@ const BusinessItemsPage: React.FC = () => {
         }}
         updateItem={updateItem}
       />
-
-      {/* Download CSV – location select */}
-      <Dialog
-        open={downloadLocationDialogOpen}
-        onClose={() => setDownloadLocationDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t('business.items.downloadSelectLocation')}</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            {t('business.items.downloadSelectLocationDescription')}
-          </DialogContentText>
-          <FormControl fullWidth>
-            <InputLabel>{t('business.locations.location', 'Location')}</InputLabel>
-            <Select
-              value={selectedDownloadLocationId ?? ''}
-              label={t('business.locations.location', 'Location')}
-              onChange={(e) =>
-                setSelectedDownloadLocationId(
-                  e.target.value === '' ? null : (e.target.value as string)
-                )
-              }
-            >
-              <MenuItem value="">
-                {t('business.items.allLocations')}
-              </MenuItem>
-              {businessLocations.map((loc: { id: string; name: string }) => (
-                <MenuItem key={loc.id} value={loc.id}>
-                  {loc.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDownloadLocationDialogOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              downloadItemsCSV(selectedDownloadLocationId ?? null);
-              setDownloadLocationDialogOpen(false);
-            }}
-          >
-            {t('business.items.download')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog

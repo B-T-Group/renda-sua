@@ -1311,7 +1311,7 @@ export class BusinessItemsService {
       return providedDescription;
     }
     const aiSuggestion = await this.aiService.generateImageItemSuggestions({
-      imageUrl,
+      imageUrls: [imageUrl],
       caption,
       altText,
       defaultCurrency: 'XAF',

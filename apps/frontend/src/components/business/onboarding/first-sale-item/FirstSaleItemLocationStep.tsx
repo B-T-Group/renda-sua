@@ -10,6 +10,8 @@ import {
   Stack,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useEffect, useState } from 'react';
@@ -32,6 +34,8 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
   onComplete,
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
   const businessId = profile?.business?.id;
@@ -131,8 +135,12 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
   const busy = locLoading || invLoading || saving;
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="body2" color="text.secondary">
+    <Stack spacing={{ xs: 2.5, sm: 2 }}>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ fontSize: { xs: '0.95rem', sm: '0.875rem' }, lineHeight: 1.5 }}
+      >
         {t(
           'business.onboarding.firstSale.location.hint',
           'Choose where this product is stocked. You can add a new location if needed.'
@@ -169,6 +177,8 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
           startIcon={<AddIcon />}
           onClick={() => setModalOpen(true)}
           disabled={busy || !primaryAddressCountry}
+          fullWidth={isNarrow}
+          sx={{ minHeight: 48, flexShrink: 0 }}
         >
           {t(
             'business.onboarding.firstSale.location.addLocation',
@@ -184,15 +194,16 @@ const FirstSaleItemLocationStep: React.FC<FirstSaleItemLocationStepProps> = ({
         disabled={busy}
         inputProps={{ min: 0 }}
       />
-      <Box>
-        <Button
-          variant="contained"
-          onClick={() => void finish()}
-          disabled={busy || !locationId}
-        >
-          {t('business.onboarding.firstSale.location.finish', 'Finish')}
-        </Button>
-      </Box>
+      <Button
+        variant="contained"
+        onClick={() => void finish()}
+        disabled={busy || !locationId}
+        fullWidth={isNarrow}
+        size="large"
+        sx={{ minHeight: 48 }}
+      >
+        {t('business.onboarding.firstSale.location.finish', 'Finish')}
+      </Button>
       <LocationModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

@@ -330,12 +330,13 @@ export class AiService {
   }
 
   async generateImageItemSuggestions(input: {
-    imageUrl: string;
+    imageUrls: string[];
     caption?: string | null;
     altText?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
   }): Promise<ImageItemSuggestionResult> {
+    const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
     const descriptionLanguage = this.resolvePreferredLanguage(
       input.preferredLanguage
@@ -351,12 +352,29 @@ export class AiService {
     }
     const textContext = textContextParts.join('\n');
 
+    if (!urls.length) {
+      return {
+        name: input.caption || input.altText || undefined,
+        categoryName: undefined,
+        subCategoryName: undefined,
+        brandName: undefined,
+        description: undefined,
+        price: null,
+        currency: defaultCurrency,
+        barcodeValues: null,
+        weight: null,
+        weightUnit: null,
+        dimensions: null,
+      };
+    }
+
     const systemPrompt =
       'You are an AI assistant that performs OCR on product images and extracts structured product data for e-commerce.';
 
     const userText = `
-You are given a product image. First, try to decode any barcode(s) visible on the image. If a barcode is decoded, use it as the strongest signal for identifying the product.
-Then, use OCR on the image and any visible labels/price tags to extract:
+You are given ${urls.length} product image(s). Analyze ALL images together: merge information from every photo, and use the clearest view of text, barcodes, labels, and price tags across them.
+First, try to decode any barcode(s) visible on ANY image. If a barcode is decoded, use it as the strongest signal for identifying the product.
+Then, use OCR on the images and any visible labels/price tags to extract:
 - Product name
 - Category name
 - Subcategory name
@@ -389,7 +407,10 @@ Return ONLY a single JSON object with this exact shape:
 }
 
 Do not include any explanation outside of the JSON.
-The "description" field MUST be written in ${languageLabel}.`;
+The "description" field MUST be written in ${languageLabel}.
+
+Image URLs (analyze every image listed):
+${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`;
 
     const request: ChatCompletionRequest = {
       model: this.deepseekService.defaultChatModel,
@@ -400,7 +421,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         },
         {
           role: 'user',
-          content: `${userText}\n\nImage URL: ${input.imageUrl}`,
+          content: userText,
         },
       ],
       max_tokens: 400,
@@ -409,7 +430,7 @@ The "description" field MUST be written in ${languageLabel}.`;
 
     try {
       this.logger.log(
-        `Generating image item suggestions for image: ${input.imageUrl}`
+        `Generating image item suggestions for ${urls.length} image(s)`
       );
       const response = await this.deepseekService.chatCompletions(
         request,
@@ -490,7 +511,7 @@ The "description" field MUST be written in ${languageLabel}.`;
         throw error;
       }
       this.logger.error(
-        `Failed to generate image item suggestions for image: ${input.imageUrl}`,
+        `Failed to generate image item suggestions for ${urls.length} image(s)`,
         error
       );
       // Fallback: minimal suggestion using caption/alt text only

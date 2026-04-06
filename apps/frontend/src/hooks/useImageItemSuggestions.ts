@@ -19,7 +19,7 @@ export type UseImageItemSuggestionsOptions = {
 };
 
 export const useImageItemSuggestions = (
-  imageId: string | null,
+  imageIds: string[] | null | undefined,
   options: UseImageItemSuggestionsOptions = {}
 ) => {
   const { autoWhen = false, trigger = 0 } = options;
@@ -30,8 +30,10 @@ export const useImageItemSuggestions = (
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const idsKey = imageIds?.filter(Boolean).join(',') ?? '';
+
   useEffect(() => {
-    if (!imageId) {
+    if (!imageIds?.length) {
       return;
     }
     if (!autoWhen && trigger < 1) {
@@ -46,7 +48,9 @@ export const useImageItemSuggestions = (
           success: boolean;
           data?: ImageItemSuggestions;
           error?: string;
-        }>('/ai/image-item-suggestions', { imageId });
+        }>('/ai/image-item-suggestions', {
+          imageIds: (imageIds ?? []).filter(Boolean),
+        });
         if (!cancelled) {
           if (response.data.success && response.data.data) {
             setSuggestions(response.data.data);
@@ -75,7 +79,7 @@ export const useImageItemSuggestions = (
     return () => {
       cancelled = true;
     };
-  }, [apiClient, imageId, autoWhen, trigger]);
+  }, [apiClient, idsKey, autoWhen, trigger]);
 
   return { suggestions, loading, error };
 };
