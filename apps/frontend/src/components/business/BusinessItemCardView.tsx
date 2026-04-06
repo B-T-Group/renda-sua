@@ -1,7 +1,9 @@
 import {
+  AutoAwesome as AutoAwesomeIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Image as ImageIcon,
+  Inventory as InventoryIcon,
   LocalOffer as DealIcon,
   LocationOn as LocationOnIcon,
   Visibility as ViewIcon,
@@ -66,6 +68,7 @@ interface BusinessItemCardViewProps {
   onDeleteItem: (item: Item) => void;
   onRestockInventoryItem: (item: Item) => void;
   onManageDeals?: (item: Item) => void;
+  onRefineWithAi?: (item: Item) => void;
 }
 
 const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
@@ -75,6 +78,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onDeleteItem,
   onRestockInventoryItem,
   onManageDeals,
+  onRefineWithAi,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -426,6 +430,48 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {onRefineWithAi && (
+            <Tooltip
+              title={t(
+                'business.items.refineWithAi.tooltip',
+                'Refine product with AI'
+              )}
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => onRefineWithAi(item)}
+                  disabled={!hasImages}
+                  sx={{
+                    color: theme.palette.secondary.main,
+                    '&:hover': {
+                      bgcolor: 'secondary.light',
+                      opacity: 0.8,
+                    },
+                  }}
+                >
+                  <AutoAwesomeIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+          {item.business_inventories?.[0] && (
+            <Tooltip title={t('business.inventory.restock', 'Restock')}>
+              <IconButton
+                size="small"
+                onClick={() => onRestockInventoryItem(item)}
+                sx={{
+                  color: theme.palette.warning.main,
+                  '&:hover': {
+                    bgcolor: 'warning.light',
+                    opacity: 0.8,
+                  },
+                }}
+              >
+                <InventoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {onManageDeals && (
             <Tooltip title={t('business.items.manageDeals', 'Manage deals')}>
               <IconButton
