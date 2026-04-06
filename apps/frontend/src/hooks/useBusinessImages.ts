@@ -276,6 +276,29 @@ export const useBusinessImages = () => {
     [apiClient, fetchImages]
   );
 
+  const setImageAsMain = useCallback(
+    async (imageId: string) => {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await apiClient.post<{ success: boolean }>(
+          `/business-images/${imageId}/set-as-main`
+        );
+        await fetchImages();
+      } catch (err: any) {
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            'Failed to set main image'
+        );
+        throw err;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [apiClient, fetchImages]
+  );
+
   const cleanupImage = useCallback(
     async (
       imageId: string
@@ -320,6 +343,7 @@ export const useBusinessImages = () => {
     updateImage,
     deleteImage,
     removeTag,
+    setImageAsMain,
     cleanupImage,
     setPage,
     setPageSize,

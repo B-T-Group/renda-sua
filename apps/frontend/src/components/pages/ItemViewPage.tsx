@@ -2,6 +2,9 @@ import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
   AutoFixHigh as AutoFixHighIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Close as CloseIcon,
   Edit as EditIcon,
   Inventory as InventoryIcon,
   PhotoCamera as PhotoCameraIcon,
@@ -17,8 +20,11 @@ import {
   CardMedia,
   Chip,
   Container,
+  Dialog,
+  DialogContent,
   Divider,
   Grid,
+  IconButton,
   LinearProgress,
   Skeleton,
   Stack,
@@ -26,11 +32,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useSnackbar } from 'notistack';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useBusinessImages } from '../../hooks/useBusinessImages';
 import {
   BusinessInventoryItem,
   useBusinessInventory,
@@ -66,6 +74,12 @@ export default function ItemViewPage() {
   const [manageDealsInventory, setManageDealsInventory] =
     useState<BusinessInventoryItem | ItemBusinessInventory | null>(null);
   const [showRefineAiDialog, setShowRefineAiDialog] = useState(false);
+  const [imageLightboxIndex, setImageLightboxIndex] = useState<number | null>(
+    null
+  );
+
+  const { enqueueSnackbar } = useSnackbar();
+  const { setImageAsMain, submitting: imageMainBusy } = useBusinessImages();
 
   const {
     fetchSingleItem,
@@ -233,6 +247,70 @@ export default function ItemViewPage() {
     };
   }, [item?.business_inventories]);
 
+  const sortedItemImages = useMemo(() => {
+    const imgs = item?.item_images ?? [];
+    return [...imgs].sort((a, b) => {
+      if (a.image_type === 'main') return -1;
+      if (b.image_type === 'main') return 1;
+      return (a.display_order ?? 0) - (b.display_order ?? 0);
+    });
+  }, [item?.item_images]);
+
+  const heroImage =
+    sortedItemImages.find((i) => i.image_type === 'main') ?? sortedItemImages[0];
+  const galleryThumbs = sortedItemImages.filter((i) => i.image_type !== 'main');
+
+  const openImageLightbox = useCallback((index: number) => {
+    setImageLightboxIndex(index);
+  }, []);
+
+  const closeImageLightbox = useCallback(() => {
+    setImageLightboxIndex(null);
+  }, []);
+
+  const goLightbox = useCallback(
+    (delta: number) => {
+      setImageLightboxIndex((prev) => {
+        if (prev === null || sortedItemImages.length === 0) return prev;
+        const n = sortedItemImages.length;
+        return (prev + delta + n) % n;
+      });
+    },
+    [sortedItemImages.length]
+  );
+
+  const handleSetImageAsMain = useCallback(
+    async (imageId: string) => {
+      try {
+        await setImageAsMain(imageId);
+        await fetchItemDetails();
+        setImageLightboxIndex(null);
+        enqueueSnackbar(
+          t('business.items.mainImageUpdated', 'Main image updated'),
+          { variant: 'success' }
+        );
+      } catch (error: any) {
+        enqueueSnackbar(
+          error?.message ||
+            t('common.error', 'Something went wrong'),
+          { variant: 'error' }
+        );
+      }
+    },
+    [enqueueSnackbar, fetchItemDetails, setImageAsMain, t]
+  );
+
+  useEffect(() => {
+    if (imageLightboxIndex === null) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goLightbox(-1);
+      if (e.key === 'ArrowRight') goLightbox(1);
+      if (e.key === 'Escape') closeImageLightbox();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [imageLightboxIndex, goLightbox, closeImageLightbox]);
+
   if (loading) {
     return (
       <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
@@ -278,14 +356,6 @@ export default function ItemViewPage() {
       </Container>
     );
   }
-
-  const mainImage = item.item_images?.find(
-    (img: ItemImage) => img.image_type === 'main'
-  );
-  const galleryImages =
-    item.item_images?.filter(
-      (img: ItemImage) => img.image_type === 'gallery'
-    ) || [];
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
@@ -484,32 +554,48 @@ export default function ItemViewPage() {
               <CardMedia
                 component="img"
                 height="300"
-                image={mainImage?.image_url || NoImage}
+                image={heroImage?.image_url || NoImage}
                 alt={item.name}
-                sx={{ objectFit: 'cover' }}
+                onClick={() => {
+                  if (!heroImage || sortedItemImages.length === 0) return;
+                  const idx = sortedItemImages.findIndex(
+                    (i) => i.id === heroImage.id
+                  );
+                  openImageLightbox(idx >= 0 ? idx : 0);
+                }}
+                sx={{
+                  objectFit: 'cover',
+                  cursor:
+                    sortedItemImages.length > 0 ? 'pointer' : 'default',
+                }}
               />
-              {galleryImages.length > 0 && (
+              {galleryThumbs.length > 0 && (
                 <Box sx={{ p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     {t('business.items.gallery', 'Gallery')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {galleryImages.slice(0, 4).map((image: ItemImage) => (
+                    {galleryThumbs.slice(0, 4).map((image: ItemImage) => (
                       <Avatar
                         key={image.id}
                         src={image.image_url}
                         alt={image.alt_text || item.name}
+                        onClick={() =>
+                          openImageLightbox(
+                            sortedItemImages.findIndex((i) => i.id === image.id)
+                          )
+                        }
                         sx={{ width: 60, height: 60, cursor: 'pointer' }}
                         variant="rounded"
                       />
                     ))}
-                    {galleryImages.length > 4 && (
+                    {galleryThumbs.length > 4 && (
                       <Avatar
                         sx={{ width: 60, height: 60, bgcolor: 'grey.300' }}
                         variant="rounded"
                       >
                         <Typography variant="caption">
-                          +{galleryImages.length - 4}
+                          +{galleryThumbs.length - 4}
                         </Typography>
                       </Avatar>
                     )}
@@ -1044,132 +1130,103 @@ export default function ItemViewPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 {t(
                   'business.items.imageManagementDescription',
-                  'Upload and manage product images. A main image is required, and you can add additional gallery images.'
+                  'Upload and manage photos. Tap a picture to open it full screen and use arrows or keyboard to browse. Use “Set as main image” to choose the primary listing photo.'
                 )}
               </Typography>
 
-              {item.item_images && item.item_images.length > 0 ? (
+              {sortedItemImages.length > 0 ? (
                 <Grid container spacing={2}>
-                  {/* Main Image */}
-                  {mainImage && (
-                    <Grid size={{ xs: 12, md: 6 }} key={mainImage.id}>
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderColor: 'primary.main',
-                          borderWidth: 2,
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            boxShadow: 4,
-                            transform: 'translateY(-2px)',
-                          },
-                        }}
-                      >
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={mainImage.image_url}
-                          alt={mainImage.alt_text || item.name}
-                          sx={{ objectFit: 'cover' }}
-                        />
-                        <CardContent>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ mb: 1 }}
-                          >
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {t('business.items.mainImage', 'Main Image')}
-                            </Typography>
-                            <Chip
-                              label={t('business.items.primary', 'Primary')}
-                              size="small"
-                              color="primary"
-                            />
-                          </Stack>
-                          {mainImage.alt_text && (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
+                  {sortedItemImages.map((image: ItemImage, idx: number) => {
+                    const isMain = image.image_type === 'main';
+                    return (
+                      <Grid size={{ xs: 12, md: 6 }} key={image.id}>
+                        <Card
+                          variant="outlined"
+                          sx={{
+                            borderColor: isMain ? 'primary.main' : 'divider',
+                            borderWidth: isMain ? 2 : 1,
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                              boxShadow: 4,
+                              transform: 'translateY(-2px)',
+                            },
+                          }}
+                        >
+                          <CardMedia
+                            component="img"
+                            height="200"
+                            image={image.image_url}
+                            alt={image.alt_text || item.name}
+                            onClick={() => openImageLightbox(idx)}
+                            sx={{
+                              objectFit: 'cover',
+                              cursor: 'pointer',
+                            }}
+                          />
+                          <CardContent>
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
                               sx={{ mb: 1 }}
+                              flexWrap="wrap"
+                              gap={1}
                             >
-                              {mainImage.alt_text}
-                            </Typography>
-                          )}
-                          {mainImage.caption && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {mainImage.caption}
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  )}
-
-                  {/* Gallery Images */}
-                  {galleryImages.map((image: ItemImage) => (
-                    <Grid size={{ xs: 12, md: 6 }} key={image.id}>
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            boxShadow: 4,
-                            transform: 'translateY(-2px)',
-                          },
-                        }}
-                      >
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={image.image_url}
-                          alt={image.alt_text || item.name}
-                          sx={{ objectFit: 'cover' }}
-                        />
-                        <CardContent>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ mb: 1 }}
-                          >
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {t(
-                                'business.items.galleryImage',
-                                'Gallery Image'
-                              )}
-                            </Typography>
-                            <Chip
-                              label={t('business.items.secondary', 'Secondary')}
-                              size="small"
-                              variant="outlined"
-                            />
-                          </Stack>
-                          {image.alt_text && (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ mb: 1 }}
-                            >
-                              {image.alt_text}
-                            </Typography>
-                          )}
-                          {image.caption && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {image.caption}
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
+                              <Typography variant="subtitle2" fontWeight="bold">
+                                {isMain
+                                  ? t('business.items.mainImage', 'Main Image')
+                                  : t(
+                                      'business.items.galleryImage',
+                                      'Gallery Image'
+                                    )}
+                              </Typography>
+                              <Chip
+                                label={
+                                  isMain
+                                    ? t('business.items.primary', 'Primary')
+                                    : t('business.items.secondary', 'Secondary')
+                                }
+                                size="small"
+                                color={isMain ? 'primary' : 'default'}
+                                variant={isMain ? 'filled' : 'outlined'}
+                              />
+                            </Stack>
+                            {!isMain && sortedItemImages.length > 1 ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={imageMainBusy}
+                                onClick={() => void handleSetImageAsMain(image.id)}
+                                sx={{ mb: 1 }}
+                              >
+                                {t(
+                                  'business.items.setAsMainImage',
+                                  'Set as main image'
+                                )}
+                              </Button>
+                            ) : null}
+                            {image.alt_text && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mb: 1 }}
+                              >
+                                {image.alt_text}
+                              </Typography>
+                            )}
+                            {image.caption && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {image.caption}
+                              </Typography>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    );
+                  })}
                 </Grid>
               ) : (
                 <Box
@@ -1213,6 +1270,88 @@ export default function ItemViewPage() {
       </Grid>
 
       {/* Dialogs */}
+      <Dialog
+        open={
+          imageLightboxIndex !== null && sortedItemImages.length > 0
+        }
+        onClose={closeImageLightbox}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { bgcolor: 'grey.900', m: { xs: 1, sm: 2 } },
+        }}
+      >
+        <DialogContent
+          sx={{ p: 0, position: 'relative', bgcolor: 'grey.900' }}
+        >
+          <IconButton
+            onClick={closeImageLightbox}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              zIndex: 2,
+              color: 'common.white',
+              bgcolor: 'rgba(0,0,0,0.45)',
+            }}
+            aria-label={t('common.close', 'Close')}
+          >
+            <CloseIcon />
+          </IconButton>
+          {imageLightboxIndex !== null &&
+            sortedItemImages[imageLightboxIndex] && (
+              <>
+                <Box
+                  component="img"
+                  src={sortedItemImages[imageLightboxIndex].image_url}
+                  alt={sortedItemImages[imageLightboxIndex].alt_text || item.name}
+                  sx={{
+                    width: '100%',
+                    maxHeight: { xs: '70vh', sm: '85vh' },
+                    objectFit: 'contain',
+                    display: 'block',
+                    mx: 'auto',
+                    pt: 5,
+                    px: 1,
+                  }}
+                />
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="center"
+                  spacing={2}
+                  sx={{ py: 2, px: 2 }}
+                >
+                  <IconButton
+                    onClick={() => goLightbox(-1)}
+                    sx={{ color: 'common.white' }}
+                    aria-label={t('common.previous', 'Previous')}
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  <Typography variant="body2" sx={{ color: 'grey.300' }}>
+                    {t(
+                      'business.items.imageLightboxCounter',
+                      '{{current}} of {{total}}',
+                      {
+                        current: imageLightboxIndex + 1,
+                        total: sortedItemImages.length,
+                      }
+                    )}
+                  </Typography>
+                  <IconButton
+                    onClick={() => goLightbox(1)}
+                    sx={{ color: 'common.white' }}
+                    aria-label={t('common.next', 'Next')}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                </Stack>
+              </>
+            )}
+        </DialogContent>
+      </Dialog>
+
       <UpdateInventoryDialog
         open={showUpdateInventoryDialog}
         onClose={() => setShowUpdateInventoryDialog(false)}

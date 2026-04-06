@@ -183,6 +183,24 @@ export class BusinessImagesController {
     return { success: true };
   }
 
+  @Post(':id/set-as-main')
+  @ApiOperation({
+    summary:
+      'Set this image as the main image for its item (demotes the previous main)',
+  })
+  @ApiResponse({ status: 200, description: 'Main image updated' })
+  @ApiResponse({ status: 400, description: 'Image not linked to an item' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Image not found' })
+  async setImageAsMain(@Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow();
+    const image = await this.businessImagesService.setImageAsMainForItem(
+      businessId,
+      id
+    );
+    return { success: true, data: { image } };
+  }
+
   @Patch(':id')
   @ApiOperation({
     summary:

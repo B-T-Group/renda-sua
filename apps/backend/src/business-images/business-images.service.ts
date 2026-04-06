@@ -8,6 +8,7 @@ export interface BusinessImage {
   item_id: string | null;
   item_sub_category_id: number | null;
   image_url: string;
+  image_type?: string | null;
   s3_key: string | null;
   file_size: number | null;
   width: number | null;
@@ -41,6 +42,7 @@ export interface CreateBusinessImageInput {
 export interface UpdateBusinessImageInput {
   item_sub_category_id?: number | null;
   image_url?: string;
+  image_type?: 'main' | 'gallery';
   s3_key?: string | null;
   file_size?: number | null;
   width?: number | null;
@@ -59,6 +61,7 @@ const LIBRARY_IMAGE_FIELDS = `
   item_id
   item_sub_category_id
   image_url
+  image_type
   s3_key
   file_size
   width
@@ -194,6 +197,20 @@ const NEXT_DISPLAY_ORDER = `
   }
 `;
 
+const ITEM_IMAGES_TYPES_FOR_ITEM = `
+  query ItemImageTypesForItem($itemId: uuid!, $businessId: uuid!) {
+    item_images(
+      where: {
+        item_id: { _eq: $itemId },
+        business_id: { _eq: $businessId }
+      }
+    ) {
+      id
+      image_type
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessImagesService {
   constructor(
@@ -260,7 +277,7 @@ export class BusinessImagesService {
     if (!images.length) {
       return [];
     }
-    const objects = images.map((img) => ({
+    const objects = images.map((img, index) => ({
       business_id: businessId,
       item_id: null,
       item_sub_category_id: subCategoryId,
@@ -274,7 +291,8 @@ export class BusinessImagesService {
       alt_text: img.alt_text ?? null,
       tags: [],
       status: 'unassigned',
-      image_type: 'gallery',
+      /** First image in the batch is the listing main photo; rest are gallery. */
+      image_type: index === 0 ? 'main' : 'gallery',
       display_order: 0,
       is_active: true,
     }));
@@ -435,6 +453,39 @@ export class BusinessImagesService {
     imageId: string
   ): Promise<BusinessImage> {
     return this.fetchImageForBusiness(businessId, imageId);
+  }
+
+  /** Demotes the current main (if any) and sets this row as `main` for its item. */
+  async setImageAsMainForItem(
+    businessId: string,
+    imageId: string
+  ): Promise<BusinessImage> {
+    const target = await this.fetchImageForBusiness(businessId, imageId);
+    if (!target.item_id) {
+      throw new HttpException(
+        { success: false, error: 'Image must be assigned to an item' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const data = await this.hasuraUserService.executeQuery<{
+      item_images: { id: string; image_type: string }[];
+    }>(ITEM_IMAGES_TYPES_FOR_ITEM, {
+      itemId: target.item_id,
+      businessId,
+    });
+    const imgs = data.item_images ?? [];
+    const currentMain = imgs.find((i) => i.image_type === 'main');
+    if (currentMain?.id === imageId) {
+      return target;
+    }
+    if (currentMain) {
+      await this.applyImageUpdate(businessId, currentMain.id, {
+        image_type: 'gallery',
+      });
+    }
+    return this.applyImageUpdate(businessId, imageId, {
+      image_type: 'main',
+    });
   }
 
   private async applyImageUpdate(

@@ -6,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogContent,
@@ -73,6 +74,17 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       return prev;
     });
     setFiles((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const setAsMainAt = (i: number) => {
+    if (i <= 0 || i >= files.length) return;
+    setFiles((prev) => {
+      const next = [...prev];
+      const [picked] = next.splice(i, 1);
+      next.unshift(picked);
+      return next;
+    });
+    setPreviewIndex(null);
   };
 
   const uploadAll = async () => {
@@ -146,7 +158,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
           intent === 'first'
             ? 'business.onboarding.firstSale.upload.hint'
             : 'business.onboarding.firstSale.upload.hintAdditional',
-          'Add one or more photos of your product. You can create the listing from the first image and attach the rest to the same item.'
+          'Add one or more photos. The main photo is used to create the listing; you can change which image is main before continuing. Extra photos attach to the same item.'
         )}
       </Typography>
       <Alert
@@ -243,6 +255,24 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
               >
                 <CloseIcon fontSize="small" />
               </IconButton>
+              {i === 0 ? (
+                <Chip
+                  size="small"
+                  color="primary"
+                  label={t(
+                    'business.onboarding.firstSale.upload.mainPhoto',
+                    'Main'
+                  )}
+                  sx={{
+                    position: 'absolute',
+                    top: 2,
+                    left: 2,
+                    height: 22,
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                  }}
+                />
+              ) : null}
               <Typography
                 variant="caption"
                 color="text.secondary"
@@ -257,6 +287,30 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
               >
                 {f.name}
               </Typography>
+              {files.length > 1 && i > 0 ? (
+                <Button
+                  type="button"
+                  size="small"
+                  variant="text"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAsMainAt(i);
+                  }}
+                  sx={{
+                    mt: 0.25,
+                    minHeight: 0,
+                    py: 0.25,
+                    px: 0,
+                    fontSize: '0.75rem',
+                    textTransform: 'none',
+                  }}
+                >
+                  {t(
+                    'business.onboarding.firstSale.upload.setAsMain',
+                    'Set as main'
+                  )}
+                </Button>
+              ) : null}
             </Box>
           ))}
         </Box>
@@ -264,7 +318,7 @@ const FirstSaleItemUploadStep: React.FC<FirstSaleItemUploadStepProps> = ({
       <Typography variant="caption" color="text.secondary">
         {t(
           'business.onboarding.firstSale.upload.previewHint',
-          'Tap a photo to view it full size.'
+          'The main listing photo is on the left. Tap a photo to view it full size.'
         )}
       </Typography>
       <Dialog

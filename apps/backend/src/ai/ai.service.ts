@@ -80,6 +80,8 @@ export class AiService {
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
   private static readonly OPENAI_CHAT_COMPLETIONS_URL =
     'https://api.openai.com/v1/chat/completions';
+  private static readonly IMAGE_ITEM_VISION_MAX_IMAGES = 10;
+  private static readonly IMAGE_FETCH_MAX_BYTES = 10 * 1024 * 1024;
 
   constructor(
     private readonly configService: ConfigService,
@@ -337,13 +339,18 @@ export class AiService {
     - Professional tone appropriate for business customers`;
   }
 
+  /**
+   * Suggests catalog fields using multimodal vision: images are fetched server-side and sent
+   * as `image_url` parts (HTTPS or `data:` URLs). OpenAI uses high-detail vision; DeepSeek
+   * uses the same OpenAI-compatible shape and falls back to text-only if the API rejects it.
+   */
   async generateImageItemSuggestions(input: {
     imageUrls: string[];
     caption?: string | null;
     altText?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
-    /** Defaults to `openai`. */
+    /** Defaults to `openai` (vision). */
     provider?: ImageItemSuggestionsProvider;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
@@ -378,85 +385,69 @@ export class AiService {
       };
     }
 
-    const systemPrompt =
-      'You are an AI assistant that performs OCR on product images and extracts structured product data for e-commerce.';
-
-    const userText = `
-You are given ${urls.length} product image(s). Analyze ALL images together: merge information from every photo, and use the clearest view of text, barcodes, labels, and price tags across them.
-First, try to decode any barcode(s) visible on ANY image. If a barcode is decoded, use it as the strongest signal for identifying the product.
-Then, use OCR on the images and any visible labels/price tags to extract:
-- Product name
-- Category name
-- Subcategory name
-- Brand name
-- A short 2–3 sentence e-commerce description in English
- - A short 2–3 sentence e-commerce description in ${languageLabel}
-- The product price as a number (no currency symbol)
-- The currency code (3-letter code). If no currency symbol or code is visible, default to "${defaultCurrency}".
-- Any decoded barcode values (EAN/UPC/etc) if readable.
-- Product weight as a number (if visible)
-- Weight unit (e.g. g, kg, ml, l)
-- Product dimensions string (e.g. 20x10x5 cm) if visible.
-
-Additional text context from the image record (may be empty):
-${textContext || 'N/A'}
-
-Return ONLY a single JSON object with this exact shape:
-{
-  "name": string | null,
-  "categoryName": string | null,
-  "subCategoryName": string | null,
-  "brandName": string | null,
-  "description": string | null,
-  "price": number | null,
-  "currency": string | null,
-  "barcodeValues": string[] | null,
-  "weight": number | null,
-  "weightUnit": string | null,
-  "dimensions": string | null
-}
-
-Do not include any explanation outside of the JSON.
-The "description" field MUST be written in ${languageLabel}.
-
-Image URLs (analyze every image listed):
-${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`;
-
     const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
-    const request: ChatCompletionRequest = {
+    const visionSystem = this.buildImageItemVisionSystemPrompt();
+    const visionUserText = this.buildImageItemVisionUserText(
+      defaultCurrency,
+      languageLabel,
+      textContext
+    );
+    const textOnlyUserText = this.buildImageItemTextOnlyUserText(
+      urls,
+      defaultCurrency,
+      languageLabel,
+      textContext
+    );
+    const resolvedImages = await this.resolveVisionImageUrls(urls);
+    const visionUserContent = this.buildVisionUserContentParts(
+      visionUserText,
+      resolvedImages,
+      provider === 'openai'
+    );
+
+    const visionRequest: ChatCompletionRequest = {
       model:
         provider === 'openai'
           ? this.getOpenAiItemSuggestionsModel()
-          : this.deepseekService.defaultChatModel,
+          : this.getDeepSeekVisionModel(),
+      messages: [
+        { role: 'system', content: visionSystem },
+        { role: 'user', content: visionUserContent },
+      ],
+      max_tokens: 900,
+      temperature: 0.1,
+    };
+
+    const textFallbackRequest: ChatCompletionRequest = {
+      model: this.deepseekService.defaultChatModel,
       messages: [
         {
           role: 'system',
-          content: systemPrompt,
+          content: this.buildImageItemTextOnlySystemPrompt(),
         },
-        {
-          role: 'user',
-          content: userText,
-        },
+        { role: 'user', content: textOnlyUserText },
       ],
-      max_tokens: 400,
+      max_tokens: 900,
       temperature: 0.1,
     };
 
     try {
       this.logger.log(
-        `Generating image item suggestions (${provider}) for ${urls.length} image(s)`
+        `Generating image item suggestions (vision, ${provider}) for ${urls.length} image(s)`
       );
-      const response =
-        provider === 'openai'
-          ? await this.openAiChatCompletions(request, 40000)
-          : await this.deepseekService.chatCompletions(request, 40000);
+      const response = await this.runImageItemSuggestionsLlm(
+        provider,
+        visionRequest,
+        textFallbackRequest
+      );
 
       const rawContent = response.choices?.[0]?.message?.content;
       const contentString = this.messageContentToString(rawContent);
+      const jsonString = this.coerceJsonObjectString(contentString);
 
       let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(contentString) as Record<string, unknown>;
+        parsed = JSON.parse(jsonString) as Record<string, unknown>;
       } catch (parseError: unknown) {
         this.logger.error(
           'Failed to parse JSON from image item suggestions',
@@ -661,6 +652,185 @@ Do not include any text outside the JSON.`;
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private buildImageItemVisionSystemPrompt(): string {
+    return (
+      'You are an AI assistant that reads product photos (OCR, labels, price tags, barcodes) ' +
+      'and returns a single JSON object. Do not invent fields you cannot read clearly; use null when uncertain.'
+    );
+  }
+
+  private buildImageItemTextOnlySystemPrompt(): string {
+    return (
+      'You help extract structured e-commerce fields from text. ' +
+      'Do not invent names, prices, barcodes, or categories. Use only caption/alt text; use null for unknown fields.'
+    );
+  }
+
+  private buildImageItemVisionUserText(
+    defaultCurrency: string,
+    languageLabel: string,
+    textContext: string
+  ): string {
+    return `
+Analyze the attached product images in order (first image is primary). Merge information across all photos; use the clearest view of text, barcodes, labels, and price tags.
+
+First, decode any visible barcode(s). If decoded, use it as the strongest signal for identifying the product.
+Then extract from the images:
+- Product name
+- Category name
+- Subcategory name
+- Brand name
+- A short 2–3 sentence e-commerce description in ${languageLabel}
+- The product price as a number (no currency symbol)
+- The currency code (3-letter code). If none visible, default to "${defaultCurrency}".
+- Any decoded barcode values (EAN/UPC/etc) if readable.
+- Product weight as a number (if visible)
+- Weight unit (e.g. g, kg, ml, l)
+- Product dimensions string (e.g. 20x10x5 cm) if visible.
+
+Additional text context from the image record (may be empty):
+${textContext || 'N/A'}
+
+Return ONLY a single JSON object with this exact shape:
+{
+  "name": string | null,
+  "categoryName": string | null,
+  "subCategoryName": string | null,
+  "brandName": string | null,
+  "description": string | null,
+  "price": number | null,
+  "currency": string | null,
+  "barcodeValues": string[] | null,
+  "weight": number | null,
+  "weightUnit": string | null,
+  "dimensions": string | null
+}
+
+Do not include any explanation outside of the JSON.
+The "description" field MUST be written in ${languageLabel}.`;
+  }
+
+  private buildImageItemTextOnlyUserText(
+    urls: string[],
+    defaultCurrency: string,
+    languageLabel: string,
+    textContext: string
+  ): string {
+    return `
+This request has no image pixels—only URLs and optional captions. Do NOT fabricate OCR, barcodes, or prices; use null unless stated in the text context.
+
+Extract when possible from captions/alt text only:
+- Product name, category, subcategory, brand
+- Description in ${languageLabel}
+- Price, currency (default "${defaultCurrency}" if unknown)
+- Barcodes, weight, dimensions
+
+Additional text context:
+${textContext || 'N/A'}
+
+Image URLs (reference only; you may not see image content):
+${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}
+
+Return ONLY a single JSON object with this exact shape:
+{
+  "name": string | null,
+  "categoryName": string | null,
+  "subCategoryName": string | null,
+  "brandName": string | null,
+  "description": string | null,
+  "price": number | null,
+  "currency": string | null,
+  "barcodeValues": string[] | null,
+  "weight": number | null,
+  "weightUnit": string | null,
+  "dimensions": string | null
+}
+
+The "description" field MUST be written in ${languageLabel}.`;
+  }
+
+  private buildVisionUserContentParts(
+    textPrompt: string,
+    imageUrlsOrDataUrls: string[],
+    openAiHighDetail: boolean
+  ): unknown[] {
+    const parts: unknown[] = [{ type: 'text', text: textPrompt }];
+    for (const u of imageUrlsOrDataUrls) {
+      parts.push({
+        type: 'image_url',
+        image_url: openAiHighDetail
+          ? { url: u, detail: 'high' as const }
+          : { url: u },
+      });
+    }
+    return parts;
+  }
+
+  private async fetchImageAsDataUrl(url: string): Promise<string | null> {
+    try {
+      const { data, headers, status } = await axios.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
+        timeout: 25000,
+        maxContentLength: AiService.IMAGE_FETCH_MAX_BYTES,
+        maxBodyLength: AiService.IMAGE_FETCH_MAX_BYTES,
+        validateStatus: (s) => s === 200,
+      });
+      if (status !== 200 || !data) return null;
+      const mime =
+        headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
+      if (!mime.startsWith('image/')) {
+        return null;
+      }
+      const b64 = Buffer.from(data).toString('base64');
+      return `data:${mime};base64,${b64}`;
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Vision: could not fetch image (${url.slice(0, 96)}…): ${
+          e instanceof Error ? e.message : 'unknown'
+        }`
+      );
+      return null;
+    }
+  }
+
+  private async resolveVisionImageUrls(urls: string[]): Promise<string[]> {
+    const capped = urls.slice(0, AiService.IMAGE_ITEM_VISION_MAX_IMAGES);
+    const out: string[] = [];
+    for (const u of capped) {
+      const dataUrl = await this.fetchImageAsDataUrl(u);
+      out.push(dataUrl ?? u);
+    }
+    return out;
+  }
+
+  private async runImageItemSuggestionsLlm(
+    provider: ImageItemSuggestionsProvider,
+    visionRequest: ChatCompletionRequest,
+    textFallbackRequest: ChatCompletionRequest
+  ): Promise<ChatCompletionResponse> {
+    if (provider === 'openai') {
+      return this.openAiChatCompletions(visionRequest, 120000);
+    }
+    try {
+      return await this.deepseekService.chatCompletions(visionRequest, 120000);
+    } catch (error: unknown) {
+      if (!axios.isAxiosError(error)) throw error;
+      const status = error.response?.status;
+      if (status !== 400 && status !== 422) throw error;
+      this.logger.warn(
+        `DeepSeek rejected multimodal vision (HTTP ${status}); retrying text-only`
+      );
+      return this.deepseekService.chatCompletions(textFallbackRequest, 60000);
+    }
+  }
+
+  private getDeepSeekVisionModel(): string {
+    return (
+      this.configService.get<string>('deepseek.visionModel')?.trim() ||
+      'deepseek-chat'
+    );
   }
 
   private getOpenAiItemSuggestionsModel(): string {

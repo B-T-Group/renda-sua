@@ -108,12 +108,17 @@ export interface GoogleCacheConfig {
 export interface OpenAIConfig {
   /** Used for image cleanup/edits (OpenAI Images API) and chat completions when provider is OpenAI. */
   apiKey: string;
-  /** Chat model for `generateImageItemSuggestions` when `provider` is `openai`. */
+  /** Vision-capable chat model for `generateImageItemSuggestions` when `provider` is `openai` (e.g. `gpt-4o-mini`). */
   chatModel: string;
 }
 
 export interface DeepseekConfig {
   apiKey: string;
+  /**
+   * Model for vision-style multimodal requests (OpenAI-compatible `image_url` parts).
+   * Defaults to `deepseek-chat`. Hosted DeepSeek may reject vision payloads; the service falls back to text-only.
+   */
+  visionModel: string;
 }
 
 export interface MyPVitConfig {
@@ -365,6 +370,7 @@ export default (): Configuration => {
     },
     deepseek: {
       apiKey: process.env.DEEPSEEK_API_KEY || '',
+      visionModel: process.env.DEEPSEEK_VISION_MODEL || 'deepseek-chat',
     },
     notification: {
       orderStatusChangeEnabled:
