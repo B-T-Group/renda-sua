@@ -1,7 +1,9 @@
 import { AutoAwesome as AutoAwesomeIcon } from '@mui/icons-material';
 import {
+  Backdrop,
   Box,
   Button,
+  Portal,
   Stack,
   TextField,
   Typography,
@@ -304,15 +306,32 @@ const FirstSaleItemCreateStep: React.FC<FirstSaleItemCreateStepProps> = ({
           'Fill details with AI'
         )}
       </Button>
-      {sugLoading && (
-        <ImageCleanupLoadingAnimation
-          minHeight={140}
-          message={t(
-            'business.onboarding.firstSale.create.aiWorking',
-            'Analyzing your images…'
-          )}
-        />
-      )}
+      <Portal>
+        <Backdrop
+          open={sugLoading}
+          sx={(theme) => ({
+            zIndex: theme.zIndex.modal + 1,
+            flexDirection: 'column',
+            gap: 2,
+            backdropFilter: 'blur(6px)',
+          })}
+        >
+          <Box
+            role="status"
+            aria-live="polite"
+            aria-busy={sugLoading}
+            sx={{ px: 2, maxWidth: 440, width: '100%' }}
+          >
+            <ImageCleanupLoadingAnimation
+              minHeight={200}
+              message={t(
+                'business.onboarding.firstSale.create.aiWorking',
+                'Analyzing your images…'
+              )}
+            />
+          </Box>
+        </Backdrop>
+      </Portal>
       <TextField
         label={t('business.onboarding.firstSale.create.name', 'Name')}
         value={name}

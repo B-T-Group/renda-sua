@@ -1,12 +1,14 @@
 import { AutoAwesome as AutoAwesomeIcon } from '@mui/icons-material';
 import {
   Alert,
+  Backdrop,
   Box,
   Button,
   Chip,
   FormControl,
   InputLabel,
   MenuItem,
+  Portal,
   Select,
   Stack,
   TextField,
@@ -292,15 +294,32 @@ const FirstRentalItemCreateStep: React.FC<FirstRentalItemCreateStepProps> = ({
           'Fill details with AI'
         )}
       </Button>
-      {sugLoading && (
-        <ImageCleanupLoadingAnimation
-          minHeight={140}
-          message={t(
-            'business.onboarding.firstRental.create.aiWorking',
-            'Analyzing your image…'
-          )}
-        />
-      )}
+      <Portal>
+        <Backdrop
+          open={sugLoading}
+          sx={(theme) => ({
+            zIndex: theme.zIndex.modal + 1,
+            flexDirection: 'column',
+            gap: 2,
+            backdropFilter: 'blur(6px)',
+          })}
+        >
+          <Box
+            role="status"
+            aria-live="polite"
+            aria-busy={sugLoading}
+            sx={{ px: 2, maxWidth: 440, width: '100%' }}
+          >
+            <ImageCleanupLoadingAnimation
+              minHeight={200}
+              message={t(
+                'business.onboarding.firstRental.create.aiWorking',
+                'Analyzing your image…'
+              )}
+            />
+          </Box>
+        </Backdrop>
+      </Portal>
       {aiCategoryHint && (
         <Alert severity="info">
           {t(

@@ -106,8 +106,10 @@ export interface GoogleCacheConfig {
 }
 
 export interface OpenAIConfig {
-  /** Used for image cleanup/edits only (OpenAI Images API). */
+  /** Used for image cleanup/edits (OpenAI Images API) and chat completions when provider is OpenAI. */
   apiKey: string;
+  /** Chat model for `generateImageItemSuggestions` when `provider` is `openai`. */
+  chatModel: string;
 }
 
 export interface DeepseekConfig {
@@ -359,6 +361,7 @@ export default (): Configuration => {
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
+      chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
     },
     deepseek: {
       apiKey: process.env.DEEPSEEK_API_KEY || '',

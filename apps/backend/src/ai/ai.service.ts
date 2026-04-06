@@ -1,7 +1,10 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import type { ChatCompletionRequest } from './chat-completion.types';
+import type {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+} from './chat-completion.types';
 import { DeepseekService } from './deepseek.service';
 import { GenerateDescriptionDto } from './dto/generate-description.dto';
 
@@ -68,10 +71,15 @@ export interface RentalImageSuggestionResult {
   currency?: string | null;
 }
 
+/** LLM backend for {@link AiService.generateImageItemSuggestions}. Default: `openai`. */
+export type ImageItemSuggestionsProvider = 'openai' | 'deepseek';
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
+  private static readonly OPENAI_CHAT_COMPLETIONS_URL =
+    'https://api.openai.com/v1/chat/completions';
 
   constructor(
     private readonly configService: ConfigService,
@@ -335,6 +343,8 @@ export class AiService {
     altText?: string | null;
     defaultCurrency?: string;
     preferredLanguage?: string | null;
+    /** Defaults to `openai`. */
+    provider?: ImageItemSuggestionsProvider;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
@@ -412,8 +422,12 @@ The "description" field MUST be written in ${languageLabel}.
 Image URLs (analyze every image listed):
 ${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`;
 
+    const provider: ImageItemSuggestionsProvider = input.provider ?? 'openai';
     const request: ChatCompletionRequest = {
-      model: this.deepseekService.defaultChatModel,
+      model:
+        provider === 'openai'
+          ? this.getOpenAiItemSuggestionsModel()
+          : this.deepseekService.defaultChatModel,
       messages: [
         {
           role: 'system',
@@ -430,12 +444,12 @@ ${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`;
 
     try {
       this.logger.log(
-        `Generating image item suggestions for ${urls.length} image(s)`
+        `Generating image item suggestions (${provider}) for ${urls.length} image(s)`
       );
-      const response = await this.deepseekService.chatCompletions(
-        request,
-        40000
-      );
+      const response =
+        provider === 'openai'
+          ? await this.openAiChatCompletions(request, 40000)
+          : await this.deepseekService.chatCompletions(request, 40000);
 
       const rawContent = response.choices?.[0]?.message?.content;
       const contentString = this.messageContentToString(rawContent);
@@ -647,6 +661,50 @@ Do not include any text outside the JSON.`;
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private getOpenAiItemSuggestionsModel(): string {
+    return (
+      this.configService.get<string>('openai.chatModel')?.trim() ||
+      'gpt-4o-mini'
+    );
+  }
+
+  private requireOpenAiApiKey(): string {
+    const key = this.configService.get<string>('openai.apiKey')?.trim();
+    if (!key) {
+      this.logger.error('OPENAI_API_KEY not configured');
+      throw new HttpException(
+        'OpenAI API key not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return key;
+  }
+
+  private async openAiChatCompletions(
+    body: ChatCompletionRequest,
+    timeoutMs: number
+  ): Promise<ChatCompletionResponse> {
+    const apiKey = this.requireOpenAiApiKey();
+    const payload: ChatCompletionRequest = {
+      ...body,
+      model: body.model || this.getOpenAiItemSuggestionsModel(),
+    };
+    const { data } = await axios.post<ChatCompletionResponse>(
+      AiService.OPENAI_CHAT_COMPLETIONS_URL,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        timeout: timeoutMs,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+    return data;
   }
 
   private messageContentToString(raw: unknown): string {
