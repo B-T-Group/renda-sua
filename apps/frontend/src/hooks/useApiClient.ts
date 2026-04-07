@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { useCallback, useMemo } from 'react';
 import { environment } from '../config/environment';
 import { activePersonaHeaderForUser } from '../utils/activePersonaStorage';
@@ -7,9 +7,19 @@ import { useLoading } from '../contexts/LoadingContext';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useTokenRefresh } from '../contexts/TokenRefreshContext';
 
+/** AI cleanup can exceed the default axios 30s client timeout; force a longer limit. */
+function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
+  const url = config.url ?? '';
+  const method = (config.method ?? 'get').toLowerCase();
+  if (method === 'post' && url.includes('/cleanup')) {
+    config.timeout = environment.imageCleanupRequestTimeoutMs;
+  }
+}
+
 /** Avoid stacking the global LoadingScreen on flows that already show inline loading. */
 function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   if (!url) return false;
+  if (url.includes('/cleanup')) return true;
   const substrings = [
     '/users/me',
     '/auth/email-availability',
@@ -89,6 +99,8 @@ export const useApiClient = (): AxiosInstance => {
         // Not authenticated, use anonymous role
         config.headers['X-Hasura-Role'] = 'anonymous';
       }
+
+      applyImageCleanupTimeout(config);
 
       if (showLoading && !shouldSkipGlobalLoadingForUrl(config.url)) {
         showLoading();
