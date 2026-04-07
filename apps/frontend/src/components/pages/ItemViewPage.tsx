@@ -32,12 +32,14 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import axios from 'axios';
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useAws } from '../../hooks/useAws';
 import { useBusinessImages } from '../../hooks/useBusinessImages';
 import {
   BusinessInventoryItem,
@@ -48,11 +50,23 @@ import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
+import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
 
 // Type for business_inventories from Item interface
 type ItemBusinessInventory = NonNullable<Item['business_inventories']>[0];
+
+function cleanedPngB64ToFile(b64: string): File {
+  const byteCharacters = atob(b64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  return new File([new Uint8Array(byteNumbers)], 'cleaned-image.png', {
+    type: 'image/png',
+  });
+}
 
 export default function ItemViewPage() {
   const { t } = useTranslation();
@@ -79,7 +93,22 @@ export default function ItemViewPage() {
   );
 
   const { enqueueSnackbar } = useSnackbar();
-  const { setImageAsMain, submitting: imageMainBusy } = useBusinessImages();
+  const {
+    setImageAsMain,
+    cleanupImage,
+    updateImage,
+    submitting: imageActionsBusy,
+  } = useBusinessImages();
+  const { generateImageUploadUrl } = useAws();
+
+  const bucketName = useMemo(
+    () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
+    []
+  );
+
+  const [imageToCleanup, setImageToCleanup] = useState<ItemImage | null>(null);
+  const [cleanedB64, setCleanedB64] = useState<string | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   const {
     fetchSingleItem,
@@ -299,6 +328,110 @@ export default function ItemViewPage() {
     },
     [enqueueSnackbar, fetchItemDetails, setImageAsMain, t]
   );
+
+  const uploadFileToS3 = useCallback(
+    async (file: File) => {
+      const presigned = await generateImageUploadUrl({
+        bucketName,
+        originalFileName: file.name,
+        contentType: file.type,
+        prefix: `businesses/${profile?.business?.id || 'unknown'}/images`,
+      });
+      if (!presigned?.success || !presigned.data) {
+        throw new Error(
+          t(
+            'business.images.upload.presignError',
+            'Failed to prepare image upload'
+          )
+        );
+      }
+      await axios.put(presigned.data.url, file, {
+        headers: { 'Content-Type': file.type },
+      });
+      const imageUrl = `https://${bucketName}.s3.amazonaws.com/${presigned.data.key}`;
+      return {
+        image_url: imageUrl,
+        s3_key: presigned.data.key,
+        file_size: file.size,
+        format: file.type,
+      };
+    },
+    [bucketName, generateImageUploadUrl, profile?.business?.id, t]
+  );
+
+  useEffect(() => {
+    if (!imageToCleanup) return;
+    let cancelled = false;
+    cleanupImage(imageToCleanup.id).then((result) => {
+      if (!cancelled && result?.b64_json) {
+        setCleanedB64(result.b64_json);
+      }
+      if (!cancelled) setCleanupLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageToCleanup, cleanupImage]);
+
+  const handleOpenItemImageCleanup = useCallback(
+    (img: ItemImage) => {
+      if (img.is_ai_cleaned) {
+        enqueueSnackbar(
+          t(
+            'business.images.cleanup.alreadyCleaned',
+            'Image was already cleaned with AI'
+          ),
+          { variant: 'info' }
+        );
+        return;
+      }
+      setImageToCleanup(img);
+      setCleanedB64(null);
+      setCleanupLoading(true);
+    },
+    [enqueueSnackbar, t]
+  );
+
+  const handleCleanupAccept = useCallback(async () => {
+    if (!imageToCleanup || !cleanedB64) return;
+    try {
+      const file = cleanedPngB64ToFile(cleanedB64);
+      const uploaded = await uploadFileToS3(file);
+      await updateImage(imageToCleanup.id, {
+        ...uploaded,
+        is_ai_cleaned: true,
+      });
+      enqueueSnackbar(
+        t(
+          'business.images.cleanup.success',
+          'Image replaced with cleaned version'
+        ),
+        { variant: 'success' }
+      );
+      setImageToCleanup(null);
+      setCleanedB64(null);
+      await fetchItemDetails();
+    } catch (e: any) {
+      enqueueSnackbar(
+        e?.message ||
+          t('business.images.cleanup.error', 'Failed to cleanup image'),
+        { variant: 'error' }
+      );
+    }
+  }, [
+    cleanedB64,
+    enqueueSnackbar,
+    fetchItemDetails,
+    imageToCleanup,
+    t,
+    updateImage,
+    uploadFileToS3,
+  ]);
+
+  const handleCleanupReject = useCallback(() => {
+    setImageToCleanup(null);
+    setCleanedB64(null);
+  }, []);
 
   useEffect(() => {
     if (imageLightboxIndex === null) return undefined;
@@ -1195,13 +1328,33 @@ export default function ItemViewPage() {
                               <Button
                                 size="small"
                                 variant="outlined"
-                                disabled={imageMainBusy}
+                                disabled={imageActionsBusy}
                                 onClick={() => void handleSetImageAsMain(image.id)}
                                 sx={{ mb: 1 }}
                               >
                                 {t(
                                   'business.items.setAsMainImage',
                                   'Set as main image'
+                                )}
+                              </Button>
+                            ) : null}
+                            {profile?.business?.image_cleanup_enabled ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                fullWidth
+                                startIcon={<AutoFixHighIcon />}
+                                onClick={() =>
+                                  handleOpenItemImageCleanup(image)
+                                }
+                                disabled={
+                                  imageActionsBusy || !!image.is_ai_cleaned
+                                }
+                                sx={{ mb: 1 }}
+                              >
+                                {t(
+                                  'business.images.actions.cleanup',
+                                  'Cleanup picture'
                                 )}
                               </Button>
                             ) : null}
@@ -1393,6 +1546,19 @@ export default function ItemViewPage() {
           fetchItemDetails();
         }}
         updateItem={updateItem}
+      />
+
+      <ImageCleanupPreviewDialog
+        open={imageToCleanup != null}
+        onClose={() => {
+          setImageToCleanup(null);
+          setCleanedB64(null);
+        }}
+        originalUrl={imageToCleanup?.image_url ?? ''}
+        cleanedB64={cleanedB64}
+        loading={cleanupLoading}
+        onAccept={() => void handleCleanupAccept()}
+        onReject={handleCleanupReject}
       />
     </Container>
   );

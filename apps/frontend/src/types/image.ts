@@ -10,6 +10,7 @@ export interface ItemImage {
   caption?: string;
   display_order?: number;
   uploaded_by?: string;
+  is_ai_cleaned?: boolean;
   created_at: string;
   updated_at?: string;
 }

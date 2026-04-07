@@ -60,6 +60,7 @@ const GET_ITEMS = `
         image_type
         alt_text
         display_order
+        is_ai_cleaned
         created_at
       }
       item_tags {
@@ -170,6 +171,7 @@ const GET_SINGLE_ITEM = `
         image_type
         alt_text
         display_order
+        is_ai_cleaned
         created_at
       }
       item_tags {
