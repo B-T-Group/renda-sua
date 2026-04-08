@@ -27,7 +27,10 @@ import type {
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import type { MobilePaymentTransaction } from './mobile-payments-database.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
-import type { MobileTransactionStatus } from './mobile-payments.service';
+import type {
+  MobilePaymentIntegrationProvider,
+  MobileTransactionStatus,
+} from './mobile-payments.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 
 @ApiTags('admin-mobile-payments')
@@ -82,7 +85,7 @@ export class AdminMobilePaymentsController {
       throw new BadRequestException('Transaction has no provider transaction_id');
     }
 
-    let provider: 'mypvit' | 'freemopay';
+    let provider: MobilePaymentIntegrationProvider;
     try {
       provider = this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
@@ -91,7 +94,7 @@ export class AdminMobilePaymentsController {
     } catch (error: any) {
       if (error?.message === 'UNSUPPORTED_INTEGRATION_PROVIDER') {
         throw new BadRequestException(
-          'Cannot determine integration provider (add customer_phone or use mypvit/freemopay)'
+          'Cannot determine integration provider (add customer_phone or use mypvit/freemopay/mtn/orange)'
         );
       }
       throw error;
@@ -138,7 +141,7 @@ export class AdminMobilePaymentsController {
       );
     }
 
-    let provider: 'mypvit' | 'freemopay';
+    let provider: MobilePaymentIntegrationProvider;
     try {
       provider = this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
@@ -147,7 +150,7 @@ export class AdminMobilePaymentsController {
     } catch (error: any) {
       if (error?.message === 'UNSUPPORTED_INTEGRATION_PROVIDER') {
         throw new BadRequestException(
-          'Cannot determine integration provider (add customer_phone or use mypvit/freemopay)'
+          'Cannot determine integration provider (add customer_phone or use mypvit/freemopay/mtn/orange)'
         );
       }
       throw error;

@@ -33,7 +33,7 @@ export interface InitiatePaymentDto {
   customerEmail?: string;
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'freemopay';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
@@ -234,7 +234,10 @@ export class MobilePaymentsController {
       if (
         isMobileMoney &&
         paymentRequest.currency !== 'XAF' &&
-        (resolvedProvider === 'mypvit' || resolvedProvider === 'freemopay')
+        (resolvedProvider === 'mypvit' ||
+          resolvedProvider === 'freemopay' ||
+          resolvedProvider === 'mtn' ||
+          resolvedProvider === 'orange')
       ) {
         throw new HttpException(
           {

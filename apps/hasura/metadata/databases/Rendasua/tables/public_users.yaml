@@ -72,6 +72,15 @@ array_relationships:
         remote_table:
           name: mtn_momo_payment_requests
           schema: public
+  - name: orange_momo_payment_requests
+    using:
+      manual_configuration:
+        column_mapping:
+          id: user_id
+        insertion_order: null
+        remote_table:
+          name: orange_momo_payment_requests
+          schema: public
   - name: order_status_history
     using:
       manual_configuration:

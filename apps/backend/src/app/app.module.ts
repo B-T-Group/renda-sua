@@ -30,6 +30,8 @@ import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
+import { OrangeMomoController } from '../orange-momo/orange-momo.controller';
+import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
@@ -98,6 +100,7 @@ import { AppService } from './app.service';
     AgentsModule,
     AwsModule,
     MtnMomoModule,
+    OrangeMomoModule,
     MobilePaymentsModule,
     GoogleModule,
     AdminModule,
@@ -114,7 +117,12 @@ import { AppService } from './app.service';
     DeliveryModule,
     SupportModule,
   ],
-  controllers: [AppController, AccountsController, MtnMomoController],
+  controllers: [
+    AppController,
+    AccountsController,
+    MtnMomoController,
+    OrangeMomoController,
+  ],
   providers: [
     AppService,
     {

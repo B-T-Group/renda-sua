@@ -68,6 +68,24 @@ export interface MtnMomoConfig {
   callbackUrl?: string;
 }
 
+/** Orange Money Core APIs (api-s1.orange.cm) — OAuth + Core X-AUTH-TOKEN. */
+export interface OrangeMomoConfig {
+  baseUrl: string;
+  oauthTokenUrl: string;
+  /** `password` (username/password in body) or `client_credentials` (body only grant_type). */
+  oauthGrantType: 'password' | 'client_credentials';
+  customerKey: string;
+  customerSecret: string;
+  apiUsername: string;
+  apiPassword: string;
+  /** Partner channel short MSISDN for mpPay. */
+  channelMsisdn: string;
+  /** Public URL Orange calls for mp notifications (e.g. https://dev.api.rendasua.com/api/orange-momo/webhook). */
+  callbackUrl: string;
+  /** Merchant channel PIN for mp/cash-in/cash-out; defaults to `2222` if unset. */
+  channelPin: string;
+}
+
 export interface AirtelMoneyConfig {
   clientId?: string;
   clientSecret?: string;
@@ -190,6 +208,7 @@ export interface Configuration {
   redis: RedisConfig;
   externalApi: ExternalApiConfig;
   mtnMomo: MtnMomoConfig;
+  orangeMomo: OrangeMomoConfig;
   airtelMoney: AirtelMoneyConfig;
   mypvit: MyPVitConfig;
   freemopay: FreemopayConfig;
@@ -338,6 +357,29 @@ export default (): Configuration => {
       remittanceSecondaryKey:
         process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY || '',
       callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
+    },
+    orangeMomo: {
+      baseUrl:
+        process.env.ORANGE_MOMO_BASE_URL ||
+        'https://api-s1.orange.cm/omcoreapis/1.0.2',
+      oauthTokenUrl:
+        process.env.ORANGE_MOMO_OAUTH_TOKEN_URL ||
+        'https://api-s1.orange.cm/token',
+      oauthGrantType:
+        process.env.ORANGE_MOMO_OAUTH_GRANT_TYPE === 'client_credentials'
+          ? 'client_credentials'
+          : 'password',
+      customerKey: process.env.ORANGE_MOMO_CUSTOMER_KEY || '',
+      customerSecret: process.env.ORANGE_MOMO_CUSTOMER_SECRET || '',
+      apiUsername: process.env.ORANGE_MOMO_API_USERNAME || '',
+      apiPassword: process.env.ORANGE_MOMO_API_PASSWORD || '',
+      channelMsisdn: process.env.ORANGE_MOMO_CHANNEL_MSISDN || '',
+      callbackUrl:
+        process.env.ORANGE_MOMO_CALLBACK_URL ||
+        (process.env.API_BASE_URL
+          ? `${process.env.API_BASE_URL.replace(/\/$/, '')}/api/orange-momo/webhook`
+          : ''),
+      channelPin: process.env.ORANGE_MOMO_CHANNEL_PIN || '2222',
     },
     order: {
       paymentTimeoutWaitMinutes: parseInt(

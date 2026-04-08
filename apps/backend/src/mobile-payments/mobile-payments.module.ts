@@ -3,6 +3,7 @@ import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
+import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { RentalsModule } from '../rentals/rentals.module';
 import { AdminMobilePaymentsController } from './admin-mobile-payments.controller';
 import { GiveChangePayoutService } from './give-change-payout.service';
@@ -17,6 +18,7 @@ import { MyPVitService } from './providers/mypvit.service';
   imports: [
     forwardRef(() => RentalsModule),
     MtnMomoModule,
+    OrangeMomoModule,
     AdminModule,
     AuthModule,
     HasuraModule,

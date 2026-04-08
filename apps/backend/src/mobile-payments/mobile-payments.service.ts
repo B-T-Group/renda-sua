@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as libphonenumber from 'google-libphonenumber';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
+import type { OrangeCollectionRequest } from '../orange-momo/orange-momo.types';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
@@ -196,8 +200,12 @@ export interface PaymentProvider {
   isAvailable: boolean;
 }
 
-/** Integration used for persistence and API responses (only two backends). */
-export type MobilePaymentIntegrationProvider = 'freemopay' | 'mypvit';
+/** Integration used for persistence and API responses. */
+export type MobilePaymentIntegrationProvider =
+  | 'freemopay'
+  | 'mypvit'
+  | 'mtn'
+  | 'orange';
 
 @Injectable()
 export class MobilePaymentsService {
@@ -207,6 +215,9 @@ export class MobilePaymentsService {
   constructor(
     private readonly myPVitService: MyPVitService,
     private readonly mtnMomoService: MtnMomoService,
+    private readonly mtnMomoDatabaseService: MtnMomoDatabaseService,
+    private readonly orangeMomoService: OrangeMomoService,
+    private readonly orangeMomoDatabaseService: OrangeMomoDatabaseService,
     private readonly freemopayService: FreemopayService
   ) {
     // Register payment providers
@@ -238,7 +249,12 @@ export class MobilePaymentsService {
       return this.getProvider(customerPhone);
     }
     const p = storedProvider?.toLowerCase();
-    if (p === 'mypvit' || p === 'freemopay') {
+    if (
+      p === 'mypvit' ||
+      p === 'freemopay' ||
+      p === 'mtn' ||
+      p === 'orange'
+    ) {
       return p;
     }
     throw new Error('UNSUPPORTED_INTEGRATION_PROVIDER');
@@ -407,6 +423,21 @@ export class MobilePaymentsService {
           };
           break;
         }
+        case 'orange': {
+          const orangeResponse = await this.orangeMomoService.requestToPay(
+            providerRequest as OrangeCollectionRequest,
+            userId || ''
+          );
+          response = {
+            success: orangeResponse.status,
+            transactionId: orangeResponse.financialTransactionId,
+            paymentUrl: '',
+            message: orangeResponse.error,
+            errorCode: orangeResponse.error,
+            provider: 'orange',
+          };
+          break;
+        }
         default:
           return {
             success: false,
@@ -480,6 +511,42 @@ export class MobilePaymentsService {
           };
           break;
         }
+        case 'mtn': {
+          const mtnStatus =
+            await this.mtnMomoService.requestToPayDeliveryNotification(
+              transactionId
+            );
+          const raw = mtnStatus.statusCode?.toUpperCase() || '';
+          status = {
+            transactionId,
+            status: this.mapMtnCollectionStatusToMobile(raw),
+            amount: parseFloat(mtnStatus.amount || '0'),
+            currency: mtnStatus.currency || 'XAF',
+            reference: mtnStatus.externalId || '',
+            message: mtnStatus.statusMessage || mtnStatus.error,
+            provider: 'mtn',
+          };
+          break;
+        }
+        case 'orange': {
+          const orangeRes =
+            await this.orangeMomoService.getMpPaymentStatus(transactionId);
+          if (!orangeRes.success || !orangeRes.data) {
+            throw new Error(orangeRes.error || 'Orange status check failed');
+          }
+          const entity = orangeRes.data.data;
+          const raw = `${entity?.status ?? ''} ${entity?.confirmtxnstatus ?? ''}`;
+          status = {
+            transactionId,
+            status: this.mapOrangeMpStatusToMobile(raw),
+            amount: entity?.amount ?? 0,
+            currency: 'XAF',
+            reference: entity?.payToken || transactionId,
+            message: entity?.confirmtxnmessage || entity?.inittxnmessage,
+            provider: 'orange',
+          };
+          break;
+        }
         default:
           throw new Error(`Unsupported payment provider: ${paymentProvider}`);
       }
@@ -492,6 +559,37 @@ export class MobilePaymentsService {
       this.logger.error('Failed to check transaction status:', error);
       throw error;
     }
+  }
+
+  private mapMtnCollectionStatusToMobile(
+    raw: string
+  ): MobileTransactionStatus['status'] {
+    switch (raw) {
+      case 'SUCCESSFUL':
+        return 'success';
+      case 'FAILED':
+      case 'REJECTED':
+        return 'failed';
+      case 'CANCELLED':
+        return 'cancelled';
+      case 'PENDING':
+      default:
+        return 'pending';
+    }
+  }
+
+  private mapOrangeMpStatusToMobile(raw: string): MobileTransactionStatus['status'] {
+    const u = raw.toUpperCase();
+    if (u.includes('SUCCESS') || u.includes('COMPLETE')) {
+      return 'success';
+    }
+    if (u.includes('FAIL') || u.includes('REJECT')) {
+      return 'failed';
+    }
+    if (u.includes('CANCEL')) {
+      return 'cancelled';
+    }
+    return 'pending';
   }
 
   private mapMypvitStatusToMobile(
@@ -760,6 +858,12 @@ export class MobilePaymentsService {
   resolveProviderFromRequest(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider'>
   ): MobilePaymentIntegrationProvider {
+    if (request.provider === 'mtn') {
+      return 'mtn';
+    }
+    if (request.provider === 'orange') {
+      return 'orange';
+    }
     if (request.customerPhone) {
       const res = detectCameroonPhone(request.customerPhone);
       if (res) {
@@ -776,6 +880,12 @@ export class MobilePaymentsService {
    * Route to the correct SDK: CM -> freemopay; explicit mtn -> MTN MoMo; else MyPVit (airtel/moov/mypvit/…).
    */
   private selectProvider(request: MobilePaymentRequest): string {
+    if (request.provider === 'mtn') {
+      return 'mtn';
+    }
+    if (request.provider === 'orange') {
+      return 'orange';
+    }
     if (request.customerPhone) {
       const res = detectCameroonPhone(request.customerPhone);
       if (res) {
@@ -784,9 +894,6 @@ export class MobilePaymentsService {
     }
     if (request.provider === 'freemopay') {
       return 'freemopay';
-    }
-    if (request.provider === 'mtn') {
-      return 'mtn';
     }
     return 'mypvit';
   }
@@ -800,6 +907,7 @@ export class MobilePaymentsService {
     reference?: string
   ):
     | CollectionRequest
+    | OrangeCollectionRequest
     | MyPVitPaymentRequest
     | FreemopayPaymentRequest
     | FreemopayWithdrawalRequest {
@@ -855,6 +963,19 @@ export class MobilePaymentsService {
           payeeNote: request.description,
         } as CollectionRequest;
       }
+      case 'orange': {
+        return {
+          amount: amount.toString(),
+          currency: request.currency.toUpperCase(),
+          externalId: reference || '',
+          payer: {
+            partyIdType: 'MSISDN',
+            partyId: phoneNumber,
+          },
+          payerMessage: request.description,
+          payeeNote: request.description,
+        } as OrangeCollectionRequest;
+      }
       default:
         throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -864,6 +985,28 @@ export class MobilePaymentsService {
    * Detect provider from transaction ID
    */
   private async detectProvider(transactionId: string): Promise<string | null> {
+    try {
+      const mtnRow =
+        await this.mtnMomoDatabaseService.getPaymentRequestByTransactionId(
+          transactionId
+        );
+      if (mtnRow) {
+        return 'mtn';
+      }
+    } catch {
+      // ignore lookup errors
+    }
+    try {
+      const orangeRow =
+        await this.orangeMomoDatabaseService.getPaymentRequestByTransactionId(
+          transactionId
+        );
+      if (orangeRow) {
+        return 'orange';
+      }
+    } catch {
+      // ignore lookup errors
+    }
     try {
       await this.freemopayService.checkTransactionStatus(transactionId);
       return 'freemopay';

@@ -1,0 +1,198 @@
+table:
+  name: orange_momo_payment_requests
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+insert_permissions:
+  - role: agent
+    permission:
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+  - role: business
+    permission:
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+  - role: client
+    permission:
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+  - role: user
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - id
+        - user_id
+        - transaction_id
+        - external_id
+        - amount
+        - currency
+        - status
+        - payer_message
+        - payee_note
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+update_permissions:
+  - role: agent
+    permission:
+      columns:
+        - status
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - status
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - status
+        - updated_at
+      filter:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+      check:
+        user:
+          id:
+            _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - status
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
