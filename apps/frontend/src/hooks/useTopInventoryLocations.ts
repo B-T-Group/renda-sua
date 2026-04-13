@@ -5,17 +5,20 @@ import {
   INVENTORY_ANONYMOUS_COUNTRY_CODES,
 } from './useInventoryItems';
 import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
+import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 
 export interface TopInventoryLocationRow {
   id: string;
   name: string;
   logo_url: string | null;
   item_count: number;
+  distance_meters?: number | null;
 }
 
 export function useTopInventoryLocations(options: {
   limit?: number;
   include_unavailable?: boolean;
+  anonymousOrigin?: PublicBrowserGeo | null;
 }) {
   const { isAuthenticated } = useAuth0();
   const api = useApiClient();
@@ -25,6 +28,7 @@ export function useTopInventoryLocations(options: {
 
   const limit = options.limit ?? 5;
   const includeUnavailable = options.include_unavailable ?? false;
+  const anonymousOrigin = options.anonymousOrigin;
 
   const fetchTop = useCallback(async () => {
     setLoading(true);
@@ -49,6 +53,10 @@ export function useTopInventoryLocations(options: {
           limit,
           ...(country_code && { country_code }),
           include_unavailable: includeUnavailable,
+          ...(anonymousOrigin && {
+            origin_lat: anonymousOrigin.lat,
+            origin_lng: anonymousOrigin.lng,
+          }),
         },
       });
       if (!data.success) {
@@ -62,7 +70,7 @@ export function useTopInventoryLocations(options: {
     } finally {
       setLoading(false);
     }
-  }, [api, isAuthenticated, limit, includeUnavailable]);
+  }, [api, isAuthenticated, limit, includeUnavailable, anonymousOrigin]);
 
   useEffect(() => {
     void fetchTop();

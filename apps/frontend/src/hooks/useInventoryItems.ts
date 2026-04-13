@@ -114,6 +114,7 @@ export interface GetInventoryItemsQuery {
   sort?: InventorySortMode;
   include_unavailable?: boolean;
   business_location_id?: string;
+  anonymousOrigin?: { lat: number; lng: number } | null;
 }
 
 export interface PaginatedInventoryItems {
@@ -198,6 +199,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.business_location_id?.trim() && {
             business_location_id: query.business_location_id.trim(),
           }),
+          ...(!isAuthenticated &&
+            query.anonymousOrigin && {
+              origin_lat: query.anonymousOrigin.lat,
+              origin_lng: query.anonymousOrigin.lng,
+            }),
         },
         signal: controller.signal,
       });
@@ -251,6 +257,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.sort,
     query.include_unavailable,
     query.business_location_id,
+    query.anonymousOrigin?.lat,
+    query.anonymousOrigin?.lng,
   ]);
 
   useEffect(() => {

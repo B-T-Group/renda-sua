@@ -115,6 +115,9 @@ export interface GetInventoryItemsQuery {
   include_unavailable?: boolean;
   /** When set, only inventory rows for this business location (UUID). */
   business_location_id?: string;
+  /** Anonymous client approximate location (browser) for distance enrichment. */
+  origin_lat?: number;
+  origin_lng?: number;
 }
 
 export interface TopInventoryLocationRow {
@@ -122,6 +125,8 @@ export interface TopInventoryLocationRow {
   name: string;
   logo_url: string | null;
   item_count: number;
+  /** Straight-line distance in meters when origin coordinates are available. */
+  distance_meters?: number | null;
 }
 
 export interface PaginatedInventoryItems {
@@ -135,6 +140,44 @@ export interface PaginatedInventoryItems {
 const INVENTORY_DISTANCE_CACHE_TTL = 7776000; // 3 months in seconds
 /** Cap rows scanned to rank locations by item count (avoids unbounded reads). */
 const TOP_LOCATIONS_INVENTORY_SCAN_LIMIT = 20000;
+
+function haversineMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function parseOptionalLatLng(
+  lat?: number,
+  lng?: number
+): { lat: number; lng: number } | null {
+  if (
+    lat === undefined ||
+    lng === undefined ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return null;
+  }
+  return { lat, lng };
+}
 
 @Injectable()
 export class InventoryItemsService {
@@ -293,30 +336,42 @@ export class InventoryItemsService {
     return { where };
   }
 
-  /**
-   * Top business locations by number of catalog inventory rows (same visibility rules as list).
-   */
-  async getTopInventoryLocations(
-    limit = 5,
-    query: Pick<
-      GetInventoryItemsQuery,
-      'country_code' | 'state' | 'is_active' | 'include_unavailable'
-    > = {}
-  ): Promise<TopInventoryLocationRow[]> {
-    const take = Math.min(Math.max(limit, 1), 20);
-    const { country_code, state } = await this.resolveInventoryListGeo(query);
-    const is_active = query.is_active !== undefined ? query.is_active : true;
-    const include_unavailable = query.include_unavailable ?? false;
-    const built = await this.buildInventoryCatalogWhere({
-      is_active,
-      include_unavailable,
-      country_code,
-      state,
-    });
-    if ('unsupported' in built) {
-      return [];
+  private async resolveTopLocationsOrigin(query: {
+    origin_lat?: number;
+    origin_lng?: number;
+  }): Promise<{ lat: number; lng: number } | null> {
+    try {
+      const addr = await this.addressesService.getCurrentUserPrimaryAddress();
+      if (!addr) {
+        return parseOptionalLatLng(query.origin_lat, query.origin_lng);
+      }
+      if (addr.latitude != null && addr.longitude != null) {
+        return parseOptionalLatLng(
+          Number(addr.latitude),
+          Number(addr.longitude)
+        );
+      }
+      const line = this.formatAddressForGoogle({
+        address_line_1: addr.address_line_1,
+        address_line_2: addr.address_line_2 ?? undefined,
+        city: addr.city,
+        state: addr.state,
+        postal_code: addr.postal_code,
+        country: addr.country,
+      });
+      const geo = await this.googleDistanceService.geocode(line);
+      return geo ? { lat: geo.latitude, lng: geo.longitude } : null;
+    } catch (error: any) {
+      this.logger.debug(
+        `Top locations user origin skipped: ${error?.message ?? error}`
+      );
+      return parseOptionalLatLng(query.origin_lat, query.origin_lng);
     }
-    const { where } = built;
+  }
+
+  private async countInventoryRowsByLocation(
+    where: Record<string, unknown>
+  ): Promise<Map<string, number>> {
     const scanQuery = `
       query ScanLocIds($where: business_inventory_bool_exp!, $lim: Int!) {
         business_inventory(where: $where, limit: $lim) {
@@ -335,36 +390,146 @@ export class InventoryItemsService {
       const id = r.business_location_id;
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
-    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-    const topPairs = sorted.slice(0, take);
-    if (topPairs.length === 0) {
-      return [];
-    }
-    const ids = topPairs.map(([id]) => id);
+    return counts;
+  }
+
+  private async fetchTopStripLocationsByIds(ids: string[]): Promise<
+    Map<
+      string,
+      {
+        id: string;
+        name: string;
+        logo_url: string | null;
+        address?: { latitude?: number | null; longitude?: number | null } | null;
+      }
+    >
+  > {
     const locQuery = `
       query TopLocDetails($ids: [uuid!]!) {
         business_locations(where: { id: { _in: $ids } }) {
           id
           name
           logo_url
+          address {
+            latitude
+            longitude
+          }
         }
       }
     `;
     const locRes = await this.hasuraSystemService.executeQuery(locQuery, {
       ids,
     });
-    const locRows: Array<{ id: string; name: string; logo_url?: string | null }> =
-      locRes.business_locations ?? [];
-    const byId = new Map(locRows.map((l) => [l.id, l]));
-    return topPairs.map(([id, item_count]) => {
+    const locRows: Array<{
+      id: string;
+      name: string;
+      logo_url?: string | null;
+      address?: { latitude?: number | null; longitude?: number | null } | null;
+    }> = locRes.business_locations ?? [];
+    return new Map(locRows.map((l) => [l.id, { ...l, logo_url: l.logo_url ?? null }]));
+  }
+
+  private scoreTopLocationsByDistance(
+    counts: Map<string, number>,
+    byId: Map<
+      string,
+      { address?: { latitude?: number | null; longitude?: number | null } | null }
+    >,
+    origin: { lat: number; lng: number } | null
+  ): Array<{
+    id: string;
+    item_count: number;
+    distance_meters: number | null;
+  }> {
+    return [...counts.keys()].map((id) => {
+      const loc = byId.get(id);
+      let distance_meters: number | null = null;
+      if (origin && loc?.address) {
+        const lat = loc.address.latitude;
+        const lng = loc.address.longitude;
+        if (lat != null && lng != null) {
+          distance_meters = haversineMeters(
+            origin.lat,
+            origin.lng,
+            Number(lat),
+            Number(lng)
+          );
+        }
+      }
+      return {
+        id,
+        item_count: counts.get(id) ?? 0,
+        distance_meters,
+      };
+    });
+  }
+
+  private rankTopLocationsByOrigin(
+    counts: Map<string, number>,
+    byId: Map<
+      string,
+      {
+        name: string;
+        logo_url: string | null;
+        address?: { latitude?: number | null; longitude?: number | null } | null;
+      }
+    >,
+    origin: { lat: number; lng: number } | null,
+    take: number
+  ): TopInventoryLocationRow[] {
+    const scored = this.scoreTopLocationsByDistance(counts, byId, origin);
+    if (origin) {
+      scored.sort((a, b) => {
+        const da = a.distance_meters ?? Infinity;
+        const db = b.distance_meters ?? Infinity;
+        if (da !== db) return da - db;
+        return b.item_count - a.item_count;
+      });
+    } else {
+      scored.sort((a, b) => b.item_count - a.item_count);
+    }
+    return scored.slice(0, take).map(({ id, item_count, distance_meters }) => {
       const loc = byId.get(id);
       return {
         id,
         name: loc?.name ?? '',
         logo_url: loc?.logo_url ?? null,
         item_count,
+        distance_meters:
+          origin && distance_meters != null ? distance_meters : null,
       };
     });
+  }
+
+  /**
+   * Nearest catalog locations when origin is known; otherwise top by item count.
+   */
+  async getTopInventoryLocations(
+    limit = 5,
+    query: Pick<
+      GetInventoryItemsQuery,
+      | 'country_code'
+      | 'state'
+      | 'is_active'
+      | 'include_unavailable'
+      | 'origin_lat'
+      | 'origin_lng'
+    > = {}
+  ): Promise<TopInventoryLocationRow[]> {
+    const take = Math.min(Math.max(limit, 1), 20);
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: query.is_active !== undefined ? query.is_active : true,
+      include_unavailable: query.include_unavailable ?? false,
+      country_code,
+      state,
+    });
+    if ('unsupported' in built) return [];
+    const counts = await this.countInventoryRowsByLocation(built.where);
+    if (counts.size === 0) return [];
+    const origin = await this.resolveTopLocationsOrigin(query);
+    const byId = await this.fetchTopStripLocationsByIds([...counts.keys()]);
+    return this.rankTopLocationsByOrigin(counts, byId, origin, take);
   }
 
   /**
@@ -562,7 +727,8 @@ export class InventoryItemsService {
       });
 
       const withDistance = await this.enrichWithDistanceOnly(
-        itemsWithViewsAndDeals
+        itemsWithViewsAndDeals,
+        parseOptionalLatLng(query.origin_lat, query.origin_lng)
       );
       const withRatings = await this.attachRatingAggregates(withDistance);
       const finalItems = await this.applySortByMode(
@@ -1122,15 +1288,29 @@ export class InventoryItemsService {
   }
 
   /**
-   * Enrich items with distance from user's primary address (no sort).
-   * Returns items unchanged on any error or when user has no primary address.
+   * Enrich items with distance from primary address or anonymous lat/lng (no sort).
    */
   private async enrichWithDistanceOnly(
-    items: InventoryItem[]
+    items: InventoryItem[],
+    anonymousOrigin: { lat: number; lng: number } | null
   ): Promise<InventoryItem[]> {
     try {
-      const origin = await this.addressesService.getCurrentUserPrimaryAddress();
-      if (!origin || items.length === 0) return items;
+      if (items.length === 0) return items;
+
+      const primary = await this.addressesService.getCurrentUserPrimaryAddress();
+      let originId: string;
+      let originFormatted: string;
+
+      if (primary) {
+        originId = primary.id;
+        originFormatted = this.formatAddressForGoogle(primary);
+      } else if (anonymousOrigin) {
+        const { lat, lng } = anonymousOrigin;
+        originId = `anon:${lat.toFixed(5)}:${lng.toFixed(5)}`;
+        originFormatted = `${lat},${lng}`;
+      } else {
+        return items;
+      }
 
       const destIds = Array.from(
         new Set(
@@ -1156,8 +1336,8 @@ export class InventoryItemsService {
 
       const matrix =
         await this.googleDistanceService.getDistanceMatrixWithCaching(
-          origin.id,
-          this.formatAddressForGoogle(origin),
+          originId,
+          originFormatted,
           destFormatted,
           { ttlSeconds: ttl }
         );

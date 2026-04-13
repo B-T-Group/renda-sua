@@ -32,6 +32,8 @@ interface GetInventoryItemsQueryParams {
   sort?: string;
   include_unavailable?: string;
   business_location_id?: string;
+  origin_lat?: string;
+  origin_lng?: string;
 }
 
 @ApiTags('Inventory Items')
@@ -43,7 +45,7 @@ export class InventoryItemsController {
   @Get('top-locations')
   @ApiOperation({
     summary:
-      'Top business locations by in-catalog item count (same rules as inventory list)',
+      'Nearest catalog locations when user address or origin_lat/origin_lng is available; otherwise ranked by item count',
   })
   @ApiQuery({
     name: 'limit',
@@ -63,22 +65,43 @@ export class InventoryItemsController {
     type: String,
     description: 'Optional state filter (with country_code)',
   })
+  @ApiQuery({
+    name: 'origin_lat',
+    required: false,
+    type: Number,
+    description:
+      'Browser latitude for nearest ranking (ignored when user has a primary address)',
+  })
+  @ApiQuery({
+    name: 'origin_lng',
+    required: false,
+    type: Number,
+    description:
+      'Browser longitude for nearest ranking (ignored when user has a primary address)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Top locations with item counts and optional logo_url',
+    description:
+      'Locations with item counts, optional logo_url, optional distance_meters',
   })
   async getTopInventoryLocations(
     @Query('limit') limit?: string,
     @Query('country_code') country_code?: string,
     @Query('state') state?: string,
     @Query('is_active') is_active?: string,
-    @Query('include_unavailable') include_unavailable?: string
+    @Query('include_unavailable') include_unavailable?: string,
+    @Query('origin_lat') origin_lat?: string,
+    @Query('origin_lng') origin_lng?: string
   ): Promise<{
     success: boolean;
     data: { locations: TopInventoryLocationRow[] };
     message: string;
   }> {
     const n = limit ? Math.min(parseInt(limit, 10) || 5, 20) : 5;
+    const lat =
+      origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
+    const lng =
+      origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
     const locations = await this.inventoryItemsService.getTopInventoryLocations(
       n,
       {
@@ -94,6 +117,8 @@ export class InventoryItemsController {
           include_unavailable !== undefined
             ? include_unavailable === 'true'
             : undefined,
+        ...(Number.isFinite(lat) && { origin_lat: lat }),
+        ...(Number.isFinite(lng) && { origin_lng: lng }),
       }
     );
     return {
@@ -225,6 +250,20 @@ export class InventoryItemsController {
     type: String,
     description: 'Filter to a single business location (UUID)',
   })
+  @ApiQuery({
+    name: 'origin_lat',
+    required: false,
+    type: Number,
+    description:
+      'Approximate latitude for distance (anonymous users; ignored when primary address exists)',
+  })
+  @ApiQuery({
+    name: 'origin_lng',
+    required: false,
+    type: Number,
+    description:
+      'Approximate longitude for distance (anonymous users; ignored when primary address exists)',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -247,6 +286,13 @@ export class InventoryItemsController {
           ? (sortParam as (typeof validSorts)[number])
           : undefined;
 
+      const oLat = query.origin_lat
+        ? Number.parseFloat(query.origin_lat)
+        : undefined;
+      const oLng = query.origin_lng
+        ? Number.parseFloat(query.origin_lng)
+        : undefined;
+
       const processedQuery: GetInventoryItemsQuery = {
         page: query.page ? Number(query.page) : undefined,
         limit: query.limit ? Number(query.limit) : undefined,
@@ -268,6 +314,8 @@ export class InventoryItemsController {
             ? query.include_unavailable === 'true'
             : undefined,
         business_location_id: query.business_location_id?.trim() || undefined,
+        ...(Number.isFinite(oLat) && { origin_lat: oLat }),
+        ...(Number.isFinite(oLng) && { origin_lng: oLng }),
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

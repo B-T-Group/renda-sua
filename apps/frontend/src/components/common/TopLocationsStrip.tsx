@@ -17,13 +17,13 @@ function LocationPill({
   selected,
   onSelect,
   unnamedLabel,
-  itemsLabel,
+  subtitle,
 }: {
   loc: TopInventoryLocationRow;
   selected: boolean;
   onSelect: () => void;
   unnamedLabel: string;
-  itemsLabel: (n: number) => string;
+  subtitle: string;
 }) {
   const theme = useTheme();
   const name = loc.name?.trim() || unnamedLabel;
@@ -134,7 +134,7 @@ function LocationPill({
               fontWeight: 500,
             }}
           >
-            {itemsLabel(loc.item_count)}
+            {subtitle}
           </Typography>
         </Box>
       </Box>
@@ -145,7 +145,7 @@ function LocationPill({
 function LoadingPills() {
   return (
     <>
-      {Array.from({ length: 5 }).map((_, i) => (
+      {Array.from({ length: 3 }).map((_, i) => (
         <Skeleton
           key={i}
           variant="rounded"
@@ -175,10 +175,32 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
     return null;
   }
 
-  const itemsLabel = (n: number) =>
+  const itemCountLabel = (n: number) =>
     t('public.items.topLocationsItemCount', '{{count}} items', {
       count: n,
     });
+
+  const locationSubtitle = (loc: TopInventoryLocationRow) => {
+    const itemPhrase = itemCountLabel(loc.item_count);
+    if (
+      loc.distance_meters != null &&
+      Number.isFinite(loc.distance_meters)
+    ) {
+      const km =
+        loc.distance_meters < 1000
+          ? (loc.distance_meters / 1000).toFixed(1)
+          : Math.round(loc.distance_meters / 1000).toString();
+      const distanceStr = t('public.items.topLocationsApproxKm', '~{{km}} km', {
+        km,
+      });
+      return t(
+        'public.items.topLocationsDistanceAndItems',
+        '{{distance}} · {{itemPhrase}}',
+        { distance: distanceStr, itemPhrase }
+      );
+    }
+    return itemPhrase;
+  };
 
   return (
     <Box
@@ -229,7 +251,7 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
         >
           {t(
             'public.items.topLocationsTitle',
-            'Popular locations by item count'
+            'Stores closest to you'
           )}
         </Typography>
       </Box>
@@ -257,7 +279,7 @@ const TopLocationsStrip: React.FC<TopLocationsStripProps> = ({
               selected={selectedId === loc.id}
               onSelect={() => onSelect({ id: loc.id, name: loc.name })}
               unnamedLabel={t('public.items.unnamedLocation', 'Store')}
-              itemsLabel={itemsLabel}
+              subtitle={locationSubtitle(loc)}
             />
           ))
         )}

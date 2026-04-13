@@ -30,6 +30,7 @@ import {
     InventorySortMode,
     useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTopInventoryLocations } from '../../hooks/useTopInventoryLocations';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import AddressAlert from '../common/AddressAlert';
@@ -82,10 +83,13 @@ const ItemsPage: React.FC = () => {
   );
   const itemsPerPage = 100;
 
+  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+
   const { locations: topLocations, loading: topLocationsLoading } =
     useTopInventoryLocations({
-      limit: 5,
+      limit: 3,
       include_unavailable: showUnavailable,
+      anonymousOrigin: browserGeo,
     });
 
   // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
@@ -96,6 +100,7 @@ const ItemsPage: React.FC = () => {
     sort,
     include_unavailable: showUnavailable,
     business_location_id: businessLocationId ?? undefined,
+    anonymousOrigin: browserGeo,
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)
@@ -453,7 +458,11 @@ const ItemsPage: React.FC = () => {
                 key={mode}
                 label={t(
                   `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
-                  mode === 'top_rated' ? 'Top rated' : mode
+                  mode === 'top_rated'
+                    ? 'Top rated'
+                    : mode === 'fastest'
+                      ? 'Closest to you'
+                      : mode
                 )}
                 onClick={() => setSort(mode)}
                 color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}

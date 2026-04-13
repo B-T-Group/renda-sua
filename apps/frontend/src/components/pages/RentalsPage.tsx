@@ -246,7 +246,7 @@ const RentalsPage: React.FC = () => {
                         {t('rentals.catalog.sortNewest', 'Recently updated')}
                       </MenuItem>
                       <MenuItem value="fastest">
-                        {t('rentals.catalog.sortFastest', 'Nearest first')}
+                        {t('rentals.catalog.sortFastest', 'Closest to you')}
                       </MenuItem>
                       <MenuItem value="cheapest">
                         {t('rentals.catalog.sortCheapest', 'Lowest price / day')}
