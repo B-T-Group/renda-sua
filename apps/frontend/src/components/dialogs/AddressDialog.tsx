@@ -51,6 +51,8 @@ interface AddressDialogProps {
   fullScreen?: boolean;
   /** When set, country is read-only and fixed to this value (e.g. business location = business primary address country). */
   readOnlyCountry?: string | null;
+  /** Nudge to use device location for delivery address accuracy. */
+  recommendCurrentLocation?: boolean;
   onClose: () => void;
   onSave: () => void;
   onAddressChange: (address: AddressFormData) => void;
@@ -70,6 +72,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   addressTypeOptions,
   fullScreen = false,
   readOnlyCountry = null,
+  recommendCurrentLocation = false,
   onClose,
   onSave,
   onAddressChange,
@@ -109,6 +112,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           hidePostalCode={hidePostalCode}
           addressTypeOptions={addressTypeOptions}
           readOnlyCountry={readOnlyCountry}
+          recommendCurrentLocation={recommendCurrentLocation}
           onAddressChange={onAddressChange}
         />
       </DialogContent>

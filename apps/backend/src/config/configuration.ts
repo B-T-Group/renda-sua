@@ -109,7 +109,7 @@ export interface Auth0Config {
 }
 
 export interface OrderConfig {
-  /** Minutes to wait before payment timeout cancellation (default 5). Used by wait-and-execute state machine. */
+  /** Minutes to wait before payment timeout cancellation (default 10). Used by wait-and-execute state machine. */
   paymentTimeoutWaitMinutes?: number;
 }
 
@@ -383,7 +383,7 @@ export default (): Configuration => {
     },
     order: {
       paymentTimeoutWaitMinutes: parseInt(
-        process.env.PAYMENT_TIMEOUT_WAIT_MINUTES || '5',
+        process.env.PAYMENT_TIMEOUT_WAIT_MINUTES || '10',
         10
       ),
     },

@@ -28,6 +28,8 @@ interface AddressFormProps {
   addressTypeOptions?: Array<{ value: string; label: string }>;
   /** When set, country is read-only and fixed to this value (e.g. business location = business primary address country). */
   readOnlyCountry?: string | null;
+  /** Show a hint to use geolocation for delivery accuracy (e.g. guest checkout address). */
+  recommendCurrentLocation?: boolean;
   onAddressChange: (address: AddressFormData) => void;
 }
 
@@ -41,6 +43,7 @@ const AddressForm: React.FC<AddressFormProps> = ({
   hidePostalCode = false,
   addressTypeOptions,
   readOnlyCountry = null,
+  recommendCurrentLocation = false,
   onAddressChange,
 }) => {
   const { t } = useTranslation();
@@ -379,6 +382,16 @@ const AddressForm: React.FC<AddressFormProps> = ({
     <>
       {/* Get Current Location Button */}
       <Box sx={{ mb: 3 }}>
+        {recommendCurrentLocation && (
+          <Alert severity="info" sx={{ mb: 2 }} icon={<LocationOnIcon />}>
+            <Typography variant="body2">
+              {t(
+                'addresses.recommendCurrentLocationForDelivery',
+                'For the most accurate delivery fee and route, use Get Current Location when you can—it fills your address automatically.'
+              )}
+            </Typography>
+          </Alert>
+        )}
         <Button
           variant="outlined"
           onClick={handleGetCurrentLocation}
@@ -455,6 +468,10 @@ const AddressForm: React.FC<AddressFormProps> = ({
             placeholder={t(
               'addresses.instructionsPlaceholder',
               'E.g. landmarks, building name, floor, or extra directions to help locate this address'
+            )}
+            helperText={t(
+              'addresses.addressDialog.instructionsHelper',
+              'A short note (landmark, building name or color, gate, floor, or who to ask) helps the delivery person find you faster—even though this field is optional.'
             )}
             value={addressData?.instructions || ''}
             onChange={(e) => handleInputChange('instructions', e.target.value)}

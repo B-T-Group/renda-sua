@@ -3115,6 +3115,7 @@ const PlaceOrderPage: React.FC = () => {
         hidePostalCode={addressDialogMode === 'anon'}
         showCoordinates={false}
         fullScreen={isMobile}
+        recommendCurrentLocation={addressDialogMode === 'anon'}
         onClose={handleCloseAddressDialog}
         onSave={handleSaveAddress}
         onAddressChange={handleAddressChange}

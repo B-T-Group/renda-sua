@@ -41,7 +41,7 @@ export class WaitAndExecuteScheduleService {
 
   /**
    * Schedule a wait-and-execute execution (e.g. payment timeout).
-   * Uses configurable waitMinutes from config (order.paymentTimeoutWaitMinutes, default 5).
+   * Uses configurable waitMinutes from config (order.paymentTimeoutWaitMinutes, default 10).
    * On failure, logs only; does not throw.
    */
   async schedulePaymentTimeout(
@@ -58,7 +58,7 @@ export class WaitAndExecuteScheduleService {
 
     const orderConfig = this.configService.get<Configuration['order']>('order');
     const minutes =
-      waitMinutes ?? orderConfig?.paymentTimeoutWaitMinutes ?? 5;
+      waitMinutes ?? orderConfig?.paymentTimeoutWaitMinutes ?? 10;
     const runAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
 
     const input = {

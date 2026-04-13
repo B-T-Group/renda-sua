@@ -145,6 +145,7 @@ const AnonAddressPage: React.FC = () => {
           showCoordinates={false}
           hideAddressLine2={true}
           hidePostalCode={true}
+          recommendCurrentLocation
           onAddressChange={setAddressFormData}
         />
         )}
