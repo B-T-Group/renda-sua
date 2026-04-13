@@ -26,6 +26,7 @@ export class CommissionsService {
       base_delivery_fee: number;
       per_km_delivery_fee: number;
       currency: string;
+      first_order_delivery_fee_promo?: boolean;
     },
     isAgentVerified: boolean,
     config: CommissionConfig
@@ -41,7 +42,8 @@ export class CommissionsService {
         order.base_delivery_fee,
         isAgentVerified,
         config,
-        [] // Empty partners array since we only want agent portion
+        [], // Empty partners array since we only want agent portion
+        !!order.first_order_delivery_fee_promo
       ).agent;
 
       // Calculate per-km delivery fee commission for agent
@@ -93,7 +95,8 @@ export class CommissionsService {
         order.base_delivery_fee,
         isAgentVerified,
         config,
-        [] // Empty partners array since we only want agent portion
+        [], // Empty partners array since we only want agent portion
+        !!order.first_order_delivery_fee_promo
       ).agent;
 
       // Calculate per-km delivery fee commission for agent
@@ -129,6 +132,7 @@ export class CommissionsService {
           order_number
           base_delivery_fee
           per_km_delivery_fee
+          first_order_delivery_fee_promo
           currency
           subtotal
           assigned_agent {
@@ -161,7 +165,8 @@ export class CommissionsService {
         order.base_delivery_fee,
         order.assigned_agent?.is_verified || false,
         config,
-        partners
+        partners,
+        !!order.first_order_delivery_fee_promo
       );
 
       const perKmDeliveryFeeBreakdown =
@@ -373,15 +378,29 @@ export class CommissionsService {
     baseDeliveryFee: number,
     isAgentVerified: boolean,
     config: CommissionConfig,
-    partners: Partners[]
+    partners: Partners[],
+    firstOrderDeliveryFeePromo = false
   ): { agent: number; partner: number; rendasua: number } {
+    if (firstOrderDeliveryFeePromo) {
+      let partnerAmount = 0;
+      partners.forEach((partner) => {
+        partnerAmount +=
+          (baseDeliveryFee * partner.base_delivery_fee_commission) / 100;
+      });
+      const agentAmount = Math.max(0, baseDeliveryFee - partnerAmount);
+      return {
+        agent: agentAmount,
+        partner: partnerAmount,
+        rendasua: 0,
+      };
+    }
+
     const agentCommission = isAgentVerified
       ? config.verifiedAgentBaseDeliveryCommission
       : config.unverifiedAgentBaseDeliveryCommission;
 
     const agentAmount = (baseDeliveryFee * agentCommission) / 100;
 
-    // Calculate partner commissions
     let partnerAmount = 0;
     partners.forEach((partner) => {
       partnerAmount +=

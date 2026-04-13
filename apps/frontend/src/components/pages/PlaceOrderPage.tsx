@@ -142,6 +142,8 @@ interface OrderSummaryProps {
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
+  firstOrderBaseDeliveryDiscountAmount?: number;
+  deliveryFeeFullBeforeDiscount?: number;
   requiresFastDelivery: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
   onSubmit: () => void;
@@ -157,6 +159,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
+  firstOrderBaseDeliveryDiscountAmount = 0,
+  deliveryFeeFullBeforeDiscount,
   requiresFastDelivery,
   formatCurrency,
   onSubmit,
@@ -289,19 +293,61 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             <Typography variant="body2" color="text.secondary">
               {t('orders.deliveryFee', 'Delivery Fee')}
             </Typography>
-            <Typography variant="body2" fontWeight="medium">
+            <Box sx={{ textAlign: 'right' }}>
               {deliveryFeeLoading ? (
                 <CircularProgress size={14} />
               ) : deliveryFeeError ? (
                 <span style={{ color: 'error.main' }}>
                   {t('common.error', 'Error')}
                 </span>
+              ) : deliveryFeeFullBeforeDiscount != null &&
+                deliveryFeeFullBeforeDiscount > computedDeliveryFee ? (
+                <>
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    sx={{
+                      textDecoration: 'line-through',
+                      color: 'text.secondary',
+                      mr: 1,
+                    }}
+                  >
+                    {formatCurrency(
+                      deliveryFeeFullBeforeDiscount,
+                      selectedItem.item.currency
+                    )}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium" component="span">
+                    {formatCurrency(
+                      computedDeliveryFee,
+                      selectedItem.item.currency
+                    )}
+                  </Typography>
+                </>
               ) : (
-                formatCurrency(computedDeliveryFee, selectedItem.item.currency)
+                <Typography variant="body2" fontWeight="medium" component="span">
+                  {formatCurrency(computedDeliveryFee, selectedItem.item.currency)}
+                </Typography>
               )}
-            </Typography>
+            </Box>
           </Box>
 
+          {!deliveryFeeLoading &&
+            !deliveryFeeError &&
+            firstOrderBaseDeliveryDiscountAmount > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="success.main">
+                  {t('orders.firstDeliveryDiscount', 'First delivery discount')}
+                </Typography>
+                <Typography variant="body2" color="success.main" fontWeight="medium">
+                  −
+                  {formatCurrency(
+                    firstOrderBaseDeliveryDiscountAmount,
+                    selectedItem.item.currency
+                  )}
+                </Typography>
+              </Box>
+            )}
 
           <Divider sx={{ my: 1.5 }} />
 
@@ -1696,21 +1742,98 @@ const PlaceOrderPage: React.FC = () => {
                       <Typography variant="body2" color="text.secondary">
                         {t('orders.deliveryFee', 'Delivery Fee')}
                       </Typography>
-                      <Typography variant="body2" fontWeight="medium">
+                      <Box sx={{ textAlign: 'right' }}>
                         {deliveryFeeLoading ? (
                           <CircularProgress size={14} />
                         ) : deliveryFeeError ? (
                           <span style={{ color: 'error.main' }}>
                             {t('common.error', 'Error')}
                           </span>
-                        ) : (
-                          formatCurrency(
-                            deliveryFee?.deliveryFee || 0,
-                            selectedItem.item.currency
-                          )
-                        )}
-                      </Typography>
+                        ) : (() => {
+                            const pay = deliveryFee?.deliveryFee || 0;
+                            const fullBefore =
+                              deliveryFee != null
+                                ? (Number(deliveryFee.baseDeliveryFeeBeforeDiscount) ||
+                                    0) +
+                                  (Number(deliveryFee.perKmDeliveryFee) || 0)
+                                : 0;
+                            if (fullBefore > pay) {
+                              return (
+                                <>
+                                  <Typography
+                                    variant="body2"
+                                    component="span"
+                                    sx={{
+                                      textDecoration: 'line-through',
+                                      color: 'text.secondary',
+                                      mr: 1,
+                                    }}
+                                  >
+                                    {formatCurrency(
+                                      fullBefore,
+                                      selectedItem.item.currency
+                                    )}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    fontWeight="medium"
+                                    component="span"
+                                  >
+                                    {formatCurrency(
+                                      pay,
+                                      selectedItem.item.currency
+                                    )}
+                                  </Typography>
+                                </>
+                              );
+                            }
+                            return (
+                              <Typography
+                                variant="body2"
+                                fontWeight="medium"
+                                component="span"
+                              >
+                                {formatCurrency(
+                                  pay,
+                                  selectedItem.item.currency
+                                )}
+                              </Typography>
+                            );
+                          })()}
+                      </Box>
                     </Box>
+
+                    {!deliveryFeeLoading &&
+                      !deliveryFeeError &&
+                      (deliveryFee?.firstOrderBaseDeliveryDiscountAmount ?? 0) >
+                        0 && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            mb: 1,
+                          }}
+                        >
+                          <Typography variant="body2" color="success.main">
+                            {t(
+                              'orders.firstDeliveryDiscount',
+                              'First delivery discount'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="success.main"
+                            fontWeight="medium"
+                          >
+                            −
+                            {formatCurrency(
+                              deliveryFee?.firstOrderBaseDeliveryDiscountAmount ??
+                                0,
+                              selectedItem.item.currency
+                            )}
+                          </Typography>
+                        </Box>
+                      )}
 
                     <Divider sx={{ my: 1.5 }} />
 
@@ -2944,6 +3067,15 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
+              firstOrderBaseDeliveryDiscountAmount={
+                deliveryFee?.firstOrderBaseDeliveryDiscountAmount
+              }
+              deliveryFeeFullBeforeDiscount={
+                deliveryFee != null
+                  ? (Number(deliveryFee.baseDeliveryFeeBeforeDiscount) || 0) +
+                    (Number(deliveryFee.perKmDeliveryFee) || 0)
+                  : undefined
+              }
               requiresFastDelivery={requiresFastDelivery}
               formatCurrency={formatCurrency}
               onSubmit={handleSubmitWithPhoneGate}

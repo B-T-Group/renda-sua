@@ -235,6 +235,7 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
         order_number
         base_delivery_fee
         per_km_delivery_fee
+        first_order_delivery_fee_promo
         subtotal
         currency
         assigned_agent_id
@@ -316,6 +317,9 @@ def get_commission_order(client: HasuraClient, order_id: str) -> Optional[Commis
             assigned_agent=assigned_agent,
             business_user_id=business_user_id,
             business_location_id=order_data.get("business_location_id"),
+            first_order_delivery_fee_promo=bool(
+                order_data.get("first_order_delivery_fee_promo")
+            ),
         )
         
         log_info("Commission order fetched", order_id=order_id, order_number=commission_order.order_number)

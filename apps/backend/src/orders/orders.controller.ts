@@ -1008,12 +1008,30 @@ export class OrdersController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Delivery fee calculated successfully',
+    description:
+      'Delivery fee calculated successfully. When isFirstOrderClient is true, deliveryFee is the payable total after halving the base component only; use baseDeliveryFeeBeforeDiscount + perKmDeliveryFee for the non-promo total (e.g. second business on checkout).',
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
         deliveryFee: { type: 'number', example: 1500 },
+        isFirstOrderClient: {
+          type: 'boolean',
+          description: 'True when the client has no existing orders (any status)',
+        },
+        baseDeliveryFeeBeforeDiscount: {
+          type: 'number',
+          description: 'Base component before first-order promo',
+        },
+        firstOrderBaseDeliveryDiscountAmount: {
+          type: 'number',
+          description: 'Amount taken off the base when promo applies (half of base)',
+        },
+        baseDeliveryFee: {
+          type: 'number',
+          description: 'Base component charged after promo',
+        },
+        perKmDeliveryFee: { type: 'number', example: 400 },
         distance: { type: 'number', example: 5.2 },
         method: {
           type: 'string',
@@ -1065,6 +1083,13 @@ export class OrdersController {
       return {
         success: true,
         deliveryFee: deliveryFeeInfo.deliveryFee,
+        isFirstOrderClient: deliveryFeeInfo.isFirstOrderClient,
+        baseDeliveryFeeBeforeDiscount:
+          deliveryFeeInfo.baseDeliveryFeeBeforeDiscount,
+        firstOrderBaseDeliveryDiscountAmount:
+          deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
+        baseDeliveryFee: deliveryFeeInfo.baseDeliveryFee,
+        perKmDeliveryFee: deliveryFeeInfo.perKmDeliveryFee,
         distance: deliveryFeeInfo.distance,
         method: deliveryFeeInfo.method,
         currency: deliveryFeeInfo.currency,

@@ -33,7 +33,21 @@ def calculate_base_delivery_fee_commissions(
     is_agent_verified: bool,
     config: CommissionConfig,
     partners: List[Partner],
+    first_order_delivery_fee_promo: bool = False,
 ) -> BaseDeliveryFeeBreakdown:
+    if first_order_delivery_fee_promo:
+        partner_amount = _sum_partner_commission(
+            base_delivery_fee,
+            partners,
+            "base_delivery_fee_commission",
+        )
+        agent_amount = max(0.0, base_delivery_fee - partner_amount)
+        return BaseDeliveryFeeBreakdown(
+            agent=agent_amount,
+            partner=partner_amount,
+            rendasua=0.0,
+        )
+
     agent_commission = (
         config.verified_agent_base_delivery_commission
         if is_agent_verified
@@ -113,6 +127,7 @@ def calculate_commissions(
         is_verified,
         config,
         partners,
+        order.first_order_delivery_fee_promo,
     )
     per_km_delivery = calculate_per_km_delivery_fee_commissions(
         order.per_km_delivery_fee,

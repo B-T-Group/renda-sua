@@ -510,6 +510,7 @@ export class OrdersService {
           base_delivery_fee: order.base_delivery_fee,
           per_km_delivery_fee: order.per_km_delivery_fee,
           currency: order.currency,
+          first_order_delivery_fee_promo: order.first_order_delivery_fee_promo,
         },
         isAgentVerified,
         commissionConfig
@@ -3008,6 +3009,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          first_order_delivery_fee_promo
           currency
           current_status
           estimated_delivery_time
@@ -3190,6 +3192,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          first_order_delivery_fee_promo
           tax_amount
           total_amount
           currency
@@ -3776,6 +3779,8 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          first_order_delivery_fee_promo
+          first_order_base_delivery_discount_amount
           tax_amount
           total_amount
           currency
@@ -3892,6 +3897,9 @@ export class OrdersService {
         base_delivery_fee: order.base_delivery_fee ?? 0,
         per_km_delivery_fee: order.per_km_delivery_fee ?? 0,
         currency: order.currency ?? 'XAF',
+        first_order_delivery_fee_promo: !!(
+          order as { first_order_delivery_fee_promo?: boolean }
+        ).first_order_delivery_fee_promo,
       },
       agent.is_verified ?? false,
       config
@@ -3920,6 +3928,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          first_order_delivery_fee_promo
           tax_amount
           total_amount
           currency
@@ -4939,7 +4948,9 @@ export class OrdersService {
         $actualDeliveryTime: timestamptz,
         $assignedAgentId: uuid,
         $verifiedAgentDelivery: Boolean!,
-        $requiresFastDelivery: Boolean!
+        $requiresFastDelivery: Boolean!,
+        $firstOrderDeliveryFeePromo: Boolean!,
+        $firstOrderBaseDeliveryDiscountAmount: numeric!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -4964,6 +4975,8 @@ export class OrdersService {
           assigned_agent_id: $assignedAgentId,
           verified_agent_delivery: $verifiedAgentDelivery,
           requires_fast_delivery: $requiresFastDelivery,
+          first_order_delivery_fee_promo: $firstOrderDeliveryFeePromo,
+          first_order_base_delivery_discount_amount: $firstOrderBaseDeliveryDiscountAmount,
           order_items: {
             data: $orderItems
           }
@@ -4992,6 +5005,8 @@ export class OrdersService {
           client_id
           delivery_address_id
           requires_fast_delivery
+          first_order_delivery_fee_promo
+          first_order_base_delivery_discount_amount
           order_items {
             id
             business_inventory_id
@@ -5052,6 +5067,9 @@ export class OrdersService {
         assignedAgentId: assigned_agent_id,
         verifiedAgentDelivery: verified_agent_delivery,
         requiresFastDelivery: requires_fast_delivery,
+        firstOrderDeliveryFeePromo: deliveryFeeInfo.firstOrderDeliveryFeePromo,
+        firstOrderBaseDeliveryDiscountAmount:
+          deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
       }
     );
 
@@ -5570,6 +5588,65 @@ export class OrdersService {
     });
   }
 
+  private roundCurrency(amount: number): number {
+    return Math.round(amount * 100) / 100;
+  }
+
+  private async clientHasAnyOrders(clientId: string): Promise<boolean> {
+    const query = `
+      query ClientHasOrders($clientId: uuid!) {
+        orders_aggregate(where: { client_id: { _eq: $clientId } }) {
+          aggregate {
+            count
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      clientId,
+    });
+    const count = result.orders_aggregate?.aggregate?.count ?? 0;
+    return count > 0;
+  }
+
+  private applyFirstOrderBasePromo(
+    baseFeeBefore: number,
+    perKmFee: number,
+    applyPromo: boolean
+  ): {
+    baseDeliveryFee: number;
+    perKmDeliveryFee: number;
+    deliveryFee: number;
+    firstOrderDeliveryFeePromo: boolean;
+    firstOrderBaseDeliveryDiscountAmount: number;
+    baseDeliveryFeeBeforeDiscount: number;
+  } {
+    const baseDeliveryFeeBeforeDiscount = this.roundCurrency(baseFeeBefore);
+    if (!applyPromo || baseFeeBefore <= 0) {
+      const baseDeliveryFee = baseDeliveryFeeBeforeDiscount;
+      const perKmDeliveryFee = this.roundCurrency(perKmFee);
+      return {
+        baseDeliveryFee,
+        perKmDeliveryFee,
+        deliveryFee: this.roundCurrency(baseDeliveryFee + perKmDeliveryFee),
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
+        baseDeliveryFeeBeforeDiscount,
+      };
+    }
+    const discount = this.roundCurrency(baseFeeBefore / 2);
+    const baseDeliveryFee = this.roundCurrency(baseFeeBefore - discount);
+    const perKmDeliveryFee = this.roundCurrency(perKmFee);
+    return {
+      baseDeliveryFee,
+      perKmDeliveryFee,
+      deliveryFee: this.roundCurrency(baseDeliveryFee + perKmDeliveryFee),
+      firstOrderDeliveryFeePromo: true,
+      firstOrderBaseDeliveryDiscountAmount: discount,
+      baseDeliveryFeeBeforeDiscount,
+    };
+  }
+
   /**
    * Calculate delivery fee for a given item based on distance
    * Uses tiered pricing model with fallback to delivery_fees table
@@ -5587,6 +5664,10 @@ export class OrdersService {
     country: string;
     baseDeliveryFee: number;
     perKmDeliveryFee: number;
+    isFirstOrderClient: boolean;
+    firstOrderDeliveryFeePromo: boolean;
+    firstOrderBaseDeliveryDiscountAmount: number;
+    baseDeliveryFeeBeforeDiscount: number;
   }> {
     try {
       // Get user for authorization
@@ -5594,6 +5675,12 @@ export class OrdersService {
       if (!user) {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
+
+      const isFirstOrderClient = !!(
+        user.client?.id &&
+        !(await this.clientHasAnyOrders(user.client.id))
+      );
+      const applyPromo = isFirstOrderClient;
 
       // Get item details
       const item = await this.getItemDetails(itemId);
@@ -5667,14 +5754,24 @@ export class OrdersService {
           this.logger.log(`Currency: ${item.item.currency}`);
           this.logger.log(`Country: ${businessAddress.country}`);
 
+          const promo = this.applyFirstOrderBasePromo(
+            feeComponents.baseFee,
+            feeComponents.perKmFee,
+            applyPromo
+          );
           return {
-            deliveryFee: feeComponents.totalFee,
-            baseDeliveryFee: feeComponents.baseFee,
-            perKmDeliveryFee: feeComponents.perKmFee,
+            deliveryFee: promo.deliveryFee,
+            baseDeliveryFee: promo.baseDeliveryFee,
+            perKmDeliveryFee: promo.perKmDeliveryFee,
             distance: distanceKm,
             method: 'distance_based',
             currency: item.item.currency,
             country: businessAddress.country,
+            isFirstOrderClient,
+            firstOrderDeliveryFeePromo: promo.firstOrderDeliveryFeePromo,
+            firstOrderBaseDeliveryDiscountAmount:
+              promo.firstOrderBaseDeliveryDiscountAmount,
+            baseDeliveryFeeBeforeDiscount: promo.baseDeliveryFeeBeforeDiscount,
           };
         }
       } catch (distanceError) {
@@ -5689,24 +5786,24 @@ export class OrdersService {
         countryCode
       );
 
-      let finalDeliveryFee = flatFee;
-
-      // Add fast delivery fee if required
+      let fastExtra = 0;
       if (requiresFastDelivery) {
         const fastDeliveryConfig = await this.getFastDeliveryFee(
           userAddress.state || '',
           userAddress.country || ''
         );
-
         if (fastDeliveryConfig.enabled) {
-          finalDeliveryFee += fastDeliveryConfig.fee;
+          fastExtra = fastDeliveryConfig.fee;
         }
       }
+
+      const promo = this.applyFirstOrderBasePromo(flatFee, 0, applyPromo);
+      const finalDeliveryFee = this.roundCurrency(promo.deliveryFee + fastExtra);
 
       this.logger.log(`Flat fee calculated: ${finalDeliveryFee}`);
       this.logger.log(`Currency: ${item.item.currency}`);
       this.logger.log(`Country: ${businessAddress.country}`);
-      this.logger.log(`Base delivery fee: ${flatFee}`);
+      this.logger.log(`Base delivery fee: ${promo.baseDeliveryFee}`);
       this.logger.log(`Per km delivery fee: 0`);
       this.logger.log(`Total delivery fee: ${finalDeliveryFee}`);
 
@@ -5715,8 +5812,13 @@ export class OrdersService {
         method: 'flat_fee',
         currency: item.item.currency,
         country: businessAddress.country,
-        baseDeliveryFee: flatFee,
+        baseDeliveryFee: promo.baseDeliveryFee,
         perKmDeliveryFee: 0,
+        isFirstOrderClient,
+        firstOrderDeliveryFeePromo: promo.firstOrderDeliveryFeePromo,
+        firstOrderBaseDeliveryDiscountAmount:
+          promo.firstOrderBaseDeliveryDiscountAmount,
+        baseDeliveryFeeBeforeDiscount: promo.baseDeliveryFeeBeforeDiscount,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {

@@ -4,6 +4,11 @@ import { useApiClient } from './useApiClient';
 export interface DeliveryFeeResponse {
   success: boolean;
   deliveryFee: number;
+  isFirstOrderClient?: boolean;
+  baseDeliveryFeeBeforeDiscount?: number;
+  firstOrderBaseDeliveryDiscountAmount?: number;
+  baseDeliveryFee?: number;
+  perKmDeliveryFee?: number;
   distance?: number;
   method: 'distance_based' | 'flat_fee';
   currency: string;

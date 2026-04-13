@@ -153,6 +153,8 @@ select_permissions:
         - verified_agent_delivery
         - delivery_pin_attempts
         - delivery_overwrite_code_used_at
+        - first_order_delivery_fee_promo
+        - first_order_base_delivery_discount_amount
       filter:
         assigned_agent:
           user:
@@ -188,6 +190,8 @@ select_permissions:
         - requires_fast_delivery
         - verified_agent_delivery
         - delivery_overwrite_code_used_at
+        - first_order_delivery_fee_promo
+        - first_order_base_delivery_discount_amount
       filter:
         business:
           user:
@@ -222,6 +226,8 @@ select_permissions:
         - completed_at
         - requires_fast_delivery
         - verified_agent_delivery
+        - first_order_delivery_fee_promo
+        - first_order_base_delivery_discount_amount
       filter:
         client:
           user:

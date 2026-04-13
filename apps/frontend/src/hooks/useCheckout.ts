@@ -80,34 +80,31 @@ export const useCheckout = () => {
         // Group items by business
         const itemsByBusiness = groupItemsByBusiness(cartItems);
 
-        // Create separate order for each business
-        const orderPromises = Array.from(itemsByBusiness.entries()).map(
-          async ([businessId, items]) => {
-            const orderData: CreateOrderRequest = {
-              items: items.map((item) => ({
-                business_inventory_id: item.inventoryItemId,
-                quantity: item.quantity,
-              })),
-              delivery_address_id: deliveryAddressId,
-              phone_number: phoneNumber,
-              special_instructions: specialInstructions,
-              requires_fast_delivery: requiresFastDelivery,
-              delivery_window: deliveryWindow,
-            };
+        // Sequential creation so only the first order receives the first-delivery promo
+        const orders: OrderResult[] = [];
+        for (const [, items] of itemsByBusiness) {
+          const orderData: CreateOrderRequest = {
+            items: items.map((item) => ({
+              business_inventory_id: item.inventoryItemId,
+              quantity: item.quantity,
+            })),
+            delivery_address_id: deliveryAddressId,
+            phone_number: phoneNumber,
+            special_instructions: specialInstructions,
+            requires_fast_delivery: requiresFastDelivery,
+            delivery_window: deliveryWindow,
+          };
 
-            const response = await apiClient.post('/orders', orderData);
+          const response = await apiClient.post('/orders', orderData);
 
-            if (!response.data.success) {
-              throw new Error(
-                response.data.message || 'Failed to create order'
-              );
-            }
-
-            return response.data.order;
+          if (!response.data.success) {
+            throw new Error(
+              response.data.message || 'Failed to create order'
+            );
           }
-        );
 
-        const orders = await Promise.all(orderPromises);
+          orders.push(response.data.order);
+        }
 
         // Clear cart after successful order creation
         clearCart();

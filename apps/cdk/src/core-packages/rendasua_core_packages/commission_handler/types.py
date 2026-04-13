@@ -33,6 +33,7 @@ class CommissionOrder(BaseModel):
     assigned_agent: Optional[AssignedAgent] = None
     business_user_id: str
     business_location_id: Optional[str] = None
+    first_order_delivery_fee_promo: bool = False
 
 
 class CommissionConfig(BaseModel):

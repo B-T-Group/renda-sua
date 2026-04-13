@@ -209,6 +209,7 @@ export class AgentsController {
             subtotal
             base_delivery_fee
             per_km_delivery_fee
+            first_order_delivery_fee_promo
             currency
             current_status
             estimated_delivery_time
@@ -309,6 +310,8 @@ export class AgentsController {
               base_delivery_fee: order.base_delivery_fee,
               per_km_delivery_fee: order.per_km_delivery_fee,
               currency: order.currency,
+              first_order_delivery_fee_promo:
+                order.first_order_delivery_fee_promo,
             },
             user.agent?.is_verified || false,
             commissionConfig

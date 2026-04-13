@@ -69,6 +69,9 @@ interface BusinessDeliveryFee {
   deliveryFee: number | null;
   loading: boolean;
   error: string | null;
+  isFirstOrderClient?: boolean;
+  firstOrderBaseDeliveryDiscountAmount?: number;
+  fullDeliveryFeeWithoutPromo?: number;
 }
 
 interface OrderSummaryProps {
@@ -90,7 +93,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   const { getCartByBusiness } = useCart();
 
   const cartByBusiness = getCartByBusiness();
-  
+  const firstBusinessId = Array.from(cartByBusiness.entries())[0]?.[0];
+
   // Get currency from cart items (all items should have the same currency)
   const currency = cartItems.length > 0 ? cartItems[0].itemData.currency : 'USD';
 
@@ -109,6 +113,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       items,
       subtotal,
       deliveryFee,
+      firstOrderBaseDeliveryDiscountAmount:
+        deliveryFeeData?.firstOrderBaseDeliveryDiscountAmount ?? 0,
+      fullDeliveryFeeWithoutPromo: deliveryFeeData?.fullDeliveryFeeWithoutPromo,
       orderTotal,
       deliveryFeeLoading: deliveryFeeData?.loading || false,
       deliveryFeeError: deliveryFeeData?.error || null,
@@ -186,18 +193,57 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               <Typography variant="body2" color="text.secondary">
                 {t('checkout.deliveryFee', 'Delivery Fee')}
               </Typography>
-              <Typography variant="body2" fontWeight="medium">
+              <Box sx={{ textAlign: 'right' }}>
                 {business.deliveryFeeLoading ? (
                   <CircularProgress size={16} />
                 ) : business.deliveryFeeError ? (
                   <Typography variant="body2" color="error" component="span">
                     {t('checkout.deliveryFeeError', 'Error calculating')}
                   </Typography>
+                ) : business.fullDeliveryFeeWithoutPromo != null &&
+                  business.fullDeliveryFeeWithoutPromo > business.deliveryFee &&
+                  business.businessId === firstBusinessId ? (
+                  <>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      sx={{
+                        textDecoration: 'line-through',
+                        color: 'text.secondary',
+                        mr: 1,
+                      }}
+                    >
+                      {formatCurrency(business.fullDeliveryFeeWithoutPromo, currency)}
+                    </Typography>
+                    <Typography variant="body2" fontWeight="medium" component="span">
+                      {formatCurrency(business.deliveryFee, currency)}
+                    </Typography>
+                  </>
                 ) : (
-                  formatCurrency(business.deliveryFee, currency)
+                  <Typography variant="body2" fontWeight="medium" component="span">
+                    {formatCurrency(business.deliveryFee, currency)}
+                  </Typography>
                 )}
-              </Typography>
+              </Box>
             </Box>
+
+            {!business.deliveryFeeLoading &&
+              !business.deliveryFeeError &&
+              business.firstOrderBaseDeliveryDiscountAmount > 0 &&
+              business.businessId === firstBusinessId && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="success.main">
+                    {t('checkout.firstDeliveryDiscount', 'First delivery discount')}
+                  </Typography>
+                  <Typography variant="body2" color="success.main" fontWeight="medium">
+                    −
+                    {formatCurrency(
+                      business.firstOrderBaseDeliveryDiscountAmount,
+                      currency
+                    )}
+                  </Typography>
+                </Box>
+              )}
 
             {requiresFastDelivery && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -344,8 +390,11 @@ const CheckoutPage: React.FC = () => {
       });
       setBusinessDeliveryFees(new Map(feesMap));
 
+      const businessEntries = Array.from(cartByBusiness.entries());
+      const firstBizId = businessEntries[0]?.[0];
+
       // Fetch delivery fee for each business (using first item from each business)
-      const fetchPromises = Array.from(cartByBusiness.entries()).map(
+      const fetchPromises = businessEntries.map(
         async ([businessId, items]) => {
           const firstItem = items[0];
           if (!firstItem) return;
@@ -361,11 +410,33 @@ const CheckoutPage: React.FC = () => {
             const response = await apiClient.get(url);
 
             if (response.data.success) {
+              const d = response.data;
+              const isFirstClient = !!d.isFirstOrderClient;
+              const baseBefore = Number(d.baseDeliveryFeeBeforeDiscount) || 0;
+              const perKm = Number(d.perKmDeliveryFee) || 0;
+              const fullNoPromo = baseBefore + perKm;
+              const apiPayable = Number(d.deliveryFee) || 0;
+              let payable = apiPayable;
+              if (isFirstClient && businessId !== firstBizId) {
+                payable = fullNoPromo;
+              }
+              const discountAmount =
+                businessId === firstBizId
+                  ? Number(d.firstOrderBaseDeliveryDiscountAmount) || 0
+                  : 0;
               feesMap.set(businessId, {
                 businessId,
-                deliveryFee: response.data.deliveryFee,
+                deliveryFee: payable,
                 loading: false,
                 error: null,
+                isFirstOrderClient: isFirstClient,
+                firstOrderBaseDeliveryDiscountAmount: discountAmount,
+                fullDeliveryFeeWithoutPromo:
+                  businessId === firstBizId &&
+                  isFirstClient &&
+                  discountAmount > 0
+                    ? fullNoPromo
+                    : undefined,
               });
             } else {
               feesMap.set(businessId, {
