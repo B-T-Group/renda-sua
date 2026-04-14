@@ -13,10 +13,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Grid,
   IconButton,
-  ImageList,
-  ImageListItem,
-  ImageListItemBar,
   Paper,
   Stack,
   TextField,
@@ -337,106 +335,122 @@ export default function ImageUploadDialog({
                 {t('business.inventory.currentImages')} ({images.length}/
                 {MAX_IMAGES})
               </Typography>
-              <ImageList
-                sx={{
-                  width: '100%',
-                  height: 240,
-                  '& .MuiImageListItem-root': {
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    transition:
-                      'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                    },
-                  },
-                }}
-                cols={3}
-                rowHeight={180}
-                gap={12}
-              >
+              <Grid container spacing={2}>
                 {images.map((image) => (
-                  <ImageListItem key={image.id}>
-                    <img
-                      src={image.image_url}
-                      alt={image.alt_text || itemName}
-                      loading="lazy"
-                      style={{
-                        objectFit: 'cover',
-                        height: '100%',
-                        width: '100%',
-                      }}
-                    />
-                    <ImageListItemBar
-                      position="bottom"
-                      title={
-                        <ToggleButtonGroup
-                          exclusive
-                          size="small"
-                          value={
-                            image.image_type === 'main' ? 'main' : 'gallery'
-                          }
-                          onChange={(_, v) =>
-                            handleExistingTypeChange(image.id, v)
-                          }
-                          disabled={loading}
-                          sx={{
-                            bgcolor: 'rgba(0,0,0,0.5)',
-                            '& .MuiToggleButton-root': {
-                              color: 'white',
-                              py: 0.25,
-                              px: 1,
-                              fontSize: '0.75rem',
-                              borderColor: 'rgba(255,255,255,0.35)',
-                            },
-                            '& .Mui-selected': {
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                              '&:hover': { bgcolor: 'primary.dark' },
-                            },
-                          }}
-                        >
-                          <ToggleButton value="main">
-                            {t(
-                              'business.inventory.imageTypePrimary',
-                              'Primary'
-                            )}
-                          </ToggleButton>
-                          <ToggleButton value="gallery">
-                            {t(
-                              'business.inventory.imageTypeSecondary',
-                              'Secondary'
-                            )}
-                          </ToggleButton>
-                        </ToggleButtonGroup>
-                      }
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={image.id}>
+                    <Paper
+                      variant="outlined"
                       sx={{
-                        background:
-                          'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
-                        '& .MuiImageListItemBar-actionIcon': {
-                          color: 'white',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        transition:
+                          'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                         },
                       }}
-                      actionIcon={
-                        <IconButton
+                    >
+                      <Box
+                        sx={{
+                          position: 'relative',
+                          width: '100%',
+                          pt: '72%',
+                          bgcolor: 'grey.100',
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={image.image_url}
+                          alt={image.alt_text || itemName}
+                          loading="lazy"
                           sx={{
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: 'rgba(255,255,255,0.2)',
-                            },
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
                           }}
-                          aria-label={t('common.delete')}
-                          onClick={() => handleDeleteImage(image.id)}
+                        />
+                      </Box>
+                      <Stack
+                        spacing={1.25}
+                        sx={{
+                          p: 1.5,
+                          pt: 1.25,
+                          flex: 1,
+                          bgcolor: 'background.paper',
+                          borderTop: 1,
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontWeight: 600, letterSpacing: 0.02 }}
                         >
-                          <DeleteIcon />
-                        </IconButton>
-                      }
-                    />
-                  </ImageListItem>
+                          {t('business.inventory.imageType', 'Image Type')}
+                        </Typography>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          sx={{ width: '100%' }}
+                        >
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <ToggleButtonGroup
+                              exclusive
+                              fullWidth
+                              size="small"
+                              value={
+                                image.image_type === 'main' ? 'main' : 'gallery'
+                              }
+                              onChange={(_, v) =>
+                                handleExistingTypeChange(image.id, v)
+                              }
+                              disabled={loading}
+                              aria-label={t(
+                                'business.inventory.imageType',
+                                'Image Type'
+                              )}
+                            >
+                              <ToggleButton value="main">
+                                {t(
+                                  'business.inventory.imageTypePrimary',
+                                  'Primary'
+                                )}
+                              </ToggleButton>
+                              <ToggleButton value="gallery">
+                                {t(
+                                  'business.inventory.imageTypeSecondary',
+                                  'Secondary'
+                                )}
+                              </ToggleButton>
+                            </ToggleButtonGroup>
+                          </Box>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={t('common.delete')}
+                            onClick={() => handleDeleteImage(image.id)}
+                            sx={{
+                              flexShrink: 0,
+                              border: 1,
+                              borderColor: 'divider',
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  </Grid>
                 ))}
-              </ImageList>
+              </Grid>
             </Paper>
           )}
 
