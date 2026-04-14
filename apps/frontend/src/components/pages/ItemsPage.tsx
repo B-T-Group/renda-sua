@@ -19,9 +19,9 @@ import {
     Switch,
     Typography,
 } from '@mui/material';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders } from '../../hooks';
@@ -63,11 +63,29 @@ const ItemCardSkeleton: React.FC = () => (
 const ItemsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
+  const searchTerm = useMemo(() => {
+    return new URLSearchParams(location.search).get('search') ?? '';
+  }, [location.search]);
+  const setSearchTerm = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (!value) next.delete('search');
+          else next.set('search', value);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
   const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
-
-  const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<ItemsPageFilterState>({
     category: '',
     subcategory: '',
@@ -92,15 +110,19 @@ const ItemsPage: React.FC = () => {
       anonymousOrigin: browserGeo,
     });
 
-  // Fetch all inventory items; backend uses logged-in user's address automatically; anonymous uses detected country (CM/GA only)
+  const inventorySearch =
+    searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
+
+  // Backend applies search (name, description, SKU, brand, tags); client filter refines category/location etc.
   const { inventoryItems, loading, error } = useInventoryItems({
     page: 1,
-    limit: 1000, // Get all items for client-side filtering
+    limit: 1000,
     is_active: true,
     sort,
     include_unavailable: showUnavailable,
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    search: inventorySearch,
   });
 
   // Only fetch orders when signed in (avoids unnecessary /orders request for anonymous users)

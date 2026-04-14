@@ -147,7 +147,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         fullWidth
         placeholder={t(
           'business.items.filters.search',
-          'Search by name, SKU, or description...'
+          'Search by name, SKU, description, or tags...'
         )}
         variant="outlined"
         size="small"
@@ -283,7 +283,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
               <TextField
                 placeholder={t(
                   'business.items.filters.search',
-                  'Search by name, SKU, or description...'
+                  'Search by name, SKU, description, or tags...'
                 )}
                 variant="outlined"
                 size="small"
@@ -461,7 +461,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                 fullWidth
                 placeholder={t(
                   'business.items.filters.search',
-                  'Search items...'
+                  'Search by name, SKU, description, or tags...'
                 )}
                 variant="outlined"
                 size="small"

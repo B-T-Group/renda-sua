@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import LoadingPage from '../common/LoadingPage';
@@ -9,6 +9,7 @@ import LoadingPage from '../common/LoadingPage';
  * businesses go to the dashboard. Aligns with onboarding and persona selection.
  */
 const SmartHome: React.FC = () => {
+  const location = useLocation();
   const { isAuthenticated } = useSessionAuth();
   const {
     loading,
@@ -28,7 +29,12 @@ const SmartHome: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/items" replace />;
+    return (
+      <Navigate
+        to={{ pathname: '/items', search: location.search }}
+        replace
+      />
+    );
   }
 
   if (!isProfileComplete) {
@@ -40,14 +46,21 @@ const SmartHome: React.FC = () => {
   }
 
   if (userType === 'client') {
-    return <Navigate to="/items" replace />;
+    return (
+      <Navigate
+        to={{ pathname: '/items', search: location.search }}
+        replace
+      />
+    );
   }
 
   if (userType === 'agent' || userType === 'business') {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Navigate to="/items" replace />;
+  return (
+    <Navigate to={{ pathname: '/items', search: location.search }} replace />
+  );
 };
 
 export default SmartHome;

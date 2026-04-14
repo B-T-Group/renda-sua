@@ -24,7 +24,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useEffect, useMemo } from 'react';
+import React, { useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
@@ -113,9 +113,14 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         const matchesSearch =
           item.item.name.toLowerCase().includes(term) ||
           item.item.description?.toLowerCase().includes(term) ||
+          item.item.sku?.toLowerCase().includes(term) ||
           item.item.brand?.name?.toLowerCase().includes(term) ||
           item.business_location?.name?.toLowerCase().includes(term) ||
-          item.business_location?.business?.name?.toLowerCase().includes(term);
+          item.business_location?.business?.name?.toLowerCase().includes(term) ||
+          (item.item.tags?.some((tag) =>
+            tag.name.toLowerCase().includes(term)
+          ) ??
+            false);
         if (!matchesSearch) return false;
       }
 
@@ -148,7 +153,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     });
   }, [items, searchTerm, filters]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onFilterChange(filteredItems);
   }, [filteredItems, onFilterChange]);
 
@@ -335,7 +340,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
           label={t('public.items.searchLabel', 'Search items')}
           placeholder={t(
             'public.items.searchPlaceholder',
-            'Name, brand, SKU, or store…'
+            'Name, brand, SKU, tags, or store…'
           )}
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}

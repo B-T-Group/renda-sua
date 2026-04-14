@@ -1423,7 +1423,7 @@
         "noCategory": "Sans catégorie",
         "noBrand": "Sans marque",
         "category": "Catégorie",
-        "search": "Rechercher des articles...",
+        "search": "Rechercher par nom, SKU, description ou étiquettes...",
         "showing": "Affichage",
         "status": "Statut"
       },
@@ -2924,7 +2924,7 @@
       "searchLabel": "Rechercher des articles",
       "searchAria": "Rechercher dans le catalogue d’articles",
       "clearSearch": "Effacer la recherche",
-      "searchPlaceholder": "Nom, marque, SKU ou magasin…",
+      "searchPlaceholder": "Nom, marque, SKU, étiquettes ou magasin…",
       "showResults": "Show {count} Results",
       "signIn": "Se connecter",
       "sortBy": "Sort by",

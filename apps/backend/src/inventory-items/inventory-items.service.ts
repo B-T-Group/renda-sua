@@ -268,6 +268,11 @@ export class InventoryItemsService {
           { item: { description: { _ilike: `%${search}%` } } },
           { item: { sku: { _ilike: `%${search}%` } } },
           { item: { brand: { name: { _ilike: `%${search}%` } } } },
+          {
+            item: {
+              item_tags: { tag: { name: { _ilike: `%${search}%` } } },
+            },
+          },
         ],
       });
     }

@@ -1434,7 +1434,7 @@
         "category": "Category",
         "noCategory": "No category",
         "noBrand": "No brand",
-        "search": "Search items...",
+        "search": "Search by name, SKU, description, or tags...",
         "showing": "Showing",
         "status": "Status"
       },
@@ -2961,7 +2961,7 @@
       "searchLabel": "Search items",
       "searchAria": "Search the item catalog",
       "clearSearch": "Clear search",
-      "searchPlaceholder": "Name, brand, SKU, or store…",
+      "searchPlaceholder": "Name, brand, SKU, tags, or store…",
       "showResults": "Show {count} Results",
       "signIn": "Sign In",
       "sortBy": "Sort by",

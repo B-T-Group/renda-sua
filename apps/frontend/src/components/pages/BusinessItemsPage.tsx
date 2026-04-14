@@ -220,6 +220,18 @@ const BusinessItemsPage: React.FC = () => {
     setManageDealsItem(inventoryItem);
   };
 
+  const itemMatchesSearchText = (item: Item, q: string): boolean => {
+    const needle = q.toLowerCase();
+    if (item.name.toLowerCase().includes(needle)) return true;
+    if (item.description?.toLowerCase().includes(needle)) return true;
+    if (item.sku?.toLowerCase().includes(needle)) return true;
+    return (
+      item.item_tags?.some((it) =>
+        it.tag?.name?.toLowerCase().includes(needle)
+      ) ?? false
+    );
+  };
+
   // Helper function to get stock status
   const getItemStockStatus = (item: any): string => {
     const inventory = item.business_inventories?.[0];
@@ -238,11 +250,7 @@ const BusinessItemsPage: React.FC = () => {
     items?.filter((item) => {
       const matchesSearch =
         filters.searchText === '' ||
-        item.name.toLowerCase().includes(filters.searchText.toLowerCase()) ||
-        item.description
-          ?.toLowerCase()
-          .includes(filters.searchText.toLowerCase()) ||
-        item.sku?.toLowerCase().includes(filters.searchText.toLowerCase());
+        itemMatchesSearchText(item, filters.searchText);
 
       const matchesStatus =
         filters.statusFilter === 'all' ||

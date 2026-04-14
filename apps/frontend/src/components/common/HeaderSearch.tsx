@@ -8,6 +8,7 @@ import {
   ClickAwayListener,
 } from '@mui/material';
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useItemSearch } from '../../hooks/useItemSearch';
 
 interface HeaderSearchProps {
@@ -17,6 +18,7 @@ interface HeaderSearchProps {
 }
 
 const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose, inverted }) => {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const { searchTerm, setSearchTerm, handleSearchSubmit, clearSearch } = useItemSearch();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,10 +38,11 @@ const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose, inverted }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchTerm.trim()) {
-      handleSearchSubmit(searchTerm);
-      handleClose();
-    }
+    const q = searchTerm.trim();
+    if (!q) return;
+    handleSearchSubmit(q);
+    setIsExpanded(false);
+    onClose?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -109,7 +112,10 @@ const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose, inverted }) => {
             />
             <InputBase
               ref={inputRef}
-              placeholder="Search for items..."
+              placeholder={t(
+                'public.items.searchPlaceholder',
+                'Name, brand, SKU, tags, or store…'
+              )}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -127,7 +133,7 @@ const HeaderSearch: React.FC<HeaderSearchProps> = ({ onClose, inverted }) => {
                 },
               }}
               inputProps={{
-                'aria-label': 'search items',
+                'aria-label': t('public.items.searchAria', 'Search the item catalog'),
               }}
             />
             <IconButton
