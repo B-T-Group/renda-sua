@@ -24,7 +24,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useLayoutEffect, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
@@ -39,7 +39,8 @@ export interface ItemsPageFilterState {
 interface ItemsPageFilterProps {
   items: InventoryItem[];
   searchTerm: string;
-  onSearchChange: (value: string) => void;
+  /** Persists the committed query (e.g. URL `search` param) when the user submits. */
+  onSearchSubmit: (value: string) => void;
   filters: ItemsPageFilterState;
   onFiltersChange: (filters: ItemsPageFilterState) => void;
   onFilterChange: (filteredItems: InventoryItem[]) => void;
@@ -53,7 +54,7 @@ interface ItemsPageFilterProps {
 const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   items,
   searchTerm,
-  onSearchChange,
+  onSearchSubmit,
   filters,
   onFiltersChange,
   onFilterChange,
@@ -65,6 +66,11 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [searchDraft, setSearchDraft] = React.useState(searchTerm);
+
+  useEffect(() => {
+    setSearchDraft(searchTerm);
+  }, [searchTerm]);
 
   const filterOptions = useMemo(() => {
     const categories = Array.from(
@@ -169,7 +175,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   };
 
   const handleClearFilters = () => {
-    onSearchChange('');
+    onSearchSubmit('');
     onFiltersChange({
       category: '',
       subcategory: '',
@@ -192,7 +198,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     if (searchTerm) {
       chips.push({
         label: `${t('common.search', 'Search')}: "${searchTerm}"`,
-        onDelete: () => onSearchChange(''),
+        onDelete: () => onSearchSubmit(''),
       });
     }
     if (filters.category) {
@@ -326,6 +332,11 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
     <Box sx={{ mb: 3 }}>
       {/* Search bar - centered */}
       <Box
+        component="form"
+        onSubmit={(e: React.FormEvent) => {
+          e.preventDefault();
+          onSearchSubmit(searchDraft.trim());
+        }}
         sx={{
           display: 'flex',
           justifyContent: 'center',
@@ -333,93 +344,120 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
           mb: 2,
         }}
       >
-        <TextField
-          fullWidth
-          size="medium"
-          variant="outlined"
-          label={t('public.items.searchLabel', 'Search items')}
-          placeholder={t(
-            'public.items.searchPlaceholder',
-            'Name, brand, SKU, tags, or store…'
-          )}
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          autoComplete="off"
-          inputProps={{
-            'aria-label': t(
-              'public.items.searchAria',
-              'Search the item catalog'
-            ),
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon
-                  sx={{
-                    color: 'text.secondary',
-                    opacity: 0.9,
-                    fontSize: 22,
-                  }}
-                />
-              </InputAdornment>
-            ),
-            endAdornment: searchTerm ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  edge="end"
-                  aria-label={t('public.items.clearSearch', 'Clear search')}
-                  onClick={() => onSearchChange('')}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ) : null,
-          }}
-          sx={(theme) => ({
-            maxWidth: 480,
-            '& .MuiInputLabel-root': {
-              fontWeight: 500,
-            },
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2.5,
-              minHeight: 52,
-              pl: 0.25,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha(theme.palette.common.white, 0.06)
-                  : alpha(theme.palette.common.black, 0.03),
-              transition: theme.transitions.create(
-                ['box-shadow', 'background-color', 'border-color'],
-                { duration: theme.transitions.duration.shorter }
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+          sx={{ width: '100%', maxWidth: 640 }}
+        >
+          <TextField
+            fullWidth
+            size="medium"
+            variant="outlined"
+            label={t('public.items.searchLabel', 'Search items')}
+            placeholder={t(
+              'public.items.searchPlaceholder',
+              'Name, brand, SKU, tags, or store…'
+            )}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            autoComplete="off"
+            helperText={t(
+              'public.items.searchHint',
+              'Press Enter or click Search to run your query.'
+            )}
+            FormHelperTextProps={{ sx: { mx: 0 } }}
+            inputProps={{
+              'aria-label': t(
+                'public.items.searchAria',
+                'Search the item catalog'
               ),
-              '&:hover': {
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon
+                    sx={{
+                      color: 'text.secondary',
+                      opacity: 0.9,
+                      fontSize: 22,
+                    }}
+                  />
+                </InputAdornment>
+              ),
+              endAdornment: searchDraft ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    edge="end"
+                    type="button"
+                    aria-label={t('public.items.clearSearch', 'Clear search')}
+                    onClick={() => onSearchSubmit('')}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            }}
+            sx={(theme) => ({
+              flex: 1,
+              '& .MuiInputLabel-root': {
+                fontWeight: 500,
+              },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2.5,
+                minHeight: 52,
+                pl: 0.25,
                 bgcolor:
                   theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.09)
-                    : alpha(theme.palette.common.black, 0.05),
+                    ? alpha(theme.palette.common.white, 0.06)
+                    : alpha(theme.palette.common.black, 0.03),
+                transition: theme.transitions.create(
+                  ['box-shadow', 'background-color', 'border-color'],
+                  { duration: theme.transitions.duration.shorter }
+                ),
+                '&:hover': {
+                  bgcolor:
+                    theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.common.white, 0.09)
+                      : alpha(theme.palette.common.black, 0.05),
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.primary.main, 0.45),
+                  },
+                },
+                '&.Mui-focused': {
+                  bgcolor: theme.palette.background.paper,
+                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.main',
+                    borderWidth: 1,
+                  },
+                },
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: alpha(theme.palette.primary.main, 0.45),
+                  borderColor: theme.palette.divider,
+                },
+                '& .MuiOutlinedInput-input': {
+                  py: 1.25,
+                  typography: 'body1',
                 },
               },
-              '&.Mui-focused': {
-                bgcolor: theme.palette.background.paper,
-                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
-                  borderWidth: 1,
-                },
-              },
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.divider,
-              },
-              '& .MuiOutlinedInput-input': {
-                py: 1.25,
-                typography: 'body1',
-              },
-            },
-          })}
-        />
+            })}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            sx={{
+              minHeight: 52,
+              px: 3,
+              borderRadius: 2.5,
+              flexShrink: 0,
+              alignSelf: { xs: 'stretch', sm: 'flex-start' },
+            }}
+          >
+            {t('public.items.searchButton', 'Search')}
+          </Button>
+        </Stack>
       </Box>
 
       {!isMobile ? (

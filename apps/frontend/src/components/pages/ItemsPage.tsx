@@ -448,7 +448,7 @@ const ItemsPage: React.FC = () => {
         <ItemsPageFilter
           items={inventoryItems}
           searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchSubmit={setSearchTerm}
           filters={filters}
           onFiltersChange={setFilters}
           onFilterChange={setFilteredItems}

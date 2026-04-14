@@ -2923,6 +2923,8 @@
       "popularSearches": "Popular searches:",
       "searchLabel": "Rechercher des articles",
       "searchAria": "Rechercher dans le catalogue d’articles",
+      "searchButton": "Rechercher",
+      "searchHint": "Appuyez sur Entrée ou touchez Rechercher pour lancer la recherche.",
       "clearSearch": "Effacer la recherche",
       "searchPlaceholder": "Nom, marque, SKU, étiquettes ou magasin…",
       "showResults": "Show {count} Results",

@@ -2960,6 +2960,8 @@
       "popularSearches": "Popular searches:",
       "searchLabel": "Search items",
       "searchAria": "Search the item catalog",
+      "searchButton": "Search",
+      "searchHint": "Press Enter or click Search to run your query.",
       "clearSearch": "Clear search",
       "searchPlaceholder": "Name, brand, SKU, tags, or store…",
       "showResults": "Show {count} Results",

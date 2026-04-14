@@ -48,7 +48,6 @@ import {
 import { PERSONA_HEADER_COLORS } from '../../constants/personaTheme';
 import LoginHeaderButton from '../auth/LoginHeaderButton';
 import LogoutButton from '../auth/LogoutButton';
-import HeaderSearch from '../common/HeaderSearch';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import Logo from '../common/Logo';
 import MobileBalanceChip from '../common/MobileBalanceChip';
@@ -600,11 +599,6 @@ const Header: React.FC = () => {
 
             {/* Right Section */}
             <Stack direction="row" spacing={1} alignItems="center">
-              {/* Search */}
-              <Box sx={{ position: 'relative' }}>
-                <HeaderSearch inverted />
-              </Box>
-
               {/* XAF balance (view transactions, withdraw) - client/agent only; mobile + desktop */}
               {isAuthenticated &&
                 (userType === 'client' || userType === 'agent') && (
