@@ -69,6 +69,15 @@ const DELETE_ITEM_IMAGE = `
   }
 `;
 
+const UPDATE_ITEM_IMAGE = `
+  mutation UpdateItemImage($id: uuid!, $_set: item_images_set_input!) {
+    update_item_images_by_pk(pk_columns: { id: $id }, _set: $_set) {
+      id
+      image_type
+    }
+  }
+`;
+
 export const useItemImages = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +86,7 @@ export const useItemImages = () => {
   const { execute: executeGetImages } = useGraphQLRequest(GET_ITEM_IMAGES);
   const { execute: executeCreateImage } = useGraphQLRequest(CREATE_ITEM_IMAGE);
   const { execute: executeDeleteImage } = useGraphQLRequest(DELETE_ITEM_IMAGE);
+  const { execute: executeUpdateImage } = useGraphQLRequest(UPDATE_ITEM_IMAGE);
 
   const fetchItemImages = useCallback(
     async (itemId: string): Promise<ItemImage[]> => {
@@ -172,6 +182,49 @@ export const useItemImages = () => {
     [executeDeleteImage]
   );
 
+  const demoteOtherMain = useCallback(
+    async (itemId: string, exceptImageId?: string) => {
+      const imgs = await fetchItemImages(itemId);
+      const other = imgs.find(
+        (i) =>
+          i.image_type === 'main' &&
+          (exceptImageId === undefined || i.id !== exceptImageId)
+      );
+      if (other) {
+        await executeUpdateImage({
+          id: other.id,
+          _set: { image_type: 'gallery' },
+        });
+      }
+    },
+    [executeUpdateImage, fetchItemImages]
+  );
+
+  const updateItemImageType = useCallback(
+    async (
+      itemId: string,
+      imageId: string,
+      imageType: 'main' | 'gallery'
+    ): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (imageType === 'main') {
+          await demoteOtherMain(itemId, imageId);
+        }
+        await executeUpdateImage({ id: imageId, _set: { image_type: imageType } });
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to update item image'
+        );
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [demoteOtherMain, executeUpdateImage]
+  );
+
   // Helper function to determine image type based on existing images
   const determineImageType = useCallback(
     (currentImages: ItemImage[]): ImageType => {
@@ -204,13 +257,20 @@ export const useItemImages = () => {
       userId: string,
       bucketName: string,
       altText?: string,
-      caption?: string
+      caption?: string,
+      preferredImageType?: 'main' | 'gallery'
     ): Promise<ItemImage> => {
       setLoading(true);
       setError(null);
 
       try {
-        // Get presigned URL
+        const currentImages = await fetchItemImages(itemId);
+        const imageType =
+          preferredImageType ?? determineImageType(currentImages);
+        if (imageType === 'main') {
+          await demoteOtherMain(itemId);
+        }
+
         const presignedResponse = await getPresignedUrl({
           bucketName,
           originalFileName: file.name,
@@ -224,18 +284,12 @@ export const useItemImages = () => {
           );
         }
 
-        // Upload to S3
         await uploadImageToS3(presignedResponse.data.url, file);
 
-        // Get the final S3 URL
         const s3Url = `https://${bucketName}.s3.amazonaws.com/${presignedResponse.data.key}`;
 
-        // Get current images to determine display order and image type
-        const currentImages = await fetchItemImages(itemId);
         const nextDisplayOrder = currentImages.length + 1;
-        const imageType = determineImageType(currentImages);
 
-        // Create item image record
         const imageData: CreateItemImageData = {
           business_id: businessId,
           item_id: itemId,
@@ -247,8 +301,7 @@ export const useItemImages = () => {
           uploaded_by: userId,
         };
 
-        const newImage = await createItemImage(imageData);
-        return newImage;
+        return await createItemImage(imageData);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to upload item image'
@@ -264,6 +317,7 @@ export const useItemImages = () => {
       fetchItemImages,
       createItemImage,
       determineImageType,
+      demoteOtherMain,
     ]
   );
 
@@ -273,6 +327,7 @@ export const useItemImages = () => {
     fetchItemImages,
     uploadItemImage,
     deleteItemImage,
+    updateItemImageType,
     createItemImage,
     getPresignedUrl,
   };

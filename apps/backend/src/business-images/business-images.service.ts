@@ -211,6 +211,20 @@ const ITEM_IMAGES_TYPES_FOR_ITEM = `
   }
 `;
 
+const ITEM_IMAGES_ORDERED_FOR_ITEM = `
+  query ItemImagesOrderedForItem($itemId: uuid!, $businessId: uuid!) {
+    item_images(
+      where: {
+        item_id: { _eq: $itemId },
+        business_id: { _eq: $businessId }
+      },
+      order_by: [{ display_order: asc_nulls_last }, { created_at: asc }]
+    ) {
+      id
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessImagesService {
   constructor(
@@ -486,6 +500,43 @@ export class BusinessImagesService {
     return this.applyImageUpdate(businessId, imageId, {
       image_type: 'main',
     });
+  }
+
+  private async promoteNextMainExcluding(
+    businessId: string,
+    itemId: string,
+    excludeImageId: string
+  ): Promise<void> {
+    const result = await this.hasuraUserService.executeQuery<{
+      item_images: { id: string }[];
+    }>(ITEM_IMAGES_ORDERED_FOR_ITEM, { itemId, businessId });
+    const next = (result.item_images ?? []).find((r) => r.id !== excludeImageId);
+    if (!next) return;
+    await this.applyImageUpdate(businessId, next.id, { image_type: 'main' });
+  }
+
+  /** Demotes this image to gallery; if it was main, promotes the next image by display order. */
+  async setImageAsGalleryForItem(
+    businessId: string,
+    imageId: string
+  ): Promise<BusinessImage> {
+    const target = await this.fetchImageForBusiness(businessId, imageId);
+    if (!target.item_id) {
+      throw new HttpException(
+        { success: false, error: 'Image must be assigned to an item' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (target.image_type !== 'main') {
+      return target;
+    }
+    await this.applyImageUpdate(businessId, imageId, { image_type: 'gallery' });
+    await this.promoteNextMainExcluding(
+      businessId,
+      target.item_id,
+      imageId
+    );
+    return this.fetchImageForBusiness(businessId, imageId);
   }
 
   private async applyImageUpdate(

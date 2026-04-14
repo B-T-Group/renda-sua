@@ -201,6 +201,24 @@ export class BusinessImagesController {
     return { success: true, data: { image } };
   }
 
+  @Post(':id/set-as-gallery')
+  @ApiOperation({
+    summary:
+      'Demote image to gallery (secondary); if it was main, promotes the next image by display order',
+  })
+  @ApiResponse({ status: 200, description: 'Image updated' })
+  @ApiResponse({ status: 400, description: 'Image not linked to an item' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Image not found' })
+  async setImageAsGallery(@Param('id') id: string) {
+    const businessId = await this.getBusinessIdOrThrow();
+    const image = await this.businessImagesService.setImageAsGalleryForItem(
+      businessId,
+      id
+    );
+    return { success: true, data: { image } };
+  }
+
   @Patch(':id')
   @ApiOperation({
     summary:

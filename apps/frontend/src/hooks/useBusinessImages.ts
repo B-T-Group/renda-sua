@@ -299,6 +299,29 @@ export const useBusinessImages = () => {
     [apiClient, fetchImages]
   );
 
+  const setImageAsGallery = useCallback(
+    async (imageId: string) => {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await apiClient.post<{ success: boolean }>(
+          `/business-images/${imageId}/set-as-gallery`
+        );
+        await fetchImages();
+      } catch (err: any) {
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            'Failed to update image'
+        );
+        throw err;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [apiClient, fetchImages]
+  );
+
   const cleanupImage = useCallback(
     async (
       imageId: string
@@ -344,6 +367,7 @@ export const useBusinessImages = () => {
     deleteImage,
     removeTag,
     setImageAsMain,
+    setImageAsGallery,
     cleanupImage,
     setPage,
     setPageSize,

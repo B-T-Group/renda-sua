@@ -23,11 +23,13 @@ import {
   Dialog,
   DialogContent,
   Divider,
+  FormControlLabel,
   Grid,
   IconButton,
   LinearProgress,
   Skeleton,
   Stack,
+  Switch,
   Typography,
   useMediaQuery,
   useTheme,
@@ -91,10 +93,12 @@ export default function ItemViewPage() {
   const [imageLightboxIndex, setImageLightboxIndex] = useState<number | null>(
     null
   );
+  const [itemActiveToggling, setItemActiveToggling] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
   const {
     setImageAsMain,
+    setImageAsGallery,
     cleanupImage,
     updateImage,
     submitting: imageActionsBusy,
@@ -329,6 +333,59 @@ export default function ItemViewPage() {
     [enqueueSnackbar, fetchItemDetails, setImageAsMain, t]
   );
 
+  const handleToggleItemActive = useCallback(
+    async (nextActive: boolean) => {
+      if (!item?.id) return;
+      setItemActiveToggling(true);
+      try {
+        await updateItem(item.id, { is_active: nextActive }, {
+          skipRefetch: true,
+        });
+        setItem((prev) =>
+          prev ? { ...prev, is_active: nextActive } : prev
+        );
+        enqueueSnackbar(
+          t(
+            'business.items.activeStatusUpdated',
+            'Listing status updated'
+          ),
+          { variant: 'success' }
+        );
+      } catch (error: any) {
+        enqueueSnackbar(
+          error?.message || t('common.error', 'Something went wrong'),
+          { variant: 'error' }
+        );
+      } finally {
+        setItemActiveToggling(false);
+      }
+    },
+    [enqueueSnackbar, item?.id, t, updateItem]
+  );
+
+  const handleSetImageAsGallery = useCallback(
+    async (imageId: string) => {
+      try {
+        await setImageAsGallery(imageId);
+        await fetchItemDetails();
+        setImageLightboxIndex(null);
+        enqueueSnackbar(
+          t(
+            'business.items.secondaryImageUpdated',
+            'This image is now secondary.'
+          ),
+          { variant: 'success' }
+        );
+      } catch (error: any) {
+        enqueueSnackbar(
+          error?.message || t('common.error', 'Something went wrong'),
+          { variant: 'error' }
+        );
+      }
+    },
+    [enqueueSnackbar, fetchItemDetails, setImageAsGallery, t]
+  );
+
   const uploadFileToS3 = useCallback(
     async (file: File) => {
       const presigned = await generateImageUploadUrl({
@@ -530,10 +587,21 @@ export default function ItemViewPage() {
                 SKU: {item.sku}
               </Typography>
             </Box>
-            <Chip
-              label={item.is_active ? t('common.active') : t('common.inactive')}
-              color={item.is_active ? 'success' : 'default'}
-              size="small"
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={Boolean(item.is_active)}
+                  onChange={(_, checked) => void handleToggleItemActive(checked)}
+                  disabled={itemActiveToggling}
+                  color="success"
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  {t('business.items.listingActive', 'Listing active')}
+                </Typography>
+              }
+              sx={{ ml: 0, mr: 0 }}
             />
           </Stack>
 
@@ -1263,7 +1331,7 @@ export default function ItemViewPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 {t(
                   'business.items.imageManagementDescription',
-                  'Upload and manage photos. Tap a picture to open it full screen and use arrows or keyboard to browse. Use “Set as main image” to choose the primary listing photo.'
+                  'Upload and manage photos. Tap a picture to open it full screen and use arrows or keyboard to browse. Use “Set as primary” or “Set as secondary” to choose which photo is the main listing image.'
                 )}
               </Typography>
 
@@ -1271,6 +1339,9 @@ export default function ItemViewPage() {
                 <Grid container spacing={2}>
                   {sortedItemImages.map((image: ItemImage, idx: number) => {
                     const isMain = image.image_type === 'main';
+                    const showSetPrimary = !isMain;
+                    const showSetSecondary =
+                      isMain && sortedItemImages.length > 1;
                     return (
                       <Grid size={{ xs: 12, md: 6 }} key={image.id}>
                         <Card
@@ -1324,19 +1395,39 @@ export default function ItemViewPage() {
                                 variant={isMain ? 'filled' : 'outlined'}
                               />
                             </Stack>
-                            {!isMain && sortedItemImages.length > 1 ? (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={imageActionsBusy}
-                                onClick={() => void handleSetImageAsMain(image.id)}
-                                sx={{ mb: 1 }}
-                              >
-                                {t(
-                                  'business.items.setAsMainImage',
-                                  'Set as main image'
-                                )}
-                              </Button>
+                            {showSetPrimary || showSetSecondary ? (
+                              <Stack spacing={1} sx={{ mb: 1 }}>
+                                {showSetPrimary ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={imageActionsBusy}
+                                    onClick={() =>
+                                      void handleSetImageAsMain(image.id)
+                                    }
+                                  >
+                                    {t(
+                                      'business.items.setAsPrimaryImage',
+                                      'Set as primary'
+                                    )}
+                                  </Button>
+                                ) : null}
+                                {showSetSecondary ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={imageActionsBusy}
+                                    onClick={() =>
+                                      void handleSetImageAsGallery(image.id)
+                                    }
+                                  >
+                                    {t(
+                                      'business.items.setAsSecondaryImage',
+                                      'Set as secondary'
+                                    )}
+                                  </Button>
+                                ) : null}
+                              </Stack>
                             ) : null}
                             {profile?.business?.image_cleanup_enabled ? (
                               <Button

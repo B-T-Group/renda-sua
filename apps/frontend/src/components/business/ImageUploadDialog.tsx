@@ -20,6 +20,8 @@ import {
   Paper,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -44,6 +46,23 @@ const ACCEPTED_FILE_TYPES = [
 ];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
+const hasOwnKey = (o: object, k: string) =>
+  Object.prototype.hasOwnProperty.call(o, k);
+
+function getEffectivePendingType(
+  index: number,
+  types: Record<string, 'main' | 'gallery'>,
+  hasExistingMain: boolean
+): 'main' | 'gallery' {
+  if (hasOwnKey(types, `file-${index}`)) {
+    return types[`file-${index}`];
+  }
+  if (!hasExistingMain && index === 0) {
+    return 'main';
+  }
+  return 'gallery';
+}
+
 export default function ImageUploadDialog({
   open,
   onClose,
@@ -53,19 +72,28 @@ export default function ImageUploadDialog({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfileContext();
-  const { loading, error, fetchItemImages, uploadItemImage, deleteItemImage } =
-    useItemImages();
+  const {
+    loading,
+    fetchItemImages,
+    uploadItemImage,
+    deleteItemImage,
+    updateItemImageType,
+  } = useItemImages();
 
   const [images, setImages] = useState<ItemImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [altTexts, setAltTexts] = useState<Record<string, string>>({});
   const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [fileImageTypes, setFileImageTypes] = useState<
+    Record<string, 'main' | 'gallery'>
+  >({});
   const [imagesModified, setImagesModified] = useState(false);
 
   useEffect(() => {
     if (open && itemId) {
       loadImages();
-      setImagesModified(false); // Reset modified flag when dialog opens
+      setImagesModified(false);
+      setFileImageTypes({});
     }
   }, [open, itemId]);
 
@@ -116,7 +144,71 @@ export default function ImageUploadDialog({
   };
 
   const removeSelectedFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => {
+      setFileImageTypes((types) => {
+        const remapped: Record<string, 'main' | 'gallery'> = {};
+        let ni = 0;
+        for (let oi = 0; oi < prev.length; oi++) {
+          if (oi === index) continue;
+          if (hasOwnKey(types, `file-${oi}`)) {
+            remapped[`file-${ni}`] = types[`file-${oi}`];
+          }
+          ni++;
+        }
+        return remapped;
+      });
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const hasExistingMain = images.some((i) => i.image_type === 'main');
+
+  const handleExistingTypeChange = async (
+    imageId: string,
+    value: 'main' | 'gallery' | null
+  ) => {
+    if (value == null) return;
+    const img = images.find((i) => i.id === imageId);
+    if (!img) return;
+    const current: 'main' | 'gallery' =
+      img.image_type === 'main' ? 'main' : 'gallery';
+    if (current === value) return;
+    try {
+      await updateItemImageType(itemId, imageId, value);
+      await loadImages();
+      enqueueSnackbar(
+        t('business.inventory.imageTypeUpdated', 'Image type updated'),
+        { variant: 'success' }
+      );
+      setImagesModified(true);
+    } catch (e) {
+      console.error('Failed to update image type:', e);
+      enqueueSnackbar(
+        t(
+          'business.inventory.failedToUpdateImageType',
+          'Failed to update image type'
+        ),
+        { variant: 'error' }
+      );
+    }
+  };
+
+  const handlePendingTypeChange = (
+    index: number,
+    value: 'main' | 'gallery' | null
+  ) => {
+    if (value == null) return;
+    setFileImageTypes((prev) => {
+      const next = { ...prev };
+      if (value === 'main') {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          next[`file-${i}`] = i === index ? 'main' : 'gallery';
+        }
+      } else {
+        next[`file-${index}`] = 'gallery';
+      }
+      return next;
+    });
   };
 
   const handleUpload = async () => {
@@ -144,6 +236,9 @@ export default function ImageUploadDialog({
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
         const fileKey = `file-${i}`;
+        const preferred = hasOwnKey(fileImageTypes, fileKey)
+          ? fileImageTypes[fileKey]
+          : undefined;
 
         await uploadItemImage(
           itemId,
@@ -152,7 +247,8 @@ export default function ImageUploadDialog({
           profile.id,
           bucketName,
           altTexts[fileKey] || '',
-          captions[fileKey] || ''
+          captions[fileKey] || '',
+          preferred
         );
       }
 
@@ -163,6 +259,7 @@ export default function ImageUploadDialog({
       setSelectedFiles([]);
       setAltTexts({});
       setCaptions({});
+      setFileImageTypes({});
 
       enqueueSnackbar(t('business.inventory.imagesUploadedSuccessfully'), {
         variant: 'success',
@@ -274,6 +371,47 @@ export default function ImageUploadDialog({
                     />
                     <ImageListItemBar
                       position="bottom"
+                      title={
+                        <ToggleButtonGroup
+                          exclusive
+                          size="small"
+                          value={
+                            image.image_type === 'main' ? 'main' : 'gallery'
+                          }
+                          onChange={(_, v) =>
+                            handleExistingTypeChange(image.id, v)
+                          }
+                          disabled={loading}
+                          sx={{
+                            bgcolor: 'rgba(0,0,0,0.5)',
+                            '& .MuiToggleButton-root': {
+                              color: 'white',
+                              py: 0.25,
+                              px: 1,
+                              fontSize: '0.75rem',
+                              borderColor: 'rgba(255,255,255,0.35)',
+                            },
+                            '& .Mui-selected': {
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              '&:hover': { bgcolor: 'primary.dark' },
+                            },
+                          }}
+                        >
+                          <ToggleButton value="main">
+                            {t(
+                              'business.inventory.imageTypePrimary',
+                              'Primary'
+                            )}
+                          </ToggleButton>
+                          <ToggleButton value="gallery">
+                            {t(
+                              'business.inventory.imageTypeSecondary',
+                              'Secondary'
+                            )}
+                          </ToggleButton>
+                        </ToggleButtonGroup>
+                      }
                       sx={{
                         background:
                           'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
@@ -407,6 +545,36 @@ export default function ImageUploadDialog({
                         </Typography>
 
                         <Stack spacing={1.5}>
+                          <Typography variant="caption" color="text.secondary">
+                            {t('business.inventory.imageType', 'Image Type')}
+                          </Typography>
+                          <ToggleButtonGroup
+                            exclusive
+                            fullWidth
+                            size="small"
+                            value={getEffectivePendingType(
+                              index,
+                              fileImageTypes,
+                              hasExistingMain
+                            )}
+                            onChange={(_, v) =>
+                              handlePendingTypeChange(index, v)
+                            }
+                            disabled={loading}
+                          >
+                            <ToggleButton value="main">
+                              {t(
+                                'business.inventory.imageTypePrimary',
+                                'Primary'
+                              )}
+                            </ToggleButton>
+                            <ToggleButton value="gallery">
+                              {t(
+                                'business.inventory.imageTypeSecondary',
+                                'Secondary'
+                              )}
+                            </ToggleButton>
+                          </ToggleButtonGroup>
                           <TextField
                             fullWidth
                             size="small"
