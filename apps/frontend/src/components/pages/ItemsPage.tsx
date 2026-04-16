@@ -449,6 +449,13 @@ const ItemsPage: React.FC = () => {
           items={inventoryItems}
           searchTerm={searchTerm}
           onSearchSubmit={setSearchTerm}
+          suggestionsQuery={{
+            include_unavailable: showUnavailable,
+            is_active: true,
+            business_location_id: businessLocationId ?? undefined,
+            origin_lat: browserGeo?.lat ?? undefined,
+            origin_lng: browserGeo?.lng ?? undefined,
+          }}
           filters={filters}
           onFiltersChange={setFilters}
           onFilterChange={setFilteredItems}

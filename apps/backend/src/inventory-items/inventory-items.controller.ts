@@ -11,6 +11,7 @@ import { Public } from '../auth/public.decorator';
 import type {
   GetInventoryItemsQuery,
   InventoryItem,
+  InventorySearchSuggestion,
   PaginatedInventoryItems,
   TopInventoryLocationRow,
 } from './inventory-items.service';
@@ -34,6 +35,11 @@ interface GetInventoryItemsQueryParams {
   business_location_id?: string;
   origin_lat?: string;
   origin_lng?: string;
+}
+
+interface GetInventorySearchSuggestionsQueryParams
+  extends Omit<GetInventoryItemsQueryParams, 'search'> {
+  q?: string;
 }
 
 @ApiTags('Inventory Items')
@@ -336,6 +342,133 @@ export class InventoryItemsController {
         {
           success: false,
           message: 'Failed to retrieve inventory items',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Public()
+  @Get('search/suggestions')
+  @ApiOperation({
+    summary: 'Get grouped search suggestions for the public item catalog',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Grouped suggestions for terms, products, categories, and sellers',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            suggestions: {
+              type: 'array',
+              items: { type: 'object' },
+            },
+          },
+        },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    type: String,
+    description: 'Search prefix (min 2 chars, max 64)',
+  })
+  @ApiQuery({
+    name: 'include_unavailable',
+    required: false,
+    type: Boolean,
+    description: 'Include items with zero stock (default: false)',
+  })
+  @ApiQuery({
+    name: 'is_active',
+    required: false,
+    type: Boolean,
+    description: 'Filter by active status (default: true)',
+  })
+  @ApiQuery({
+    name: 'country_code',
+    required: false,
+    type: String,
+    description: 'Anonymous catalog scope (overridden by primary address)',
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    type: String,
+    description: 'Optional state filter (with country_code)',
+  })
+  @ApiQuery({
+    name: 'business_location_id',
+    required: false,
+    type: String,
+    description: 'Filter to a single business location (UUID)',
+  })
+  @ApiQuery({
+    name: 'origin_lat',
+    required: false,
+    type: Number,
+    description:
+      'Approximate latitude for anonymous distance scoping (ignored when primary address exists)',
+  })
+  @ApiQuery({
+    name: 'origin_lng',
+    required: false,
+    type: Number,
+    description:
+      'Approximate longitude for anonymous distance scoping (ignored when primary address exists)',
+  })
+  async getSearchSuggestions(
+    @Query() query: GetInventorySearchSuggestionsQueryParams
+  ): Promise<{
+    success: boolean;
+    data: { suggestions: InventorySearchSuggestion[] };
+    message: string;
+  }> {
+    try {
+      const oLat = query.origin_lat
+        ? Number.parseFloat(query.origin_lat)
+        : undefined;
+      const oLng = query.origin_lng
+        ? Number.parseFloat(query.origin_lng)
+        : undefined;
+
+      const suggestions = await this.inventoryItemsService.getInventorySearchSuggestions(
+        {
+          q: query.q ?? '',
+          is_active:
+            query.is_active !== undefined ? query.is_active === 'true' : true,
+          include_unavailable:
+            query.include_unavailable !== undefined
+              ? query.include_unavailable === 'true'
+              : false,
+          country_code: query.country_code,
+          state: query.state,
+          business_location_id: query.business_location_id?.trim() || undefined,
+          ...(Number.isFinite(oLat) && { origin_lat: oLat }),
+          ...(Number.isFinite(oLng) && { origin_lng: oLng }),
+        }
+      );
+
+      return {
+        success: true,
+        data: { suggestions },
+        message: 'Search suggestions retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to retrieve search suggestions',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR

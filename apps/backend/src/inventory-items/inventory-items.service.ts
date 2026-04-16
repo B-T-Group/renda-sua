@@ -120,6 +120,24 @@ export interface GetInventoryItemsQuery {
   origin_lng?: number;
 }
 
+export type InventorySearchSuggestion =
+  | { kind: 'term'; value: string }
+  | {
+      kind: 'product';
+      inventoryId: string;
+      title: string;
+      imageUrl?: string | null;
+      price: number;
+      currency: string;
+    }
+  | { kind: 'category'; value: string }
+  | {
+      kind: 'seller';
+      businessId: string;
+      name: string;
+      logoUrl?: string | null;
+    };
+
 export interface TopInventoryLocationRow {
   id: string;
   name: string;
@@ -756,6 +774,171 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private normalizeSuggestionQuery(q: string): string {
+    return q
+      .trim()
+      .slice(0, 64)
+      .replace(/[%_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private tryAddProductSuggestion(params: {
+    row: any;
+    suggestions: InventorySearchSuggestion[];
+    seenProducts: Set<string>;
+  }) {
+    const { row, suggestions, seenProducts } = params;
+    if (!row?.id || seenProducts.has(row.id) || seenProducts.size >= 8) return;
+    const title = row?.item?.name;
+    if (!title) return;
+    seenProducts.add(row.id);
+    suggestions.push({
+      kind: 'product',
+      inventoryId: row.id,
+      title,
+      imageUrl: row.item?.item_images?.[0]?.image_url ?? null,
+      price: Number(row.selling_price ?? 0),
+      currency: row.item?.currency ?? 'XAF',
+    });
+  }
+
+  private tryAddCategorySuggestion(params: {
+    row: any;
+    suggestions: InventorySearchSuggestion[];
+    seenCategories: Set<string>;
+  }) {
+    const { row, suggestions, seenCategories } = params;
+    if (seenCategories.size >= 5) return;
+    const category = row?.item?.item_sub_category?.item_category?.name;
+    if (!category || seenCategories.has(category)) return;
+    seenCategories.add(category);
+    suggestions.push({ kind: 'category', value: category });
+  }
+
+  private tryAddSellerSuggestion(params: {
+    row: any;
+    suggestions: InventorySearchSuggestion[];
+    seenSellers: Set<string>;
+  }) {
+    const { row, suggestions, seenSellers } = params;
+    if (seenSellers.size >= 5) return;
+    const business = row?.business_location?.business;
+    const businessId = business?.id;
+    if (!businessId || seenSellers.has(businessId)) return;
+    seenSellers.add(businessId);
+    suggestions.push({
+      kind: 'seller',
+      businessId,
+      name: business?.name ?? '',
+      logoUrl: row?.business_location?.logo_url ?? null,
+    });
+  }
+
+  private tryAddTermSuggestions(params: {
+    row: any;
+    suggestions: InventorySearchSuggestion[];
+    seenTerms: Set<string>;
+  }) {
+    const { row, suggestions, seenTerms } = params;
+    if (seenTerms.size >= 10) return;
+    const tags: string[] =
+      row?.item?.item_tags?.map((it: any) => it?.tag?.name).filter(Boolean) ??
+      [];
+    for (const tag of tags) {
+      if (seenTerms.size >= 10) break;
+      const value = String(tag).trim();
+      const key = value.toLowerCase();
+      if (!key || seenTerms.has(key)) continue;
+      seenTerms.add(key);
+      suggestions.push({ kind: 'term', value });
+    }
+  }
+
+  private buildSuggestionsFromRows(
+    rows: any[],
+    q: string
+  ): InventorySearchSuggestion[] {
+    const suggestions: InventorySearchSuggestion[] = [{ kind: 'term', value: q }];
+    const seenProducts = new Set<string>();
+    const seenCategories = new Set<string>();
+    const seenSellers = new Set<string>();
+    const seenTerms = new Set<string>([q.toLowerCase()]);
+
+    for (const row of rows) {
+      if (suggestions.length > 30) break;
+      this.tryAddProductSuggestion({ row, suggestions, seenProducts });
+      this.tryAddCategorySuggestion({ row, suggestions, seenCategories });
+      this.tryAddSellerSuggestion({ row, suggestions, seenSellers });
+      this.tryAddTermSuggestions({ row, suggestions, seenTerms });
+    }
+    return suggestions;
+  }
+
+  async getInventorySearchSuggestions(
+    query: Omit<GetInventoryItemsQuery, 'search' | 'page' | 'limit' | 'sort'> & {
+      q: string;
+    }
+  ): Promise<InventorySearchSuggestion[]> {
+    const q = this.normalizeSuggestionQuery(query.q);
+    if (q.length < 2) return [];
+
+    const { country_code, state } = await this.resolveInventoryListGeo({
+      country_code: query.country_code,
+      state: query.state,
+    });
+
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: query.is_active !== undefined ? query.is_active : true,
+      include_unavailable: query.include_unavailable ?? false,
+      search: q,
+      business_location_id: query.business_location_id,
+      country_code,
+      state,
+    });
+    if ('unsupported' in built) return [];
+
+    const queryString = `
+      query InventorySearchSuggestions($where: business_inventory_bool_exp!, $limit: Int!) {
+        business_inventory(where: $where, limit: $limit, order_by: { created_at: desc }) {
+          id
+          selling_price
+          item {
+            name
+            currency
+            item_images(limit: 1, order_by: { display_order: asc }) {
+              image_url
+            }
+            item_sub_category {
+              item_category {
+                name
+              }
+            }
+            item_tags {
+              tag {
+                name
+              }
+            }
+          }
+          business_location {
+            logo_url
+            business {
+              id
+              name
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.hasuraSystemService.executeQuery(queryString, {
+      where: built.where,
+      limit: 20,
+    });
+    const rows = result?.business_inventory ?? [];
+    return this.buildSuggestionsFromRows(rows, q);
   }
 
   /**

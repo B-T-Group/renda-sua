@@ -1,19 +1,26 @@
 import {
     Close as CloseIcon,
+    CategoryOutlined as CategoryIcon,
     FilterList as FilterListIcon,
     Search as SearchIcon,
+    StorefrontOutlined as StorefrontIcon,
 } from '@mui/icons-material';
 import {
+    Autocomplete,
+    Avatar,
     Badge,
     Box,
     Button,
     Chip,
+    CircularProgress,
     Drawer,
     FormControl,
     Grid,
     IconButton,
     InputAdornment,
     InputLabel,
+    ListItemAvatar,
+    ListItemText,
     MenuItem,
     Select,
     Skeleton,
@@ -26,6 +33,11 @@ import {
 import { alpha } from '@mui/material/styles';
 import React, { useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import {
+  InventorySearchSuggestion,
+  useInventorySearchSuggestions,
+} from '../../hooks/useInventorySearchSuggestions';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 
 export interface ItemsPageFilterState {
@@ -41,6 +53,15 @@ interface ItemsPageFilterProps {
   searchTerm: string;
   /** Persists the committed query (e.g. URL `search` param) when the user submits. */
   onSearchSubmit: (value: string) => void;
+  suggestionsQuery?: {
+    include_unavailable?: boolean;
+    is_active?: boolean;
+    country_code?: string;
+    state?: string;
+    business_location_id?: string;
+    origin_lat?: number;
+    origin_lng?: number;
+  };
   filters: ItemsPageFilterState;
   onFiltersChange: (filters: ItemsPageFilterState) => void;
   onFilterChange: (filteredItems: InventoryItem[]) => void;
@@ -55,6 +76,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   items,
   searchTerm,
   onSearchSubmit,
+  suggestionsQuery,
   filters,
   onFiltersChange,
   onFilterChange,
@@ -65,12 +87,49 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [searchDraft, setSearchDraft] = React.useState(searchTerm);
 
   useEffect(() => {
     setSearchDraft(searchTerm);
   }, [searchTerm]);
+
+  const runSearch = React.useCallback(() => {
+    onSearchSubmit(searchDraft.trim());
+  }, [onSearchSubmit, searchDraft]);
+
+  const { suggestions, loading: suggestionsLoading } =
+    useInventorySearchSuggestions(
+      {
+        q: searchDraft,
+        include_unavailable: suggestionsQuery?.include_unavailable,
+        is_active: suggestionsQuery?.is_active,
+        country_code: suggestionsQuery?.country_code,
+        state: suggestionsQuery?.state,
+        business_location_id: suggestionsQuery?.business_location_id,
+        origin_lat: suggestionsQuery?.origin_lat,
+        origin_lng: suggestionsQuery?.origin_lng,
+      },
+      { enabled: Boolean(suggestionsQuery) }
+    );
+
+  const suggestionsGroupLabel = React.useCallback(
+    (kind: InventorySearchSuggestion['kind']) => {
+      switch (kind) {
+        case 'product':
+          return t('public.items.suggestions.products', 'Products');
+        case 'category':
+          return t('public.items.suggestions.categories', 'Categories');
+        case 'seller':
+          return t('public.items.suggestions.sellers', 'Sellers');
+        case 'term':
+        default:
+          return t('public.items.suggestions.terms', 'Search terms');
+      }
+    },
+    [t]
+  );
 
   const filterOptions = useMemo(() => {
     const categories = Array.from(
@@ -335,7 +394,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         component="form"
         onSubmit={(e: React.FormEvent) => {
           e.preventDefault();
-          onSearchSubmit(searchDraft.trim());
+          runSearch();
         }}
         sx={{
           display: 'flex',
@@ -347,101 +406,266 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', sm: 'flex-start' }}
-          sx={{ width: '100%', maxWidth: 640 }}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          sx={{
+            width: '100%',
+            maxWidth: { xs: '100%', md: 900 },
+            mx: 'auto',
+          }}
         >
-          <TextField
-            fullWidth
-            size="medium"
-            variant="outlined"
-            label={t('public.items.searchLabel', 'Search items')}
-            placeholder={t(
-              'public.items.searchPlaceholder',
-              'Name, brand, SKU, tags, or store…'
-            )}
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-            autoComplete="off"
-            helperText={t(
-              'public.items.searchHint',
-              'Press Enter or click Search to run your query.'
-            )}
-            FormHelperTextProps={{ sx: { mx: 0 } }}
-            inputProps={{
-              'aria-label': t(
-                'public.items.searchAria',
-                'Search the item catalog'
-              ),
+          <Autocomplete
+            freeSolo
+            options={suggestions}
+            filterOptions={(options) => options}
+            loading={suggestionsLoading}
+            sx={{ flex: 1, minWidth: 0 }}
+            inputValue={searchDraft}
+            onInputChange={(_event, value) => setSearchDraft(value)}
+            onChange={(_event, value) => {
+              if (typeof value === 'string') {
+                setSearchDraft(value);
+                onSearchSubmit(value.trim());
+                return;
+              }
+              if (!value) return;
+              switch (value.kind) {
+                case 'product':
+                  navigate(`/items/${value.inventoryId}`);
+                  return;
+                case 'category':
+                  onFiltersChange({
+                    ...filters,
+                    category: value.value,
+                    subcategory: '',
+                  });
+                  setSearchDraft('');
+                  onSearchSubmit('');
+                  return;
+                case 'seller':
+                  setSearchDraft(value.name);
+                  onSearchSubmit(value.name.trim());
+                  return;
+                case 'term':
+                default:
+                  setSearchDraft(value.value);
+                  onSearchSubmit(value.value.trim());
+                  return;
+              }
             }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon
-                    sx={{
-                      color: 'text.secondary',
-                      opacity: 0.9,
-                      fontSize: 22,
-                    }}
-                  />
-                </InputAdornment>
-              ),
-              endAdornment: searchDraft ? (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    edge="end"
-                    type="button"
-                    aria-label={t('public.items.clearSearch', 'Clear search')}
-                    onClick={() => onSearchSubmit('')}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') return option;
+              switch (option.kind) {
+                case 'product':
+                  return option.title;
+                case 'seller':
+                  return option.name;
+                case 'category':
+                case 'term':
+                default:
+                  return option.value;
+              }
             }}
-            sx={(theme) => ({
-              flex: 1,
-              '& .MuiInputLabel-root': {
-                fontWeight: 500,
-              },
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2.5,
-                minHeight: 52,
-                pl: 0.25,
-                bgcolor:
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.06)
-                    : alpha(theme.palette.common.black, 0.03),
-                transition: theme.transitions.create(
-                  ['box-shadow', 'background-color', 'border-color'],
-                  { duration: theme.transitions.duration.shorter }
-                ),
-                '&:hover': {
-                  bgcolor:
-                    theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.common.white, 0.09)
-                      : alpha(theme.palette.common.black, 0.05),
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: alpha(theme.palette.primary.main, 0.45),
+            groupBy={(option) => suggestionsGroupLabel(option.kind)}
+            noOptionsText={t(
+              'public.items.suggestions.noOptions',
+              'No suggestions'
+            )}
+            loadingText={t('common.loading', 'Loading...')}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                fullWidth
+                size="medium"
+                variant="outlined"
+                placeholder={t(
+                  'public.items.searchPlaceholder',
+                  'Search for items, shops, or categories…'
+                )}
+                autoComplete="off"
+                helperText={undefined}
+                inputProps={{
+                  ...params.inputProps,
+                  'aria-label': t(
+                    'public.items.searchAria',
+                    'Search the item catalog'
+                  ),
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <IconButton
+                        type="button"
+                        size="medium"
+                        aria-label={t('public.items.searchButton', 'Search')}
+                        onClick={runSearch}
+                        edge="start"
+                        sx={{ ml: -0.5 }}
+                      >
+                        <SearchIcon
+                          sx={{
+                            color: 'text.secondary',
+                            opacity: 0.9,
+                            fontSize: 22,
+                          }}
+                        />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchDraft ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="medium"
+                        edge="end"
+                        type="button"
+                        aria-label={t(
+                          'public.items.clearSearch',
+                          'Clear search'
+                        )}
+                        onClick={() => {
+                          setSearchDraft('');
+                          onSearchSubmit('');
+                        }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : (
+                    <InputAdornment position="end">
+                      {suggestionsLoading ? (
+                        <CircularProgress size={18} />
+                      ) : null}
+                      {params.InputProps.endAdornment}
+                    </InputAdornment>
+                  ),
+                }}
+                sx={(theme) => ({
+                  flex: 1,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2.5,
+                    minHeight: 56,
+                    pl: 0.25,
+                    bgcolor:
+                      theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.06)
+                        : alpha(theme.palette.common.black, 0.03),
+                    transition: theme.transitions.create(
+                      ['box-shadow', 'background-color', 'border-color'],
+                      { duration: theme.transitions.duration.shorter }
+                    ),
+                    '&:hover': {
+                      bgcolor:
+                        theme.palette.mode === 'dark'
+                          ? alpha(theme.palette.common.white, 0.09)
+                          : alpha(theme.palette.common.black, 0.05),
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: alpha(theme.palette.primary.main, 0.45),
+                      },
+                    },
+                    '&.Mui-focused': {
+                      bgcolor: theme.palette.background.paper,
+                      boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: 1,
+                      },
+                    },
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: theme.palette.divider,
+                    },
+                    '& .MuiOutlinedInput-input': {
+                      py: 1.25,
+                      typography: 'body1',
+                    },
                   },
-                },
-                '&.Mui-focused': {
-                  bgcolor: theme.palette.background.paper,
-                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
-                    borderWidth: 1,
-                  },
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: theme.palette.divider,
-                },
-                '& .MuiOutlinedInput-input': {
-                  py: 1.25,
-                  typography: 'body1',
-                },
-              },
-            })}
+                })}
+              />
+            )}
+            renderOption={(props, option) => {
+              const content =
+                option.kind === 'product' ? (
+                  <>
+                    <ListItemAvatar>
+                      <Avatar
+                        variant="rounded"
+                        src={option.imageUrl ?? undefined}
+                        alt={option.title}
+                        sx={{ width: 32, height: 32 }}
+                      />
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={option.title}
+                      secondary={new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: option.currency || 'XAF',
+                      }).format(option.price ?? 0)}
+                      primaryTypographyProps={{ noWrap: true }}
+                      secondaryTypographyProps={{ noWrap: true }}
+                    />
+                  </>
+                ) : option.kind === 'seller' ? (
+                  <>
+                    <ListItemAvatar>
+                      <Avatar
+                        variant="rounded"
+                        src={option.logoUrl ?? undefined}
+                        alt={option.name}
+                        sx={{ width: 32, height: 32 }}
+                      >
+                        <StorefrontIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={option.name}
+                      secondary={t(
+                        'public.items.suggestions.sellerLabel',
+                        'Seller'
+                      )}
+                      primaryTypographyProps={{ noWrap: true }}
+                    />
+                  </>
+                ) : option.kind === 'category' ? (
+                  <>
+                    <ListItemAvatar>
+                      <Avatar
+                        variant="rounded"
+                        sx={{ width: 32, height: 32 }}
+                      >
+                        <CategoryIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={option.value}
+                      secondary={t(
+                        'public.items.suggestions.categoryLabel',
+                        'Category'
+                      )}
+                      primaryTypographyProps={{ noWrap: true }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <ListItemAvatar>
+                      <Avatar
+                        variant="rounded"
+                        sx={{ width: 32, height: 32 }}
+                      >
+                        <SearchIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={option.value}
+                      primaryTypographyProps={{ noWrap: true }}
+                    />
+                  </>
+                );
+
+              return (
+                <li {...props} key={`${option.kind}-${props.id}`}>
+                  {content}
+                </li>
+              );
+            }}
           />
           <Button
             type="submit"
@@ -452,7 +676,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
               px: 3,
               borderRadius: 2.5,
               flexShrink: 0,
-              alignSelf: { xs: 'stretch', sm: 'flex-start' },
+              alignSelf: { xs: 'stretch', sm: 'center' },
             }}
           >
             {t('public.items.searchButton', 'Search')}
