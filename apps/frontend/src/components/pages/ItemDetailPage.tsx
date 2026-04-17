@@ -1,6 +1,7 @@
 import {
   ArrowBack as ArrowBackIcon,
   Business as BusinessIcon,
+  Close as CloseIcon,
   Inventory2 as SpecsIcon,
   ShoppingCart,
   Verified,
@@ -9,20 +10,25 @@ import {
 import {
   Alert,
   Box,
+  ButtonBase,
   Button,
   Card,
   CardContent,
   CardMedia,
   Chip,
   Container,
+  Dialog,
+  DialogContent,
   Divider,
   Grid,
+  IconButton,
   Skeleton,
   Stack,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { useAuth0 } from '@auth0/auth0-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -35,6 +41,7 @@ import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
+import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import SEOHead from '../seo/SEOHead';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
@@ -50,8 +57,12 @@ export default function ItemDetailPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
+  const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
+  const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { items: similarItems, loading: similarLoading } = useSimilarItems(
@@ -69,9 +80,19 @@ export default function ItemDetailPage() {
     }
   }, [id, trackOnMount]);
 
+  React.useEffect(() => {
+    if (!inventoryItem?.id) return;
+    setSelectedImageIndex(0);
+    setImageLightboxOpen(false);
+  }, [inventoryItem?.id]);
+
   const handleOrderClick = () => {
     if (id) {
       trackView(id);
+      if (!isAuthenticated) {
+        setAnonBuyNowOpen(true);
+        return;
+      }
       navigate(`/items/${id}/place_order`);
     }
   };
@@ -150,14 +171,23 @@ export default function ItemDetailPage() {
   }
 
   const item = inventoryItem.item;
-  const primaryImage =
-    item.item_images && item.item_images.length > 0
-      ? item.item_images[0].image_url
-      : null;
+  const images = item.item_images ?? [];
+  const primaryImage = images.length > 0 ? images[0].image_url : null;
+  const selectedImageUrl =
+    images[selectedImageIndex]?.image_url ?? primaryImage ?? null;
   const business = inventoryItem.business_location?.business;
   const location = inventoryItem.business_location;
   const canOrder =
     inventoryItem.computed_available_quantity > 0 && inventoryItem.is_active;
+  const hasDeal =
+    inventoryItem.hasActiveDeal &&
+    typeof inventoryItem.original_price === 'number' &&
+    typeof inventoryItem.discounted_price === 'number' &&
+    inventoryItem.original_price > 0;
+  const checkoutUnitPrice = hasDeal
+    ? inventoryItem.discounted_price!
+    : inventoryItem.selling_price;
+  const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
@@ -191,13 +221,17 @@ export default function ItemDetailPage() {
               borderColor: 'divider',
             }}
           >
-            {primaryImage ? (
+            {selectedImageUrl ? (
               <CardMedia
                 component="img"
                 height={isMobile ? 280 : 400}
-                image={primaryImage}
+                image={selectedImageUrl}
                 alt={item.name}
-                sx={{ objectFit: 'cover' }}
+                sx={{
+                  objectFit: 'cover',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setImageLightboxOpen(true)}
               />
             ) : (
               <Box
@@ -217,6 +251,55 @@ export default function ItemDetailPage() {
               </Box>
             )}
           </Card>
+
+          {images.length > 1 && (
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                mt: 1.5,
+                flexWrap: 'wrap',
+                justifyContent: { xs: 'center', md: 'flex-start' },
+                rowGap: 1,
+              }}
+            >
+              {images.map((img, idx) => {
+                const isSelected = idx === selectedImageIndex;
+                return (
+                  <ButtonBase
+                    key={img.id ?? `${img.image_url}-${idx}`}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    sx={{
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      border: '2px solid',
+                      borderColor: isSelected ? 'primary.main' : 'divider',
+                      width: 64,
+                      height: 64,
+                      flexShrink: 0,
+                    }}
+                    aria-label={t(
+                      'items.imageThumbnail',
+                      'View image {{index}}',
+                      { index: idx + 1 }
+                    )}
+                  >
+                    <Box
+                      component="img"
+                      src={img.image_url}
+                      alt={img.alt_text || item.name}
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  </ButtonBase>
+                );
+              })}
+            </Stack>
+          )}
         </Grid>
 
         {/* Details */}
@@ -551,6 +634,50 @@ export default function ItemDetailPage() {
           </Typography>
         )}
       </Box>
+
+      <AnonymousBuyNowDialog
+        open={anonBuyNowOpen}
+        inventoryItemId={inventoryItem.id}
+        item={{
+          title: item.name,
+          imageUrl: primaryImage,
+          priceText: checkoutPriceText,
+          quantity: 1,
+        }}
+        onClose={() => setAnonBuyNowOpen(false)}
+      />
+
+      <Dialog
+        open={imageLightboxOpen}
+        onClose={() => setImageLightboxOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <IconButton
+          aria-label={t('common.close', 'Close')}
+          onClick={() => setImageLightboxOpen(false)}
+          sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent sx={{ p: 0 }}>
+          {selectedImageUrl ? (
+            <Box
+              component="img"
+              src={selectedImageUrl}
+              alt={item.name}
+              sx={{
+                width: '100%',
+                height: 'auto',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                display: 'block',
+                bgcolor: 'common.black',
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Container>
   );
 }
