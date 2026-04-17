@@ -41,6 +41,7 @@ import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
+import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -408,8 +409,14 @@ export default function ItemDetailPage() {
     <>
       {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
       <Container maxWidth="lg" component="main" sx={{ py: { xs: 2, md: 4 } }}>
-        {/* Back link */}
-        <Box sx={{ mb: 2 }}>
+        {/* Back + share */}
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          spacing={1}
+          sx={{ mb: 2 }}
+        >
           <Button
             component={RouterLink}
             to="/items"
@@ -419,7 +426,14 @@ export default function ItemDetailPage() {
           >
             {t('common.back', 'Back')}
           </Button>
-        </Box>
+          {id ? (
+            <PageShareMenu
+              shareUrl={`${clientOrigin()}/items/${id}`}
+              shareTitle={item.name}
+              shareDescription={checkoutPriceText}
+            />
+          ) : null}
+        </Stack>
 
         <Box component="article" aria-labelledby="item-detail-heading">
           {/* Main content: image + details */}
