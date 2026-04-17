@@ -2584,7 +2584,19 @@
     "dealEndsOn": "Se termine le {{date}}",
     "similarItems": "Articles similaires",
     "outOfStock": "Rupture de stock",
-    "notAvailable": "Non disponible"
+    "notAvailable": "Non disponible",
+    "seo": {
+      "breadcrumbCatalog": "Articles",
+      "detailTitle": "{{name}} | Rendasua",
+      "errorDescription": "Ce produit n’est pas disponible ou le lien est incorrect.",
+      "errorTitle": "Produit introuvable | Rendasua",
+      "errorWebPageName": "Produit introuvable",
+      "fallbackDescription": "{{name}} — Parcourez et commandez sur Rendasua.",
+      "loadingDescription": "Chargement des détails du produit.",
+      "loadingKeywords": "Rendasua, marketplace, produit",
+      "loadingTitle": "Produit | Rendasua",
+      "loadingWebPageName": "Produit"
+    }
   },
   "persona": {
     "client": "Client",

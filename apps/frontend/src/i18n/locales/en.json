@@ -2621,7 +2621,19 @@
     "dealEndsOn": "Ends on {{date}}",
     "similarItems": "Similar Items",
     "outOfStock": "Out of Stock",
-    "notAvailable": "Not Available"
+    "notAvailable": "Not Available",
+    "seo": {
+      "breadcrumbCatalog": "Items",
+      "detailTitle": "{{name}} | Rendasua",
+      "errorDescription": "This product is unavailable or the link may be incorrect.",
+      "errorTitle": "Product not found | Rendasua",
+      "errorWebPageName": "Product not found",
+      "fallbackDescription": "{{name}} — Browse and order on Rendasua.",
+      "loadingDescription": "Loading product details.",
+      "loadingKeywords": "Rendasua, marketplace, product",
+      "loadingTitle": "Product | Rendasua",
+      "loadingWebPageName": "Product"
+    }
   },
   "persona": {
     "client": "Client",

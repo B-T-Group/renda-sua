@@ -51,6 +51,124 @@ const formatCurrency = (amount: number, currency = 'USD') => {
   }).format(amount);
 };
 
+const SEO_DESC_MAX = 160;
+
+function clientOrigin(): string {
+  if (typeof window === 'undefined') return 'https://rendasua.com';
+  return window.location.origin;
+}
+
+function toAbsoluteUrl(origin: string, url: string | null | undefined): string | null {
+  const u = url?.trim();
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  return `${origin}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
+function plainDescription(text: string | null | undefined): string {
+  if (!text) return '';
+  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function truncateSeoText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 3))}...`;
+}
+
+function salePriceForInventory(inv: InventoryItem): number {
+  const hasDeal =
+    inv.hasActiveDeal &&
+    typeof inv.original_price === 'number' &&
+    typeof inv.discounted_price === 'number' &&
+    inv.original_price > 0;
+  return hasDeal ? inv.discounted_price! : inv.selling_price;
+}
+
+function availabilitySchemaUrl(inv: InventoryItem): string {
+  const inStock = inv.computed_available_quantity > 0 && inv.is_active;
+  return inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+}
+
+function collectProductImageUrls(origin: string, inv: InventoryItem): string[] | undefined {
+  const urls = (inv.item.item_images ?? [])
+    .map((img) => toAbsoluteUrl(origin, img.image_url))
+    .filter((u): u is string => Boolean(u));
+  return urls.length > 0 ? urls : undefined;
+}
+
+function buildOfferLd(inv: InventoryItem, pageUrl: string): object {
+  const sellerName = inv.business_location?.business?.name;
+  return {
+    '@type': 'Offer',
+    url: pageUrl,
+    priceCurrency: inv.item.currency,
+    price: String(salePriceForInventory(inv)),
+    availability: availabilitySchemaUrl(inv),
+    ...(sellerName
+      ? { seller: { '@type': 'Organization', name: sellerName } }
+      : {}),
+  };
+}
+
+function buildProductLdNode(
+  origin: string,
+  id: string,
+  inv: InventoryItem,
+  descriptionFallback: string
+): Record<string, unknown> {
+  const item = inv.item;
+  const pageUrl = `${origin}/items/${id}`;
+  const shortDesc = truncateSeoText(
+    plainDescription(item.description) || descriptionFallback,
+    SEO_DESC_MAX
+  );
+  const product: Record<string, unknown> = {
+    '@type': 'Product',
+    name: item.name,
+    description: shortDesc,
+    url: pageUrl,
+    sku: item.sku?.trim() || undefined,
+    image: collectProductImageUrls(origin, inv),
+  };
+  if (item.brand?.name) {
+    product.brand = { '@type': 'Brand', name: item.brand.name };
+  }
+  product.offers = buildOfferLd(inv, pageUrl);
+  return product;
+}
+
+function buildBreadcrumbLdNode(
+  origin: string,
+  id: string,
+  itemName: string,
+  catalogLabel: string
+): object {
+  const pageUrl = `${origin}/items/${id}`;
+  const catalogUrl = `${origin}/items`;
+  const elements = [
+    { '@type': 'ListItem', position: 1, name: catalogLabel, item: catalogUrl },
+    { '@type': 'ListItem', position: 2, name: itemName, item: pageUrl },
+  ];
+  return { '@type': 'BreadcrumbList', itemListElement: elements };
+}
+
+function buildItemJsonLd(
+  origin: string,
+  id: string,
+  inv: InventoryItem,
+  catalogLabel: string,
+  descriptionFallback: string
+): object {
+  const product = buildProductLdNode(origin, id, inv, descriptionFallback);
+  const breadcrumb = buildBreadcrumbLdNode(
+    origin,
+    id,
+    inv.item.name,
+    catalogLabel
+  );
+  return { '@context': 'https://schema.org', '@graph': [product, breadcrumb] };
+}
+
 export default function ItemDetailPage() {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -130,43 +248,140 @@ export default function ItemDetailPage() {
 
   const isClientUser = profile?.user_type_id === 'client';
 
+  const itemDetailSeo = React.useMemo(() => {
+    if (!id) return null;
+    const origin = clientOrigin();
+    const canonical = `${origin}/items/${id}`;
+    const defaultOg = 'https://rendasua.com/og-image.jpg';
+
+    if (loading) {
+      return {
+        title: t('items.seo.loadingTitle', 'Product | Rendasua'),
+        description: t('items.seo.loadingDescription', 'Loading product details.'),
+        keywords: t('items.seo.loadingKeywords', 'Rendasua, marketplace, product'),
+        image: defaultOg,
+        canonical,
+        url: origin,
+        type: 'website' as const,
+        structuredData: {
+          '@context': 'https://schema.org',
+          '@type': 'WebPage',
+          name: t('items.seo.loadingWebPageName', 'Product'),
+          url: canonical,
+        },
+        noindex: false,
+      };
+    }
+
+    if (error || !inventoryItem) {
+      return {
+        title: t('items.seo.errorTitle', 'Product not found | Rendasua'),
+        description: t(
+          'items.seo.errorDescription',
+          'This product is unavailable or the link may be incorrect.'
+        ),
+        keywords: 'Rendasua, marketplace',
+        image: defaultOg,
+        canonical,
+        url: origin,
+        type: 'website' as const,
+        structuredData: {
+          '@context': 'https://schema.org',
+          '@type': 'WebPage',
+          name: t('items.seo.errorWebPageName', 'Product not found'),
+          url: canonical,
+        },
+        noindex: true,
+      };
+    }
+
+    const item = inventoryItem.item;
+    const catalogLabel = t('items.seo.breadcrumbCatalog', 'Items');
+    const fallbackDesc = t(
+      'items.seo.fallbackDescription',
+      '{{name}} — Browse and order on Rendasua.',
+      { name: item.name }
+    );
+    const metaDesc = truncateSeoText(
+      plainDescription(item.description) || fallbackDesc,
+      SEO_DESC_MAX
+    );
+    const title = t('items.seo.detailTitle', '{{name}} | Rendasua', { name: item.name });
+    const imgs = item.item_images ?? [];
+    const ogImage = toAbsoluteUrl(origin, imgs[0]?.image_url) || defaultOg;
+    const kwParts = [
+      item.name,
+      item.brand?.name,
+      item.item_sub_category?.item_category?.name,
+      item.item_sub_category?.name,
+      inventoryItem.business_location?.business?.name,
+    ];
+    const keywords = [...new Set(kwParts.flatMap((p) => (p?.trim() ? [p.trim()] : [])))].join(
+      ', '
+    );
+
+    return {
+      title,
+      description: metaDesc,
+      keywords,
+      image: ogImage,
+      canonical,
+      url: origin,
+      type: 'product' as const,
+      structuredData: buildItemJsonLd(
+        origin,
+        id,
+        inventoryItem,
+        catalogLabel,
+        fallbackDesc
+      ),
+      noindex: false,
+    };
+  }, [id, loading, error, inventoryItem, t]);
+
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
-        <Skeleton variant="text" width={120} height={40} sx={{ mb: 2 }} />
-        <Grid container spacing={3} sx={{ width: '100%' }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Skeleton
-              variant="rectangular"
-              height={isMobile ? 280 : 400}
-              sx={{ borderRadius: 2, mb: 2 }}
-            />
+      <>
+        {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
+        <Container maxWidth="lg" component="main" sx={{ py: { xs: 2, md: 4 } }}>
+          <Skeleton variant="text" width={120} height={40} sx={{ mb: 2 }} />
+          <Grid container spacing={3} sx={{ width: '100%' }}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Skeleton
+                variant="rectangular"
+                height={isMobile ? 280 : 400}
+                sx={{ borderRadius: 2, mb: 2 }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Skeleton variant="text" width="80%" height={40} sx={{ mb: 1 }} />
+              <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
+              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
+            </Grid>
           </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Skeleton variant="text" width="80%" height={40} sx={{ mb: 1 }} />
-            <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
-            <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
-          </Grid>
-        </Grid>
-      </Container>
+        </Container>
+      </>
     );
   }
 
   if (error || !inventoryItem) {
     return (
-      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error || t('items.notFound', 'Item not found')}
-        </Alert>
-        <Button
-          component={RouterLink}
-          to="/items"
-          startIcon={<ArrowBackIcon />}
-          variant="outlined"
-        >
-          {t('common.back', 'Back')}
-        </Button>
-      </Container>
+      <>
+        {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
+        <Container maxWidth="lg" component="main" sx={{ py: { xs: 2, md: 4 } }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error || t('items.notFound', 'Item not found')}
+          </Alert>
+          <Button
+            component={RouterLink}
+            to="/items"
+            startIcon={<ArrowBackIcon />}
+            variant="outlined"
+          >
+            {t('common.back', 'Back')}
+          </Button>
+        </Container>
+      </>
     );
   }
 
@@ -190,28 +405,25 @@ export default function ItemDetailPage() {
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
-      <SEOHead
-        title={item.name}
-        description={item.description || undefined}
-        keywords={`${item.name}, ${item.brand?.name || ''}, ${item.item_sub_category?.name || ''}`}
-      />
+    <>
+      {itemDetailSeo && <SEOHead {...itemDetailSeo} />}
+      <Container maxWidth="lg" component="main" sx={{ py: { xs: 2, md: 4 } }}>
+        {/* Back link */}
+        <Box sx={{ mb: 2 }}>
+          <Button
+            component={RouterLink}
+            to="/items"
+            startIcon={<ArrowBackIcon />}
+            variant="outlined"
+            size={isMobile ? 'small' : 'medium'}
+          >
+            {t('common.back', 'Back')}
+          </Button>
+        </Box>
 
-      {/* Back link */}
-      <Box sx={{ mb: 2 }}>
-        <Button
-          component={RouterLink}
-          to="/items"
-          startIcon={<ArrowBackIcon />}
-          variant="outlined"
-          size={isMobile ? 'small' : 'medium'}
-        >
-          {t('common.back', 'Back')}
-        </Button>
-      </Box>
-
-      {/* Main content: image + details */}
-      <Grid container spacing={3} sx={{ width: '100%' }}>
+        <Box component="article" aria-labelledby="item-detail-heading">
+          {/* Main content: image + details */}
+          <Grid container spacing={3} sx={{ width: '100%' }}>
         {/* Image */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card
@@ -222,17 +434,19 @@ export default function ItemDetailPage() {
             }}
           >
             {selectedImageUrl ? (
-              <CardMedia
-                component="img"
-                height={isMobile ? 280 : 400}
-                image={selectedImageUrl}
-                alt={item.name}
-                sx={{
-                  objectFit: 'cover',
-                  cursor: 'pointer',
-                }}
+              <ButtonBase
                 onClick={() => setImageLightboxOpen(true)}
-              />
+                sx={{ width: '100%', display: 'block' }}
+                aria-label={t('items.viewImage', 'View image')}
+              >
+                <CardMedia
+                  component="img"
+                  height={isMobile ? 280 : 400}
+                  image={selectedImageUrl}
+                  alt={item.name}
+                  sx={{ objectFit: 'cover', width: '100%' }}
+                />
+              </ButtonBase>
             ) : (
               <Box
                 sx={{
@@ -306,6 +520,7 @@ export default function ItemDetailPage() {
         <Grid size={{ xs: 12, md: 6 }}>
           <Stack spacing={2}>
             <Typography
+              id="item-detail-heading"
               variant="h4"
               component="h1"
               sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' } }}
@@ -555,9 +770,10 @@ export default function ItemDetailPage() {
           )}
         </CardContent>
       </Card>
+        </Box>
 
-      {/* Similar items */}
-      {similarItems.length > 0 && (
+        {/* Similar items */}
+        {similarItems.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" gutterBottom>
             {t('items.similarItems', 'Similar Items')}
@@ -634,7 +850,7 @@ export default function ItemDetailPage() {
           </Typography>
         )}
       </Box>
-
+      </Container>
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
@@ -646,7 +862,6 @@ export default function ItemDetailPage() {
         }}
         onClose={() => setAnonBuyNowOpen(false)}
       />
-
       <Dialog
         open={imageLightboxOpen}
         onClose={() => setImageLightboxOpen(false)}
@@ -678,6 +893,6 @@ export default function ItemDetailPage() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </Container>
+    </>
   );
 }
