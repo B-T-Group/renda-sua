@@ -53,6 +53,7 @@ import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
+import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import ImageCleanupPreviewDialog from '../dialogs/ImageCleanupPreviewDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
@@ -1554,23 +1555,31 @@ export default function ItemViewPage() {
           {imageLightboxIndex !== null &&
             sortedItemImages[imageLightboxIndex] && (
               <>
-                <Box
-                  component="img"
-                  src={sortedItemImages[imageLightboxIndex].image_url}
-                  alt={sortedItemImages[imageLightboxIndex].alt_text || item.name}
+                <ImageLightboxTapZones
+                  showTapZones={sortedItemImages.length > 1}
+                  onPrevious={() => goLightbox(-1)}
+                  onNext={() => goLightbox(1)}
+                  previousLabel={t('common.previous', 'Previous')}
+                  nextLabel={t('common.next', 'Next')}
                   onTouchStart={lightboxSwipe.onTouchStart}
                   onTouchEnd={lightboxSwipe.onTouchEnd}
-                  sx={{
-                    width: '100%',
-                    maxHeight: { xs: '70vh', sm: '85vh' },
-                    objectFit: 'contain',
-                    display: 'block',
-                    mx: 'auto',
-                    pt: 5,
-                    px: 1,
-                    touchAction: 'pan-y',
-                  }}
-                />
+                  wrapperSx={{ mx: 'auto', pt: 5, px: 1 }}
+                >
+                  <Box
+                    component="img"
+                    src={sortedItemImages[imageLightboxIndex].image_url}
+                    alt={
+                      sortedItemImages[imageLightboxIndex].alt_text || item.name
+                    }
+                    sx={{
+                      width: '100%',
+                      maxHeight: { xs: '70vh', sm: '85vh' },
+                      objectFit: 'contain',
+                      display: 'block',
+                      touchAction: 'pan-y',
+                    }}
+                  />
+                </ImageLightboxTapZones>
                 <Stack
                   direction="row"
                   alignItems="center"

@@ -43,6 +43,7 @@ import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
+import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import PageShareMenu from '../common/PageShareMenu';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
@@ -945,22 +946,30 @@ export default function ItemDetailPage() {
         <DialogContent sx={{ p: 0, pt: 5, bgcolor: 'common.black' }}>
           {selectedImageUrl ? (
             <>
-              <Box
-                component="img"
-                src={selectedImageUrl}
-                alt={item.name}
+              <ImageLightboxTapZones
+                showTapZones={images.length > 1}
+                onPrevious={goPrevLightboxImage}
+                onNext={goNextLightboxImage}
+                previousLabel={t('common.previous', 'Previous')}
+                nextLabel={t('common.next', 'Next')}
                 onTouchStart={itemDetailLightboxSwipe.onTouchStart}
                 onTouchEnd={itemDetailLightboxSwipe.onTouchEnd}
-                sx={{
-                  width: '100%',
-                  height: 'auto',
-                  maxHeight: '70vh',
-                  objectFit: 'contain',
-                  display: 'block',
-                  bgcolor: 'common.black',
-                  touchAction: 'pan-y',
-                }}
-              />
+              >
+                <Box
+                  component="img"
+                  src={selectedImageUrl}
+                  alt={item.name}
+                  sx={{
+                    width: '100%',
+                    height: 'auto',
+                    maxHeight: '70vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    bgcolor: 'common.black',
+                    touchAction: 'pan-y',
+                  }}
+                />
+              </ImageLightboxTapZones>
               {images.length > 1 ? (
                 <Stack
                   direction="row"

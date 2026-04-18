@@ -34,6 +34,7 @@ import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
+import { ImageLightboxTapZones } from './ImageLightboxTapZones';
 
 type CardItemImage = InventoryItem['item']['item_images'][number];
 
@@ -1103,21 +1104,33 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   <ChevronLeft />
                 </IconButton>
               )}
-              <Box
-                component="img"
-                src={displayImageUrl}
-                alt={
-                  displayImage?.alt_text || inventory.item.name
-                }
+              <ImageLightboxTapZones
+                showTapZones={hasMultipleImages}
+                onPrevious={goPrevImage}
+                onNext={goNextImage}
+                previousLabel={t(
+                  'business.items.cardGalleryPrevious',
+                  'Previous photo'
+                )}
+                nextLabel={t('business.items.cardGalleryNext', 'Next photo')}
                 onTouchStart={cardLightboxSwipe.onTouchStart}
                 onTouchEnd={cardLightboxSwipe.onTouchEnd}
-                sx={{
-                  maxWidth: '100%',
-                  maxHeight: '90vh',
-                  objectFit: 'contain',
-                  touchAction: 'pan-y',
-                }}
-              />
+              >
+                <Box
+                  component="img"
+                  src={displayImageUrl}
+                  alt={
+                    displayImage?.alt_text || inventory.item.name
+                  }
+                  sx={{
+                    maxWidth: '100%',
+                    maxHeight: '90vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    touchAction: 'pan-y',
+                  }}
+                />
+              </ImageLightboxTapZones>
               {hasMultipleImages && (
                 <IconButton
                   aria-label={t(
