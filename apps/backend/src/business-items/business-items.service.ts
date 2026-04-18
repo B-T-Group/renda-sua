@@ -105,7 +105,13 @@ const GET_ITEMS = `
 const GET_BUSINESS_LOCATIONS = `
   query GetBusinessLocations($businessId: uuid!) {
     business_locations(
-      where: { business_id: { _eq: $businessId } }
+      where: {
+        business_id: { _eq: $businessId }
+        _or: [
+          { address_id: { _is_null: true } }
+          { address: { status: { _eq: active } } }
+        ]
+      }
       order_by: { name: asc }
     ) {
       id

@@ -454,7 +454,12 @@ export class InventoryItemsService {
   > {
     const locQuery = `
       query TopLocDetails($ids: [uuid!]!) {
-        business_locations(where: { id: { _in: $ids } }) {
+        business_locations(
+          where: {
+            id: { _in: $ids }
+            address: { status: { _eq: active } }
+          }
+        ) {
           id
           name
           logo_url

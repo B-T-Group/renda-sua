@@ -180,21 +180,30 @@ export class HasuraSystemService {
       `
       query CountUserAddresses($uid: uuid!) {
         ca: client_addresses_aggregate(
-          where: { client: { user_id: { _eq: $uid } } }
+          where: {
+            client: { user_id: { _eq: $uid } }
+            address: { status: { _eq: active } }
+          }
         ) {
           aggregate {
             count
           }
         }
         aa: agent_addresses_aggregate(
-          where: { agent: { user_id: { _eq: $uid } } }
+          where: {
+            agent: { user_id: { _eq: $uid } }
+            address: { status: { _eq: active } }
+          }
         ) {
           aggregate {
             count
           }
         }
         ba: business_addresses_aggregate(
-          where: { business: { user_id: { _eq: $uid } } }
+          where: {
+            business: { user_id: { _eq: $uid } }
+            address: { status: { _eq: active } }
+          }
         ) {
           aggregate {
             count
@@ -339,7 +348,10 @@ export class HasuraSystemService {
     const query = `
       query GetBusinessPrimaryAddress($businessId: uuid!) {
         business_addresses(
-          where: { business_id: { _eq: $businessId } }
+          where: {
+            business_id: { _eq: $businessId }
+            address: { status: { _eq: active } }
+          }
           limit: 1
         ) {
           address { country }
@@ -364,6 +376,7 @@ export class HasuraSystemService {
           where: {
             business_id: { _eq: $businessId }
             address_id: { _eq: $addressId }
+            address: { status: { _eq: active } }
           }
           limit: 1
         ) {
@@ -384,7 +397,10 @@ export class HasuraSystemService {
   async ensureAccountForBusinessLocation(businessLocationId: string): Promise<any> {
     const query = `
       query GetBusinessLocationForAccount($id: uuid!) {
-        business_locations_by_pk(id: $id) {
+        business_locations(
+          where: { id: { _eq: $id }, address: { status: { _eq: active } } }
+          limit: 1
+        ) {
           id
           business { user_id }
           address { country }
@@ -392,9 +408,13 @@ export class HasuraSystemService {
       }
     `;
     const result = await this.executeQuery<{
-      business_locations_by_pk: { id: string; business: { user_id: string }; address: { country: string } };
+      business_locations: Array<{
+        id: string;
+        business: { user_id: string };
+        address: { country: string };
+      }>;
     }>(query, { id: businessLocationId });
-    const row = result.business_locations_by_pk;
+    const row = result.business_locations?.[0];
     if (!row?.business?.user_id || !row?.address?.country) {
       return null;
     }
@@ -522,7 +542,7 @@ export class HasuraSystemService {
       case 'client':
         query = `
           query GetAllClientAddresses($userId: uuid!) {
-            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1
@@ -546,7 +566,7 @@ export class HasuraSystemService {
       case 'agent':
         query = `
           query GetAllAgentAddresses($userId: uuid!) {
-            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1
@@ -570,7 +590,7 @@ export class HasuraSystemService {
       case 'business':
         query = `
           query GetAllBusinessAddresses($userId: uuid!) {
-            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1

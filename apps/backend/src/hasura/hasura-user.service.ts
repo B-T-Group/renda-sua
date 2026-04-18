@@ -622,7 +622,7 @@ export class HasuraUserService {
       case 'client':
         query = `
           query GetClientAddress($userId: uuid!) {
-            client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+            client_addresses(where: {client: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1
@@ -633,6 +633,7 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                status
                 created_at
                 updated_at
               }
@@ -643,7 +644,7 @@ export class HasuraUserService {
       case 'agent':
         query = `
           query GetAgentAddress($userId: uuid!) {
-            agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+            agent_addresses(where: {agent: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1
@@ -654,6 +655,7 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                status
                 created_at
                 updated_at
               }
@@ -664,7 +666,7 @@ export class HasuraUserService {
       case 'business':
         query = `
           query GetBusinessAddress($userId: uuid!) {
-            business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+            business_addresses(where: {business: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
               address {
                 id
                 address_line_1
@@ -675,6 +677,7 @@ export class HasuraUserService {
                 country
                 is_primary
                 address_type
+                status
                 created_at
                 updated_at
               }
@@ -807,7 +810,10 @@ export class HasuraUserService {
 
     const query = `
       query GetAddressById($addressId: uuid!) {
-        addresses_by_pk(id: $addressId) {
+        addresses(
+          where: { id: { _eq: $addressId }, status: { _eq: active } }
+          limit: 1
+        ) {
           id
           address_line_1
           address_line_2
@@ -827,7 +833,7 @@ export class HasuraUserService {
       addressId,
     });
 
-    const address = result.addresses_by_pk;
+    const address = result.addresses?.[0];
     if (!address) {
       return null;
     }

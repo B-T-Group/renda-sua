@@ -581,7 +581,13 @@ export class OrderRefundsService {
   private async fetchBusinessRegisteredAddress(businessId: string) {
     const q = `
       query Ba($bid: uuid!) {
-        business_addresses(where: { business_id: { _eq: $bid } }, limit: 1) {
+        business_addresses(
+          where: {
+            business_id: { _eq: $bid }
+            address: { status: { _eq: active } }
+          }
+          limit: 1
+        ) {
           id
           address {
             id

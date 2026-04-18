@@ -5883,10 +5883,11 @@ export class OrdersService {
         );
       }
 
-      // Get client address
-      const clientAddresses = await this.addressesService.getAddressesByIds([
-        order.delivery_address_id,
-      ]);
+      // Order may reference addresses later soft-deleted; still use snapshot IDs for distance
+      const clientAddresses = await this.addressesService.getAddressesByIds(
+        [order.delivery_address_id],
+        { includeInactive: true }
+      );
       const clientAddress = clientAddresses[0];
       if (!clientAddress) {
         throw new HttpException(
@@ -5895,10 +5896,10 @@ export class OrdersService {
         );
       }
 
-      // Get business location address
-      const businessAddresses = await this.addressesService.getAddressesByIds([
-        order.business_location.address_id,
-      ]);
+      const businessAddresses = await this.addressesService.getAddressesByIds(
+        [order.business_location.address_id],
+        { includeInactive: true }
+      );
       const businessAddress = businessAddresses[0];
       if (!businessAddress) {
         throw new HttpException(

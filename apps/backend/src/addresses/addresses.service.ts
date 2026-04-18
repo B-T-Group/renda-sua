@@ -213,7 +213,7 @@ export class AddressesService {
         case 'client':
           addressIdsQuery = `
             query GetClientAddressIds($userId: uuid!) {
-              client_addresses(where: {client: {user_id: {_eq: $userId}}}) {
+              client_addresses(where: {client: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
                 address_id
               }
             }
@@ -222,7 +222,7 @@ export class AddressesService {
         case 'agent':
           addressIdsQuery = `
             query GetAgentAddressIds($userId: uuid!) {
-              agent_addresses(where: {agent: {user_id: {_eq: $userId}}}) {
+              agent_addresses(where: {agent: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
                 address_id
               }
             }
@@ -231,7 +231,7 @@ export class AddressesService {
         case 'business':
           addressIdsQuery = `
             query GetBusinessAddressIds($userId: uuid!) {
-              business_addresses(where: {business: {user_id: {_eq: $userId}}}) {
+              business_addresses(where: {business: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
                 address_id
               }
             }
@@ -750,13 +750,13 @@ export class AddressesService {
 
       const checkOwnershipQuery = `
         query CheckAddressOwnershipAny($addressId: uuid!, $userId: uuid!) {
-          client_addresses(where: {address_id: {_eq: $addressId}, client: {user_id: {_eq: $userId}}}) {
+          client_addresses(where: {address_id: {_eq: $addressId}, client: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
             id
           }
-          agent_addresses(where: {address_id: {_eq: $addressId}, agent: {user_id: {_eq: $userId}}}) {
+          agent_addresses(where: {address_id: {_eq: $addressId}, agent: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
             id
           }
-          business_addresses(where: {address_id: {_eq: $addressId}, business: {user_id: {_eq: $userId}}}) {
+          business_addresses(where: {address_id: {_eq: $addressId}, business: {user_id: {_eq: $userId}}, address: {status: {_eq: active}}}) {
             id
           }
         }
@@ -1020,13 +1020,18 @@ export class AddressesService {
   }
 
   /**
-   * Fetch multiple addresses by their IDs
+   * Fetch multiple addresses by their IDs (active only by default).
+   * Use `includeInactive` only for order-bound snapshots (e.g. fee recalculation).
    */
-  async getAddressesByIds(addressIds: string[]): Promise<AddressResponse[]> {
+  async getAddressesByIds(
+    addressIds: string[],
+    opts?: { includeInactive?: boolean }
+  ): Promise<AddressResponse[]> {
     if (!addressIds || addressIds.length === 0) return [];
+    const statusFilter = opts?.includeInactive ? '' : ', status: {_eq: active}';
     const query = `
       query GetAddressesByIds($ids: [uuid!]!) {
-        addresses(where: {id: {_in: $ids}, status: {_eq: active}}) {
+        addresses(where: {id: {_in: $ids}${statusFilter}}) {
           id
           address_line_1
           address_line_2
@@ -1076,7 +1081,8 @@ export class AddressesService {
         business_locations(
           where: {
             id: {_eq: $locationId},
-            business: {user_id: {_eq: $userId}}
+            business: {user_id: {_eq: $userId}},
+            address: {status: {_eq: active}}
           }
         ) {
           id

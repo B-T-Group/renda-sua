@@ -285,7 +285,13 @@ export class LocationsService {
       // Get business location with address
       const query = `
         query GetBusinessLocation($businessLocationId: uuid!) {
-          business_locations_by_pk(id: $businessLocationId) {
+          business_locations(
+            where: {
+              id: { _eq: $businessLocationId }
+              address: { status: { _eq: active } }
+            }
+            limit: 1
+          ) {
             id
             address_id
             address {
@@ -312,7 +318,8 @@ export class LocationsService {
       });
 
       const businessLocation =
-        result.business_locations_by_pk as BusinessLocationAddress | null;
+        (result.business_locations?.[0] as BusinessLocationAddress | null) ??
+        null;
 
       if (!businessLocation || !businessLocation.address) {
         this.logger.warn(

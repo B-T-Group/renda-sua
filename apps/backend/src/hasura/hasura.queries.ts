@@ -177,7 +177,7 @@ export const GET_USER_CLIENT = gql`
     clients(where: { user_id: { _eq: $userId } }) {
       id
       user_id
-      client_addresses {
+      client_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
@@ -207,7 +207,7 @@ export const GET_USER_BUSINESS = gql`
       name
       is_admin
       is_verified
-      business_addresses {
+      business_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
@@ -238,7 +238,7 @@ export const GET_USER_AGENT = gql`
       is_verified
       onboarding_complete
       agent_code
-      agent_addresses {
+      agent_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1

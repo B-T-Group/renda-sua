@@ -28,7 +28,7 @@ const GET_AGENTS_QUERY = `
           updated_at
         }
       }
-      agent_addresses {
+      agent_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
@@ -73,7 +73,7 @@ const GET_CLIENTS_QUERY = `
           updated_at
         }
       }
-      client_addresses {
+      client_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
@@ -121,7 +121,7 @@ const GET_BUSINESSES_QUERY = `
           updated_at
         }
       }
-      business_addresses {
+      business_addresses(where: { address: { status: { _eq: active } } }) {
         address {
           id
           address_line_1
@@ -264,7 +264,7 @@ export class AdminService {
               document_type { id name description }
             }
           }
-          agent_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+          agent_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         agents_aggregate(where: $where) { aggregate { count } }
       }
@@ -302,7 +302,7 @@ export class AdminService {
         clients(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
-          client_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+          client_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         clients_aggregate(where: $where) { aggregate { count } }
       }
@@ -332,7 +332,7 @@ export class AdminService {
         businesses(where: $where, limit: $limit, offset: $offset, order_by: {created_at: desc}) {
           id user_id name is_admin is_verified image_cleanup_enabled created_at updated_at
           user { id email first_name last_name phone_number accounts { id currency available_balance withheld_balance total_balance is_active created_at updated_at } }
-          business_addresses { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
+          business_addresses(where: { address: { status: { _eq: active } } }) { address { id address_line_1 address_line_2 city state postal_code country is_primary address_type latitude longitude created_at updated_at } }
         }
         businesses_aggregate(where: $where) { aggregate { count } }
       }
