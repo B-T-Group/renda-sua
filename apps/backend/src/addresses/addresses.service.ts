@@ -716,7 +716,8 @@ export class AddressesService {
    */
   async getUserAddresses(): Promise<AddressResponse[]> {
     const user = await this.hasuraUserService.getUser();
-    return user.addresses || [];
+    const list = user.addresses || [];
+    return list.filter((a) => (a.status ?? 'active') === 'active');
   }
 
   /**
