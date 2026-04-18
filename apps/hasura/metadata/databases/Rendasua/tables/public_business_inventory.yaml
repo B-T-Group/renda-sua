@@ -45,6 +45,7 @@ insert_permissions:
         - unit_cost
         - selling_price
         - is_active
+        - promotion
 select_permissions:
   - role: agent
     permission:
@@ -77,6 +78,7 @@ select_permissions:
         - last_restocked_at
         - created_at
         - updated_at
+        - promotion
       computed_fields:
         - computed_available_quantity
       filter:
@@ -116,6 +118,7 @@ update_permissions:
         - is_active
         - last_restocked_at
         - updated_at
+        - promotion
       filter:
         business_location:
           business:
