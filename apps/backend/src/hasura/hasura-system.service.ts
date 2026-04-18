@@ -533,6 +533,7 @@ export class HasuraSystemService {
                 country
                 is_primary
                 address_type
+                status
                 latitude
                 longitude
                 created_at
@@ -556,6 +557,7 @@ export class HasuraSystemService {
                 country
                 is_primary
                 address_type
+                status
                 latitude
                 longitude
                 created_at
@@ -579,6 +581,7 @@ export class HasuraSystemService {
                 country
                 is_primary
                 address_type
+                status
                 latitude
                 longitude
                 created_at

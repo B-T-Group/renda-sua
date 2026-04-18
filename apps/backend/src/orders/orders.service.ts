@@ -4738,7 +4738,7 @@ export class OrdersService {
     // Calculate delivery fee using the new structure
     const deliveryFeeInfo = await this.calculateItemDeliveryFee(
       orderData.items[0].business_inventory_id,
-      orderData.delivery_address?.id,
+      client_delivery_address_id,
       orderData.requires_fast_delivery,
       totalWeight
     );
@@ -5647,6 +5647,20 @@ export class OrdersService {
     };
   }
 
+  private resolveDeliveryFeeTargetAddressId(
+    explicitId: string | undefined,
+    addresses?: Array<Pick<Addresses, 'id' | 'is_primary' | 'status'>>
+  ): string {
+    if (explicitId?.trim()) {
+      return explicitId.trim();
+    }
+    const active = (addresses ?? []).filter(
+      (a) => (a.status ?? 'active') === 'active'
+    );
+    const primaryActive = active.find((a) => a.is_primary === true);
+    return primaryActive?.id ?? active[0]?.id ?? '';
+  }
+
   /**
    * Calculate delivery fee for a given item based on distance
    * Uses tiered pricing model with fallback to delivery_fees table
@@ -5688,8 +5702,11 @@ export class OrdersService {
         throw new HttpException('Item not found', HttpStatus.NOT_FOUND);
       }
 
-      // Get user's address (use provided addressId or fallback to primary address)
-      const targetAddressId = addressId || user.addresses?.[0]?.id || '';
+      // Use explicit address, else first active primary, else first active
+      const targetAddressId = this.resolveDeliveryFeeTargetAddressId(
+        addressId,
+        user.addresses
+      );
       const userAddresses = await this.addressesService.getAddressesByIds([
         targetAddressId,
       ]);
