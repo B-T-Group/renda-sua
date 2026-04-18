@@ -11,6 +11,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../auth/public.decorator';
 import { TrackItemViewDto } from './dto/track-item-view.dto';
 import { ItemViewsService } from './item-views.service';
 
@@ -19,6 +20,7 @@ import { ItemViewsService } from './item-views.service';
 export class ItemViewsController {
   constructor(private readonly itemViewsService: ItemViewsService) {}
 
+  @Public()
   @Post('track-view')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Track a unique view for an inventory item' })
