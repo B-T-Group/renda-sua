@@ -1,6 +1,8 @@
 import {
   ArrowBack as ArrowBackIcon,
   Business as BusinessIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   Inventory2 as SpecsIcon,
   ShoppingCart,
@@ -36,6 +38,7 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import type { InventoryItem } from '../../hooks/useInventoryItem';
 import { useItemRatings } from '../../hooks/useItemRatings';
 import { useSimilarItems } from '../../hooks/useSimilarItems';
@@ -204,6 +207,49 @@ export default function ItemDetailPage() {
     setSelectedImageIndex(0);
     setImageLightboxOpen(false);
   }, [inventoryItem?.id]);
+
+  const lightboxGalleryCount =
+    inventoryItem?.item?.item_images?.length ?? 0;
+
+  const goPrevLightboxImage = React.useCallback(() => {
+    if (lightboxGalleryCount <= 1) return;
+    setSelectedImageIndex((i) =>
+      i === 0 ? lightboxGalleryCount - 1 : i - 1
+    );
+  }, [lightboxGalleryCount]);
+
+  const goNextLightboxImage = React.useCallback(() => {
+    if (lightboxGalleryCount <= 1) return;
+    setSelectedImageIndex((i) =>
+      i === lightboxGalleryCount - 1 ? 0 : i + 1
+    );
+  }, [lightboxGalleryCount]);
+
+  const itemDetailLightboxSwipe = useSwipeImageNavigation(
+    goNextLightboxImage,
+    goPrevLightboxImage,
+    imageLightboxOpen && lightboxGalleryCount > 1
+  );
+
+  React.useEffect(() => {
+    if (!imageLightboxOpen || lightboxGalleryCount <= 1) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goPrevLightboxImage();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goNextLightboxImage();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    imageLightboxOpen,
+    lightboxGalleryCount,
+    goPrevLightboxImage,
+    goNextLightboxImage,
+  ]);
 
   const handleOrderClick = () => {
     if (id) {
@@ -881,29 +927,75 @@ export default function ItemDetailPage() {
         onClose={() => setImageLightboxOpen(false)}
         maxWidth="md"
         fullWidth
+        PaperProps={{ sx: { bgcolor: 'common.black' } }}
       >
         <IconButton
           aria-label={t('common.close', 'Close')}
           onClick={() => setImageLightboxOpen(false)}
-          sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            zIndex: 1,
+            color: 'common.white',
+          }}
         >
           <CloseIcon />
         </IconButton>
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent sx={{ p: 0, pt: 5, bgcolor: 'common.black' }}>
           {selectedImageUrl ? (
-            <Box
-              component="img"
-              src={selectedImageUrl}
-              alt={item.name}
-              sx={{
-                width: '100%',
-                height: 'auto',
-                maxHeight: '80vh',
-                objectFit: 'contain',
-                display: 'block',
-                bgcolor: 'common.black',
-              }}
-            />
+            <>
+              <Box
+                component="img"
+                src={selectedImageUrl}
+                alt={item.name}
+                onTouchStart={itemDetailLightboxSwipe.onTouchStart}
+                onTouchEnd={itemDetailLightboxSwipe.onTouchEnd}
+                sx={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  display: 'block',
+                  bgcolor: 'common.black',
+                  touchAction: 'pan-y',
+                }}
+              />
+              {images.length > 1 ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="center"
+                  spacing={2}
+                  sx={{ py: 2, px: 2 }}
+                >
+                  <IconButton
+                    onClick={goPrevLightboxImage}
+                    sx={{ color: 'common.white' }}
+                    aria-label={t('common.previous', 'Previous')}
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  <Typography variant="body2" sx={{ color: 'grey.300' }}>
+                    {t(
+                      'business.items.imageLightboxCounter',
+                      '{{current}} of {{total}}',
+                      {
+                        current: selectedImageIndex + 1,
+                        total: images.length,
+                      }
+                    )}
+                  </Typography>
+                  <IconButton
+                    onClick={goNextLightboxImage}
+                    sx={{ color: 'common.white' }}
+                    aria-label={t('common.next', 'Next')}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                </Stack>
+              ) : null}
+            </>
           ) : null}
         </DialogContent>
       </Dialog>

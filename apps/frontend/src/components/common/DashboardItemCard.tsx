@@ -32,6 +32,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 
 type CardItemImage = InventoryItem['item']['item_images'][number];
@@ -166,6 +167,12 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [imageLightboxOpen, galleryImages.length]);
+
+  const cardLightboxSwipe = useSwipeImageNavigation(
+    goNextImage,
+    goPrevImage,
+    imageLightboxOpen && hasMultipleImages
+  );
 
   const ratingCount = inventory.rating_count ?? 0;
   const showAggregateRating =
@@ -1102,10 +1109,13 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 alt={
                   displayImage?.alt_text || inventory.item.name
                 }
+                onTouchStart={cardLightboxSwipe.onTouchStart}
+                onTouchEnd={cardLightboxSwipe.onTouchEnd}
                 sx={{
                   maxWidth: '100%',
                   maxHeight: '90vh',
                   objectFit: 'contain',
+                  touchAction: 'pan-y',
                 }}
               />
               {hasMultipleImages && (

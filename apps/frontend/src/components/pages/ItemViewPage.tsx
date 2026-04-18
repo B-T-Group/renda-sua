@@ -48,6 +48,7 @@ import {
   useBusinessInventory,
 } from '../../hooks/useBusinessInventory';
 import { Item, useItems } from '../../hooks/useItems';
+import { useSwipeImageNavigation } from '../../hooks/useSwipeImageNavigation';
 import { ItemImage } from '../../types/image';
 import ImageUploadDialog from '../business/ImageUploadDialog';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
@@ -500,6 +501,14 @@ export default function ItemViewPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [imageLightboxIndex, goLightbox, closeImageLightbox]);
+
+  const lightboxSwipeEnabled =
+    imageLightboxIndex !== null && sortedItemImages.length > 1;
+  const lightboxSwipe = useSwipeImageNavigation(
+    () => goLightbox(1),
+    () => goLightbox(-1),
+    lightboxSwipeEnabled
+  );
 
   if (loading) {
     return (
@@ -1549,6 +1558,8 @@ export default function ItemViewPage() {
                   component="img"
                   src={sortedItemImages[imageLightboxIndex].image_url}
                   alt={sortedItemImages[imageLightboxIndex].alt_text || item.name}
+                  onTouchStart={lightboxSwipe.onTouchStart}
+                  onTouchEnd={lightboxSwipe.onTouchEnd}
                   sx={{
                     width: '100%',
                     maxHeight: { xs: '70vh', sm: '85vh' },
@@ -1557,6 +1568,7 @@ export default function ItemViewPage() {
                     mx: 'auto',
                     pt: 5,
                     px: 1,
+                    touchAction: 'pan-y',
                   }}
                 />
                 <Stack
