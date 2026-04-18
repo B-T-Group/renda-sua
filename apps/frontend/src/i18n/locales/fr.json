@@ -2620,7 +2620,9 @@
       "views": "{{count}} vues",
       "ratingAria": "Note moyenne {{avg}} sur 5, {{count}} avis",
       "ratingsCount_one": "{{count}} avis",
-      "ratingsCount_other": "{{count}} avis"
+      "ratingsCount_other": "{{count}} avis",
+      "openImageGallery": "Cliquer pour agrandir",
+      "photoIndex": "{{current}} / {{total}}"
     },
     "dealEndsOn": "Se termine le {{date}}",
     "similarItems": "Articles similaires",

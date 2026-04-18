@@ -2,6 +2,8 @@ import {
   Build,
   Business,
   Category,
+  ChevronLeft,
+  ChevronRight,
   Palette,
   Scale,
   ShoppingCart,
@@ -23,13 +25,29 @@ import {
   DialogContent,
   IconButton,
   Rating,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
+
+type CardItemImage = InventoryItem['item']['item_images'][number];
+
+/** Main image first, then others sorted by display_order. */
+function orderedGalleryImages(
+  images: CardItemImage[] | undefined
+): CardItemImage[] {
+  if (!images?.length) return [];
+  const byOrder = [...images].sort(
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+  );
+  const main = byOrder.find((i) => i.image_type === 'main');
+  if (!main) return byOrder;
+  return [main, ...byOrder.filter((i) => i !== main)];
+}
 
 interface DashboardItemCardProps {
   item: InventoryItem;
@@ -71,7 +89,17 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const navigate = useNavigate();
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
+
+  const galleryImages = useMemo(
+    () => orderedGalleryImages(inventory.item.item_images),
+    [inventory.item.item_images]
+  );
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [inventory.id]);
 
   const hasDealPrices =
     inventory.hasActiveDeal &&
@@ -87,14 +115,46 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       )
     : null;
 
-  const getPrimaryImage = (item: InventoryItem) => {
-    if (item.item.item_images && item.item.item_images.length > 0) {
-      return item.item.item_images[0].image_url;
-    }
-    return null;
+  const displayIdx =
+    galleryImages.length === 0
+      ? 0
+      : Math.min(activeImageIndex, galleryImages.length - 1);
+  const displayImage = galleryImages[displayIdx];
+  const displayImageUrl = displayImage?.image_url ?? null;
+  const hasMultipleImages = galleryImages.length > 1;
+
+  const goPrevImage = () => {
+    if (!hasMultipleImages) return;
+    setActiveImageIndex((i) =>
+      i === 0 ? galleryImages.length - 1 : i - 1
+    );
   };
 
-  const primaryImage = getPrimaryImage(inventory);
+  const goNextImage = () => {
+    if (!hasMultipleImages) return;
+    setActiveImageIndex((i) =>
+      i === galleryImages.length - 1 ? 0 : i + 1
+    );
+  };
+
+  useEffect(() => {
+    if (!imageLightboxOpen || galleryImages.length <= 1) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setActiveImageIndex((i) =>
+          i === 0 ? galleryImages.length - 1 : i - 1
+        );
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setActiveImageIndex((i) =>
+          i === galleryImages.length - 1 ? 0 : i + 1
+        );
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [imageLightboxOpen, galleryImages.length]);
 
   const ratingCount = inventory.rating_count ?? 0;
   const showAggregateRating =
@@ -133,107 +193,262 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         },
       }}
     >
-      {/* Image Section - Top (clickable to view) */}
+      {/* Image gallery — arrows, thumbnails when multiple; click main image for lightbox */}
       <Box
-        onClick={() => primaryImage && setImageLightboxOpen(true)}
         sx={{
           width: '100%',
           height: '240px',
           flexShrink: 0,
           overflow: 'hidden',
-          position: 'relative',
-          bgcolor: 'grey.300',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: primaryImage ? 'pointer' : 'default',
+          flexDirection: 'column',
+          bgcolor: 'grey.300',
         }}
       >
-        {primaryImage ? (
-          <CardMedia
-            component="img"
-            height="240"
-            image={primaryImage}
-            alt={inventory.item.name}
-            sx={{
-              objectFit: 'cover',
-              width: '100%',
-              height: '100%',
-              transition: 'transform 0.3s ease',
-              pointerEvents: 'none',
-              '.MuiCard-root:hover &': {
-                transform: 'scale(1.05)',
-              },
-            }}
-          />
-        ) : (
+        <Tooltip
+          title={
+            displayImageUrl
+              ? t(
+                  'items.itemCard.openImageGallery',
+                  'Click to view larger'
+                )
+              : ''
+          }
+          disableHoverListener={!displayImageUrl}
+        >
           <Box
+            onClick={() => displayImageUrl && setImageLightboxOpen(true)}
             sx={{
-              width: '100%',
-              height: '100%',
-              bgcolor: 'grey.300',
+              flex: hasMultipleImages ? '1 1 auto' : '1 1 100%',
+              minHeight: 0,
+              position: 'relative',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              cursor: displayImageUrl ? 'pointer' : 'default',
+              overflow: 'hidden',
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              No Image
-            </Typography>
-          </Box>
-        )}
-        {/* Price badge overlay */}
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 12,
-            left: 12,
-            bgcolor: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(8px)',
-            px: 2,
-            py: 1,
-            borderRadius: 2,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-          }}
-        >
-          {hasDealPrices ? (
-            <>
-              <Box>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ textDecoration: 'line-through' }}
-                >
-                  {formatCurrency(
-                    inventory.original_price!,
-                    inventory.item.currency
-                  )}
-                </Typography>
-                <Typography variant="h6" color="primary" fontWeight="bold">
-                  {formatCurrency(
-                    inventory.discounted_price!,
-                    inventory.item.currency
-                  )}
+            {displayImageUrl ? (
+              <>
+                {hasMultipleImages && (
+                  <Chip
+                    label={t(
+                      'business.items.cardGalleryPhotosBadge',
+                      '{{count}} photos',
+                      { count: galleryImages.length }
+                    )}
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      zIndex: 1,
+                      bgcolor: 'rgba(0, 0, 0, 0.65)',
+                      color: 'common.white',
+                      fontSize: '0.7rem',
+                      height: 22,
+                      '& .MuiChip-label': { px: 1 },
+                    }}
+                  />
+                )}
+                {hasMultipleImages && (
+                  <>
+                    <IconButton
+                      size="small"
+                      aria-label={t(
+                        'business.items.cardGalleryPrevious',
+                        'Previous photo'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goPrevImage();
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        left: 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 1,
+                        bgcolor: 'rgba(255, 255, 255, 0.85)',
+                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
+                        p: 0.25,
+                      }}
+                    >
+                      <ChevronLeft fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label={t(
+                        'business.items.cardGalleryNext',
+                        'Next photo'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goNextImage();
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        right: 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 1,
+                        bgcolor: 'rgba(255, 255, 255, 0.85)',
+                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
+                        p: 0.25,
+                      }}
+                    >
+                      <ChevronRight fontSize="small" />
+                    </IconButton>
+                  </>
+                )}
+                <CardMedia
+                  component="img"
+                  image={displayImageUrl}
+                  alt={
+                    displayImage?.alt_text ||
+                    inventory.item.name
+                  }
+                  sx={{
+                    objectFit: 'cover',
+                    width: '100%',
+                    height: '100%',
+                    transition: 'transform 0.3s ease',
+                    pointerEvents: 'none',
+                    '.MuiCard-root:hover &': {
+                      transform: 'scale(1.05)',
+                    },
+                  }}
+                />
+              </>
+            ) : (
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  bgcolor: 'grey.300',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  No Image
                 </Typography>
               </Box>
-              {discountPercent && discountPercent > 0 && (
-                <Chip
-                  label={`-${discountPercent}%`}
-                  color="secondary"
-                  size="small"
-                  sx={{ fontWeight: 700 }}
-                />
+            )}
+            {/* Price badge overlay */}
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 12,
+                left: 12,
+                bgcolor: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(8px)',
+                px: 2,
+                py: 1,
+                borderRadius: 2,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                pointerEvents: 'none',
+              }}
+            >
+              {hasDealPrices ? (
+                <>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ textDecoration: 'line-through' }}
+                    >
+                      {formatCurrency(
+                        inventory.original_price!,
+                        inventory.item.currency
+                      )}
+                    </Typography>
+                    <Typography variant="h6" color="primary" fontWeight="bold">
+                      {formatCurrency(
+                        inventory.discounted_price!,
+                        inventory.item.currency
+                      )}
+                    </Typography>
+                  </Box>
+                  {discountPercent && discountPercent > 0 && (
+                    <Chip
+                      label={`-${discountPercent}%`}
+                      color="secondary"
+                      size="small"
+                      sx={{ fontWeight: 700 }}
+                    />
+                  )}
+                </>
+              ) : (
+                <Typography variant="h6" color="primary" fontWeight="bold">
+                  {formatCurrency(
+                    inventory.selling_price,
+                    inventory.item.currency
+                  )}
+                </Typography>
               )}
-            </>
-          ) : (
-            <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency(inventory.selling_price, inventory.item.currency)}
-            </Typography>
-          )}
-        </Box>
+            </Box>
+          </Box>
+        </Tooltip>
+        {hasMultipleImages && (
+          <Box
+            sx={{
+              flex: '0 0 auto',
+              display: 'flex',
+              gap: 0.5,
+              px: 0.75,
+              py: 0.5,
+              overflowX: 'auto',
+              borderTop: 1,
+              borderColor: 'divider',
+              bgcolor: 'grey.50',
+            }}
+          >
+            {galleryImages.map((img, idx) => (
+              <Box
+                key={img.id ?? `${img.image_url}-${idx}`}
+                component="button"
+                type="button"
+                onClick={() => setActiveImageIndex(idx)}
+                sx={{
+                  flex: '0 0 auto',
+                  width: 40,
+                  height: 40,
+                  p: 0,
+                  border: 2,
+                  borderColor:
+                    idx === displayIdx ? 'primary.main' : 'grey.300',
+                  borderRadius: 0.5,
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  bgcolor: 'background.paper',
+                  opacity: idx === displayIdx ? 1 : 0.75,
+                  '&:hover': {
+                    borderColor: 'primary.light',
+                    opacity: 1,
+                  },
+                }}
+              >
+                <Box
+                  component="img"
+                  src={img.image_url}
+                  alt=""
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
 
       {/* Content Section - Bottom */}
@@ -777,7 +992,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         inventoryItemId={inventory.id}
         item={{
           title: inventory.item.name,
-          imageUrl: primaryImage,
+          imageUrl: displayImageUrl,
           priceText: checkoutPriceText,
           quantity: 1,
         }}
@@ -827,19 +1042,84 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
+            position: 'relative',
+            gap: 1,
           }}
         >
-          {primaryImage && (
-            <Box
-              component="img"
-              src={primaryImage}
-              alt={inventory.item.name}
-              sx={{
-                maxWidth: '100%',
-                maxHeight: '90vh',
-                objectFit: 'contain',
-              }}
-            />
+          {displayImageUrl && (
+            <>
+              {hasMultipleImages && (
+                <IconButton
+                  aria-label={t(
+                    'business.items.cardGalleryPrevious',
+                    'Previous photo'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goPrevImage();
+                  }}
+                  sx={{
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.45)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
+                  }}
+                >
+                  <ChevronLeft />
+                </IconButton>
+              )}
+              <Box
+                component="img"
+                src={displayImageUrl}
+                alt={
+                  displayImage?.alt_text || inventory.item.name
+                }
+                sx={{
+                  maxWidth: '100%',
+                  maxHeight: '90vh',
+                  objectFit: 'contain',
+                }}
+              />
+              {hasMultipleImages && (
+                <IconButton
+                  aria-label={t(
+                    'business.items.cardGalleryNext',
+                    'Next photo'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goNextImage();
+                  }}
+                  sx={{
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.45)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
+                  }}
+                >
+                  <ChevronRight />
+                </IconButton>
+              )}
+              {hasMultipleImages && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    color: 'common.white',
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
+                  }}
+                >
+                  {t('items.itemCard.photoIndex', '{{current}} / {{total}}', {
+                    current: displayIdx + 1,
+                    total: galleryImages.length,
+                  })}
+                </Typography>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>
