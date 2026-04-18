@@ -39,6 +39,10 @@ const getEnvironment = () => {
       process.env.NODE_ENV !== 'production' &&
       process.env.NODE_ENV !== 'development',
     apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
+    /** Browser key with Places API + HTTP referrer restrictions (see Google Cloud Console). */
+    googleMapsBrowserApiKey:
+      process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
+      'AIzaSyDpI80RcSNpjLNybedvZ62QFyV4485tiyI',
     /** AI image cleanup (OpenAI); business + rental library endpoints */
     imageCleanupRequestTimeoutMs: 120_000,
     enableDebugLogging: isDevelopment,

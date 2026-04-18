@@ -20,3 +20,8 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+/* Google Places suggestions above MUI Dialog (default ~1300) */
+.pac-container {
+  z-index: 2000 !important;
+}

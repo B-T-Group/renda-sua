@@ -1,4 +1,3 @@
-import { LocationOn as LocationOnIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -8,17 +7,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  TextField,
   Typography,
 } from '@mui/material';
-import { City, Country, State } from 'country-state-city';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { alpha } from '@mui/material/styles';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 import AddressForm from '../addresses/AddressForm';
 
 export interface AddressFormData {
@@ -87,10 +80,20 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
     }
   };
 
+  const handleDialogClose = (
+    _event: object,
+    reason: 'backdropClick' | 'escapeKeyDown'
+  ) => {
+    if (reason === 'backdropClick') {
+      return;
+    }
+    handleClose();
+  };
+
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={handleDialogClose}
       maxWidth="md"
       fullWidth
       fullScreen={fullScreen}
@@ -116,20 +119,71 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
           onAddressChange={onAddressChange}
         />
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          {t('addresses.addressDialog.cancel', 'Cancel')}
-        </Button>
-        <Button
-          onClick={onSave}
-          variant="contained"
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={16} /> : null}
+      <DialogActions
+        sx={{
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          gap: 1.5,
+          pt: 1,
+        }}
+      >
+        <Alert
+          severity="info"
+          variant="outlined"
+          sx={(theme) => ({
+            py: 1.25,
+            px: 1.75,
+            borderRadius: 1,
+            borderColor: alpha(theme.palette.info.main, 0.35),
+            bgcolor: alpha(theme.palette.info.main, theme.palette.mode === 'dark' ? 0.12 : 0.06),
+            alignItems: 'flex-start',
+            '& .MuiAlert-icon': {
+              color: 'info.main',
+              opacity: 0.9,
+              py: 0.125,
+              mr: 0.5,
+            },
+            '& .MuiAlert-message': {
+              width: '100%',
+              padding: 0,
+            },
+          })}
         >
-          {loading
-            ? t('addresses.addressDialog.saving', 'Saving...')
-            : t('addresses.addressDialog.save', 'Save')}
-        </Button>
+          <Typography
+            variant="body2"
+            component="div"
+            color="text.primary"
+            fontWeight={500}
+            sx={{ lineHeight: 1.6 }}
+          >
+            {t(
+              'addresses.addressDialog.verifyBeforeSaveNote',
+              'Please confirm this address is correct before saving. It is used to calculate delivery cost and to get your order to you accurately.'
+            )}
+          </Typography>
+        </Alert>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 1,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Button onClick={handleClose} disabled={loading}>
+            {t('addresses.addressDialog.cancel', 'Cancel')}
+          </Button>
+          <Button
+            onClick={onSave}
+            variant="contained"
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={16} /> : null}
+          >
+            {loading
+              ? t('addresses.addressDialog.saving', 'Saving...')
+              : t('addresses.addressDialog.save', 'Save')}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

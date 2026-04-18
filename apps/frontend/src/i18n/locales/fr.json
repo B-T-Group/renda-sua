@@ -107,11 +107,16 @@
       "requiredFields": "Veuillez remplir tous les champs obligatoires (adresse, ville, état, pays).",
       "save": "Enregistrer",
       "saving": "Enregistrement...",
+      "verifyBeforeSaveNote": "Vérifiez que cette adresse est correcte avant d'enregistrer : elle sert au calcul des frais de livraison et à acheminer votre commande jusqu'à vous.",
       "stateProvince": "État/Province",
       "yes": "Oui",
       "no": "Non"
     },
     "instructionsPlaceholder": "Ex. repères, nom du bâtiment, étage ou indications pour localiser cette adresse",
+    "placesAutocomplete": {
+      "helper": "Commencez à saisir pour voir des suggestions d'adresse. Choisissez une suggestion pour remplir ville, région et code postal automatiquement.",
+      "loadError": "Impossible de charger les suggestions d'adresse. Vous pouvez toujours saisir votre adresse manuellement."
+    },
     "howToFind": "Comment s'y rendre",
     "saveError": "Échec de l'enregistrement de l'adresse. Veuillez réessayer.",
     "addressTypes": {
@@ -2308,6 +2313,7 @@
     "deliveryAgent": "Agent de Livraison",
     "internalAgent": "Agent interne",
     "deliveryFee": "Frais de Livraison",
+    "deliveryFeeAddressRequired": "Ajoutez une adresse de livraison pour calculer les frais d'expédition et finaliser votre commande.",
     "firstDeliveryDiscount": "Réduction première livraison",
     "deliveryCommission": "Commission de Livraison",
     "earnings": "Vos Gains",
@@ -2599,6 +2605,7 @@
     "color": "Couleur",
     "description": "Description",
     "details": "Détails",
+    "viewProduct": "Voir le produit",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Délai de livraison estimé",
     "fragile": "Fragile",

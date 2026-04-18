@@ -107,11 +107,16 @@
       "requiredFields": "Please fill in all required fields (address, city, state, country).",
       "save": "Save",
       "saving": "Saving...",
+      "verifyBeforeSaveNote": "Please confirm this address is correct before saving. It is used to calculate delivery cost and to get your order to you accurately.",
       "stateProvince": "State/Province",
       "yes": "Yes",
       "no": "No"
     },
     "instructionsPlaceholder": "E.g. landmarks, building name, floor, or extra directions to help locate this address",
+    "placesAutocomplete": {
+      "helper": "Start typing to see address suggestions. Pick one to fill city, region, and postal code automatically.",
+      "loadError": "Could not load address suggestions. You can still type your address manually."
+    },
     "howToFind": "How to find",
     "saveError": "Failed to save address. Please try again.",
     "addressTypes": {
@@ -2336,6 +2341,7 @@
     "deliveryAgent": "Delivery Agent",
     "internalAgent": "Internal agent",
     "deliveryFee": "Delivery Fee",
+    "deliveryFeeAddressRequired": "Add a delivery address to calculate shipping and complete your order.",
     "firstDeliveryDiscount": "First delivery discount",
     "deliveryCommission": "Delivery Commission",
     "earnings": "Your Earnings",
@@ -2636,6 +2642,7 @@
     "color": "Color",
     "description": "Description",
     "details": "Details",
+    "viewProduct": "View product",
     "dimensions": "Dimensions",
     "estimatedDeliveryTime": "Est. delivery time",
     "fragile": "Fragile",

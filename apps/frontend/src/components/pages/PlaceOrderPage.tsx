@@ -148,6 +148,8 @@ interface OrderSummaryProps {
   deliveryFee: number | null;
   deliveryFeeLoading: boolean;
   deliveryFeeError: string | null;
+  /** True when addresses finished loading but none is selected (e.g. user must add one). */
+  deliveryAddressMissing?: boolean;
   firstOrderBaseDeliveryDiscountAmount?: number;
   deliveryFeeFullBeforeDiscount?: number;
   requiresFastDelivery: boolean;
@@ -165,6 +167,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryFee,
   deliveryFeeLoading,
   deliveryFeeError,
+  deliveryAddressMissing = false,
   firstOrderBaseDeliveryDiscountAmount = 0,
   deliveryFeeFullBeforeDiscount,
   requiresFastDelivery,
@@ -299,13 +302,24 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             <Typography variant="body2" color="text.secondary">
               {t('orders.deliveryFee', 'Delivery Fee')}
             </Typography>
-            <Box sx={{ textAlign: 'right' }}>
+            <Box sx={{ textAlign: 'right', maxWidth: { xs: '100%', sm: 280 }, ml: 'auto' }}>
               {deliveryFeeLoading ? (
                 <CircularProgress size={14} />
+              ) : deliveryAddressMissing ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.45 }}
+                >
+                  {t(
+                    'orders.deliveryFeeAddressRequired',
+                    'Add a delivery address to calculate shipping and complete your order.'
+                  )}
+                </Typography>
               ) : deliveryFeeError ? (
-                <span style={{ color: 'error.main' }}>
+                <Typography variant="body2" color="error">
                   {t('common.error', 'Error')}
-                </span>
+                </Typography>
               ) : deliveryFeeFullBeforeDiscount != null &&
                 deliveryFeeFullBeforeDiscount > computedDeliveryFee ? (
                 <>
@@ -339,6 +353,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
           </Box>
 
           {!deliveryFeeLoading &&
+            !deliveryAddressMissing &&
             !deliveryFeeError &&
             firstOrderBaseDeliveryDiscountAmount > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -531,6 +546,8 @@ const PlaceOrderPage: React.FC = () => {
   const selectedAddress = addresses.find(
     (addr) => addr.address.id === selectedAddressId
   )?.address;
+  const deliveryAddressMissing =
+    !addressesLoading && !selectedAddressId;
   const userCountry = selectedAddress?.country || 'GA'; // Default to Gabon
   const userState = selectedAddress?.state || 'Estuaire Province'; // Default to Estuaire
 
@@ -1775,13 +1792,30 @@ const PlaceOrderPage: React.FC = () => {
                       <Typography variant="body2" color="text.secondary">
                         {t('orders.deliveryFee', 'Delivery Fee')}
                       </Typography>
-                      <Box sx={{ textAlign: 'right' }}>
+                      <Box
+                        sx={{
+                          textAlign: 'right',
+                          maxWidth: { xs: '100%', sm: 280 },
+                          ml: 'auto',
+                        }}
+                      >
                         {deliveryFeeLoading ? (
                           <CircularProgress size={14} />
+                        ) : deliveryAddressMissing ? (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ lineHeight: 1.45 }}
+                          >
+                            {t(
+                              'orders.deliveryFeeAddressRequired',
+                              'Add a delivery address to calculate shipping and complete your order.'
+                            )}
+                          </Typography>
                         ) : deliveryFeeError ? (
-                          <span style={{ color: 'error.main' }}>
+                          <Typography variant="body2" color="error">
                             {t('common.error', 'Error')}
-                          </span>
+                          </Typography>
                         ) : (() => {
                             const pay = deliveryFee?.deliveryFee || 0;
                             const fullBefore =
@@ -1837,6 +1871,7 @@ const PlaceOrderPage: React.FC = () => {
                     </Box>
 
                     {!deliveryFeeLoading &&
+                      !deliveryAddressMissing &&
                       !deliveryFeeError &&
                       (deliveryFee?.firstOrderBaseDeliveryDiscountAmount ?? 0) >
                         0 && (
@@ -3127,6 +3162,7 @@ const PlaceOrderPage: React.FC = () => {
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
+              deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={
                 deliveryFee?.firstOrderBaseDeliveryDiscountAmount
               }

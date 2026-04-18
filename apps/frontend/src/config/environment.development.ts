@@ -22,6 +22,8 @@ const getDevelopmentEnvironment = () => {
     isProduction: false,
     isLocal: false,
     apiUrl: 'https://dev.api.rendasua.com/api',
+    googleMapsBrowserApiKey:
+      process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '',
     enableDebugLogging: true,
     enableAnalytics: false,
   };

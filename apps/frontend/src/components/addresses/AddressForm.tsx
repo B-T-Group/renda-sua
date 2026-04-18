@@ -14,7 +14,10 @@ import {
 import { City, Country, State } from 'country-state-city';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { environment } from '../../config/environment';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
+import { useGooglePlacesAutocomplete } from '../../hooks/useGooglePlacesAutocomplete';
+import { parseGooglePlaceAddress } from '../../utils/parseGooglePlaceAddress';
 import type { AddressFormData } from '../dialogs/AddressDialog';
 
 interface AddressFormProps {
@@ -229,6 +232,70 @@ const AddressForm: React.FC<AddressFormProps> = ({
     return partialMatch?.isoCode || '';
   };
 
+  const placesApiKey = environment.googleMapsBrowserApiKey;
+  const [addressLine1Input, setAddressLine1Input] =
+    useState<HTMLInputElement | null>(null);
+  const [placesLoadError, setPlacesLoadError] = useState<string | null>(null);
+
+  const restrictionCountry =
+    (readOnlyCountry && readOnlyCountry.trim()) ||
+    (addressData?.country && addressData.country.trim()) ||
+    null;
+
+  useGooglePlacesAutocomplete(addressLine1Input, {
+    apiKey: placesApiKey,
+    countryRestriction: restrictionCountry,
+    enabled: Boolean(placesApiKey) && !loading,
+    onPlaceSelected: (place) => {
+      const parsed = parseGooglePlaceAddress(place);
+      const finalCountry =
+        (readOnlyCountry && readOnlyCountry.trim()) ||
+        parsed.country ||
+        addressData?.country ||
+        '';
+
+      const matchedState =
+        finalCountry && parsed.state
+          ? findBestOptionLabel(
+              parsed.state,
+              State.getStatesOfCountry(finalCountry).map((s) => s.name)
+            )
+          : parsed.state;
+
+      let matchedCity = parsed.city;
+      if (finalCountry && matchedState) {
+        const stateCodeForCities = findStateCode(matchedState, finalCountry);
+        if (stateCodeForCities) {
+          matchedCity = findBestOptionLabel(
+            parsed.city,
+            City.getCitiesOfState(finalCountry, stateCodeForCities).map(
+              (c) => c.name
+            )
+          );
+        }
+      }
+
+      onAddressChange({
+        address_line_1: parsed.address_line_1,
+        address_line_2: addressData?.address_line_2 || '',
+        city: matchedCity,
+        state: matchedState,
+        postal_code: parsed.postal_code,
+        country: finalCountry,
+        address_type: addressData?.address_type || 'home',
+        is_primary: addressData?.is_primary || false,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        instructions: addressData?.instructions,
+      });
+    },
+    onLoadError: (msg) => setPlacesLoadError(msg),
+  });
+
+  const setAddressLine1Ref = useCallback((el: HTMLInputElement | null) => {
+    setAddressLine1Input(el);
+  }, []);
+
   const handleGetCurrentLocation = async () => {
     try {
       const location = await getCurrentLocation();
@@ -414,6 +481,16 @@ const AddressForm: React.FC<AddressFormProps> = ({
             <Typography variant="body2">{locationError}</Typography>
           </Alert>
         )}
+        {placesLoadError && (
+          <Alert severity="warning" sx={{ mt: 1 }} onClose={() => setPlacesLoadError(null)}>
+            <Typography variant="body2">
+              {t(
+                'addresses.placesAutocomplete.loadError',
+                'Could not load address suggestions. You can still type your address manually.'
+              )}
+            </Typography>
+          </Alert>
+        )}
       </Box>
 
       <Box
@@ -427,12 +504,21 @@ const AddressForm: React.FC<AddressFormProps> = ({
         <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
           <TextField
             fullWidth
+            inputRef={setAddressLine1Ref}
             label={t(
               'addresses.addressDialog.addressLine1',
               'Address Line 1'
             )}
             value={addressData?.address_line_1 || ''}
             onChange={(e) => handleInputChange('address_line_1', e.target.value)}
+            helperText={
+              placesApiKey
+                ? t(
+                    'addresses.placesAutocomplete.helper',
+                    'Start typing to see address suggestions. Pick one to fill city, region, and postal code automatically.'
+                  )
+                : undefined
+            }
             required
             disabled={loading}
           />
