@@ -24,7 +24,8 @@ const getProductionEnvironment = () => {
     isLocal: false,
     apiUrl: 'https://prod.api.rendasua.com/api',
     googleMapsBrowserApiKey:
-      process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '',
+      process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
+      'AIzaSyDpI80RcSNpjLNybedvZ62QFyV4485tiyI',
     enableDebugLogging: false,
     enableAnalytics: true,
   };
