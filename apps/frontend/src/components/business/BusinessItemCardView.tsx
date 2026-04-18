@@ -6,6 +6,7 @@ import {
   Inventory as InventoryIcon,
   LocalOffer as DealIcon,
   LocationOn as LocationOnIcon,
+  TrendingUp as PromoteIcon,
   Visibility as ViewIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
@@ -28,6 +29,12 @@ interface BusinessInventory {
   id: string;
   computed_available_quantity: number;
   reorder_point: number;
+  promotion?: {
+    promoted?: boolean;
+    start?: string;
+    end?: string;
+    sponsored?: boolean;
+  } | null;
 }
 
 interface ItemImage {
@@ -68,6 +75,7 @@ interface BusinessItemCardViewProps {
   onDeleteItem: (item: Item) => void;
   onRestockInventoryItem: (item: Item) => void;
   onManageDeals?: (item: Item) => void;
+  onPromoteItem?: (item: Item) => void;
   onRefineWithAi?: (item: Item) => void;
 }
 
@@ -78,6 +86,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   onDeleteItem,
   onRestockInventoryItem,
   onManageDeals,
+  onPromoteItem,
   onRefineWithAi,
 }) => {
   const { t } = useTranslation();
@@ -487,6 +496,28 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               >
                 <DealIcon fontSize="small" />
               </IconButton>
+            </Tooltip>
+          )}
+          {onPromoteItem && (
+            <Tooltip
+              title={t('business.items.promotion.tooltip', 'Promote listing')}
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => onPromoteItem(item)}
+                  disabled={!item.business_inventories?.length}
+                  sx={{
+                    color: theme.palette.success.main,
+                    '&:hover': {
+                      bgcolor: 'success.light',
+                      opacity: 0.8,
+                    },
+                  }}
+                >
+                  <PromoteIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           )}
           <Tooltip title={t('business.items.deleteItem', 'Delete Item')}>

@@ -10,6 +10,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
+import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -84,6 +85,7 @@ const GET_ITEMS = `
         is_active
         created_at
         updated_at
+        promotion
         business_location {
           id
           name
@@ -195,6 +197,7 @@ const GET_SINGLE_ITEM = `
         last_restocked_at
         created_at
         updated_at
+        promotion
         business_location {
           id
           name
@@ -276,6 +279,7 @@ const GET_BUSINESS_INVENTORY = `
       is_active
       created_at
       updated_at
+      promotion
       business_location {
         id
         name
@@ -362,6 +366,24 @@ const UPDATE_BUSINESS_INVENTORY = `
       id
       item_id
       business_location_id
+    }
+  }
+`;
+
+const UPDATE_BUSINESS_INVENTORY_PROMOTION_BULK = `
+  mutation UpdateInventoryPromotionBulk(
+    $businessId: uuid!
+    $itemId: uuid!
+    $promotion: jsonb
+  ) {
+    update_business_inventory(
+      where: {
+        item_id: { _eq: $itemId }
+        business_location: { business_id: { _eq: $businessId } }
+      }
+      _set: { promotion: $promotion }
+    ) {
+      affected_rows
     }
   }
 `;
@@ -804,6 +826,7 @@ export class BusinessItemsService {
       unit_cost?: number;
       selling_price?: number;
       is_active?: boolean;
+      promotion?: Record<string, unknown> | null;
     }
   ) {
     const invResult = await this.hasuraUserService.executeQuery<{
@@ -844,6 +867,45 @@ export class BusinessItemsService {
     });
 
     return result.update_business_inventory_by_pk;
+  }
+
+  private promotionPayloadFromDto(
+    dto: UpdateItemPromotionDto
+  ): Record<string, unknown> | null {
+    if (!dto.promoted) return null;
+    const p: Record<string, unknown> = { promoted: true };
+    if (dto.start) p.start = dto.start;
+    if (dto.end) p.end = dto.end;
+    if (dto.sponsored === true) p.sponsored = true;
+    return p;
+  }
+
+  async setPromotionForItem(
+    businessId: string,
+    itemId: string,
+    dto: UpdateItemPromotionDto
+  ): Promise<{ affected_rows: number }> {
+    const row = await this.hasuraUserService.executeQuery<{
+      items_by_pk: { id: string; business_id: string } | null;
+    }>(GET_ITEM_BY_ID, { itemId });
+    const item = row.items_by_pk;
+    if (!item || item.business_id !== businessId) {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    const promotion = this.promotionPayloadFromDto(dto);
+    const result = await this.hasuraUserService.executeMutation<{
+      update_business_inventory: { affected_rows: number };
+    }>(UPDATE_BUSINESS_INVENTORY_PROMOTION_BULK, {
+      businessId,
+      itemId,
+      promotion,
+    });
+    return {
+      affected_rows: result.update_business_inventory?.affected_rows ?? 0,
+    };
   }
 
   async updateItem(

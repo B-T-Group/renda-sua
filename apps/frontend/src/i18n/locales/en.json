@@ -1416,7 +1416,20 @@
       "descriptionPlaceholder": "Describe your product in detail...",
       "details": "Item Details",
       "deals": {
-        "manage": "Manage deals"
+        "manage": "Manage deals",
+        "noInventory": "Add inventory for this item before creating deals"
+      },
+      "promotion": {
+        "dialogTitle": "Promote in catalogue search",
+        "description": "Boost visibility when customers sort by relevance. Applies to all locations for this product.",
+        "promoted": "Promoted",
+        "sponsored": "Sponsored (stronger boost)",
+        "start": "Start (optional)",
+        "end": "End (optional)",
+        "saveSuccess": "Promotion saved",
+        "saveError": "Failed to save promotion",
+        "tooltip": "Promote listing",
+        "noInventory": "Add inventory for this item before promoting"
       },
       "download": "Download",
       "downloadSuccess": "Items downloaded successfully",

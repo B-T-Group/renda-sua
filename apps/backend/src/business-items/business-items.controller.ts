@@ -10,6 +10,8 @@ import {
   Patch,
   Post,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -27,6 +29,7 @@ import { CreateItemDealDto } from './dto/create-item-deal.dto';
 import { UpdateItemDealDto } from './dto/update-item-deal.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
+import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -300,6 +303,11 @@ export class BusinessItemsController {
         unit_cost: { type: 'number' },
         selling_price: { type: 'number' },
         is_active: { type: 'boolean' },
+        promotion: {
+          type: 'object',
+          nullable: true,
+          description: 'JSON promotion payload or null to clear',
+        },
       },
     },
   })
@@ -314,6 +322,7 @@ export class BusinessItemsController {
       unit_cost?: number;
       selling_price?: number;
       is_active?: boolean;
+      promotion?: Record<string, unknown> | null;
     }
   ) {
     const user = await this.hasuraUserService.getUser();
@@ -360,6 +369,36 @@ export class BusinessItemsController {
         HttpStatus.NOT_FOUND
       );
     }
+  }
+
+  @Patch('items/:itemId/promotion')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary:
+      'Set promotion on all inventory rows for this item within the business',
+  })
+  @ApiResponse({ status: 200, description: 'Promotion updated' })
+  @ApiResponse({ status: 403, description: 'User has no business' })
+  @ApiResponse({ status: 404, description: 'Item not found' })
+  @ApiBody({ type: UpdateItemPromotionDto })
+  async updateItemPromotion(
+    @Param('itemId') itemId: string,
+    @Body() body: UpdateItemPromotionDto
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const result = await this.businessItemsService.setPromotionForItem(
+      businessId,
+      itemId,
+      body
+    );
+    return { success: true, data: result };
   }
 
   @Patch('items/:itemId')

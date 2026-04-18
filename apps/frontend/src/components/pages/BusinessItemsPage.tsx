@@ -38,6 +38,7 @@ import BusinessItemCardView from '../business/BusinessItemCardView';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
+import PromoteItemDialog from '../business/PromoteItemDialog';
 import RefineItemWithAiDialog from '../dialogs/RefineItemWithAiDialog';
 import SEOHead from '../seo/SEOHead';
 
@@ -98,6 +99,7 @@ const BusinessItemsPage: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageDealsItem, setManageDealsItem] = useState<any | null>(null);
   const [refineAiItem, setRefineAiItem] = useState<Item | null>(null);
+  const [promoteItem, setPromoteItem] = useState<any | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ItemsFilterState>({
@@ -218,6 +220,20 @@ const BusinessItemsPage: React.FC = () => {
       return;
     }
     setManageDealsItem(inventoryItem);
+  };
+
+  const handlePromoteItem = (item: any) => {
+    if (!item.business_inventories?.length) {
+      enqueueSnackbar(
+        t(
+          'business.items.promotion.noInventory',
+          'Add inventory for this item before promoting'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
+    setPromoteItem(item);
   };
 
   const itemMatchesSearchText = (item: Item, q: string): boolean => {
@@ -546,6 +562,7 @@ const BusinessItemsPage: React.FC = () => {
                     onDeleteItem={handleDeleteItem}
                     onRestockInventoryItem={handleRestockInventoryItem}
                     onManageDeals={handleManageDeals}
+                    onPromoteItem={handlePromoteItem}
                     onRefineWithAi={(i) => setRefineAiItem(i)}
                   />
                 </Box>
@@ -575,6 +592,13 @@ const BusinessItemsPage: React.FC = () => {
         open={Boolean(manageDealsItem)}
         onClose={() => setManageDealsItem(null)}
         inventoryItem={manageDealsItem}
+      />
+
+      <PromoteItemDialog
+        open={Boolean(promoteItem)}
+        onClose={() => setPromoteItem(null)}
+        item={promoteItem}
+        onSaved={() => void refetchPageData()}
       />
 
       <RefineItemWithAiDialog

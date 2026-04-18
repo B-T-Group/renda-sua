@@ -1405,7 +1405,20 @@
       "descriptionPlaceholder": "Describe your product in detail...",
       "details": "Item Details",
       "deals": {
-        "manage": "Gérer les offres"
+        "manage": "Gérer les offres",
+        "noInventory": "Ajoutez de l’inventaire pour cet article avant de créer des offres"
+      },
+      "promotion": {
+        "dialogTitle": "Mettre en avant dans la recherche du catalogue",
+        "description": "Augmentez la visibilité lorsque les clients trient par pertinence. S’applique à tous les emplacements pour ce produit.",
+        "promoted": "Mis en avant",
+        "sponsored": "Sponsorisé (boost plus fort)",
+        "start": "Début (facultatif)",
+        "end": "Fin (facultatif)",
+        "saveSuccess": "Promotion enregistrée",
+        "saveError": "Échec de l’enregistrement de la promotion",
+        "tooltip": "Mettre l’annonce en avant",
+        "noInventory": "Ajoutez de l’inventaire pour cet article avant la promotion"
       },
       "download": "Télécharger CSV de vos produits",
       "downloadSuccess": "Articles téléchargés avec succès",

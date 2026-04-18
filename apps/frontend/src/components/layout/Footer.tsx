@@ -169,12 +169,17 @@ const Footer: React.FC = () => {
 
           <Divider sx={{ borderColor: theme.palette.grey[800] }} />
 
-          {/* Bottom Section */}
+          {/* Bottom Section — capped width so a single line is not edge-to-edge */}
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             justifyContent="space-between"
             alignItems={{ xs: 'center', md: 'center' }}
             spacing={2}
+            sx={{
+              maxWidth: 720,
+              mx: 'auto',
+              width: '100%',
+            }}
           >
             {/* Copyright */}
             <Typography

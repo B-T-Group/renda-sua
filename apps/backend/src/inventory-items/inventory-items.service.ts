@@ -11,6 +11,30 @@ export type InventorySortMode =
   | 'top_rated'
   | 'deals';
 
+/** Stored JSON on `business_inventory.promotion` */
+export interface InventoryListingPromotion {
+  promoted?: boolean;
+  start?: string;
+  end?: string;
+  sponsored?: boolean;
+}
+
+function isPromotionActiveAt(
+  promotion: InventoryListingPromotion | null | undefined,
+  nowMs: number
+): boolean {
+  if (!promotion || promotion.promoted !== true) return false;
+  if (promotion.start) {
+    const s = Date.parse(String(promotion.start));
+    if (Number.isFinite(s) && nowMs < s) return false;
+  }
+  if (promotion.end) {
+    const e = Date.parse(String(promotion.end));
+    if (Number.isFinite(e) && nowMs > e) return false;
+  }
+  return true;
+}
+
 export interface InventoryItem {
   id: string;
   business_location_id: string;
@@ -20,6 +44,7 @@ export interface InventoryItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  promotion?: InventoryListingPromotion | null;
   viewsCount?: number;
   hasActiveDeal?: boolean;
   original_price?: number;
@@ -619,6 +644,7 @@ export class InventoryItemsService {
           is_active
           created_at
           updated_at
+          promotion
           item {
             id
             name
@@ -967,6 +993,7 @@ export class InventoryItemsService {
           is_active
           created_at
           updated_at
+          promotion
           item {
             id
             name
@@ -1641,13 +1668,16 @@ export class InventoryItemsService {
   private static readonly RELEVANCE_WEIGHT_ORDERED_CATEGORY = 20;
   private static readonly RELEVANCE_WEIGHT_DEAL = 5;
   private static readonly RELEVANCE_DISTANCE_MAX_BOOST = 50;
+  private static readonly RELEVANCE_WEIGHT_PROMOTED = 800;
+  private static readonly RELEVANCE_WEIGHT_PROMOTED_SPONSORED = 1000;
 
   private computeRelevanceScore(
     item: InventoryItem,
     orderedInventoryIds: Set<string>,
     orderedItemIds: Set<string>,
     orderedBrandIds: Set<string>,
-    orderedCategoryIds: Set<number>
+    orderedCategoryIds: Set<number>,
+    nowMs: number
   ): number {
     const viewsCount = item.viewsCount ?? 0;
     let score = 1 + viewsCount;
@@ -1671,6 +1701,12 @@ export class InventoryItemsService {
     }
     if (item.hasActiveDeal) {
       score += InventoryItemsService.RELEVANCE_WEIGHT_DEAL;
+    }
+    if (isPromotionActiveAt(item.promotion, nowMs)) {
+      const sponsored = item.promotion?.sponsored === true;
+      score += sponsored
+        ? InventoryItemsService.RELEVANCE_WEIGHT_PROMOTED_SPONSORED
+        : InventoryItemsService.RELEVANCE_WEIGHT_PROMOTED;
     }
     const dist = item.distance_value;
     if (dist != null && Number.isFinite(dist)) {
@@ -1854,20 +1890,23 @@ export class InventoryItemsService {
   ): Promise<InventoryItem[]> {
     const signals = await this.getRelevanceSignalsFromPastOrders(clientId);
     const sorted = [...items];
+    const nowMs = Date.now();
     sorted.sort((a, b) => {
       const scoreA = this.computeRelevanceScore(
         a,
         signals.orderedInventoryIds,
         signals.orderedItemIds,
         signals.orderedBrandIds,
-        signals.orderedCategoryIds
+        signals.orderedCategoryIds,
+        nowMs
       );
       const scoreB = this.computeRelevanceScore(
         b,
         signals.orderedInventoryIds,
         signals.orderedItemIds,
         signals.orderedBrandIds,
-        signals.orderedCategoryIds
+        signals.orderedCategoryIds,
+        nowMs
       );
       if (scoreB !== scoreA) return scoreB - scoreA;
       return (

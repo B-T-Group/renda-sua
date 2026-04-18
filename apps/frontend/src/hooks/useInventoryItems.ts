@@ -13,6 +13,12 @@ export interface InventoryItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  promotion?: {
+    promoted?: boolean;
+    start?: string;
+    end?: string;
+    sponsored?: boolean;
+  } | null;
   viewsCount?: number;
   hasActiveDeal?: boolean;
   original_price?: number;
