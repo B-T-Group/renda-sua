@@ -1438,8 +1438,18 @@
         "category": "Catégorie",
         "search": "Rechercher par nom, SKU, description ou étiquettes...",
         "showing": "Affichage",
-        "status": "Statut"
+        "status": "Statut",
+        "specialListingLabel": "Visibilité",
+        "specialListingValue": {
+          "all": "Toutes les annonces",
+          "deals": "Offres actives",
+          "promotions": "Mises en avant",
+          "deals_or_promotions": "Offres ou mises en avant"
+        }
       },
+      "badgeDeal": "Offre",
+      "badgePromoted": "Mis en avant",
+      "badgeSponsored": "Sponsorisé",
       "fragile": "Fragile",
       "gallery": "Gallery",
       "galleryImage": "Gallery Image",
@@ -1455,7 +1465,11 @@
       "setAsSecondaryImage": "Définir comme secondaire",
       "mainImageUpdated": "Image principale mise à jour",
       "secondaryImageUpdated": "Cette image est maintenant secondaire.",
-      "imagesCount": "Number of images",
+      "imagesCount": "Nombre d’images",
+      "cardGalleryPhotosBadge": "{{count}} photos",
+      "cardGalleryClickForNext": "Cliquez sur la photo pour la suivante",
+      "cardGalleryPrevious": "Photo précédente",
+      "cardGalleryNext": "Photo suivante",
       "inactive": "Inactif",
       "listingActive": "Annonce active",
       "activeStatusUpdated": "Statut de l’annonce mis à jour",

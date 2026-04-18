@@ -86,6 +86,12 @@ const GET_ITEMS = `
         created_at
         updated_at
         promotion
+        item_deals {
+          id
+          start_at
+          end_at
+          is_active
+        }
         business_location {
           id
           name
@@ -198,6 +204,12 @@ const GET_SINGLE_ITEM = `
         created_at
         updated_at
         promotion
+        item_deals {
+          id
+          start_at
+          end_at
+          is_active
+        }
         business_location {
           id
           name

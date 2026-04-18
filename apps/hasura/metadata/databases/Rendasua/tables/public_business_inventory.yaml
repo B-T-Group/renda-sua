@@ -18,6 +18,15 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+  - name: item_deals
+    using:
+      manual_configuration:
+        column_mapping:
+          id: inventory_item_id
+        insertion_order: null
+        remote_table:
+          name: item_deals
+          schema: public
 computed_fields:
   - name: computed_available_quantity
     definition:

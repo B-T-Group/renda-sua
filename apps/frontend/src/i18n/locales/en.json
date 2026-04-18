@@ -1449,8 +1449,18 @@
         "noBrand": "No brand",
         "search": "Search by name, SKU, description, or tags...",
         "showing": "Showing",
-        "status": "Status"
+        "status": "Status",
+        "specialListingLabel": "Spotlight",
+        "specialListingValue": {
+          "all": "All listings",
+          "deals": "Active deals",
+          "promotions": "Promoted",
+          "deals_or_promotions": "Deals or promoted"
+        }
       },
+      "badgeDeal": "Deal",
+      "badgePromoted": "Promoted",
+      "badgeSponsored": "Sponsored",
       "fragile": "Fragile",
       "gallery": "Gallery",
       "galleryImage": "Gallery Image",
@@ -1467,6 +1477,10 @@
       "mainImageUpdated": "Main image updated",
       "secondaryImageUpdated": "This image is now secondary.",
       "imagesCount": "Number of images",
+      "cardGalleryPhotosBadge": "{{count}} photos",
+      "cardGalleryClickForNext": "Click photo for next",
+      "cardGalleryPrevious": "Previous photo",
+      "cardGalleryNext": "Next photo",
       "inactive": "Inactive",
       "listingActive": "Listing active",
       "activeStatusUpdated": "Listing status updated",

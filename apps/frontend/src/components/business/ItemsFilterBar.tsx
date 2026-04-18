@@ -30,6 +30,8 @@ export interface ItemsFilterState {
   categoryFilter: string;
   brandFilter: string;
   stockFilter: string;
+  /** all | deals | promotions | deals_or_promotions */
+  specialListingFilter: string;
 }
 
 interface ItemsFilterBarProps {
@@ -68,6 +70,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
       categoryFilter: 'all',
       brandFilter: 'all',
       stockFilter: 'all',
+      specialListingFilter: 'all',
     });
   };
 
@@ -78,6 +81,7 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
     if (filters.categoryFilter !== 'all') count++;
     if (filters.brandFilter !== 'all') count++;
     if (filters.stockFilter !== 'all') count++;
+    if (filters.specialListingFilter !== 'all') count++;
     return count;
   };
 
@@ -132,6 +136,16 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
           filters.stockFilter
         )}`,
         onDelete: () => handleFilterChange('stockFilter', 'all'),
+      });
+    }
+
+    if (filters.specialListingFilter !== 'all') {
+      chips.push({
+        label: `${t('business.items.filters.specialListingLabel', 'Spotlight')}: ${t(
+          `business.items.filters.specialListingValue.${filters.specialListingFilter}`,
+          filters.specialListingFilter
+        )}`,
+        onDelete: () => handleFilterChange('specialListingFilter', 'all'),
       });
     }
 
@@ -208,6 +222,44 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         </Select>
       </FormControl>
 
+      <FormControl fullWidth size="small">
+        <InputLabel>
+          {t('business.items.filters.specialListingLabel', 'Spotlight')}
+        </InputLabel>
+        <Select
+          value={filters.specialListingFilter}
+          onChange={(e) =>
+            handleFilterChange('specialListingFilter', e.target.value)
+          }
+          label={t('business.items.filters.specialListingLabel', 'Spotlight')}
+        >
+          <MenuItem value="all">
+            {t(
+              'business.items.filters.specialListingValue.all',
+              'All listings'
+            )}
+          </MenuItem>
+          <MenuItem value="deals">
+            {t(
+              'business.items.filters.specialListingValue.deals',
+              'Active deals'
+            )}
+          </MenuItem>
+          <MenuItem value="promotions">
+            {t(
+              'business.items.filters.specialListingValue.promotions',
+              'Promoted'
+            )}
+          </MenuItem>
+          <MenuItem value="deals_or_promotions">
+            {t(
+              'business.items.filters.specialListingValue.deals_or_promotions',
+              'Deals or promoted'
+            )}
+          </MenuItem>
+        </Select>
+      </FormControl>
+
       {/* Category Filter */}
       <FormControl fullWidth size="small">
         <InputLabel>{t('business.items.category', 'Category')}</InputLabel>
@@ -279,7 +331,13 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
         >
           <Stack spacing={2}>
             {/* First Row - Search and Main Filters */}
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              useFlexGap
+              flexWrap="wrap"
+            >
               <TextField
                 placeholder={t(
                   'business.items.filters.search',
@@ -396,6 +454,47 @@ const ItemsFilterBar: React.FC<ItemsFilterBarProps> = ({
                       {brand}
                     </MenuItem>
                   ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: 168 }}>
+                <InputLabel>
+                  {t('business.items.filters.specialListingLabel', 'Spotlight')}
+                </InputLabel>
+                <Select
+                  value={filters.specialListingFilter}
+                  onChange={(e) =>
+                    handleFilterChange('specialListingFilter', e.target.value)
+                  }
+                  label={t(
+                    'business.items.filters.specialListingLabel',
+                    'Spotlight'
+                  )}
+                >
+                  <MenuItem value="all">
+                    {t(
+                      'business.items.filters.specialListingValue.all',
+                      'All listings'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="deals">
+                    {t(
+                      'business.items.filters.specialListingValue.deals',
+                      'Active deals'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="promotions">
+                    {t(
+                      'business.items.filters.specialListingValue.promotions',
+                      'Promoted'
+                    )}
+                  </MenuItem>
+                  <MenuItem value="deals_or_promotions">
+                    {t(
+                      'business.items.filters.specialListingValue.deals_or_promotions',
+                      'Deals or promoted'
+                    )}
+                  </MenuItem>
                 </Select>
               </FormControl>
 

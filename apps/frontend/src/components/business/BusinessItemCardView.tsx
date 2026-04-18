@@ -1,5 +1,7 @@
 import {
   AutoAwesome as AutoAwesomeIcon,
+  ChevronLeft,
+  ChevronRight,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Image as ImageIcon,
@@ -22,8 +24,13 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  itemHasActiveDeal,
+  itemHasActivePromotion,
+  itemHasSponsoredPromotion,
+} from '../../utils/businessItemListing';
 
 interface BusinessInventory {
   id: string;
@@ -35,12 +42,31 @@ interface BusinessInventory {
     end?: string;
     sponsored?: boolean;
   } | null;
+  item_deals?: Array<{
+    id: string;
+    start_at: string;
+    end_at: string;
+    is_active: boolean;
+  }>;
 }
 
 interface ItemImage {
+  id?: string;
   image_type: string;
   image_url: string;
   alt_text?: string;
+  display_order?: number;
+}
+
+/** Main image first, then others sorted by display_order (matches listing API). */
+function orderedCardGalleryImages(images: ItemImage[] | undefined): ItemImage[] {
+  if (!images?.length) return [];
+  const byOrder = [...images].sort(
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+  );
+  const main = byOrder.find((i) => i.image_type === 'main');
+  if (!main) return byOrder;
+  return [main, ...byOrder.filter((i) => i !== main)];
 }
 
 interface Item {
@@ -92,6 +118,16 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
 
+  const galleryImages = useMemo(
+    () => orderedCardGalleryImages(item.item_images),
+    [item.item_images]
+  );
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [item.id]);
+
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -99,7 +135,26 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
     }).format(amount);
   };
 
-  const mainImage = item.item_images?.find((img) => img.image_type === 'main');
+  const displayIdx =
+    galleryImages.length === 0
+      ? 0
+      : Math.min(activeImageIndex, galleryImages.length - 1);
+  const displayImage = galleryImages[displayIdx];
+  const hasMultipleImages = galleryImages.length > 1;
+
+  const goPrevImage = () => {
+    if (!hasMultipleImages) return;
+    setActiveImageIndex((i) =>
+      i === 0 ? galleryImages.length - 1 : i - 1
+    );
+  };
+
+  const goNextImage = () => {
+    if (!hasMultipleImages) return;
+    setActiveImageIndex((i) =>
+      i === galleryImages.length - 1 ? 0 : i + 1
+    );
+  };
 
   // Count locations where item is available
   const locationCount = item.business_inventories?.length || 0;
@@ -124,6 +179,10 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
   // Check if item requires special handling
   const hasSpecialHandling =
     item.is_fragile || item.is_perishable || item.requires_special_handling;
+
+  const hasActiveDeal = itemHasActiveDeal(item);
+  const hasActivePromotion = itemHasActivePromotion(item);
+  const hasSponsoredPromotion = itemHasSponsoredPromotion(item);
 
   return (
     <Card
@@ -196,27 +255,186 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
         )}
       </Box>
 
-      {/* Image Section with No Image Placeholder */}
+      {/* Image gallery (thumbnails + click / arrows when multiple) */}
       <Box
         sx={{
           height: 200,
           position: 'relative',
-          bgcolor: mainImage ? 'transparent' : 'grey.100',
+          bgcolor: displayImage ? 'transparent' : 'grey.100',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
-        {mainImage ? (
-          <CardMedia
-            component="img"
-            height="200"
-            image={mainImage.image_url}
-            alt={mainImage.alt_text || item.name}
-            sx={{
-              objectFit: 'cover',
-            }}
-          />
+        {displayImage ? (
+          <>
+            <Tooltip
+              title={
+                hasMultipleImages
+                  ? t(
+                      'business.items.cardGalleryClickForNext',
+                      'Click photo for next'
+                    )
+                  : ''
+              }
+              disableHoverListener={!hasMultipleImages}
+            >
+              <Box
+                sx={{
+                  position: 'relative',
+                  flex: hasMultipleImages ? '1 1 auto' : '1 1 100%',
+                  minHeight: 0,
+                  cursor: hasMultipleImages ? 'pointer' : 'default',
+                }}
+                role={hasMultipleImages ? 'button' : undefined}
+                tabIndex={hasMultipleImages ? 0 : undefined}
+                onClick={() => hasMultipleImages && goNextImage()}
+                onKeyDown={(e) => {
+                  if (!hasMultipleImages) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    goNextImage();
+                  }
+                }}
+              >
+                {hasMultipleImages && (
+                  <Chip
+                    label={t(
+                      'business.items.cardGalleryPhotosBadge',
+                      '{{count}} photos',
+                      { count: galleryImages.length }
+                    )}
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      left: 8,
+                      zIndex: 1,
+                      bgcolor: 'rgba(0, 0, 0, 0.65)',
+                      color: 'common.white',
+                      fontSize: '0.7rem',
+                      height: 22,
+                      '& .MuiChip-label': { px: 1 },
+                    }}
+                  />
+                )}
+                <CardMedia
+                  component="img"
+                  image={displayImage.image_url}
+                  alt={displayImage.alt_text || item.name}
+                  sx={{
+                    width: '100%',
+                    height: hasMultipleImages ? '100%' : 200,
+                    minHeight: hasMultipleImages ? 0 : 200,
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+                {hasMultipleImages && (
+                  <>
+                    <IconButton
+                      size="small"
+                      aria-label={t(
+                        'business.items.cardGalleryPrevious',
+                        'Previous photo'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goPrevImage();
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        left: 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        bgcolor: 'rgba(255, 255, 255, 0.85)',
+                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
+                        p: 0.25,
+                      }}
+                    >
+                      <ChevronLeft fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label={t(
+                        'business.items.cardGalleryNext',
+                        'Next photo'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goNextImage();
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        right: 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        bgcolor: 'rgba(255, 255, 255, 0.85)',
+                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
+                        p: 0.25,
+                      }}
+                    >
+                      <ChevronRight fontSize="small" />
+                    </IconButton>
+                  </>
+                )}
+              </Box>
+            </Tooltip>
+            {hasMultipleImages && (
+              <Box
+                sx={{
+                  flex: '0 0 auto',
+                  display: 'flex',
+                  gap: 0.5,
+                  px: 0.75,
+                  py: 0.5,
+                  overflowX: 'auto',
+                  borderTop: 1,
+                  borderColor: 'divider',
+                  bgcolor: 'grey.50',
+                }}
+              >
+                {galleryImages.map((img, idx) => (
+                  <Box
+                    key={img.id ?? `${img.image_url}-${idx}`}
+                    component="button"
+                    type="button"
+                    onClick={() => setActiveImageIndex(idx)}
+                    sx={{
+                      flex: '0 0 auto',
+                      width: 40,
+                      height: 40,
+                      p: 0,
+                      border: 2,
+                      borderColor:
+                        idx === displayIdx ? 'primary.main' : 'grey.300',
+                      borderRadius: 0.5,
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      bgcolor: 'background.paper',
+                      opacity: idx === displayIdx ? 1 : 0.75,
+                      '&:hover': {
+                        borderColor: 'primary.light',
+                        opacity: 1,
+                      },
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={img.image_url}
+                      alt=""
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </>
         ) : (
           <Box
             sx={{
@@ -226,6 +444,7 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
               justifyContent: 'center',
               color: 'text.secondary',
               p: 2,
+              height: '100%',
             }}
           >
             <ImageIcon sx={{ fontSize: 60, opacity: 0.3, mb: 1 }} />
@@ -235,6 +454,48 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
           </Box>
         )}
       </Box>
+
+      {(hasActiveDeal || hasActivePromotion) && (
+        <Stack
+          direction="row"
+          spacing={0.5}
+          useFlexGap
+          flexWrap="wrap"
+          sx={{
+            px: 1.5,
+            py: 0.75,
+            gap: 0.5,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'action.hover',
+          }}
+        >
+          {hasActiveDeal && (
+            <Chip
+              size="small"
+              icon={<DealIcon sx={{ '&&': { fontSize: 16 } }} />}
+              label={t('business.items.badgeDeal', 'Deal')}
+              color="secondary"
+              variant="filled"
+              sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+            />
+          )}
+          {hasActivePromotion && (
+            <Chip
+              size="small"
+              icon={<PromoteIcon sx={{ '&&': { fontSize: 16 } }} />}
+              label={
+                hasSponsoredPromotion
+                  ? t('business.items.badgeSponsored', 'Sponsored')
+                  : t('business.items.badgePromoted', 'Promoted')
+              }
+              color="success"
+              variant="filled"
+              sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+            />
+          )}
+        </Stack>
+      )}
 
       <CardContent
         sx={{

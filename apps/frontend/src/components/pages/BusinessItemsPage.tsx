@@ -36,6 +36,10 @@ import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useItems, type Item } from '../../hooks/useItems';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import ItemsFilterBar, { ItemsFilterState } from '../business/ItemsFilterBar';
+import {
+  itemHasActiveDeal,
+  itemHasActivePromotion,
+} from '../../utils/businessItemListing';
 import UpdateInventoryDialog from '../business/UpdateInventoryDialog';
 import ManageDealsDialog from '../business/ManageDealsDialog';
 import PromoteItemDialog from '../business/PromoteItemDialog';
@@ -108,6 +112,7 @@ const BusinessItemsPage: React.FC = () => {
     categoryFilter: 'all',
     brandFilter: 'all',
     stockFilter: 'all',
+    specialListingFilter: 'all',
   });
 
   const apiClient = useApiClient();
@@ -287,12 +292,22 @@ const BusinessItemsPage: React.FC = () => {
         filters.stockFilter === 'all' ||
         getItemStockStatus(item) === filters.stockFilter;
 
+      const sl = filters.specialListingFilter;
+      let matchesSpotlight = true;
+      if (sl === 'deals') matchesSpotlight = itemHasActiveDeal(item);
+      else if (sl === 'promotions') matchesSpotlight = itemHasActivePromotion(item);
+      else if (sl === 'deals_or_promotions') {
+        matchesSpotlight =
+          itemHasActiveDeal(item) || itemHasActivePromotion(item);
+      }
+
       return (
         matchesSearch &&
         matchesStatus &&
         matchesCategory &&
         matchesBrand &&
-        matchesStock
+        matchesStock &&
+        matchesSpotlight
       );
     }) || [];
 
